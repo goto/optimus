@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/odpf/optimus/sdk/plugin"
+	"github.com/goto/optimus/sdk/plugin"
 )
 
 var (

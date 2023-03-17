@@ -1,11 +1,11 @@
 package extension
 
 import (
-	"github.com/odpf/salt/log"
+	"github.com/goto/salt/log"
 	"github.com/spf13/cobra"
 
-	"github.com/odpf/optimus/client/cmd/internal/survey"
-	"github.com/odpf/optimus/client/extension/model"
+	"github.com/goto/optimus/client/cmd/internal/survey"
+	"github.com/goto/optimus/client/extension/model"
 )
 
 type uninstallCommand struct {

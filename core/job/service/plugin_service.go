@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odpf/salt/log"
+	"github.com/goto/salt/log"
 	"golang.org/x/net/context"
 
-	"github.com/odpf/optimus/core/job"
-	"github.com/odpf/optimus/core/tenant"
-	"github.com/odpf/optimus/internal/compiler"
-	"github.com/odpf/optimus/sdk/plugin"
+	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/compiler"
+	"github.com/goto/optimus/sdk/plugin"
 )
 
 const (

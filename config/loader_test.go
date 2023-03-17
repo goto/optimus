@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	saltConfig "github.com/odpf/salt/config"
+	saltConfig "github.com/goto/salt/config"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/odpf/optimus/config"
+	"github.com/goto/optimus/config"
 )
 
 const clientConfig = `

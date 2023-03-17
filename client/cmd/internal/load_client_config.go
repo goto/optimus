@@ -3,9 +3,9 @@ package internal
 import (
 	"errors"
 
-	saltConfig "github.com/odpf/salt/config"
+	saltConfig "github.com/goto/salt/config"
 
-	"github.com/odpf/optimus/config"
+	"github.com/goto/optimus/config"
 )
 
 // TODO: need to do refactor for proper file naming

@@ -91,10 +91,10 @@ func (v *versionCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	// Print version update if new version is exist
-	//githubRepo := "goto/optimus"
-	//if updateNotice := version.UpdateNotice(config.BuildVersion, githubRepo); updateNotice != "" {
+	// githubRepo := "goto/optimus"
+	// if updateNotice := version.UpdateNotice(config.BuildVersion, githubRepo); updateNotice != "" {
 	//	v.logger.Info(updateNotice)
-	//}
+	// }
 	v.printAllPluginInfos()
 	return nil
 }

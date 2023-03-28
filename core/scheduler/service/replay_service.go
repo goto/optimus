@@ -18,6 +18,7 @@ type ReplayRepository interface {
 
 	GetReplayToExecute(context.Context) (*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
+	GetReplayByProject(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.Replay, error)
 }
 
 type ReplayValidator interface {
@@ -49,6 +50,10 @@ func (r ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, j
 
 	runs := getExpectedRuns(jobCron, config.StartTime, config.EndTime)
 	return r.replayRepo.RegisterReplay(ctx, replayReq, runs)
+}
+
+func (r ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
+	return r.replayRepo.GetReplayByProject(ctx, projectName)
 }
 
 func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator) *ReplayService {

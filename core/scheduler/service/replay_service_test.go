@@ -125,7 +125,7 @@ func TestReplayService(t *testing.T) {
 			replay3 := scheduler.NewReplayRequest("sample-job-C", tnnt, replayConfig, scheduler.ReplayStateFailed)
 			replays := []*scheduler.Replay{replay1, replay2, replay3}
 			replayRepository := new(ReplayRepository)
-			replayRepository.On("GetReplayByProject", ctx, mock.Anything).Return(replays, nil)
+			replayRepository.On("GetReplaysByProject", ctx, mock.Anything).Return(replays, nil)
 			defer replayRepository.AssertExpectations(t)
 
 			replayService := service.NewReplayService(replayRepository, nil, nil)
@@ -136,7 +136,7 @@ func TestReplayService(t *testing.T) {
 
 		t.Run("should return error when get replay by project is fail", func(t *testing.T) {
 			replayRepository := new(ReplayRepository)
-			replayRepository.On("GetReplayByProject", ctx, mock.Anything).Return(nil, errors.New("some error"))
+			replayRepository.On("GetReplaysByProject", ctx, mock.Anything).Return(nil, errors.New("some error"))
 			defer replayRepository.AssertExpectations(t)
 
 			replayService := service.NewReplayService(replayRepository, nil, nil)
@@ -153,7 +153,7 @@ type ReplayRepository struct {
 }
 
 // GetRaplayByProject provides a mock function with given fields: ctx, projectName
-func (_m *ReplayRepository) GetReplayByProject(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.Replay, error) {
+func (_m *ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.Replay, error) {
 	ret := _m.Called(ctx, projectName)
 
 	var r0 []*scheduler.Replay

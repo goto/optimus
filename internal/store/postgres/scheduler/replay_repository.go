@@ -205,7 +205,7 @@ func (r ReplayRepository) GetReplayRequestsByStatus(ctx context.Context, statusL
 	return replayReqs, nil
 }
 
-func (r ReplayRepository) GetReplayByProject(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.Replay, error) {
+func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.Replay, error) {
 	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE project_name=$1`
 	rows, err := r.db.Query(ctx, getReplayRequest, projectName)
 	if err != nil {

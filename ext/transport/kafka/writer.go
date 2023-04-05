@@ -16,8 +16,6 @@ var (
 	})
 )
 
-type Message []byte
-
 type Writer struct {
 	kWriter *kafka.Writer
 }
@@ -40,7 +38,7 @@ func (w *Writer) Close() {
 	_ = w.kWriter.Close()
 }
 
-func (w *Writer) Write(messages []Message) error {
+func (w *Writer) Write(messages [][]byte) error {
 	kMessage := make([]kafka.Message, len(messages))
 	for i, m := range messages {
 		kMessage[i] = kafka.Message{

@@ -152,13 +152,18 @@ func (u *uploadAllCommand) sendNamespaceResourceRequest(stream pb.ResourceServic
 		}
 
 		var errorReturned bool
-		for i := 0; i < resLength; i = i + size {
+		for i := 0; i < resLength; i += size {
 			endIndex := i + size
 			if resLength < endIndex {
 				endIndex = resLength
 			}
 
 			request, err := u.getResourceDeploymentRequest(namespace.Name, storeName, resources[i:endIndex])
+			if err != nil {
+				u.logger.Error("Unable to get resource request, err: %s", err)
+				continue
+			}
+
 			if err = stream.Send(request); err != nil {
 				errorReturned = true
 				u.logger.Error("Error: %s", err)

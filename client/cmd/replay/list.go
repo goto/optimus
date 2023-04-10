@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"time"
 
+	"github.com/goto/salt/log"
+	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/cobra"
+
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connectivity"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/salt/log"
-	"github.com/olekukonko/tablewriter"
-	"github.com/spf13/cobra"
 )
 
 type listCommand struct {
@@ -33,6 +34,7 @@ func ListCommand() *cobra.Command {
 		PreRunE: l.PreRunE,
 		RunE:    l.RunE,
 	}
+	l.injectFlags(cmd)
 	return cmd
 }
 
@@ -88,14 +90,14 @@ func (l *listCommand) listReplay(req *pb.ListReplayRequest) error {
 	if len(listReplayResp.GetReplays()) == 0 {
 		l.logger.Info("No replays were found in %s project.", req.ProjectName)
 	} else {
-		result := l.stringifyListOfReplays(listReplayResp)
+		result := stringifyListOfReplays(listReplayResp)
 		l.logger.Info("Replays for project: %s", l.projectName)
 		l.logger.Info(result)
 	}
 	return nil
 }
 
-func (l *listCommand) stringifyListOfReplays(resp *pb.ListReplayResponse) string {
+func stringifyListOfReplays(resp *pb.ListReplayResponse) string {
 	buff := &bytes.Buffer{}
 	table := tablewriter.NewWriter(buff)
 	table.SetBorder(false)

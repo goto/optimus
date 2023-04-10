@@ -76,7 +76,7 @@ func (h ReplayHandler) ListReplay(ctx context.Context, req *pb.ListReplayRequest
 		return nil, errors.GRPCErr(err, "unable to get replay list for "+req.GetProjectName())
 	}
 
-	replayProtos := make([]*pb.ReplaySpecification, len(replays))
+	replayProtos := make([]*pb.GetReplayResponse, len(replays))
 	for i, replay := range replays {
 		replayProtos[i] = replayToProto(replay)
 	}
@@ -84,14 +84,16 @@ func (h ReplayHandler) ListReplay(ctx context.Context, req *pb.ListReplayRequest
 	return &pb.ListReplayResponse{Replays: replayProtos}, nil
 }
 
-func replayToProto(replay *scheduler.Replay) *pb.ReplaySpecification {
-	return &pb.ReplaySpecification{
-		Id:          replay.ID().String(),
-		JobName:     replay.JobName().String(),
-		StartTime:   timestamppb.New(replay.Config().StartTime),
-		EndTime:     timestamppb.New(replay.Config().EndTime),
-		Description: replay.Config().Description,
-		Status:      replay.State().String(),
+func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {
+	return &pb.GetReplayResponse{
+		Id:      replay.ID().String(),
+		JobName: replay.JobName().String(),
+		ReplayConfig: &pb.ReplayConfig{
+			StartTime:   timestamppb.New(replay.Config().StartTime),
+			EndTime:     timestamppb.New(replay.Config().EndTime),
+			Description: replay.Config().Description,
+		},
+		Status: replay.State().String(),
 	}
 }
 

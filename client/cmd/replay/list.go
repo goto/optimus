@@ -112,9 +112,9 @@ func (l *listCommand) stringifyListOfReplays(resp *pb.ListReplayResponse) string
 		table.Append([]string{
 			replay.GetId(),
 			replay.GetJobName(),
-			replay.GetStartTime().AsTime().Format(time.RFC3339),
-			replay.GetEndTime().AsTime().Format(time.RFC3339),
-			replay.GetDescription(),
+			replay.GetReplayConfig().GetStartTime().AsTime().Format(time.RFC3339),
+			replay.GetReplayConfig().GetEndTime().AsTime().Format(time.RFC3339),
+			replay.GetReplayConfig().GetDescription(),
 			replay.GetStatus(),
 		})
 	}

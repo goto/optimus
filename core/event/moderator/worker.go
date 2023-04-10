@@ -80,5 +80,5 @@ func (w *Worker) Close() error {
 
 	w.wg.Wait()
 	w.Flush()
-	return nil
+	return w.writer.Close()
 }

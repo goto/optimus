@@ -3,9 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 
+	"github.com/goto/optimus/core/event"
+	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -30,20 +34,26 @@ type TenantDetailsGetter interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 }
 
+type EventHandler interface {
+	HandleEvent(moderator.Event)
+}
+
 type ResourceService struct {
 	repo              ResourceRepository
 	mgr               ResourceManager
 	tnntDetailsGetter TenantDetailsGetter
 
-	logger log.Logger
+	logger       log.Logger
+	eventHandler EventHandler
 }
 
-func NewResourceService(logger log.Logger, repo ResourceRepository, mgr ResourceManager, tnntDetailsGetter TenantDetailsGetter) *ResourceService {
+func NewResourceService(logger log.Logger, repo ResourceRepository, mgr ResourceManager, tnntDetailsGetter TenantDetailsGetter, eventHandler EventHandler) *ResourceService {
 	return &ResourceService{
 		repo:              repo,
 		mgr:               mgr,
 		tnntDetailsGetter: tnntDetailsGetter,
 		logger:            logger,
+		eventHandler:      eventHandler,
 	}
 }
 
@@ -93,7 +103,19 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 			return err
 		}
 	}
-	return rs.mgr.CreateResource(ctx, incoming)
+
+	if err := rs.mgr.CreateResource(ctx, incoming); err != nil {
+		return err
+	}
+
+	rs.eventHandler.HandleEvent(event.ResourceCreated{
+		Event: event.Event{
+			ID:         uuid.New(),
+			OccurredAt: time.Now(),
+		},
+		Resource: incoming,
+	})
+	return nil
 }
 
 func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource) error {
@@ -131,7 +153,18 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	return rs.mgr.UpdateResource(ctx, incoming)
+	if err := rs.mgr.UpdateResource(ctx, incoming); err != nil {
+		return err
+	}
+
+	rs.eventHandler.HandleEvent(event.ResourceUpdated{
+		Event: event.Event{
+			ID:         uuid.New(),
+			OccurredAt: time.Now(),
+		},
+		Resource: incoming,
+	})
+	return nil
 }
 
 func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceFullName string) (*resource.Resource, error) {

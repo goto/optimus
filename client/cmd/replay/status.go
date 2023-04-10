@@ -5,14 +5,15 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/goto/salt/log"
+	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/cobra"
+
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connectivity"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/salt/log"
-	"github.com/olekukonko/tablewriter"
-	"github.com/spf13/cobra"
 )
 
 type statusCommand struct {
@@ -83,7 +84,7 @@ func (r *statusCommand) RunE(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	result := r.stringifyReplayStatus(resp)
+	result := stringifyReplayStatus(resp)
 	r.logger.Info("Replay status for replay ID: %s", replayID)
 	r.logger.Info(result)
 	return nil
@@ -102,7 +103,7 @@ func (r *statusCommand) getReplay(replayID string) (*pb.GetReplayResponse, error
 	return replayService.GetReplay(conn.GetContext(), req)
 }
 
-func (r *statusCommand) stringifyReplayStatus(resp *pb.GetReplayResponse) string {
+func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	buff := &bytes.Buffer{}
 	buff.WriteString(fmt.Sprintf("ID       : %s", resp.GetId()))
 	buff.WriteString(fmt.Sprintf("Job Name : %s", resp.GetJobName()))

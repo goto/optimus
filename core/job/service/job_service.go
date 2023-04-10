@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
 
+	"github.com/goto/optimus/core/event"
+	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
@@ -24,6 +28,10 @@ const (
 	ConcurrentLimit        = 600
 )
 
+type EventHandler interface {
+	HandleEvent(moderator.Event)
+}
+
 type JobService struct {
 	repo JobRepository
 
@@ -32,16 +40,18 @@ type JobService struct {
 
 	tenantDetailsGetter TenantDetailsGetter
 
-	logger log.Logger
+	logger       log.Logger
+	eventHandler EventHandler
 }
 
-func NewJobService(repo JobRepository, pluginService PluginService, upstreamResolver UpstreamResolver, tenantDetailsGetter TenantDetailsGetter, logger log.Logger) *JobService {
+func NewJobService(repo JobRepository, pluginService PluginService, upstreamResolver UpstreamResolver, tenantDetailsGetter TenantDetailsGetter, logger log.Logger, eventHandler EventHandler) *JobService {
 	return &JobService{
 		repo:                repo,
 		pluginService:       pluginService,
 		upstreamResolver:    upstreamResolver,
 		tenantDetailsGetter: tenantDetailsGetter,
 		logger:              logger,
+		eventHandler:        eventHandler,
 	}
 }
 
@@ -100,6 +110,8 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
+	go j.sendJobCreatedEvent(uuid.New(), addedJobs)
+
 	return errors.MultiToError(me)
 }
 
@@ -123,6 +135,8 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
+
+	go j.sendJobUpdatedEvent(uuid.New(), updatedJobs)
 
 	return errors.MultiToError(me)
 }
@@ -266,6 +280,10 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 	err = j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs)
 	me.Append(err)
+
+	uuid := uuid.New()
+	go j.sendJobCreatedEvent(uuid, addedJobs)
+	go j.sendJobUpdatedEvent(uuid, updatedJobs)
 
 	return errors.MultiToError(me)
 }
@@ -687,4 +705,32 @@ func (j *JobService) GetDownstream(ctx context.Context, subjectJob *job.Job, loc
 		return j.repo.GetDownstreamByDestination(ctx, subjectJob.ProjectName(), subjectJob.Destination())
 	}
 	return j.repo.GetDownstreamByJobName(ctx, subjectJob.ProjectName(), subjectJob.Spec().Name())
+}
+
+func (j *JobService) sendJobCreatedEvent(uuid uuid.UUID, jobs []*job.Job) {
+	now := time.Now()
+
+	for _, jb := range jobs {
+		j.eventHandler.HandleEvent(event.JobCreated{
+			Event: event.Event{
+				ID:         uuid,
+				OccurredAt: now,
+			},
+			Job: jb,
+		})
+	}
+}
+
+func (j *JobService) sendJobUpdatedEvent(uuid uuid.UUID, jobs []*job.Job) {
+	now := time.Now()
+
+	for _, jb := range jobs {
+		j.eventHandler.HandleEvent(event.JobUpdated{
+			Event: event.Event{
+				ID:         uuid,
+				OccurredAt: now,
+			},
+			Job: jb,
+		})
+	}
 }

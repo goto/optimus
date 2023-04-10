@@ -64,6 +64,6 @@ type Publisher struct {
 
 type PublisherKafkaConfig struct {
 	Topic               string   `mapstructure:"topic"`
-	BrokerURLs          []string `mapstructure:"broker_urls"`
 	BatchIntervalSecond int      `mapstructure:"batch_interval_second"`
+	BrokerURLs          []string `mapstructure:"broker_urls"`
 }

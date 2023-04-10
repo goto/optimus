@@ -16,6 +16,7 @@ require (
 	github.com/emirpasic/gods v1.12.0
 	github.com/fatih/color v1.7.0
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/google/uuid v1.3.0
 	github.com/goto/optimus/sdk v0.0.0-20230313071811-2d68a9c815bf

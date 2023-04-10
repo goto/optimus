@@ -11,7 +11,7 @@ import (
 type JobRun struct {
 	Event
 
-	Run scheduler.JobRun
+	Run *scheduler.JobRun
 }
 
 func (j JobRun) Bytes() ([]byte, error) {

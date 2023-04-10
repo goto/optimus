@@ -34,8 +34,8 @@ func NewWriter(kafkaBrokerUrls []string, topic string, logger log.Logger) *Write
 	return &Writer{kWriter: writer}
 }
 
-func (w *Writer) Close() {
-	_ = w.kWriter.Close()
+func (w *Writer) Close() error {
+	return w.kWriter.Close()
 }
 
 func (w *Writer) Write(messages [][]byte) error {

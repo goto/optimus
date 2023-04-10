@@ -125,7 +125,7 @@ func TestReplayService(t *testing.T) {
 			replay3 := scheduler.NewReplayRequest("sample-job-C", tnnt, replayConfig, scheduler.ReplayStateFailed)
 			replays := []*scheduler.Replay{replay1, replay2, replay3}
 			replayRepository := new(ReplayRepository)
-			replayRepository.On("GetReplaysByProject", ctx, mock.Anything).Return(replays, nil)
+			replayRepository.On("GetReplaysByProject", ctx, mock.Anything, mock.Anything).Return(replays, nil)
 			defer replayRepository.AssertExpectations(t)
 
 			replayService := service.NewReplayService(replayRepository, nil, nil)
@@ -136,7 +136,7 @@ func TestReplayService(t *testing.T) {
 
 		t.Run("should return error when get replay by project is fail", func(t *testing.T) {
 			replayRepository := new(ReplayRepository)
-			replayRepository.On("GetReplaysByProject", ctx, mock.Anything).Return(nil, errors.New("some error"))
+			replayRepository.On("GetReplaysByProject", ctx, mock.Anything, mock.Anything).Return(nil, errors.New("some error"))
 			defer replayRepository.AssertExpectations(t)
 
 			replayService := service.NewReplayService(replayRepository, nil, nil)
@@ -152,25 +152,25 @@ type ReplayRepository struct {
 	mock.Mock
 }
 
-// GetRaplayByProject provides a mock function with given fields: ctx, projectName
-func (_m *ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.Replay, error) {
-	ret := _m.Called(ctx, projectName)
+// GetReplaysByProject provides a mock function with given fields: ctx, projectName, dayLimits
+func (_m *ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error) {
+	ret := _m.Called(ctx, projectName, dayLimits)
 
 	var r0 []*scheduler.Replay
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName) ([]*scheduler.Replay, error)); ok {
-		return rf(ctx, projectName)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, int) ([]*scheduler.Replay, error)); ok {
+		return rf(ctx, projectName, dayLimits)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName) []*scheduler.Replay); ok {
-		r0 = rf(ctx, projectName)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, int) []*scheduler.Replay); ok {
+		r0 = rf(ctx, projectName, dayLimits)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*scheduler.Replay)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName) error); ok {
-		r1 = rf(ctx, projectName)
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, int) error); ok {
+		r1 = rf(ctx, projectName, dayLimits)
 	} else {
 		r1 = ret.Error(1)
 	}

@@ -214,7 +214,7 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("return error when get replay list failed", func(t *testing.T) {
 			service := new(mockReplayService)
-			service.On("GetReplayList", ctx, "project-test").Return(nil, errors.New("some error"))
+			service.On("GetReplayList", ctx, tenant.ProjectName("project-test")).Return(nil, errors.New("some error"))
 			defer service.AssertExpectations(t)
 
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
@@ -229,7 +229,7 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("return empty list when no replay found in project", func(t *testing.T) {
 			service := new(mockReplayService)
-			service.On("GetReplayList", ctx, "project-test").Return([]*scheduler.Replay{}, nil)
+			service.On("GetReplayList", ctx, tenant.ProjectName("project-test")).Return([]*scheduler.Replay{}, nil)
 			defer service.AssertExpectations(t)
 
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
@@ -240,7 +240,7 @@ func TestReplayHandler(t *testing.T) {
 
 			result, err := replayHandler.ListReplay(ctx, req)
 			assert.NoError(t, err)
-			assert.Empty(t, result)
+			assert.Empty(t, result.Replays)
 		})
 		t.Run("return replay list when success", func(t *testing.T) {
 			tnnt, _ := tenant.NewTenant("project-test", "ns-1")
@@ -252,7 +252,7 @@ func TestReplayHandler(t *testing.T) {
 			replay2 := scheduler.NewReplayRequest("sample-job-B", tnnt, replayConfig, scheduler.ReplayStateCreated)
 			replay3 := scheduler.NewReplayRequest("sample-job-C", tnnt, replayConfig, scheduler.ReplayStateFailed)
 			service := new(mockReplayService)
-			service.On("GetReplayList", ctx, "project-test").Return([]*scheduler.Replay{replay1, replay2, replay3}, nil)
+			service.On("GetReplayList", ctx, tenant.ProjectName("project-test")).Return([]*scheduler.Replay{replay1, replay2, replay3}, nil)
 			defer service.AssertExpectations(t)
 
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
@@ -263,7 +263,7 @@ func TestReplayHandler(t *testing.T) {
 
 			result, err := replayHandler.ListReplay(ctx, req)
 			assert.NoError(t, err)
-			assert.Len(t, result, 3)
+			assert.Len(t, result.Replays, 3)
 		})
 	})
 }

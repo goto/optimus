@@ -205,9 +205,9 @@ func (r ReplayRepository) GetReplayRequestsByStatus(ctx context.Context, statusL
 	return replayReqs, nil
 }
 
-func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.Replay, error) {
-	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE project_name=$1`
-	rows, err := r.db.Query(ctx, getReplayRequest, projectName)
+func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error) {
+	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE project_name=$1 LIMIT $2`
+	rows, err := r.db.Query(ctx, getReplayRequest, projectName, dayLimits)
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "unable to get replay list", err)
 	}

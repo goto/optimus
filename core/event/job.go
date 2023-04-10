@@ -14,31 +14,31 @@ import (
 type JobCreated struct {
 	Event
 
-	job *job.Job
+	Job *job.Job
 }
 
 func (j JobCreated) Bytes() ([]byte, error) {
-	return jobEventToBytes(j.Event, j.job, pbInt.OptimusChangeEvent_JOB_CREATE)
+	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_JOB_CREATE)
 }
 
 type JobUpdated struct {
 	Event
 
-	job *job.Job
+	Job *job.Job
 }
 
 func (j JobUpdated) Bytes() ([]byte, error) {
-	return jobEventToBytes(j.Event, j.job, pbInt.OptimusChangeEvent_JOB_UPDATE)
+	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_JOB_UPDATE)
 }
 
 type JobDeleted struct {
 	Event
 
-	job *job.Job
+	Job *job.Job
 }
 
 func (j JobDeleted) Bytes() ([]byte, error) {
-	return jobEventToBytes(j.Event, j.job, pbInt.OptimusChangeEvent_JOB_DELETE)
+	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_JOB_DELETE)
 }
 
 func jobEventToBytes(event Event, job *job.Job, eventType pbInt.OptimusChangeEvent_EventType) ([]byte, error) {

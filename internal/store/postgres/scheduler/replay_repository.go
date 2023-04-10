@@ -268,10 +268,10 @@ func (r ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUID)
 	}
 	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt)
 	replayRuns := make([]*scheduler.JobRunStatus, len(runs))
-	for i, run := range runs {
+	for i := range runs {
 		replayRun := &scheduler.JobRunStatus{
-			ScheduledAt: run.ScheduledTime,
-			State:       scheduler.State(run.RunStatus),
+			ScheduledAt: runs[i].ScheduledTime,
+			State:       scheduler.State(runs[i].RunStatus),
 		}
 		replayRuns[i] = replayRun
 	}

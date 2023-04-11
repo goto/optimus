@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/olekukonko/tablewriter"
@@ -105,35 +106,56 @@ func (r *statusCommand) getReplay(replayID string) (*pb.GetReplayResponse, error
 
 func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	buff := &bytes.Buffer{}
-	buff.WriteString(fmt.Sprintf("ID       : %s", resp.GetId()))
-	buff.WriteString(fmt.Sprintf("Job Name : %s", resp.GetJobName()))
-	buff.WriteString(fmt.Sprintf("Runs     : %d", len(resp.GetReplayRuns())))
+	mode := "sequential"
+	if resp.GetReplayConfig().GetParallel() {
+		mode = "parallel"
+	}
+	buff.WriteString(fmt.Sprintf("Job Name      : %s", resp.GetJobName()))
+	buff.WriteString(fmt.Sprintf("Replay Mode   : %s", mode))
+	buff.WriteString(fmt.Sprintf("Description   : %s", resp.ReplayConfig.GetDescription()))
+	buff.WriteString(fmt.Sprintf("Start Date    : %s", resp.ReplayConfig.GetStartTime().AsTime().Format(time.RFC3339)))
+	buff.WriteString(fmt.Sprintf("End Date      : %s", resp.ReplayConfig.GetEndTime().AsTime().Format(time.RFC3339)))
+	buff.WriteString(fmt.Sprintf("Replay Status : %s", resp.GetStatus()))
+	buff.WriteString(fmt.Sprintf("Runs          : %d", len(resp.GetReplayRuns())))
 
+	if len(resp.ReplayConfig.GetJobConfig()) > 0 {
+		stringifyReplayConfig(buff, resp.ReplayConfig.GetJobConfig())
+	}
+
+	if len(resp.GetReplayRuns()) > 0 {
+		stringifyReplayRuns(buff, resp.GetReplayRuns())
+	}
+
+	return buff.String()
+}
+
+func stringifyReplayConfig(buff *bytes.Buffer, jobConfig map[string]string) {
 	table := tablewriter.NewWriter(buff)
 	table.SetBorder(false)
 	table.SetHeader([]string{
-		"Config Key",
-		"Config Value",
+		"config key",
+		"config value",
 	})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	for k, v := range resp.ReplayConfig.GetJobConfig() {
+	for k, v := range jobConfig {
 		table.Append([]string{k, v})
 	}
 	table.Render()
+}
 
-	table = tablewriter.NewWriter(buff)
+func stringifyReplayRuns(buff *bytes.Buffer, runs []*pb.ReplayRun) {
+	table := tablewriter.NewWriter(buff)
 	table.SetBorder(false)
 	table.SetHeader([]string{
-		"ScheduledAt",
-		"Status",
+		"scheduled at",
+		"status",
 	})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	for _, run := range resp.GetReplayRuns() {
+	for _, run := range runs {
 		table.Append([]string{
 			run.GetScheduledAt().AsTime().String(),
 			run.GetStatus(),
 		})
 	}
 	table.Render()
-	return buff.String()
 }

@@ -63,6 +63,7 @@ resource_managers:
     host: external.optimus.io
 publisher:
   type: kafka
+  buffer: 8
   config:
     topic: optimus_event_for_test
     batch_interval_second: 5
@@ -289,7 +290,8 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 	s.expectedServerConfig.Replay.ReplayTimeout = time.Hour * 3
 
 	s.expectedServerConfig.Publisher = config.Publisher{
-		Type: "kafka",
+		Type:   "kafka",
+		Buffer: 8,
 		Config: map[string]interface{}{
 			"topic":                 "optimus_event_for_test",
 			"batch_interval_second": 5,

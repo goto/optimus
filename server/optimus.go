@@ -108,7 +108,8 @@ func New(conf *config.ServerConfig) (*OptimusServer, error) {
 }
 
 func (s *OptimusServer) setupPublisher() error {
-	ch := make(chan []byte)
+	ch := make(chan []byte, s.conf.Publisher.Buffer)
+
 	var worker *moderator.Worker
 
 	switch s.conf.Publisher.Type {

@@ -59,6 +59,7 @@ type ReplayConfig struct {
 
 type Publisher struct {
 	Type   string      `mapstructure:"type" default:"kafka"`
+	Buffer int         `mapstructure:"buffer"`
 	Config interface{} `mapstructure:"config"`
 }
 

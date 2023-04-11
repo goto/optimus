@@ -132,7 +132,7 @@ func (h JobRunHandler) UploadToScheduler(ctx context.Context, req *pb.UploadToSc
 		return nil, errors.GRPCErr(err, "unable to get projectName")
 	}
 	go func() {
-		err = h.service.UploadToScheduler(ctx, projectName)
+		err = h.service.UploadToScheduler(context.Background(), projectName)
 		if err != nil {
 			h.l.Error("Finished upload to scheduler with error: %s", err)
 		}

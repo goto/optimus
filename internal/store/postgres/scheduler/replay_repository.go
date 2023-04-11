@@ -230,19 +230,7 @@ func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName t
 }
 
 func (r ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		} else {
-			tx.Commit(ctx)
-		}
-	}()
-
-	rr, err := r.getReplayRequestByID(ctx, tx, replayID)
+	rr, err := r.getReplayRequestByID(ctx, replayID)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
@@ -250,7 +238,7 @@ func (r ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUID)
 		return nil, errors.NotFound(job.EntityJob, fmt.Sprintf("no replay found for replay ID %s", replayID.String()))
 	}
 
-	runs, err := r.getReplayRuns(ctx, tx, replayID)
+	runs, err := r.getReplayRuns(ctx, replayID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
@@ -400,10 +388,10 @@ func (ReplayRepository) getReplayRequest(ctx context.Context, tx pgx.Tx, replay 
 	return rr, nil
 }
 
-func (ReplayRepository) getReplayRequestByID(ctx context.Context, tx pgx.Tx, replayID uuid.UUID) (replayRequest, error) {
+func (r ReplayRepository) getReplayRequestByID(ctx context.Context, replayID uuid.UUID) (replayRequest, error) {
 	var rr replayRequest
 	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE id=$1`
-	err := tx.QueryRow(ctx, getReplayRequest, replayID).Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+	err := r.db.QueryRow(ctx, getReplayRequest, replayID).Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
 		&rr.Status, &rr.Message, &rr.CreatedAt)
 	if err != nil {
 		return rr, err
@@ -411,10 +399,10 @@ func (ReplayRepository) getReplayRequestByID(ctx context.Context, tx pgx.Tx, rep
 	return rr, nil
 }
 
-func (ReplayRepository) getReplayRuns(ctx context.Context, tx pgx.Tx, replayID uuid.UUID) ([]replayRun, error) {
+func (r ReplayRepository) getReplayRuns(ctx context.Context, replayID uuid.UUID) ([]replayRun, error) {
 	var runs []replayRun
 	getRuns := `SELECT ` + replayRunColumns + ` FROM replay_run WHERE replay_id=$1`
-	rows, err := tx.Query(ctx, getRuns, replayID)
+	rows, err := r.db.Query(ctx, getRuns, replayID)
 	if err != nil {
 		return nil, err
 	}

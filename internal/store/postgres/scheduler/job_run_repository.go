@@ -61,15 +61,14 @@ func (j *jobRun) toJobRun() (*scheduler.JobRun, error) {
 		}
 	}
 	return &scheduler.JobRun{
-		ID:          j.ID,
-		JobName:     scheduler.JobName(j.JobName),
-		Tenant:      t,
-		State:       state,
-		StartTime:   j.StartTime,
-		ScheduledAt: j.ScheduledAt,
-		SLAAlert:    j.SLAAlert,
-		EndTime:     j.EndTime,
-		Monitoring:  monitoring,
+		ID:         j.ID,
+		JobName:    scheduler.JobName(j.JobName),
+		Tenant:     t,
+		State:      state,
+		StartTime:  j.StartTime,
+		SLAAlert:   j.SLAAlert,
+		EndTime:    j.EndTime,
+		Monitoring: monitoring,
 	}, nil
 }
 

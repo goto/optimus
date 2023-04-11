@@ -128,7 +128,13 @@ func (s *OptimusServer) setupPublisher() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	go worker.Run(ctx)
 
-	s.cleanupFn = append(s.cleanupFn, cancel)
+	s.cleanupFn = append(s.cleanupFn, func() {
+		cancel()
+
+		if err := worker.Close(); err != nil {
+			s.logger.Error("error closing publishing worker: %v", err)
+		}
+	})
 
 	s.publisherHandler = moderator.NewEventHandler(ch, s.logger)
 	return nil

@@ -9,13 +9,15 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-var kafkaQueueCounter = promauto.NewCounter(prometheus.CounterOpts{
-	Name: "kafka_publish_queue",
-	Help: "Events published to kafka topic",
-})
+var (
+	kafkaQueueCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "kafka_publish_queue",
+		Help: "Events published to kafka topic",
+	})
+)
 
 type Writer struct {
-	writer *kafka.Writer
+	kWriter *kafka.Writer
 }
 
 func NewWriter(kafkaBrokerUrls []string, topic string, logger log.Logger) *Writer {
@@ -29,22 +31,22 @@ func NewWriter(kafkaBrokerUrls []string, topic string, logger log.Logger) *Write
 		ErrorLogger:            kafka.LoggerFunc(logger.Error),
 	}
 
-	return &Writer{writer: writer}
+	return &Writer{kWriter: writer}
 }
 
 func (w *Writer) Close() error {
-	return w.writer.Close()
+	return w.kWriter.Close()
 }
 
 func (w *Writer) Write(messages [][]byte) error {
-	kafkaMessages := make([]kafka.Message, len(messages))
+	kMessage := make([]kafka.Message, len(messages))
 	for i, m := range messages {
-		kafkaMessages[i] = kafka.Message{
+		kMessage[i] = kafka.Message{
 			Value: m,
 		}
 	}
 
-	err := w.writer.WriteMessages(context.Background(), kafkaMessages...)
+	err := w.kWriter.WriteMessages(context.Background(), kMessage...)
 	if err == nil {
 		kafkaQueueCounter.Add(float64(len(messages)))
 		return nil

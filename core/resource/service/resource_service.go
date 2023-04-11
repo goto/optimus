@@ -57,7 +57,7 @@ func NewResourceService(logger log.Logger, repo ResourceRepository, mgr Resource
 	}
 }
 
-func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resource) error { // nolint:gocritic
+func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resource) error {
 	if err := rs.mgr.Validate(incoming); err != nil {
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
@@ -118,7 +118,7 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 	return nil
 }
 
-func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource) error { // nolint:gocritic
+func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource) error {
 	if err := rs.mgr.Validate(incoming); err != nil {
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
@@ -167,7 +167,7 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 	return nil
 }
 
-func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceFullName string) (*resource.Resource, error) { // nolint:gocritic
+func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceFullName string) (*resource.Resource, error) {
 	if resourceFullName == "" {
 		rs.logger.Error("resource full name is empty")
 		return nil, errors.InvalidArgument(resource.EntityResource, "empty resource full name")
@@ -175,11 +175,11 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 	return rs.repo.ReadByFullName(ctx, tnnt, store, resourceFullName)
 }
 
-func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
+func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
 	return rs.repo.ReadAll(ctx, tnnt, store)
 }
 
-func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource) error { // nolint:gocritic
+func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource) error {
 	multiError := errors.NewMultiError("error batch updating resources")
 	for _, r := range resources {
 		if err := rs.mgr.Validate(r); err != nil {
@@ -218,7 +218,7 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 	return errors.MultiToError(multiError)
 }
 
-func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource) ([]*resource.Resource, error) { // nolint:gocritic
+func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource) ([]*resource.Resource, error) {
 	existingResources, readErr := rs.repo.ReadAll(ctx, tnnt, store)
 	if readErr != nil {
 		rs.logger.Error("error reading all existing resources: %s", readErr)

@@ -116,7 +116,7 @@ func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	buff.WriteString(fmt.Sprintf("Start Date    : %s\n", resp.ReplayConfig.GetStartTime().AsTime().Format(time.RFC3339)))
 	buff.WriteString(fmt.Sprintf("End Date      : %s\n", resp.ReplayConfig.GetEndTime().AsTime().Format(time.RFC3339)))
 	buff.WriteString(fmt.Sprintf("Replay Status : %s\n", resp.GetStatus()))
-	buff.WriteString(fmt.Sprintf("Runs          : %d\n", len(resp.GetReplayRuns())))
+	buff.WriteString(fmt.Sprintf("Total Runs    : %d\n\n", len(resp.GetReplayRuns())))
 
 	if len(resp.ReplayConfig.GetJobConfig()) > 0 {
 		stringifyReplayConfig(buff, resp.ReplayConfig.GetJobConfig())

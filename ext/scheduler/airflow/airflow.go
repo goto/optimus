@@ -40,7 +40,7 @@ const (
 	jobsExtension   = ".py"
 
 	concurrentTicketPerSec = 40
-	concurrentLimit        = 600
+	concurrentLimit        = 100
 )
 
 type Bucket interface {

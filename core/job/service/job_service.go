@@ -23,7 +23,7 @@ import (
 
 const (
 	ConcurrentTicketPerSec = 40
-	ConcurrentLimit        = 600
+	ConcurrentLimit        = 100
 )
 
 type JobService struct {

@@ -10,8 +10,8 @@ import (
 )
 
 var kafkaQueueCounter = promauto.NewCounter(prometheus.CounterOpts{
-	Name: "kafka_publish_queue",
-	Help: "Events published to kafka topic",
+	Name: "publisher_kafka_events_queued_counter",
+	Help: "Number of events queued to be published to kafka topic",
 })
 
 type Writer struct {

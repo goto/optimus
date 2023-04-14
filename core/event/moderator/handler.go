@@ -1,6 +1,15 @@
 package moderator
 
-import "github.com/goto/salt/log"
+import (
+	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var eventQueueCounter = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "publisher_events_created_counter",
+	Help: "Events created and to be sent to writer",
+})
 
 type Event interface {
 	Bytes() ([]byte, error)
@@ -24,5 +33,7 @@ func (e EventHandler) HandleEvent(event Event) {
 		e.logger.Error("error converting event to bytes: %v", err)
 		return
 	}
+
 	go func() { e.messageChan <- bytes }()
+	eventQueueCounter.Inc()
 }

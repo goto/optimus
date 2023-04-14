@@ -3,9 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/event"
@@ -108,13 +106,11 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	rs.eventHandler.HandleEvent(event.ResourceCreated{
-		Event: event.Event{
-			ID:         uuid.New(),
-			OccurredAt: time.Now(),
-		},
-		Resource: incoming,
-	})
+	if ev, err := event.NewResourceCreatedEvent(incoming); err != nil {
+		rs.logger.Error("error creating event for resource create: %s", err)
+	} else {
+		rs.eventHandler.HandleEvent(ev)
+	}
 	return nil
 }
 
@@ -157,13 +153,11 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	rs.eventHandler.HandleEvent(event.ResourceUpdated{
-		Event: event.Event{
-			ID:         uuid.New(),
-			OccurredAt: time.Now(),
-		},
-		Resource: incoming,
-	})
+	if ev, err := event.NewResourceUpdatedEvent(incoming); err != nil {
+		rs.logger.Error("error creating event for resource update: %s", err)
+	} else {
+		rs.eventHandler.HandleEvent(ev)
+	}
 	return nil
 }
 

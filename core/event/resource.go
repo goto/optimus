@@ -17,6 +17,17 @@ type ResourceCreated struct {
 	Resource *resource.Resource
 }
 
+func NewResourceCreatedEvent(rsc *resource.Resource) (*ResourceCreated, error) {
+	baseEvent, err := NewBaseEvent()
+	if err != nil {
+		return nil, err
+	}
+	return &ResourceCreated{
+		Event:    baseEvent,
+		Resource: rsc,
+	}, nil
+}
+
 func (r ResourceCreated) Bytes() ([]byte, error) {
 	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_RESOURCE_CREATE)
 }
@@ -25,6 +36,17 @@ type ResourceUpdated struct {
 	Event
 
 	Resource *resource.Resource
+}
+
+func NewResourceUpdatedEvent(rsc *resource.Resource) (*ResourceUpdated, error) {
+	baseEvent, err := NewBaseEvent()
+	if err != nil {
+		return nil, err
+	}
+	return &ResourceUpdated{
+		Event:    baseEvent,
+		Resource: rsc,
+	}, nil
 }
 
 func (r ResourceUpdated) Bytes() ([]byte, error) {

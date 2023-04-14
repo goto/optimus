@@ -84,6 +84,7 @@ func New(conf *config.ServerConfig) (*OptimusServer, error) {
 	}
 
 	setupFns := []setupFn{
+		server.setupPublisher,
 		server.setupPlugins,
 		server.setupTelemetry,
 		server.setupAppKey,
@@ -92,7 +93,6 @@ func New(conf *config.ServerConfig) (*OptimusServer, error) {
 		server.setupHandlers,
 		server.setupMonitoring,
 		server.setupHTTPProxy,
-		server.setupPublisher,
 	}
 
 	for _, fn := range setupFns {

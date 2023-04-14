@@ -1,7 +1,7 @@
 package event
 
 import (
-	"github.com/gogo/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 

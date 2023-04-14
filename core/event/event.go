@@ -10,8 +10,6 @@ import (
 
 const eventsEntity = "events"
 
-type Message []byte
-
 type Event struct {
 	ID         uuid.UUID
 	OccurredAt time.Time

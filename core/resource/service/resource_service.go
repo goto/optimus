@@ -271,7 +271,7 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, tnnt te
 	return toUpdateOnStore, errors.MultiToError(me)
 }
 
-func (rs ResourceService) raiseCreateEvent(res *resource.Resource) {
+func (rs ResourceService) raiseCreateEvent(res *resource.Resource) { // nolint:gocritic
 	if res.Status() != resource.StatusSuccess {
 		return
 	}
@@ -284,7 +284,7 @@ func (rs ResourceService) raiseCreateEvent(res *resource.Resource) {
 	rs.eventHandler.HandleEvent(ev)
 }
 
-func (rs ResourceService) raiseUpdateEvent(res *resource.Resource) {
+func (rs ResourceService) raiseUpdateEvent(res *resource.Resource) { // nolint:gocritic
 	if res.Status() != resource.StatusSuccess {
 		return
 	}

@@ -283,9 +283,25 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 	addedJobs, err := j.bulkAdd(ctx, tenantWithDetails, toAdd, logWriter)
 	me.Append(err)
+	for _, job := range addedJobs {
+		jobEvent, err := event.NewJobCreatedEvent(job)
+		if err != nil {
+			j.logger.Error("error creating event for job create: %s", err)
+			continue
+		}
+		j.eventHandler.HandleEvent(jobEvent)
+	}
 
 	updatedJobs, err := j.bulkUpdate(ctx, tenantWithDetails, toUpdate, logWriter)
 	me.Append(err)
+	for _, job := range updatedJobs {
+		jobEvent, err := event.NewJobCreatedEvent(job)
+		if err != nil {
+			j.logger.Error("error creating event for job update: %s", err)
+			continue
+		}
+		j.eventHandler.HandleEvent(jobEvent)
+	}
 
 	err = j.bulkDelete(ctx, jobTenant, toDelete, logWriter)
 	me.Append(err)

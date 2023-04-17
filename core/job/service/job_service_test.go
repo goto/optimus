@@ -770,6 +770,8 @@ func TestJobService(t *testing.T) {
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -799,8 +801,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.NoError(t, err)
 		})
@@ -819,6 +822,8 @@ func TestJobService(t *testing.T) {
 
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -840,6 +845,7 @@ func TestJobService(t *testing.T) {
 			pluginService.On("GenerateUpstreams", ctx, detailedTenant, specA, true).Return(jobAUpstreamName, nil)
 
 			jobRepo.On("Update", ctx, mock.Anything).Return([]*job.Job{jobA}, nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			upstream := job.NewUpstreamResolved("job-B", "", "resource-B", sampleTenant, "static", taskName, false)
 
@@ -850,7 +856,7 @@ func TestJobService(t *testing.T) {
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.NoError(t, err)
 		})
@@ -909,6 +915,8 @@ func TestJobService(t *testing.T) {
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -951,8 +959,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.NoError(t, err)
 		})
@@ -971,6 +980,8 @@ func TestJobService(t *testing.T) {
 
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -1016,8 +1027,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, []job.Name{"job-D"}, logWriter)
 			assert.NoError(t, err)
 		})
@@ -1118,6 +1130,8 @@ func TestJobService(t *testing.T) {
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -1155,8 +1169,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.ErrorContains(t, err, "job is being used by")
 		})
@@ -1175,6 +1190,8 @@ func TestJobService(t *testing.T) {
 
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -1207,8 +1224,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 		})

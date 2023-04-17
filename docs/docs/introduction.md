@@ -28,7 +28,7 @@ warehouse sink you want to support, and what configurations you need from the us
 through [plugin](concepts/plugin.md). At the moment, we provide a [BigQuery to BigQuery task plugin](https://github.com/goto/transformers/tree/main/task/bq2bq), 
 but you can write custom plugins such as Python transformations.
 
-Also, in order to provide a unified command line experience of various tools, Optimus provides [extensions](guides/extension.md) 
+Also, in order to provide a unified command line experience of various tools, Optimus provides [extensions](client-guide/work-with-extension.md) 
 support on client side through which you can extend the capabilities for example providing governance. 
 
 ## Automated Dependency Resolution

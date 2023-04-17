@@ -9,6 +9,8 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
 
+	"github.com/goto/optimus/core/event"
+	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
@@ -29,17 +31,19 @@ type JobService struct {
 
 	pluginService    PluginService
 	upstreamResolver UpstreamResolver
+	eventHandler     EventHandler
 
 	tenantDetailsGetter TenantDetailsGetter
 
 	logger log.Logger
 }
 
-func NewJobService(repo JobRepository, pluginService PluginService, upstreamResolver UpstreamResolver, tenantDetailsGetter TenantDetailsGetter, logger log.Logger) *JobService {
+func NewJobService(repo JobRepository, pluginService PluginService, upstreamResolver UpstreamResolver, tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger) *JobService {
 	return &JobService{
 		repo:                repo,
 		pluginService:       pluginService,
 		upstreamResolver:    upstreamResolver,
+		eventHandler:        eventHandler,
 		tenantDetailsGetter: tenantDetailsGetter,
 		logger:              logger,
 	}
@@ -74,6 +78,10 @@ type JobRepository interface {
 	GetDownstreamByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Downstream, error)
 }
 
+type EventHandler interface {
+	HandleEvent(moderator.Event)
+}
+
 type UpstreamResolver interface {
 	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
@@ -99,6 +107,15 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
+
+	for _, job := range addedJobs {
+		jobEvent, err := event.NewJobCreatedEvent(job)
+		if err != nil {
+			j.logger.Error("error creating event for job create: %s", err)
+			continue
+		}
+		j.eventHandler.HandleEvent(jobEvent)
+	}
 
 	return errors.MultiToError(me)
 }

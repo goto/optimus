@@ -108,6 +108,11 @@ func New(conf *config.ServerConfig) (*OptimusServer, error) {
 }
 
 func (s *OptimusServer) setupPublisher() error {
+	if s.conf.Publisher == nil {
+		s.publisherHandler = moderator.NewEventHandler(nil, s.logger)
+		return nil
+	}
+
 	ch := make(chan []byte, s.conf.Publisher.Buffer)
 
 	var worker *moderator.Worker

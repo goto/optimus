@@ -289,7 +289,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 
 	s.expectedServerConfig.Replay.ReplayTimeout = time.Hour * 3
 
-	s.expectedServerConfig.Publisher = config.Publisher{
+	s.expectedServerConfig.Publisher = &config.Publisher{
 		Type:   "kafka",
 		Buffer: 8,
 		Config: map[string]interface{}{

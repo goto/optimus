@@ -28,6 +28,11 @@ func NewEventHandler(messageChan chan<- []byte, logger log.Logger) *EventHandler
 }
 
 func (e EventHandler) HandleEvent(event Event) {
+	if e.messageChan == nil {
+		e.logger.Warn("event is not published because it is not configured")
+		return
+	}
+
 	bytes, err := event.Bytes()
 	if err != nil {
 		e.logger.Error("error converting event to bytes: %v", err)

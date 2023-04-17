@@ -11,7 +11,7 @@ type ServerConfig struct {
 	ResourceManagers []ResourceManager `mapstructure:"resource_managers"`
 	Plugin           PluginConfig      `mapstructure:"plugin"`
 	Replay           ReplayConfig      `mapstructure:"replay"`
-	Publisher        Publisher         `mapstructure:"publisher"`
+	Publisher        *Publisher        `mapstructure:"publisher"`
 }
 
 type Serve struct {

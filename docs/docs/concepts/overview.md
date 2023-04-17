@@ -239,6 +239,23 @@ metadata:
     pool: poolA
     # defines the queue to be assigend for this job
     queue: queueA
+
+# contains configuration for publishing events to outside service
+publisher:
+  # the type of publisher to send the event to (currently supported: kafka)
+  type: kafka
+  # the number of buffer to be used
+  buffer: 8
+  # config is the configuration specific to each publisher type (refer to publisher.type)
+  config:
+    # for kafka: topic is the topic target for sending message to
+    topic: optimus-events
+    # for kafka: interval in second before sending the message
+    batch_interval_second: 1
+    # for kafka: broker URLs to send the message to
+    broker_urls:
+      - localhost:9092
+
 ```
 
 `resource` under metadata follows most of the convention specified [here](https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container).

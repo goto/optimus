@@ -141,6 +141,15 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
+	for _, job := range updatedJobs {
+		jobEvent, err := event.NewJobCreatedEvent(job)
+		if err != nil {
+			j.logger.Error("error creating event for job update: %s", err)
+			continue
+		}
+		j.eventHandler.HandleEvent(jobEvent)
+	}
+
 	return errors.MultiToError(me)
 }
 

@@ -382,6 +382,8 @@ func TestJobService(t *testing.T) {
 			tenantDetailsGetter := new(TenantDetailsGetter)
 			defer tenantDetailsGetter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			specs := []*job.Spec{specA}
 
@@ -402,8 +404,9 @@ func TestJobService(t *testing.T) {
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
 
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.Update(ctx, sampleTenant, specs)
 			assert.NoError(t, err)
 		})
@@ -442,6 +445,8 @@ func TestJobService(t *testing.T) {
 			tenantDetailsGetter := new(TenantDetailsGetter)
 			defer tenantDetailsGetter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			specC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -469,8 +474,9 @@ func TestJobService(t *testing.T) {
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
 
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.Update(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "generate upstream error")
 		})
@@ -523,6 +529,8 @@ func TestJobService(t *testing.T) {
 			tenantDetailsGetter := new(TenantDetailsGetter)
 			defer tenantDetailsGetter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			specs := []*job.Spec{specA}
 
@@ -540,8 +548,9 @@ func TestJobService(t *testing.T) {
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
 
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.Update(ctx, sampleTenant, specs)
 			assert.NoError(t, err)
 		})
@@ -557,6 +566,8 @@ func TestJobService(t *testing.T) {
 
 			tenantDetailsGetter := new(TenantDetailsGetter)
 			defer tenantDetailsGetter.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -581,8 +592,9 @@ func TestJobService(t *testing.T) {
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), savedJobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamB}, nil, nil)
 
 			jobRepo.On("ReplaceUpstreams", ctx, mock.Anything).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.Update(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "unable to save job A")
 		})
@@ -633,6 +645,8 @@ func TestJobService(t *testing.T) {
 			tenantDetailsGetter := new(TenantDetailsGetter)
 			defer tenantDetailsGetter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			specs := []*job.Spec{specA}
 
@@ -652,8 +666,9 @@ func TestJobService(t *testing.T) {
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamA}, nil, nil)
 
 			jobRepo.On("ReplaceUpstreams", ctx, mock.Anything).Return(errors.New("internal error"))
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.Update(ctx, sampleTenant, specs)
 			assert.Error(t, err)
 		})

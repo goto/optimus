@@ -340,6 +340,14 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 		specs := job.Jobs(jobs).GetSpecs()
 		updatedJobs, err := j.bulkUpdate(ctx, tenantWithDetails, specs, logWriter)
 		me.Append(err)
+		for _, job := range updatedJobs {
+			jobEvent, err := event.NewJobCreatedEvent(job)
+			if err != nil {
+				j.logger.Error("error creating event for job update: %s", err)
+				continue
+			}
+			j.eventHandler.HandleEvent(jobEvent)
+		}
 
 		j.logger.Debug("resolving upstreams for %d jobs of project [%s] namespace [%s]", len(updatedJobs), projectName, namespaceName)
 		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, projectName, updatedJobs, logWriter)

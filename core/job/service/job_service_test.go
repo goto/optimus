@@ -1402,6 +1402,8 @@ func TestJobService(t *testing.T) {
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			jobADestination := job.ResourceURN("resource-A")
 			jobAUpstreamName := []job.ResourceURN{"job-B"}
@@ -1433,8 +1435,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil).Times(3)
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.Refresh(ctx, project.Name(), []string{namespace.Name().String()}, nil, logWriter)
 			assert.NoError(t, err)
 		})
@@ -1453,6 +1456,8 @@ func TestJobService(t *testing.T) {
 
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			jobADestination := job.ResourceURN("resource-A")
@@ -1492,8 +1497,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobBWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil).Times(4)
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.Refresh(ctx, project.Name(), []string{namespace.Name().String(), otherNamespace.Name().String()}, nil, logWriter)
 			assert.NoError(t, err)
 		})

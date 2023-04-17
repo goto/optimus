@@ -233,7 +233,6 @@ func TestResourceService(t *testing.T) {
 			mgr.On("CreateResource", ctx, incoming).Return(nil)
 
 			eventHandler := newEventHandler(t)
-			eventHandler.On("HandleEvent", mock.Anything).Return()
 
 			rscService := service.NewResourceService(logger, repo, mgr, tnntDetailsGetter, eventHandler)
 
@@ -400,7 +399,6 @@ func TestResourceService(t *testing.T) {
 			mgr.On("UpdateResource", ctx, mock.Anything).Return(nil)
 
 			eventHandler := newEventHandler(t)
-			eventHandler.On("HandleEvent", mock.Anything).Return()
 
 			rscService := service.NewResourceService(logger, repo, mgr, nil, eventHandler)
 
@@ -593,7 +591,9 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", mock.Anything).Return(nil)
 			mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset", nil)
 
-			rscService := service.NewResourceService(logger, repo, mgr, nil, nil)
+			eventHandler := newEventHandler(t)
+
+			rscService := service.NewResourceService(logger, repo, mgr, nil, eventHandler)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate})
 
@@ -618,7 +618,8 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", mock.Anything).Return(nil)
 			mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset.view1", nil)
 
-			rscService := service.NewResourceService(logger, repo, mgr, nil, nil)
+			eventHandler := newEventHandler(t)
+			rscService := service.NewResourceService(logger, repo, mgr, nil, eventHandler)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate})
 
@@ -644,7 +645,8 @@ func TestResourceService(t *testing.T) {
 			mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset.view1", nil)
 			mgr.On("BatchUpdate", ctx, resource.Bigquery, mock.Anything).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, mgr, nil, nil)
+			eventHandler := newEventHandler(t)
+			rscService := service.NewResourceService(logger, repo, mgr, nil, eventHandler)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate})
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -672,7 +674,8 @@ func TestResourceService(t *testing.T) {
 			mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset.view1", nil)
 			mgr.On("BatchUpdate", ctx, resource.Bigquery, mock.Anything).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, mgr, nil, nil)
+			eventHandler := newEventHandler(t)
+			rscService := service.NewResourceService(logger, repo, mgr, nil, eventHandler)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate})
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -704,9 +707,20 @@ func TestResourceService(t *testing.T) {
 			mgr := newResourceManager(t)
 			mgr.On("Validate", mock.Anything).Return(nil)
 			mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset.view1", nil)
-			mgr.On("BatchUpdate", ctx, resource.Bigquery, []*resource.Resource{incomingToCreate, incomingToUpdate, incomingToCreateExisting}).Return(nil)
+			mgr.On("BatchUpdate", ctx, resource.Bigquery, []*resource.Resource{incomingToCreate, incomingToUpdate, incomingToCreateExisting}).Run(func(args mock.Arguments) {
+				res := args.Get(2).([]*resource.Resource)
+				for _, r := range res {
+					r.MarkSuccess()
+				}
+			}).Return(nil)
 
-			rscService := service.NewResourceService(logger, repo, mgr, nil, nil)
+			eventHandler := newEventHandler(t)
+			argMatcher := mock.MatchedBy(func(ev moderator.Event) bool {
+				return ev != nil
+			})
+			eventHandler.On("HandleEvent", argMatcher).Return().Times(3)
+
+			rscService := service.NewResourceService(logger, repo, mgr, nil, eventHandler)
 
 			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting}
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings)

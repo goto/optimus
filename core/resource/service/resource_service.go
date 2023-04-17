@@ -106,11 +106,7 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	if ev, err := event.NewResourceCreatedEvent(incoming); err != nil {
-		rs.logger.Error("error creating event for resource create: %s", err)
-	} else {
-		rs.eventHandler.HandleEvent(ev)
-	}
+	rs.raiseCreateEvent(incoming)
 	return nil
 }
 
@@ -152,12 +148,7 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 	if err := rs.mgr.UpdateResource(ctx, incoming); err != nil {
 		return err
 	}
-
-	if ev, err := event.NewResourceUpdatedEvent(incoming); err != nil {
-		rs.logger.Error("error creating event for resource update: %s", err)
-	} else {
-		rs.eventHandler.HandleEvent(ev)
-	}
+	rs.raiseUpdateEvent(incoming)
 	return nil
 }
 
@@ -208,7 +199,26 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 		return errors.MultiToError(multiError)
 	}
 
+	var toCreate []*resource.Resource
+	var toUpdate []*resource.Resource
+	for _, r := range toUpdateOnStore {
+		if r.Status() == resource.StatusToCreate {
+			toCreate = append(toCreate, r)
+		} else if r.Status() == resource.StatusToUpdate {
+			toUpdate = append(toUpdate, r)
+		}
+	}
+
 	multiError.Append(rs.mgr.BatchUpdate(ctx, store, toUpdateOnStore))
+
+	for _, r := range toCreate {
+		rs.raiseCreateEvent(r)
+	}
+
+	for _, r := range toUpdate {
+		rs.raiseUpdateEvent(r)
+	}
+
 	return errors.MultiToError(multiError)
 }
 
@@ -259,6 +269,32 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, tnnt te
 		me.Append(err)
 	}
 	return toUpdateOnStore, errors.MultiToError(me)
+}
+
+func (rs ResourceService) raiseCreateEvent(res *resource.Resource) {
+	if res.Status() != resource.StatusSuccess {
+		return
+	}
+
+	ev, err := event.NewResourceCreatedEvent(res)
+	if err != nil {
+		rs.logger.Error("error creating event for resource create: %s", err)
+		return
+	}
+	rs.eventHandler.HandleEvent(ev)
+}
+
+func (rs ResourceService) raiseUpdateEvent(res *resource.Resource) {
+	if res.Status() != resource.StatusSuccess {
+		return
+	}
+
+	ev, err := event.NewResourceUpdatedEvent(res)
+	if err != nil {
+		rs.logger.Error("error creating event for resource update: %s", err)
+		return
+	}
+	rs.eventHandler.HandleEvent(ev)
 }
 
 func createFullNameToResourceMap(resources []*resource.Resource) map[string]*resource.Resource {

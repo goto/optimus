@@ -6,6 +6,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/handler/v1beta1"
+	"github.com/goto/optimus/core/tenant"
 	pbInt "github.com/goto/optimus/protos/gotocompany/optimus/integration/v1beta1"
 )
 
@@ -49,6 +50,42 @@ func NewJobUpdateEvent(job *job.Job) (*JobUpdated, error) {
 
 func (j JobUpdated) Bytes() ([]byte, error) {
 	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_JOB_UPDATE)
+}
+
+type JobDeleted struct {
+	Event
+
+	JobName   job.Name
+	JobTenant tenant.Tenant
+}
+
+func NewJobDeleteEvent(tnnt tenant.Tenant, jobName job.Name) (*JobDeleted, error) {
+	baseEvent, err := NewBaseEvent()
+	if err != nil {
+		return nil, err
+	}
+	return &JobDeleted{
+		Event:     baseEvent,
+		JobName:   jobName,
+		JobTenant: tnnt,
+	}, nil
+}
+
+func (j JobDeleted) Bytes() ([]byte, error) {
+	occurredAt := timestamppb.New(j.Event.OccurredAt)
+	optEvent := &pbInt.OptimusChangeEvent{
+		EventId:       j.Event.ID.String(),
+		OccurredAt:    occurredAt,
+		ProjectName:   j.JobTenant.ProjectName().String(),
+		NamespaceName: j.JobTenant.NamespaceName().String(),
+		EventType:     pbInt.OptimusChangeEvent_JOB_DELETE,
+		Payload: &pbInt.OptimusChangeEvent_JobChange{
+			JobChange: &pbInt.JobChangePayload{
+				JobName: j.JobName.String(),
+			},
+		},
+	}
+	return proto.Marshal(optEvent)
 }
 
 func jobEventToBytes(event Event, job *job.Job, eventType pbInt.OptimusChangeEvent_EventType) ([]byte, error) {

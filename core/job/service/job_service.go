@@ -166,7 +166,18 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 		return nil, errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg)
 	}
 
-	return downstreamFullNames, j.repo.Delete(ctx, jobTenant.ProjectName(), jobName, cleanFlag)
+	if err := j.repo.Delete(ctx, jobTenant.ProjectName(), jobName, cleanFlag); err != nil {
+		return downstreamFullNames, err
+	}
+
+	jobEvent, err := event.NewJobDeleteEvent(jobTenant, jobName)
+	if err != nil {
+		j.logger.Error("error creating event for job delete: %s", err)
+	} else {
+		j.eventHandler.HandleEvent(jobEvent)
+	}
+
+	return downstreamFullNames, nil
 }
 
 func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (*job.Job, error) {

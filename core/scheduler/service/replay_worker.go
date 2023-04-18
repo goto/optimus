@@ -164,7 +164,7 @@ func (w ReplayWorker) processReplayedRequest(ctx context.Context, replayReq *sch
 	}
 
 	updatedReplayMap := identifyUpdatedRunStatus(replayReq.Runs, incomingRuns)
-	updatedRuns := scheduler.JobRunStatusList(incomingRuns).MergeWithUpdatedRuns(updatedReplayMap)
+	updatedRuns := scheduler.JobRunStatusList(replayReq.Runs).MergeWithUpdatedRuns(updatedReplayMap)
 	inProgressRuns := scheduler.JobRunStatusList(updatedRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StateReplayed})
 	failedRuns := scheduler.JobRunStatusList(updatedRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StateFailed})
 

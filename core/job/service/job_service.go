@@ -533,6 +533,12 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deleting job %s failed: %s", jobTenant.NamespaceName().String(), spec.Name().String(), err.Error()))
 			me.Append(err)
 		} else {
+			jobEvent, err := event.NewJobDeleteEvent(jobTenant, spec.Name())
+			if err != nil {
+				j.logger.Error("error creating event for job delete: %s", err)
+			} else {
+				j.eventHandler.HandleEvent(jobEvent)
+			}
 			deletedJob++
 		}
 	}

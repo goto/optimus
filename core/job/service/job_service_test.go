@@ -882,6 +882,8 @@ func TestJobService(t *testing.T) {
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -898,10 +900,11 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), specB.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), specB.Name(), false).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.NoError(t, err)
 		})
@@ -965,7 +968,7 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
-			eventHandler.On("HandleEvent", mock.Anything).Times(2)
+			eventHandler.On("HandleEvent", mock.Anything).Times(3)
 
 			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
@@ -1033,7 +1036,7 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
-			eventHandler.On("HandleEvent", mock.Anything).Times(2)
+			eventHandler.On("HandleEvent", mock.Anything).Times(3)
 
 			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, []job.Name{"job-D"}, logWriter)
@@ -1055,6 +1058,8 @@ func TestJobService(t *testing.T) {
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
+			eventHandler := newEventHandler(t)
+
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -1071,10 +1076,11 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), existingSpecC.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), existingSpecC.Name(), false).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 		})
@@ -1093,6 +1099,8 @@ func TestJobService(t *testing.T) {
 
 			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -1113,10 +1121,11 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), existingSpecC.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), existingSpecC.Name(), false).Return(nil)
+			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
-			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 		})
@@ -1175,7 +1184,7 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobWithUpstream}).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
-			eventHandler.On("HandleEvent", mock.Anything).Times(1)
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
 
 			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log)
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithValidationError, logWriter)

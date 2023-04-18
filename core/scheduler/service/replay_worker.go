@@ -141,7 +141,7 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 		w.l.Info("cleared [%s] [%s] run for replay %s", replayReq.Replay.JobName().String(), toBeReplayedRuns[0].ScheduledAt, replayReq.Replay.ID().String())
 
 		updatedReplayMap[toBeReplayedRuns[0].ScheduledAt] = scheduler.StateReplayed
-		updatedRuns = scheduler.JobRunStatusList(incomingRuns).MergeWithUpdatedRuns(updatedReplayMap)
+		updatedRuns = scheduler.JobRunStatusList(updatedRuns).MergeWithUpdatedRuns(updatedReplayMap)
 	}
 
 	pendingRuns := scheduler.JobRunStatusList(updatedRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StatePending})

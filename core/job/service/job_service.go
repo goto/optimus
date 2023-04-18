@@ -109,12 +109,7 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	me.Append(err)
 
 	for _, job := range addedJobs {
-		jobEvent, err := event.NewJobCreatedEvent(job)
-		if err != nil {
-			j.logger.Error("error creating event for job create: %s", err)
-			continue
-		}
-		j.eventHandler.HandleEvent(jobEvent)
+		j.raiseCreateEvent(job)
 	}
 
 	return errors.MultiToError(me)
@@ -142,12 +137,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	me.Append(err)
 
 	for _, job := range updatedJobs {
-		jobEvent, err := event.NewJobCreatedEvent(job)
-		if err != nil {
-			j.logger.Error("error creating event for job update: %s", err)
-			continue
-		}
-		j.eventHandler.HandleEvent(jobEvent)
+		j.raiseUpdateEvent(job)
 	}
 
 	return errors.MultiToError(me)
@@ -170,12 +160,7 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 		return downstreamFullNames, err
 	}
 
-	jobEvent, err := event.NewJobDeleteEvent(jobTenant, jobName)
-	if err != nil {
-		j.logger.Error("error creating event for job delete: %s", err)
-	} else {
-		j.eventHandler.HandleEvent(jobEvent)
-	}
+	j.raiseDeleteEvent(jobTenant, jobName)
 
 	return downstreamFullNames, nil
 }
@@ -294,25 +279,9 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 	addedJobs, err := j.bulkAdd(ctx, tenantWithDetails, toAdd, logWriter)
 	me.Append(err)
-	for _, job := range addedJobs {
-		jobEvent, err := event.NewJobCreatedEvent(job)
-		if err != nil {
-			j.logger.Error("error creating event for job create: %s", err)
-			continue
-		}
-		j.eventHandler.HandleEvent(jobEvent)
-	}
 
 	updatedJobs, err := j.bulkUpdate(ctx, tenantWithDetails, toUpdate, logWriter)
 	me.Append(err)
-	for _, job := range updatedJobs {
-		jobEvent, err := event.NewJobCreatedEvent(job)
-		if err != nil {
-			j.logger.Error("error creating event for job update: %s", err)
-			continue
-		}
-		j.eventHandler.HandleEvent(jobEvent)
-	}
 
 	err = j.bulkDelete(ctx, jobTenant, toDelete, logWriter)
 	me.Append(err)
@@ -351,14 +320,6 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 		specs := job.Jobs(jobs).GetSpecs()
 		updatedJobs, err := j.bulkUpdate(ctx, tenantWithDetails, specs, logWriter)
 		me.Append(err)
-		for _, job := range updatedJobs {
-			jobEvent, err := event.NewJobCreatedEvent(job)
-			if err != nil {
-				j.logger.Error("error creating event for job update: %s", err)
-				continue
-			}
-			j.eventHandler.HandleEvent(jobEvent)
-		}
 
 		j.logger.Debug("resolving upstreams for %d jobs of project [%s] namespace [%s]", len(updatedJobs), projectName, namespaceName)
 		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, projectName, updatedJobs, logWriter)
@@ -477,6 +438,9 @@ func (j *JobService) bulkAdd(ctx context.Context, tenantWithDetails *tenant.With
 
 	if len(addedJobs) > 0 {
 		logWriter.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] successfully added %d jobs", tenantWithDetails.Namespace().Name().String(), len(addedJobs)))
+		for _, job := range addedJobs {
+			j.raiseCreateEvent(job)
+		}
 	}
 
 	return addedJobs, errors.MultiToError(me)
@@ -501,6 +465,9 @@ func (j *JobService) bulkUpdate(ctx context.Context, tenantWithDetails *tenant.W
 
 	if len(updatedJobs) > 0 {
 		logWriter.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] successfully updated %d jobs", tenantWithDetails.Namespace().Name().String(), len(updatedJobs)))
+		for _, job := range updatedJobs {
+			j.raiseUpdateEvent(job)
+		}
 	}
 
 	return updatedJobs, errors.MultiToError(me)
@@ -533,12 +500,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deleting job %s failed: %s", jobTenant.NamespaceName().String(), spec.Name().String(), err.Error()))
 			me.Append(err)
 		} else {
-			jobEvent, err := event.NewJobDeleteEvent(jobTenant, spec.Name())
-			if err != nil {
-				j.logger.Error("error creating event for job delete: %s", err)
-			} else {
-				j.eventHandler.HandleEvent(jobEvent)
-			}
+			j.raiseDeleteEvent(jobTenant, spec.Name())
 			deletedJob++
 		}
 	}
@@ -754,4 +716,31 @@ func (j *JobService) GetDownstream(ctx context.Context, subjectJob *job.Job, loc
 		return j.repo.GetDownstreamByDestination(ctx, subjectJob.ProjectName(), subjectJob.Destination())
 	}
 	return j.repo.GetDownstreamByJobName(ctx, subjectJob.ProjectName(), subjectJob.Spec().Name())
+}
+
+func (j *JobService) raiseCreateEvent(job *job.Job) {
+	jobEvent, err := event.NewJobCreatedEvent(job)
+	if err != nil {
+		j.logger.Error("error creating event for job create: %s", err)
+		return
+	}
+	j.eventHandler.HandleEvent(jobEvent)
+}
+
+func (j *JobService) raiseUpdateEvent(job *job.Job) {
+	jobEvent, err := event.NewJobUpdateEvent(job)
+	if err != nil {
+		j.logger.Error("error creating event for job update: %s", err)
+		return
+	}
+	j.eventHandler.HandleEvent(jobEvent)
+}
+
+func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
+	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName)
+	if err != nil {
+		j.logger.Error("error creating event for job delete: %s", err)
+		return
+	}
+	j.eventHandler.HandleEvent(jobEvent)
 }

@@ -27,7 +27,7 @@ func NewJobCreatedEvent(job *job.Job) (*JobCreated, error) {
 	}, nil
 }
 
-func (j JobCreated) Bytes() ([]byte, error) {
+func (j *JobCreated) Bytes() ([]byte, error) {
 	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_JOB_CREATE)
 }
 
@@ -48,7 +48,7 @@ func NewJobUpdateEvent(job *job.Job) (*JobUpdated, error) {
 	}, nil
 }
 
-func (j JobUpdated) Bytes() ([]byte, error) {
+func (j *JobUpdated) Bytes() ([]byte, error) {
 	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_JOB_UPDATE)
 }
 
@@ -71,7 +71,7 @@ func NewJobDeleteEvent(tnnt tenant.Tenant, jobName job.Name) (*JobDeleted, error
 	}, nil
 }
 
-func (j JobDeleted) Bytes() ([]byte, error) {
+func (j *JobDeleted) Bytes() ([]byte, error) {
 	occurredAt := timestamppb.New(j.Event.OccurredAt)
 	optEvent := &pbInt.OptimusChangeEvent{
 		EventId:       j.Event.ID.String(),

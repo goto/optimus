@@ -11,6 +11,10 @@ import (
 	"github.com/goto/optimus/internal/lib/cron"
 )
 
+const (
+	getReplaysDayLimit = 30 // TODO: make it configurable via cli
+)
+
 type ReplayRepository interface {
 	RegisterReplay(ctx context.Context, replay *scheduler.Replay, runs []*scheduler.JobRunStatus) (uuid.UUID, error)
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
@@ -18,6 +22,8 @@ type ReplayRepository interface {
 
 	GetReplayToExecute(context.Context) (*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
+	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
+	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
 }
 
 type ReplayValidator interface {
@@ -49,6 +55,14 @@ func (r ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, j
 
 	runs := getExpectedRuns(jobCron, config.StartTime, config.EndTime)
 	return r.replayRepo.RegisterReplay(ctx, replayReq, runs)
+}
+
+func (r ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
+	return r.replayRepo.GetReplaysByProject(ctx, projectName, getReplaysDayLimit)
+}
+
+func (r ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
+	return r.replayRepo.GetReplayByID(ctx, replayID)
 }
 
 func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator) *ReplayService {

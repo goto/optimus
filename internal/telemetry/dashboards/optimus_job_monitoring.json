@@ -1,13 +1,32 @@
 {
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
   },
   "description": "",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 2,
   "id": 340,
-  "iteration": 1682066170304,
+  "iteration": 1682437993499,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -29,7 +48,7 @@
         "type": "postgres",
         "uid": "${environment}"
       },
-      "description": "This panel also has airflow link to the job in the tooltip.\nClick on an operator to get the Airflow Link",
+      "description": "This panel also has airflow link and upstream link to the job in the tooltip.\nClick on an operator to get the Airflow Link\n\n❌ means this link does not work",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -40,6 +59,10 @@
               "targetBlank": true,
               "title": "Airflow Link",
               "url": "https://p-godata-id-optimus-airflow.golabs.io/tree?dag_id=$job"
+            },
+            {
+              "title": "⬆ ${__data.fields.meta} Link",
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&var-job=${__data.fields.meta}\n&var-label=All\n&orgId=1\n&theme=dark\n&${__url_time_range}"
             }
           ],
           "mappings": [],
@@ -60,7 +83,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 12,
         "w": 24,
         "x": 0,
         "y": 1
@@ -84,6 +107,10 @@
           {
             "color": "#000000",
             "text": "schedule_delay"
+          },
+          {
+            "color": "#8AB8FF",
+            "text": "sla_definition"
           }
         ],
         "endField": "end_time",
@@ -114,7 +141,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "select \n      opr.type , \n      opr.name, \n      opr.status,\n      extract( epoch from opr.start_time)*1000 as start, \n      extract( epoch from case when opr.end_time > now() then now() else opr.end_time end)  *1000 as end,\n      opr.start_time  , opr.end_time \n      from (\n  select *, 'sensor' as type from sensor_run \n  union all \n  select *, 'task' as type from task_run \n  union all \n  select *, 'hook' as type  from hook_run \n) as opr join job_run as jr \non opr.job_run_id = jr.id \nwhere jr.scheduled_at = to_timestamp('$schedule_time', 'DAY DD/mm/yyyy HH24:MI:SS') and jr.job_name = '$job' \n\nunion \nselect 'delay' as type, \n      'schedule_delay' as name, \n      'schedule_delay' as status,\n      extract( epoch from scheduled_at)*1000 as start, \n      extract( epoch from start_time)  *1000 as end,\n      scheduled_at as start_time  , start_time as end_time \nfrom job_run \nwhere scheduled_at = to_timestamp('$schedule_time', 'DAY DD/mm/yyyy HH24:MI:SS') and job_name = '$job'\n",
+          "rawSql": "select \n      opr.type , \n      opr.name, \n      meta,\n      opr.status,\n      extract( epoch from opr.start_time)*1000 as start, \n      extract( epoch from case when opr.end_time > now() then now() else opr.end_time end)  *1000 as end,\n      opr.start_time  , opr.end_time \n      from (\n  select *, REGEXP_REPLACE(name,'wait_(.*)-(.*)','\\1')  as meta , 'sensor' as type from sensor_run \n  union all \n  select *, '❌' as meta,  'task' as type from task_run \n  union all \n  select *, '❌' as meta , 'hook' as type  from hook_run \n) as opr join job_run as jr \non opr.job_run_id = jr.id \nwhere jr.scheduled_at = to_timestamp('$schedule_time', 'DAY DD/mm/yyyy HH24:MI:SS') and jr.job_name = '$job' \n\nunion \nselect 'delay' as type, \n      'schedule_delay' as name, \n      '❌' as meta, \n      'schedule_delay' as status,\n      extract( epoch from scheduled_at)*1000 as start, \n      extract( epoch from start_time)  *1000 as end,\n      scheduled_at as start_time  , start_time as end_time \nfrom job_run \nwhere scheduled_at = to_timestamp('$schedule_time', 'DAY DD/mm/yyyy HH24:MI:SS') and job_name = '$job'\n\nunion \n\nselect 'SLA Definition' as type, \n      case when sla_definition = 0 then '' else 'SLA Definition' end as name, \n      '❌' as meta, \n      'sla_definition' as status,\n      extract( epoch from scheduled_at)*1000 as start, \n      extract( epoch from scheduled_at)*1000 + sla_definition as end,\n      scheduled_at as start_time  , \n      scheduled_at + (interval '1 sec' * sla_definition) end_time \nfrom job_run \nwhere scheduled_at = to_timestamp('$schedule_time', 'DAY DD/mm/yyyy HH24:MI:SS') and job_name = '$job'",
           "refId": "A",
           "select": [
             [
@@ -137,6 +164,7 @@
         }
       ],
       "title": "$job \"$schedule_time\" Job Timeline Gant",
+      "transformations": [],
       "transparent": true,
       "type": "marcusolsson-gantt-panel"
     },
@@ -153,7 +181,7 @@
           "custom": {
             "align": "auto",
             "displayMode": "auto",
-            "inspect": false
+            "inspect": true
           },
           "mappings": [],
           "thresholds": {
@@ -179,7 +207,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 223
+                "value": 178
               }
             ]
           },
@@ -206,6 +234,54 @@
                 "value": 108
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "labels"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 377
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "project_name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 105
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "is_critical"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 82
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "🚨⚠️ Alerts Configured"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 501
+              }
+            ]
           }
         ]
       },
@@ -213,7 +289,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 13
       },
       "id": 43,
       "options": {
@@ -238,7 +314,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "SELECT\n  window_spec ->>'WindowSize' as WindowSize , schedule->'Interval' as Schedule, owner, labels \nFROM\n  job\nWHERE name = '$job'\n",
+          "rawSql": "SELECT\n  project_name, window_spec ->>'WindowSize' as WindowSize , schedule->'Interval' as Schedule, owner,\n  CASE \n    WHEN labels::text LIKE '%critical%' THEN '⚠️⚠️⚠️'\n    ELSE 'No'\n  END AS is_critical,\n  labels , alert \nFROM\n  job\nWHERE name = '$job' and project_name in ($project)\n",
           "refId": "A",
           "select": [
             [
@@ -261,6 +337,30 @@
         }
       ],
       "title": "Job MetaData",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "labels": false
+            },
+            "indexByName": {
+              "alert": 5,
+              "is_critical": 4,
+              "labels": 6,
+              "owner": 3,
+              "project_name": 0,
+              "schedule": 2,
+              "windowsize": 1
+            },
+            "renameByName": {
+              "alert": "🚨⚠️ Alerts Configured",
+              "orchestrator": "",
+              "windowsize": ""
+            }
+          }
+        }
+      ],
       "type": "table"
     },
     {
@@ -268,7 +368,7 @@
         "type": "postgres",
         "uid": "${environment}"
       },
-      "description": "Shows all upstreams of the selected job in project. Adhered filter:\n* project\n* job",
+      "description": "Shows all upstreams of the selected job in project. Adhered filter:\n* project\n* job\n\nExternal Jobs Link Are not supported , unless their Optimus is configured in ENV",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -284,7 +384,7 @@
             {
               "targetBlank": false,
               "title": "",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&var-project=${__data.fields.project}\n&var-job=${__data.fields.upstream}\n&var-label=All\n&orgId=1\n&theme=dark\n&${__url_time_range}"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${namespace:queryparam}\n&var-project=${__data.fields.project}\n&var-job=${__data.fields.upstream}\n&var-label=All\n&orgId=1\n&theme=dark\n&${__url_time_range}"
             }
           ],
           "mappings": [],
@@ -311,7 +411,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 374
+                "value": 186
               }
             ]
           },
@@ -355,9 +455,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 9,
         "x": 0,
-        "y": 13
+        "y": 16
       },
       "id": 4,
       "options": {
@@ -389,7 +489,7 @@
           "hide": false,
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "with job_schedule_cte as (\n    select\n        id,\n        project_name,\n        name,\n        schedule::json -> 'Interval' as schedule_cron\n    from job\n),\njob_upstream_cte as (\n    select\n        job_id,\n        upstream_job_id as upstream_id,\n        upstream_job_name as upstream_name,\n        case\n            when upstream_external then 'external'\n            when not upstream_external then 'internal'\n        end as _type,\n        upstream_type as deduction_strategy\n    from job_upstream\n    where\n        project_name in ($project) and\n        job_name = '$job' and\n        upstream_job_name != ''\n)\n\nselect\n    js.project_name as project,\n    ju.upstream_name as upstream,\n    js.schedule_cron as schedule,\n    ju.deduction_strategy as strategy,\n    ju._type as type \nfrom job_schedule_cte js\njoin job_upstream_cte ju\n    on js.id = ju.job_id;",
+          "rawSql": "with job_schedule_cte as (\n    select\n        id,\n        project_name,\n        name,\n        schedule::json -> 'Interval' as schedule_cron\n    from job\n),\njob_upstream_cte as (\n    select\n        job_id,\n        upstream_job_id as upstream_id,\n        upstream_job_name as upstream_name,\n        upstream_project_name, \n        case\n            when upstream_external then '🌎 external'\n            when not upstream_external then 'internal'\n        end as _type,\n        upstream_type as deduction_strategy\n    from job_upstream\n    where\n        project_name in ($project) and\n        job_name = '$job' and\n        upstream_job_name != ''\n)\n\nselect\n    ju.upstream_project_name as project,\n    ju.upstream_name as upstream,\n    js.schedule_cron as schedule,\n    ju.deduction_strategy as strategy,\n    ju._type as type \nfrom job_schedule_cte js\njoin job_upstream_cte ju\n    on js.id = ju.job_id;",
           "refId": "B",
           "select": [
             [
@@ -433,8 +533,8 @@
           },
           "links": [
             {
-              "title": "",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&var-project=${__data.fields.project}\n&var-job=${__data.fields.downstream}\n&var-label=All\n&orgId=1\n&theme=dark\n&${__url_time_range}"
+              "title": "Job link",
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&var-project=${__data.fields.project}\n&var-job=${__data.fields.job}\n&var-label=All\n&orgId=1\n&theme=dark\n&${__url_time_range}"
             }
           ],
           "mappings": [],
@@ -461,7 +561,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 84
+                "value": 98
               }
             ]
           },
@@ -521,7 +621,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 93
+                "value": 456
               }
             ]
           },
@@ -545,7 +645,55 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 209
+                "value": 348
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "project_name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 142
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "level"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "job_name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 306
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "is_critical"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 93
               }
             ]
           }
@@ -553,11 +701,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 13
+        "w": 15,
+        "x": 9,
+        "y": 16
       },
-      "id": 2,
+      "id": 44,
       "options": {
         "footer": {
           "fields": "",
@@ -567,7 +715,12 @@
           "show": false
         },
         "showHeader": true,
-        "sortBy": []
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "is_critical"
+          }
+        ]
       },
       "pluginVersion": "8.5.15",
       "targets": [
@@ -580,7 +733,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "with job_schedule_cte as (\n    select\n        id,\n        project_name,\n        name,\n        schedule::json -> 'Interval' as schedule_cron, \n        labels\n    from job\n),\njob_upstream_cte as (\n    select\n        job_id,\n        upstream_type as deduction_strategy\n    from job_upstream\n    where\n        upstream_project_name in ($project) and\n        upstream_job_name = '$job'\n)\n\nselect\n    js.project_name as project,\n    js.name as downstream,\n    js.labels,\n    js.schedule_cron as schedule,\n    ju.deduction_strategy as strategy\nfrom job_schedule_cte js\njoin job_upstream_cte ju\n    on js.id = ju.job_id;",
+          "rawSql": "WITH RECURSIVE downstreams AS (\n  SELECT\n    job_name,\n    project_name,\n    upstream_job_name,\n    1 AS level\n  FROM\n    job_upstream\n  WHERE\n    upstream_job_name = '$job'\n    and upstream_project_name in ($project)\n  UNION\n  ALL\n  SELECT\n    ju.job_name,\n    ju.project_name,\n    ju.upstream_job_name,\n    level + 1\n  FROM\n    job_upstream ju\n    JOIN downstreams d ON d.job_name = ju.upstream_job_name\n    and d.project_name = ju.upstream_project_name\n    and level < 5\n)\nSELECT\n  dj.job_name as job,\n  dj.project_name as project,\n  dj.level,\n  CASE\n    WHEN j.labels :: text LIKE '%critical%' THEN '⚠️⚠️⚠️'\n    ELSE 'No'\n  END AS is_critical,\n  j.labels, \n  schedule->'Interval' as interval \nFROM\n  (\n    select\n      job_name,\n      project_name,\n      upstream_job_name,\n      level\n    from\n      downstreams\n    group by\n      job_name,\n      project_name,\n      upstream_job_name,\n      level\n  ) dj\n  join job j on dj.job_name = j.name\n  and dj.project_name = j.project_name\nORDER BY\n  is_critical,\n  level desc;",
           "refId": "A",
           "select": [
             [
@@ -602,7 +755,24 @@
           ]
         }
       ],
-      "title": "Downstream",
+      "title": "Downstream Direct or Indirect (5 level limit)",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "is_critical": 2,
+              "job": 0,
+              "labels": 4,
+              "level": 3,
+              "project": 1,
+              "schedule_cron": 5
+            },
+            "renameByName": {}
+          }
+        }
+      ],
       "type": "table"
     },
     {
@@ -648,7 +818,7 @@
             {
               "targetBlank": false,
               "title": "'$job' ${__data.fields.schedule_time} time line",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\nvar-environment=$environment\n&var-project=$project\n&var-namespace=$namespace\n&var-job=$job\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark&viewPanel=38"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\nvar-environment=$environment\n&var-project=$project\n&var-namespace=$namespace\n&var-job=$job\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark&viewPanel=38"
             }
           ],
           "mappings": [],
@@ -656,8 +826,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -762,7 +931,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 24
       },
       "id": 35,
       "options": {
@@ -844,7 +1013,7 @@
             {
               "targetBlank": false,
               "title": "$job ${__data.fields.schedule_time} time line ",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&var-project=$project\n&var-job=$job\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark\n&${__url_time_range}"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&var-project=${__data.fields.project_name}\n&var-job=$job\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark\n&${__url_time_range}"
             }
           ],
           "mappings": [],
@@ -853,8 +1022,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "yellow",
-                "value": null
+                "color": "yellow"
               }
             ]
           },
@@ -866,7 +1034,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 33
       },
       "id": 26,
       "options": {
@@ -901,7 +1069,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "SELECT scheduled_at, \n        start_time,\n        status, \n        sla_alert as sla_breached,\n        TO_CHAR(scheduled_at, 'DAY DD/mm/yyyy HH24:MI:SS') as schedule_time,\n        EXTRACT(epoch from case when status = 'running' then now() - start_time  else end_time - start_time end) as duration\nFROM \n  job_run\nWHERE \n  $__timeFilter(scheduled_at) \n  and \n  project_name in ($project) \n  and \n  namespace_name in ($namespace)\n  and \n  job_name = '$job'\norder by scheduled_at\nlimit 100\n",
+          "rawSql": "SELECT scheduled_at, \n        start_time,\n        status, \n        project_name,\n        sla_alert as sla_breached,\n        TO_CHAR(scheduled_at, 'DAY DD/mm/yyyy HH24:MI:SS') as schedule_time,\n        EXTRACT(epoch from case when status = 'running' then now() - start_time  else end_time - start_time end) as duration\nFROM \n  job_run\nWHERE \n  $__timeFilter(scheduled_at) \n  and \n  project_name in ($project) \n  and \n  namespace_name in ($namespace)\n  and \n  job_name = '$job'\norder by scheduled_at\nlimit 100\n",
           "refId": "A",
           "select": [
             [
@@ -947,7 +1115,7 @@
             {
               "targetBlank": false,
               "title": "$job ${__data.fields.schedule_time} time line ",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?var-environment=Optimus+Staging\n&var-project=All&var-namespace=All\n&var-job=$job\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark&viewPanel=38"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?var-environment=Optimus+Staging\n&var-project=All&var-namespace=All\n&var-job=$job\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark&viewPanel=38"
             }
           ],
           "mappings": [
@@ -986,8 +1154,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1023,7 +1190,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 43
       },
       "id": 27,
       "options": {
@@ -1078,7 +1245,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 53
       },
       "id": 12,
       "panels": [],
@@ -1115,7 +1282,7 @@
           "links": [
             {
               "title": "${__data.fields.job_name}",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?${environment:queryparam}\n&${project:queryparam}\n&${project:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&orgId=1&theme=dark"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?${environment:queryparam}\n&${project:queryparam}\n&${project:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&orgId=1&theme=dark"
             }
           ],
           "mappings": [],
@@ -1124,8 +1291,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1153,7 +1319,7 @@
         "h": 24,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 54
       },
       "id": 22,
       "options": {
@@ -1191,7 +1357,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "with job_labels as (\n    SELECT\n        job.name as job_name,\n        job.project_name as project_name,\n        extracted_labels.value as job_label\n    FROM job, jsonb_each(job.labels) extracted_labels\n    where\n        project_name in ($project) and\n        namespace_name in ($namespace)\n)\n\nSELECT  jr.job_name, \n        100 * sum(case when status = 'failed' then 1 else 0 end ) / count(*) failure_percentage,\n        sum(case when status = 'failed' then 1 else 0 end )  failure_count,\n        sum(case when status = 'success' then 1 else 0 end )  success_count,\n        count(*) total_runs_count\nFROM \n  job_run jr\njoin job_labels jl\non\n  jr.project_name = jl.project_name and\n  jr.job_name = jl.job_name\nWHERE \n  $__timeFilter(jr.scheduled_at) \n  and \n  jr.project_name in ($project) \n  and \n  jr.namespace_name in ($namespace)\n  and\n  jl.job_label in ($label)\nGROUP BY jr.job_name\nhaving 100 * sum(case when status = 'failed' then 1 else 0 end ) / count(*) > 0\nORDER BY failure_percentage desc \nlimit 20\n",
+          "rawSql": "with job_labels as (\n    SELECT\n        job.name as job_name,\n        job.project_name as project_name,\n        extracted_labels.value as job_label\n    FROM job, jsonb_each(job.labels) extracted_labels\n    where\n        project_name in ($project) and\n        namespace_name in ($namespace)\n)\n\nSELECT  jr.job_name, \n        100 * sum(case when status = 'failed' then 1 else 0 end ) / count(*) failure_percentage,\n        sum(case when status = 'failed' then 1 else 0 end )  failure_count,\n        sum(case when status = 'success' then 1 else 0 end )  success_count,\n        count(*) total_runs_count\nFROM \n  job_run jr\njoin job_labels jl\non\n  jr.project_name = jl.project_name and\n  jr.job_name = jl.job_name\nWHERE \n  $__timeFilter(jr.scheduled_at) \n  and \n  jr.project_name in ($project) \n  and \n  jr.namespace_name in ($namespace)\n  and\n  jl.job_label in ($label)\nGROUP BY jr.job_name\nhaving 100 * sum(case when status = 'failed' then 1 else 0 end ) / count(*) > 0\nORDER BY failure_percentage  desc , failure_count desc\nlimit 20\n",
           "refId": "A",
           "select": [
             [
@@ -1239,8 +1405,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1280,7 +1445,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 54
       },
       "id": 24,
       "options": {
@@ -1353,8 +1518,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1406,7 +1570,7 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 62
       },
       "id": 8,
       "options": {
@@ -1467,6 +1631,116 @@
         "type": "postgres",
         "uid": "${environment}"
       },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 66
+      },
+      "id": 46,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "8.5.15",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${environment}"
+          },
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "select sum(extract(epoch from duration)) as agg_duration, time from \n(\n  SELECT\n    -- job_run_id, name , \n    case when max(end_time) < now() then max(end_time)-min(start_time) else interval '0' end duration, \n    date_trunc('hour', min(start_time)) as time \n  FROM\n    sensor_run\n  WHERE\n    $__timeFilter(start_time)\n  Group by \n    job_run_id, name\n) as temp\nGroup by time \norder by time \n    \n",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Aggrigate upstream wait time",
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${environment}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -1483,7 +1757,7 @@
             {
               "targetBlank": false,
               "title": "${__data.fields.job_name} ${__data.fields.schedule_time} ",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark"
             }
           ],
           "mappings": [],
@@ -1491,8 +1765,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1544,7 +1817,7 @@
         "h": 11,
         "w": 12,
         "x": 12,
-        "y": 63
+        "y": 74
       },
       "id": 36,
       "options": {
@@ -1644,8 +1917,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "transparent",
-                "value": null
+                "color": "transparent"
               },
               {
                 "color": "red"
@@ -1685,7 +1957,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 85
       },
       "id": 16,
       "interval": "1d",
@@ -1780,8 +2052,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1821,7 +2092,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 93
       },
       "id": 20,
       "options": {
@@ -1892,7 +2163,7 @@
             {
               "targetBlank": false,
               "title": "${__data.fields.job_name} ${__data.fields.schedule_time} ",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark"
             }
           ],
           "mappings": [],
@@ -1900,8 +2171,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1953,7 +2223,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 102
       },
       "id": 14,
       "options": {
@@ -2030,7 +2300,7 @@
             {
               "targetBlank": false,
               "title": "${__data.fields.job_name} ${__data.fields.schedule_time} ",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1&theme=dark"
             }
           ],
           "mappings": [],
@@ -2038,8 +2308,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2115,7 +2384,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 102
       },
       "id": 6,
       "options": {
@@ -2192,7 +2461,7 @@
             {
               "targetBlank": false,
               "title": "${__data.fields.job_name} ${__data.fields.schedule_time} ",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark"
             }
           ],
           "mappings": [],
@@ -2200,8 +2469,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2241,7 +2509,7 @@
         "h": 7,
         "w": 19,
         "x": 0,
-        "y": 100
+        "y": 110
       },
       "id": 29,
       "options": {
@@ -2312,7 +2580,7 @@
           "links": [
             {
               "title": "",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark"
             }
           ],
           "mappings": [],
@@ -2320,8 +2588,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2387,7 +2654,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 79
+                "value": 96
               }
             ]
           },
@@ -2399,7 +2666,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 59
+                "value": 73
               }
             ]
           },
@@ -2411,7 +2678,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 141
+                "value": 109
               }
             ]
           },
@@ -2426,6 +2693,30 @@
                 "value": 463
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "No ↓ "
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 116
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "No. ↓stream"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 102
+              }
+            ]
           }
         ]
       },
@@ -2433,7 +2724,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 107
+        "y": 117
       },
       "id": 40,
       "options": {
@@ -2448,7 +2739,7 @@
         "sortBy": [
           {
             "desc": true,
-            "displayName": "downstream_count"
+            "displayName": "duration"
           }
         ]
       },
@@ -2463,7 +2754,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "with stuck_sensors as (\n  SELECT\n    TO_CHAR(jr.scheduled_at, 'DAY DD/mm/yyyy HH24:MI:SS') as schedule_time,\n    sr.name as sensor_name,\n    jr.job_name,\n    case\n      when max (sr.end_time) > now() then now() - max (sr.end_time)\n      else max(sr.end_time) - min (sr.start_time)\n    end duration,\n    --min(sr.start_time) as wait_start,\n    --case when max (sr.end_time) > now() then null else max (sr.end_time) end end_time,\n    count (*) as attemps,\n    case\n      when max (sr.end_time) > now() then 'Not Concluded'\n      else 'Finished'\n    end status\n  FROM\n    sensor_run sr\n    join job_run jr on sr.job_run_id = jr.id\n  WHERE\n    $__timeFilter(sr.start_time)\n    and sr.end_time < now()\n  group by\n    sr.name,\n    jr.job_name,\n    sr.job_run_id,\n    jr.scheduled_at\n  order by\n    max(sr.end_time) - min(sr.start_time) desc\n  limit\n    100\n)\nselect\n  s.*,\n  count(*) as downstream_count,\n  STRING_AGG(ju.job_name, ' , ') AS downstream\nfrom\n  stuck_sensors s\n  join job_upstream ju on ju.upstream_job_name = s.job_name\ngroup by\n  s.sensor_name,\n  s.job_name,\n  s.schedule_time,\n  s.duration,\n  s.attemps,\n  s.status\norder by   s.duration desc, downstream_count desc",
+          "rawSql": "with stuck_sensors as (\n  SELECT\n    TO_CHAR(jr.scheduled_at, 'DAY DD/mm/yyyy HH24:MI:SS') as schedule_time,\n    sr.name as sensor_name,\n    jr.job_name,\n    case\n      when max (sr.end_time) > now() then now() - max (sr.end_time)\n      else max(sr.end_time) - min (sr.start_time)\n    end duration,\n    --min(sr.start_time) as wait_start,\n    --case when max (sr.end_time) > now() then null else max (sr.end_time) end end_time,\n    count (*) as attemps\n  FROM\n    sensor_run sr\n    join job_run jr on sr.job_run_id = jr.id\n  WHERE\n    $__timeFilter(sr.start_time)\n    and sr.end_time < now()\n  group by\n    sr.name,\n    jr.job_name,\n    sr.job_run_id,\n    jr.scheduled_at\n  order by\n    max(sr.end_time) - min(sr.start_time) desc\n  limit\n    100\n)\nselect\n  s.*,\n  count(*) as \"No. ↓stream\",\n  STRING_AGG(ju.job_name, ' , ') AS \"↓streams\"\nfrom\n  stuck_sensors s\n  join job_upstream ju on ju.upstream_job_name = s.job_name\ngroup by\n  s.sensor_name,\n  s.job_name,\n  s.schedule_time,\n  s.duration,\n  s.attemps\norder by   s.duration desc, \"No. ↓stream\" desc",
           "refId": "A",
           "select": [
             [
@@ -2507,7 +2798,7 @@
           "links": [
             {
               "title": "",
-              "url": "https://radar.golabs.io/d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&${__url_time_range}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark"
+              "url": "d/BgtXgCA4z/any-optimus-job-monitoring-end-user-playground?\n${environment:queryparam}\n&${project:queryparam}\n&${namespace:queryparam}\n&${__url_time_range}\n&var-job=${__data.fields.job_name}\n&var-label=All\n&var-schedule_time=${__data.fields.schedule_time}\n&orgId=1\n&theme=dark"
             }
           ],
           "mappings": [],
@@ -2515,8 +2806,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2616,7 +2906,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 125
       },
       "id": 41,
       "options": {
@@ -2753,9 +3043,13 @@
       },
       {
         "current": {
-          "selected": false,
-          "text": "All",
-          "value": "$__all"
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
         },
         "datasource": {
           "type": "postgres",
@@ -2777,8 +3071,8 @@
       {
         "current": {
           "selected": false,
-          "text": "data-gojek-id-mart.merchant_promotion_platform.summary_outlet_performance_daily",
-          "value": "data-gojek-id-mart.merchant_promotion_platform.summary_outlet_performance_daily"
+          "text": "data-gojek-id-mart.merchant_platform.summary_merchant_platform_analytic_daily",
+          "value": "data-gojek-id-mart.merchant_platform.summary_merchant_platform_analytic_daily"
         },
         "datasource": {
           "type": "postgres",
@@ -2800,8 +3094,8 @@
       {
         "current": {
           "selected": false,
-          "text": "THURSDAY  20/04/2023 22:00:00",
-          "value": "THURSDAY  20/04/2023 22:00:00"
+          "text": "MONDAY    24/04/2023 22:00:00",
+          "value": "MONDAY    24/04/2023 22:00:00"
         },
         "datasource": {
           "type": "postgres",
@@ -2841,9 +3135,9 @@
       "1d"
     ]
   },
-  "timezone": "",
+  "timezone": "utc",
   "title": "Optimus Job Monitoring  End User ( Interactive )",
   "uid": "BgtXgCA4z",
-  "version": 392,
+  "version": 458,
   "weekStart": ""
 }

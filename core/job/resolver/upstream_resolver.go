@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	ConcurrentTicketPerSec = 40
+	ConcurrentTicketPerSec = 50
 	ConcurrentLimit        = 100
 )
 

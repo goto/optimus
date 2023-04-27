@@ -39,7 +39,7 @@ const (
 	jobsDir         = "dags"
 	jobsExtension   = ".py"
 
-	concurrentTicketPerSec = 40
+	concurrentTicketPerSec = 50
 	concurrentLimit        = 100
 )
 

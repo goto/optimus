@@ -60,7 +60,7 @@ type JobService interface {
 	GetByFilter(ctx context.Context, filters ...filter.FilterOpt) (jobSpecs []*job.Job, err error)
 	ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec, jobNamesWithValidationError []job.Name, logWriter writer.LogWriter) error
 	Refresh(ctx context.Context, projectName tenant.ProjectName, namespaceNames, jobNames []string, logWriter writer.LogWriter) error
-	Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, logWriter writer.LogWriter) error
+	Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithValidationError []job.Name, logWriter writer.LogWriter) error
 
 	GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, spec *job.Spec) (*job.Job, writer.BufferedLogger)
 	GetUpstreamsToInspect(ctx context.Context, subjectJob *job.Job, localJob bool) ([]*job.Upstream, error)
@@ -373,14 +373,14 @@ func (jh *JobHandler) CheckJobSpecifications(req *pb.CheckJobSpecificationsReque
 	}
 
 	me := errors.NewMultiError("check / validate job spec errors")
-	jobSpecs, _, err := fromJobProtos(req.Jobs)
+	jobSpecs, jobNamesWithValidationErrors, err := fromJobProtos(req.Jobs)
 	if err != nil {
 		errorMsg := fmt.Sprintf("failure when adapting job specifications: %s", err.Error())
 		jh.l.Error(errorMsg)
 		me.Append(err)
 	}
 
-	if err := jh.jobService.Validate(stream.Context(), jobTenant, jobSpecs, responseWriter); err != nil {
+	if err := jh.jobService.Validate(stream.Context(), jobTenant, jobSpecs, jobNamesWithValidationErrors, responseWriter); err != nil {
 		me.Append(err)
 	}
 

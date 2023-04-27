@@ -2040,12 +2040,12 @@ func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs 
 }
 
 // Validate provides a mock function with given fields: ctx, jobTenant, jobSpecs, logWriter
-func (_m *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, logWriter writer.LogWriter) error {
+func (_m *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithValidationError []job.Name, logWriter writer.LogWriter) error {
 	ret := _m.Called(ctx, jobTenant, jobSpecs, logWriter)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec, writer.LogWriter) error); ok {
-		r0 = rf(ctx, jobTenant, jobSpecs, logWriter)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec, []job.Name, writer.LogWriter) error); ok {
+		r0 = rf(ctx, jobTenant, jobSpecs, jobNamesWithValidationError, logWriter)
 	} else {
 		r0 = ret.Error(0)
 	}

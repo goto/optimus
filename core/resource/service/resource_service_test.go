@@ -113,6 +113,35 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("resource already exists in repository", func(t *testing.T) {
+			t.Run("returns no error if status is success or exists_in_store", func(t *testing.T) {
+				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				assert.NoError(t, err)
+
+				mgr := newResourceManager(t)
+				mgr.On("Validate", mock.Anything).Return(nil)
+				mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset", nil)
+
+				statusToTest := []resource.Status{
+					resource.StatusExistInStore,
+					resource.StatusSuccess,
+				}
+
+				for _, status := range statusToTest {
+					incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+					assert.NoError(t, err)
+
+					existingWithStatus := resource.FromExisting(existing, resource.ReplaceStatus(status))
+
+					repo := newResourceRepository(t)
+					repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName()).Return(existingWithStatus, nil)
+
+					rscService := service.NewResourceService(logger, repo, mgr, nil)
+
+					err = rscService.Create(ctx, incoming)
+					assert.NoError(t, err)
+					repo.AssertExpectations(t)
+				}
+			})
 			t.Run("returns error if status is neither create_failure nor to_create", func(t *testing.T) {
 				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
 				assert.NoError(t, err)
@@ -121,9 +150,6 @@ func TestResourceService(t *testing.T) {
 				mgr.On("Validate", mock.Anything).Return(nil)
 				mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset", nil)
 
-				repo := newResourceRepository(t)
-				rscService := service.NewResourceService(logger, repo, mgr, nil)
-
 				unacceptableStatuses := []resource.Status{
 					resource.StatusUnknown,
 					resource.StatusValidationFailure,
@@ -131,8 +157,6 @@ func TestResourceService(t *testing.T) {
 					resource.StatusToUpdate,
 					resource.StatusSkipped,
 					resource.StatusUpdateFailure,
-					resource.StatusExistInStore,
-					resource.StatusSuccess,
 				}
 
 				for _, status := range unacceptableStatuses {
@@ -140,6 +164,9 @@ func TestResourceService(t *testing.T) {
 					assert.NoError(t, err)
 
 					existingWithStatus := resource.FromExisting(existing, resource.ReplaceStatus(status))
+
+					repo := newResourceRepository(t)
+					rscService := service.NewResourceService(logger, repo, mgr, nil)
 
 					repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName()).Return(existingWithStatus, nil)
 

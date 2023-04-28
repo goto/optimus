@@ -82,6 +82,9 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 			return err
 		}
 	} else {
+		if existing.Status() == resource.StatusSuccess || existing.Status() == resource.StatusExistInStore {
+			return nil // Note: return in case resource already exists
+		}
 		if !resource.StatusForToCreate(existing.Status()) {
 			msg := fmt.Sprintf("cannot create resource [%s] since it already exists with status [%s]", incoming.FullName(), existing.Status())
 			rs.logger.Error(msg)

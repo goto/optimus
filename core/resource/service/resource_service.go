@@ -37,21 +37,19 @@ type EventHandler interface {
 }
 
 type ResourceService struct {
-	repo              ResourceRepository
-	mgr               ResourceManager
-	tnntDetailsGetter TenantDetailsGetter
+	repo ResourceRepository
+	mgr  ResourceManager
 
 	logger       log.Logger
 	eventHandler EventHandler
 }
 
-func NewResourceService(logger log.Logger, repo ResourceRepository, mgr ResourceManager, tnntDetailsGetter TenantDetailsGetter, eventHandler EventHandler) *ResourceService {
+func NewResourceService(logger log.Logger, repo ResourceRepository, mgr ResourceManager, eventHandler EventHandler) *ResourceService {
 	return &ResourceService{
-		repo:              repo,
-		mgr:               mgr,
-		tnntDetailsGetter: tnntDetailsGetter,
-		logger:            logger,
-		eventHandler:      eventHandler,
+		repo:         repo,
+		mgr:          mgr,
+		logger:       logger,
+		eventHandler: eventHandler,
 	}
 }
 
@@ -75,11 +73,6 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 	if existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName()); err != nil {
 		if !errors.IsErrorType(err, errors.ErrNotFound) {
 			rs.logger.Error("error getting resource [%s]: %s", incoming.FullName(), err)
-			return err
-		}
-
-		if _, err := rs.tnntDetailsGetter.GetDetails(ctx, incoming.Tenant()); err != nil {
-			rs.logger.Error("error getting tenant for resource [%s] details: %s", incoming.FullName(), err)
 			return err
 		}
 		incoming.MarkToCreate()

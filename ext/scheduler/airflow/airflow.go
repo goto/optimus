@@ -108,7 +108,7 @@ func (s *Scheduler) DeployJobs(ctx context.Context, tenant tenant.Tenant, jobs [
 	for _, result := range runner.Run() {
 		multiError.Append(result.Err)
 	}
-	return errors.MultiToError(multiError)
+	return multiError.ToErr()
 }
 
 // TODO list jobs should not refer from the scheduler, rather should list from db and it has nothing to do with scheduler.
@@ -150,27 +150,27 @@ func (s *Scheduler) DeleteJobs(ctx context.Context, t tenant.Tenant, jobNames []
 	if err != nil {
 		return err
 	}
-	multiError := errors.NewMultiError("ErrorsInDeleteJobs")
+	me := errors.NewMultiError("ErrorsInDeleteJobs")
 	for _, jobName := range jobNames {
 		if strings.TrimSpace(jobName) == "" {
-			multiError.Append(errors.InvalidArgument(EntityAirflow, "job name cannot be an empty string"))
+			me.Append(errors.InvalidArgument(EntityAirflow, "job name cannot be an empty string"))
 			continue
 		}
 		blobKey := pathFromJobName(jobsDir, t.NamespaceName().String(), jobName, jobsExtension)
 		if err := bucket.Delete(spanCtx, blobKey); err != nil {
 			// ignore missing files
 			if gcerrors.Code(err) != gcerrors.NotFound {
-				multiError.Append(err)
+				me.Append(err)
 			}
 		}
 	}
 	err = deleteDirectoryIfEmpty(ctx, t.NamespaceName().String(), bucket)
 	if err != nil {
 		if gcerrors.Code(err) != gcerrors.NotFound {
-			multiError.Append(err)
+			me.Append(err)
 		}
 	}
-	return errors.MultiToError(multiError)
+	return me.ToErr()
 }
 
 // deleteDirectoryIfEmpty remove jobs Folder if it exists

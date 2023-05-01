@@ -264,13 +264,13 @@ func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOp
 	return nil, fmt.Errorf("no filter matched")
 }
 
-func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithValidationError []job.Name, logWriter writer.LogWriter) error {
+func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
 	me := errors.NewMultiError("replace all specs errors")
 
 	existingJobs, err := j.repo.GetAllByTenant(ctx, jobTenant)
 	me.Append(err)
 
-	toAdd, toUpdate, toDelete, err := j.differentiateSpecs(existingJobs, jobTenant, specs, jobNamesWithValidationError)
+	toAdd, toUpdate, toDelete, err := j.differentiateSpecs(existingJobs, jobTenant, specs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
@@ -336,7 +336,7 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 	return errors.MultiToError(me)
 }
 
-func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithValidationError []job.Name, logWriter writer.LogWriter) error {
+func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
 	me := errors.NewMultiError("validate specs errors")
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
@@ -347,7 +347,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	existingJobs, err := j.repo.GetAllByTenant(ctx, jobTenant)
 	me.Append(err)
 
-	toAdd, toUpdate, toDelete, err := j.differentiateSpecs(existingJobs, jobTenant, jobSpecs, jobNamesWithValidationError)
+	toAdd, toUpdate, toDelete, err := j.differentiateSpecs(existingJobs, jobTenant, jobSpecs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
@@ -566,13 +566,13 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	return errors.MultiToError(me)
 }
 
-func (JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithValidationError []job.Name) (added, modified, deleted []*job.Spec, err error) {
+func (JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted []*job.Spec, err error) {
 	me := errors.NewMultiError("differentiate specs errors")
 
 	var addedSpecs, modifiedSpecs, deletedSpecs []*job.Spec
 
 	existingSpecsMap := job.Jobs(existingJobs).GetNameAndSpecMap()
-	for _, jobNameToSkip := range jobNamesWithValidationError {
+	for _, jobNameToSkip := range jobNamesWithInvalidSpec {
 		delete(existingSpecsMap, jobNameToSkip)
 	}
 

@@ -270,7 +270,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	existingJobs, err := j.repo.GetAllByTenant(ctx, jobTenant)
 	me.Append(err)
 
-	toAdd, toUpdate, toDelete, err := j.differentiateSpecs(existingJobs, jobTenant, specs, jobNamesWithInvalidSpec)
+	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, jobTenant, specs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
@@ -347,7 +347,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	existingJobs, err := j.repo.GetAllByTenant(ctx, jobTenant)
 	me.Append(err)
 
-	toAdd, toUpdate, toDelete, err := j.differentiateSpecs(existingJobs, jobTenant, jobSpecs, jobNamesWithInvalidSpec)
+	toAdd, toUpdate, toDelete, unmodifiedSpecs, err := j.differentiateSpecs(existingJobs, jobTenant, jobSpecs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
@@ -363,7 +363,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 
 	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
 	// assumption, all job specs from input are also the job within same project
-	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, toDelete)
+	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, unmodifiedSpecs)
 	identifierToJobsMap := getIdentifierToJobsMap(jobsToValidateMap)
 	for _, jobEntity := range jobsToValidateMap {
 		if _, err := j.validateCyclic(jobEntity.Job().Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
@@ -400,37 +400,28 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 	return errors.MultiToError(me)
 }
 
-func getAllJobsToValidateMap(incomingJobs, existingJobs []*job.Job, toDelete []*job.Spec) map[job.Name]*job.WithUpstream {
+func getAllJobsToValidateMap(incomingJobs, existingJobs []*job.Job, unmodifiedSpecs []*job.Spec) map[job.Name]*job.WithUpstream {
 	me := errors.NewMultiError("validate specs errors")
 
+	existingJobMap := job.Jobs(existingJobs).GetNameAndJobMap()
+	var unmodifiedJobs []*job.Job
+	for _, unmodifiedSpec := range unmodifiedSpecs {
+		if unmodifiedJob, ok := existingJobMap[unmodifiedSpec.Name()]; ok {
+			unmodifiedJobs = append(unmodifiedJobs, unmodifiedJob)
+			continue
+		}
+		errorsMsg := fmt.Sprintf("unable to validate existing job %s", unmodifiedSpec.Name().String())
+		me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg))
+	}
+
 	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
-	for _, incomingJob := range incomingJobs {
-		jobWithUpstream, err := incomingJob.GetJobWithUnresolvedUpstream()
+	for _, jobToValidate := range append(incomingJobs, unmodifiedJobs...) {
+		jobWithUpstream, err := jobToValidate.GetJobWithUnresolvedUpstream()
 		if err != nil {
 			me.Append(err)
 			continue
 		}
-		jobsToValidateMap[incomingJob.Spec().Name()] = jobWithUpstream
-	}
-
-	deletedJobMap := make(map[job.Name]bool)
-	for _, jobToDelete := range toDelete {
-		deletedJobMap[jobToDelete.Name()] = true
-	}
-
-	for _, existingJob := range existingJobs {
-		if _, ok := jobsToValidateMap[existingJob.Spec().Name()]; ok {
-			continue
-		}
-		if _, ok := deletedJobMap[existingJob.Spec().Name()]; ok {
-			continue
-		}
-		jobWithUpstream, err := existingJob.GetJobWithUnresolvedUpstream()
-		if err != nil {
-			me.Append(err)
-			continue
-		}
-		jobsToValidateMap[existingJob.Spec().Name()] = jobWithUpstream
+		jobsToValidateMap[jobToValidate.Spec().Name()] = jobWithUpstream
 	}
 	return jobsToValidateMap
 }
@@ -566,10 +557,10 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	return errors.MultiToError(me)
 }
 
-func (JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted []*job.Spec, err error) {
+func (JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified []*job.Spec, err error) {
 	me := errors.NewMultiError("differentiate specs errors")
 
-	var addedSpecs, modifiedSpecs, deletedSpecs []*job.Spec
+	var addedSpecs, modifiedSpecs, unmodifiedSpecs, deletedSpecs []*job.Spec
 
 	existingSpecsMap := job.Jobs(existingJobs).GetNameAndSpecMap()
 	for _, jobNameToSkip := range jobNamesWithInvalidSpec {
@@ -581,6 +572,8 @@ func (JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.T
 			addedSpecs = append(addedSpecs, incomingSpec)
 		} else if !reflect.DeepEqual(spec, incomingSpec) {
 			modifiedSpecs = append(modifiedSpecs, incomingSpec)
+		} else {
+			unmodifiedSpecs = append(unmodifiedSpecs, incomingSpec)
 		}
 	}
 	telemetry.NewCounter("total_jobs_modified", map[string]string{
@@ -594,7 +587,7 @@ func (JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.T
 			deletedSpecs = append(deletedSpecs, existingJobSpec)
 		}
 	}
-	return addedSpecs, modifiedSpecs, deletedSpecs, errors.MultiToError(me)
+	return addedSpecs, modifiedSpecs, deletedSpecs, unmodifiedSpecs, errors.MultiToError(me)
 }
 
 func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant.WithDetails, specs []*job.Spec, logWriter writer.LogWriter) ([]*job.Job, error) {

@@ -49,7 +49,7 @@ func (j *JobRunStateChanged) Bytes() ([]byte, error) {
 		Payload: &pbInt.OptimusChangeEvent_JobRun{
 			JobRun: &pbInt.JobRunPayload{
 				JobName:     j.JobRun.JobName.String(),
-				ScheduledAt: j.JobRun.ScheduledAt.String(),
+				ScheduledAt: timestamppb.New(j.JobRun.ScheduledAt),
 				JobRunId:    j.JobRun.ID.String(),
 			},
 		},

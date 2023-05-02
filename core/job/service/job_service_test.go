@@ -1831,7 +1831,7 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(nil, nil)
 
 			pluginService.On("GenerateDestination", ctx, detailedTenant, specA.Task()).Return(job.ResourceURN(""), errors.New("some error on generate destination"))
-			jobService := service.NewJobService(nil, pluginService, upstreamResolver, tenantDetailsGetter, log)
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, log)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 

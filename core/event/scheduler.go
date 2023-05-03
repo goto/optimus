@@ -1,9 +1,8 @@
 package event
 
 import (
-	"google.golang.org/protobuf/types/known/timestamppb"
-
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/scheduler"
 	pbInt "github.com/goto/optimus/protos/gotocompany/optimus/integration/v1beta1"

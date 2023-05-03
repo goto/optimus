@@ -320,13 +320,13 @@ func operatorStartToJobState(operatorType scheduler.OperatorType) (scheduler.Sta
 	}
 }
 
-func (j *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
+func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 	schedulerEvent, err := event.NewJobRunStateChangeEvent(jobRun)
 	if err != nil {
-		j.l.Error("error creating event for job run state change : %w", err)
+		s.l.Error("error creating event for job run state change : %w", err)
 		return
 	}
-	j.eventHandler.HandleEvent(schedulerEvent)
+	s.eventHandler.HandleEvent(schedulerEvent)
 }
 
 func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {

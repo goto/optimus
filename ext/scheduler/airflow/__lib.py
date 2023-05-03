@@ -307,7 +307,8 @@ def optimus_notify(context, event_meta):
 
     if SCHEDULER_ERR_MSG in event_meta.keys():
         failure_message = failure_message + ", " + event_meta[SCHEDULER_ERR_MSG]
-    print("failures: {}".format(failure_message))
+    if len(failure_message)>0:
+        log.info(f'failures: {failure_message}')
     
     task_instance = context.get('task_instance')
     message = {
@@ -329,7 +330,7 @@ def optimus_notify(context, event_meta):
     # post event
     log.info(event)
     resp = optimus_client.notify_event(params["project_name"], params["namespace"], params["job_name"], event)
-    print("posted event ", params, event, resp)
+    log.info(f'posted event {params}, {event}, {resp} ')
     return
 
 def get_run_type(context):
@@ -395,7 +396,6 @@ def operator_success_event(context):
     try:
         run_type = get_run_type(context)
         if run_type == "SENSOR":
-            print("clearing sensor xcom")
             cleanup_xcom(context)
         meta = {
             "event_type": "TYPE_{}_SUCCESS".format(run_type),
@@ -410,7 +410,6 @@ def operator_retry_event(context):
     try:
         run_type = get_run_type(context)
         if run_type == "SENSOR":
-            print("clearing sensor xcom")
             cleanup_xcom(context)
         meta = {
             "event_type": "TYPE_{}_RETRY".format(run_type),
@@ -425,7 +424,7 @@ def operator_failure_event(context):
     try:
         run_type = get_run_type(context)
         if run_type == "SENSOR":
-            print("clearing sensor xcom")
+            log.info("clearing sensor xcom")
             cleanup_xcom(context)
         meta = {
             "event_type": "TYPE_{}_FAIL".format(run_type),
@@ -470,22 +469,25 @@ def optimus_sla_miss_notify(dag, task_list, blocking_task_list, slas, blocking_t
         }
         # post event
         resp = optimus_client.notify_event(params["project_name"], params["namespace"], params["job_name"], event)
-        print("posted event ", params, event, resp)
+        log.info(f'posted event {params}, {event}, {resp}')
         return
     except Exception as e:
         print(e)
 
 def shouldSendSensorStartEvent(ctx):
     try:
+        from airflow import settings
         ti = ctx.get('task_instance')
         key = "sensorEvt/{}/{}/{}".format(ti.task_id , ctx.get('next_execution_date').strftime(TIMESTAMP_FORMAT) , ti.try_number)
-
-        result = ti.xcom_pull(key=key)
+        log.info( f'sensor calback check Xcom Key-> {key}')
+        session = settings.Session()
+        result = session.query(session.query(XCom).filter(XCom.key == key, XCom.dag_id == ti.dag_id).exists()).scalar()
+        log.info(f'sensor xcom exists-> {result}')
         if not result:
-            print("sending NEW sensor start event for attempt number ", ti.try_number)
+            log.info(f'sending NEW sensor start event for attempt number-> {ti.try_number}')
             ti.xcom_push(key=key, value=True)
             return True
-        print("ignoring sending sensor start event as its already sent")
+        log.info("ignoring sending sensor start event as its already sent")
         return False
     except Exception as e:
         print(e)
@@ -495,7 +497,7 @@ def get_result_for_monitoring_from_xcom(ctx):
         ti = ctx.get('task_instance')
         return_value = ti.xcom_pull(key='return_value')
     except Exception as e:
-        print(f'error getting result for monitoring: {e}')
+        log.info(f'error getting result for monitoring: {e}')
 
     if type(return_value) is dict:
         if 'monitoring' in return_value:
@@ -503,12 +505,20 @@ def get_result_for_monitoring_from_xcom(ctx):
     return None
 
 def cleanup_xcom(ctx):
+    log.info("clearing sensor xcom")
+            
     try:
         from airflow import settings
+        from sqlalchemy import and_
         session = settings.Session()
         ti = ctx.get('task_instance')
-        key = "sensorEvt/{}/{}/{}".format(ti.task_id , ctx.get('next_execution_date').strftime(TIMESTAMP_FORMAT) , ti.try_number)
-        session.query(XCom).filter(XCom.key == key).delete()
+        cleanup_key_patttern = "sensorEvt/{}".format(ti.task_id)
+        # cleanup xcom is runs after the task run is completed hence the try number is increased by the time cleanup_xcom is called
+        log.info(f'xcom key pattern to clear -> {cleanup_key_patttern}')
+
+        result = session.query(XCom).filter( and_( XCom.dag_id == ti.dag_id , XCom.key.startswith(cleanup_key_patttern))).delete(synchronize_session=False)
+        log.info (f'Rows deleted-> {result}')
+        session.commit()
     except Exception as e:
         print(e)
 
@@ -554,7 +564,8 @@ def alert_failed_to_slack(context):
         if _xcom_value_has_error(xcom):
             failure_messages.append(xcom.value['error'])
     failure_message = ", ".join(failure_messages)
-    print("failures: {}".format(failure_message))
+    if failure_message != "":
+        log.info(f'failures: {failure_message}')
 
     message_body = "\n".join([
         "• *DAG*: {}".format(current_dag_id),

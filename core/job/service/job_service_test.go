@@ -1960,6 +1960,59 @@ func TestJobService(t *testing.T) {
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "deletion of job job-C will fail. job is being used by test-proj/job-B")
 		})
+
+		t.Run("returns no error when delete the job and its downstreams", func(t *testing.T) {
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, mock.Anything).Return(detailedTenant, nil)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			pluginService := new(PluginService)
+			defer pluginService.AssertExpectations(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			repo := new(JobRepository)
+			defer repo.AssertExpectations(t)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobTaskConfigA, _ := job.ConfigFrom(map[string]string{"table": "table-A"})
+			jobTaskConfigB, _ := job.ConfigFrom(map[string]string{"table": "table-B"})
+			jobTaskConfigC, _ := job.ConfigFrom(map[string]string{"table": "table-C"})
+			jobTaskA := job.NewTask(taskName, jobTaskConfigA)
+			jobTaskB := job.NewTask(taskName, jobTaskConfigB)
+			jobTaskC := job.NewTask(taskName, jobTaskConfigC)
+
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTaskA).Build()
+			specAUpdated, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner-updated", jobSchedule, jobWindow, jobTaskA).Build()
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTaskB).Build()
+			specC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTaskC).Build()
+			specs := []*job.Spec{specAUpdated}
+
+			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-Z"})
+			jobB := job.NewJob(sampleTenant, specB, "table-B", nil)
+			jobC := job.NewJob(sampleTenant, specC, "table-C", []job.ResourceURN{"table-B"})
+
+			repo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB, jobC}, nil)
+
+			pluginService.On("GenerateDestination", ctx, detailedTenant, jobTaskA).Return(job.ResourceURN("table-A"), nil)
+			pluginService.On("GenerateUpstreams", ctx, detailedTenant, specAUpdated, true).Return([]job.ResourceURN{"table-Z"}, nil)
+
+			jobCDownstream := []*job.Downstream{
+				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
+			}
+			repo.On("GetDownstreamByJobName", ctx, project.Name(), specC.Name()).Return(jobCDownstream, nil)
+			repo.On("GetDownstreamByJobName", ctx, project.Name(), specB.Name()).Return([]*job.Downstream{}, nil)
+
+			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+
+			jobService := service.NewJobService(repo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log)
+			err := jobService.Validate(ctx, sampleTenant, specs, jobNamesWithInvalidSpec, logWriter)
+			assert.NoError(t, err)
+		})
+
 		t.Run("returns error when there's a cyclic", func(t *testing.T) {
 			tenantDetailsGetter := new(TenantDetailsGetter)
 			tenantDetailsGetter.On("GetDetails", ctx, mock.Anything).Return(detailedTenant, nil)

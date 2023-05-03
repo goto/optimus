@@ -381,6 +381,12 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 
 func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Tenant, toDelete []*job.Spec, logWriter writer.LogWriter) error {
 	me := errors.NewMultiError("delete job specs check errors")
+	toDeleteMap := map[job.FullName]bool{}
+	for _, specToDelete := range toDelete {
+		fullName := job.FullNameFrom(jobTenant.ProjectName(), specToDelete.Name())
+		toDeleteMap[fullName] = true
+	}
+
 	for _, jobToDelete := range toDelete {
 		downstreamList, err := j.repo.GetDownstreamByJobName(ctx, jobTenant.ProjectName(), jobToDelete.Name())
 		if err != nil {
@@ -389,9 +395,17 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 			continue
 		}
 
-		if len(downstreamList) > 0 {
-			downstreamFullNames := job.DownstreamList(downstreamList).GetDownstreamFullNames()
-			errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), downstreamFullNames.String())
+		safeToDelete := true
+		notDeleted := []job.FullName{}
+		for _, downstreamFullName := range job.DownstreamList(downstreamList).GetDownstreamFullNames() {
+			if _, ok := toDeleteMap[downstreamFullName]; !ok {
+				safeToDelete = false
+				notDeleted = append(notDeleted, downstreamFullName)
+			}
+		}
+
+		if !safeToDelete {
+			errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), job.FullNames(notDeleted).String())
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] %s", jobTenant.NamespaceName().String(), errorMsg))
 			me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg))
 			continue

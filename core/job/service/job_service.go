@@ -403,7 +403,7 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 			continue
 		}
 	}
-	return errors.MultiToError(me)
+	return me.ToErr()
 }
 
 func isJobSafeToDelete(toDeleteMap map[job.FullName]bool, downstreamFullNames []job.FullName) ([]job.FullName, bool) {

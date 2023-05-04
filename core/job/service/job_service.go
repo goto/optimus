@@ -387,17 +387,14 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 		toDeleteMap[fullName] = true
 	}
 
+	downstreamOfJob := map[job.FullName][]*job.Downstream{}
 	for _, jobToDelete := range toDelete {
-		downstreamList, err := j.repo.GetDownstreamByJobName(ctx, jobTenant.ProjectName(), jobToDelete.Name())
-		if err != nil {
-			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), jobToDelete.Name().String(), err.Error()))
-			me.Append(err)
-			continue
-		}
+		j.populateAllDownstream(ctx, jobTenant.ProjectName(), jobTenant.NamespaceName(), jobToDelete.Name(), downstreamOfJob, me, logWriter)
 
 		safeToDelete := true
 		notDeleted := []job.FullName{}
-		for _, downstreamFullName := range job.DownstreamList(downstreamList).GetDownstreamFullNames() {
+		fullName := job.FullNameFrom(jobTenant.ProjectName(), jobToDelete.Name())
+		for _, downstreamFullName := range job.DownstreamList(downstreamOfJob[fullName]).GetDownstreamFullNames() {
 			if _, ok := toDeleteMap[downstreamFullName]; !ok {
 				safeToDelete = false
 				notDeleted = append(notDeleted, downstreamFullName)
@@ -412,6 +409,26 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 		}
 	}
 	return errors.MultiToError(me)
+}
+
+func (j *JobService) populateAllDownstream(ctx context.Context, projectName tenant.ProjectName, namespaceName tenant.NamespaceName, jobName job.Name, downstreamOfJob map[job.FullName][]*job.Downstream, me *errors.MultiError, logWriter writer.LogWriter) {
+	currentJobFullName := job.FullNameFrom(projectName, jobName)
+	downstreamOfJob[currentJobFullName] = []*job.Downstream{}
+	childJobs, err := j.repo.GetDownstreamByJobName(ctx, projectName, jobName)
+	if err != nil {
+		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", namespaceName.String(), jobName.String(), err.Error()))
+		me.Append(err)
+		return
+	}
+	for _, childJob := range childJobs {
+		downstreamOfJob[currentJobFullName] = append(downstreamOfJob[currentJobFullName], childJob)
+		if downstreamOfChildJob, ok := downstreamOfJob[childJob.FullName()]; ok {
+			downstreamOfJob[currentJobFullName] = append(downstreamOfJob[currentJobFullName], downstreamOfChildJob...)
+			continue
+		}
+		j.populateAllDownstream(ctx, childJob.ProjectName(), childJob.NamespaceName(), childJob.Name(), downstreamOfJob, me, logWriter)
+		downstreamOfJob[currentJobFullName] = append(downstreamOfJob[currentJobFullName], downstreamOfJob[childJob.FullName()]...)
+	}
 }
 
 func getAllJobsToValidateMap(incomingJobs, existingJobs []*job.Job, unmodifiedSpecs []*job.Spec) map[job.Name]*job.WithUpstream {

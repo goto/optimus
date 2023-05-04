@@ -1129,7 +1129,7 @@ func TestJobService(t *testing.T) {
 			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 		})
-		t.Run("skips to delete jobs with downstream", func(t *testing.T) {
+		t.Run("skips to delete jobs if the downstream is not deleted", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			defer jobRepo.AssertExpectations(t)
 
@@ -1150,13 +1150,16 @@ func TestJobService(t *testing.T) {
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-			incomingSpecs := []*job.Spec{specA}
+			specE, _ := job.NewSpecBuilder(jobVersion, "job-E", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			incomingSpecs := []*job.Spec{specA, specE}
 
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			existingJobC := job.NewJob(sampleTenant, existingSpecC, "", nil)
 			existingSpecD, _ := job.NewSpecBuilder(jobVersion, "job-D", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			existingJobD := job.NewJob(sampleTenant, existingSpecD, "", nil)
-			existingSpecs := []*job.Job{existingJobC, existingJobD}
+			existingSpecE, _ := job.NewSpecBuilder(jobVersion, "job-E", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			existingJobE := job.NewJob(sampleTenant, existingSpecE, "", nil)
+			existingSpecs := []*job.Job{existingJobC, existingJobD, existingJobE}
 
 			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(existingSpecs, nil)
 
@@ -1170,11 +1173,12 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("Add", ctx, mock.Anything).Return([]*job.Job{jobA}, nil)
 
 			downstreamList := []*job.Downstream{
-				job.NewDownstream("sample-job-E", project.Name(), namespace.Name(), taskName),
+				job.NewDownstream("job-E", project.Name(), namespace.Name(), taskName),
 			}
 
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), existingSpecC.Name()).Return(downstreamList, nil)
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), existingSpecD.Name()).Return(nil, nil)
+			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), existingSpecE.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), existingSpecD.Name(), false).Return(nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", "resource-B", sampleTenant, "static", taskName, false)

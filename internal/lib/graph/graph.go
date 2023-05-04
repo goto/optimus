@@ -21,33 +21,33 @@ type node[v fmt.Stringer] struct {
 }
 
 type stack[v fmt.Stringer] struct {
-	ordered []v
-	element map[string]int
+	elements []v
+	indexOf  map[string]int
 }
 
 func (s *stack[v]) isExist(elm v) bool {
-	_, ok := s.element[elm.String()]
+	_, ok := s.indexOf[elm.String()]
 	return ok
 }
 
 func (s *stack[v]) pop() v {
-	n := len(s.ordered)
-	elm := s.ordered[n-1]
-	s.ordered = s.ordered[:n-1]
-	delete(s.element, elm.String())
+	n := len(s.elements)
+	elm := s.elements[n-1]
+	s.elements = s.elements[:n-1]
+	delete(s.indexOf, elm.String())
 	return elm
 }
 
 func (s *stack[v]) push(elm v) {
-	s.ordered = append(s.ordered, elm)
-	s.element[elm.String()] = len(s.ordered) - 1
+	s.elements = append(s.elements, elm)
+	s.indexOf[elm.String()] = len(s.elements) - 1
 }
 
 func (s *stack[v]) getUntil(elm v) []v {
 	if s.isExist(elm) {
-		idx := s.element[elm.String()]
-		result := make([]v, len(s.ordered)-1)
-		copy(result, s.ordered[idx:len(s.ordered)])
+		idx := s.indexOf[elm.String()]
+		result := make([]v, len(s.elements)-1)
+		copy(result, s.elements[idx:len(s.elements)])
 		return result
 	}
 	return nil
@@ -80,10 +80,10 @@ func (g *graph[v]) Traverse(root v) []v {
 		return nil
 	}
 
-	stk := &stack[v]{ordered: []v{}, element: map[string]int{}}
+	stk := &stack[v]{elements: []v{}, indexOf: map[string]int{}}
 	g.traverse(root, stk)
 
-	return stk.ordered
+	return stk.elements
 }
 
 func (g *graph[v]) GetCyclics(root v) [][]v {
@@ -91,7 +91,7 @@ func (g *graph[v]) GetCyclics(root v) [][]v {
 		return nil
 	}
 
-	stk := &stack[v]{ordered: []v{}, element: map[string]int{}}
+	stk := &stack[v]{elements: []v{}, indexOf: map[string]int{}}
 	cyclics := [][]v{}
 	g.traverseCyclic(root, &cyclics, stk)
 

@@ -387,19 +387,14 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 		toDeleteMap[fullName] = true
 	}
 
-	downstreamOfJob := map[job.FullName][]*job.Downstream{}
 	for _, jobToDelete := range toDelete {
-		j.populateAllDownstream(ctx, jobTenant.ProjectName(), jobTenant.NamespaceName(), jobToDelete.Name(), downstreamOfJob, me, logWriter)
-
-		safeToDelete := true
-		notDeleted := []job.FullName{}
-		fullName := job.FullNameFrom(jobTenant.ProjectName(), jobToDelete.Name())
-		for _, downstreamFullName := range job.DownstreamList(downstreamOfJob[fullName]).GetDownstreamFullNames() {
-			if _, ok := toDeleteMap[downstreamFullName]; !ok {
-				safeToDelete = false
-				notDeleted = append(notDeleted, downstreamFullName)
-			}
+		downstreams, err := j.getDownstreams(ctx, jobTenant.ProjectName(), jobTenant.NamespaceName(), jobToDelete.Name(), map[job.FullName]bool{}, logWriter)
+		if err != nil {
+			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), jobToDelete.Name().String(), err.Error()))
+			me.Append(err)
+			continue
 		}
+		notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, job.DownstreamList(downstreams).GetDownstreamFullNames())
 
 		if !safeToDelete {
 			errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), job.FullNames(notDeleted).String())
@@ -411,24 +406,37 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 	return errors.MultiToError(me)
 }
 
-func (j *JobService) populateAllDownstream(ctx context.Context, projectName tenant.ProjectName, namespaceName tenant.NamespaceName, jobName job.Name, downstreamOfJob map[job.FullName][]*job.Downstream, me *errors.MultiError, logWriter writer.LogWriter) {
+func isJobSafeToDelete(toDeleteMap map[job.FullName]bool, downstreamFullNames []job.FullName) ([]job.FullName, bool) {
+	notDeleted := []job.FullName{}
+	for _, downstreamFullName := range downstreamFullNames {
+		if _, ok := toDeleteMap[downstreamFullName]; !ok {
+			notDeleted = append(notDeleted, downstreamFullName)
+		}
+	}
+
+	return notDeleted, len(notDeleted) == 0
+}
+
+func (j *JobService) getDownstreams(ctx context.Context, projectName tenant.ProjectName, namespaceName tenant.NamespaceName, jobName job.Name, visited map[job.FullName]bool, logWriter writer.LogWriter) ([]*job.Downstream, error) {
 	currentJobFullName := job.FullNameFrom(projectName, jobName)
-	downstreamOfJob[currentJobFullName] = []*job.Downstream{}
+	downstreams := []*job.Downstream{}
+	visited[currentJobFullName] = true
 	childJobs, err := j.repo.GetDownstreamByJobName(ctx, projectName, jobName)
 	if err != nil {
-		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", namespaceName.String(), jobName.String(), err.Error()))
-		me.Append(err)
-		return
+		return nil, err
 	}
 	for _, childJob := range childJobs {
-		downstreamOfJob[currentJobFullName] = append(downstreamOfJob[currentJobFullName], childJob)
-		if downstreamOfChildJob, ok := downstreamOfJob[childJob.FullName()]; ok {
-			downstreamOfJob[currentJobFullName] = append(downstreamOfJob[currentJobFullName], downstreamOfChildJob...)
+		downstreams = append(downstreams, childJob)
+		if visited[childJob.FullName()] {
 			continue
 		}
-		j.populateAllDownstream(ctx, childJob.ProjectName(), childJob.NamespaceName(), childJob.Name(), downstreamOfJob, me, logWriter)
-		downstreamOfJob[currentJobFullName] = append(downstreamOfJob[currentJobFullName], downstreamOfJob[childJob.FullName()]...)
+		childDownstreams, err := j.getDownstreams(ctx, childJob.ProjectName(), childJob.NamespaceName(), childJob.Name(), visited, logWriter)
+		if err != nil {
+			return nil, err
+		}
+		downstreams = append(downstreams, childDownstreams...)
 	}
+	return downstreams, nil
 }
 
 func getAllJobsToValidateMap(incomingJobs, existingJobs []*job.Job, unmodifiedSpecs []*job.Spec) map[job.Name]*job.WithUpstream {

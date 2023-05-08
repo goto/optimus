@@ -1,22 +1,8 @@
 DROP TABLE IF EXISTS JOB_OLD;
 DROP TABLE IF EXISTS JOB_DEPLOYMENT, MIGRATION_STEPS;
-DROP TABLE IF EXISTS BACKUP_OLD, SECRET_OLD, RESOURCE_OLD;
+DROP TABLE IF EXISTS BACKUP_OLD, REPLAY_OLD, SECRET_OLD, RESOURCE_OLD;
 DROP TABLE IF EXISTS NAMESPACE_OLD, PROJECT_OLD;
 
-
-ALTER TABLE hook_run DROP CONSTRAINT IF EXISTS  hook_run_job_id_fkey;
-
-ALTER TABLE hook_run ADD CONSTRAINT hook_run_job_id_fkey 
-FOREIGN KEY (job_run_id) REFERENCES job_run(id);
-
-
-ALTER TABLE sensor_run DROP CONSTRAINT sensor_run_job_id_fkey;
-
-ALTER TABLE sensor_run ADD CONSTRAINT sensor_run_job_id_fkey
-FOREIGN KEY (job_run_id) REFERENCES job_run(id);
-
-
-ALTER TABLE task_run DROP CONSTRAINT task_run_job_id_fkey;
-
-ALTER TABLE task_run ADD CONSTRAINT task_run_job_id_fkey
-FOREIGN KEY (job_run_id) REFERENCES job_run(id);
+ALTER TABLE sensor_run DROP CONSTRAINT IF EXISTS sensor_run_job_id_fkey;
+ALTER TABLE task_run   DROP CONSTRAINT IF EXISTS task_run_job_id_fkey;
+ALTER TABLE hook_run   DROP CONSTRAINT IF EXISTS hook_run_job_id_fkey;

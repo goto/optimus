@@ -163,3 +163,8 @@ ALTER TABLE ONLY job_old
     ADD CONSTRAINT job_namespace_id_fkey FOREIGN KEY (namespace_id) REFERENCES namespace_old(id);
 ALTER TABLE ONLY job_old
     ADD CONSTRAINT job_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_old(id);
+
+DROP INDEX IF EXISTS idx_job_run_start_time;
+DROP INDEX IF EXISTS idx_sensor_run_start_time;
+DROP INDEX IF EXISTS idx_hook_run_start_time;
+DROP INDEX IF EXISTS idx_task_run_start_time;

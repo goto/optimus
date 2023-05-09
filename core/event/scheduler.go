@@ -93,12 +93,23 @@ func NewJobRunFailedEvent(jobRun *scheduler.JobRun) (*JobRunFailed, error) {
 }
 
 func toOptimusChangeEvent(j *scheduler.JobRun, e Event) *pbInt.OptimusChangeEvent {
+	var eventType pbInt.OptimusChangeEvent_EventType
+	switch j.State {
+	case scheduler.StateWaitUpstream:
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_WAIT_UPSTREAM
+	case scheduler.StateInProgress:
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_IN_PROGRESS
+	case scheduler.StateSuccess:
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_SUCCESS
+	case scheduler.StateFailed:
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_FAILURE
+	}
 	return &pbInt.OptimusChangeEvent{
 		EventId:       e.ID.String(),
 		OccurredAt:    timestamppb.New(e.OccurredAt),
 		ProjectName:   j.Tenant.ProjectName().String(),
 		NamespaceName: j.Tenant.NamespaceName().String(),
-		EventType:     pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_WAIT_UPSTREAM,
+		EventType: eventType
 		Payload: &pbInt.OptimusChangeEvent_JobRun{
 			JobRun: &pbInt.JobRunPayload{
 				JobName:     j.JobName.String(),

@@ -328,7 +328,18 @@ func operatorStartToJobState(operatorType scheduler.OperatorType) (scheduler.Sta
 }
 
 func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
-	schedulerEvent, err := event.NewJobRunStateChangeEvent(jobRun)
+	var schedulerEvent moderator.Event
+	var err error
+	switch jobRun.State {
+	case scheduler.StateWaitUpstream:
+		schedulerEvent, err = event.NewJobRunWaitUpstreamEvent(jobRun)
+	case scheduler.StateInProgress:
+		schedulerEvent, err = event.NewJobRunInProgressEvent(jobRun)
+	case scheduler.StateSuccess:
+		schedulerEvent, err = event.NewJobRunSuccessEvent(jobRun)
+	case scheduler.StateFailed:
+		schedulerEvent, err = event.NewJobRunFailedEvent(jobRun)
+	}
 	if err != nil {
 		s.l.Error("error creating event for job run state change : %w", err)
 		return

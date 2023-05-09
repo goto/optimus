@@ -30,13 +30,13 @@ func (j *JobRunStateChanged) Bytes() ([]byte, error) {
 	var eventType pbInt.OptimusChangeEvent_EventType
 	switch j.JobRun.State {
 	case scheduler.StateWaitUpstream:
-		eventType = pbInt.OptimusChangeEvent_JOB_WAIT_UPSTREAM
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_WAIT_UPSTREAM
 	case scheduler.StateInProgress:
-		eventType = pbInt.OptimusChangeEvent_JOB_IN_PROGRESS
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_IN_PROGRESS
 	case scheduler.StateSuccess:
-		eventType = pbInt.OptimusChangeEvent_JOB_SUCCESS
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_SUCCESS
 	case scheduler.StateFailed:
-		eventType = pbInt.OptimusChangeEvent_JOB_FAILURE
+		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_FAILURE
 	}
 
 	optEvent := &pbInt.OptimusChangeEvent{

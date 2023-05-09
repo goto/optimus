@@ -109,12 +109,13 @@ func toOptimusChangeEvent(j *scheduler.JobRun, e Event) *pbInt.OptimusChangeEven
 		OccurredAt:    timestamppb.New(e.OccurredAt),
 		ProjectName:   j.Tenant.ProjectName().String(),
 		NamespaceName: j.Tenant.NamespaceName().String(),
-		EventType: eventType
+		EventType:     eventType,
 		Payload: &pbInt.OptimusChangeEvent_JobRun{
 			JobRun: &pbInt.JobRunPayload{
 				JobName:     j.JobName.String(),
 				ScheduledAt: timestamppb.New(j.ScheduledAt),
 				JobRunId:    j.ID.String(),
+				StartTime:   timestamppb.New(j.StartTime),
 			},
 		},
 	}

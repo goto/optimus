@@ -15,7 +15,7 @@ type JobRunWaitUpstream struct {
 }
 
 func (j *JobRunWaitUpstream) Bytes() ([]byte, error) {
-	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event))
+	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_WAIT_UPSTREAM))
 }
 
 type JobRunInProgress struct {
@@ -25,7 +25,7 @@ type JobRunInProgress struct {
 }
 
 func (j *JobRunInProgress) Bytes() ([]byte, error) {
-	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event))
+	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_IN_PROGRESS))
 }
 
 type JobRunSuccess struct {
@@ -35,7 +35,7 @@ type JobRunSuccess struct {
 }
 
 func (j *JobRunSuccess) Bytes() ([]byte, error) {
-	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event))
+	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_SUCCESS))
 }
 
 type JobRunFailed struct {
@@ -45,7 +45,7 @@ type JobRunFailed struct {
 }
 
 func (j *JobRunFailed) Bytes() ([]byte, error) {
-	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event))
+	return proto.Marshal(toOptimusChangeEvent(j.JobRun, j.Event, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_FAILURE))
 }
 
 func NewJobRunWaitUpstreamEvent(jobRun *scheduler.JobRun) (*JobRunWaitUpstream, error) {
@@ -92,18 +92,7 @@ func NewJobRunFailedEvent(jobRun *scheduler.JobRun) (*JobRunFailed, error) {
 	}, nil
 }
 
-func toOptimusChangeEvent(j *scheduler.JobRun, e Event) *pbInt.OptimusChangeEvent {
-	var eventType pbInt.OptimusChangeEvent_EventType
-	switch j.State {
-	case scheduler.StateWaitUpstream:
-		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_WAIT_UPSTREAM
-	case scheduler.StateInProgress:
-		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_IN_PROGRESS
-	case scheduler.StateSuccess:
-		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_SUCCESS
-	case scheduler.StateFailed:
-		eventType = pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_FAILURE
-	}
+func toOptimusChangeEvent(j *scheduler.JobRun, e Event, eventType pbInt.OptimusChangeEvent_EventType) *pbInt.OptimusChangeEvent {
 	return &pbInt.OptimusChangeEvent{
 		EventId:       e.ID.String(),
 		OccurredAt:    timestamppb.New(e.OccurredAt),

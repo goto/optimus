@@ -334,7 +334,7 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 		schedulerEvent, err = event.NewJobRunFailedEvent(jobRun)
 	}
 	if err != nil {
-		s.l.Error("error creating event for job run state change : %w", err)
+		s.l.Error("error creating event for job run state change : %s", err)
 		return
 	}
 	s.eventHandler.HandleEvent(schedulerEvent)

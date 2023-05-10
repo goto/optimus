@@ -384,7 +384,7 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 	toDeleteMap := job.Specs(toDelete).ToFullNameAndSpecMap(jobTenant.ProjectName())
 
 	for _, jobToDelete := range toDelete {
-		downstreams, err := j.getDownstreams(ctx, jobTenant.ProjectName(), jobToDelete.Name(), map[job.FullName]bool{})
+		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), jobToDelete.Name(), map[job.FullName]bool{})
 		if err != nil {
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), jobToDelete.Name().String(), err.Error()))
 			me.Append(err)
@@ -419,7 +419,7 @@ func isJobSafeToDelete(toDeleteMap map[job.FullName]*job.Spec, downstreamFullNam
 	return notDeleted, len(notDeleted) == 0
 }
 
-func (j *JobService) getDownstreams(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, visited map[job.FullName]bool) ([]*job.Downstream, error) {
+func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, visited map[job.FullName]bool) ([]*job.Downstream, error) {
 	currentJobFullName := job.FullNameFrom(projectName, jobName)
 	downstreams := []*job.Downstream{}
 	visited[currentJobFullName] = true
@@ -432,7 +432,7 @@ func (j *JobService) getDownstreams(ctx context.Context, projectName tenant.Proj
 		if visited[childJob.FullName()] {
 			continue
 		}
-		childDownstreams, err := j.getDownstreams(ctx, childJob.ProjectName(), childJob.Name(), visited)
+		childDownstreams, err := j.getAllDownstreams(ctx, childJob.ProjectName(), childJob.Name(), visited)
 		if err != nil {
 			return nil, err
 		}
@@ -571,7 +571,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	for _, spec := range toDelete {
 		// TODO: reuse Delete method and pass forceFlag as false
 		fullName := job.FullNameFrom(jobTenant.ProjectName(), spec.Name())
-		downstreams, err := j.getDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), map[job.FullName]bool{})
+		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), map[job.FullName]bool{})
 		if err != nil {
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), spec.Name().String(), err.Error()))
 			me.Append(err)

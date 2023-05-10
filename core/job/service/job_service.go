@@ -583,13 +583,15 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 
 		logWriter.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] deleting job %s", jobTenant.NamespaceName().String(), spec.Name().String()))
 
-		for i := len(downstreams) - 1; i >= 0; i-- {
+		isDeletionFail := false
+		for i := len(downstreams) - 1; i >= 0 && !isDeletionFail; i-- {
 			if alreadyDeleted[downstreams[i].FullName()] {
 				continue
 			}
 			if err = j.repo.Delete(ctx, downstreams[i].ProjectName(), downstreams[i].Name(), false); err != nil {
 				logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deleting job %s failed: %s", downstreams[i].NamespaceName().String(), downstreams[i].Name().String(), err.Error()))
 				me.Append(err)
+				isDeletionFail = true
 			} else {
 				alreadyDeleted[downstreams[i].FullName()] = true
 				j.raiseDeleteEvent(jobTenant, spec.Name())
@@ -597,6 +599,9 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 			}
 		}
 
+		if alreadyDeleted[fullName] || isDeletionFail {
+			continue
+		}
 		if err = j.repo.Delete(ctx, jobTenant.ProjectName(), spec.Name(), false); err != nil {
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deleting job %s failed: %s", jobTenant.NamespaceName().String(), spec.Name().String(), err.Error()))
 			me.Append(err)

@@ -381,11 +381,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 
 func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Tenant, toDelete []*job.Spec, logWriter writer.LogWriter) error {
 	me := errors.NewMultiError("delete job specs check errors")
-	toDeleteMap := map[job.FullName]bool{}
-	for _, specToDelete := range toDelete {
-		fullName := job.FullNameFrom(jobTenant.ProjectName(), specToDelete.Name())
-		toDeleteMap[fullName] = true
-	}
+	toDeleteMap := job.Specs(toDelete).ToFullNameAndSpecMap(jobTenant.ProjectName())
 
 	for _, jobToDelete := range toDelete {
 		downstreams, err := j.getDownstreams(ctx, jobTenant.ProjectName(), jobToDelete.Name(), map[job.FullName]bool{})
@@ -406,7 +402,7 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 	return me.ToErr()
 }
 
-func isJobSafeToDelete(toDeleteMap map[job.FullName]bool, downstreamFullNames []job.FullName) ([]job.FullName, bool) {
+func isJobSafeToDelete(toDeleteMap map[job.FullName]*job.Spec, downstreamFullNames []job.FullName) ([]job.FullName, bool) {
 	notDeleted := []job.FullName{}
 	for _, downstreamFullName := range downstreamFullNames {
 		if _, ok := toDeleteMap[downstreamFullName]; !ok {
@@ -563,11 +559,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	j.logger.Debug("deleting %d jobs of project [%s] namespace [%s]", len(toDelete), jobTenant.ProjectName(), jobTenant.NamespaceName())
 	me := errors.NewMultiError("bulk delete specs errors")
 	deletedJob := 0
-	toDeleteMap := map[job.FullName]bool{}
-	for _, specToDelete := range toDelete {
-		fullName := job.FullNameFrom(jobTenant.ProjectName(), specToDelete.Name())
-		toDeleteMap[fullName] = true
-	}
+	toDeleteMap := job.Specs(toDelete).ToFullNameAndSpecMap(jobTenant.ProjectName())
 
 	alreadyDeleted := map[job.FullName]bool{}
 	for _, spec := range toDelete {

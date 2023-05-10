@@ -390,16 +390,22 @@ func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Te
 			me.Append(err)
 			continue
 		}
-		notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, job.DownstreamList(downstreams).GetDownstreamFullNames())
-
-		if !safeToDelete {
-			errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), job.FullNames(notDeleted).String())
-			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] %s", jobTenant.NamespaceName().String(), errorMsg))
-			me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg))
-			continue
-		}
+		validateDeleteJob(jobTenant, downstreams, toDeleteMap, jobToDelete, logWriter, me)
 	}
 	return me.ToErr()
+}
+
+func validateDeleteJob(jobTenant tenant.Tenant, downstreams []*job.Downstream, toDeleteMap map[job.FullName]*job.Spec, jobToDelete *job.Spec, logWriter writer.LogWriter, me *errors.MultiError) bool {
+	notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, job.DownstreamList(downstreams).GetDownstreamFullNames())
+
+	if !safeToDelete {
+		errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), job.FullNames(notDeleted).String())
+		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] %s", jobTenant.NamespaceName().String(), errorMsg))
+		me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg))
+		return false
+	}
+
+	return true
 }
 
 func isJobSafeToDelete(toDeleteMap map[job.FullName]*job.Spec, downstreamFullNames []job.FullName) ([]job.FullName, bool) {
@@ -572,12 +578,8 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 			continue
 		}
 
-		notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, job.DownstreamList(downstreams).GetDownstreamFullNames())
-
-		if !safeToDelete {
-			errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", spec.Name().String(), job.FullNames(notDeleted).String())
-			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] %s", jobTenant.NamespaceName().String(), errorMsg))
-			me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg))
+		isSafeToDelete := validateDeleteJob(jobTenant, downstreams, toDeleteMap, spec, logWriter, me)
+		if !isSafeToDelete {
 			continue
 		}
 

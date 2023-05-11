@@ -21,7 +21,7 @@ type Handler interface {
 
 type NoOpHandler struct{}
 
-func (n NoOpHandler) HandleEvent(_ Event) {}
+func (NoOpHandler) HandleEvent(_ Event) {}
 
 type EventHandler struct {
 	messageChan chan<- []byte

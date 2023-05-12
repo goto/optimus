@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/resolver"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/telemetry"
@@ -119,4 +120,35 @@ func (s *JobRunService) cleanPerNamespace(ctx context.Context, t tenant.Tenant, 
 		}
 	}
 	return s.scheduler.DeleteJobs(ctx, t, jobsToDelete)
+}
+
+func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUpdate, toDelete []string) error {
+	me := errors.NewMultiError("errorInUploadJobs")
+	allJobsWithDetails, err := s.jobRepo.GetJobs(ctx, tnnt.ProjectName(), toUpdate)
+	me.Append(err)
+	if allJobsWithDetails == nil {
+		return me.ToErr()
+	}
+
+	s.l.Info("got jobs to upload to scheduler")
+	simple := resolver.SimpleResolver{}
+	err = simple.Resolve(ctx, allJobsWithDetails)
+	if err != nil {
+		me.Append(err)
+		return me.ToErr()
+	}
+
+	if err = s.scheduler.DeployJobs(ctx, tnnt, allJobsWithDetails); err == nil {
+		s.l.Info(fmt.Sprintf("[success] namespace: %s, project: %s, deployed %d jobs", tnnt.NamespaceName().String(),
+			tnnt.ProjectName().String(), len(allJobsWithDetails)))
+	}
+	me.Append(err)
+
+	if len(toDelete) > 0 {
+		err = s.scheduler.DeleteJobs(ctx, tnnt, toDelete)
+		s.l.Info("deleted %s jobs on project: %s", len(toDelete), tnnt.ProjectName())
+		me.Append(err)
+	}
+
+	return me.ToErr()
 }

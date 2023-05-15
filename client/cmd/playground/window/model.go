@@ -194,7 +194,7 @@ func (m *model) generateWindowInputView() string {
 func (m *model) generateWindowTableRowView(version int) []string {
 	window, err := models.NewWindow(version, string(m.truncateTo), m.offsetInput.Value(), m.sizeInput.Value())
 	if err != nil {
-		return []string{fmt.Sprintf("%d", version), err.Error()}
+		return []string{fmt.Sprintf("%d", version), err.Error(), err.Error()}
 	}
 	var startTimeRow string
 	if startTime, err := window.GetStartTime(m.scheduledTime); err != nil {

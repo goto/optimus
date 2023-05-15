@@ -149,6 +149,9 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
+	err = j.uploadJobs(ctx, jobTenant, nil, updatedJobs, nil)
+	me.Append(err)
+
 	for _, job := range updatedJobs {
 		j.raiseUpdateEvent(job)
 	}

@@ -163,6 +163,7 @@ func (m *model) generateWindowInputView() string {
 	buff := &bytes.Buffer{}
 	table := tablewriter.NewWriter(buff)
 	table.SetRowLine(true)
+	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT})
 	table.Append([]string{
 		"truncate_to",
 		m.generateValueWithCursorPointerView(pointToTruncateTo, string(m.truncateTo)),

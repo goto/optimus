@@ -100,7 +100,6 @@ func (m *model) generateWindowResultView() string {
 	buff := &bytes.Buffer{}
 	table := tablewriter.NewWriter(buff)
 	table.SetHeader([]string{"Version", "Start Time", "End Time"})
-	table.SetAutoMergeCells(true)
 	table.Append(m.generateWindowTableRowView(1))
 	table.Append(m.generateWindowTableRowView(2)) //nolint: gomnd
 	table.Render()

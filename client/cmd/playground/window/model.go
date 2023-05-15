@@ -10,14 +10,12 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/goto/salt/log"
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/goto/optimus/internal/models"
 )
 
 type model struct {
-	log           log.Logger
 	currentCursor cursorPointer
 
 	truncateTo  truncateTo
@@ -27,14 +25,13 @@ type model struct {
 	scheduledTime time.Time
 }
 
-func newModel(log log.Logger) *model {
+func newModel() *model {
 	offsetInput := textinput.New()
 
 	sizeInput := textinput.New()
 	sizeInput.Focus()
 
 	return &model{
-		log:           log,
 		currentCursor: pointToTruncateTo,
 		truncateTo:    truncateToDay,
 		sizeInput:     sizeInput,

@@ -176,6 +176,10 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 		return downstreamFullNames, err
 	}
 
+	if err := j.uploadJobs(ctx, jobTenant, nil, nil, []job.Name{jobName}); err != nil {
+		return downstreamFullNames, err
+	}
+
 	j.raiseDeleteEvent(jobTenant, jobName)
 
 	return downstreamFullNames, nil

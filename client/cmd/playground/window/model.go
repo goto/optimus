@@ -66,8 +66,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		"1", "2", "3", "4", "5",
 		"6", "7", "8", "9", "0",
 		"backspace":
-		m.sizeInput, _ = m.sizeInput.Update(msg)
-		m.offsetInput, _ = m.offsetInput.Update(msg)
+		m.handleInput(msg)
 	}
 	return m, nil
 }
@@ -224,6 +223,15 @@ func (m *model) generateValueWithCursorPointerView(targetCursor cursorPointer, v
 		return s.String()
 	}
 	return value
+}
+
+func (m *model) handleInput(msg tea.Msg) {
+	switch m.currentCursor {
+	case pointToOffset:
+		m.offsetInput, _ = m.offsetInput.Update(msg)
+	case pointToSize:
+		m.sizeInput, _ = m.sizeInput.Update(msg)
+	}
 }
 
 func (m *model) handleDecrement() {

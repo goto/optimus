@@ -26,16 +26,11 @@ type model struct {
 }
 
 func newModel() *model {
-	offsetInput := textinput.New()
-
-	sizeInput := textinput.New()
-	sizeInput.Focus()
-
 	return &model{
 		currentCursor: pointToTruncateTo,
 		truncateTo:    truncateToDay,
-		sizeInput:     sizeInput,
-		offsetInput:   offsetInput,
+		sizeInput:     textinput.New(),
+		offsetInput:   textinput.New(),
 		scheduledTime: time.Now(),
 	}
 }
@@ -50,6 +45,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if currMsg.String() != "tea.KeyMsg" {
 		return m, nil
 	}
+
 	msgStr := fmt.Sprintf("%s", msg)
 	switch msgStr {
 	case "ctrl+c", "q":
@@ -193,12 +189,14 @@ func (m *model) generateWindowTableRowView(version int) []string {
 	if err != nil {
 		return []string{fmt.Sprintf("%d", version), err.Error(), err.Error()}
 	}
+
 	var startTimeRow string
 	if startTime, err := window.GetStartTime(m.scheduledTime); err != nil {
 		startTimeRow = err.Error()
 	} else {
 		startTimeRow = startTime.Format(time.RFC3339)
 	}
+
 	var endTimeRow string
 	if endTime, err := window.GetEndTime(m.scheduledTime); err != nil {
 		endTimeRow = err.Error()

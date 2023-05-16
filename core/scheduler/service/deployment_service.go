@@ -7,7 +7,6 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/goto/optimus/core/scheduler"
-	"github.com/goto/optimus/core/scheduler/resolver"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/telemetry"
@@ -131,9 +130,7 @@ func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUp
 	}
 
 	s.l.Info("got jobs to upload to scheduler")
-	simple := resolver.SimpleResolver{}
-	err = simple.Resolve(ctx, allJobsWithDetails)
-	if err != nil {
+	if err := s.priorityResolver.Resolve(ctx, allJobsWithDetails); err != nil {
 		me.Append(err)
 		return me.ToErr()
 	}

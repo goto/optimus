@@ -348,7 +348,7 @@ func (j *JobRepository) GetAll(ctx context.Context, projectName tenant.ProjectNa
 }
 
 func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error) {
-	getJobByNames := `SELECT ` + jobColumns + ` FROM job WHERE project_name = $1 AND job_name = any ($2) AND deleted_at IS NULL`
+	getJobByNames := `SELECT ` + jobColumns + ` FROM job WHERE project_name = $1 AND name = any ($2) AND deleted_at IS NULL`
 	rows, err := j.db.Query(ctx, getJobByNames, projectName, jobs)
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "error while getting selected jobs", err)

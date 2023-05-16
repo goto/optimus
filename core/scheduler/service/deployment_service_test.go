@@ -223,6 +223,20 @@ func TestDeploymentService(t *testing.T) {
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Nil(t, err)
 		})
+		t.Run("should delete requested jobs, appropriately", func(t *testing.T) {
+			var jobNamesToUpload []string
+			jobNamesToDelete := []string{"job2"}
+
+			mScheduler := new(mockScheduler)
+			mScheduler.On("DeleteJobs", mock.Anything, tnnt1, jobNamesToDelete).Return(nil)
+			defer mScheduler.AssertExpectations(t)
+
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil,
+				mScheduler, nil, nil, nil)
+
+			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
+			assert.Nil(t, err)
+		})
 	})
 }
 

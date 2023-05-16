@@ -8,7 +8,7 @@ import pendulum
 import requests
 from airflow.configuration import conf
 from airflow.hooks.base import BaseHook
-from airflow.models import (XCOM_RETURN_KEY, Variable, XCom)
+from airflow.models import (XCOM_RETURN_KEY, Variable, XCom, TaskReschedule )
 from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
 from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 from airflow.sensors.base import BaseSensorOperator
@@ -395,8 +395,6 @@ def operator_start_event(context):
 def operator_success_event(context):
     try:
         run_type = get_run_type(context)
-        if run_type == "SENSOR":
-            cleanup_xcom(context)
         meta = {
             "event_type": "TYPE_{}_SUCCESS".format(run_type),
             "status": "success"
@@ -409,8 +407,6 @@ def operator_success_event(context):
 def operator_retry_event(context):
     try:
         run_type = get_run_type(context)
-        if run_type == "SENSOR":
-            cleanup_xcom(context)
         meta = {
             "event_type": "TYPE_{}_RETRY".format(run_type),
             "status": "retried"
@@ -423,9 +419,6 @@ def operator_retry_event(context):
 def operator_failure_event(context):
     try:
         run_type = get_run_type(context)
-        if run_type == "SENSOR":
-            log.info("clearing sensor xcom")
-            cleanup_xcom(context)
         meta = {
             "event_type": "TYPE_{}_FAIL".format(run_type),
             "status": "failed"
@@ -476,19 +469,12 @@ def optimus_sla_miss_notify(dag, task_list, blocking_task_list, slas, blocking_t
 
 def shouldSendSensorStartEvent(ctx):
     try:
-        from airflow import settings
-        ti = ctx.get('task_instance')
-        key = "sensorEvt/{}/{}/{}".format(ti.task_id , ctx.get('next_execution_date').strftime(TIMESTAMP_FORMAT) , ti.try_number)
-        log.info( f'sensor calback check Xcom Key-> {key}')
-        session = settings.Session()
-        result = session.query(session.query(XCom).filter(XCom.key == key, XCom.dag_id == ti.dag_id).exists()).scalar()
-        log.info(f'sensor xcom exists-> {result}')
-        if not result:
+        ti=ctx['ti']
+        task_reschedules = TaskReschedule.find_for_task_instance(ti)
+        if len(task_reschedules) == 0 :
             log.info(f'sending NEW sensor start event for attempt number-> {ti.try_number}')
-            ti.xcom_push(key=key, value=True)
             return True
-        log.info("ignoring sending sensor start event as its already sent")
-        return False
+        log.info("ignoring sending sensor start event as its not first poke")
     except Exception as e:
         print(e)
 
@@ -503,24 +489,6 @@ def get_result_for_monitoring_from_xcom(ctx):
         if 'monitoring' in return_value:
             return return_value['monitoring']
     return None
-
-def cleanup_xcom(ctx):
-    log.info("clearing sensor xcom")
-            
-    try:
-        from airflow import settings
-        from sqlalchemy import and_
-        session = settings.Session()
-        ti = ctx.get('task_instance')
-        cleanup_key_patttern = "sensorEvt/{}".format(ti.task_id)
-        # cleanup xcom is runs after the task run is completed hence the try number is increased by the time cleanup_xcom is called
-        log.info(f'xcom key pattern to clear -> {cleanup_key_patttern}')
-
-        result = session.query(XCom).filter( and_( XCom.dag_id == ti.dag_id , XCom.key.startswith(cleanup_key_patttern))).delete(synchronize_session=False)
-        log.info (f'Rows deleted-> {result}')
-        session.commit()
-    except Exception as e:
-        print(e)
 
 # everything below this is here for legacy reasons, should be cleaned up in future
 

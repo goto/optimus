@@ -320,7 +320,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 func (j *JobService) uploadJobs(ctx context.Context, jobTenant tenant.Tenant, addedJobs, updatedJobs []*job.Job, deletedJobNames []job.Name) error {
 	if len(addedJobs) == 0 && len(updatedJobs) == 0 && len(deletedJobNames) == 0 {
-		return errors.NewError(errors.ErrInternalError, job.EntityJob, "no jobs to proceed to the scheduler")
+		return nil
 	}
 
 	var jobNamesToUpload, jobNamesToRemove []string

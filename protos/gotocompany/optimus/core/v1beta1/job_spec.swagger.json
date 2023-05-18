@@ -337,6 +337,47 @@
         "tags": [
           "JobSpecificationService"
         ]
+      },
+      "put": {
+        "summary": "ChangeJobNamespace move a job spec from one namespace to another",
+        "operationId": "JobSpecificationService_ChangeJobNamespace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1ChangeJobNamespaceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "JobSpecificationService"
+        ]
       }
     },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/{jobName}/task": {
@@ -755,6 +796,9 @@
           "type": "string"
         }
       }
+    },
+    "v1beta1ChangeJobNamespaceResponse": {
+      "type": "object"
     },
     "v1beta1CheckJobSpecificationResponse": {
       "type": "object",

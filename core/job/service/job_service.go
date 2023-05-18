@@ -75,6 +75,8 @@ type JobRepository interface {
 	Update(context.Context, []*job.Job) (updatedJobs []*job.Job, err error)
 	Delete(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, cleanHistory bool) error
 
+	ChangeJobNamespace(ctx context.Context, jobName job.Name, tenant, newTenant tenant.Tenant) error
+
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 	GetAllByResourceDestination(ctx context.Context, resourceDestination job.ResourceURN) ([]*job.Job, error)
 	GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error)
@@ -183,6 +185,11 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 	j.raiseDeleteEvent(jobTenant, jobName)
 
 	return downstreamFullNames, nil
+}
+
+func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenant tenant.Tenant, jobName job.Name) error {
+	return j.repo.ChangeJobNamespace(ctx, jobName, jobTenant, jobNewTenant)
+	// TODO: do we need a namespace change event to be emited
 }
 
 func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (*job.Job, error) {

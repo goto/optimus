@@ -139,11 +139,11 @@ WHERE
 	tag, err := tx.Exec(ctx, changeJobNamespaceQuery, newTenant.NamespaceName(), jobName,
 		tenant.ProjectName(), tenant.NamespaceName())
 	if err != nil {
-		return errors.Wrap(job.EntityJob, "unable to change namespace", err)
+		return errors.Wrap(job.EntityJob, err.Error(), err)
 	}
 
 	if tag.RowsAffected() == 0 {
-		return errors.InternalError(job.EntityJob, "unable to change namespace", nil)
+		return errors.NotFound(job.EntityJob, "job not found with the given namespace: "+tenant.NamespaceName().String())
 	}
 	return nil
 }
@@ -157,13 +157,10 @@ WHERE
 	upstream_project_name = $3 AND
 	upstream_namespace_name = $4
 ;`
-	tag, err := tx.Exec(ctx, changeJobUpstreamsQuery, newTenant.NamespaceName(), jobName,
+	_, err := tx.Exec(ctx, changeJobUpstreamsQuery, newTenant.NamespaceName(), jobName,
 		tenant.ProjectName(), tenant.NamespaceName())
 	if err != nil {
-		return errors.Wrap(job.EntityJob, "unable to change namespace in job_upstream table", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return errors.InternalError(job.EntityJob, "unable to change namespace in job_upstream table", nil)
+		return errors.Wrap(job.EntityJob, err.Error(), err)
 	}
 	return nil
 }
@@ -177,14 +174,10 @@ WHERE
 	project_name = $3 AND
 	namespace_name = $4
 ;`
-	tag, err := tx.Exec(ctx, changeJobRunNamespaceQuery, newTenant.NamespaceName(), jobName,
+	_, err := tx.Exec(ctx, changeJobRunNamespaceQuery, newTenant.NamespaceName(), jobName,
 		tenant.ProjectName(), tenant.NamespaceName())
 	if err != nil {
-		return errors.Wrap(job.EntityJob, "unable to change namespace in job_run table", err)
-	}
-
-	if tag.RowsAffected() == 0 {
-		return errors.InternalError(job.EntityJob, "unable to change namespace in job_run table", nil)
+		return errors.Wrap(job.EntityJob, err.Error(), err)
 	}
 	return nil
 }

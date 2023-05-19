@@ -3099,6 +3099,12 @@ func (_m *JobRepository) Delete(ctx context.Context, projectName tenant.ProjectN
 	return r0
 }
 
+// ChangeJobNamespace provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
+func (_m *JobRepository) ChangeJobNamespace(ctx context.Context, jobName job.Name, jobTenant, jobNewTenant tenant.Tenant) error {
+	ret := _m.Called(ctx, jobName, jobTenant, jobNewTenant)
+	return ret.Error(0)
+}
+
 // GetAllByProjectName provides a mock function with given fields: ctx, projectName
 func (_m *JobRepository) GetAllByProjectName(ctx context.Context, projectName tenant.ProjectName) ([]*job.Job, error) {
 	ret := _m.Called(ctx, projectName)

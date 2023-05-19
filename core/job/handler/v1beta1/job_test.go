@@ -1852,6 +1852,12 @@ func (_m *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNa
 	return r0, r1
 }
 
+// ChangeNamespace provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
+func (_m *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenant tenant.Tenant, jobName job.Name) error {
+	ret := _m.Called(ctx, jobName, jobTenant, jobNewTenant)
+	return ret.Error(0)
+}
+
 // Get provides a mock function with given fields: ctx, jobTenant, jobName
 func (_m *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (*job.Job, error) {
 	ret := _m.Called(ctx, jobTenant, jobName)

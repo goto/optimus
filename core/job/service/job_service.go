@@ -189,7 +189,7 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 
 func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenant tenant.Tenant, jobName job.Name) error {
 	return j.repo.ChangeJobNamespace(ctx, jobName, jobTenant, jobNewTenant)
-	// TODO: do we need a namespace change event to be emited
+	// TODO: do we need a namespace change event to be emitted
 }
 
 func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (*job.Job, error) {

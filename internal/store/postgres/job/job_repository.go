@@ -106,6 +106,9 @@ func (j JobRepository) Update(ctx context.Context, jobs []*job.Job) ([]*job.Job,
 
 func (j JobRepository) ChangeJobNamespace(ctx context.Context, jobName job.Name, tenant, newTenant tenant.Tenant) error {
 	tx, err := j.db.Begin(ctx)
+	if err != nil {
+		return errors.InternalError(job.EntityJob, "unable to begin transaction", err)
+	}
 
 	if err = changeJobNamespace(ctx, tx, jobName, tenant, newTenant); err != nil {
 		tx.Rollback(ctx)

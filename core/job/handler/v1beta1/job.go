@@ -159,7 +159,7 @@ func (jh *JobHandler) ChangeJobNamespace(ctx context.Context, changeRequest *pb.
 		return nil, errors.GRPCErr(err, errorMsg)
 	}
 
-	err := jh.jobService.ChangeNamespace(ctx, jobSourceTenant, jobNewTenant, jobName)
+	err = jh.jobService.ChangeNamespace(ctx, jobSourceTenant, jobNewTenant, jobName)
 	if err != nil {
 		errorMsg := "failed to change job namespace"
 		jh.l.Error(fmt.Sprintf("%s: %s", errorMsg, err.Error()))

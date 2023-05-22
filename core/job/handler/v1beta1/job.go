@@ -154,7 +154,7 @@ func (jh *JobHandler) ChangeJobNamespace(ctx context.Context, changeRequest *pb.
 
 	jobName, err := job.NameFrom(changeRequest.JobName)
 	if err != nil {
-		errorMsg := "failed to adapt job name when deleting job specification"
+		errorMsg := "failed to adapt job name when changing job specification"
 		jh.l.Error(fmt.Sprintf("%s: %s", errorMsg, err.Error()))
 		return nil, errors.GRPCErr(err, errorMsg)
 	}

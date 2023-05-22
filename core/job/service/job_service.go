@@ -188,8 +188,31 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 }
 
 func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenant tenant.Tenant, jobName job.Name) error {
-	return j.repo.ChangeJobNamespace(ctx, jobName, jobTenant, jobNewTenant)
-	// TODO: do we need a namespace change event to be emitted
+	err := j.repo.ChangeJobNamespace(ctx, jobName, jobTenant, jobNewTenant)
+	if err != nil {
+		errorsMsg := fmt.Sprintf("unable to successfully finish job namespace change transaction : %s", err.Error())
+		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
+	}
+
+	newJobSpec, err := j.repo.GetByJobName(ctx, jobNewTenant.ProjectName(), jobName)
+	if err != nil {
+		errorsMsg := fmt.Sprintf(" unable fetch jobSpecs for newly modified job : %s, namespace: %s, err: %s", jobName, jobNewTenant.NamespaceName(), err.Error())
+		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
+	}
+
+	err = j.uploadJobs(ctx, jobTenant, nil, nil, []job.Name{jobName})
+	if err != nil {
+		errorsMsg := fmt.Sprintf(" unable to remove old job : %s", err.Error())
+		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
+	}
+
+	err = j.uploadJobs(ctx, jobNewTenant, []*job.Job{newJobSpec}, nil, nil)
+	if err != nil {
+		errorsMsg := fmt.Sprintf(" unable to create new job on scheduler : %s", err.Error())
+		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
+	}
+	j.raiseUpdateEvent(newJobSpec)
+	return nil
 }
 
 func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (*job.Job, error) {

@@ -53,25 +53,34 @@ func NewJobPluginService(pluginRepo PluginRepo, engine Engine, logger log.Logger
 }
 
 func (p JobPluginService) Info(_ context.Context, taskName job.TaskName) (*plugin.Info, error) {
+	p.logger.Info("executing request to get plugin info")
+
 	taskPlugin, err := p.pluginRepo.GetByName(taskName.String())
 	if err != nil {
+		p.logger.Error("error getting plugin [%s]: %s", taskName.String(), err)
 		return nil, err
 	}
 
 	if taskPlugin.YamlMod == nil {
+		p.logger.Error(ErrYamlModNotExist.Error())
 		return nil, ErrYamlModNotExist
 	}
 
+	p.logger.Info("finished getting plugin info")
 	return taskPlugin.YamlMod.PluginInfo(), nil
 }
 
 func (p JobPluginService) GenerateDestination(ctx context.Context, tnnt *tenant.WithDetails, task job.Task) (job.ResourceURN, error) {
+	p.logger.Info("accepting request to generate destination")
+
 	taskPlugin, err := p.pluginRepo.GetByName(task.Name().String())
 	if err != nil {
+		p.logger.Error("error getting plugin [%s]: %s", task.Name().String(), err)
 		return "", err
 	}
 
 	if taskPlugin.DependencyMod == nil {
+		p.logger.Error(ErrUpstreamModNotFound.Error())
 		return "", ErrUpstreamModNotFound
 	}
 
@@ -81,25 +90,32 @@ func (p JobPluginService) GenerateDestination(ctx context.Context, tnnt *tenant.
 		Config: compiledConfig,
 	})
 	if err != nil {
+		p.logger.Error("error generating destination: %s", err)
 		return "", fmt.Errorf("failed to generate destination: %w", err)
 	}
 
+	p.logger.Info("finished generating destination")
 	return job.ResourceURN(destination.URN()), nil
 }
 
 func (p JobPluginService) GenerateUpstreams(ctx context.Context, jobTenant *tenant.WithDetails, spec *job.Spec, dryRun bool) ([]job.ResourceURN, error) {
+	p.logger.Info("accepting request to generate upstreams")
+
 	taskPlugin, err := p.pluginRepo.GetByName(spec.Task().Name().String())
 	if err != nil {
+		p.logger.Error("error getting plugin [%s]: %s", spec.Task().Name().String(), err)
 		return nil, err
 	}
 
 	if taskPlugin.DependencyMod == nil {
+		p.logger.Error(ErrUpstreamModNotFound.Error())
 		return nil, ErrUpstreamModNotFound
 	}
 
 	// TODO: this now will always be a same time for start of service, is it correct ?
 	assets, err := p.compileAsset(ctx, taskPlugin, spec, p.now())
 	if err != nil {
+		p.logger.Error("error compiling asset: %s", err)
 		return nil, fmt.Errorf("asset compilation failure: %w", err)
 	}
 
@@ -113,6 +129,7 @@ func (p JobPluginService) GenerateUpstreams(ctx context.Context, jobTenant *tena
 		},
 	})
 	if err != nil {
+		p.logger.Error("error generating dependencies: %s", err)
 		return nil, err
 	}
 
@@ -122,6 +139,7 @@ func (p JobPluginService) GenerateUpstreams(ctx context.Context, jobTenant *tena
 		upstreamURNs = append(upstreamURNs, resourceURN)
 	}
 
+	p.logger.Info("finished generating upstreams")
 	return upstreamURNs, nil
 }
 
@@ -135,7 +153,7 @@ func (p JobPluginService) compileConfig(configs job.Config, tnnt *tenant.WithDet
 	for key, val := range configs {
 		compiledConf, err := p.engine.CompileString(val, tmplCtx)
 		if err != nil {
-			p.logger.Warn("error in template compilation: ", err.Error())
+			p.logger.Warn("template compilation encountered suppressed error: ", err.Error())
 			compiledConf = val
 		}
 		pluginConfigs = append(pluginConfigs, plugin.Config{
@@ -161,6 +179,7 @@ func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.P
 			},
 		})
 		if err != nil {
+			p.logger.Error("error generating destination: %s", err)
 			return nil, err
 		}
 		jobDestination = jobDestinationResponse.Destination
@@ -168,10 +187,12 @@ func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.P
 
 	startTime, err := spec.Window().GetStartTime(scheduledAt)
 	if err != nil {
+		p.logger.Error("error getting start time: %s", err)
 		return nil, fmt.Errorf("error getting start time: %w", err)
 	}
 	endTime, err := spec.Window().GetEndTime(scheduledAt)
 	if err != nil {
+		p.logger.Error("error getting end time: %s", err)
 		return nil, fmt.Errorf("error getting end time: %w", err)
 	}
 
@@ -187,6 +208,7 @@ func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.P
 		configKeyDestination:   jobDestination,
 	})
 	if err != nil {
+		p.logger.Error("error compiling asset: %s", err)
 		return nil, fmt.Errorf("failed to compile templates: %w", err)
 	}
 

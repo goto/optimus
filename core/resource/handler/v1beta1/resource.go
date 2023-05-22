@@ -60,12 +60,15 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 			if errors.Is(err, io.EOF) {
 				break
 			}
+			errMsg := fmt.Sprintf("error encountered when receiving stream request: %s", err)
+			rh.l.Error(errMsg)
+			responseWriter.Write(writer.LogLevelError, errMsg)
 			return err
 		}
 
 		tnnt, err := tenant.NewTenant(request.GetProjectName(), request.GetNamespaceName())
 		if err != nil {
-			errMsg := fmt.Sprintf("invalid deploy request for %s: %s", request.GetNamespaceName(), err.Error())
+			errMsg := fmt.Sprintf("invalid tenant information request [%s/%s]: %s", request.GetProjectName(), request.GetNamespaceName(), err)
 			rh.l.Error(errMsg)
 			responseWriter.Write(writer.LogLevelError, errMsg)
 			errNamespaces = append(errNamespaces, request.NamespaceName)
@@ -74,7 +77,7 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 
 		store, err := resource.FromStringToStore(request.GetDatastoreName())
 		if err != nil {
-			errMsg := fmt.Sprintf("invalid store name for %s: %s", request.GetDatastoreName(), err.Error())
+			errMsg := fmt.Sprintf("invalid store name [%s]: %s", request.GetDatastoreName(), err)
 			rh.l.Error(errMsg)
 			responseWriter.Write(writer.LogLevelError, errMsg)
 			errNamespaces = append(errNamespaces, request.NamespaceName)
@@ -85,7 +88,7 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		for _, resourceProto := range request.GetResources() {
 			adapted, err := fromResourceProto(resourceProto, tnnt, store)
 			if err != nil {
-				errMsg := fmt.Sprintf("%s: cannot adapt resource %s", err.Error(), resourceProto.GetName())
+				errMsg := fmt.Sprintf("error adapting resource [%s]: %s", resourceProto.GetName(), err)
 				rh.l.Error(errMsg)
 				responseWriter.Write(writer.LogLevelError, errMsg)
 				continue
@@ -120,7 +123,8 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 			continue
 		}
 
-		successMsg := fmt.Sprintf("%d resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
+		successMsg := fmt.Sprintf("[%d] resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
+		rh.l.Info(successMsg)
 		responseWriter.Write(writer.LogLevelInfo, successMsg)
 
 		totalSuccessBatchUpdateGauge.Set(float64(len(successResources)))
@@ -130,7 +134,7 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 	rh.l.Info("Finished resource deployment in %v", time.Since(startTime))
 	if len(errNamespaces) > 0 {
 		namespacesWithError := strings.Join(errNamespaces, ", ")
-		rh.l.Error("Error while deploying namespaces: [%s]", namespacesWithError)
+		rh.l.Error("error when deploying namespaces: [%s]", namespacesWithError)
 		return fmt.Errorf("error when deploying: [%s]", namespacesWithError)
 	}
 	return nil
@@ -139,16 +143,19 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb.ListResourceSpecificationRequest) (*pb.ListResourceSpecificationResponse, error) {
 	store, err := resource.FromStringToStore(req.GetDatastoreName())
 	if err != nil {
+		rh.l.Error("invalid store name [%s]: %s", req.GetDatastoreName(), err)
 		return nil, errors.GRPCErr(err, "invalid list resource request")
 	}
 
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
+		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to list resource for "+req.GetDatastoreName())
 	}
 
 	resources, err := rh.service.GetAll(ctx, tnnt, store)
 	if err != nil {
+		rh.l.Error("error getting all resources: %s", err)
 		return nil, errors.GRPCErr(err, "failed to list resource for "+req.GetDatastoreName())
 	}
 
@@ -156,6 +163,7 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 	for _, resourceSpec := range resources {
 		resourceProto, err := toResourceProto(resourceSpec)
 		if err != nil {
+			rh.l.Error("error adapting resource [%s]: %s", resourceSpec.FullName(), err)
 			return nil, errors.GRPCErr(err, "failed to parse resource "+resourceSpec.FullName())
 		}
 		resourceProtos = append(resourceProtos, resourceProto)
@@ -169,21 +177,25 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateResourceRequest) (*pb.CreateResourceResponse, error) {
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
+		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to create resource")
 	}
 
 	store, err := resource.FromStringToStore(req.GetDatastoreName())
 	if err != nil {
+		rh.l.Error("invalid datastore name [%s]: %s", req.GetDatastoreName(), err)
 		return nil, errors.GRPCErr(err, "invalid create resource request")
 	}
 
 	res, err := fromResourceProto(req.Resource, tnnt, store)
 	if err != nil {
+		rh.l.Error("error adapting resource [%s]: %s", req.GetResource().GetName(), err)
 		return nil, errors.GRPCErr(err, "failed to create resource")
 	}
 
 	err = rh.service.Create(ctx, res)
 	if err != nil {
+		rh.l.Error("error creating resource [%s]: %s", res.FullName(), err)
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
 	return &pb.CreateResourceResponse{}, nil
@@ -191,26 +203,31 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 
 func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResourceRequest) (*pb.ReadResourceResponse, error) {
 	if req.GetResourceName() == "" {
+		rh.l.Error("resource name is empty")
 		return nil, errors.GRPCErr(errors.InvalidArgument(resource.EntityResource, "empty resource name"), "invalid read resource request")
 	}
 
 	store, err := resource.FromStringToStore(req.GetDatastoreName())
 	if err != nil {
+		rh.l.Error("invalid datastore name [%s]: %s", req.GetDatastoreName(), err)
 		return nil, errors.GRPCErr(err, "invalid read resource request")
 	}
 
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
+		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to read resource "+req.GetResourceName())
 	}
 
 	response, err := rh.service.Get(ctx, tnnt, store, req.GetResourceName())
 	if err != nil {
+		rh.l.Error("error getting resource [%s]: %s", req.GetResourceName(), err)
 		return nil, errors.GRPCErr(err, "failed to read resource "+req.GetResourceName())
 	}
 
 	protoResource, err := toResourceProto(response)
 	if err != nil {
+		rh.l.Error("error adapting resource [%s]: %s", req.GetResourceName(), err)
 		return nil, errors.GRPCErr(err, "failed to read resource "+req.GetResourceName())
 	}
 
@@ -222,21 +239,25 @@ func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResource
 func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateResourceRequest) (*pb.UpdateResourceResponse, error) {
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
+		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to update resource")
 	}
 
 	store, err := resource.FromStringToStore(req.GetDatastoreName())
 	if err != nil {
+		rh.l.Error("invalid datastore name [%s]: %s", req.GetDatastoreName(), err)
 		return nil, errors.GRPCErr(err, "invalid update resource request")
 	}
 
 	res, err := fromResourceProto(req.Resource, tnnt, store)
 	if err != nil {
+		rh.l.Error("error adapting resource [%s]: %s", req.GetResource().GetName(), err)
 		return nil, errors.GRPCErr(err, "failed to update resource")
 	}
 
 	err = rh.service.Update(ctx, res)
 	if err != nil {
+		rh.l.Error("error updating resource [%s]: %s", res.FullName(), err)
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 	return &pb.UpdateResourceResponse{}, nil

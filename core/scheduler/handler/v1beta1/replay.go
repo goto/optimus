@@ -28,22 +28,28 @@ type ReplayHandler struct {
 }
 
 func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.ReplayResponse, error) {
+	h.l.Info("accepting request for replay")
+
 	replayTenant, err := tenant.NewTenant(req.GetProjectName(), req.NamespaceName)
 	if err != nil {
+		h.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "unable to start replay for "+req.GetJobName())
 	}
 
 	jobName, err := scheduler.JobNameFrom(req.GetJobName())
 	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, "unable to start replay for "+req.GetJobName())
 	}
 
 	if err = req.GetStartTime().CheckValid(); err != nil {
+		h.l.Error("error validating start time: %s", err)
 		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityJobRun, "invalid start_time"), "unable to start replay for "+req.GetJobName())
 	}
 
 	if req.GetEndTime() != nil {
 		if err = req.GetEndTime().CheckValid(); err != nil {
+			h.l.Error("error validating end time: %s", err)
 			return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityJobRun, "invalid end_time"), "unable to start replay for "+req.GetJobName())
 		}
 	}
@@ -52,6 +58,7 @@ func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.R
 	if req.JobConfig != "" {
 		jobConfig, err = parseJobConfig(req.JobConfig)
 		if err != nil {
+			h.l.Error("error parsing job config: %s", err)
 			return nil, errors.GRPCErr(err, "unable to parse replay job config for "+req.JobName)
 		}
 	}
@@ -59,6 +66,7 @@ func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.R
 	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.Parallel, jobConfig, req.Description)
 	replayID, err := h.service.CreateReplay(ctx, replayTenant, jobName, replayConfig)
 	if err != nil {
+		h.l.Error("error creating replay for job [%s]: %s", jobName, err)
 		return nil, errors.GRPCErr(err, "unable to start replay for "+req.GetJobName())
 	}
 

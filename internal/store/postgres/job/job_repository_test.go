@@ -732,31 +732,25 @@ func TestPostgresJobRepository(t *testing.T) {
 	})
 	t.Run("ChangeJobNamespace", func(t *testing.T) {
 		newTenant, _ := tenant.NewTenant(otherNamespace.ProjectName().String(), otherNamespace.Name().String())
+		jobSpecA, err := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, jobWindow, jobTask).WithDescription(jobDescription).Build()
+		assert.NoError(t, err)
+		jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"dev.resource.sample_c"})
+
+		jobSpecB, err := job.NewSpecBuilder(jobVersion, "sample-job-B", jobOwner, jobSchedule, jobWindow, jobTask).WithDescription(jobDescription).Build()
+		assert.NoError(t, err)
+		jobB := job.NewJob(sampleTenant, jobSpecB, "dev.resource.sample_b", []job.ResourceURN{"dev.resource.sample_a"})
 
 		t.Run("Change Job namespace successfully", func(t *testing.T) {
 			db := dbSetup()
 
-			jobSpecA, err := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, jobWindow, jobTask).WithDescription(jobDescription).Build()
-			assert.NoError(t, err)
-			jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"dev.resource.sample_c"})
-
-			jobSpecB, err := job.NewSpecBuilder(jobVersion, "sample-job-B", jobOwner, jobSchedule, jobWindow, jobTask).WithDescription(jobDescription).Build()
-			assert.NoError(t, err)
-			jobB := job.NewJob(sampleTenant, jobSpecB, "dev.resource.sample_b", []job.ResourceURN{"dev.resource.sample_a"})
-
 			jobRepo := postgres.NewJobRepository(db)
-
 			addedJob, err := jobRepo.Add(ctx, []*job.Job{jobA, jobB})
 			assert.NoError(t, err)
 			assert.NotNil(t, addedJob)
 
 			upstreamAInferred := job.NewUpstreamResolved("sample-job-A", "host-1", "dev.resource.sample_a", sampleTenant, "inferred", taskName, false)
 			jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{upstreamAInferred})
-
 			err = jobRepo.ReplaceUpstreams(ctx, []*job.WithUpstream{jobBWithUpstream})
-			assert.NoError(t, err)
-
-			err = jobRepo.Delete(ctx, proj.Name(), jobSpecA.Name(), false)
 			assert.NoError(t, err)
 
 			// update failure with proper log message shows job has been soft deleted
@@ -778,8 +772,6 @@ func TestPostgresJobRepository(t *testing.T) {
 			}
 			assert.True(t, jobAIsUpstream)
 
-			// todo: create jobA runs
-			// move the runs across namespace
 		})
 	})
 

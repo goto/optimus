@@ -54,12 +54,11 @@ func NewResourceService(logger log.Logger, repo ResourceRepository, mgr Resource
 }
 
 func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resource) error { // nolint:gocritic
-	rs.logger.Info("executing request to create resource")
-
 	if err := rs.mgr.Validate(incoming); err != nil {
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
+
 	incoming.MarkValidationSuccess()
 	urn, err := rs.mgr.GetURN(incoming)
 	if err != nil {
@@ -104,19 +103,17 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 		rs.logger.Error("error creating resource [%s] to manager: %s", incoming.FullName(), err)
 		return err
 	}
-	rs.logger.Info("resource [%s] is successfully created", incoming.FullName())
 
 	rs.raiseCreateEvent(incoming)
 	return nil
 }
 
 func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource) error { // nolint:gocritic
-	rs.logger.Info("executing request to update resource")
-
 	if err := rs.mgr.Validate(incoming); err != nil {
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
+
 	incoming.MarkValidationSuccess()
 	urn, err := rs.mgr.GetURN(incoming)
 	if err != nil {
@@ -151,15 +148,12 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 		rs.logger.Error("error updating resource [%s] to manager: %s", incoming.FullName(), err)
 		return err
 	}
-	rs.logger.Info("resource [%s] is successfully updated", incoming.FullName())
 
 	rs.raiseUpdateEvent(incoming)
 	return nil
 }
 
 func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceFullName string) (*resource.Resource, error) { // nolint:gocritic
-	rs.logger.Info("executing request to get a resource")
-
 	if resourceFullName == "" {
 		rs.logger.Error("resource full name is empty")
 		return nil, errors.InvalidArgument(resource.EntityResource, "empty resource full name")
@@ -168,13 +162,10 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 }
 
 func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
-	rs.logger.Info("executing request to get all resources")
 	return rs.repo.ReadAll(ctx, tnnt, store)
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource) error { // nolint:gocritic
-	rs.logger.Info("executing request to deploy all resources")
-
 	multiError := errors.NewMultiError("error batch updating resources")
 	for _, r := range resources {
 		if err := rs.mgr.Validate(r); err != nil {

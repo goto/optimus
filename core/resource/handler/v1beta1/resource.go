@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -50,9 +49,6 @@ type ResourceHandler struct {
 }
 
 func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_DeployResourceSpecificationServer) error {
-	rh.l.Info("accepting request to reploy resources")
-
-	startTime := time.Now()
 	responseWriter := writer.NewDeployResourceSpecificationResponseWriter(stream)
 	var errNamespaces []string
 
@@ -126,14 +122,13 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		}
 
 		successMsg := fmt.Sprintf("[%d] resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
-		rh.l.Info(successMsg)
 		responseWriter.Write(writer.LogLevelInfo, successMsg)
 
 		totalSuccessBatchUpdateGauge.Set(float64(len(successResources)))
 		totalSkippedBatchUpdateGauge.Set(float64(len(skippedResources)))
 		totalFailureBatchUpdateGauge.Set(float64(len(failureResources)))
 	}
-	rh.l.Info("Finished resource deployment in %v", time.Since(startTime))
+
 	if len(errNamespaces) > 0 {
 		namespacesWithError := strings.Join(errNamespaces, ", ")
 		rh.l.Error("error when deploying namespaces: [%s]", namespacesWithError)
@@ -143,8 +138,6 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 }
 
 func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb.ListResourceSpecificationRequest) (*pb.ListResourceSpecificationResponse, error) {
-	rh.l.Info("accepting request to list resources")
-
 	store, err := resource.FromStringToStore(req.GetDatastoreName())
 	if err != nil {
 		rh.l.Error("invalid store name [%s]: %s", req.GetDatastoreName(), err)
@@ -179,8 +172,6 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 }
 
 func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateResourceRequest) (*pb.CreateResourceResponse, error) {
-	rh.l.Info("accepting request to create resource")
-
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
 		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
@@ -205,13 +196,10 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
 
-	rh.l.Info("finished creating resource")
 	return &pb.CreateResourceResponse{}, nil
 }
 
 func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResourceRequest) (*pb.ReadResourceResponse, error) {
-	rh.l.Info("accepting request to read")
-
 	if req.GetResourceName() == "" {
 		rh.l.Error("resource name is empty")
 		return nil, errors.GRPCErr(errors.InvalidArgument(resource.EntityResource, "empty resource name"), "invalid read resource request")
@@ -241,15 +229,12 @@ func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResource
 		return nil, errors.GRPCErr(err, "failed to read resource "+req.GetResourceName())
 	}
 
-	rh.l.Info("finished reading resource")
 	return &pb.ReadResourceResponse{
 		Resource: protoResource,
 	}, nil
 }
 
 func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateResourceRequest) (*pb.UpdateResourceResponse, error) {
-	rh.l.Info("accepting request to update resource")
-
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
 		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
@@ -274,7 +259,6 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 
-	rh.l.Info("finished updating resource")
 	return &pb.UpdateResourceResponse{}, nil
 }
 

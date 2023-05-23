@@ -771,7 +771,6 @@ func TestPostgresJobRepository(t *testing.T) {
 				}
 			}
 			assert.True(t, jobAIsUpstream)
-
 		})
 	})
 

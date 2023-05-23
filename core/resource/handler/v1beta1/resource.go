@@ -66,7 +66,7 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 
 		tnnt, err := tenant.NewTenant(request.GetProjectName(), request.GetNamespaceName())
 		if err != nil {
-			errMsg := fmt.Sprintf("invalid tenant information request [%s/%s]: %s", request.GetProjectName(), request.GetNamespaceName(), err)
+			errMsg := fmt.Sprintf("invalid tenant information request project [%s] namespace [%s]: %s", request.GetProjectName(), request.GetNamespaceName(), err)
 			rh.l.Error(errMsg)
 			responseWriter.Write(writer.LogLevelError, errMsg)
 			errNamespaces = append(errNamespaces, request.NamespaceName)
@@ -146,7 +146,7 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to list resource for "+req.GetDatastoreName())
 	}
 
@@ -174,7 +174,7 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateResourceRequest) (*pb.CreateResourceResponse, error) {
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to create resource")
 	}
 
@@ -213,7 +213,7 @@ func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResource
 
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to read resource "+req.GetResourceName())
 	}
 
@@ -237,7 +237,7 @@ func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResource
 func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateResourceRequest) (*pb.UpdateResourceResponse, error) {
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		rh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to update resource")
 	}
 

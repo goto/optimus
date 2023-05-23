@@ -29,7 +29,7 @@ type BackupHandler struct {
 func (b BackupHandler) CreateBackup(ctx context.Context, req *pb.CreateBackupRequest) (*pb.CreateBackupResponse, error) {
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		b.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		b.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "invalid backup request")
 	}
 
@@ -61,7 +61,7 @@ func (b BackupHandler) CreateBackup(ctx context.Context, req *pb.CreateBackupReq
 func (b BackupHandler) ListBackups(ctx context.Context, req *pb.ListBackupsRequest) (*pb.ListBackupsResponse, error) {
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		b.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		b.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "invalid list backup request")
 	}
 

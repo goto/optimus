@@ -33,36 +33,45 @@ type JobRunHandler struct {
 }
 
 func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputRequest) (*pb.JobRunInputResponse, error) {
+	h.l.Info("accepting request to get job run input")
+
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+req.GetJobName())
 	}
 
 	jobName, err := scheduler.JobNameFrom(req.GetJobName())
 	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+req.GetJobName())
 	}
 
 	executor, err := scheduler.ExecutorFromEnum(req.InstanceName, req.InstanceType.String())
 	if err != nil {
+		h.l.Error("error adapting executor: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+req.GetJobName())
 	}
 
 	err = req.ScheduledAt.CheckValid()
 	if err != nil {
+		h.l.Error("invalid scheduled at: %s", err)
 		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityJobRun, "invalid scheduled_at"), "unable to get job run input for "+req.GetJobName())
 	}
 
 	runConfig, err := scheduler.RunConfigFrom(executor, req.ScheduledAt.AsTime(), req.JobrunId)
 	if err != nil {
+		h.l.Error("error adapting run config: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+req.GetJobName())
 	}
 
 	input, err := h.service.JobRunInput(ctx, projectName, jobName, runConfig)
 	if err != nil {
+		h.l.Error("error getting job run input: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+req.GetJobName())
 	}
 
+	h.l.Info("finished getting job run input")
 	return &pb.JobRunInputResponse{
 		Envs:    input.Configs,
 		Files:   input.Files,
@@ -73,24 +82,30 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 // JobRun currently gets the job runs from scheduler based on the criteria
 // TODO: later should collect the job runs from optimus
 func (h JobRunHandler) JobRun(ctx context.Context, req *pb.JobRunRequest) (*pb.JobRunResponse, error) {
+	h.l.Info("accepting request to get job run")
+
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
 	jobName, err := scheduler.JobNameFrom(req.GetJobName())
 	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
 	criteria, err := buildCriteriaForJobRun(req)
 	if err != nil {
+		h.l.Error("error building job run criteria: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
 	var jobRuns []*scheduler.JobRunStatus
 	jobRuns, err = h.service.GetJobRuns(ctx, projectName, jobName, criteria)
 	if err != nil {
+		h.l.Error("error getting job runs: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
@@ -127,8 +142,11 @@ func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, 
 }
 
 func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSchedulerRequest) (*pb.UploadToSchedulerResponse, error) {
+	h.l.Info("accepting request to upload to scheduler")
+
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "unable to get projectName")
 	}
 	go func() {
@@ -142,18 +160,23 @@ func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSche
 
 // RegisterJobEvent TODO: check in jaeger if this api takes time, then we can make this async
 func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJobEventRequest) (*pb.RegisterJobEventResponse, error) {
+	h.l.Info("accepting request to registr job event")
+
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
+		h.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "unable to get tenant")
 	}
 
 	jobName, err := scheduler.JobNameFrom(req.GetJobName())
 	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", jobName, err)
 		return nil, errors.GRPCErr(err, "unable to get job name"+req.GetJobName())
 	}
 
 	event, err := scheduler.EventFrom(req.GetEvent().Type.String(), req.GetEvent().Value.AsMap(), jobName, tnnt)
 	if err != nil {
+		h.l.Error("error adapting event: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse event")
 	}
 	me := errors.NewMultiError("errors in RegisterJobEvent")

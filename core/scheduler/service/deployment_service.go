@@ -61,6 +61,8 @@ func setJobMetric(t tenant.Tenant, jobs []*scheduler.JobWithDetails) {
 }
 
 func (s *JobRunService) UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error {
+	s.l.Info("executing request to upload to scheduler")
+
 	spanCtx, span := otel.Tracer("optimus").Start(ctx, "UploadToScheduler")
 	defer span.End()
 
@@ -74,6 +76,7 @@ func (s *JobRunService) UploadToScheduler(ctx context.Context, projectName tenan
 
 	err = s.priorityResolver.Resolve(spanCtx, allJobsWithDetails)
 	if err != nil {
+		s.l.Error("error resolving priority: %s", err)
 		me.Append(err)
 		return me.ToErr()
 	}
@@ -83,7 +86,7 @@ func (s *JobRunService) UploadToScheduler(ctx context.Context, projectName tenan
 	for t, jobs := range jobGroupByTenant {
 		span.AddEvent("uploading job specs")
 		if err = s.deployJobsPerNamespace(spanCtx, t, jobs); err == nil {
-			s.l.Debug(fmt.Sprintf("[success] namespace: %s, project: %s, deployed", t.NamespaceName().String(), t.ProjectName().String()))
+			s.l.Info(fmt.Sprintf("[success] namespace: %s, project: %s, deployed", t.NamespaceName().String(), t.ProjectName().String()))
 		}
 		me.Append(err)
 

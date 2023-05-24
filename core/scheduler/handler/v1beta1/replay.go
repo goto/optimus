@@ -30,7 +30,7 @@ type ReplayHandler struct {
 func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.ReplayResponse, error) {
 	replayTenant, err := tenant.NewTenant(req.GetProjectName(), req.NamespaceName)
 	if err != nil {
-		h.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		h.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "unable to start replay for "+req.GetJobName())
 	}
 
@@ -74,11 +74,13 @@ func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.R
 func (h ReplayHandler) ListReplay(ctx context.Context, req *pb.ListReplayRequest) (*pb.ListReplayResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "unable to get replay list for "+req.GetProjectName())
 	}
 
 	replays, err := h.service.GetReplayList(ctx, projectName)
 	if err != nil {
+		h.l.Error("error getting replay list for project [%s]: %s", projectName, err)
 		return nil, errors.GRPCErr(err, "unable to get replay list for "+req.GetProjectName())
 	}
 
@@ -93,6 +95,7 @@ func (h ReplayHandler) ListReplay(ctx context.Context, req *pb.ListReplayRequest
 func (h ReplayHandler) GetReplay(ctx context.Context, req *pb.GetReplayRequest) (*pb.GetReplayResponse, error) {
 	id, err := uuid.Parse(req.GetReplayId())
 	if err != nil {
+		h.l.Error("error parsing replay id [%s]: %s", req.GetReplayId(), err)
 		err = errors.InvalidArgument(scheduler.EntityReplay, err.Error())
 		return nil, errors.GRPCErr(err, "unable to get replay for replayID "+req.GetReplayId())
 	}
@@ -100,8 +103,10 @@ func (h ReplayHandler) GetReplay(ctx context.Context, req *pb.GetReplayRequest) 
 	replay, err := h.service.GetReplayByID(ctx, id)
 	if err != nil {
 		if errors.IsErrorType(err, errors.ErrNotFound) {
+			h.l.Warn("replay with id [%s] is not found", id.String())
 			return &pb.GetReplayResponse{}, nil
 		}
+		h.l.Error("error getting replay with id [%s]: %s", id.String(), err)
 		return nil, errors.GRPCErr(err, "unable to get replay for replayID "+req.GetReplayId())
 	}
 

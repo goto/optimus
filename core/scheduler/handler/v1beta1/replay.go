@@ -28,8 +28,6 @@ type ReplayHandler struct {
 }
 
 func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.ReplayResponse, error) {
-	h.l.Info("accepting request for replay")
-
 	replayTenant, err := tenant.NewTenant(req.GetProjectName(), req.NamespaceName)
 	if err != nil {
 		h.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)

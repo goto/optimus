@@ -86,8 +86,6 @@ type JobRunService struct {
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
-	s.l.Info("executing request to get job run input")
-
 	job, err := s.jobRepo.GetJob(ctx, projectName, jobName)
 	if err != nil {
 		s.l.Error("error getting job [%s]: %s", jobName, err)
@@ -122,8 +120,6 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 }
 
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
-	s.l.Info("executing request to get job runs")
-
 	jobWithDetails, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
 		msg := fmt.Sprintf("unable to get job details for jobName: %s, project:%s", jobName, projectName)
@@ -459,8 +455,6 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 }
 
 func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Event) error {
-	s.l.Info("executing request to update job state")
-
 	s.trackEvent(event)
 
 	switch event.Type {

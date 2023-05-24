@@ -33,8 +33,6 @@ type JobRunHandler struct {
 }
 
 func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputRequest) (*pb.JobRunInputResponse, error) {
-	h.l.Info("accepting request to get job run input")
-
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
@@ -71,7 +69,6 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+req.GetJobName())
 	}
 
-	h.l.Info("finished getting job run input")
 	return &pb.JobRunInputResponse{
 		Envs:    input.Configs,
 		Files:   input.Files,
@@ -82,8 +79,6 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 // JobRun currently gets the job runs from scheduler based on the criteria
 // TODO: later should collect the job runs from optimus
 func (h JobRunHandler) JobRun(ctx context.Context, req *pb.JobRunRequest) (*pb.JobRunResponse, error) {
-	h.l.Info("accepting request to get job run")
-
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
@@ -142,8 +137,6 @@ func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, 
 }
 
 func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSchedulerRequest) (*pb.UploadToSchedulerResponse, error) {
-	h.l.Info("accepting request to upload to scheduler")
-
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
@@ -160,8 +153,6 @@ func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSche
 
 // RegisterJobEvent TODO: check in jaeger if this api takes time, then we can make this async
 func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJobEventRequest) (*pb.RegisterJobEventResponse, error) {
-	h.l.Info("accepting request to registr job event")
-
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
 		h.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)

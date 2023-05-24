@@ -42,8 +42,6 @@ type ReplayService struct {
 }
 
 func (r ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
-	r.logger.Info("executing request to create replay")
-
 	subjectJob, err := r.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
 	if err != nil {
 		r.logger.Error("error getting job details of [%s]: %s", jobName.String(), err)

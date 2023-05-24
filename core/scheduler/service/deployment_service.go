@@ -61,8 +61,6 @@ func setJobMetric(t tenant.Tenant, jobs []*scheduler.JobWithDetails) {
 }
 
 func (s *JobRunService) UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error {
-	s.l.Info("executing request to upload to scheduler")
-
 	spanCtx, span := otel.Tracer("optimus").Start(ctx, "UploadToScheduler")
 	defer span.End()
 

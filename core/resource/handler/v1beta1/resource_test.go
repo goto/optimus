@@ -49,7 +49,7 @@ func TestResourceHandler(t *testing.T) {
 			}
 
 			argMatcher := mock.MatchedBy(func(req *pb.DeployResourceSpecificationResponse) bool {
-				return req.LogStatus.Message == "invalid tenant information request [/ns]: invalid argument for entity project: project name is empty"
+				return req.LogStatus.Message == "invalid tenant information request project [] namespace [ns]: invalid argument for entity project: project name is empty"
 			})
 			stream := new(resourceStreamMock)
 			stream.On("Context").Return(ctx)

@@ -313,6 +313,11 @@ func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any
 
 func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Event) error {
 	if len(event.SLAObjectList) > 0 {
+		telemetry.NewCounter("job_run_sla_miss", map[string]string{
+			"project":   event.Tenant.ProjectName().String(),
+			"namespace": event.Tenant.NamespaceName().String(),
+			"job":       event.JobName.String(),
+		}).Inc()
 		return s.repo.UpdateSLA(ctx, event.SLAObjectList)
 	}
 	return nil

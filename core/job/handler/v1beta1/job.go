@@ -68,11 +68,9 @@ type JobService interface {
 }
 
 func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *pb.AddJobSpecificationsRequest) (*pb.AddJobSpecificationsResponse, error) {
-	jh.l.Info("accepting request to add jobs")
-
 	jobTenant, err := tenant.NewTenant(jobSpecRequest.ProjectName, jobSpecRequest.NamespaceName)
 	if err != nil {
-		jh.l.Error("invalid tenant information request [%s/%s]: %s", jobSpecRequest.GetProjectName(), jobSpecRequest.GetNamespaceName(), err)
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", jobSpecRequest.GetProjectName(), jobSpecRequest.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to add job specifications")
 	}
 
@@ -103,16 +101,12 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		responseLog = "jobs are successfully created"
 	}
 
-	jh.l.Info(responseLog)
-
 	return &pb.AddJobSpecificationsResponse{
 		Log: responseLog,
 	}, nil
 }
 
 func (jh *JobHandler) DeleteJobSpecification(ctx context.Context, deleteRequest *pb.DeleteJobSpecificationRequest) (*pb.DeleteJobSpecificationResponse, error) {
-	jh.l.Info("accepting request to delete job")
-
 	jobTenant, err := tenant.NewTenant(deleteRequest.ProjectName, deleteRequest.NamespaceName)
 	if err != nil {
 		errorMsg := "failed to adapt tenant when deleting job specification"
@@ -140,8 +134,6 @@ func (jh *JobHandler) DeleteJobSpecification(ctx context.Context, deleteRequest 
 		jh.l.Warn(msg)
 	}
 
-	jh.l.Info("finished deleting job")
-
 	return &pb.DeleteJobSpecificationResponse{
 		Success: true,
 		Message: msg,
@@ -149,8 +141,6 @@ func (jh *JobHandler) DeleteJobSpecification(ctx context.Context, deleteRequest 
 }
 
 func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecRequest *pb.UpdateJobSpecificationsRequest) (*pb.UpdateJobSpecificationsResponse, error) {
-	jh.l.Info("accepting request to update jobs")
-
 	jobTenant, err := tenant.NewTenant(jobSpecRequest.ProjectName, jobSpecRequest.NamespaceName)
 	if err != nil {
 		errorMsg := "failed to adapt tenant when updating job specifications"
@@ -183,19 +173,15 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 		responseLog = "jobs are successfully updated"
 	}
 
-	jh.l.Info(responseLog)
-
 	return &pb.UpdateJobSpecificationsResponse{
 		Log: responseLog,
 	}, nil
 }
 
 func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpecificationRequest) (*pb.GetJobSpecificationResponse, error) {
-	jh.l.Info("accepting request to get job")
-
 	jobTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		jh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, err
 	}
 	jobName, err := job.NameFrom(req.GetJobName())
@@ -211,8 +197,6 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 		return nil, errors.GRPCErr(err, errorMsg)
 	}
 
-	jh.l.Info("finished getting job")
-
 	// TODO: return 404 if job is not found
 	return &pb.GetJobSpecificationResponse{
 		Spec: ToJobProto(jobSpec),
@@ -220,8 +204,6 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 }
 
 func (jh *JobHandler) GetJobSpecifications(ctx context.Context, req *pb.GetJobSpecificationsRequest) (*pb.GetJobSpecificationsResponse, error) {
-	jh.l.Info("accepting request to get job by filter")
-
 	jobSpecs, merr := jh.jobService.GetByFilter(ctx,
 		filter.WithString(filter.ResourceDestination, req.GetResourceDestination()),
 		filter.WithString(filter.ProjectName, req.GetProjectName()),
@@ -238,8 +220,6 @@ func (jh *JobHandler) GetJobSpecifications(ctx context.Context, req *pb.GetJobSp
 		})
 	}
 
-	jh.l.Info("finished getting job by filter")
-
 	// TODO: return 404 if job is not found
 	return &pb.GetJobSpecificationsResponse{
 		JobSpecificationResponses: jobSpecResponseProtos,
@@ -247,8 +227,6 @@ func (jh *JobHandler) GetJobSpecifications(ctx context.Context, req *pb.GetJobSp
 }
 
 func (jh *JobHandler) ListJobSpecification(ctx context.Context, req *pb.ListJobSpecificationRequest) (*pb.ListJobSpecificationResponse, error) {
-	jh.l.Info("accepting request to list jobs")
-
 	jobSpecs, merr := jh.jobService.GetByFilter(ctx,
 		filter.WithString(filter.ProjectName, req.GetProjectName()),
 		filter.WithStringArray(filter.NamespaceNames, []string{req.GetNamespaceName()}),
@@ -259,8 +237,6 @@ func (jh *JobHandler) ListJobSpecification(ctx context.Context, req *pb.ListJobS
 		jobSpecificationProtos[i] = ToJobProto(jobSpec)
 	}
 
-	jh.l.Info("finished listing jobs")
-
 	// TODO: make a stream response
 	return &pb.ListJobSpecificationResponse{
 		Jobs: jobSpecificationProtos,
@@ -268,8 +244,6 @@ func (jh *JobHandler) ListJobSpecification(ctx context.Context, req *pb.ListJobS
 }
 
 func (jh *JobHandler) GetWindow(_ context.Context, req *pb.GetWindowRequest) (*pb.GetWindowResponse, error) {
-	jh.l.Info("accepting request to get window")
-
 	// TODO: the default version to be deprecated & made mandatory in future releases
 	version := 1
 	if err := req.GetScheduledAt().CheckValid(); err != nil {
@@ -302,8 +276,6 @@ func (jh *JobHandler) GetWindow(_ context.Context, req *pb.GetWindowRequest) (*p
 		return nil, me
 	}
 
-	jh.l.Info("finished getting window")
-
 	return &pb.GetWindowResponse{
 		Start: timestamppb.New(startTime),
 		End:   timestamppb.New(endTime),
@@ -311,8 +283,6 @@ func (jh *JobHandler) GetWindow(_ context.Context, req *pb.GetWindowRequest) (*p
 }
 
 func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationService_ReplaceAllJobSpecificationsServer) error {
-	jh.l.Info("accepting request to replace all jobs")
-
 	responseWriter := writer.NewReplaceAllJobSpecificationsResponseWriter(stream)
 	var errNamespaces []string
 	var errMessages []string
@@ -330,7 +300,7 @@ func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationServ
 		}
 
 		responseWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] received %d job specs", request.GetNamespaceName(), len(request.GetJobs())))
-		jh.l.Info("replacing all job specifications for project [%s] namespace [%s]", request.GetProjectName(), request.GetNamespaceName())
+		jh.l.Debug("replacing all job specifications for project [%s] namespace [%s]", request.GetProjectName(), request.GetNamespaceName())
 		startTime := time.Now()
 
 		jobTenant, err := tenant.NewTenant(request.ProjectName, request.NamespaceName)
@@ -361,7 +331,7 @@ func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationServ
 		}
 
 		processDuration := time.Since(startTime)
-		jh.l.Info("finished replacing all job specifications for project [%s] namespace [%s], took %s", request.GetProjectName(), request.GetNamespaceName(), processDuration)
+		jh.l.Debug("finished replacing all job specifications for project [%s] namespace [%s], took %s", request.GetProjectName(), request.GetNamespaceName(), processDuration)
 		jobReplaceAllDurationGauge.Set(processDuration.Seconds())
 	}
 	if len(errNamespaces) > 0 {
@@ -371,18 +341,15 @@ func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationServ
 		namespacesWithError := strings.Join(errNamespaces, ", ")
 		return fmt.Errorf("error when replacing job specifications: [%s]", namespacesWithError)
 	}
-
-	jh.l.Info("finished replacing all jobs")
 	return nil
 }
 
 func (jh *JobHandler) RefreshJobs(request *pb.RefreshJobsRequest, stream pb.JobSpecificationService_RefreshJobsServer) error {
-	jh.l.Info("accepting request to refresh jobs")
 	startTime := time.Now()
 	defer func() {
 		processDuration := time.Since(startTime)
 		jobRefreshDurationGauge.Set(processDuration.Seconds())
-		jh.l.Info("finished refreshing jobs for project [%s], took %s", request.GetProjectName(), processDuration)
+		jh.l.Debug("finished refreshing jobs for project [%s], took %s", request.GetProjectName(), processDuration)
 	}()
 
 	responseWriter := writer.NewRefreshJobResponseWriter(stream)
@@ -403,19 +370,16 @@ func (jh *JobHandler) RefreshJobs(request *pb.RefreshJobsRequest, stream pb.JobS
 	}
 	responseWriter.Write(writer.LogLevelInfo, "jobs refreshed successfully")
 
-	jh.l.Info("finished refreshing jobs")
 	return nil
 }
 
 func (jh *JobHandler) CheckJobSpecifications(req *pb.CheckJobSpecificationsRequest, stream pb.JobSpecificationService_CheckJobSpecificationsServer) error {
-	jh.l.Info("accepting request to check job specifications")
-
 	startTime := time.Now()
 
 	responseWriter := writer.NewCheckJobSpecificationResponseWriter(stream)
 	jobTenant, err := tenant.NewTenant(req.ProjectName, req.NamespaceName)
 	if err != nil {
-		jh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return err
 	}
 
@@ -434,17 +398,13 @@ func (jh *JobHandler) CheckJobSpecifications(req *pb.CheckJobSpecificationsReque
 	processDuration := time.Since(startTime)
 	jobValidationDurationGauge.Set(processDuration.Seconds())
 
-	jh.l.Info("finished validating jobs for project [%s] namespace [%s], took %s", req.GetProjectName(), req.GetNamespaceName(), processDuration)
-
 	return me.ToErr()
 }
 
 func (jh *JobHandler) GetJobTask(ctx context.Context, req *pb.GetJobTaskRequest) (*pb.GetJobTaskResponse, error) {
-	jh.l.Info("acepting request to get job task")
-
 	jobTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		jh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, err
 	}
 
@@ -484,19 +444,15 @@ func (jh *JobHandler) GetJobTask(ctx context.Context, req *pb.GetJobTaskRequest)
 		}
 	}
 
-	jh.l.Info("finished getting job task")
-
 	return &pb.GetJobTaskResponse{
 		Task: jobTaskSpec,
 	}, nil
 }
 
 func (jh *JobHandler) JobInspect(ctx context.Context, req *pb.JobInspectRequest) (*pb.JobInspectResponse, error) {
-	jh.l.Info("accepting request to inspect job")
-
 	jobTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
-		jh.l.Error("invalid tenant information request [%s/%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, err
 	}
 

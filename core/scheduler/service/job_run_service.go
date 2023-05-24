@@ -95,10 +95,13 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	// Todo: later, always return scheduleTime, for scheduleTimes greater than a given date
 	var jobRun *scheduler.JobRun
 	if config.JobRunID.IsEmpty() {
+		s.l.Warn("getting job run by scheduled at")
 		jobRun, err = s.repo.GetByScheduledAt(ctx, job.Tenant, jobName, config.ScheduledAt)
 	} else {
+		s.l.Warn("getting job run by id")
 		jobRun, err = s.repo.GetByID(ctx, config.JobRunID)
 	}
+
 	var executedAt time.Time
 	if err != nil { // Fallback for executed_at to scheduled_at
 		executedAt = config.ScheduledAt
@@ -151,7 +154,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 
 	actualRuns, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
 	if err != nil {
-		s.l.Error(fmt.Sprintf("unable to get job runs from airflow err: %v", err.Error()))
+		s.l.Error("unable to get job runs from airflow err: %s", err)
 		actualRuns = []*scheduler.JobRunStatus{}
 	}
 	totalRuns := mergeRuns(expectedRuns, actualRuns)
@@ -232,10 +235,12 @@ func validateJobQuery(jobQuery *scheduler.JobRunsCriteria, jobWithDetails *sched
 func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error {
 	job, err := s.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
 	if err != nil {
+		s.l.Error("error getting job details for job [%s]: %s", jobName, err)
 		return err
 	}
 	slaDefinitionInSec, err := job.SLADuration()
 	if err != nil {
+		s.l.Error("error getting sla duration: %s", err)
 		return err
 	}
 	telemetry.NewGauge("total_jobs_running", map[string]string{
@@ -244,6 +249,7 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 	}).Inc()
 	err = s.repo.Create(ctx, tenant, jobName, scheduledAt, slaDefinitionInSec)
 	if err != nil {
+		s.l.Error("error creating job run: %s", err)
 		return err
 	}
 
@@ -260,15 +266,18 @@ func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenan
 	jobRun, err := s.repo.GetByScheduledAt(ctx, tenant, jobName, scheduledAt)
 	if err != nil {
 		if !errors.IsErrorType(err, errors.ErrNotFound) {
+			s.l.Error("error getting job run by scheduled at: %s", err)
 			return nil, err
 		}
 		// TODO: consider moving below call outside as the caller is a 'getter'
 		err = s.registerNewJobRun(ctx, tenant, jobName, scheduledAt)
 		if err != nil {
+			s.l.Error("error registering new job run: %s", err)
 			return nil, err
 		}
 		jobRun, err = s.repo.GetByScheduledAt(ctx, tenant, jobName, scheduledAt)
 		if err != nil {
+			s.l.Error("error getting the registered job run: %s", err)
 			return nil, err
 		}
 	}
@@ -295,6 +304,7 @@ func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event
 		}
 	}
 	if err := s.repo.Update(ctx, jobRun.ID, event.EventTime, event.Status); err != nil {
+		s.l.Error("error updating job run with id [%s]: %s", jobRun.ID, err)
 		return err
 	}
 	jobRun.State = event.Status
@@ -386,14 +396,20 @@ func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Eve
 	operatorRun, err := s.operatorRunRepo.GetOperatorRun(ctx, event.OperatorName, operatorType, jobRunID)
 	if err != nil {
 		if !errors.IsErrorType(err, errors.ErrNotFound) {
+			s.l.Error("error getting operator for job run [%s]: %s", jobRunID, err)
 			return nil, err
 		}
+		s.l.Warn("operator is not found, creating it")
+
+		// TODO: consider moving below call outside as the caller is a 'getter'
 		err = s.createOperatorRun(ctx, event, operatorType)
 		if err != nil {
+			s.l.Error("error creating operator run: %s", err)
 			return nil, err
 		}
 		operatorRun, err = s.operatorRunRepo.GetOperatorRun(ctx, event.OperatorName, operatorType, jobRunID)
 		if err != nil {
+			s.l.Error("error getting the registered operator run: %s", err)
 			return nil, err
 		}
 	}

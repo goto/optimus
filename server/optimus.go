@@ -280,7 +280,7 @@ func (s *OptimusServer) setupHandlers() error {
 
 	tProjectService := tService.NewProjectService(tProjectRepo)
 	tNamespaceService := tService.NewNamespaceService(tNamespaceRepo)
-	tSecretService := tService.NewSecretService(s.key, tSecretRepo)
+	tSecretService := tService.NewSecretService(s.key, tSecretRepo, s.logger)
 	tenantService := tService.NewTenantService(tProjectService, tNamespaceService, tSecretService, s.logger)
 
 	// Resource Bounded Context

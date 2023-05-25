@@ -283,6 +283,10 @@ func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event
 		}).Inc()
 	case scheduler.StateSuccess:
 		s.decreaseNoOfJobRunning(event.Tenant)
+		telemetry.NewCounter("job_run_success", map[string]string{
+			"project":   event.Tenant.ProjectName().String(),
+			"namespace": event.Tenant.NamespaceName().String(),
+		}).Inc()
 	}
 	if err := s.repo.Update(ctx, jobRun.ID, event.EventTime, event.Status); err != nil {
 		return err
@@ -433,16 +437,21 @@ func (s *JobRunService) raiseTaskRunMetrics(event *scheduler.Event) {
 	switch event.Status {
 	case scheduler.StateSuccess:
 		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_tasks", event.OperatorName)
+		telemetry.NewCounter("task_run_success", map[string]string{
+			"project":   event.Tenant.ProjectName().String(),
+			"namespace": event.Tenant.NamespaceName().String(),
+			"type":      event.OperatorName,
+		}).Inc()
 	case scheduler.StateRetry:
 		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_tasks", event.OperatorName)
-		telemetry.NewGauge("task_run_retried", map[string]string{
+		telemetry.NewCounter("task_run_retried", map[string]string{
 			"project":   event.Tenant.ProjectName().String(),
 			"namespace": event.Tenant.NamespaceName().String(),
 			"type":      event.OperatorName,
 		}).Inc()
 	case scheduler.StateFailed:
 		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_tasks", event.OperatorName)
-		telemetry.NewGauge("task_run_failed", map[string]string{
+		telemetry.NewCounter("task_run_failed", map[string]string{
 			"project":   event.Tenant.ProjectName().String(),
 			"namespace": event.Tenant.NamespaceName().String(),
 			"type":      event.OperatorName,
@@ -454,16 +463,21 @@ func (s *JobRunService) raiseHookRunMetrics(event *scheduler.Event) {
 	switch event.Status {
 	case scheduler.StateSuccess:
 		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_hooks", event.OperatorName)
+		telemetry.NewCounter("hook_run_success", map[string]string{
+			"project":   event.Tenant.ProjectName().String(),
+			"namespace": event.Tenant.NamespaceName().String(),
+			"type":      event.OperatorName,
+		}).Inc()
 	case scheduler.StateRetry:
 		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_hooks", event.OperatorName)
-		telemetry.NewGauge("hook_run_retried", map[string]string{
+		telemetry.NewCounter("hook_run_retried", map[string]string{
 			"project":   event.Tenant.ProjectName().String(),
 			"namespace": event.Tenant.NamespaceName().String(),
 			"type":      event.OperatorName,
 		}).Inc()
 	case scheduler.StateFailed:
 		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_hooks", event.OperatorName)
-		telemetry.NewGauge("hook_run_failed", map[string]string{
+		telemetry.NewCounter("hook_run_failed", map[string]string{
 			"project":   event.Tenant.ProjectName().String(),
 			"namespace": event.Tenant.NamespaceName().String(),
 			"type":      event.OperatorName,

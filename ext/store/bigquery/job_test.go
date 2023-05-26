@@ -24,7 +24,7 @@ func TestJob(t *testing.T) {
 
 			err := copyJob.Wait(ctx)
 			assert.Error(t, err)
-			assert.EqualError(t, err, "internal error for entity BigqueryStore: error while wait for bq job")
+			assert.EqualError(t, err, "internal error for entity BigqueryStore: error while wait for bq job: error in wait")
 		})
 		t.Run("return no error when successful", func(t *testing.T) {
 			bqJob := new(mockBQJob)

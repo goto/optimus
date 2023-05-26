@@ -310,16 +310,15 @@ def optimus_notify(context, event_meta):
     if len(failure_message)>0:
         log.info(f'failures: {failure_message}')
     
-    task_instance = {}
-
+    task_instance = context.get('task_instance')
+    
     if event_meta["event_type"] == "TYPE_FAILURE" :
         dag_run = context['dag_run']
         tis = dag_run.get_task_instances()
         for ti in tis:
             if ti.state == "failed":
                 task_instance = ti
-    else :
-        task_instance = context.get('task_instance')
+                break
 
     message = {
         "log_url": task_instance.log_url,

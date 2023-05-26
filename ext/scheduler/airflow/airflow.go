@@ -43,9 +43,9 @@ const (
 	concurrentTicketPerSec = 50
 	concurrentLimit        = 100
 
-	metricTotalJobsUploadSucceed  = "total_jobs_upload_succeed"
+	metricTotalJobsUploadSucceed  = "total_jobs_upload_success"
 	metricTotalJobsUploadFailed   = "total_jobs_upload_failed"
-	metricTotalJobsRemovalSucceed = "total_jobs_removal_succeed"
+	metricTotalJobsRemovalSucceed = "total_jobs_removal_success"
 	metricTotalJobsRemovalFailed  = "total_jobs_removal_failed"
 )
 
@@ -369,8 +369,8 @@ func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler
 }
 
 func raiseJobMetric(jobTenant tenant.Tenant, metricName string, metricValue int) {
-	telemetry.NewGauge(metricName, map[string]string{
+	telemetry.NewCounter(metricName, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
-	}).Set(float64(metricValue))
+	}).Add(float64(metricValue))
 }

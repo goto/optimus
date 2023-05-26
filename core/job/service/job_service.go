@@ -927,8 +927,8 @@ func raiseJobChangeMetric(jobTenant tenant.Tenant, metricName string, jobName jo
 }
 
 func raiseTotalJobChangeMetric(jobTenant tenant.Tenant, metricName string, metricValue int) {
-	telemetry.NewGauge(metricName, map[string]string{
+	telemetry.NewCounter(metricName, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
-	}).Set(float64(metricValue))
+	}).Add(float64(metricValue))
 }

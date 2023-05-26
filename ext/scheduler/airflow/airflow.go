@@ -343,7 +343,7 @@ func (s *Scheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName s
 		executionTime.UTC().Format(airflowDateFormat)),
 	)
 	req := airflowRequest{
-		URL:    dagRunClearURL,
+		URL:    dagRunCreateURL,
 		method: http.MethodPost,
 		param:  jobName.String(),
 		body:   data,

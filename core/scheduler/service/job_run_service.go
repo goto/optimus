@@ -272,21 +272,17 @@ func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event
 	if err != nil {
 		return err
 	}
-
-	switch event.Status {
-	case scheduler.StateFailed:
-		s.decreaseNoOfJobRunning(event.Tenant)
-		telemetry.NewCounter("job_run_failed", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"job":       event.JobName.String(),
-		}).Inc()
-	case scheduler.StateSuccess:
-		s.decreaseNoOfJobRunning(event.Tenant)
-		telemetry.NewCounter("job_run_success", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-		}).Inc()
+	for _, state := range scheduler.TaskEndStates {
+		if event.Status == state {
+			// this can go negative, because it is possible that when we deploy certain job have already started,
+			// and the very first events we get are that of task end states, to handle this, we should treat the lowest
+			// value as the base value.
+			telemetry.NewGauge("total_jobs_running", map[string]string{
+				"project":   event.Tenant.ProjectName().String(),
+				"namespace": event.Tenant.NamespaceName().String(),
+			}).Dec()
+			break
+		}
 	}
 	if err := s.repo.Update(ctx, jobRun.ID, event.EventTime, event.Status); err != nil {
 		return err
@@ -295,16 +291,6 @@ func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event
 	s.raiseJobRunStateChangeEvent(jobRun)
 	monitoringValues := s.getMonitoringValues(event)
 	return s.repo.UpdateMonitoring(ctx, jobRun.ID, monitoringValues)
-}
-
-func (*JobRunService) decreaseNoOfJobRunning(t tenant.Tenant) {
-	// this can go negative, because it is possible that when we deploy certain job have already started,
-	// and the very first events we get are that of task end states, to handle this, we should treat the lowest
-	// value as the base value.
-	telemetry.NewGauge("total_jobs_running", map[string]string{
-		"project":   t.ProjectName().String(),
-		"namespace": t.NamespaceName().String(),
-	}).Dec()
 }
 
 func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any {
@@ -317,11 +303,6 @@ func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any
 
 func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Event) error {
 	if len(event.SLAObjectList) > 0 {
-		telemetry.NewCounter("job_run_sla_miss", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"job":       event.JobName.String(),
-		}).Inc()
 		return s.repo.UpdateSLA(ctx, event.SLAObjectList)
 	}
 	return nil
@@ -416,10 +397,19 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 		return err
 	}
 	if operatorType == scheduler.OperatorTask {
-		s.raiseTaskRunMetrics(event)
-	}
-	if operatorType == scheduler.OperatorHook {
-		s.raiseHookRunMetrics(event)
+		for _, state := range scheduler.TaskEndStates {
+			if event.Status == state {
+				// this can go negative, because it is possible that when we deploy certain job have already started,
+				// and the very first events we get are that of task end states, to handle this, we should treat the lowest
+				// value as the base value.
+				telemetry.NewGauge("count_running_tasks", map[string]string{
+					"project":   event.Tenant.ProjectName().String(),
+					"namespace": event.Tenant.NamespaceName().String(),
+					"type":      event.OperatorName,
+				}).Dec()
+				break
+			}
+		}
 	}
 	err = s.operatorRunRepo.UpdateOperatorRun(ctx, operatorType, operatorRun.ID, event.EventTime, event.Status)
 	if err != nil {
@@ -433,69 +423,6 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 	return nil
 }
 
-func (s *JobRunService) raiseTaskRunMetrics(event *scheduler.Event) {
-	switch event.Status {
-	case scheduler.StateSuccess:
-		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_tasks", event.OperatorName)
-		telemetry.NewCounter("task_run_success", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"type":      event.OperatorName,
-		}).Inc()
-	case scheduler.StateRetry:
-		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_tasks", event.OperatorName)
-		telemetry.NewCounter("task_run_retried", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"type":      event.OperatorName,
-		}).Inc()
-	case scheduler.StateFailed:
-		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_tasks", event.OperatorName)
-		telemetry.NewCounter("task_run_failed", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"type":      event.OperatorName,
-		}).Inc()
-	}
-}
-
-func (s *JobRunService) raiseHookRunMetrics(event *scheduler.Event) {
-	switch event.Status {
-	case scheduler.StateSuccess:
-		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_hooks", event.OperatorName)
-		telemetry.NewCounter("hook_run_success", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"type":      event.OperatorName,
-		}).Inc()
-	case scheduler.StateRetry:
-		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_hooks", event.OperatorName)
-		telemetry.NewCounter("hook_run_retried", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"type":      event.OperatorName,
-		}).Inc()
-	case scheduler.StateFailed:
-		s.decreaseNoOfOperatorRunning(event.Tenant, "count_running_hooks", event.OperatorName)
-		telemetry.NewCounter("hook_run_failed", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"type":      event.OperatorName,
-		}).Inc()
-	}
-}
-
-func (*JobRunService) decreaseNoOfOperatorRunning(t tenant.Tenant, metricName, taskName string) {
-	// this can go negative, because it is possible that when we deploy certain job have already started,
-	// and the very first events we get are that of task end states, to handle this, we should treat the lowest
-	// value as the base value.
-	telemetry.NewGauge(metricName, map[string]string{
-		"project":   t.ProjectName().String(),
-		"namespace": t.NamespaceName().String(),
-		"type":      taskName,
-	}).Dec()
-}
-
 func (s *JobRunService) trackEvent(event *scheduler.Event) {
 	if event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
 		s.l.Debug(fmt.Sprintf("received event: %v, jobName: %v , slaPayload: %#v",
@@ -504,10 +431,19 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 		s.l.Debug(fmt.Sprintf("received event: %v, eventTime: %s, jobName: %v, Operator: %v, schedule: %s, status: %s",
 			event.Type, event.EventTime.Format("01/02/06 15:04:05 MST"), event.JobName, event.OperatorName, event.JobScheduledAt.Format("01/02/06 15:04:05 MST"), event.Status))
 	}
+
+	operatorName := event.OperatorName
+	if event.Type == scheduler.JobFailureEvent || event.Type == scheduler.JobSuccessEvent || event.Type == scheduler.SLAMissEvent {
+		operatorName = event.JobName.String()
+	} else if event.Type == scheduler.SensorStartEvent || event.Type == scheduler.SensorRetryEvent || event.Type == scheduler.SensorSuccessEvent || event.Type == scheduler.SensorFailEvent {
+		operatorName = ""
+	}
+
 	telemetry.NewGauge("scheduler_events", map[string]string{
-		"project":   event.Tenant.ProjectName().String(),
-		"namespace": event.Tenant.NamespaceName().String(),
-		"type":      event.Type.String(),
+		"project":       event.Tenant.ProjectName().String(),
+		"namespace":     event.Tenant.NamespaceName().String(),
+		"event_type":    event.Type.String(),
+		"operator_name": operatorName,
 	}).Inc()
 }
 

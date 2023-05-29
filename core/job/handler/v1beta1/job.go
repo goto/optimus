@@ -143,13 +143,13 @@ func (jh *JobHandler) ChangeJobNamespace(ctx context.Context, changeRequest *pb.
 	if err != nil {
 		errorMsg := "failed to adapt source tenant when changing job namespace"
 		jh.l.Error(fmt.Sprintf("%s: %s", errorMsg, err.Error()))
-		return nil, errors.GRPCErr(errors.InvalidArgument(job.EntityJob, "invalid Namespace name"), errorMsg)
+		return nil, errors.GRPCErr(err, errorMsg)
 	}
 	jobNewTenant, err := tenant.NewTenant(changeRequest.ProjectName, changeRequest.NewNamespaceName)
 	if err != nil {
 		errorMsg := "failed to adapt new tenant when changing job namespace"
 		jh.l.Error(fmt.Sprintf("%s: %s", errorMsg, err.Error()))
-		return nil, errors.GRPCErr(errors.InvalidArgument(job.EntityJob, "invalid Namespace name"), errorMsg)
+		return nil, errors.GRPCErr(err, errorMsg)
 	}
 
 	jobName, err := job.NameFrom(changeRequest.JobName)

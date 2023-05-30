@@ -230,6 +230,12 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 	if err != nil {
 		return err
 	}
+	telemetry.NewGauge("scheduler_events", map[string]string{
+		"project":    tenant.ProjectName().String(),
+		"namespace":  tenant.NamespaceName().String(),
+		"event_type": scheduler.JobStartEvent.String(),
+		"operator":   jobName.String(),
+	}).Inc()
 	telemetry.NewGauge("total_jobs_running", map[string]string{
 		"project":   tenant.ProjectName().String(),
 		"namespace": tenant.NamespaceName().String(),

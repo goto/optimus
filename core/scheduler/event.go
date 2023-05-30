@@ -27,6 +27,7 @@ const (
 	EventCategoryJobFailure JobEventCategory = "failure"
 
 	SLAMissEvent    JobEventType = "sla_miss"
+	JobStartEvent   JobEventType = "job_start"
 	JobFailureEvent JobEventType = "failure"
 	JobSuccessEvent JobEventType = "job_success"
 

@@ -12,6 +12,7 @@ from airflow.models import (XCOM_RETURN_KEY, Variable, XCom, TaskReschedule )
 from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
 from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 from airflow.sensors.base import BaseSensorOperator
+from airflow.utils.state import TaskInstanceState
 from croniter import croniter
 from kubernetes.client import models as k8s
 
@@ -316,7 +317,7 @@ def optimus_notify(context, event_meta):
         dag_run = context['dag_run']
         tis = dag_run.get_task_instances()
         for ti in tis:
-            if ti.state == "failed":
+            if ti.state == TaskInstanceState.FAILED:
                 task_instance = ti
                 break
 

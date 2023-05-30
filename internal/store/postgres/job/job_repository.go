@@ -489,8 +489,8 @@ func (j JobRepository) ReplaceUpstreams(ctx context.Context, jobsWithUpstreams [
 	}
 
 	var jobFullName []string
-	for _, upstream := range storageJobUpstreams {
-		jobFullName = append(jobFullName, upstream.getJobFullName())
+	for _, jobWithUpstream := range jobsWithUpstreams {
+		jobFullName = append(jobFullName, jobWithUpstream.Job().FullName())
 	}
 
 	if err = j.deleteUpstreams(ctx, tx, jobFullName); err != nil {

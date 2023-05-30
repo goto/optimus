@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/job"
@@ -17,24 +15,10 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	"github.com/goto/optimus/sdk/plugin"
-)
-
-var (
-	jobReplaceAllDurationGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "jobs_replace_all_duration_in_seconds",
-		Help: "The duration of job replace all in seconds",
-	})
-	jobRefreshDurationGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "jobs_refresh_duration_in_seconds",
-		Help: "The duration of job refresh in seconds",
-	})
-	jobValidationDurationGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "jobs_validation_duration_in_seconds",
-		Help: "The duration of job validation in seconds",
-	})
 )
 
 type JobHandler struct {
@@ -321,7 +305,10 @@ func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationServ
 
 		processDuration := time.Since(startTime)
 		jh.l.Info("finished replacing all job specifications for project [%s] namespace [%s], took %s", request.GetProjectName(), request.GetNamespaceName(), processDuration)
-		jobReplaceAllDurationGauge.Set(processDuration.Seconds())
+		telemetry.NewGauge("jobs_replace_all_duration_in_seconds", map[string]string{
+			"project":   jobTenant.ProjectName().String(),
+			"namespace": jobTenant.NamespaceName().String(),
+		}).Add(processDuration.Seconds())
 	}
 	if len(errNamespaces) > 0 {
 		errMessageSummary := strings.Join(errMessages, "\n")
@@ -338,7 +325,9 @@ func (jh *JobHandler) RefreshJobs(request *pb.RefreshJobsRequest, stream pb.JobS
 	startTime := time.Now()
 	defer func() {
 		processDuration := time.Since(startTime)
-		jobRefreshDurationGauge.Set(processDuration.Seconds())
+		telemetry.NewGauge("jobs_refresh_duration_in_seconds", map[string]string{
+			"project": request.ProjectName,
+		}).Add(processDuration.Seconds())
 		jh.l.Info("finished refreshing jobs for project [%s], took %s", request.GetProjectName(), processDuration)
 	}()
 
@@ -385,7 +374,10 @@ func (jh *JobHandler) CheckJobSpecifications(req *pb.CheckJobSpecificationsReque
 	}
 
 	processDuration := time.Since(startTime)
-	jobValidationDurationGauge.Set(processDuration.Seconds())
+	telemetry.NewGauge("jobs_validation_duration_in_seconds", map[string]string{
+		"project":   jobTenant.ProjectName().String(),
+		"namespace": jobTenant.NamespaceName().String(),
+	}).Add(processDuration.Seconds())
 
 	jh.l.Info("finished validating jobs for project [%s] namespace [%s], took %s", req.GetProjectName(), req.GetNamespaceName(), processDuration)
 

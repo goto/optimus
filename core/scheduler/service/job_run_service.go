@@ -440,10 +440,10 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 	}
 
 	telemetry.NewGauge("scheduler_events", map[string]string{
-		"project":       event.Tenant.ProjectName().String(),
-		"namespace":     event.Tenant.NamespaceName().String(),
-		"event_type":    event.Type.String(),
-		"operator_name": operatorName,
+		"project":    event.Tenant.ProjectName().String(),
+		"namespace":  event.Tenant.NamespaceName().String(),
+		"event_type": event.Type.String(),
+		"operator":   operatorName,
 	}).Inc()
 }
 

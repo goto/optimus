@@ -18,6 +18,13 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+const (
+	metricResourcesUpsertSuccessTotal = "resources_upsert_success_total"
+	metricResourcesUpsertSkippedTotal = "resources_upsert_skipped_total"
+	metricResourcesUpsertFailedTotal  = "resources_upsert_failed_total"
+	metricResourcesUploadAllDuration  = "resources_upload_all_duration_in_seconds"
+)
+
 type ResourceService interface {
 	Create(ctx context.Context, res *resource.Resource) error
 	Update(ctx context.Context, res *resource.Resource) error
@@ -108,12 +115,12 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		successMsg := fmt.Sprintf("%d resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
 		responseWriter.Write(writer.LogLevelInfo, successMsg)
 
-		raiseResourceUpsertMetric(tnnt, "resources_upsert_success_total", len(successResources))
-		raiseResourceUpsertMetric(tnnt, "resources_upsert_skipped_total", len(skippedResources))
-		raiseResourceUpsertMetric(tnnt, "resources_upsert_failed_total", len(failureResources))
+		raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSuccessTotal, len(successResources))
+		raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSkippedTotal, len(skippedResources))
+		raiseResourceUpsertMetric(tnnt, metricResourcesUpsertFailedTotal, len(failureResources))
 
 		processDuration := time.Since(startTime)
-		telemetry.NewGauge("resources_upload_all_duration_in_seconds", map[string]string{
+		telemetry.NewGauge(metricResourcesUploadAllDuration, map[string]string{
 			"project":   tnnt.ProjectName().String(),
 			"namespace": tnnt.NamespaceName().String(),
 		}).Add(processDuration.Seconds())
@@ -178,7 +185,7 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
 
-	raiseResourceUpsertMetric(tnnt, "resources_upsert_success_total", 1)
+	raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSuccessTotal, 1)
 	return &pb.CreateResourceResponse{}, nil
 }
 
@@ -233,7 +240,7 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 
-	raiseResourceUpsertMetric(tnnt, "resources_upsert_success_total", 1)
+	raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSuccessTotal, 1)
 	return &pb.UpdateResourceResponse{}, nil
 }
 

@@ -21,6 +21,12 @@ import (
 	"github.com/goto/optimus/sdk/plugin"
 )
 
+const (
+	metricReplaceAllDuration = "jobs_replace_all_duration_in_seconds"
+	metricRefreshDuration    = "jobs_refresh_duration_in_seconds"
+	metricValidationDuration = "jobs_validation_duration_in_seconds"
+)
+
 type JobHandler struct {
 	l          log.Logger
 	jobService JobService
@@ -305,7 +311,7 @@ func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationServ
 
 		processDuration := time.Since(startTime)
 		jh.l.Info("finished replacing all job specifications for project [%s] namespace [%s], took %s", request.GetProjectName(), request.GetNamespaceName(), processDuration)
-		telemetry.NewGauge("jobs_replace_all_duration_in_seconds", map[string]string{
+		telemetry.NewGauge(metricReplaceAllDuration, map[string]string{
 			"project":   jobTenant.ProjectName().String(),
 			"namespace": jobTenant.NamespaceName().String(),
 		}).Add(processDuration.Seconds())
@@ -325,7 +331,7 @@ func (jh *JobHandler) RefreshJobs(request *pb.RefreshJobsRequest, stream pb.JobS
 	startTime := time.Now()
 	defer func() {
 		processDuration := time.Since(startTime)
-		telemetry.NewGauge("jobs_refresh_duration_in_seconds", map[string]string{
+		telemetry.NewGauge(metricRefreshDuration, map[string]string{
 			"project": request.ProjectName,
 		}).Add(processDuration.Seconds())
 		jh.l.Info("finished refreshing jobs for project [%s], took %s", request.GetProjectName(), processDuration)
@@ -374,7 +380,7 @@ func (jh *JobHandler) CheckJobSpecifications(req *pb.CheckJobSpecificationsReque
 	}
 
 	processDuration := time.Since(startTime)
-	telemetry.NewGauge("jobs_validation_duration_in_seconds", map[string]string{
+	telemetry.NewGauge(metricValidationDuration, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
 	}).Add(processDuration.Seconds())

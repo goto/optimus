@@ -8,30 +8,14 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-)
-
-var (
-	totalSkippedBatchUpdateGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "resources_batch_update_skipped_total",
-		Help: "The total number of skipped resources in batch update",
-	})
-	totalSuccessBatchUpdateGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "resources_batch_update_success_total",
-		Help: "The total number of failure resources in batch update",
-	})
-	totalFailureBatchUpdateGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "resources_batch_update_failure_total",
-		Help: "The total number of failure resources in batch update",
-	})
 )
 
 type ResourceService interface {
@@ -123,9 +107,9 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		successMsg := fmt.Sprintf("%d resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
 		responseWriter.Write(writer.LogLevelInfo, successMsg)
 
-		totalSuccessBatchUpdateGauge.Set(float64(len(successResources)))
-		totalSkippedBatchUpdateGauge.Set(float64(len(skippedResources)))
-		totalFailureBatchUpdateGauge.Set(float64(len(failureResources)))
+		raiseResourceUpsertMetric(tnnt, "resources_upsert_success_total", len(successResources))
+		raiseResourceUpsertMetric(tnnt, "resources_upsert_skipped_total", len(skippedResources))
+		raiseResourceUpsertMetric(tnnt, "resources_upsert_failed_total", len(failureResources))
 	}
 	rh.l.Info("Finished resource deployment in %v", time.Since(startTime))
 	if len(errNamespaces) > 0 {
@@ -186,6 +170,8 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 	if err != nil {
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
+
+	raiseResourceUpsertMetric(tnnt, "resources_upsert_success_total", 1)
 	return &pb.CreateResourceResponse{}, nil
 }
 
@@ -239,6 +225,8 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 	if err != nil {
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
+
+	raiseResourceUpsertMetric(tnnt, "resources_upsert_success_total", 1)
 	return &pb.UpdateResourceResponse{}, nil
 }
 
@@ -329,6 +317,13 @@ func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) 
 		Assets:  nil,
 		Labels:  meta.Labels,
 	}, nil
+}
+
+func raiseResourceUpsertMetric(jobTenant tenant.Tenant, metricName string, metricValue int) {
+	telemetry.NewCounter(metricName, map[string]string{
+		"project":   jobTenant.ProjectName().String(),
+		"namespace": jobTenant.NamespaceName().String(),
+	}).Add(float64(metricValue))
 }
 
 func NewResourceHandler(l log.Logger, resourceService ResourceService) *ResourceHandler {

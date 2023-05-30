@@ -47,6 +47,7 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 			return err
 		}
 
+		startTime := time.Now()
 		tnnt, err := tenant.NewTenant(request.GetProjectName(), request.GetNamespaceName())
 		if err != nil {
 			errMsg := fmt.Sprintf("invalid deploy request for %s: %s", request.GetNamespaceName(), err.Error())
@@ -110,6 +111,12 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		raiseResourceUpsertMetric(tnnt, "resources_upsert_success_total", len(successResources))
 		raiseResourceUpsertMetric(tnnt, "resources_upsert_skipped_total", len(skippedResources))
 		raiseResourceUpsertMetric(tnnt, "resources_upsert_failed_total", len(failureResources))
+
+		processDuration := time.Since(startTime)
+		telemetry.NewGauge("resources_upload_all_duration_in_seconds", map[string]string{
+			"project":   tnnt.ProjectName().String(),
+			"namespace": tnnt.NamespaceName().String(),
+		}).Add(processDuration.Seconds())
 	}
 	rh.l.Info("Finished resource deployment in %v", time.Since(startTime))
 	if len(errNamespaces) > 0 {

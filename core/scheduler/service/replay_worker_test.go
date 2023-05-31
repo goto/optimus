@@ -732,12 +732,12 @@ func (_m *mockReplayScheduler) ClearBatch(ctx context.Context, t tenant.Tenant, 
 }
 
 // CreateRun provides a mock function with given fields: ctx, tnnt, jobName, executionTime, dagRunID
-func (_m *mockReplayScheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunID string) error {
-	ret := _m.Called(ctx, tnnt, jobName, executionTime, dagRunID)
+func (_m *mockReplayScheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error {
+	ret := _m.Called(ctx, tnnt, jobName, executionTime, dagRunIDPrefix)
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, scheduler.JobName, time.Time, string) error); ok {
-		r0 = rf(ctx, tnnt, jobName, executionTime, dagRunID)
+		r0 = rf(ctx, tnnt, jobName, executionTime, dagRunIDPrefix)
 	} else {
 		r0 = ret.Error(0)
 	}

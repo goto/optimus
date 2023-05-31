@@ -81,7 +81,7 @@ func (w ReplayWorker) createMissingRuns(ctx context.Context, replayReq *schedule
 	for _, run := range replayReq.Runs {
 		if _, ok := existedRunsMap[run.ScheduledAt]; !ok {
 			// create any missing runs
-			if err := w.scheduler.CreateRun(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), run.ScheduledAt, "replayed"); err != nil {
+			if err := w.scheduler.CreateRun(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), run.ScheduledAt, scheduler.StateReplayed.String()); err != nil {
 				return nil, err
 			}
 			run.State = scheduler.StateReplayed

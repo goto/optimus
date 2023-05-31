@@ -192,7 +192,7 @@ func TestReplayWorker(t *testing.T) {
 					},
 				},
 			}
-			updatedRuns := []*scheduler.JobRunStatus{
+			updatedRunsAfterRunCreate := []*scheduler.JobRunStatus{
 				{
 					ScheduledAt: scheduledTime1,
 					State:       scheduler.StateReplayed,
@@ -202,20 +202,26 @@ func TestReplayWorker(t *testing.T) {
 					State:       scheduler.StatePending,
 				},
 			}
+			updatedRuns := []*scheduler.JobRunStatus{
+				{
+					ScheduledAt: scheduledTime1,
+					State:       scheduler.StateReplayed,
+				},
+				{
+					ScheduledAt: scheduledTime2,
+					State:       scheduler.StateReplayed,
+				},
+			}
 			existingRuns := []*scheduler.JobRunStatus{{
 				ScheduledAt: scheduledTime2,
 				State:       scheduler.StateSuccess,
-			}}
-			createdRuns := []*scheduler.JobRunStatus{{
-				ScheduledAt: scheduledTime1,
-				State:       scheduler.StateReplayed,
 			}}
 
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil)
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(existingRuns, nil)
 			sch.On("CreateRun", mock.Anything, tnnt, jobAName, scheduledTime1, "replayed").Return(nil).Once()
-			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour)).Return(nil)
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStatePartialReplayed, createdRuns, "").Return(nil)
+			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour)).Return(nil)
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStatePartialReplayed, updatedRunsAfterRunCreate, "").Return(nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStatePartialReplayed, updatedRuns, "").Return(nil)
 
 			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)

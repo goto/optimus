@@ -16,6 +16,7 @@ import (
 type ResourceRepository interface {
 	Create(ctx context.Context, res *resource.Resource) error
 	Update(ctx context.Context, res *resource.Resource) error
+	ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
 }
@@ -145,6 +146,16 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 	rs.raiseUpdateEvent(incoming)
+	return nil
+}
+
+func (rs ResourceService) ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error {
+	if err := rs.repo.ChangeNamespace(ctx, res, newTenant); err != nil {
+		rs.logger.Error("error changing namespace of stored resource [%s]: %s", res.FullName(), err)
+		return err
+	}
+	res.UpdateTenant(newTenant)
+	rs.raiseUpdateEvent(res)
 	return nil
 }
 

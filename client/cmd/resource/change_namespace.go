@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/goto/optimus/client/cmd/internal"
@@ -37,12 +38,13 @@ func NewChangeNamespaceCommand() *cobra.Command {
 		logger: l,
 	}
 	cmd := &cobra.Command{
-		Use:     "change-namespace",
-		Short:   "Create namespace of a resource",
-		Example: "optimus resource change-namespace <resource-name> --old-namespace <old-namespace> --new-namespace <new-namespace>",
-		RunE:    changeNamespace.RunE,
-		Args:    cobra.MinimumNArgs(1),
-		PreRunE: changeNamespace.PreRunE,
+		Use:      "change-namespace",
+		Short:    "Create namespace of a resource",
+		Example:  "optimus resource change-namespace <resource-name> --old-namespace <old-namespace> --new-namespace <new-namespace>",
+		Args:     cobra.MinimumNArgs(1),
+		PreRunE:  changeNamespace.PreRunE,
+		RunE:     changeNamespace.RunE,
+		PostRunE: changeNamespace.PostRunE,
 	}
 	// Config filepath flag
 	cmd.Flags().StringVarP(&changeNamespace.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
@@ -102,4 +104,37 @@ func (c *changeNamespaceCommand) sendChangeNamespaceRequest(resourceName string)
 
 	_, err = resourceRunServiceClient.ChangeResourceNamespace(conn.GetContext(), request)
 	return err
+}
+
+func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error {
+	c.logger.Info("\n[INFO] Moving resource in filesystem")
+	resourceName := args[0]
+	fs := afero.NewOsFs()
+	var source, destination string
+	for _, namespace := range c.clientConfig.Namespaces {
+		if namespace.Name == c.oldNamespace {
+			for _, datastore := range namespace.Datastore {
+				if datastore.Type == c.dataStore {
+					source = "./" + datastore.Path + "/" + resourceName
+					break
+				}
+			}
+		} else if namespace.Name == c.newNamespace {
+			for _, datastore := range namespace.Datastore {
+				if datastore.Type == c.dataStore {
+					destination = "./" + datastore.Path + "/" + resourceName
+					break
+				}
+			}
+		}
+	}
+
+	c.logger.Info(fmt.Sprintf("\t* Old Path : '%s' \n\t* New Path : '%s' \n", source, destination))
+
+	err := fs.Rename(source, destination)
+	if err != nil {
+		return err
+	}
+	c.logger.Info("[OK] Resource moved successfully")
+	return nil
 }

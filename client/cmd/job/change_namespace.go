@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/goto/optimus/client/cmd/internal"
@@ -36,12 +37,13 @@ func NewChangeNemespaceCommand() *cobra.Command {
 		logger: l,
 	}
 	cmd := &cobra.Command{
-		Use:     "change-namespace",
-		Short:   "Create namespace of a Job",
-		Example: "optimus job change-namespace <job-name> --old-namespace <old-namespace> --new-namespace <new-namespace>",
-		RunE:    changeNamespace.RunE,
-		Args:    cobra.MinimumNArgs(1),
-		PreRunE: changeNamespace.PreRunE,
+		Use:      "change-namespace",
+		Short:    "Change namespace of a Job",
+		Example:  "optimus job change-namespace <job-name> --old-namespace <old-namespace> --new-namespace <new-namespace>",
+		Args:     cobra.MinimumNArgs(1),
+		PreRunE:  changeNamespace.PreRunE,
+		RunE:     changeNamespace.RunE,
+		PostRunE: changeNamespace.PostRunE,
 	}
 	// Config filepath flag
 	cmd.Flags().StringVarP(&changeNamespace.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
@@ -78,7 +80,7 @@ func (c *changeNamespaceCommand) RunE(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("namespace change request failed for job %s: %w", jobName, err)
 	}
-	c.logger.Info("successfully changed namespace and deployed new DAG on Scheduler")
+	c.logger.Info("Successfully changed namespace and deployed new DAG on Scheduler")
 	return nil
 }
 
@@ -100,4 +102,27 @@ func (c *changeNamespaceCommand) sendChangeNamespaceRequest(jobName string) erro
 
 	_, err = jobRunServiceClient.ChangeJobNamespace(conn.GetContext(), request)
 	return err
+}
+
+func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error {
+	c.logger.Info("\n[INFO] Moving job in filesystem")
+	jobName := args[0]
+	fs := afero.NewOsFs()
+	var source, destination string
+	for _, namespace := range c.clientConfig.Namespaces {
+		if namespace.Name == c.oldNamespace {
+			source = "./" + namespace.Job.Path + "/" + jobName
+		} else if namespace.Name == c.newNamespace {
+			destination = "./" + namespace.Job.Path + "/" + jobName
+		}
+	}
+
+	c.logger.Info(fmt.Sprintf("\t* Old Path : '%s' \n\t* New Path : '%s' \n", source, destination))
+
+	err := fs.Rename(source, destination)
+	if err != nil {
+		return err
+	}
+	c.logger.Info("[OK] Job moved successfully")
+	return nil
 }

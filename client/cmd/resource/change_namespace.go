@@ -2,6 +2,7 @@ package resource
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -40,8 +41,8 @@ func NewChangeNamespaceCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:      "change-namespace",
 		Short:    "Create namespace of a resource",
-		Example:  "optimus resource change-namespace <resource-name> --old-namespace <old-namespace> --new-namespace <new-namespace>",
-		Args:     cobra.MinimumNArgs(1),
+		Example:  "optimus resource change-namespace <resource-name> <datastore-name> --old-namespace <old-namespace> --new-namespace <new-namespace>",
+		Args:     cobra.MinimumNArgs(2),
 		PreRunE:  changeNamespace.PreRunE,
 		RunE:     changeNamespace.RunE,
 		PostRunE: changeNamespace.PostRunE,
@@ -64,7 +65,7 @@ func (c *changeNamespaceCommand) injectFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&c.host, "host", "", "Optimus service endpoint url")
 }
 
-func (c *changeNamespaceCommand) PreRunE(_ *cobra.Command, _ []string) error {
+func (c *changeNamespaceCommand) PreRunE(_ *cobra.Command, args []string) error {
 	// Load mandatory config
 	conf, err := config.LoadClientConfig(c.configFilePath)
 	if err != nil {
@@ -77,7 +78,9 @@ func (c *changeNamespaceCommand) PreRunE(_ *cobra.Command, _ []string) error {
 
 func (c *changeNamespaceCommand) RunE(_ *cobra.Command, args []string) error {
 	resourceName := args[0]
-	err := c.sendChangeNamespaceRequest(resourceName)
+	resourceFullName := strings.ReplaceAll(strings.ReplaceAll(resourceName, "/", "."), "\\", ".")
+	c.dataStore = args[1]
+	err := c.sendChangeNamespaceRequest(resourceFullName)
 	if err != nil {
 		return fmt.Errorf("namespace change request failed for resource %s: %w", resourceName, err)
 	}
@@ -109,6 +112,7 @@ func (c *changeNamespaceCommand) sendChangeNamespaceRequest(resourceName string)
 func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error {
 	c.logger.Info("\n[INFO] Moving resource in filesystem")
 	resourceName := args[0]
+	c.dataStore = args[1]
 	fs := afero.NewOsFs()
 	var source, destination string
 	for _, namespace := range c.clientConfig.Namespaces {
@@ -123,6 +127,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 			for _, datastore := range namespace.Datastore {
 				if datastore.Type == c.dataStore {
 					destination = "./" + datastore.Path + "/" + resourceName
+					fs.MkdirAll("./"+datastore.Path, 0755)
 					break
 				}
 			}

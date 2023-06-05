@@ -25,13 +25,12 @@ const (
 	ConcurrentTicketPerSec = 50
 	ConcurrentLimit        = 100
 
-	metricJobEvent                 = "job_event"
-	metricJobEventAdded            = "added"
-	metricJobEventUpdated          = "updated"
-	metricJobEventDeleted          = "deleted"
-	metricJobEventValidationFailed = "validation_failed"
-	metricJobEventUpsertFailed     = "upsert_failed"
-	metricJobEventDeleteFailed     = "delete_failed"
+	metricJobEvent             = "job_event"
+	metricJobEventAdded        = "added"
+	metricJobEventUpdated      = "updated"
+	metricJobEventDeleted      = "deleted"
+	metricJobEventUpsertFailed = "upsert_failed"
+	metricJobEventDeleteFailed = "delete_failed"
 )
 
 type JobService struct {
@@ -342,10 +341,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, deletedJobNames)
 	me.Append(err)
 
-	failedToModify := failedToAdd + failedToUpdate + len(jobNamesWithInvalidSpec)
-	if failedToModify > 0 {
-		raiseJobEventMetric(tenantWithDetails.ToTenant(), metricJobEventUpsertFailed, failedToModify)
-	}
+	raiseJobEventMetric(tenantWithDetails.ToTenant(), metricJobEventUpsertFailed, failedToAdd+failedToUpdate)
 
 	return me.ToErr()
 }

@@ -477,10 +477,10 @@ func (j *JobWithUpstream) getJobFullName() string {
 }
 
 func (j JobRepository) ReplaceUpstreams(ctx context.Context, jobsWithUpstreams []*job.WithUpstream) error {
-	var storageJobUpstreams []*JobWithUpstream
+	var jobUpstreams []*JobWithUpstream
 	for _, jobWithUpstreams := range jobsWithUpstreams {
-		upstream := toJobUpstream(jobWithUpstreams)
-		storageJobUpstreams = append(storageJobUpstreams, upstream...)
+		singleJobUpstreams := toJobUpstream(jobWithUpstreams)
+		jobUpstreams = append(jobUpstreams, singleJobUpstreams...)
 	}
 
 	tx, err := j.db.Begin(ctx)
@@ -497,7 +497,7 @@ func (j JobRepository) ReplaceUpstreams(ctx context.Context, jobsWithUpstreams [
 		tx.Rollback(ctx)
 		return err
 	}
-	if err = j.insertUpstreams(ctx, tx, storageJobUpstreams); err != nil {
+	if err = j.insertUpstreams(ctx, tx, jobUpstreams); err != nil {
 		tx.Rollback(ctx)
 		return err
 	}

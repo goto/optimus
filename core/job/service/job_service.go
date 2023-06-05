@@ -25,14 +25,13 @@ const (
 	ConcurrentTicketPerSec = 50
 	ConcurrentLimit        = 100
 
-	metricTotalJobAddSuccess = "total_job_add_success"
-	metricJobUpdateSuccess   = "job_update_success"
-	metricJobDeleteSuccess   = "job_delete_success"
-
-	metricTotalJobUpsertFailed = "total_jobs_upsert_failed"
-	metricTotalJobDeleteFailed = "total_jobs_delete_failed"
-
-	metricTotalUpstreamRefresh = "total_upstream_refresh"
+	metricJobEvent                 = "job_event"
+	metricJobEventAdded            = "added"
+	metricJobEventUpdated          = "updated"
+	metricJobEventDeleted          = "deleted"
+	metricJobEventValidationFailed = "validation_failed"
+	metricJobEventUpsertFailed     = "upsert_failed"
+	metricJobEventDeleteFailed     = "delete_failed"
 )
 
 type JobService struct {
@@ -123,7 +122,6 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), addedJobs, logWriter)
 	me.Append(err)
-	raiseTotalJobChangeMetric(jobTenant, metricTotalUpstreamRefresh, len(jobsWithUpstreams))
 
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
@@ -134,11 +132,11 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	for _, job := range addedJobs {
 		j.raiseCreateEvent(job)
 	}
-	raiseTotalJobChangeMetric(jobTenant, metricTotalJobAddSuccess, len(addedJobs))
+	raiseJobEventMetric(jobTenant, metricJobEventAdded, len(addedJobs))
 
 	if len(addedJobs) < len(specs) {
 		totalFailed := len(specs) - len(addedJobs)
-		raiseTotalJobChangeMetric(jobTenant, metricTotalJobUpsertFailed, totalFailed)
+		raiseJobEventMetric(jobTenant, metricJobEventUpsertFailed, totalFailed)
 	}
 
 	return me.ToErr()
@@ -161,7 +159,6 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), updatedJobs, logWriter)
 	me.Append(err)
-	raiseTotalJobChangeMetric(jobTenant, metricTotalUpstreamRefresh, len(jobsWithUpstreams))
 
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
@@ -171,12 +168,12 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 
 	for _, job := range updatedJobs {
 		j.raiseUpdateEvent(job)
-		raiseJobChangeMetric(jobTenant, metricJobUpdateSuccess, job.Spec().Name())
 	}
+	raiseJobEventMetric(jobTenant, metricJobEventUpdated, len(updatedJobs))
 
 	if len(updatedJobs) < len(specs) {
 		totalFailed := len(specs) - len(updatedJobs)
-		raiseTotalJobChangeMetric(jobTenant, metricTotalJobUpsertFailed, totalFailed)
+		raiseJobEventMetric(jobTenant, metricJobEventUpsertFailed, totalFailed)
 	}
 
 	return me.ToErr()
@@ -185,24 +182,24 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error) {
 	downstreamList, err := j.repo.GetDownstreamByJobName(ctx, jobTenant.ProjectName(), jobName)
 	if err != nil {
-		raiseTotalJobChangeMetric(jobTenant, metricTotalJobDeleteFailed, 1)
+		raiseJobEventMetric(jobTenant, metricJobEventDeleteFailed, 1)
 		return nil, err
 	}
 
 	downstreamFullNames := job.DownstreamList(downstreamList).GetDownstreamFullNames()
 
 	if len(downstreamList) > 0 && !forceFlag {
-		raiseTotalJobChangeMetric(jobTenant, metricTotalJobDeleteFailed, 1)
+		raiseJobEventMetric(jobTenant, metricJobEventDeleteFailed, 1)
 		errorMsg := fmt.Sprintf("%s depends on this job. consider do force delete to proceed.", downstreamFullNames)
 		return nil, errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg)
 	}
 
 	if err := j.repo.Delete(ctx, jobTenant.ProjectName(), jobName, cleanFlag); err != nil {
-		raiseTotalJobChangeMetric(jobTenant, metricTotalJobDeleteFailed, 1)
+		raiseJobEventMetric(jobTenant, metricJobEventDeleteFailed, 1)
 		return downstreamFullNames, err
 	}
 
-	raiseJobChangeMetric(jobTenant, metricJobDeleteSuccess, jobName)
+	raiseJobEventMetric(jobTenant, metricJobEventDeleted, 1)
 
 	if err := j.uploadJobs(ctx, jobTenant, nil, nil, []job.Name{jobName}); err != nil {
 		return downstreamFullNames, err
@@ -347,7 +344,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 	failedToModify := failedToAdd + failedToUpdate + len(jobNamesWithInvalidSpec)
 	if failedToModify > 0 {
-		raiseTotalJobChangeMetric(tenantWithDetails.ToTenant(), metricTotalJobUpsertFailed, failedToModify)
+		raiseJobEventMetric(tenantWithDetails.ToTenant(), metricJobEventUpsertFailed, failedToModify)
 	}
 
 	return me.ToErr()
@@ -402,8 +399,6 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 		j.logger.Debug("resolving upstreams for %d jobs of project [%s] namespace [%s]", len(updatedJobs), projectName, namespaceName)
 		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, projectName, updatedJobs, logWriter)
 		me.Append(err)
-
-		raiseTotalJobChangeMetric(jobTenant, metricTotalUpstreamRefresh, len(jobsWithUpstreams))
 
 		j.logger.Debug("replacing upstreams for %d jobs of project [%s] namespace [%s]", len(jobsWithUpstreams), projectName, namespaceName)
 		err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
@@ -576,8 +571,6 @@ func (j *JobService) resolveAndSaveUpstreams(ctx context.Context, jobTenant tena
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), allJobsToResolve, logWriter)
 	me.Append(err)
 
-	raiseTotalJobChangeMetric(jobTenant, metricTotalUpstreamRefresh, len(jobsWithUpstreams))
-
 	j.logger.Debug("replacing upstreams for %d jobs of project [%s] namespace [%s]", len(jobsWithUpstreams), jobTenant.ProjectName(), jobTenant.NamespaceName())
 	err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
@@ -608,7 +601,7 @@ func (j *JobService) bulkAdd(ctx context.Context, tenantWithDetails *tenant.With
 		for _, job := range addedJobs {
 			j.raiseCreateEvent(job)
 		}
-		raiseTotalJobChangeMetric(tenantWithDetails.ToTenant(), metricTotalJobAddSuccess, len(addedJobs))
+		raiseJobEventMetric(tenantWithDetails.ToTenant(), metricJobEventAdded, len(addedJobs))
 	}
 
 	return addedJobs, me.ToErr()
@@ -635,8 +628,8 @@ func (j *JobService) bulkUpdate(ctx context.Context, tenantWithDetails *tenant.W
 		logWriter.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] successfully updated %d jobs", tenantWithDetails.Namespace().Name().String(), len(updatedJobs)))
 		for _, job := range updatedJobs {
 			j.raiseUpdateEvent(job)
-			raiseJobChangeMetric(tenantWithDetails.ToTenant(), metricJobUpdateSuccess, job.Spec().Name())
 		}
+		raiseJobEventMetric(tenantWithDetails.ToTenant(), metricJobEventUpdated, len(updatedJobs))
 	}
 
 	return updatedJobs, me.ToErr()
@@ -678,7 +671,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 			} else {
 				alreadyDeleted[downstreams[i].FullName()] = true
 				j.raiseDeleteEvent(jobTenant, spec.Name())
-				raiseJobChangeMetric(jobTenant, metricJobDeleteSuccess, downstreams[i].Name())
+				raiseJobEventMetric(jobTenant, metricJobEventDeleted, 1)
 				deletedJobNames = append(deletedJobNames, downstreams[i].Name())
 			}
 		}
@@ -692,7 +685,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 		} else {
 			alreadyDeleted[fullName] = true
 			j.raiseDeleteEvent(jobTenant, spec.Name())
-			raiseJobChangeMetric(jobTenant, metricJobDeleteSuccess, spec.Name())
+			raiseJobEventMetric(jobTenant, metricJobEventDeleted, 1)
 			deletedJobNames = append(deletedJobNames, spec.Name())
 		}
 	}
@@ -702,7 +695,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	}
 	if len(deletedJobNames) < len(toDelete) {
 		totalFailed := len(toDelete) - len(deletedJobNames)
-		raiseTotalJobChangeMetric(jobTenant, metricTotalJobDeleteFailed, totalFailed)
+		raiseJobEventMetric(jobTenant, metricJobEventDeleteFailed, totalFailed)
 	}
 	return deletedJobNames, me.ToErr()
 }
@@ -928,17 +921,10 @@ func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
 	j.eventHandler.HandleEvent(jobEvent)
 }
 
-func raiseJobChangeMetric(jobTenant tenant.Tenant, metricName string, jobName job.Name) {
-	telemetry.NewCounter(metricName, map[string]string{
+func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int) {
+	telemetry.NewCounter(metricJobEvent, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
-		"job":       jobName.String(),
-	}).Inc()
-}
-
-func raiseTotalJobChangeMetric(jobTenant tenant.Tenant, metricName string, metricValue int) {
-	telemetry.NewCounter(metricName, map[string]string{
-		"project":   jobTenant.ProjectName().String(),
-		"namespace": jobTenant.NamespaceName().String(),
+		"status":    state,
 	}).Add(float64(metricValue))
 }

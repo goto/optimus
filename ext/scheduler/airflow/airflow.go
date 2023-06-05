@@ -366,7 +366,7 @@ func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler
 	}
 }
 
-func raiseSchedulerMetric(jobTenant tenant.Tenant, metricName string, status string, metricValue int) {
+func raiseSchedulerMetric(jobTenant tenant.Tenant, metricName, status string, metricValue int) {
 	telemetry.NewCounter(metricName, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),

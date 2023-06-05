@@ -142,6 +142,9 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 		return nil, fmt.Errorf("unable to read system certs")
 	}
 
-	config := &tls.Config{RootCAs: certPool}
+	config := &tls.Config{
+		RootCAs:    certPool,
+		MinVersion: tls.VersionTLS12,
+	}
 	return credentials.NewTLS(config), nil
 }

@@ -493,7 +493,7 @@ func (j JobRepository) ReplaceUpstreams(ctx context.Context, jobsWithUpstreams [
 		jobFullName = append(jobFullName, jobWithUpstream.Job().FullName())
 	}
 
-	if err = j.deleteUpstreams(ctx, tx, jobFullName); err != nil {
+	if err = j.deleteUpstreamsByJobNames(ctx, tx, jobFullName); err != nil {
 		tx.Rollback(ctx)
 		return err
 	}
@@ -568,7 +568,7 @@ VALUES (
 	return nil
 }
 
-func (JobRepository) deleteUpstreams(ctx context.Context, tx pgx.Tx, jobUpstreams []string) error {
+func (JobRepository) deleteUpstreamsByJobNames(ctx context.Context, tx pgx.Tx, jobUpstreams []string) error {
 	deleteForProjectScope := `DELETE
 FROM job_upstream
 WHERE project_name || '/' || job_name = any ($1);`

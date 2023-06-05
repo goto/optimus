@@ -142,11 +142,10 @@ func (w ReplayWorker) processNewReplayRequestParallel(ctx context.Context, repla
 }
 
 func (w ReplayWorker) processNewReplayRequestSequential(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
-	runsToBeCleared := scheduler.JobRunStatusList(replayReq.Runs).GetSortedRunsByStates([]scheduler.State{scheduler.StatePending})
-	if len(runsToBeCleared) == 0 { // if all of replay runs is new
+	runToClear := replayReq.GetFirstExecutableRun()
+	if runToClear == nil {
 		return replayReq.Runs, nil
 	}
-	runToClear := runsToBeCleared[0]
 	if err := w.scheduler.Clear(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), runToClear.GetLogicalTime(jobCron)); err != nil {
 		w.l.Error("unable to clear job run for replay", "replay_id", replayReq.Replay.ID())
 		return nil, err

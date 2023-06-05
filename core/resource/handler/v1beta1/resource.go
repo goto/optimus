@@ -19,10 +19,8 @@ import (
 )
 
 const (
-	metricResourcesUpsertSuccessTotal = "resources_upsert_success_total"
-	metricResourcesUpsertSkippedTotal = "resources_upsert_skipped_total"
-	metricResourcesUpsertFailedTotal  = "resources_upsert_failed_total"
-	metricResourcesUploadAllDuration  = "resources_upload_all_duration_in_seconds"
+	metricResourceEvents             = "resource_events"
+	metricResourcesUploadAllDuration = "resources_upload_all_duration_in_seconds"
 )
 
 type ResourceService interface {
@@ -115,9 +113,9 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		successMsg := fmt.Sprintf("%d resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
 		responseWriter.Write(writer.LogLevelInfo, successMsg)
 
-		raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSuccessTotal, len(successResources))
-		raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSkippedTotal, len(skippedResources))
-		raiseResourceUpsertMetric(tnnt, metricResourcesUpsertFailedTotal, len(failureResources))
+		raiseResourceUpsertMetric(tnnt, "success", len(successResources))
+		raiseResourceUpsertMetric(tnnt, "skipped", len(skippedResources))
+		raiseResourceUpsertMetric(tnnt, "failed", len(failureResources))
 
 		processDuration := time.Since(startTime)
 		telemetry.NewGauge(metricResourcesUploadAllDuration, map[string]string{
@@ -185,7 +183,7 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
 
-	raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSuccessTotal, 1)
+	raiseResourceUpsertMetric(tnnt, "success", 1)
 	return &pb.CreateResourceResponse{}, nil
 }
 
@@ -240,7 +238,7 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 
-	raiseResourceUpsertMetric(tnnt, metricResourcesUpsertSuccessTotal, 1)
+	raiseResourceUpsertMetric(tnnt, "success", 1)
 	return &pb.UpdateResourceResponse{}, nil
 }
 
@@ -333,10 +331,11 @@ func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) 
 	}, nil
 }
 
-func raiseResourceUpsertMetric(jobTenant tenant.Tenant, metricName string, metricValue int) {
-	telemetry.NewCounter(metricName, map[string]string{
+func raiseResourceUpsertMetric(jobTenant tenant.Tenant, state string, metricValue int) {
+	telemetry.NewCounter(metricResourceEvents, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
+		"status":    state,
 	}).Add(float64(metricValue))
 }
 

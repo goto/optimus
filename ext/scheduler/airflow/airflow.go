@@ -43,10 +43,8 @@ const (
 	concurrentTicketPerSec = 50
 	concurrentLimit        = 100
 
-	metricTotalJobsUploadSucceed  = "total_jobs_upload_success"
-	metricTotalJobsUploadFailed   = "total_jobs_upload_failed"
-	metricTotalJobsRemovalSucceed = "total_jobs_removal_success"
-	metricTotalJobsRemovalFailed  = "total_jobs_removal_failed"
+	metricJobUpload  = "job_upload"
+	metricJobRemoval = "job_removal"
 )
 
 type Bucket interface {
@@ -121,8 +119,8 @@ func (s *Scheduler) DeployJobs(ctx context.Context, tenant tenant.Tenant, jobs [
 		}
 		countDeploySucceed++
 	}
-	raiseJobMetric(tenant, metricTotalJobsUploadSucceed, countDeploySucceed)
-	raiseJobMetric(tenant, metricTotalJobsUploadFailed, countDeployFailed)
+	raiseSchedulerMetric(tenant, metricJobUpload, "success", countDeploySucceed)
+	raiseSchedulerMetric(tenant, metricJobUpload, "failed", countDeployFailed)
 
 	return multiError.ToErr()
 }
@@ -185,8 +183,8 @@ func (s *Scheduler) DeleteJobs(ctx context.Context, t tenant.Tenant, jobNames []
 		}
 		countDeleteJobsSucceed++
 	}
-	raiseJobMetric(t, metricTotalJobsRemovalSucceed, countDeleteJobsSucceed)
-	raiseJobMetric(t, metricTotalJobsRemovalFailed, countDeleteJobsFailed)
+	raiseSchedulerMetric(t, metricJobRemoval, "success", countDeleteJobsSucceed)
+	raiseSchedulerMetric(t, metricJobRemoval, "failed", countDeleteJobsFailed)
 
 	err = deleteDirectoryIfEmpty(ctx, t.NamespaceName().String(), bucket)
 	if err != nil {
@@ -368,9 +366,10 @@ func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler
 	}
 }
 
-func raiseJobMetric(jobTenant tenant.Tenant, metricName string, metricValue int) {
+func raiseSchedulerMetric(jobTenant tenant.Tenant, metricName string, status string, metricValue int) {
 	telemetry.NewCounter(metricName, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
+		"status":    status,
 	}).Add(float64(metricValue))
 }

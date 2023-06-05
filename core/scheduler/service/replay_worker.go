@@ -13,6 +13,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/telemetry"
 )
 
 type ReplayScheduler interface {
@@ -49,6 +50,7 @@ func (w ReplayWorker) Process(replayReq *scheduler.ReplayWithRun) {
 	if err != nil {
 		w.l.Error(fmt.Sprintf("unable to get cron value for job %s: %s", replayReq.Replay.JobName(), err.Error()), "replay_id", replayReq.Replay.ID())
 		w.updateReplayAsFailed(ctx, replayReq.Replay.ID(), err.Error())
+		raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), scheduler.ReplayStateFailed)
 		return
 	}
 
@@ -63,6 +65,7 @@ func (w ReplayWorker) Process(replayReq *scheduler.ReplayWithRun) {
 
 	if err != nil {
 		w.updateReplayAsFailed(ctx, replayReq.Replay.ID(), err.Error())
+		raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), scheduler.ReplayStateFailed)
 	}
 }
 
@@ -84,6 +87,7 @@ func (w ReplayWorker) processNewReplayRequest(ctx context.Context, replayReq *sc
 		w.l.Error("unable to update replay state", "replay_id", replayReq.Replay.ID())
 		return err
 	}
+	raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), state)
 	return nil
 }
 
@@ -154,6 +158,7 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 		w.l.Error("unable to update replay state", "replay_id", replayReq.Replay.ID())
 		return err
 	}
+	raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), replayState)
 	return nil
 }
 
@@ -184,6 +189,7 @@ func (w ReplayWorker) processReplayedRequest(ctx context.Context, replayReq *sch
 		w.l.Error("unable to update replay state", "replay_id", replayReq.Replay.ID())
 		return err
 	}
+	raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), state)
 	return nil
 }
 
@@ -232,4 +238,13 @@ func (w ReplayWorker) updateReplayAsFailed(ctx context.Context, replayID uuid.UU
 	if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, message); err != nil {
 		w.l.Error("unable to update replay state to failed", "replay_id", replayID)
 	}
+}
+
+func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state scheduler.ReplayState) {
+	telemetry.NewCounter(metricJobReplay, map[string]string{
+		"project":   t.ProjectName().String(),
+		"namespace": t.NamespaceName().String(),
+		"job":       jobName.String(),
+		"status":    state.String(),
+	}).Inc()
 }

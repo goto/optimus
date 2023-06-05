@@ -16,7 +16,7 @@ import (
 const (
 	getReplaysDayLimit = 30 // TODO: make it configurable via cli
 
-	metricJobReplay = "job_replay_request"
+	metricJobReplay = "job_replay"
 )
 
 type ReplayRepository interface {
@@ -72,6 +72,7 @@ func (r ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, j
 		"project":   tenant.ProjectName().String(),
 		"namespace": tenant.NamespaceName().String(),
 		"job":       jobName.String(),
+		"status":    replayReq.State().String(),
 	}).Inc()
 	return replayID, nil
 }

@@ -303,7 +303,7 @@ func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any
 }
 
 func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Event) error {
-	telemetry.NewGauge("job_run_event", map[string]string{
+	telemetry.NewGauge("job_run_events", map[string]string{
 		"project":   event.Tenant.ProjectName().String(),
 		"namespace": event.Tenant.NamespaceName().String(),
 		"name":      event.JobName.String(),

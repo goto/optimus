@@ -25,8 +25,6 @@ const (
 	metricReplaceAllDuration = "jobs_replace_all_duration_in_seconds"
 	metricRefreshDuration    = "jobs_refresh_duration_in_seconds"
 	metricValidationDuration = "jobs_validation_duration_in_seconds"
-
-	metricJobEventValidationFailed = "validation_failed"
 )
 
 type JobHandler struct {
@@ -73,7 +71,7 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		jh.l.Error(errorMsg)
 		me.Append(err)
 	}
-	raiseJobEventMetric(jobTenant, metricJobEventValidationFailed, len(invalidSpecs))
+	raiseJobEventMetric(jobTenant, job.MetricJobEventStateValidationFailed, len(invalidSpecs))
 
 	if len(jobSpecs) == 0 {
 		me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, "no jobs to be processed"))
@@ -145,7 +143,7 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 		jh.l.Error(errorMsg)
 		me.Append(err)
 	}
-	raiseJobEventMetric(jobTenant, metricJobEventValidationFailed, len(invalidSpecs))
+	raiseJobEventMetric(jobTenant, job.MetricJobEventStateValidationFailed, len(invalidSpecs))
 
 	if len(jobSpecs) == 0 {
 		me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, "no jobs to be processed"))
@@ -498,7 +496,7 @@ func (jh *JobHandler) JobInspect(ctx context.Context, req *pb.JobInspectRequest)
 }
 
 func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int) {
-	telemetry.NewCounter(state, map[string]string{
+	telemetry.NewCounter(job.MetricJobEvent, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
 		"status":    state,

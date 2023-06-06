@@ -20,6 +20,9 @@ import (
 
 const (
 	metricResourceEvents             = "resource_events"
+	metricResourceEventsStateSuccess = "success"
+	metricResourceEventsStateSkipped = "skipped"
+	metricResourceEventsStateFailed  = "failed"
 	metricResourcesUploadAllDuration = "resources_upload_all_duration_in_seconds"
 )
 
@@ -113,9 +116,9 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		successMsg := fmt.Sprintf("%d resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
 		responseWriter.Write(writer.LogLevelInfo, successMsg)
 
-		raiseResourceUpsertMetric(tnnt, "success", len(successResources))
-		raiseResourceUpsertMetric(tnnt, "skipped", len(skippedResources))
-		raiseResourceUpsertMetric(tnnt, "failed", len(failureResources))
+		raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSuccess, len(successResources))
+		raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSkipped, len(skippedResources))
+		raiseResourceUpsertMetric(tnnt, metricResourceEventsStateFailed, len(failureResources))
 
 		processDuration := time.Since(startTime)
 		telemetry.NewGauge(metricResourcesUploadAllDuration, map[string]string{
@@ -183,7 +186,7 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
 
-	raiseResourceUpsertMetric(tnnt, "success", 1)
+	raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSuccess, 1)
 	return &pb.CreateResourceResponse{}, nil
 }
 
@@ -238,7 +241,7 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 
-	raiseResourceUpsertMetric(tnnt, "success", 1)
+	raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSuccess, 1)
 	return &pb.UpdateResourceResponse{}, nil
 }
 

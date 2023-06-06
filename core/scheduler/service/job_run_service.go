@@ -26,6 +26,8 @@ func (m metricType) String() string {
 
 const (
 	scheduleDelay metricType = "schedule_delay"
+
+	metricJobRunEvents = "job_run_events"
 )
 
 type JobRepository interface {
@@ -303,7 +305,7 @@ func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any
 }
 
 func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Event) error {
-	telemetry.NewGauge("job_run_events", map[string]string{
+	telemetry.NewCounter(metricJobRunEvents, map[string]string{
 		"project":   event.Tenant.ProjectName().String(),
 		"namespace": event.Tenant.NamespaceName().String(),
 		"name":      event.JobName.String(),
@@ -346,7 +348,7 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 		return
 	}
 	s.eventHandler.HandleEvent(schedulerEvent)
-	telemetry.NewCounter("job_run_events", map[string]string{
+	telemetry.NewCounter(metricJobRunEvents, map[string]string{
 		"project":   jobRun.Tenant.ProjectName().String(),
 		"namespace": jobRun.Tenant.NamespaceName().String(),
 		"name":      jobRun.JobName.String(),

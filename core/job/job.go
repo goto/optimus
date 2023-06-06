@@ -17,7 +17,7 @@ const (
 	UpstreamStateResolved   UpstreamState = "resolved"
 	UpstreamStateUnresolved UpstreamState = "unresolved"
 
-	MetricJobEvent                      = "job_event"
+	MetricJobEvent                      = "job_events"
 	MetricJobEventStateAdded            = "added"
 	MetricJobEventStateUpdated          = "updated"
 	MetricJobEventStateDeleted          = "deleted"

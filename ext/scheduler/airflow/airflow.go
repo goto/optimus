@@ -43,8 +43,10 @@ const (
 	concurrentTicketPerSec = 50
 	concurrentLimit        = 100
 
-	metricJobUpload  = "job_upload"
-	metricJobRemoval = "job_removal"
+	metricJobUpload       = "job_upload"
+	metricJobRemoval      = "job_removal"
+	metricJobStateSuccess = "success"
+	metricJobStateFailed  = "failed"
 )
 
 type Bucket interface {
@@ -119,8 +121,8 @@ func (s *Scheduler) DeployJobs(ctx context.Context, tenant tenant.Tenant, jobs [
 		}
 		countDeploySucceed++
 	}
-	raiseSchedulerMetric(tenant, metricJobUpload, "success", countDeploySucceed)
-	raiseSchedulerMetric(tenant, metricJobUpload, "failed", countDeployFailed)
+	raiseSchedulerMetric(tenant, metricJobUpload, metricJobStateSuccess, countDeploySucceed)
+	raiseSchedulerMetric(tenant, metricJobUpload, metricJobStateFailed, countDeployFailed)
 
 	return multiError.ToErr()
 }
@@ -183,8 +185,8 @@ func (s *Scheduler) DeleteJobs(ctx context.Context, t tenant.Tenant, jobNames []
 		}
 		countDeleteJobsSucceed++
 	}
-	raiseSchedulerMetric(t, metricJobRemoval, "success", countDeleteJobsSucceed)
-	raiseSchedulerMetric(t, metricJobRemoval, "failed", countDeleteJobsFailed)
+	raiseSchedulerMetric(t, metricJobRemoval, metricJobStateSuccess, countDeleteJobsSucceed)
+	raiseSchedulerMetric(t, metricJobRemoval, metricJobStateFailed, countDeleteJobsFailed)
 
 	err = deleteDirectoryIfEmpty(ctx, t.NamespaceName().String(), bucket)
 	if err != nil {

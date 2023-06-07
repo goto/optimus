@@ -2,6 +2,9 @@ package job
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -11,7 +14,10 @@ import (
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connectivity"
 	"github.com/goto/optimus/client/cmd/internal/logger"
+	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -24,10 +30,10 @@ type changeNamespaceCommand struct {
 	configFilePath string
 	clientConfig   *config.ClientConfig
 
-	project      string
-	oldNamespace string
-	newNamespace string
-	host         string
+	project          string
+	oldNamespaceName string
+	newNamespaceName string
+	host             string
 }
 
 // NewChangeNamespaceCommand initializes job namespace change command
@@ -55,8 +61,8 @@ func NewChangeNamespaceCommand() *cobra.Command {
 
 func (c *changeNamespaceCommand) injectFlags(cmd *cobra.Command) {
 	// Mandatory flags
-	cmd.Flags().StringVarP(&c.oldNamespace, "old-namespace", "o", "", "current namespace of the job")
-	cmd.Flags().StringVarP(&c.newNamespace, "new-namespace", "n", "", "namespace to which the job needs to be moved to")
+	cmd.Flags().StringVarP(&c.oldNamespaceName, "old-namespace", "o", "", "current namespace of the job")
+	cmd.Flags().StringVarP(&c.newNamespaceName, "new-namespace", "n", "", "namespace to which the job needs to be moved to")
 
 	// Mandatory flags if config is not set
 	cmd.Flags().StringVarP(&c.project, "project-name", "p", "", "Name of the optimus project")
@@ -80,7 +86,7 @@ func (c *changeNamespaceCommand) RunE(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("namespace change request failed for job %s: %w", jobName, err)
 	}
-	c.logger.Info("Successfully changed namespace and deployed new DAG on Scheduler")
+	c.logger.Info("[OK] Successfully changed namespace and deployed new DAG on Scheduler")
 	return nil
 }
 
@@ -95,8 +101,8 @@ func (c *changeNamespaceCommand) sendChangeNamespaceRequest(jobName string) erro
 	jobRunServiceClient := pb.NewJobSpecificationServiceClient(conn.GetConnection())
 	request := &pb.ChangeJobNamespaceRequest{
 		ProjectName:      c.project,
-		NamespaceName:    c.oldNamespace,
-		NewNamespaceName: c.newNamespace,
+		NamespaceName:    c.oldNamespaceName,
+		NewNamespaceName: c.newNamespaceName,
 		JobName:          jobName,
 	}
 
@@ -105,24 +111,68 @@ func (c *changeNamespaceCommand) sendChangeNamespaceRequest(jobName string) erro
 }
 
 func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error {
-	c.logger.Info("\n[INFO] Moving job in filesystem")
+	c.logger.Info("\n[info] Moving job in filesystem")
 	jobName := args[0]
-	fs := afero.NewOsFs()
-	var source, destination string
-	for _, namespace := range c.clientConfig.Namespaces {
-		if namespace.Name == c.oldNamespace {
-			source = "./" + namespace.Job.Path + "/" + jobName
-		} else if namespace.Name == c.newNamespace {
-			destination = "./" + namespace.Job.Path + "/" + jobName
-		}
+	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs())
+	if err != nil {
+		return err
 	}
 
-	c.logger.Info(fmt.Sprintf("\t* Old Path : '%s' \n\t* New Path : '%s' \n", source, destination))
+	oldNamespaceConfig, err := c.getNamespaceConfig(c.oldNamespaceName)
+	if err != nil {
+		return errors.Wrap(tenant.EntityNamespace, "unregistered old namespace", err)
+	}
 
-	err := fs.Rename(source, destination)
+	jobSpec, err := jobSpecReadWriter.ReadByName(oldNamespaceConfig.Job.Path, jobName)
+	if err != nil {
+		return errors.Wrap(tenant.EntityNamespace, "unable to find job in old namespace", err)
+	}
+
+	fs := afero.NewOsFs()
+	newNamespaceConfig, err := c.getNamespaceConfig(c.newNamespaceName)
+	if err != nil || newNamespaceConfig.Job.Path == "" {
+		c.logger.Warn("[warn] new namespace not recognised for jobs")
+		c.logger.Warn("[info] removing job from old namespace")
+		err = fs.RemoveAll(jobSpec.Path)
+		if err != nil {
+			c.logger.Warn("unable to remove job from old namespace")
+			return errors.NewError(errors.ErrInternalError, "change-namespace", "unable to remove job from old namespace")
+		}
+		c.logger.Warn("[info] removed job spec from current namespace directory")
+		c.logger.Warn("[info] run `optimus job export` on the new namespace repo, to fetch the newly moved job.")
+		c.logger.Info("[OK] Job moved successfully")
+		return nil
+	}
+
+	var relativeJobPath string
+	splitComp := strings.Split(jobSpec.Path, oldNamespaceConfig.Job.Path)
+	if !(len(splitComp) > 1) {
+		return errors.NewError(errors.ErrInternalError, "change-namespace", "unable to parse job spec path")
+	}
+	relativeJobPath = splitComp[1]
+
+	c.logger.Info(fmt.Sprintf("\t* Old Path : '%s' \n\t* New Path : '%s' \n", jobSpec.Path, newNamespaceConfig.Job.Path+relativeJobPath))
+
+	c.logger.Info(fmt.Sprintf("[info] creating job directry: %s", newNamespaceConfig.Job.Path+relativeJobPath))
+
+	err = fs.MkdirAll(filepath.Dir(newNamespaceConfig.Job.Path+relativeJobPath), os.FileMode(0o755))
+	if err != nil {
+		return err
+	}
+
+	err = fs.Rename(jobSpec.Path, newNamespaceConfig.Job.Path+relativeJobPath)
 	if err != nil {
 		return err
 	}
 	c.logger.Info("[OK] Job moved successfully")
 	return nil
+}
+
+func (c *changeNamespaceCommand) getNamespaceConfig(namespaceName string) (*config.Namespace, error) {
+	for _, namespace := range c.clientConfig.Namespaces {
+		if namespace.Name == namespaceName {
+			return namespace, nil
+		}
+	}
+	return nil, errors.NotFound(tenant.EntityNamespace, "not recognised in config")
 }

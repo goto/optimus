@@ -113,14 +113,15 @@ func (c *changeNamespaceCommand) sendChangeNamespaceRequest(jobName string) erro
 func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error {
 	c.logger.Info("\n[info] Moving job in filesystem")
 	jobName := args[0]
-	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs())
-	if err != nil {
-		return err
-	}
 
 	oldNamespaceConfig, err := c.getNamespaceConfig(c.oldNamespaceName)
 	if err != nil {
 		return errors.Wrap(tenant.EntityNamespace, "unregistered old namespace", err)
+	}
+
+	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs())
+	if err != nil {
+		return err
 	}
 
 	jobSpec, err := jobSpecReadWriter.ReadByName(oldNamespaceConfig.Job.Path, jobName)

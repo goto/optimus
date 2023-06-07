@@ -155,7 +155,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 
 	c.logger.Info(fmt.Sprintf("[info] creating job directry: %s", newNamespaceConfig.Job.Path+relativeJobPath))
 
-	err = fs.MkdirAll(filepath.Dir(newNamespaceConfig.Job.Path+relativeJobPath), os.FileMode(0o755))
+	err = fs.MkdirAll(filepath.Dir(newNamespaceConfig.Job.Path+relativeJobPath), os.ModePerm)
 	if err != nil {
 		return err
 	}

@@ -59,6 +59,7 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
+
 	incoming.MarkValidationSuccess()
 	urn, err := rs.mgr.GetURN(incoming)
 	if err != nil {
@@ -100,6 +101,7 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 	}
 
 	if err := rs.mgr.CreateResource(ctx, incoming); err != nil {
+		rs.logger.Error("error creating resource [%s] to manager: %s", incoming.FullName(), err)
 		return err
 	}
 
@@ -112,6 +114,7 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
+
 	incoming.MarkValidationSuccess()
 	urn, err := rs.mgr.GetURN(incoming)
 	if err != nil {
@@ -143,8 +146,10 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 	}
 
 	if err := rs.mgr.UpdateResource(ctx, incoming); err != nil {
+		rs.logger.Error("error updating resource [%s] to manager: %s", incoming.FullName(), err)
 		return err
 	}
+
 	rs.raiseUpdateEvent(incoming)
 	return nil
 }

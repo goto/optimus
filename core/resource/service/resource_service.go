@@ -149,13 +149,18 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 	return nil
 }
 
-func (rs ResourceService) ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error {
-	if err := rs.repo.ChangeNamespace(ctx, res, newTenant); err != nil {
-		rs.logger.Error("error changing namespace of stored resource [%s]: %s", res.FullName(), err)
+func (rs ResourceService) ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error {
+	resource, err := rs.Get(ctx, oldTenant, datastore, resourceFullName)
+	if err != nil {
+		rs.logger.Error("failed to read existing resource [%s]: %s", resourceFullName, err)
 		return err
 	}
-	res.UpdateTenant(newTenant)
-	rs.raiseUpdateEvent(res)
+	if err := rs.repo.ChangeNamespace(ctx, resource, newTenant); err != nil {
+		rs.logger.Error("error changing namespace of stored resource [%s]: %s", resource.FullName(), err)
+		return err
+	}
+	resource.UpdateTenant(newTenant)
+	rs.raiseUpdateEvent(resource)
 	return nil
 }
 

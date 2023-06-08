@@ -46,7 +46,7 @@ func NewChangeNamespaceCommand() *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use:      "change-namespace",
-		Short:    "Create namespace of a resource",
+		Short:    "Change namespace of a resource",
 		Example:  "optimus resource change-namespace <resource-name> <datastore-name> --old-namespace <old-namespace> --new-namespace <new-namespace>",
 		Args:     cobra.MinimumNArgs(2), //nolint
 		PreRunE:  changeNamespace.PreRunE,

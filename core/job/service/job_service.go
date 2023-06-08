@@ -452,6 +452,10 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 
 		err = j.repo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 		me.Append(err)
+
+		j.logger.Debug("uploading [%d] jobs of project [%s] namespace [%s] to scheduler", len(jobs), projectName, namespaceName)
+		err = j.uploadJobs(ctx, jobTenant, jobs, nil, nil)
+		me.Append(err)
 	}
 
 	return me.ToErr()

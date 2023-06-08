@@ -940,7 +940,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, eventHandler, nil, jobDeploymentService)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, eventHandler, log, jobDeploymentService)
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, false)
 			assert.NoError(t, err)
 			assert.Empty(t, affectedDownstream)
@@ -971,7 +971,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, eventHandler, nil, jobDeploymentService)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, eventHandler, log, jobDeploymentService)
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, true)
 			assert.NoError(t, err)
 			assert.EqualValues(t, downstreamFullNames, affectedDownstream)
@@ -988,7 +988,7 @@ func TestJobService(t *testing.T) {
 			}
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(downstreamList, nil)
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, false)
 			assert.Error(t, err)
 			assert.Empty(t, affectedDownstream)
@@ -1001,7 +1001,7 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(nil, errors.New("internal error"))
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, false)
 			assert.Error(t, err)
 			assert.Empty(t, affectedDownstream)
@@ -1015,7 +1015,7 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), specA.Name(), false).Return(errors.New("internal error"))
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, false)
 			assert.Error(t, err)
 			assert.Empty(t, affectedDownstream)
@@ -1037,7 +1037,7 @@ func TestJobService(t *testing.T) {
 			errorMsg := "internal error"
 			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, emptyJobNames, mock.Anything).Return(errors.New(errorMsg))
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, eventHandler, nil, jobDeploymentService)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, eventHandler, log, jobDeploymentService)
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, false)
 			assert.ErrorContains(t, err, errorMsg)
 			assert.Empty(t, affectedDownstream)
@@ -2092,7 +2092,7 @@ func TestJobService(t *testing.T) {
 			jobName, _ := job.NameFrom("job-A")
 			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobName).Return(nil, errors.New("error when fetch job"))
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 			actual, err := jobService.Get(ctx, sampleTenant, jobName)
 			assert.Error(t, err, "error when fetch job")
 			assert.Nil(t, actual)
@@ -2105,7 +2105,7 @@ func TestJobService(t *testing.T) {
 			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(jobA, nil)
 
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 			actual, err := jobService.Get(ctx, sampleTenant, specA.Name())
 			assert.NoError(t, err, "error when fetch job")
 			assert.NotNil(t, actual)
@@ -2121,7 +2121,7 @@ func TestJobService(t *testing.T) {
 
 				jobRepo.On("GetAllByResourceDestination", ctx, job.ResourceURN("example")).Return(nil, errors.New("error encountered"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx, filter.WithString(filter.ResourceDestination, "example"))
 				assert.Error(t, err, "error encountered")
 				assert.Nil(t, actual)
@@ -2134,7 +2134,7 @@ func TestJobService(t *testing.T) {
 				jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 				jobRepo.On("GetAllByResourceDestination", ctx, job.ResourceURN("table-A")).Return([]*job.Job{jobA}, nil)
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx, filter.WithString(filter.ResourceDestination, "table-A"))
 				assert.NoError(t, err)
 				assert.NotNil(t, actual)
@@ -2150,7 +2150,7 @@ func TestJobService(t *testing.T) {
 				jobName, _ := job.NameFrom("job-A")
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobName).Return(nil, errors.New("error encountered"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithStringArray(filter.JobNames, []string{jobName.String()}),
@@ -2168,7 +2168,7 @@ func TestJobService(t *testing.T) {
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(jobA, nil)
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specB.Name()).Return(nil, errors.New("error encountered"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithStringArray(filter.JobNames, []string{specA.Name().String(), specB.Name().String()}),
@@ -2185,7 +2185,7 @@ func TestJobService(t *testing.T) {
 				specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(nil, optErrors.NotFound(job.EntityJob, "job not found"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithStringArray(filter.JobNames, []string{specA.Name().String()}),
@@ -2201,7 +2201,7 @@ func TestJobService(t *testing.T) {
 				jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(jobA, nil)
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithStringArray(filter.JobNames, []string{specA.Name().String()}),
@@ -2220,7 +2220,7 @@ func TestJobService(t *testing.T) {
 				jobName, _ := job.NameFrom("job-A")
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobName).Return(nil, errors.New("error encountered"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithString(filter.JobName, jobName.String()),
@@ -2235,7 +2235,7 @@ func TestJobService(t *testing.T) {
 				specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(nil, optErrors.NotFound(job.EntityJob, "job not found"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithString(filter.JobName, specA.Name().String()),
@@ -2251,7 +2251,7 @@ func TestJobService(t *testing.T) {
 				jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(jobA, nil)
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithString(filter.JobName, specA.Name().String()),
@@ -2269,7 +2269,7 @@ func TestJobService(t *testing.T) {
 
 				jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(nil, errors.New("error encountered"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithStringArray(filter.NamespaceNames, []string{sampleTenant.NamespaceName().String()}),
@@ -2281,7 +2281,7 @@ func TestJobService(t *testing.T) {
 				jobRepo := new(JobRepository)
 				defer jobRepo.AssertExpectations(t)
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithStringArray(filter.NamespaceNames, []string{""}),
@@ -2297,7 +2297,7 @@ func TestJobService(t *testing.T) {
 				jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 				jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA}, nil)
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithStringArray(filter.NamespaceNames, []string{sampleTenant.NamespaceName().String()}),
@@ -2315,7 +2315,7 @@ func TestJobService(t *testing.T) {
 
 				jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(nil, errors.New("error encountered"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithString(filter.NamespaceName, sampleTenant.NamespaceName().String()),
@@ -2331,7 +2331,7 @@ func TestJobService(t *testing.T) {
 				jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 				jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA}, nil)
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 					filter.WithString(filter.NamespaceName, sampleTenant.NamespaceName().String()),
@@ -2349,7 +2349,7 @@ func TestJobService(t *testing.T) {
 
 				jobRepo.On("GetAllByProjectName", ctx, sampleTenant.ProjectName()).Return(nil, errors.New("error encountered"))
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 				)
@@ -2364,7 +2364,7 @@ func TestJobService(t *testing.T) {
 				jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 				jobRepo.On("GetAllByProjectName", ctx, sampleTenant.ProjectName()).Return([]*job.Job{jobA}, nil)
 
-				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil)
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, log, nil)
 				actual, err := jobService.GetByFilter(ctx,
 					filter.WithString(filter.ProjectName, sampleTenant.ProjectName().String()),
 				)
@@ -2375,7 +2375,7 @@ func TestJobService(t *testing.T) {
 			})
 		})
 		t.Run("return error when there's no filter", func(t *testing.T) {
-			jobService := service.NewJobService(nil, nil, nil, nil, nil, nil, nil)
+			jobService := service.NewJobService(nil, nil, nil, nil, nil, log, nil)
 			actual, err := jobService.GetByFilter(ctx)
 			assert.Error(t, err, "no filter matched")
 			assert.Nil(t, actual)

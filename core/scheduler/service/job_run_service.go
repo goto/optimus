@@ -491,16 +491,16 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 		telemetry.NewCounter("task_run_events", map[string]string{
 			"project":    event.Tenant.ProjectName().String(),
 			"namespace":  event.Tenant.NamespaceName().String(),
-			"event_type": event.Type.String(),
-			"operator":   eventType,
+			"event_type": eventType,
+			"operator":   event.OperatorName,
 		}).Inc()
 	} else if event.Type == scheduler.HookStartEvent || event.Type == scheduler.HookRetryEvent || event.Type == scheduler.HookSuccessEvent || event.Type == scheduler.HookFailEvent {
 		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorHook))
 		telemetry.NewCounter("hook_run_events", map[string]string{
 			"project":    event.Tenant.ProjectName().String(),
 			"namespace":  event.Tenant.NamespaceName().String(),
-			"event_type": event.Type.String(),
-			"operator":   eventType,
+			"event_type": eventType,
+			"operator":   event.OperatorName,
 		}).Inc()
 	}
 }

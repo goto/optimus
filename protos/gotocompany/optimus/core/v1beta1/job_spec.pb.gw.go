@@ -621,13 +621,17 @@ func local_request_JobSpecificationService_DeleteJobSpecification_0(ctx context.
 
 }
 
-var (
-	filter_JobSpecificationService_ChangeJobNamespace_0 = &utilities.DoubleArray{Encoding: map[string]int{"project_name": 0, "namespace_name": 1, "job_name": 2}, Base: []int{1, 1, 2, 3, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 3, 4}}
-)
-
 func request_JobSpecificationService_ChangeJobNamespace_0(ctx context.Context, marshaler runtime.Marshaler, client JobSpecificationServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq ChangeJobNamespaceRequest
 	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 
 	var (
 		val string
@@ -644,33 +648,6 @@ func request_JobSpecificationService_ChangeJobNamespace_0(ctx context.Context, m
 	protoReq.ProjectName, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_name", err)
-	}
-
-	val, ok = pathParams["namespace_name"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace_name")
-	}
-
-	protoReq.NamespaceName, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace_name", err)
-	}
-
-	val, ok = pathParams["job_name"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "job_name")
-	}
-
-	protoReq.JobName, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "job_name", err)
-	}
-
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_JobSpecificationService_ChangeJobNamespace_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := client.ChangeJobNamespace(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -682,6 +659,14 @@ func local_request_JobSpecificationService_ChangeJobNamespace_0(ctx context.Cont
 	var protoReq ChangeJobNamespaceRequest
 	var metadata runtime.ServerMetadata
 
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
 	var (
 		val string
 		ok  bool
@@ -697,33 +682,6 @@ func local_request_JobSpecificationService_ChangeJobNamespace_0(ctx context.Cont
 	protoReq.ProjectName, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_name", err)
-	}
-
-	val, ok = pathParams["namespace_name"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace_name")
-	}
-
-	protoReq.NamespaceName, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace_name", err)
-	}
-
-	val, ok = pathParams["job_name"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "job_name")
-	}
-
-	protoReq.JobName, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "job_name", err)
-	}
-
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_JobSpecificationService_ChangeJobNamespace_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := server.ChangeJobNamespace(ctx, &protoReq)
@@ -1168,13 +1126,13 @@ func RegisterJobSpecificationServiceHandlerServer(ctx context.Context, mux *runt
 
 	})
 
-	mux.Handle("PUT", pattern_JobSpecificationService_ChangeJobNamespace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_JobSpecificationService_ChangeJobNamespace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/ChangeJobNamespace", runtime.WithHTTPPathPattern("/v1beta1/project/{project_name}/namespace/{namespace_name}/job/{job_name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/ChangeJobNamespace", runtime.WithHTTPPathPattern("/v1beta1/project/{project_name}/change-job-namespace"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1464,11 +1422,11 @@ func RegisterJobSpecificationServiceHandlerClient(ctx context.Context, mux *runt
 
 	})
 
-	mux.Handle("PUT", pattern_JobSpecificationService_ChangeJobNamespace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_JobSpecificationService_ChangeJobNamespace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/ChangeJobNamespace", runtime.WithHTTPPathPattern("/v1beta1/project/{project_name}/namespace/{namespace_name}/job/{job_name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/ChangeJobNamespace", runtime.WithHTTPPathPattern("/v1beta1/project/{project_name}/change-job-namespace"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1582,7 +1540,7 @@ var (
 
 	pattern_JobSpecificationService_DeleteJobSpecification_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5, 1, 0, 4, 1, 5, 6}, []string{"v1beta1", "project", "project_name", "namespace", "namespace_name", "job", "job_name"}, ""))
 
-	pattern_JobSpecificationService_ChangeJobNamespace_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5, 1, 0, 4, 1, 5, 6}, []string{"v1beta1", "project", "project_name", "namespace", "namespace_name", "job", "job_name"}, ""))
+	pattern_JobSpecificationService_ChangeJobNamespace_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1beta1", "project", "project_name", "change-job-namespace"}, ""))
 
 	pattern_JobSpecificationService_ListJobSpecification_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1beta1", "project", "project_name", "namespace", "namespace_name", "job"}, ""))
 

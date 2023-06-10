@@ -33,7 +33,6 @@ generate-proto: ## regenerate protos
 	@echo " > generating protobuf from goto/proton"
 	@echo " > [info] make sure correct version of dependencies are installed using 'make install'"
 	@buf generate https://github.com/goto/proton/archive/${PROTON_COMMIT}.zip#strip_components=1 --template buf.gen.yaml --path gotocompany/optimus
-	# @buf generate proton --template buf.gen.yaml --path proton/gotocompany/optimus
 	@echo " > protobuf compilation finished"
 
 unit-test-ci:

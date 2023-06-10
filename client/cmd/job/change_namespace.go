@@ -146,7 +146,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 
 	var relativeJobPath string
 	splitComp := strings.Split(jobSpec.Path, oldNamespaceConfig.Job.Path)
-	if !(len(splitComp) > 1) {
+	if len(splitComp) <= 1 {
 		return errors.NewError(errors.ErrInternalError, "change-namespace", "unable to parse job spec path")
 	}
 	relativeJobPath = splitComp[1]

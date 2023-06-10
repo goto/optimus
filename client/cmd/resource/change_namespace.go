@@ -152,21 +152,21 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 
 	var relativeResourcePath string
 	splitComp := strings.Split(resourceSpec.Path, oldNamespaceConfig.Path)
-	if !(len(splitComp) > 1) {
+	if len(splitComp) <= 1 {
 		return errors.NewError(errors.ErrInternalError, "change-namespace", "unable to parse resource spec path")
 	}
 	relativeResourcePath = splitComp[1]
+	newResourcePath := newNamespaceConfig.Path + relativeResourcePath
+	c.logger.Info(fmt.Sprintf("\t* Old Path : '%s' \n\t* New Path : '%s' \n", resourceSpec.Path, newResourcePath))
 
-	c.logger.Info(fmt.Sprintf("\t* Old Path : '%s' \n\t* New Path : '%s' \n", resourceSpec.Path, newNamespaceConfig.Path+relativeResourcePath))
+	c.logger.Info(fmt.Sprintf("[info] creating Resource directry: %s", newResourcePath))
 
-	c.logger.Info(fmt.Sprintf("[info] creating Resource directry: %s", newNamespaceConfig.Path+relativeResourcePath))
-
-	err = fs.MkdirAll(filepath.Dir(newNamespaceConfig.Path+relativeResourcePath), os.FileMode(0o755))
+	err = fs.MkdirAll(filepath.Dir(newResourcePath), os.FileMode(0o755))
 	if err != nil {
 		return err
 	}
 
-	err = fs.Rename(resourceSpec.Path, newNamespaceConfig.Path+relativeResourcePath)
+	err = fs.Rename(resourceSpec.Path, newResourcePath)
 	if err != nil {
 		return err
 	}

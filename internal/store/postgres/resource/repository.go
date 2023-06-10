@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -77,10 +78,10 @@ func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, stor
 			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errors.NotFound(resource.EntityResource, "no resource found for "+res.FullName)
+			return nil, errors.NotFound(resource.EntityResource, fmt.Sprintf("no resource: '%s' found for project:%s, namespace:%s ", fullName, tnnt.ProjectName(), tnnt.NamespaceName()))
 		}
 
-		return nil, errors.Wrap(resource.EntityResource, "error reading the resource "+res.FullName, err)
+		return nil, errors.Wrap(resource.EntityResource, fmt.Sprintf("error reading resource: '%s' found for project:%s, namespace:%s ", fullName, tnnt.ProjectName(), tnnt.NamespaceName()), err)
 	}
 
 	return FromModelToResource(&res)

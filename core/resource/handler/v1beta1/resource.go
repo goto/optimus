@@ -279,7 +279,7 @@ func (rh ResourceHandler) ChangeResourceNamespace(ctx context.Context, req *pb.C
 		return nil, errors.GRPCErr(err, "invalid Datastore Name")
 	}
 
-	err = rh.service.ChangeNamespace(ctx, store, req.GetDatastoreName(), tnnt, newTnnt)
+	err = rh.service.ChangeNamespace(ctx, store, req.GetResourceName(), tnnt, newTnnt)
 	if err != nil {
 		return nil, errors.GRPCErr(err, "failed to update resource "+req.GetResourceName())
 	}

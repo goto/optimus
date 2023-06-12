@@ -17,7 +17,6 @@ import (
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/resource"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -121,54 +120,58 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 
 	oldNamespaceConfig, err := c.getResourceDatastoreConfig(c.oldNamespace, c.dataStore)
 	if err != nil {
-		return errors.Wrap(tenant.EntityNamespace, "unregistered old namespace", err)
+		c.logger.Error(fmt.Sprintf("[error] old namespace unregistered in filesystem, err: %s", err.Error()))
+		return nil
 	}
 
 	resourceSpecReadWriter, err := specio.NewResourceSpecReadWriter(afero.NewOsFs())
 	if err != nil {
-		return err
+		c.logger.Error(fmt.Sprintf("[error] could not instantiate Spec Readed , err: %s", err.Error()))
+		return nil
 	}
 
 	resourceSpec, err := resourceSpecReadWriter.ReadByName(oldNamespaceConfig.Path, resourceName)
 	if err != nil {
-		return errors.Wrap(tenant.EntityNamespace, "unable to find resource in old namespace", err)
+		c.logger.Error(fmt.Sprintf("[error] unable to find resource in old namespace directory, err: %s", err.Error()))
+		return nil
 	}
 
 	fs := afero.NewOsFs()
 	newNamespaceConfig, err := c.getResourceDatastoreConfig(c.newNamespace, c.dataStore)
 	if err != nil || newNamespaceConfig.Path == "" {
 		c.logger.Warn("[warn] new namespace not recognised for Resources")
+		c.logger.Warn("[info] run `optimus resource export` on the new namespace repo, to fetch the newly moved resource.")
+
 		c.logger.Warn("[info] removing resource from old namespace")
 		err = fs.RemoveAll(resourceSpec.Path)
 		if err != nil {
-			c.logger.Warn("unable to remove resource from old namespace")
-			return errors.NewError(errors.ErrInternalError, "change-namespace", "unable to remove resource from old namespace")
+			c.logger.Error(fmt.Sprintf("[error] unable to remove resource from old namespace , err: %s", err.Error()))
+			c.logger.Warn("[info] consider deleting source files manually if they exist")
+			return nil
 		}
-		c.logger.Warn("[info] removed resource spec from current namespace directory")
-		c.logger.Warn("[info] run `optimus resource export` on the new namespace repo, to fetch the newly moved resource.")
-		c.logger.Info("[OK] Resource moved successfully")
+		c.logger.Warn("[OK] removed resource spec from current namespace directory")
 		return nil
 	}
 
-	var relativeResourcePath string
-	splitComp := strings.Split(resourceSpec.Path, oldNamespaceConfig.Path)
-	if len(splitComp) <= 1 {
-		return errors.NewError(errors.ErrInternalError, "change-namespace", "unable to parse resource spec path")
-	}
-	relativeResourcePath = splitComp[1]
-	newResourcePath := newNamespaceConfig.Path + relativeResourcePath
+	newResourcePath := strings.Replace(resourceSpec.Path, oldNamespaceConfig.Path, newNamespaceConfig.Path, 1)
+
 	c.logger.Info(fmt.Sprintf("\t* Old Path : '%s' \n\t* New Path : '%s' \n", resourceSpec.Path, newResourcePath))
 
 	c.logger.Info(fmt.Sprintf("[info] creating Resource directry: %s", newResourcePath))
 
 	err = fs.MkdirAll(filepath.Dir(newResourcePath), os.FileMode(0o755))
 	if err != nil {
-		return err
+		c.logger.Error(fmt.Sprintf("[error] unable to create path in the new namespace directory, err: %s", err.Error()))
+		c.logger.Warn("[warn] unable to move resource from old namespace")
+		c.logger.Warn("[info] consider moving source files manually")
+		return nil
 	}
 
 	err = fs.Rename(resourceSpec.Path, newResourcePath)
 	if err != nil {
-		return err
+		c.logger.Error(fmt.Sprintf("[warn] unable to move resource from old namespace, err: %s", err.Error()))
+		c.logger.Warn("[info] consider moving source files manually")
+		return nil
 	}
 	c.logger.Info("[OK] Resource moved successfully")
 	return nil

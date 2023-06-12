@@ -126,7 +126,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 
 	resourceSpecReadWriter, err := specio.NewResourceSpecReadWriter(afero.NewOsFs())
 	if err != nil {
-		c.logger.Error(fmt.Sprintf("[error] could not instantiate Spec Readed , err: %s", err.Error()))
+		c.logger.Error(fmt.Sprintf("[error] could not instantiate Spec Readed, err: %s", err.Error()))
 		return nil
 	}
 

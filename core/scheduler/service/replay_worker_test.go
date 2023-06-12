@@ -83,14 +83,14 @@ func TestReplayWorker(t *testing.T) {
 			updatedRuns := []*scheduler.JobRunStatus{
 				{
 					ScheduledAt: scheduledTime1,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 			}
 
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil)
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(replayReq.Runs, nil)
 			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour)).Return(nil)
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateReplayed, updatedRuns, "").Return(nil)
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, updatedRuns, "").Return(nil)
 
 			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
@@ -121,7 +121,7 @@ func TestReplayWorker(t *testing.T) {
 			updatedRuns := []*scheduler.JobRunStatus{
 				{
 					ScheduledAt: scheduledTime1,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 				{
 					ScheduledAt: scheduledTime2,
@@ -164,7 +164,7 @@ func TestReplayWorker(t *testing.T) {
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil)
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(replayReq.Runs, nil)
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, executionTime1, executionTime2).Return(nil)
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateReplayed, mock.Anything, "").Return(nil)
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil)
 
 			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
@@ -195,7 +195,7 @@ func TestReplayWorker(t *testing.T) {
 			updatedRunsAfterRunCreate := []*scheduler.JobRunStatus{
 				{
 					ScheduledAt: scheduledTime1,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 				{
 					ScheduledAt: scheduledTime2,
@@ -205,11 +205,11 @@ func TestReplayWorker(t *testing.T) {
 			updatedRuns := []*scheduler.JobRunStatus{
 				{
 					ScheduledAt: scheduledTime1,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 				{
 					ScheduledAt: scheduledTime2,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 			}
 			existingRuns := []*scheduler.JobRunStatus{{
@@ -334,7 +334,7 @@ func TestReplayWorker(t *testing.T) {
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 					{
 						ScheduledAt: scheduledTime2,
@@ -367,7 +367,7 @@ func TestReplayWorker(t *testing.T) {
 				},
 				{
 					ScheduledAt: scheduledTime2,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 				{
 					ScheduledAt: scheduledTime3,
@@ -398,7 +398,7 @@ func TestReplayWorker(t *testing.T) {
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 					{
 						ScheduledAt: scheduledTime2,
@@ -431,7 +431,7 @@ func TestReplayWorker(t *testing.T) {
 				},
 				{
 					ScheduledAt: scheduledTime2,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 				{
 					ScheduledAt: scheduledTime3,
@@ -462,7 +462,7 @@ func TestReplayWorker(t *testing.T) {
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 					{
 						ScheduledAt: scheduledTime2,
@@ -497,7 +497,7 @@ func TestReplayWorker(t *testing.T) {
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 					{
 						ScheduledAt: scheduledTime2,
@@ -536,7 +536,7 @@ func TestReplayWorker(t *testing.T) {
 			defer jobRepository.AssertExpectations(t)
 
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateReplayed, time.Now()),
+				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
@@ -544,7 +544,7 @@ func TestReplayWorker(t *testing.T) {
 					},
 					{
 						ScheduledAt: scheduledTime2,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 				},
 			}
@@ -577,19 +577,19 @@ func TestReplayWorker(t *testing.T) {
 			defer jobRepository.AssertExpectations(t)
 
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateReplayed, time.Now()),
+				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 					{
 						ScheduledAt: scheduledTime2,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 					{
 						ScheduledAt: scheduledTime3,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 				},
 			}
@@ -614,17 +614,17 @@ func TestReplayWorker(t *testing.T) {
 				},
 				{
 					ScheduledAt: scheduledTime2,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 				{
 					ScheduledAt: scheduledTime3,
-					State:       scheduler.StateReplayed,
+					State:       scheduler.StateInProgress,
 				},
 			}
 
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil)
 			sch.On("GetJobRuns", mock.Anything, tnnt, runsCriteriaJobA, jobCron).Return(runsFromScheduler, nil)
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateReplayed, updatedRuns, "").Return(nil)
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, updatedRuns, "").Return(nil)
 
 			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
@@ -640,7 +640,7 @@ func TestReplayWorker(t *testing.T) {
 			defer jobRepository.AssertExpectations(t)
 
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateReplayed, time.Now()),
+				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
@@ -648,7 +648,7 @@ func TestReplayWorker(t *testing.T) {
 					},
 					{
 						ScheduledAt: scheduledTime2,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 				},
 			}
@@ -671,7 +671,7 @@ func TestReplayWorker(t *testing.T) {
 			defer jobRepository.AssertExpectations(t)
 
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateReplayed, time.Now()),
+				Replay: scheduler.NewReplay(uuid.New(), jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
 				Runs: []*scheduler.JobRunStatus{
 					{
 						ScheduledAt: scheduledTime1,
@@ -679,7 +679,7 @@ func TestReplayWorker(t *testing.T) {
 					},
 					{
 						ScheduledAt: scheduledTime2,
-						State:       scheduler.StateReplayed,
+						State:       scheduler.StateInProgress,
 					},
 				},
 			}

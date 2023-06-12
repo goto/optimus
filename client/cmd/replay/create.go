@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	supportedISOTimeLayouts = [...]string{time.RFC3339, time.DateOnly}
+	supportedISOTimeLayouts = [...]string{time.RFC3339, "2006-01-02"}
 	terminalStatuses        = map[string]bool{"success": true, "failed": true, "invalid": true}
 )
 

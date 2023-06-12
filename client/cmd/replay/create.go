@@ -24,7 +24,10 @@ const (
 	pollIntervalInSecond = 30
 )
 
-var terminalStatuses = map[string]bool{"success": true, "failed": true, "invalid": true}
+var (
+	supportedISOTimeLayouts = [...]string{time.RFC3339, time.DateOnly}
+	terminalStatuses        = map[string]bool{"success": true, "failed": true, "invalid": true}
+)
 
 type createCommand struct {
 	logger         log.Logger
@@ -186,7 +189,14 @@ func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, j
 }
 
 func getTimeProto(timeStr string) (*timestamppb.Timestamp, error) {
-	parsedTime, err := time.Parse(ISOTimeLayout, timeStr)
+	var parsedTime time.Time
+	var err error
+	for _, ISOTimeLayout := range supportedISOTimeLayouts {
+		parsedTime, err = time.Parse(ISOTimeLayout, timeStr)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

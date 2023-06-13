@@ -130,6 +130,8 @@ func (r *createCommand) waitForReplayState(replayID string) error {
 		}
 		spinner.Start(fmt.Sprintf("%s...", resp.Status))
 		if _, ok := terminalStatuses[resp.Status]; ok {
+			spinner.Stop()
+			r.logger.Info("\n" + stringifyReplayStatus(resp))
 			break
 		}
 		time.Sleep(time.Duration(pollIntervalInSecond) * time.Second)

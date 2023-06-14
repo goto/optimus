@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	metricReplaceAllDuration = "jobs_replace_all_duration_in_seconds"
-	metricRefreshDuration    = "jobs_refresh_duration_in_seconds"
-	metricValidationDuration = "jobs_validation_duration_in_seconds"
+	metricReplaceAllDuration = "job_replace_all_duration_seconds"
+	metricRefreshDuration    = "job_refresh_duration_seconds"
+	metricValidationDuration = "job_validation_duration_seconds"
 )
 
 type JobHandler struct {

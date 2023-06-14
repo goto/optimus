@@ -19,11 +19,11 @@ import (
 )
 
 const (
-	metricResourceEvents             = "resource_events"
+	metricResourceEvents             = "resource_events_total"
 	metricResourceEventsStateSuccess = "success"
 	metricResourceEventsStateSkipped = "skipped"
 	metricResourceEventsStateFailed  = "failed"
-	metricResourcesUploadAllDuration = "resources_upload_all_duration_in_seconds"
+	metricResourcesUploadAllDuration = "resource_upload_all_duration_seconds_total"
 )
 
 type ResourceService interface {

@@ -27,7 +27,7 @@ func (m metricType) String() string {
 const (
 	scheduleDelay metricType = "schedule_delay"
 
-	metricJobRunEvents = "job_run_events"
+	metricJobRunEvents = "jobrun_events_total"
 )
 
 type JobRepository interface {
@@ -481,14 +481,14 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 
 	if event.Type == scheduler.SensorStartEvent || event.Type == scheduler.SensorRetryEvent || event.Type == scheduler.SensorSuccessEvent || event.Type == scheduler.SensorFailEvent {
 		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorSensor))
-		telemetry.NewCounter("sensor_run_events", map[string]string{
+		telemetry.NewCounter("jobrun_sensor_events_total", map[string]string{
 			"project":    event.Tenant.ProjectName().String(),
 			"namespace":  event.Tenant.NamespaceName().String(),
 			"event_type": eventType,
 		}).Inc()
 	} else if event.Type == scheduler.TaskStartEvent || event.Type == scheduler.TaskRetryEvent || event.Type == scheduler.TaskSuccessEvent || event.Type == scheduler.TaskFailEvent {
 		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorTask))
-		telemetry.NewCounter("task_run_events", map[string]string{
+		telemetry.NewCounter("jobrun_task_events_total", map[string]string{
 			"project":    event.Tenant.ProjectName().String(),
 			"namespace":  event.Tenant.NamespaceName().String(),
 			"event_type": eventType,
@@ -496,7 +496,7 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 		}).Inc()
 	} else if event.Type == scheduler.HookStartEvent || event.Type == scheduler.HookRetryEvent || event.Type == scheduler.HookSuccessEvent || event.Type == scheduler.HookFailEvent {
 		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorHook))
-		telemetry.NewCounter("hook_run_events", map[string]string{
+		telemetry.NewCounter("jobrun_hook_events_total", map[string]string{
 			"project":    event.Tenant.ProjectName().String(),
 			"namespace":  event.Tenant.NamespaceName().String(),
 			"event_type": eventType,

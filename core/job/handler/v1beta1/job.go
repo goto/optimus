@@ -160,6 +160,12 @@ func (jh *JobHandler) ChangeJobNamespace(ctx context.Context, changeRequest *pb.
 		return nil, errors.GRPCErr(err, errorMsg)
 	}
 
+	telemetry.NewCounter("job_namespace_migrations_total", map[string]string{
+		"project":               jobSourceTenant.ProjectName().String(),
+		"namespace_source":      jobSourceTenant.NamespaceName().String(),
+		"namespace_destination": jobNewTenant.NamespaceName().String(),
+	}).Inc()
+
 	return &pb.ChangeJobNamespaceResponse{}, nil
 }
 

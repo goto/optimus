@@ -286,6 +286,13 @@ func (rh ResourceHandler) ChangeResourceNamespace(ctx context.Context, req *pb.C
 	if err != nil {
 		return nil, errors.GRPCErr(err, "failed to update resource "+req.GetResourceName())
 	}
+
+	telemetry.NewCounter("resource_namespace_migrations_total", map[string]string{
+		"project":               tnnt.ProjectName().String(),
+		"namespace_source":      tnnt.NamespaceName().String(),
+		"namespace_destination": newTnnt.NamespaceName().String(),
+	}).Inc()
+
 	return &pb.ChangeResourceNamespaceResponse{}, nil
 }
 

@@ -121,15 +121,20 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 }
 
 func (r *createCommand) waitForReplayState(replayID string) error {
-	spinner := progressbar.NewProgressBar()
-	spinner.Start("in progress...")
+	spinner := progressbar.NewProgressBarWithWriter(r.logger.Writer())
+	status := "in progress"
+	spinner.Start(fmt.Sprintf("%s...", status))
 	for {
 		resp, err := r.getReplay(replayID)
 		if err != nil {
 			return err
 		}
-		spinner.Start(fmt.Sprintf("%s...", resp.Status))
-		if _, ok := terminalStatuses[resp.Status]; ok {
+		if status != resp.Status {
+			status = resp.Status
+			spinner.StartNewLine(fmt.Sprintf("%s...", status))
+		}
+		if _, ok := terminalStatuses[status]; ok {
+			spinner.StartNewLine("\n")
 			spinner.Stop()
 			r.logger.Info("\n" + stringifyReplayStatus(resp))
 			break

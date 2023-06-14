@@ -246,10 +246,6 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		s.l.Error("error getting sla duration: %s", err)
 		return err
 	}
-	telemetry.NewGauge("total_jobs_running", map[string]string{
-		"project":   tenant.ProjectName().String(),
-		"namespace": tenant.NamespaceName().String(),
-	}).Inc()
 	err = s.repo.Create(ctx, tenant, jobName, scheduledAt, slaDefinitionInSec)
 	if err != nil {
 		s.l.Error("error creating job run: %s", err)
@@ -293,18 +289,6 @@ func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event
 	if err != nil {
 		s.l.Error("error getting job run by schedule time [%s]: %s", event.JobScheduledAt, err)
 		return err
-	}
-	for _, state := range scheduler.TaskEndStates {
-		if event.Status == state {
-			// this can go negative, because it is possible that when we deploy certain job have already started,
-			// and the very first events we get are that of task end states, to handle this, we should treat the lowest
-			// value as the base value.
-			telemetry.NewGauge("total_jobs_running", map[string]string{
-				"project":   event.Tenant.ProjectName().String(),
-				"namespace": event.Tenant.NamespaceName().String(),
-			}).Dec()
-			break
-		}
 	}
 	if err := s.repo.Update(ctx, jobRun.ID, event.EventTime, event.Status); err != nil {
 		s.l.Error("error updating job run with id [%s]: %s", jobRun.ID, err)
@@ -382,13 +366,6 @@ func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.
 		s.l.Error("error getting job run by scheduled time [%s]: %s", event.JobScheduledAt, err)
 		return err
 	}
-	if operatorType == scheduler.OperatorTask {
-		telemetry.NewGauge("count_running_tasks", map[string]string{
-			"project":   event.Tenant.ProjectName().String(),
-			"namespace": event.Tenant.NamespaceName().String(),
-			"type":      event.OperatorName,
-		}).Inc()
-	}
 	jobState, err := operatorStartToJobState(operatorType)
 	if err != nil {
 		s.l.Error("error converting operator to job state: %s", err)
@@ -441,21 +418,6 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 	if err != nil {
 		s.l.Error("error getting operator for job run id [%s]: %s", jobRun.ID, err)
 		return err
-	}
-	if operatorType == scheduler.OperatorTask {
-		for _, state := range scheduler.TaskEndStates {
-			if event.Status == state {
-				// this can go negative, because it is possible that when we deploy certain job have already started,
-				// and the very first events we get are that of task end states, to handle this, we should treat the lowest
-				// value as the base value.
-				telemetry.NewGauge("count_running_tasks", map[string]string{
-					"project":   event.Tenant.ProjectName().String(),
-					"namespace": event.Tenant.NamespaceName().String(),
-					"type":      event.OperatorName,
-				}).Dec()
-				break
-			}
-		}
 	}
 	err = s.operatorRunRepo.UpdateOperatorRun(ctx, operatorType, operatorRun.ID, event.EventTime, event.Status)
 	if err != nil {

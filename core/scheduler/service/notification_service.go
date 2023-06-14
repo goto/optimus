@@ -7,23 +7,10 @@ import (
 	"strings"
 
 	"github.com/goto/salt/log"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-)
-
-var (
-	jobFailureCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "job_event_failure",
-		Help: "Event received for job failures by scheduler",
-	})
-	jobSLAMissCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "job_event_slamiss",
-		Help: "Event received for SLA miss by scheduler",
-	})
 )
 
 const (
@@ -94,11 +81,6 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				}
 			}
 		}
-	}
-	if event.Type.IsOfType(scheduler.EventCategoryJobFailure) {
-		jobFailureCounter.Inc()
-	} else if event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
-		jobSLAMissCounter.Inc()
 	}
 	return multierror.ToErr()
 }

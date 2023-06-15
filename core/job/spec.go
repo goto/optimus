@@ -10,7 +10,10 @@ import (
 	"github.com/goto/optimus/internal/models"
 )
 
-const DateLayout = "2006-01-02"
+const (
+	DateLayout       = "2006-01-02"
+	maxJobNameLength = 125
+)
 
 type Spec struct {
 	version  int
@@ -191,6 +194,9 @@ type Name string
 func NameFrom(name string) (Name, error) {
 	if name == "" {
 		return "", errors.InvalidArgument(EntityJob, "name is empty")
+	}
+	if len(name) > maxJobNameLength {
+		return "", errors.InvalidArgument(EntityJob, fmt.Sprintf("length of job name is %d, longer than the length allowed (%d)", len(name), maxJobNameLength))
 	}
 	return Name(name), nil
 }

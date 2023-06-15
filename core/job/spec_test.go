@@ -253,6 +253,11 @@ func TestEntitySpec(t *testing.T) {
 			assert.ErrorContains(t, err, "name is empty")
 			assert.Empty(t, name)
 		})
+		t.Run("should return error if name length is more than maximum allowed", func(t *testing.T) {
+			name, err := job.NameFrom("QEQFbm'mWufBaUrkccHlFeEDXHaFBOYFRAYGmjwuuTvEhkMekpHVocCBfpX'XBghyFiTTqbYQAseWcfJJsUAdbHRWoWGODoINrglgDsxJjwrmoYRIrGxMAifCGJUqD")
+			assert.ErrorContains(t, err, "length of job name is 126, longer than the length allowed (125)")
+			assert.Empty(t, name)
+		})
 	})
 
 	t.Run("ScheduleDateFrom", func(t *testing.T) {

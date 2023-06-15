@@ -162,6 +162,30 @@ func (s Specs) ToFullNameAndSpecMap(projectName tenant.ProjectName) map[FullName
 	return fullnameAndSpecMap
 }
 
+func (s Specs) Validate() ([]*Spec, error) {
+	// validate duplication
+	me := errors.NewMultiError("validate specs duplication errors")
+	isJobNameValid := map[Name]bool{}
+
+	for _, spec := range s {
+		if valid, ok := isJobNameValid[spec.Name()]; !ok {
+			isJobNameValid[spec.Name()] = true
+		} else if valid { // duplication detected
+			isJobNameValid[spec.Name()] = false // make it invalid
+			me.Append(fmt.Errorf("duplicate %s", spec.Name()))
+		}
+	}
+
+	validSpecs := []*Spec{}
+	for _, spec := range s {
+		if isJobNameValid[spec.Name()] {
+			validSpecs = append(validSpecs, spec)
+		}
+	}
+
+	return validSpecs, me.ToErr()
+}
+
 type Name string
 
 func NameFrom(name string) (Name, error) {

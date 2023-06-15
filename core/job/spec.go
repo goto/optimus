@@ -163,10 +163,10 @@ func (s Specs) ToFullNameAndSpecMap(projectName tenant.ProjectName) map[FullName
 }
 
 func (s Specs) Validate() ([]*Spec, error) {
-	// validate duplication
-	me := errors.NewMultiError("validate specs duplication errors")
+	me := errors.NewMultiError("validate specs errors")
 	isJobNameValid := map[Name]bool{}
 
+	// validate duplication
 	for _, spec := range s {
 		if valid, ok := isJobNameValid[spec.Name()]; !ok {
 			isJobNameValid[spec.Name()] = true

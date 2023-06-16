@@ -20,9 +20,6 @@ import (
 
 const (
 	metricResourceEvents             = "resource_events_total"
-	metricResourceEventsStateSuccess = "success"
-	metricResourceEventsStateSkipped = "skipped"
-	metricResourceEventsStateFailed  = "failed"
 	metricResourcesUploadAllDuration = "resource_upload_all_duration_seconds_total"
 )
 
@@ -119,9 +116,9 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		successMsg := fmt.Sprintf("[%d] resources with namespace [%s] are deployed successfully", len(resourceSpecs), request.GetNamespaceName())
 		responseWriter.Write(writer.LogLevelInfo, successMsg)
 
-		raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSuccess, len(successResources))
-		raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSkipped, len(skippedResources))
-		raiseResourceUpsertMetric(tnnt, metricResourceEventsStateFailed, len(failureResources))
+		for _, resourceSpec := range resourceSpecs {
+			raiseResourceDatastoreEventMetric(tnnt, resourceSpec.Store().String(), resourceSpec.Kind(), resourceSpec.Status().String())
+		}
 
 		processDuration := time.Since(startTime)
 		telemetry.NewGauge(metricResourcesUploadAllDuration, map[string]string{
@@ -192,12 +189,11 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 	}
 
 	err = rh.service.Create(ctx, res)
+	raiseResourceDatastoreEventMetric(tnnt, res.Store().String(), res.Kind(), res.Status().String())
 	if err != nil {
 		rh.l.Error("error creating resource [%s]: %s", res.FullName(), err)
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
-
-	raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSuccess, 1)
 
 	return &pb.CreateResourceResponse{}, nil
 }
@@ -257,12 +253,12 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 	}
 
 	err = rh.service.Update(ctx, res)
+	raiseResourceDatastoreEventMetric(tnnt, res.Store().String(), res.Kind(), res.Status().String())
 	if err != nil {
 		rh.l.Error("error updating resource [%s]: %s", res.FullName(), err)
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 
-	raiseResourceUpsertMetric(tnnt, metricResourceEventsStateSuccess, 1)
 	return &pb.UpdateResourceResponse{}, nil
 }
 
@@ -385,12 +381,14 @@ func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) 
 	}, nil
 }
 
-func raiseResourceUpsertMetric(jobTenant tenant.Tenant, state string, metricValue int) {
+func raiseResourceDatastoreEventMetric(jobTenant tenant.Tenant, datastoreName, resourceKind, state string) {
 	telemetry.NewCounter(metricResourceEvents, map[string]string{
 		"project":   jobTenant.ProjectName().String(),
 		"namespace": jobTenant.NamespaceName().String(),
+		"datastore": datastoreName,
+		"type":      resourceKind,
 		"status":    state,
-	}).Add(float64(metricValue))
+	}).Inc()
 }
 
 func NewResourceHandler(l log.Logger, resourceService ResourceService) *ResourceHandler {

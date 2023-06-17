@@ -2,7 +2,6 @@ package connectivity
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"os"
 	"time"
@@ -13,6 +12,8 @@ import (
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+
+	"github.com/goto/optimus/client/cmd/internal/auth"
 )
 
 const (
@@ -37,14 +38,16 @@ type Connectivity struct {
 	cancelRequestCtx func()
 
 	connection *grpc.ClientConn
+	auth       *auth.Auth
 }
 
 // NewConnectivity initializes client connection
-func NewConnectivity(serverHost string, requestTimeout time.Duration) (*Connectivity, error) {
-	connection, err := createConnection(serverHost)
+func NewConnectivity(serverHost string, requestTimeout time.Duration, a *auth.Auth) (*Connectivity, error) {
+	connection, err := createConnection(serverHost, a)
 	if err != nil {
 		return nil, err
 	}
+
 	reqCtx, reqCancel := context.WithTimeout(context.Background(), requestTimeout)
 	return &Connectivity{
 		requestCtx:       reqCtx,
@@ -69,27 +72,22 @@ func (c *Connectivity) Close() {
 	c.cancelRequestCtx()
 }
 
-func createConnection(host string) (*grpc.ClientConn, error) {
+func createConnection(host string, auth *auth.Auth) (*grpc.ClientConn, error) {
 	opts := getDefaultDialOptions()
 
-	// pass rpc credentials
-	if token := os.Getenv("OPTIMUS_AUTH_BASIC_TOKEN"); token != "" {
-		base64Token := base64.StdEncoding.EncodeToString([]byte(token))
-		opts = append(opts, grpc.WithPerRPCCredentials(&basicAuthentication{
-			Token: base64Token,
-		}))
-	} else if token := os.Getenv("OPTIMUS_AUTH_BEARER_TOKEN"); token != "" {
-		opts = append(opts, grpc.WithPerRPCCredentials(&bearerAuthentication{
-			Token: token,
-		}))
+	ctx, dialCancel := context.WithTimeout(context.Background(), optimusDialTimeout)
+	defer dialCancel()
+
+	err := addAuthentication(ctx, opts, auth)
+	if err != nil {
+		return nil, err
 	}
 
-	ctx, dialCancel := context.WithTimeout(context.Background(), optimusDialTimeout)
 	conn, err := grpc.DialContext(ctx, host, opts...)
 	if errors.Is(err, context.DeadlineExceeded) {
 		err = errServerNotReachable(host)
 	}
-	dialCancel()
+
 	return conn, err
 }
 
@@ -117,4 +115,30 @@ func getDefaultDialOptions() []grpc.DialOption {
 		)),
 	)
 	return opts
+}
+
+func addAuthentication(ctx context.Context, opts []grpc.DialOption, auth *auth.Auth) error {
+	if useInsecure() {
+		return nil
+	}
+
+	token, err := auth.GetToken(ctx)
+	if err != nil {
+		return err
+	}
+	if token == nil {
+		return errors.New("unable to get valid token")
+	}
+
+	opts = append(opts, grpc.WithPerRPCCredentials(&bearerAuthentication{
+		Token: token.AccessToken,
+	}))
+	return nil
+}
+
+func useInsecure() bool {
+	if insecure := os.Getenv("OPTIMUS_INSECURE"); insecure != "" {
+		return true
+	}
+	return false
 }

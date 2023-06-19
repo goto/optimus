@@ -257,7 +257,7 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		"namespace": tenant.NamespaceName().String(),
 		"job":       jobName.String(),
 		"type":      scheduleDelay.String(),
-	}).Add(float64(time.Now().Unix() - scheduledAt.Unix()))
+	}).Set(float64(time.Now().Unix() - scheduledAt.Unix()))
 	return nil
 }
 
@@ -430,7 +430,7 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 		"namespace": event.Tenant.NamespaceName().String(),
 		"job":       event.JobName.String(),
 		"type":      operatorType.String(),
-	}).Add(float64(event.EventTime.Unix() - operatorRun.StartTime.Unix()))
+	}).Set(float64(event.EventTime.Unix() - operatorRun.StartTime.Unix()))
 	return nil
 }
 

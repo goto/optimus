@@ -98,7 +98,7 @@ func (u *uploadAllCommand) uploadAll(selectedNamespaces []*config.Namespace) err
 	ctx, cancelFunc := context.WithTimeout(context.Background(), uploadAllTimeout)
 	defer cancelFunc()
 
-	if err = u.uploadAllResources(ctx, conn, selectedNamespaces); err != nil {
+	if err := u.uploadAllResources(ctx, conn, selectedNamespaces); err != nil {
 		return err
 	}
 	u.logger.Info("finished uploading resource specifications to server!\n")

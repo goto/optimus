@@ -41,7 +41,7 @@ func (a Auth) GetToken(ctx context.Context) (*oauth2.Token, error) {
 	return nil, err
 }
 
-func (a Auth) getTokenFromServer(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, error) {
+func (Auth) getTokenFromServer(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, error) {
 	source := oidc.NewTokenSource(ctx, cfg, cfg.ClientID)
 	return source.Token()
 }

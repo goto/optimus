@@ -19,7 +19,7 @@ func NewInsecure(l log.Logger) *Insecure {
 	}
 }
 
-func (i *Insecure) Create(host string) (*grpc.ClientConn, error) {
+func (*Insecure) Create(host string) (*grpc.ClientConn, error) {
 	ctx, dialCancel := context.WithTimeout(context.Background(), optimusDialTimeout)
 	defer dialCancel()
 

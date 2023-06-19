@@ -86,7 +86,6 @@ func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Pr
 	_, err := projectServiceClient.RegisterProject(ctx, &pb.RegisterProjectRequest{
 		Project: projectSpec,
 	})
-
 	if err != nil {
 		if status.Code(err) == codes.FailedPrecondition {
 			logger.Warn(fmt.Sprintf("Ignoring project config changes: %v", err))

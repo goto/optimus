@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/client/cmd/internal"
-	"github.com/goto/optimus/client/cmd/internal/connectivity"
+	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -23,7 +23,9 @@ const (
 )
 
 type createCommand struct {
-	logger         log.Logger
+	logger     log.Logger
+	connection connection.Connection
+
 	configFilePath string
 
 	parallel    bool
@@ -95,6 +97,8 @@ func (r *createCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 	if r.host == "" {
 		r.host = conf.Host
 	}
+
+	r.connection = connection.New(r.logger, conf)
 	return nil
 }
 
@@ -115,13 +119,13 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 }
 
 func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, jobConfig string) (string, error) {
-	conn, err := connectivity.NewConnectivity(r.host, replayTimeout)
+	conn, err := r.connection.Create(r.host)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
 
-	replayService := pb.NewReplayServiceClient(conn.GetConnection())
+	replayService := pb.NewReplayServiceClient(conn)
 
 	startTime, err := getTimeProto(startTimeStr)
 	if err != nil {
@@ -131,7 +135,11 @@ func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, j
 	if err != nil {
 		return "", err
 	}
-	respStream, err := replayService.Replay(conn.GetContext(), &pb.ReplayRequest{
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
+	defer cancelFunc()
+
+	respStream, err := replayService.Replay(ctx, &pb.ReplayRequest{
 		ProjectName:   r.projectName,
 		JobName:       jobName,
 		NamespaceName: r.namespaceName,

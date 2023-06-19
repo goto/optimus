@@ -1,6 +1,7 @@
 package version
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/goto/optimus/client/cmd/internal"
-	"github.com/goto/optimus/client/cmd/internal/connectivity"
+	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/config"
@@ -20,7 +21,9 @@ import (
 const versionTimeout = time.Second * 2
 
 type versionCommand struct {
-	logger         log.Logger
+	logger     log.Logger
+	connection connection.Connection
+
 	configFilePath string
 
 	isWithServer bool
@@ -71,6 +74,8 @@ func (v *versionCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 		} else if v.host == "" {
 			v.host = conf.Host
 		}
+
+		v.connection = connection.New(v.logger, conf)
 	}
 
 	var err error
@@ -126,23 +131,26 @@ func (v *versionCommand) printAllPluginInfos() {
 }
 
 // getVersionRequest send a version request to service
-func (*versionCommand) getVersionRequest(clientVer, host string) (ver string, err error) {
-	conn, err := connectivity.NewConnectivity(host, versionTimeout)
+func (v *versionCommand) getVersionRequest(clientVer, host string) (ver string, err error) {
+	conn, err := v.connection.Create(host)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
 
-	runtime := pb.NewRuntimeServiceClient(conn.GetConnection())
+	runtime := pb.NewRuntimeServiceClient(conn)
 	spinner := progressbar.NewProgressBar()
 	spinner.Start("please wait...")
-	versionResponse, err := runtime.Version(conn.GetContext(), &pb.VersionRequest{
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), versionTimeout)
+	defer cancelFunc()
+
+	versionResponse, err := runtime.Version(ctx, &pb.VersionRequest{
 		Client: clientVer,
 	})
 	if err != nil {
 		return "", fmt.Errorf("request failed for version: %w", err)
 	}
-	time.Sleep(versionTimeout)
 	spinner.Stop()
 	return versionResponse.Server, nil
 }

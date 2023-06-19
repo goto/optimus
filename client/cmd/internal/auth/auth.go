@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 
 	"github.com/goto/salt/log"
 	"github.com/goto/salt/oidc"
@@ -25,12 +24,9 @@ func NewAuth(logger log.Logger, authConfig config.Auth) *Auth {
 }
 
 func (a Auth) GetToken(ctx context.Context) (*oauth2.Token, error) {
-	if a.cfg.ClientID == "" || a.cfg.ClientSecret == "" {
-		return nil, errors.New("invalid auth configuration, clientID or clientSecret is empty")
-	}
-
 	token, err := RetrieveFromKeyring(a.cfg.ClientID)
 	if err == nil {
+		a.logger.Debug("token not found in keyring")
 		return token, nil
 	}
 

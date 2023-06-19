@@ -64,7 +64,7 @@ func (w ReplayWorker) Process(replayReq *scheduler.ReplayWithRun) {
 		err = w.processNewReplayRequest(ctx, replayReq, jobCron)
 	case scheduler.ReplayStatePartialReplayed:
 		err = w.processPartialReplayedRequest(ctx, replayReq, jobCron)
-	case scheduler.ReplayStateInProgress:
+	case scheduler.ReplayStateReplayed:
 		err = w.processReplayedRequest(ctx, replayReq, jobCron)
 	}
 
@@ -100,7 +100,7 @@ func (w ReplayWorker) createMissingRuns(ctx context.Context, replayReq *schedule
 }
 
 func (w ReplayWorker) processNewReplayRequest(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (err error) {
-	state := scheduler.ReplayStateInProgress
+	state := scheduler.ReplayStateReplayed
 	if !replayReq.Replay.Config().Parallel && len(replayReq.Runs) > 1 {
 		state = scheduler.ReplayStatePartialReplayed
 	}
@@ -197,7 +197,7 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 
 	pendingRuns := scheduler.JobRunStatusList(updatedRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StatePending})
 	if len(pendingRuns) == 0 {
-		replayState = scheduler.ReplayStateInProgress
+		replayState = scheduler.ReplayStateReplayed
 	}
 
 	if err := w.replayRepo.UpdateReplay(ctx, replayReq.Replay.ID(), replayState, updatedRuns, ""); err != nil {
@@ -221,7 +221,7 @@ func (w ReplayWorker) processReplayedRequest(ctx context.Context, replayReq *sch
 	failedRuns := scheduler.JobRunStatusList(updatedRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StateFailed})
 
 	var message string
-	state := scheduler.ReplayStateInProgress
+	state := scheduler.ReplayStateReplayed
 	if len(inProgressRuns) == 0 && len(failedRuns) == 0 {
 		state = scheduler.ReplayStateSuccess
 		w.l.Info("marking replay %s as success", replayReq.Replay.ID().String())

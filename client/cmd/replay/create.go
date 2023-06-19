@@ -115,7 +115,7 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 		return err
 	}
 	r.logger.Info("Replay request is accepted and it is in progress")
-	r.logger.Info("Either you could wait or you could close (ctrl+c) and check the status with `optimus status %s` command later", replayID)
+	r.logger.Info("Either you could wait or you could close (ctrl+c) and check the status with `optimus replay status %s` command later", replayID)
 
 	return r.waitForReplayState(replayID)
 }

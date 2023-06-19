@@ -16,6 +16,10 @@ import (
 	"github.com/goto/optimus/internal/telemetry"
 )
 
+const (
+	prefixReplayed = "replayed"
+)
+
 type ReplayScheduler interface {
 	Clear(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error
 	ClearBatch(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, startTime, endTime time.Time) error
@@ -85,7 +89,7 @@ func (w ReplayWorker) createMissingRuns(ctx context.Context, replayReq *schedule
 	for _, run := range replayReq.Runs {
 		if _, ok := existedRunsMap[run.ScheduledAt]; !ok {
 			// create any missing runs
-			if err := w.scheduler.CreateRun(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), run.ScheduledAt, "replayed"); err != nil {
+			if err := w.scheduler.CreateRun(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), run.ScheduledAt, prefixReplayed); err != nil {
 				return nil, err
 			}
 			run.State = scheduler.StateInProgress

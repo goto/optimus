@@ -252,9 +252,10 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		return err
 	}
 
-	telemetry.NewCounter("scheduler_operator_durations_seconds", map[string]string{
+	telemetry.NewGauge("jobrun_durations_breakdown_seconds", map[string]string{
 		"project":   tenant.ProjectName().String(),
 		"namespace": tenant.NamespaceName().String(),
+		"job":       jobName.String(),
 		"type":      scheduleDelay.String(),
 	}).Add(float64(time.Now().Unix() - scheduledAt.Unix()))
 	return nil
@@ -424,9 +425,10 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 		s.l.Error("error updating operator run id [%s]: %s", operatorRun.ID, err)
 		return err
 	}
-	telemetry.NewCounter("scheduler_operator_durations_seconds", map[string]string{
+	telemetry.NewGauge("jobrun_durations_breakdown_seconds", map[string]string{
 		"project":   event.Tenant.ProjectName().String(),
 		"namespace": event.Tenant.NamespaceName().String(),
+		"job":       event.JobName.String(),
 		"type":      operatorType.String(),
 	}).Add(float64(event.EventTime.Unix() - operatorRun.StartTime.Unix()))
 	return nil

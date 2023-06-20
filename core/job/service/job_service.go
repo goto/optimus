@@ -466,8 +466,9 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		return err
 	}
 
-	validatedJobSpecs, err := job.Specs(jobSpecs).Validate()
+	err = job.Specs(jobSpecs).Validate()
 	me.Append(err)
+	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
 
 	existingJobs, err := j.repo.GetAllByTenant(ctx, jobTenant)
 	me.Append(err)

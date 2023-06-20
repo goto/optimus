@@ -165,28 +165,41 @@ func (s Specs) ToFullNameAndSpecMap(projectName tenant.ProjectName) map[FullName
 	return fullnameAndSpecMap
 }
 
-func (s Specs) Validate() ([]*Spec, error) {
+func (s Specs) Validate() error {
 	me := errors.NewMultiError("validate specs errors")
-	isJobNameValid := map[Name]bool{}
-
-	// validate duplication
+	jobNameCount := s.getJobNameCount()
+	isJobNameVisited := map[Name]bool{}
 	for _, spec := range s {
-		if valid, ok := isJobNameValid[spec.Name()]; !ok {
-			isJobNameValid[spec.Name()] = true
-		} else if valid { // duplication detected
-			isJobNameValid[spec.Name()] = false // make it invalid
+		if jobNameCount[spec.Name()] > 1 && !isJobNameVisited[spec.Name()] {
 			me.Append(fmt.Errorf("duplicate %s", spec.Name()))
 		}
+		isJobNameVisited[spec.Name()] = true
 	}
 
+	return me.ToErr()
+}
+
+func (s Specs) GetValid() []*Spec {
+	jobNameCount := s.getJobNameCount()
 	validSpecs := []*Spec{}
 	for _, spec := range s {
-		if isJobNameValid[spec.Name()] {
+		if jobNameCount[spec.Name()] == 1 {
 			validSpecs = append(validSpecs, spec)
 		}
 	}
 
-	return validSpecs, me.ToErr()
+	return validSpecs
+}
+
+func (s Specs) getJobNameCount() map[Name]int {
+	jobNameCount := map[Name]int{}
+	for _, spec := range s {
+		if _, ok := jobNameCount[spec.Name()]; !ok {
+			jobNameCount[spec.Name()] = 0
+		}
+		jobNameCount[spec.Name()]++
+	}
+	return jobNameCount
 }
 
 type Name string

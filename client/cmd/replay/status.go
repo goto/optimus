@@ -96,7 +96,11 @@ func (r *statusCommand) RunE(_ *cobra.Command, args []string) error {
 }
 
 func (r *statusCommand) getReplay(replayID string) (*pb.GetReplayResponse, error) {
-	conn, err := r.connection.Create(r.host)
+	return getReplay(r.host, replayID, r.connection)
+}
+
+func getReplay(host, replayID string, connection connection.Connection) (*pb.GetReplayResponse, error) {
+	conn, err := connection.Create(host)
 	if err != nil {
 		return nil, err
 	}

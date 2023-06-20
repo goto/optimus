@@ -13,13 +13,20 @@ import (
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
+	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
 const (
-	replayTimeout = time.Minute * 1
-	ISOTimeLayout = time.RFC3339
+	replayTimeout        = time.Minute * 1
+	ISOTimeLayout        = time.RFC3339
+	pollIntervalInSecond = 30
+)
+
+var (
+	supportedISOTimeLayouts = [...]string{time.RFC3339, "2006-01-02"}
+	terminalStatuses        = map[string]bool{"success": true, "failed": true, "invalid": true}
 )
 
 type createCommand struct {
@@ -47,8 +54,9 @@ func CreateCommand() *cobra.Command {
 		Use:   "create",
 		Short: "Run replay operation on a dag based on provided start and end time range",
 		Long: "This operation takes three arguments, first is DAG name[required]\nused in optimus specification, " +
-			"second is start time[required] of\nreplay, third is end time[optional] of replay. \nDate ranges are inclusive.",
-		Example: "optimus replay create <job_name> <2023-01-01T02:30:00Z00:00> [2023-01-02T02:30:00Z00:00]",
+			"second is start time[required] of\nreplay, third is end time[optional] of replay. \nDate ranges are inclusive. " +
+			"Supported date formats are RFC3339 and \nsimple date YYYY-MM-DD",
+		Example: "optimus replay create <job_name> <2023-01-01T02:30:00Z00:00> [2023-01-02T02:30:00Z00:00]\noptimus replay create <job_name> <2023-01-01> [2023-01-02]",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return errors.New("job name is required")
@@ -114,8 +122,39 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	r.logger.Info("Replay request created with id %s", replayID)
+	r.logger.Info("Replay request is accepted and it is in progress")
+	r.logger.Info("Either you could wait or you could close (ctrl+c) and check the status with `optimus replay status %s` command later", replayID)
+
+	return r.waitForReplayState(replayID)
+}
+
+func (r *createCommand) waitForReplayState(replayID string) error {
+	spinner := progressbar.NewProgressBarWithWriter(r.logger.Writer())
+	status := "in progress"
+	spinner.Start(fmt.Sprintf("%s...", status))
+	for {
+		resp, err := r.getReplay(replayID)
+		if err != nil {
+			return err
+		}
+		if status != resp.Status {
+			status = resp.Status
+			spinner.StartNewLine(fmt.Sprintf("%s...", status))
+		}
+		if _, ok := terminalStatuses[status]; ok {
+			spinner.StartNewLine("\n")
+			spinner.Stop()
+			r.logger.Info("\n" + stringifyReplayStatus(resp))
+			break
+		}
+		time.Sleep(time.Duration(pollIntervalInSecond) * time.Second)
+	}
+	spinner.Stop()
 	return nil
+}
+
+func (r *createCommand) getReplay(replayID string) (*pb.GetReplayResponse, error) {
+	return getReplay(r.host, replayID)
 }
 
 func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, jobConfig string) (string, error) {
@@ -159,7 +198,14 @@ func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, j
 }
 
 func getTimeProto(timeStr string) (*timestamppb.Timestamp, error) {
-	parsedTime, err := time.Parse(ISOTimeLayout, timeStr)
+	var parsedTime time.Time
+	var err error
+	for _, ISOTimeLayout := range supportedISOTimeLayouts {
+		parsedTime, err = time.Parse(ISOTimeLayout, timeStr)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -16,7 +16,7 @@ import (
 	"github.com/goto/optimus/config"
 )
 
-const authTimeout = time.Second * 5
+const authTimeout = time.Minute * 1
 
 type Secure struct {
 	l          log.Logger

@@ -26,7 +26,7 @@ func NewAuth(logger log.Logger, authConfig config.Auth) *Auth {
 func (a Auth) GetToken(ctx context.Context) (*oauth2.Token, error) {
 	token, err := RetrieveFromKeyring(a.cfg.ClientID)
 	if err == nil {
-		a.logger.Debug("token not found in keyring")
+		a.logger.Debug("token found in keyring")
 		return token, nil
 	}
 
@@ -47,13 +47,13 @@ func (Auth) getTokenFromServer(ctx context.Context, cfg *oauth2.Config) (*oauth2
 }
 
 func toAuthConfig(authConfig config.Auth) *oauth2.Config {
-	callbackURL := "http://127.0.0.1:8755/auth/callback"
+	callbackURL := "http://localhost:9090/auth/callback"
 	cfg := &oauth2.Config{
 		ClientID:     authConfig.ClientID,
 		ClientSecret: authConfig.ClientSecret,
 		Endpoint:     google.Endpoint,
 		RedirectURL:  callbackURL,
-		Scopes:       []string{"openid"},
+		Scopes:       []string{"openid email"},
 	}
 
 	return cfg

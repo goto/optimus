@@ -472,8 +472,9 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 
 func (s *JobRunService) trackEvent(event *scheduler.Event) {
 	if event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
-		s.l.Debug(fmt.Sprintf("received event: %v, jobName: %v , slaPayload: %#v",
-			event.Type, event.JobName, event.SLAObjectList))
+		s.l.Info(fmt.Sprintf("received %s event: %v, jobName: %v , slaPayload: %#v", scheduler.EventCategorySLAMiss, event.Type, event.JobName, event.SLAObjectList))
+	} else if event.Type.IsOfType(scheduler.EventCategoryJobFailure) {
+		s.l.Info(fmt.Sprintf("received job failure event, eventTime: %s, jobName: %v, schedule: %s", event.EventTime.Format("01/02/06 15:04:05 MST"), event.JobName, event.JobScheduledAt.Format("01/02/06 15:04:05 MST")))
 	} else {
 		s.l.Debug(fmt.Sprintf("received event: %v, eventTime: %s, jobName: %v, Operator: %v, schedule: %s, status: %s",
 			event.Type, event.EventTime.Format("01/02/06 15:04:05 MST"), event.JobName, event.OperatorName, event.JobScheduledAt.Format("01/02/06 15:04:05 MST"), event.Status))

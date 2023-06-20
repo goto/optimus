@@ -8,6 +8,8 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/goto/salt/version"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
@@ -149,6 +151,9 @@ func (v *versionCommand) getVersionRequest(clientVer, host string) (ver string, 
 		Client: clientVer,
 	})
 	if err != nil {
+		if status.Code(err) == codes.Unauthenticated {
+			return "", fmt.Errorf("please check if client_id belongs to this application")
+		}
 		return "", fmt.Errorf("request failed for version: %w", err)
 	}
 	spinner.Stop()

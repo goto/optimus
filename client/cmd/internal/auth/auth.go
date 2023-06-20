@@ -26,7 +26,6 @@ func NewAuth(logger log.Logger, authConfig config.Auth) *Auth {
 func (a Auth) GetToken(ctx context.Context) (*oauth2.Token, error) {
 	token, err := RetrieveFromKeyring(a.cfg.ClientID)
 	if err == nil {
-		a.logger.Debug("token found in keyring")
 		return token, nil
 	}
 

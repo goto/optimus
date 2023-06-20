@@ -19,7 +19,7 @@ func RetrieveFromKeyring(clientID string) (*oauth2.Token, error) {
 	}
 
 	var token oauth2.Token
-	if err = json.Unmarshal([]byte(tokenStr), &token); err != nil {
+	if err := json.Unmarshal([]byte(tokenStr), &token); err != nil {
 		return nil, err
 	}
 

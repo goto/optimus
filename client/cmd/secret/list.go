@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -131,8 +132,12 @@ func (*listCommand) stringifyListOfSecrets(listSecretsResponse *pb.ListSecretsRe
 		"Date",
 	})
 
-	table.SetAlignment(tablewriter.ALIGN_CENTER)
-	for _, secret := range listSecretsResponse.Secrets {
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	secrets := listSecretsResponse.Secrets
+	sort.Slice(secrets, func(i, j int) bool {
+		return secrets[i].Name < secrets[j].Name
+	})
+	for _, secret := range secrets {
 		namespace := "*"
 		if secret.Namespace != "" {
 			namespace = secret.Namespace

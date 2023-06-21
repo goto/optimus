@@ -33,6 +33,7 @@ type ResourceService interface {
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
 	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
 	Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource) error
+	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
 }
 
 type ResourceHandler struct {
@@ -287,6 +288,43 @@ func (rh ResourceHandler) ChangeResourceNamespace(ctx context.Context, req *pb.C
 		return nil, errors.GRPCErr(err, "failed to update resource "+req.GetResourceName())
 	}
 	return &pb.ChangeResourceNamespaceResponse{}, nil
+}
+
+func (rh ResourceHandler) ApplyResources(ctx context.Context, req *pb.ApplyResourcesRequest) (*pb.ApplyResourcesResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		return nil, errors.GRPCErr(err, "invalid tenant details")
+	}
+
+	store, err := resource.FromStringToStore(req.GetDatastoreName())
+	if err != nil {
+		return nil, errors.GRPCErr(err, "invalid Datastore Name")
+	}
+
+	if len(req.ResourceNames) == 0 {
+		return nil, errors.GRPCErr(errors.InvalidArgument(resource.EntityResource, "empty resource names"), "unable to apply resources")
+	}
+
+	statuses, err := rh.service.SyncResources(ctx, tnnt, store, req.ResourceNames)
+	if err != nil {
+		return nil, errors.GRPCErr(err, "unable to sync to datastore")
+	}
+
+	var respStatuses []*pb.ApplyResourcesResponse_ResourceStatus
+	for _, r := range statuses.ResourceNames {
+		respStatuses = append(respStatuses, &pb.ApplyResourcesResponse_ResourceStatus{
+			ResourceName: r,
+			Status:       "success",
+		})
+	}
+	for _, r := range statuses.IgnoredResources {
+		respStatuses = append(respStatuses, &pb.ApplyResourcesResponse_ResourceStatus{
+			ResourceName: r.Name,
+			Status:       "failure",
+			Reason:       r.Reason,
+		})
+	}
+	return &pb.ApplyResourcesResponse{Statuses: respStatuses}, nil
 }
 
 func writeError(logWriter writer.LogWriter, err error) {

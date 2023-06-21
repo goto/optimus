@@ -192,11 +192,8 @@ func (s Specs) GetValid() []*Spec {
 }
 
 func (s Specs) getJobNameCount() map[Name]int {
-	jobNameCount := map[Name]int{}
+	jobNameCount := make(map[Name]int)
 	for _, spec := range s {
-		if _, ok := jobNameCount[spec.Name()]; !ok {
-			jobNameCount[spec.Name()] = 0
-		}
 		jobNameCount[spec.Name()]++
 	}
 	return jobNameCount

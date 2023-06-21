@@ -41,7 +41,7 @@ default_args = {
     "start_date": datetime.strptime("2022-11-10T05:02:00", "%Y-%m-%dT%H:%M:%S"),
     "end_date": datetime.strptime("2022-11-10T10:02:00", "%Y-%m-%dT%H:%M:%S"),
     "weight_rule": WeightRule.ABSOLUTE,
-    "sla":timedelta(seconds=7200),
+    "sla": timedelta(seconds=7200),
     "on_execute_callback": operator_start_event,
     "on_success_callback": operator_success_event,
     "on_retry_callback"  : operator_retry_event,

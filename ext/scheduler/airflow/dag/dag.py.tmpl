@@ -50,7 +50,7 @@ default_args = {
     {{- end}}
     "weight_rule": WeightRule.ABSOLUTE,
     {{- if gt .SLAMissDuration 0 }}
-    "sla":timedelta(seconds={{ .SLAMissDuration }}),
+    "sla": timedelta(seconds={{ .SLAMissDuration }}),
     {{- end }}
     "on_execute_callback": operator_start_event,
     "on_success_callback": operator_success_event,

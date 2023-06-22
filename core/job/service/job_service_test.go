@@ -2098,6 +2098,112 @@ func TestJobService(t *testing.T) {
 		})
 	})
 
+	t.Run("RefreshResourceDownstream", func(t *testing.T) {
+		t.Run("returns error if encountered error when identifying downstreams", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			pluginService := new(PluginService)
+			defer pluginService.AssertExpectations(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobDeploymentService := new(JobDeploymentService)
+			defer jobDeploymentService.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
+
+			resourceURNs := []job.ResourceURN{"project.dataset.table"}
+
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService)
+
+			jobRepo.On("GetDownstreamBySources", ctx, resourceURNs).Return(nil, errors.New("internal error"))
+
+			err := jobService.RefreshResourceDownstream(ctx, resourceURNs, logWriter)
+			assert.ErrorContains(t, err, "internal error")
+		})
+
+		t.Run("should refresh and return nil if no error is encountered when refreshing downstreams", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			pluginService := new(PluginService)
+			defer pluginService.AssertExpectations(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobDeploymentService := new(JobDeploymentService)
+			defer jobDeploymentService.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
+
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			jobADestination := job.ResourceURN("resource-A")
+			jobAUpstreamName := job.ResourceURN("job-B")
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, []job.ResourceURN{jobAUpstreamName})
+
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			jobBDestination := job.ResourceURN("resource-B")
+			jobBUpstreamName := job.ResourceURN("job-C")
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, []job.ResourceURN{jobBUpstreamName})
+
+			resourceURNs := []job.ResourceURN{jobAUpstreamName, jobBUpstreamName}
+
+			jobDownstreams := []*job.Downstream{
+				job.NewDownstream(jobA.Spec().Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), jobTask.Name()),
+				job.NewDownstream(jobB.Spec().Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), jobTask.Name()),
+			}
+
+			jobRepo.On("GetDownstreamBySources", ctx, resourceURNs).Return(jobDownstreams, nil)
+			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobA.Spec().Name()).Return(jobA, nil)
+			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobB.Spec().Name()).Return(jobB, nil)
+
+			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+			pluginService.On("GenerateDestination", ctx, detailedTenant, specA.Task()).Return(jobADestination, nil).Once()
+			pluginService.On("GenerateUpstreams", ctx, detailedTenant, specA, true).Return([]job.ResourceURN{jobAUpstreamName}, nil)
+
+			pluginService.On("GenerateDestination", ctx, detailedTenant, specB.Task()).Return(jobBDestination, nil).Once()
+			pluginService.On("GenerateUpstreams", ctx, detailedTenant, specB, true).Return([]job.ResourceURN{jobBUpstreamName}, nil)
+
+			jobRepo.On("Update", ctx, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
+
+			upstreamB := job.NewUpstreamResolved("job-B", "", "resource-B", sampleTenant, "static", taskName, false)
+			jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+			upstreamC := job.NewUpstreamResolved("job-C", "", "resource-C", sampleTenant, "static", taskName, false)
+			jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{upstreamC})
+			upstreamResolver.On("BulkResolve", ctx, project.Name(), []*job.Job{jobA, jobB}, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
+
+			jobRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}).Return(nil)
+
+			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil).Times(3)
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
+
+			var jobNamesToRemove []string
+			jobNamesToUpload := []string{jobA.GetName(), jobB.GetName()}
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, jobNamesToUpload, jobNamesToRemove).Return(nil)
+
+			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService)
+
+			err := jobService.RefreshResourceDownstream(ctx, resourceURNs, logWriter)
+			assert.NoError(t, err)
+		})
+	})
+
 	t.Run("Get", func(t *testing.T) {
 		t.Run("return error when repo get by job name error", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -3362,6 +3468,29 @@ func (_m *JobRepository) GetDownstreamByJobName(ctx context.Context, projectName
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, job.Name) error); ok {
 		r1 = rf(ctx, projectName, jobName)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetDownstreamBySources provides a mock function with given fields: ctx, sources
+func (_m *JobRepository) GetDownstreamBySources(ctx context.Context, sources []job.ResourceURN) ([]*job.Downstream, error) {
+	ret := _m.Called(ctx, sources)
+
+	var r0 []*job.Downstream
+	if rf, ok := ret.Get(0).(func(context.Context, []job.ResourceURN) []*job.Downstream); ok {
+		r0 = rf(ctx, sources)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*job.Downstream)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, []job.ResourceURN) error); ok {
+		r1 = rf(ctx, sources)
 	} else {
 		r1 = ret.Error(1)
 	}

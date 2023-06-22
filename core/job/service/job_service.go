@@ -88,6 +88,7 @@ type JobRepository interface {
 
 	GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination job.ResourceURN) ([]*job.Downstream, error)
 	GetDownstreamByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Downstream, error)
+	GetDownstreamBySources(ctx context.Context, sources []job.ResourceURN) ([]*job.Downstream, error)
 }
 
 type EventHandler interface {
@@ -456,6 +457,31 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 		j.logger.Debug("uploading [%d] jobs of project [%s] namespace [%s] to scheduler", len(jobs), projectName, namespaceName)
 		err = j.uploadJobs(ctx, jobTenant, jobs, nil, nil)
 		me.Append(err)
+	}
+
+	return me.ToErr()
+}
+
+func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error {
+	downstreams, err := j.repo.GetDownstreamBySources(ctx, resourceURNs)
+	if err != nil {
+		j.logger.Error("error identifying job downstream for given resources: %s", err)
+		return err
+	}
+
+	groupedDownstreams := j.groupDownstreamPerProject(downstreams)
+
+	me := errors.NewMultiError("refresh downstream errors")
+	for projectName, downstreams := range groupedDownstreams {
+		jobNames := make([]string, len(downstreams))
+		for i, d := range downstreams {
+			jobNames[i] = d.Name().String()
+		}
+
+		if err := j.Refresh(ctx, projectName, nil, jobNames, logWriter); err != nil {
+			j.logger.Error("error refreshing downstream jobs for project [%s]: %s", projectName, err)
+			me.Append(err)
+		}
 	}
 
 	return me.ToErr()
@@ -989,6 +1015,14 @@ func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
 		return
 	}
 	j.eventHandler.HandleEvent(jobEvent)
+}
+
+func (*JobService) groupDownstreamPerProject(downstreams []*job.Downstream) map[tenant.ProjectName][]*job.Downstream {
+	output := make(map[tenant.ProjectName][]*job.Downstream)
+	for _, d := range downstreams {
+		output[d.ProjectName()] = append(output[d.ProjectName()], d)
+	}
+	return output
 }
 
 func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int) {

@@ -3,14 +3,17 @@ package service
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
+	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/writer"
 )
 
 type ResourceRepository interface {
@@ -29,6 +32,10 @@ type ResourceManager interface {
 	GetURN(res *resource.Resource) (string, error)
 }
 
+type DownstreamRefresher interface {
+	RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error
+}
+
 type TenantDetailsGetter interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 }
@@ -38,17 +45,23 @@ type EventHandler interface {
 }
 
 type ResourceService struct {
-	repo ResourceRepository
-	mgr  ResourceManager
+	repo      ResourceRepository
+	mgr       ResourceManager
+	refresher DownstreamRefresher
 
 	logger       log.Logger
 	eventHandler EventHandler
 }
 
-func NewResourceService(logger log.Logger, repo ResourceRepository, mgr ResourceManager, eventHandler EventHandler) *ResourceService {
+func NewResourceService(
+	logger log.Logger,
+	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
+	eventHandler EventHandler,
+) *ResourceService {
 	return &ResourceService{
 		repo:         repo,
 		mgr:          mgr,
+		refresher:    downstreamRefresher,
 		logger:       logger,
 		eventHandler: eventHandler,
 	}
@@ -109,7 +122,7 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 	return nil
 }
 
-func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource) error { // nolint:gocritic
+func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
 	if err := rs.mgr.Validate(incoming); err != nil {
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
@@ -151,10 +164,20 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 	}
 
 	rs.raiseUpdateEvent(incoming)
+
+	err = rs.handleRefreshDownstream(ctx,
+		[]*resource.Resource{incoming},
+		map[string]*resource.Resource{existing.FullName(): existing},
+		logWriter,
+	)
+	if err != nil {
+		rs.logger.Error("error refreshing downstream for resource [%s]: %s", incoming.FullName(), err)
+		return err
+	}
 	return nil
 }
 
-func (rs ResourceService) ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error {
+func (rs ResourceService) ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error { // nolint:gocritic
 	resourceSpec, err := rs.Get(ctx, oldTenant, datastore, resourceFullName)
 	if err != nil {
 		rs.logger.Error("failed to read existing resource [%s]: %s", resourceFullName, err)
@@ -181,9 +204,9 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return rs.repo.ReadAll(ctx, tnnt, store)
 }
 
-func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource) error { // nolint:gocritic
+func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
 	multiError := errors.NewMultiError("error batch updating resources")
-	for _, r := range resources {
+	for _, r := range incomings {
 		if err := rs.mgr.Validate(r); err != nil {
 			msg := fmt.Sprintf("error validating [%s]: %s", r.FullName(), err)
 			multiError.Append(errors.Wrap(resource.EntityResource, msg, err))
@@ -208,7 +231,15 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 		r.MarkValidationSuccess()
 	}
 
-	toUpdateOnStore, err := rs.getResourcesToBatchUpdate(ctx, tnnt, store, resources)
+	existingResources, err := rs.repo.ReadAll(ctx, tnnt, store)
+	if err != nil {
+		rs.logger.Error("error reading all existing resources: %s", err)
+		multiError.Append(err)
+		return multiError.ToErr()
+	}
+	existingMappedByFullName := createFullNameToResourceMap(existingResources)
+
+	toUpdateOnStore, err := rs.getResourcesToBatchUpdate(ctx, incomings, existingMappedByFullName)
 	multiError.Append(err)
 
 	if len(toUpdateOnStore) == 0 {
@@ -236,18 +267,14 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 		rs.raiseUpdateEvent(r)
 	}
 
+	if err = rs.handleRefreshDownstream(ctx, toUpdate, existingMappedByFullName, logWriter); err != nil {
+		multiError.Append(err)
+	}
+
 	return multiError.ToErr()
 }
 
-func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource) ([]*resource.Resource, error) { // nolint:gocritic
-	existingResources, readErr := rs.repo.ReadAll(ctx, tnnt, store)
-	if readErr != nil {
-		rs.logger.Error("error reading all existing resources: %s", readErr)
-		return nil, readErr
-	}
-
-	existingMappedByFullName := createFullNameToResourceMap(existingResources)
-
+func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomings []*resource.Resource, existingMappedByFullName map[string]*resource.Resource) ([]*resource.Resource, error) { // nolint:gocritic
 	var toUpdateOnStore []*resource.Resource
 	me := errors.NewMultiError("error in resources to batch update")
 
@@ -312,6 +339,47 @@ func (rs ResourceService) raiseUpdateEvent(res *resource.Resource) { // nolint:g
 		return
 	}
 	rs.eventHandler.HandleEvent(ev)
+}
+
+func (rs ResourceService) handleRefreshDownstream( // nolint:gocritic
+	ctx context.Context,
+	incomings []*resource.Resource,
+	existingMappedByFullName map[string]*resource.Resource,
+	logWriter writer.LogWriter,
+) error {
+	var resourceURNsToRefresh []job.ResourceURN
+	for _, incoming := range incomings {
+		if incoming.Status() != resource.StatusSuccess {
+			continue
+		}
+
+		existing, ok := existingMappedByFullName[incoming.FullName()]
+
+		skipMessage := fmt.Sprintf("downstream refresh for resource [%s] is skipped", existing.FullName())
+		if !ok {
+			rs.logger.Warn(skipMessage)
+			logWriter.Write(writer.LogLevelWarning, skipMessage)
+			continue
+		}
+
+		if rs.isToRefreshDownstream(incoming, existing) {
+			resourceURNsToRefresh = append(resourceURNsToRefresh, job.ResourceURN(incoming.URN()))
+		} else {
+			rs.logger.Warn(skipMessage)
+			logWriter.Write(writer.LogLevelWarning, skipMessage)
+		}
+	}
+
+	if len(resourceURNsToRefresh) == 0 {
+		rs.logger.Info("no resource urns to which the refresh will be done upon")
+		return nil
+	}
+
+	return rs.refresher.RefreshResourceDownstream(ctx, resourceURNsToRefresh, logWriter)
+}
+
+func (ResourceService) isToRefreshDownstream(incoming, existing *resource.Resource) bool {
+	return !reflect.DeepEqual(incoming.Spec(), existing.Spec())
 }
 
 func createFullNameToResourceMap(resources []*resource.Resource) map[string]*resource.Resource {

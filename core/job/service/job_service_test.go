@@ -2120,11 +2120,13 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 
-			resourceURNs := []job.ResourceURN{"project.dataset.table"}
+			standardizedURNs := []job.ResourceURN{"project.dataset.table"}
 
 			jobService := service.NewJobService(jobRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService)
 
-			jobRepo.On("GetDownstreamBySources", ctx, resourceURNs).Return(nil, errors.New("internal error"))
+			jobRepo.On("GetDownstreamBySources", ctx, standardizedURNs).Return(nil, errors.New("internal error"))
+
+			resourceURNs := []string{"project.dataset.table"}
 
 			err := jobService.RefreshResourceDownstream(ctx, resourceURNs, logWriter)
 			assert.ErrorContains(t, err, "internal error")
@@ -2161,14 +2163,15 @@ func TestJobService(t *testing.T) {
 			jobBUpstreamName := job.ResourceURN("job-C")
 			jobB := job.NewJob(sampleTenant, specB, jobBDestination, []job.ResourceURN{jobBUpstreamName})
 
-			resourceURNs := []job.ResourceURN{jobAUpstreamName, jobBUpstreamName}
+			standardizedURNs := []job.ResourceURN{jobAUpstreamName, jobBUpstreamName}
+			resourceURNs := []string{jobAUpstreamName.String(), jobBUpstreamName.String()}
 
 			jobDownstreams := []*job.Downstream{
 				job.NewDownstream(jobA.Spec().Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), jobTask.Name()),
 				job.NewDownstream(jobB.Spec().Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), jobTask.Name()),
 			}
 
-			jobRepo.On("GetDownstreamBySources", ctx, resourceURNs).Return(jobDownstreams, nil)
+			jobRepo.On("GetDownstreamBySources", ctx, standardizedURNs).Return(jobDownstreams, nil)
 			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobA.Spec().Name()).Return(jobA, nil)
 			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobB.Spec().Name()).Return(jobB, nil)
 

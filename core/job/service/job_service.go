@@ -462,8 +462,13 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 	return me.ToErr()
 }
 
-func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error {
-	downstreams, err := j.repo.GetDownstreamBySources(ctx, resourceURNs)
+func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs []string, logWriter writer.LogWriter) error {
+	standardizedURNs := make([]job.ResourceURN, len(resourceURNs))
+	for i, urn := range resourceURNs {
+		standardizedURNs[i] = job.ResourceURN(urn)
+	}
+
+	downstreams, err := j.repo.GetDownstreamBySources(ctx, standardizedURNs)
 	if err != nil {
 		j.logger.Error("error identifying job downstream for given resources: %s", err)
 		return err

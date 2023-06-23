@@ -478,10 +478,19 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 			jobNames[i] = d.Name().String()
 		}
 
+		status := "successful"
 		if err := j.Refresh(ctx, projectName, nil, jobNames, logWriter); err != nil {
 			j.logger.Error("error refreshing downstream jobs for project [%s]: %s", projectName, err)
 			me.Append(err)
+
+			status = "failed"
 		}
+
+		counter := telemetry.NewCounter(job.MetricJobRefreshResourceDownstream, map[string]string{
+			"project": projectName.String(),
+			"status":  status,
+		})
+		counter.Add(float64(len(jobNames)))
 	}
 
 	return me.ToErr()

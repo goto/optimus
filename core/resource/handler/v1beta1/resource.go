@@ -298,7 +298,7 @@ func (rh ResourceHandler) ApplyResources(ctx context.Context, req *pb.ApplyResou
 
 	store, err := resource.FromStringToStore(req.GetDatastoreName())
 	if err != nil {
-		return nil, errors.GRPCErr(err, "invalid Datastore Name")
+		return nil, errors.GRPCErr(err, "invalid datastore Name")
 	}
 
 	if len(req.ResourceNames) == 0 {

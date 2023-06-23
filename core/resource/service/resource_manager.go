@@ -86,16 +86,14 @@ func (m *ResourceMgr) SyncResource(ctx context.Context, res *resource.Resource) 
 	if !ok {
 		msg := fmt.Sprintf("datastore [%s] for resource [%s] is not found", store.String(), res.FullName())
 		m.logger.Error(msg)
-		return errors.InvalidArgument(resource.EntityResource, msg)
+		return errors.InternalError(resource.EntityResource, msg, nil)
 	}
 
 	if err := datastore.Create(ctx, res); err != nil {
-		if errors.IsErrorType(err, errors.ErrAlreadyExists) {
-			if errUpdate := datastore.Update(ctx, res); errUpdate != nil {
-				return errors.AddErrContext(errUpdate, resource.EntityResource, "unable to update on datastore")
-			}
-		} else {
+		if !errors.IsErrorType(err, errors.ErrAlreadyExists) {
 			return errors.AddErrContext(err, resource.EntityResource, "unable to create on datastore")
+		} else if errUpdate := datastore.Update(ctx, res); errUpdate != nil {
+			return errors.AddErrContext(errUpdate, resource.EntityResource, "unable to update on datastore")
 		}
 	}
 

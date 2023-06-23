@@ -182,8 +182,6 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) {
 	resources, err := rs.repo.GetResources(ctx, tnnt, store, names)
-	fmt.Printf("received %d resources for names %d\n", len(resources), len(names))
-	fmt.Println(names, tnnt, store)
 	if err != nil {
 		rs.logger.Error("error getting resources [%s] from db: %s", strings.Join(names, ", "), err)
 		return nil, err
@@ -194,7 +192,7 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 	}
 
 	if len(resources) == 0 {
-		return synced, err
+		return synced, nil
 	}
 
 	for _, r := range resources {
@@ -204,6 +202,7 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 				Name:   r.Name().String(),
 				Reason: err.Error(),
 			})
+			continue
 		}
 		synced.ResourceNames = append(synced.ResourceNames, r.FullName())
 	}

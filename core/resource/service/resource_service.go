@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/goto/salt/log"
 
@@ -379,7 +380,23 @@ func (rs ResourceService) handleRefreshDownstream( // nolint:gocritic
 }
 
 func (ResourceService) isToRefreshDownstream(incoming, existing *resource.Resource) bool {
-	return !reflect.DeepEqual(incoming.Spec(), existing.Spec())
+	var key []string
+	for k := range incoming.Spec() {
+		key = append(key, k)
+	}
+	for k := range existing.Spec() {
+		key = append(key, k)
+	}
+
+	// TODO: this is not ideal solution, we need to see how to get these 'special' fields
+	for _, k := range key {
+		switch strings.ToLower(k) {
+		case "view_query", "schema", "source":
+			return !reflect.DeepEqual(incoming.Spec()[k], existing.Spec()[k])
+		}
+	}
+
+	return false
 }
 
 func createFullNameToResourceMap(resources []*resource.Resource) map[string]*resource.Resource {

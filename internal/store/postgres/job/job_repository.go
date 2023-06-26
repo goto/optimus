@@ -104,6 +104,21 @@ func (j JobRepository) Update(ctx context.Context, jobs []*job.Job) ([]*job.Job,
 	return storedJobs, me.ToErr()
 }
 
+func (j JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error {
+	updateJobStateQuery := `
+UPDATE job SET state = $1, remark = $2
+WHERE name = $3 AND project_name = $4
+;`
+	tag, err := j.db.Exec(ctx, updateJobStateQuery, jobState, remark, jobName, jobTenant.ProjectName())
+	if err != nil {
+		return errors.Wrap(job.EntityJob, "error during job state update", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.NewError(errors.ErrInternalError, job.EntityJob, fmt.Sprintf("failed to be update state of job:%s ", jobName.String()))
+	}
+	return nil
+}
+
 func (j JobRepository) ChangeJobNamespace(ctx context.Context, jobName job.Name, tenant, newTenant tenant.Tenant) error {
 	tx, err := j.db.Begin(ctx)
 	if err != nil {

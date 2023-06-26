@@ -63,6 +63,8 @@ type JobSpecificationServiceClient interface {
 	// GetWindow provides the start and end dates provided a scheduled date
 	// of the execution window
 	GetWindow(ctx context.Context, in *GetWindowRequest, opts ...grpc.CallOption) (*GetWindowResponse, error)
+	// UpdateJobState enable / disable job on scheuler
+	UpdateJobState(ctx context.Context, in *UpdateJobStateRequest, opts ...grpc.CallOption) (*UpdateJobStateResponse, error)
 }
 
 type jobSpecificationServiceClient struct {
@@ -316,6 +318,15 @@ func (c *jobSpecificationServiceClient) GetWindow(ctx context.Context, in *GetWi
 	return out, nil
 }
 
+func (c *jobSpecificationServiceClient) UpdateJobState(ctx context.Context, in *UpdateJobStateRequest, opts ...grpc.CallOption) (*UpdateJobStateResponse, error) {
+	out := new(UpdateJobStateResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobState", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobSpecificationServiceServer is the server API for JobSpecificationService service.
 // All implementations must embed UnimplementedJobSpecificationServiceServer
 // for forward compatibility
@@ -361,6 +372,8 @@ type JobSpecificationServiceServer interface {
 	// GetWindow provides the start and end dates provided a scheduled date
 	// of the execution window
 	GetWindow(context.Context, *GetWindowRequest) (*GetWindowResponse, error)
+	// UpdateJobState enable / disable job on scheuler
+	UpdateJobState(context.Context, *UpdateJobStateRequest) (*UpdateJobStateResponse, error)
 	mustEmbedUnimplementedJobSpecificationServiceServer()
 }
 
@@ -418,6 +431,9 @@ func (UnimplementedJobSpecificationServiceServer) GetJobTask(context.Context, *G
 }
 func (UnimplementedJobSpecificationServiceServer) GetWindow(context.Context, *GetWindowRequest) (*GetWindowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWindow not implemented")
+}
+func (UnimplementedJobSpecificationServiceServer) UpdateJobState(context.Context, *UpdateJobStateRequest) (*UpdateJobStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateJobState not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) mustEmbedUnimplementedJobSpecificationServiceServer() {
 }
@@ -761,6 +777,24 @@ func _JobSpecificationService_GetWindow_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobSpecificationService_UpdateJobState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateJobStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobSpecificationServiceServer).UpdateJobState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobSpecificationServiceServer).UpdateJobState(ctx, req.(*UpdateJobStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobSpecificationService_ServiceDesc is the grpc.ServiceDesc for JobSpecificationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -819,6 +853,10 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWindow",
 			Handler:    _JobSpecificationService_GetWindow_Handler,
+		},
+		{
+			MethodName: "UpdateJobState",
+			Handler:    _JobSpecificationService_UpdateJobState_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

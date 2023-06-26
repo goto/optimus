@@ -24,6 +24,8 @@ const (
 	MetricJobEventStateUpsertFailed     = "upsert_failed"
 	MetricJobEventStateDeleteFailed     = "delete_failed"
 	MetricJobEventStateValidationFailed = "validation_failed"
+	MetricJobEventEnabled               = "enabled"
+	MetricJobEventDisabled              = "disabled"
 )
 
 type Job struct {

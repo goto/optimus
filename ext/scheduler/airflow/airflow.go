@@ -31,6 +31,7 @@ const (
 	EntityAirflow = "Airflow"
 
 	dagStatusBatchURL = "api/v1/dags/~/dagRuns/list"
+	dagURL            = "/api/v1/dags/%s"
 	dagRunClearURL    = "api/v1/dags/%s/clearTaskInstances"
 	dagRunCreateURL   = "api/v1/dags/%s/dagRuns"
 	airflowDateFormat = "2006-01-02T15:04:05+00:00"
@@ -284,6 +285,38 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 	}
 
 	return getJobRuns(dagRunList, jobCron)
+}
+
+func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName, state string) error {
+	spanCtx, span := startChildSpan(ctx, "UpdateJobState")
+	defer span.End()
+
+	var isPaused bool
+	switch state {
+	case "enabled":
+		isPaused = false
+	case "disabled":
+		isPaused = true
+	}
+	data := []byte(fmt.Sprintf(`{"is_paused": %v}`, isPaused))
+
+	req := airflowRequest{
+		URL:    dagURL,
+		method: http.MethodPatch,
+		param:  jobName,
+		body:   data,
+	}
+
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	if err != nil {
+		return err
+	}
+	_, err = s.client.Invoke(spanCtx, req, schdAuth)
+	if err != nil {
+		return errors.Wrap(EntityAirflow, "failure while updating dag status", err)
+	}
+
+	return nil
 }
 
 func getDagRunRequest(jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) DagRunRequest {

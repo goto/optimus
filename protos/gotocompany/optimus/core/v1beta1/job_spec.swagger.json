@@ -389,6 +389,65 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/{jobName}/change-state": {
+      "patch": {
+        "summary": "UpdateJobState enable / disable job on scheuler",
+        "operationId": "JobSpecificationService_UpdateJobState",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1UpdateJobStateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "$ref": "#/definitions/v1beta1JobState"
+                },
+                "remark": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "JobSpecificationService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/{jobName}/task": {
       "get": {
         "summary": "GetJobTask provides task details specific to plugin used in a job",
@@ -1214,6 +1273,15 @@
         }
       }
     },
+    "v1beta1JobState": {
+      "type": "string",
+      "enum": [
+        "JOB_STATE_UNSPECIFIED",
+        "JOB_STATE_ENABLED",
+        "JOB_STATE_DISABLED"
+      ],
+      "default": "JOB_STATE_UNSPECIFIED"
+    },
     "v1beta1JobTask": {
       "type": "object",
       "properties": {
@@ -1296,6 +1364,9 @@
           "type": "string"
         }
       }
+    },
+    "v1beta1UpdateJobStateResponse": {
+      "type": "object"
     }
   },
   "externalDocs": {

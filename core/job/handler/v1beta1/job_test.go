@@ -687,6 +687,63 @@ func TestNewJobHandler(t *testing.T) {
 			assert.ErrorContains(t, err, "error in changing namespace: failed to change job namespace")
 		})
 	})
+	t.Run("UpdateJobState", func(t *testing.T) {
+		//state := job.DISABLED
+		updateRemark := "job disable remark"
+		t.Run("fail if improper tenant info", func(t *testing.T) {
+			jobAName, _ := job.NameFrom("job-A")
+			request := &pb.UpdateJobStateRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: "",
+				JobName:       jobAName.String(),
+				State:         1,
+				Remark:        updateRemark,
+			}
+
+			jobHandler := v1beta1.NewJobHandler(nil, log)
+			_, err := jobHandler.UpdateJobState(ctx, request)
+			assert.ErrorContains(t, err, "namespace name is empty")
+		})
+		t.Run("fail if improper tenant info", func(t *testing.T) {
+			//jobAName, _ := job.NameFrom("job-A")
+			request := &pb.UpdateJobStateRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				JobName:       "",
+				State:         1,
+				Remark:        updateRemark,
+			}
+
+			jobHandler := v1beta1.NewJobHandler(nil, log)
+			_, err := jobHandler.UpdateJobState(ctx, request)
+			assert.ErrorContains(t, err, "name is empty")
+		})
+		t.Run("fail if State is improper", func(t *testing.T) {
+			request := &pb.UpdateJobStateRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				JobName:       "job-A",
+				State:         4,
+				Remark:        updateRemark,
+			}
+			jobHandler := v1beta1.NewJobHandler(nil, log)
+			_, err := jobHandler.UpdateJobState(ctx, request)
+			assert.ErrorContains(t, err, "invalid state")
+		})
+		t.Run("fail if remark is empty", func(t *testing.T) {
+			request := &pb.UpdateJobStateRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				JobName:       "job-A",
+				State:         1,
+				Remark:        "",
+			}
+
+			jobHandler := v1beta1.NewJobHandler(nil, log)
+			_, err := jobHandler.UpdateJobState(ctx, request)
+			assert.ErrorContains(t, err, "can not update job state without a valid remark")
+		})
+	})
 	t.Run("DeleteJobSpecification", func(t *testing.T) {
 		t.Run("deletes job successfully", func(t *testing.T) {
 			jobService := new(JobService)
@@ -1936,6 +1993,12 @@ func (_m *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNa
 // ChangeNamespace provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
 func (_m *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenant tenant.Tenant, jobName job.Name) error {
 	ret := _m.Called(ctx, jobTenant, jobNewTenant, jobName)
+	return ret.Error(0)
+}
+
+// UpdateState provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
+func (_m *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error {
+	ret := _m.Called(ctx, jobTenant, jobName, jobState, remark)
 	return ret.Error(0)
 }
 

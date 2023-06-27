@@ -688,7 +688,6 @@ func TestNewJobHandler(t *testing.T) {
 		})
 	})
 	t.Run("UpdateJobState", func(t *testing.T) {
-		//state := job.DISABLED
 		updateRemark := "job disable remark"
 		t.Run("fail if improper tenant info", func(t *testing.T) {
 			jobAName, _ := job.NameFrom("job-A")
@@ -705,7 +704,6 @@ func TestNewJobHandler(t *testing.T) {
 			assert.ErrorContains(t, err, "namespace name is empty")
 		})
 		t.Run("fail if improper tenant info", func(t *testing.T) {
-			//jobAName, _ := job.NameFrom("job-A")
 			request := &pb.UpdateJobStateRequest{
 				ProjectName:   project.Name().String(),
 				NamespaceName: namespace.Name().String(),

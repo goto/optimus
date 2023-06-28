@@ -85,18 +85,27 @@ func (w ReplayWorker) createMissingRuns(ctx context.Context, replayReq *schedule
 	}
 
 	// check each runs if there's no existing run from the above
-	existedRunsMap := scheduler.JobRunStatusList(existedRuns).ToRunStatusMap()
-	for _, run := range replayReq.Runs {
-		if _, ok := existedRunsMap[run.ScheduledAt]; !ok {
-			// create any missing runs
-			if err := w.scheduler.CreateRun(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), run.ScheduledAt, prefixReplayed); err != nil {
-				return nil, err
-			}
-			run.State = scheduler.StateInProgress
-			createdRuns = append(createdRuns, run)
+	runsToBeCreated := missingRunsToBeCreated(replayReq.Runs, existedRuns)
+	for _, run := range runsToBeCreated {
+		// create missing runs
+		if err := w.scheduler.CreateRun(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), run.ScheduledAt, prefixReplayed); err != nil {
+			return nil, err
 		}
+		run.State = scheduler.StateInProgress
+		createdRuns = append(createdRuns, run)
 	}
 	return createdRuns, nil
+}
+
+func missingRunsToBeCreated(expectedRuns, existingRuns []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {
+	runsToBeCreated := []*scheduler.JobRunStatus{}
+	existedRunsMap := scheduler.JobRunStatusList(existingRuns).ToRunStatusMap()
+	for _, run := range expectedRuns {
+		if _, ok := existedRunsMap[run.ScheduledAt]; !ok {
+			runsToBeCreated = append(runsToBeCreated, run)
+		}
+	}
+	return runsToBeCreated
 }
 
 func (w ReplayWorker) processNewReplayRequest(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (err error) {

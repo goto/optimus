@@ -102,7 +102,7 @@ func (r ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*
 	return replayWithRun, nil
 }
 
-func (r ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (runs []*scheduler.JobRunStatus, err error) {
+func (r ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) ([]*scheduler.JobRunStatus, error) {
 	jobRunCriteria := &scheduler.JobRunsCriteria{
 		Name:      jobName.String(),
 		StartDate: config.StartTime,
@@ -113,7 +113,16 @@ func (r ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, 
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return nil, err
 	}
-	return r.runGetter.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
+	existingRuns, err := r.runGetter.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
+	if err != nil {
+		return nil, err
+	}
+	expectedRuns := getExpectedRuns(jobCron, config.StartTime, config.EndTime)
+	tobeCreatedRuns := missingRunsToBeCreated(expectedRuns, existingRuns)
+	tobeCreatedRuns = scheduler.JobRunStatusList(tobeCreatedRuns).OverrideWithStatus(scheduler.StateMissing)
+	runs := append(tobeCreatedRuns, existingRuns...)
+	runs = scheduler.JobRunStatusList(runs).GetSortedRunsByScheduledAt()
+	return runs, nil
 }
 
 func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {

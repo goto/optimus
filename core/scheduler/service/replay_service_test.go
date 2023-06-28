@@ -246,17 +246,37 @@ func TestReplayService(t *testing.T) {
 			assert.Nil(t, result)
 		})
 
-		t.Run("returns runs status when success", func(t *testing.T) {
+		t.Run("returns runs to be created when no existing runs", func(t *testing.T) {
 			jobRepository := new(JobRepository)
 			defer jobRepository.AssertExpectations(t)
 
 			schedulerRunGetter := new(mockScheduler)
 			defer schedulerRunGetter.AssertExpectations(t)
 
+			runs := []*scheduler.JobRunStatus{}
+			jobRepository.On("GetJobDetails", mock.Anything, projName, jobName).Return(jobWithDetails, nil)
+			schedulerRunGetter.On("GetJobRuns", ctx, tnnt, mock.Anything, mock.Anything).Return(runs, nil)
+
+			replayService := service.NewReplayService(nil, jobRepository, nil, schedulerRunGetter, logger)
+			result, err := replayService.GetRunsStatus(ctx, tnnt, jobName, replayConfig)
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			assert.Len(t, result, 2)
+			assert.Equal(t, scheduler.StateMissing, result[0].State)
+			assert.Equal(t, scheduler.StateMissing, result[1].State)
+		})
+		t.Run("returns runs to be created when only 1 existing runs", func(t *testing.T) {
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+
+			schedulerRunGetter := new(mockScheduler)
+			defer schedulerRunGetter.AssertExpectations(t)
+
+			scheduledAt, _ := time.Parse(scheduler.ISODateFormat, "2023-01-03T12:00:00Z")
 			runs := []*scheduler.JobRunStatus{
 				{
-					ScheduledAt: startTime,
-					State:       scheduler.StateAccepted,
+					ScheduledAt: scheduledAt,
+					State:       scheduler.StateSuccess,
 				},
 			}
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobName).Return(jobWithDetails, nil)
@@ -266,7 +286,9 @@ func TestReplayService(t *testing.T) {
 			result, err := replayService.GetRunsStatus(ctx, tnnt, jobName, replayConfig)
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
-			assert.Len(t, result, 1)
+			assert.Len(t, result, 2)
+			assert.Equal(t, scheduler.StateSuccess, result[0].State)
+			assert.Equal(t, scheduler.StateMissing, result[1].State)
 		})
 	})
 }

@@ -20,6 +20,10 @@ const (
 	metricJobReplay = "jobrun_replay_requests_total"
 )
 
+type SchedulerRunGetter interface {
+	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
+}
+
 type ReplayRepository interface {
 	RegisterReplay(ctx context.Context, replay *scheduler.Replay, runs []*scheduler.JobRunStatus) (uuid.UUID, error)
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
@@ -38,6 +42,7 @@ type ReplayValidator interface {
 type ReplayService struct {
 	replayRepo ReplayRepository
 	jobRepo    JobRepository
+	runGetter  SchedulerRunGetter
 
 	validator ReplayValidator
 
@@ -95,6 +100,19 @@ func (r ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*
 	}
 	replayWithRun.Runs = scheduler.JobRunStatusList(replayWithRun.Runs).GetSortedRunsByScheduledAt()
 	return replayWithRun, nil
+}
+
+func (r ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (runs []*scheduler.JobRunStatus, err error) {
+	jobRunCriteria := &scheduler.JobRunsCriteria{
+		Name:      jobName.String(),
+		StartDate: config.StartTime,
+		EndDate:   config.EndTime,
+	}
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, tenant.ProjectName(), jobName)
+	if err != nil {
+		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
+	}
+	return r.runGetter.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
 }
 
 func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, logger log.Logger) *ReplayService {

@@ -239,6 +239,17 @@
         }
       }
     },
+    "v1beta1ReplayDryRunResponse": {
+      "type": "object",
+      "properties": {
+        "replayRuns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1ReplayRun"
+          }
+        }
+      }
+    },
     "v1beta1ReplayResponse": {
       "type": "object",
       "properties": {

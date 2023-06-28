@@ -111,10 +111,11 @@ func (r ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, 
 	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, tenant.ProjectName(), jobName)
 	if err != nil {
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
+		return nil, err
 	}
 	return r.runGetter.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
 }
 
-func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, logger log.Logger) *ReplayService {
-	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, logger: logger}
+func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
+	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, runGetter: runGetter, logger: logger}
 }

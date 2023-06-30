@@ -68,7 +68,7 @@ func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth Sched
 	endpoint := buildEndPoint(auth.host, r.path)
 	request, err := http.NewRequestWithContext(ctx, r.method, endpoint, bytes.NewBuffer(r.body))
 	if err != nil {
-		return resp, fmt.Errorf("failed to build http request for %s due to %w", r.path, err)
+		return resp, fmt.Errorf("failed to build http request for %s due to %w", endpoint, err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(auth.token))))

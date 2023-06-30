@@ -49,7 +49,7 @@ type ReplayService struct {
 	logger log.Logger
 }
 
-func (r ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
+func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
 	subjectJob, err := r.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
 	if err != nil {
 		r.logger.Error("error getting job details of [%s]: %s", jobName.String(), err)
@@ -89,11 +89,11 @@ func (r ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, j
 	return replayID, nil
 }
 
-func (r ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
+func (r *ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
 	return r.replayRepo.GetReplaysByProject(ctx, projectName, getReplaysDayLimit)
 }
 
-func (r ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
+func (r *ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
 	replayWithRun, err := r.replayRepo.GetReplayByID(ctx, replayID)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (r ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*
 	return replayWithRun, nil
 }
 
-func (r ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) ([]*scheduler.JobRunStatus, error) {
+func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) ([]*scheduler.JobRunStatus, error) {
 	jobRunCriteria := &scheduler.JobRunsCriteria{
 		Name:      jobName.String(),
 		StartDate: config.StartTime,
@@ -120,7 +120,8 @@ func (r ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, 
 	expectedRuns := getExpectedRuns(jobCron, config.StartTime, config.EndTime)
 	tobeCreatedRuns := missingRunsToBeCreated(expectedRuns, existingRuns)
 	tobeCreatedRuns = scheduler.JobRunStatusList(tobeCreatedRuns).OverrideWithStatus(scheduler.StateMissing)
-	runs := append(tobeCreatedRuns, existingRuns...)
+	runs := tobeCreatedRuns
+	runs = append(runs, existingRuns...)
 	runs = scheduler.JobRunStatusList(runs).GetSortedRunsByScheduledAt()
 	return runs, nil
 }

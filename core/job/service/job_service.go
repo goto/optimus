@@ -363,7 +363,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	existingJobs, err := j.repo.GetAllByTenant(ctx, jobTenant)
 	me.Append(err)
 
-	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, jobTenant, specs, jobNamesWithInvalidSpec)
+	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, specs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
@@ -466,10 +466,14 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		return err
 	}
 
+	err = job.Specs(jobSpecs).Validate()
+	me.Append(err)
+	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
+
 	existingJobs, err := j.repo.GetAllByTenant(ctx, jobTenant)
 	me.Append(err)
 
-	toAdd, toUpdate, toDelete, unmodifiedSpecs, err := j.differentiateSpecs(existingJobs, jobTenant, jobSpecs, jobNamesWithInvalidSpec)
+	toAdd, toUpdate, toDelete, unmodifiedSpecs, err := j.differentiateSpecs(existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
@@ -756,7 +760,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	return deletedJobNames, me.ToErr()
 }
 
-func (*JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified []*job.Spec, err error) {
+func (*JobService) differentiateSpecs(existingJobs []*job.Job, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified []*job.Spec, err error) {
 	// TODO: consider checking multi-error if it is required here
 	me := errors.NewMultiError("differentiate specs errors")
 
@@ -776,10 +780,6 @@ func (*JobService) differentiateSpecs(existingJobs []*job.Job, jobTenant tenant.
 			unmodifiedSpecs = append(unmodifiedSpecs, incomingSpec)
 		}
 	}
-	telemetry.NewCounter("total_jobs_modified", map[string]string{
-		"project":   jobTenant.ProjectName().String(),
-		"namespace": jobTenant.NamespaceName().String(),
-	}).Add(float64(len(modifiedSpecs)))
 
 	incomingSpecsMap := job.Specs(specs).ToNameAndSpecMap()
 	for existingJobName, existingJobSpec := range existingSpecsMap {

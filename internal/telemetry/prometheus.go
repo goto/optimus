@@ -35,10 +35,12 @@ func NewCounter(metric string, labels map[string]string) prometheus.Counter {
 	counterMetricMutex.Lock()
 	defer counterMetricMutex.Unlock()
 
-	if _, ok := counterMetricMap[metricKey]; !ok {
-		counterMetricMap[metricKey] = promauto.NewCounter(prometheus.CounterOpts{Name: metric, ConstLabels: labels})
+	if existingMetric, ok := counterMetricMap[metricKey]; ok {
+		return existingMetric
 	}
-	return counterMetricMap[metricKey]
+	newMetric := promauto.NewCounter(prometheus.CounterOpts{Name: metric, ConstLabels: labels})
+	counterMetricMap[metricKey] = newMetric
+	return newMetric
 }
 
 func NewGauge(metric string, labels map[string]string) prometheus.Gauge {
@@ -47,8 +49,10 @@ func NewGauge(metric string, labels map[string]string) prometheus.Gauge {
 	gaugeMetricMutex.Lock()
 	defer gaugeMetricMutex.Unlock()
 
-	if _, ok := gaugeMetricMap[metricKey]; !ok {
-		gaugeMetricMap[metricKey] = promauto.NewGauge(prometheus.GaugeOpts{Name: metric, ConstLabels: labels})
+	if existingMetric, ok := gaugeMetricMap[metricKey]; ok {
+		return existingMetric
 	}
-	return gaugeMetricMap[metricKey]
+	newMetric := promauto.NewGauge(prometheus.GaugeOpts{Name: metric, ConstLabels: labels})
+	gaugeMetricMap[metricKey] = newMetric
+	return newMetric
 }

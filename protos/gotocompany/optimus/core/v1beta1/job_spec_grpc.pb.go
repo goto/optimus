@@ -64,7 +64,7 @@ type JobSpecificationServiceClient interface {
 	// of the execution window
 	GetWindow(ctx context.Context, in *GetWindowRequest, opts ...grpc.CallOption) (*GetWindowResponse, error)
 	// UpdateJobState enable / disable job on scheuler
-	UpdateJobState(ctx context.Context, in *UpdateJobStateRequest, opts ...grpc.CallOption) (*UpdateJobStateResponse, error)
+	UpdateJobsState(ctx context.Context, in *UpdateJobsStateRequest, opts ...grpc.CallOption) (*UpdateJobsStateResponse, error)
 }
 
 type jobSpecificationServiceClient struct {
@@ -318,9 +318,9 @@ func (c *jobSpecificationServiceClient) GetWindow(ctx context.Context, in *GetWi
 	return out, nil
 }
 
-func (c *jobSpecificationServiceClient) UpdateJobState(ctx context.Context, in *UpdateJobStateRequest, opts ...grpc.CallOption) (*UpdateJobStateResponse, error) {
-	out := new(UpdateJobStateResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobState", in, out, opts...)
+func (c *jobSpecificationServiceClient) UpdateJobsState(ctx context.Context, in *UpdateJobsStateRequest, opts ...grpc.CallOption) (*UpdateJobsStateResponse, error) {
+	out := new(UpdateJobsStateResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobsState", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ type JobSpecificationServiceServer interface {
 	// of the execution window
 	GetWindow(context.Context, *GetWindowRequest) (*GetWindowResponse, error)
 	// UpdateJobState enable / disable job on scheuler
-	UpdateJobState(context.Context, *UpdateJobStateRequest) (*UpdateJobStateResponse, error)
+	UpdateJobsState(context.Context, *UpdateJobsStateRequest) (*UpdateJobsStateResponse, error)
 	mustEmbedUnimplementedJobSpecificationServiceServer()
 }
 
@@ -432,8 +432,8 @@ func (UnimplementedJobSpecificationServiceServer) GetJobTask(context.Context, *G
 func (UnimplementedJobSpecificationServiceServer) GetWindow(context.Context, *GetWindowRequest) (*GetWindowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWindow not implemented")
 }
-func (UnimplementedJobSpecificationServiceServer) UpdateJobState(context.Context, *UpdateJobStateRequest) (*UpdateJobStateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateJobState not implemented")
+func (UnimplementedJobSpecificationServiceServer) UpdateJobsState(context.Context, *UpdateJobsStateRequest) (*UpdateJobsStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateJobsState not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) mustEmbedUnimplementedJobSpecificationServiceServer() {
 }
@@ -777,20 +777,20 @@ func _JobSpecificationService_GetWindow_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobSpecificationService_UpdateJobState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateJobStateRequest)
+func _JobSpecificationService_UpdateJobsState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateJobsStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(JobSpecificationServiceServer).UpdateJobState(ctx, in)
+		return srv.(JobSpecificationServiceServer).UpdateJobsState(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobState",
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobsState",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobSpecificationServiceServer).UpdateJobState(ctx, req.(*UpdateJobStateRequest))
+		return srv.(JobSpecificationServiceServer).UpdateJobsState(ctx, req.(*UpdateJobsStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -855,8 +855,8 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _JobSpecificationService_GetWindow_Handler,
 		},
 		{
-			MethodName: "UpdateJobState",
-			Handler:    _JobSpecificationService_UpdateJobState_Handler,
+			MethodName: "UpdateJobsState",
+			Handler:    _JobSpecificationService_UpdateJobsState_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -107,14 +107,14 @@ func (j JobRepository) Update(ctx context.Context, jobs []*job.Job) ([]*job.Job,
 func (j JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error {
 	updateJobStateQuery := `
 UPDATE job SET state = $1, remark = $2
-WHERE name = $3 AND project_name = $4
+WHERE name = $3 AND project_name = $4 AND namespace_name = $5
 ;`
-	tag, err := j.db.Exec(ctx, updateJobStateQuery, jobState, remark, jobName, jobTenant.ProjectName())
+	tag, err := j.db.Exec(ctx, updateJobStateQuery, jobState, remark, jobName, jobTenant.ProjectName(), jobTenant.NamespaceName())
 	if err != nil {
 		return errors.Wrap(job.EntityJob, "error during job state update", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.NewError(errors.ErrInternalError, job.EntityJob, fmt.Sprintf("failed to be update state of job:%s ", jobName.String()))
+		return errors.NewError(errors.ErrNotFound, job.EntityJob, fmt.Sprintf("failed to be update state of job:%s in repo", jobName.String()))
 	}
 	return nil
 }

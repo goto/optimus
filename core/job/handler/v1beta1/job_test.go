@@ -691,54 +691,63 @@ func TestNewJobHandler(t *testing.T) {
 		updateRemark := "job disable remark"
 		t.Run("fail if improper tenant info", func(t *testing.T) {
 			jobAName, _ := job.NameFrom("job-A")
-			request := &pb.UpdateJobStateRequest{
-				ProjectName:   project.Name().String(),
-				NamespaceName: "",
-				JobName:       jobAName.String(),
-				State:         1,
-				Remark:        updateRemark,
+
+			request := &pb.UpdateJobsStateRequest{
+				UpdateRequest: []*pb.UpdateJobsStateRequest_UpdateRequest{{
+					ProjectName:   project.Name().String(),
+					NamespaceName: "",
+					JobName:       jobAName.String(),
+					State:         1,
+					Remark:        updateRemark,
+				}},
 			}
 
 			jobHandler := v1beta1.NewJobHandler(nil, log)
-			_, err := jobHandler.UpdateJobState(ctx, request)
+			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "namespace name is empty")
 		})
 		t.Run("fail if improper tenant info", func(t *testing.T) {
-			request := &pb.UpdateJobStateRequest{
-				ProjectName:   project.Name().String(),
-				NamespaceName: namespace.Name().String(),
-				JobName:       "",
-				State:         1,
-				Remark:        updateRemark,
+			request := &pb.UpdateJobsStateRequest{
+				UpdateRequest: []*pb.UpdateJobsStateRequest_UpdateRequest{{
+					ProjectName:   project.Name().String(),
+					NamespaceName: namespace.Name().String(),
+					JobName:       "",
+					State:         1,
+					Remark:        updateRemark,
+				}},
 			}
 
 			jobHandler := v1beta1.NewJobHandler(nil, log)
-			_, err := jobHandler.UpdateJobState(ctx, request)
+			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "name is empty")
 		})
 		t.Run("fail if State is improper", func(t *testing.T) {
-			request := &pb.UpdateJobStateRequest{
-				ProjectName:   project.Name().String(),
-				NamespaceName: namespace.Name().String(),
-				JobName:       "job-A",
-				State:         4,
-				Remark:        updateRemark,
+			request := &pb.UpdateJobsStateRequest{
+				UpdateRequest: []*pb.UpdateJobsStateRequest_UpdateRequest{{
+					ProjectName:   project.Name().String(),
+					NamespaceName: namespace.Name().String(),
+					JobName:       "job-A",
+					State:         4,
+					Remark:        updateRemark,
+				}},
 			}
 			jobHandler := v1beta1.NewJobHandler(nil, log)
-			_, err := jobHandler.UpdateJobState(ctx, request)
+			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "invalid state")
 		})
 		t.Run("fail if remark is empty", func(t *testing.T) {
-			request := &pb.UpdateJobStateRequest{
-				ProjectName:   project.Name().String(),
-				NamespaceName: namespace.Name().String(),
-				JobName:       "job-A",
-				State:         1,
-				Remark:        "",
+			request := &pb.UpdateJobsStateRequest{
+				UpdateRequest: []*pb.UpdateJobsStateRequest_UpdateRequest{{
+					ProjectName:   project.Name().String(),
+					NamespaceName: namespace.Name().String(),
+					JobName:       "job-A",
+					State:         1,
+					Remark:        "",
+				}},
 			}
 
 			jobHandler := v1beta1.NewJobHandler(nil, log)
-			_, err := jobHandler.UpdateJobState(ctx, request)
+			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "can not update job state without a valid remark")
 		})
 	})

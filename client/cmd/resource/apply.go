@@ -48,7 +48,7 @@ func NewApplyCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "apply",
-		Short:   "Sync resources between optimus and datastore",
+		Short:   "Apply resources from optimus to datastore",
 		Long:    heredoc.Doc(`Apply changes to destination datastore`),
 		Example: "optimus resource apply <resource-name1,resource-name2>",
 		Annotations: map[string]string{
@@ -127,7 +127,7 @@ func (a *applyCommand) apply() error {
 		if errors.Is(err, context.DeadlineExceeded) {
 			a.logger.Error("Apply took too long, timing out")
 		}
-		return fmt.Errorf("failed to sync resourcse: %w", err)
+		return fmt.Errorf("failed to apply resourcse: %w", err)
 	}
 
 	a.printApplyStatus(responses)
@@ -135,7 +135,7 @@ func (a *applyCommand) apply() error {
 }
 
 func (a *applyCommand) printApplyStatus(responses *pb.ApplyResourcesResponse) {
-	a.logger.Info("Sync finished")
+	a.logger.Info("Apply finished")
 	var successResources []string
 	for _, status := range responses.Statuses {
 		if status.Status == successStatus {

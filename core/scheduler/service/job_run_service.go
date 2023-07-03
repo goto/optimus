@@ -456,7 +456,9 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 			"namespace":  event.Tenant.NamespaceName().String(),
 			"event_type": eventType,
 		}).Inc()
-	} else if event.Type == scheduler.TaskStartEvent || event.Type == scheduler.TaskRetryEvent || event.Type == scheduler.TaskSuccessEvent || event.Type == scheduler.TaskFailEvent {
+		return
+	}
+	if event.Type == scheduler.TaskStartEvent || event.Type == scheduler.TaskRetryEvent || event.Type == scheduler.TaskSuccessEvent || event.Type == scheduler.TaskFailEvent {
 		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorTask))
 		telemetry.NewCounter("jobrun_task_events_total", map[string]string{
 			"project":    event.Tenant.ProjectName().String(),
@@ -464,7 +466,9 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 			"event_type": eventType,
 			"operator":   event.OperatorName,
 		}).Inc()
-	} else if event.Type == scheduler.HookStartEvent || event.Type == scheduler.HookRetryEvent || event.Type == scheduler.HookSuccessEvent || event.Type == scheduler.HookFailEvent {
+		return
+	}
+	if event.Type == scheduler.HookStartEvent || event.Type == scheduler.HookRetryEvent || event.Type == scheduler.HookSuccessEvent || event.Type == scheduler.HookFailEvent {
 		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorHook))
 		telemetry.NewCounter("jobrun_hook_events_total", map[string]string{
 			"project":    event.Tenant.ProjectName().String(),

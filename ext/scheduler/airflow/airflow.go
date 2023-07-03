@@ -17,6 +17,7 @@ import (
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 
+	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -287,7 +288,7 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 	return getJobRuns(dagRunList, jobCron)
 }
 
-func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName, state string) error {
+func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName job.Name, state string) error {
 	spanCtx, span := startChildSpan(ctx, "UpdateJobState")
 	defer span.End()
 

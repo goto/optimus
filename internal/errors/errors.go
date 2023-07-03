@@ -21,7 +21,6 @@ const (
 	ErrAlreadyExists   ErrorType = "Resource Already Exists"
 	ErrInvalidArgument ErrorType = "Invalid Argument"
 	ErrFailedPrecond   ErrorType = "Failed Precondition"
-	ErrPartialSuccess  ErrorType = "Partial Success"
 
 	ErrInvalidState ErrorType = "Invalid State"
 )

@@ -97,7 +97,7 @@ type JobStateChange struct {
 	State     job.State
 }
 
-func NewJobStateChaneEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) (*JobStateChange, error) {
+func NewJobStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) (*JobStateChange, error) {
 	baseEvent, err := NewBaseEvent()
 	if err != nil {
 		return nil, err

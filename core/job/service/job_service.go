@@ -104,7 +104,7 @@ type UpstreamResolver interface {
 }
 
 type Scheduler interface {
-	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName, state string) error
+	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName job.Name, state string) error
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
@@ -184,12 +184,10 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error {
-	err := j.scheduler.UpdateJobState(ctx, jobTenant, jobName.String(), jobState.String())
-	if err != nil {
+	if err := j.scheduler.UpdateJobState(ctx, jobTenant, jobName, jobState.String()); err != nil {
 		return err
 	}
-	err = j.repo.UpdateState(ctx, jobTenant, jobName, jobState, remark)
-	if err != nil {
+	if err := j.repo.UpdateState(ctx, jobTenant, jobName, jobState, remark); err != nil {
 		return err
 	}
 
@@ -1010,9 +1008,9 @@ func (j *JobService) raiseUpdateEvent(job *job.Job) {
 }
 
 func (j *JobService) raiseStateChaneEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) {
-	jobEvent, err := event.NewJobStateChaneEvent(tnnt, jobName, state)
+	jobEvent, err := event.NewJobStateChangeEvent(tnnt, jobName, state)
 	if err != nil {
-		j.logger.Error("error creating event for job delete: %s", err)
+		j.logger.Error("error creating event for job state change: %s", err)
 		return
 	}
 	j.eventHandler.HandleEvent(jobEvent)

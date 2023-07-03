@@ -522,7 +522,7 @@ func (jh *JobHandler) UpdateJobsState(ctx context.Context, req *pb.UpdateJobsSta
 	}
 
 	if len(me.Errors) > 0 {
-		return nil, errors.NewError(errors.ErrPartialSuccess, job.EntityJob, me.Error())
+		return nil, errors.GRPCErr(me.ToErr(), "update job state error")
 	}
 
 	return &pb.UpdateJobsStateResponse{}, nil

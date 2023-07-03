@@ -3170,12 +3170,11 @@ func TestJobService(t *testing.T) {
 	})
 	t.Run("updateState", func(t *testing.T) {
 		specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-		jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
 		state := job.DISABLED
 		updateRemark := "job disable remark"
 		t.Run("should fail if scheduler state change request fails", func(t *testing.T) {
 			scheduler := new(mockScheduler)
-			scheduler.On("UpdateJobState", ctx, sampleTenant, jobA.GetName(), state.String()).Return(fmt.Errorf("some error in update Job State"))
+			scheduler.On("UpdateJobState", ctx, sampleTenant, specA.Name(), state.String()).Return(fmt.Errorf("some error in update Job State"))
 			defer scheduler.AssertExpectations(t)
 
 			jobService := service.NewJobService(nil, nil, nil, nil, nil, nil, nil, scheduler)
@@ -3185,7 +3184,7 @@ func TestJobService(t *testing.T) {
 
 		t.Run("should fail if update state in job table fails", func(t *testing.T) {
 			scheduler := new(mockScheduler)
-			scheduler.On("UpdateJobState", ctx, sampleTenant, jobA.GetName(), state.String()).Return(nil)
+			scheduler.On("UpdateJobState", ctx, sampleTenant, specA.Name(), state.String()).Return(nil)
 			defer scheduler.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
@@ -3199,7 +3198,7 @@ func TestJobService(t *testing.T) {
 
 		t.Run("should pass when no error in scheduler update and repo update", func(t *testing.T) {
 			scheduler := new(mockScheduler)
-			scheduler.On("UpdateJobState", ctx, sampleTenant, jobA.GetName(), state.String()).Return(nil)
+			scheduler.On("UpdateJobState", ctx, sampleTenant, specA.Name(), state.String()).Return(nil)
 			defer scheduler.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
@@ -3695,7 +3694,7 @@ type mockScheduler struct {
 	mock.Mock
 }
 
-func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName, state string) error {
+func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName job.Name, state string) error {
 	args := ms.Called(ctx, tnnt, jobName, state)
 	return args.Error(0)
 }

@@ -200,7 +200,7 @@ func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, j
 	}
 
 	raiseJobEventMetric(jobTenant, metricName, 1)
-	j.raiseStateChaneEvent(jobTenant, jobName, jobState)
+	j.raiseStateChangeEvent(jobTenant, jobName, jobState)
 	return nil
 }
 
@@ -1007,7 +1007,7 @@ func (j *JobService) raiseUpdateEvent(job *job.Job) {
 	j.eventHandler.HandleEvent(jobEvent)
 }
 
-func (j *JobService) raiseStateChaneEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) {
+func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) {
 	jobEvent, err := event.NewJobStateChangeEvent(tnnt, jobName, state)
 	if err != nil {
 		j.logger.Error("error creating event for job state change: %s", err)

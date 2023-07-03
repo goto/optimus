@@ -521,7 +521,6 @@ func (jh *JobHandler) UpdateJobsState(ctx context.Context, req *pb.UpdateJobsSta
 		me.Append(err)
 	}
 
-	fmt.Println(len(me.Errors))
 	if len(me.Errors) > 0 {
 		return nil, errors.NewError(errors.ErrPartialSuccess, job.EntityJob, me.Error())
 	}

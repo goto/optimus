@@ -301,9 +301,8 @@ func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobN
 	data := []byte(fmt.Sprintf(`{"is_paused": %v}`, isPaused))
 
 	req := airflowRequest{
-		URL:    dagURL,
+		path:   fmt.Sprintf(dagURL, jobName),
 		method: http.MethodPatch,
-		param:  jobName,
 		body:   data,
 	}
 

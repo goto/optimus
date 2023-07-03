@@ -162,7 +162,7 @@ func (r *createCommand) replayDryRun(replayReq *pb.ReplayRequest) error {
 	buff := &bytes.Buffer{}
 	stringifyReplayRuns(buff, runs)
 
-	r.logger.Info("Replay list of replay runs to be replayed:")
+	r.logger.Info("List of runs to be replayed:")
 	r.logger.Info(buff.String())
 	return nil
 }
@@ -179,7 +179,7 @@ func (r *createCommand) replay(replayReq *pb.ReplayRequest) error {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancelFunc()
 
-	respStream, err := replayService.Replay(ctx, replayReq)
+	resp, err := replayService.Replay(ctx, replayReq)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			r.logger.Error("Replay creation took too long, timing out")
@@ -188,9 +188,9 @@ func (r *createCommand) replay(replayReq *pb.ReplayRequest) error {
 	}
 
 	r.logger.Info("Replay request is accepted and it is in progress")
-	r.logger.Info("Either you could wait or you could close (ctrl+c) and check the status with `optimus replay status %s` command later", respStream.Id)
+	r.logger.Info("Either you could wait or you could close (ctrl+c) and check the status with `optimus replay status %s` command later", resp.Id)
 
-	return r.waitForReplayState(respStream.Id)
+	return r.waitForReplayState(resp.Id)
 }
 
 func (r *createCommand) waitForReplayState(replayID string) error {

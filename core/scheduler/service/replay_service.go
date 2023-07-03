@@ -118,7 +118,7 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 		return nil, err
 	}
 	expectedRuns := getExpectedRuns(jobCron, config.StartTime, config.EndTime)
-	tobeCreatedRuns := missingRunsToBeCreated(expectedRuns, existingRuns)
+	tobeCreatedRuns := getMissingRuns(expectedRuns, existingRuns)
 	tobeCreatedRuns = scheduler.JobRunStatusList(tobeCreatedRuns).OverrideWithStatus(scheduler.StateMissing)
 	runs := tobeCreatedRuns
 	runs = append(runs, existingRuns...)

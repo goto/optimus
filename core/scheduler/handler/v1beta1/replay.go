@@ -36,7 +36,7 @@ func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayRequest) 
 
 	runs, err := h.service.GetRunsStatus(ctx, replayReq.Tenant(), replayReq.JobName(), replayReq.Config())
 	if err != nil {
-		h.l.Error("error fetching runs status: %s", err)
+		h.l.Error("error fetching runs status for replay dry run: %s", err)
 		return nil, errors.GRPCErr(err, "unable to fetch runs status for "+req.JobName)
 	}
 

@@ -160,7 +160,8 @@ func (r *createCommand) replayDryRun(replayReq *pb.ReplayRequest) error {
 	runs := respStream.GetReplayRuns()
 
 	buff := &bytes.Buffer{}
-	stringifyReplayRuns(buff, runs)
+	header := []string{"scheduled at", "status"}
+	stringifyReplayRuns(buff, header, runs)
 
 	r.logger.Info("List of runs to be replayed:")
 	r.logger.Info(buff.String())

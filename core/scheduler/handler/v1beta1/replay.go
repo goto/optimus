@@ -21,6 +21,17 @@ type ReplayService interface {
 	GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (runs []*scheduler.JobRunStatus, err error)
 }
 
+type replayRequest interface {
+	GetProjectName() string
+	GetNamespaceName() string
+	GetJobName() string
+	GetStartTime() *timestamppb.Timestamp
+	GetEndTime() *timestamppb.Timestamp
+	GetJobConfig() string
+	GetParallel() bool
+	GetDescription() string
+}
+
 type ReplayHandler struct {
 	l       log.Logger
 	service ReplayService
@@ -28,7 +39,7 @@ type ReplayHandler struct {
 	pb.UnimplementedReplayServiceServer
 }
 
-func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayRequest) (*pb.ReplayDryRunResponse, error) {
+func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayDryRunRequest) (*pb.ReplayDryRunResponse, error) {
 	replayReq, err := newReplayRequest(h.l, req)
 	if err != nil {
 		return nil, err
@@ -116,8 +127,8 @@ func replayRunsToProto(runs []*scheduler.JobRunStatus) []*pb.ReplayRun {
 	return runsProto
 }
 
-func newReplayRequest(l log.Logger, req *pb.ReplayRequest) (*scheduler.Replay, error) {
-	replayTenant, err := tenant.NewTenant(req.GetProjectName(), req.NamespaceName)
+func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error) {
+	replayTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
 		l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "unable to start replay for "+req.GetJobName())
@@ -142,17 +153,17 @@ func newReplayRequest(l log.Logger, req *pb.ReplayRequest) (*scheduler.Replay, e
 	}
 
 	jobConfig := make(map[string]string)
-	if req.JobConfig != "" {
-		jobConfig, err = parseJobConfig(req.JobConfig)
+	if req.GetJobConfig() != "" {
+		jobConfig, err = parseJobConfig(req.GetJobConfig())
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.Parallel, jobConfig, req.Description)
+	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription())
 	if err != nil {
 		l.Error("error parsing job config: %s", err)
-		return nil, errors.GRPCErr(err, "unable to parse replay job config for "+req.JobName)
+		return nil, errors.GRPCErr(err, "unable to parse replay job config for "+req.GetJobName())
 	}
 
 	return scheduler.NewReplayRequest(jobName, replayTenant, replayConfig, scheduler.ReplayStateCreated), nil

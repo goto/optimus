@@ -38,7 +38,7 @@ func TestReplayHandler(t *testing.T) {
 			service := new(mockReplayService)
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
 
-			req := &pb.ReplayRequest{
+			req := &pb.ReplayDryRunRequest{
 				JobName:       jobName.String(),
 				NamespaceName: namespaceName,
 				StartTime:     startTime,
@@ -56,7 +56,7 @@ func TestReplayHandler(t *testing.T) {
 			service := new(mockReplayService)
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
 
-			req := &pb.ReplayRequest{
+			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
 				NamespaceName: namespaceName,
 				StartTime:     startTime,
@@ -74,7 +74,7 @@ func TestReplayHandler(t *testing.T) {
 			service := new(mockReplayService)
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
 
-			req := &pb.ReplayRequest{
+			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
 				JobName:       jobName.String(),
 				NamespaceName: namespaceName,
@@ -93,7 +93,7 @@ func TestReplayHandler(t *testing.T) {
 			service := new(mockReplayService)
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
 
-			req := &pb.ReplayRequest{
+			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
 				JobName:       jobName.String(),
 				NamespaceName: namespaceName,
@@ -113,7 +113,7 @@ func TestReplayHandler(t *testing.T) {
 			service := new(mockReplayService)
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
 
-			req := &pb.ReplayRequest{
+			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
 				JobName:       jobName.String(),
 				NamespaceName: namespaceName,
@@ -136,7 +136,7 @@ func TestReplayHandler(t *testing.T) {
 			service := new(mockReplayService)
 			replayHandler := v1beta1.NewReplayHandler(logger, service)
 
-			req := &pb.ReplayRequest{
+			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
 				JobName:       jobName.String(),
 				NamespaceName: namespaceName,

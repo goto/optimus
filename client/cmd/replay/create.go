@@ -127,7 +127,8 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	if r.dryRun {
-		err := r.replayDryRun(replayReq)
+		replayDryRunReq := convertReplayToReplayDryRunRequest(replayReq)
+		err := r.replayDryRun(replayDryRunReq)
 		if err != nil {
 			return err
 		}
@@ -137,7 +138,20 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 	return r.replay(replayReq)
 }
 
-func (r *createCommand) replayDryRun(replayReq *pb.ReplayRequest) error {
+func convertReplayToReplayDryRunRequest(replayReq *pb.ReplayRequest) *pb.ReplayDryRunRequest {
+	return &pb.ReplayDryRunRequest{
+		ProjectName:   replayReq.GetProjectName(),
+		JobName:       replayReq.GetJobName(),
+		NamespaceName: replayReq.GetNamespaceName(),
+		StartTime:     replayReq.GetStartTime(),
+		EndTime:       replayReq.GetEndTime(),
+		Parallel:      replayReq.GetParallel(),
+		Description:   replayReq.GetDescription(),
+		JobConfig:     replayReq.GetJobConfig(),
+	}
+}
+
+func (r *createCommand) replayDryRun(replayDryRunReq *pb.ReplayDryRunRequest) error {
 	conn, err := r.connection.Create(r.host)
 	if err != nil {
 		return err
@@ -149,7 +163,7 @@ func (r *createCommand) replayDryRun(replayReq *pb.ReplayRequest) error {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancelFunc()
 
-	respStream, err := replayService.ReplayDryRun(ctx, replayReq)
+	respStr	eam, err := replayService.ReplayDryRun(ctx, replayDryRunReq)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			r.logger.Error("Replay dry-run took too long, timing out")

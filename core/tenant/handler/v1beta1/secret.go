@@ -14,6 +14,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+var _ pb.SecretServiceServer = (*SecretHandler)(nil)
+
 const (
 	metricSecretEvents               = "secret_events_total"
 	secretEventsStatusRegistered     = "registered"

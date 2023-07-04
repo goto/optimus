@@ -13,6 +13,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+var _ pb.BackupServiceServer = (*BackupHandler)(nil)
+
 type BackupService interface {
 	Create(context.Context, *resource.Backup) (*resource.BackupResult, error)
 	Get(context.Context, resource.BackupID) (*resource.Backup, error)

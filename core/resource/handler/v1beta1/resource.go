@@ -18,6 +18,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+var _ pb.ResourceServiceServer = (*ResourceHandler)(nil)
+
 const (
 	metricResourceEvents             = "resource_events_total"
 	metricResourcesUploadAllDuration = "resource_upload_all_duration_seconds_total"

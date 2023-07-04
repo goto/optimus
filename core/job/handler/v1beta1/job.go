@@ -21,6 +21,8 @@ import (
 	"github.com/goto/optimus/sdk/plugin"
 )
 
+var _ pb.JobSpecificationServiceServer = (*JobHandler)(nil)
+
 const (
 	metricReplaceAllDuration = "job_replace_all_duration_seconds"
 	metricRefreshDuration    = "job_refresh_duration_seconds"

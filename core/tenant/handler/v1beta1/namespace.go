@@ -11,6 +11,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+var _ pb.NamespaceServiceServer = (*NamespaceHandler)(nil)
+
 type NamespaceService interface {
 	Save(ctx context.Context, namespace *tenant.Namespace) error
 	Get(context.Context, tenant.ProjectName, tenant.NamespaceName) (*tenant.Namespace, error)

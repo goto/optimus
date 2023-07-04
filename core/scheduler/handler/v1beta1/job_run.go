@@ -13,6 +13,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+var _ pb.JobRunServiceServer = (*JobRunHandler)(nil)
+
 type JobRunService interface {
 	JobRunInput(context.Context, tenant.ProjectName, scheduler.JobName, scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 	UpdateJobState(context.Context, *scheduler.Event) error

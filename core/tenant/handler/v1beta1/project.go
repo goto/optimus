@@ -12,6 +12,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+var _ pb.ProjectServiceServer = (*ProjectHandler)(nil)
+
 type ProjectHandler struct {
 	l              log.Logger
 	projectService ProjectService

@@ -436,15 +436,16 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 }
 
 func (s *JobRunService) trackEvent(event *scheduler.Event) {
-	if event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
+	switch {
+	case event.Type.IsOfType(scheduler.EventCategorySLAMiss):
 		jsonSLAObjectList, err := json.Marshal(event.SLAObjectList)
 		if err != nil {
 			jsonSLAObjectList = []byte("unable to json Marshal SLAObjectList")
 		}
 		s.l.Info("received job sla_miss event, jobName: %v , slaPayload: %s", event.JobName, string(jsonSLAObjectList))
-	} else if event.Type.IsOfType(scheduler.EventCategoryJobFailure) {
+	case event.Type.IsOfType(scheduler.EventCategoryJobFailure):
 		s.l.Info("received job failure event, eventTime: %s, jobName: %v, schedule: %s", event.EventTime.Format("01/02/06 15:04:05 MST"), event.JobName, event.JobScheduledAt.Format("01/02/06 15:04:05 MST"))
-	} else {
+	default:
 		s.l.Debug("received event: %v, eventTime: %s, jobName: %v, Operator: %v, schedule: %s, status: %s",
 			event.Type, event.EventTime.Format("01/02/06 15:04:05 MST"), event.JobName, event.OperatorName, event.JobScheduledAt.Format("01/02/06 15:04:05 MST"), event.Status)
 	}

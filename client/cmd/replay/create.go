@@ -163,7 +163,7 @@ func (r *createCommand) replayDryRun(replayDryRunReq *pb.ReplayDryRunRequest) er
 	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancelFunc()
 
-	respStream, err := replayService.ReplayDryRun(ctx, replayDryRunReq)
+	resp, err := replayService.ReplayDryRun(ctx, replayDryRunReq)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			r.logger.Error("Replay dry-run took too long, timing out")
@@ -171,7 +171,7 @@ func (r *createCommand) replayDryRun(replayDryRunReq *pb.ReplayDryRunRequest) er
 		return fmt.Errorf("replay dry-run request failed: %w", err)
 	}
 
-	runs := respStream.GetReplayRuns()
+	runs := resp.GetReplayRuns()
 
 	buff := &bytes.Buffer{}
 	header := []string{"scheduled at", "status"}

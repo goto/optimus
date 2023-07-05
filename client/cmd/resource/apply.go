@@ -10,7 +10,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/spf13/cobra"
 
-	"github.com/goto/optimus/client/cmd/internal/connectivity"
+	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/client/cmd/internal/survey"
@@ -24,7 +24,8 @@ const (
 )
 
 type applyCommand struct {
-	logger log.Logger
+	logger     log.Logger
+	connection connection.Connection
 
 	configFilePath string
 	clientConfig   *config.ClientConfig
@@ -72,6 +73,8 @@ func (a *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	a.connection = connection.New(a.logger, a.clientConfig)
+
 	return nil
 }
 
@@ -100,13 +103,13 @@ func (a *applyCommand) RunE(_ *cobra.Command, _ []string) error {
 }
 
 func (a *applyCommand) apply() error {
-	conn, err := connectivity.NewConnectivity(a.clientConfig.Host, applyTimeout)
+	conn, err := a.connection.Create(a.clientConfig.Host)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	apply := pb.NewResourceServiceClient(conn.GetConnection())
+	apply := pb.NewResourceServiceClient(conn)
 
 	spinner := progressbar.NewProgressBar()
 	spinner.Start("please wait...")

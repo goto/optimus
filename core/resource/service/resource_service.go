@@ -23,11 +23,13 @@ type ResourceRepository interface {
 	ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
+	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 }
 
 type ResourceManager interface {
 	CreateResource(ctx context.Context, res *resource.Resource) error
 	UpdateResource(ctx context.Context, res *resource.Resource) error
+	SyncResource(ctx context.Context, res *resource.Resource) error
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
 	Validate(res *resource.Resource) error
 	GetURN(res *resource.Resource) (string, error)
@@ -203,6 +205,36 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 
 func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
 	return rs.repo.ReadAll(ctx, tnnt, store)
+}
+
+func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic
+	resources, err := rs.repo.GetResources(ctx, tnnt, store, names)
+	if err != nil {
+		rs.logger.Error("error getting resources [%s] from db: %s", strings.Join(names, ", "), err)
+		return nil, err
+	}
+
+	synced := &resource.SyncResponse{
+		IgnoredResources: findMissingResources(names, resources),
+	}
+
+	if len(resources) == 0 {
+		return synced, nil
+	}
+
+	for _, r := range resources {
+		err := rs.mgr.SyncResource(ctx, r)
+		if err != nil {
+			synced.IgnoredResources = append(synced.IgnoredResources, resource.IgnoredResource{
+				Name:   r.Name().String(),
+				Reason: err.Error(),
+			})
+			continue
+		}
+		synced.ResourceNames = append(synced.ResourceNames, r.FullName())
+	}
+
+	return synced, nil
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic

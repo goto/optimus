@@ -50,22 +50,10 @@ type ReplayService struct {
 }
 
 func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
-	subjectJob, err := r.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, tenant, jobName)
 	if err != nil {
-		r.logger.Error("error getting job details of [%s]: %s", jobName.String(), err)
-		return uuid.Nil, errors.AddErrContext(err, scheduler.EntityReplay,
-			fmt.Sprintf("unable to get job details for jobName: %s, project:%s", jobName, tenant.ProjectName().String()))
-	}
-
-	if subjectJob.Job.Tenant.NamespaceName() != tenant.NamespaceName() {
-		r.logger.Error("job [%s] resides in namespace [%s], expecting it under [%s]", jobName, subjectJob.Job.Tenant.NamespaceName(), tenant.NamespaceName())
-		return uuid.Nil, errors.InvalidArgument(scheduler.EntityReplay, fmt.Sprintf("job %s does not exist in %s namespace", jobName, tenant.NamespaceName().String()))
-	}
-
-	jobCron, err := cron.ParseCronSchedule(subjectJob.Schedule.Interval)
-	if err != nil {
-		r.logger.Error("error parsing cron schedule for interval [%s]: %s", subjectJob.Schedule.Interval, err)
-		return uuid.Nil, errors.InternalError(scheduler.EntityReplay, "invalid cron interval for "+jobName.String(), err)
+		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
+		return uuid.Nil, err
 	}
 
 	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
@@ -108,7 +96,7 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 		StartDate: config.StartTime,
 		EndDate:   config.EndTime,
 	}
-	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, tenant.ProjectName(), jobName)
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, tenant, jobName)
 	if err != nil {
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return nil, err
@@ -128,4 +116,29 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 
 func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
 	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, runGetter: runGetter, logger: logger}
+}
+
+func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt tenant.Tenant, jobName scheduler.JobName) (*cron.ScheduleSpec, error) {
+	jobWithDetails, err := jobRepo.GetJobDetails(ctx, tnnt.ProjectName(), jobName)
+	if err != nil || jobWithDetails == nil {
+		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("unable to get job details for jobName: %s, project: %s", jobName, tnnt.ProjectName()))
+	}
+
+	if jobWithDetails.Job.Tenant.NamespaceName() != tnnt.NamespaceName() {
+		l.Error("job [%s] resides in namespace [%s], expecting it under [%s]", jobName, jobWithDetails.Job.Tenant.NamespaceName(), tnnt.NamespaceName())
+		return nil, errors.InvalidArgument(scheduler.EntityReplay, fmt.Sprintf("job %s does not exist in %s namespace", jobName, tnnt.NamespaceName().String()))
+	}
+
+	interval := jobWithDetails.Schedule.Interval
+	if interval == "" {
+		l.Error("job interval is empty")
+		return nil, errors.InvalidArgument(scheduler.EntityReplay, "job schedule interval is empty")
+	}
+	jobCron, err := cron.ParseCronSchedule(interval)
+	if err != nil {
+		l.Error("error parsing cron interval: %s", err)
+		return nil, errors.InternalError(scheduler.EntityReplay, "unable to parse job cron interval", err)
+	}
+	return jobCron, nil
 }

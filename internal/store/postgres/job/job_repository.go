@@ -114,7 +114,7 @@ WHERE project_name = $4 AND namespace_name = $5 AND name = any ($3)
 		return errors.Wrap(job.EntityJob, "error during job state update", err)
 	}
 	if tag.RowsAffected() != int64(len(jobNames)) {
-		return errors.NewError(errors.ErrNotFound, job.EntityJob, "failed to update state of all of the selected job in DB, consider retrying")
+		return errors.NewError(errors.ErrNotFound, job.EntityJob, "failed to update state of all of the selected job in DB")
 	}
 	return nil
 }

@@ -154,35 +154,36 @@ type MetadataResourceConfig struct {
 }
 
 func fromStorageMetadata(metadata json.RawMessage) (scheduler.RuntimeConfig, error) {
+	if metadata == nil {
+		return scheduler.RuntimeConfig{}, nil
+	}
+	var storeMetadata Metadata
+	if err := json.Unmarshal(metadata, &storeMetadata); err != nil {
+		return scheduler.RuntimeConfig{}, err
+	}
 	var runtimeConfig scheduler.RuntimeConfig
-	if metadata != nil {
-		var storeMetadata Metadata
-		if err := json.Unmarshal(metadata, &storeMetadata); err != nil {
-			return scheduler.RuntimeConfig{}, err
-		}
-		if storeMetadata.Resource != nil {
-			var resourceRequest *scheduler.ResourceConfig
-			if storeMetadata.Resource.Request != nil {
-				resourceRequest = &scheduler.ResourceConfig{
-					CPU:    storeMetadata.Resource.Request.CPU,
-					Memory: storeMetadata.Resource.Request.Memory,
-				}
-			}
-			var resourceLimit *scheduler.ResourceConfig
-			if storeMetadata.Resource.Limit != nil {
-				resourceLimit = &scheduler.ResourceConfig{
-					CPU:    storeMetadata.Resource.Limit.CPU,
-					Memory: storeMetadata.Resource.Limit.Memory,
-				}
-			}
-			runtimeConfig.Resource = &scheduler.Resource{
-				Request: resourceRequest,
-				Limit:   resourceLimit,
+	if storeMetadata.Resource != nil {
+		var resourceRequest *scheduler.ResourceConfig
+		if storeMetadata.Resource.Request != nil {
+			resourceRequest = &scheduler.ResourceConfig{
+				CPU:    storeMetadata.Resource.Request.CPU,
+				Memory: storeMetadata.Resource.Request.Memory,
 			}
 		}
-		if storeMetadata.Scheduler != nil {
-			runtimeConfig.Scheduler = storeMetadata.Scheduler
+		var resourceLimit *scheduler.ResourceConfig
+		if storeMetadata.Resource.Limit != nil {
+			resourceLimit = &scheduler.ResourceConfig{
+				CPU:    storeMetadata.Resource.Limit.CPU,
+				Memory: storeMetadata.Resource.Limit.Memory,
+			}
 		}
+		runtimeConfig.Resource = &scheduler.Resource{
+			Request: resourceRequest,
+			Limit:   resourceLimit,
+		}
+	}
+	if storeMetadata.Scheduler != nil {
+		runtimeConfig.Scheduler = storeMetadata.Scheduler
 	}
 	return runtimeConfig, nil
 }

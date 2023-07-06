@@ -91,7 +91,7 @@ type JobRepository interface {
 	GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination job.ResourceURN) ([]*job.Downstream, error)
 	GetDownstreamByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Downstream, error)
 
-	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error
+	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error
 }
 
 type EventHandler interface {
@@ -104,7 +104,7 @@ type UpstreamResolver interface {
 }
 
 type Scheduler interface {
-	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName job.Name, state string) error
+	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName []*job.Name, state string) error
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
@@ -183,11 +183,13 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	return me.ToErr()
 }
 
-func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error {
-	if err := j.scheduler.UpdateJobState(ctx, jobTenant, jobName, jobState.String()); err != nil {
+func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error {
+	err := j.scheduler.UpdateJobState(ctx, jobTenant, jobNames, jobState.String())
+	if err != nil {
 		return err
 	}
-	if err := j.repo.UpdateState(ctx, jobTenant, jobName, jobState, remark); err != nil {
+
+	if err := j.repo.UpdateState(ctx, jobTenant, jobNames, jobState, remark); err != nil {
 		return err
 	}
 
@@ -199,8 +201,10 @@ func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, j
 		metricName = job.MetricJobEventDisabled
 	}
 
-	raiseJobEventMetric(jobTenant, metricName, 1)
-	j.raiseStateChangeEvent(jobTenant, jobName, jobState)
+	raiseJobEventMetric(jobTenant, metricName, len(jobNames))
+	for _, jobName := range jobNames {
+		j.raiseStateChangeEvent(jobTenant, *jobName, jobState)
+	}
 	return nil
 }
 

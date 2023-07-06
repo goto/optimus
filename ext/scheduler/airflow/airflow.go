@@ -288,32 +288,42 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 	return getJobRuns(dagRunList, jobCron)
 }
 
-func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName job.Name, state string) error {
+// UpdateJobState set the state of jobs as enabled / disabled on scheduler
+func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []*job.Name, state string) error {
 	spanCtx, span := startChildSpan(ctx, "UpdateJobState")
 	defer span.End()
 
-	var isPaused bool
+	var data []byte
 	switch state {
 	case "enabled":
-		isPaused = false
+		data = []byte(`{"is_paused": false}`)
 	case "disabled":
-		isPaused = true
-	}
-	data := []byte(fmt.Sprintf(`{"is_paused": %v}`, isPaused))
-
-	req := airflowRequest{
-		path:   fmt.Sprintf(dagURL, jobName),
-		method: http.MethodPatch,
-		body:   data,
+		data = []byte(`{"is_paused": true}`)
 	}
 
 	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
 	if err != nil {
 		return err
 	}
-	_, err = s.client.Invoke(spanCtx, req, schdAuth)
-	if err != nil {
-		return errors.Wrap(EntityAirflow, "failure while updating dag status", err)
+	ch := make(chan error, len(jobNames))
+	for _, jobName := range jobNames {
+		go func(jobName *job.Name) {
+			req := airflowRequest{
+				path:   fmt.Sprintf(dagURL, jobName),
+				method: http.MethodPatch,
+				body:   data,
+			}
+			_, err := s.client.Invoke(spanCtx, req, schdAuth)
+			ch <- err
+		}(jobName)
+	}
+	me := errors.NewMultiError("update job state on scheduler")
+	for i := 0; i < len(jobNames); i++ {
+		me.Append(<-ch)
+	}
+
+	if len(me.Errors) > 0 {
+		return errors.Wrap(EntityAirflow, "failure while updating dag status", me.ToErr())
 	}
 
 	return nil

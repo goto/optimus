@@ -21,39 +21,6 @@
     "application/json"
   ],
   "paths": {
-    "/v1beta1/change-job-state": {
-      "patch": {
-        "summary": "UpdateJobState enable / disable job on scheuler",
-        "operationId": "JobSpecificationService_UpdateJobsState",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1UpdateJobsStateResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1beta1UpdateJobsStateRequest"
-            }
-          }
-        ],
-        "tags": [
-          "JobSpecificationService"
-        ]
-      }
-    },
     "/v1beta1/jobs": {
       "get": {
         "summary": "GetJobSpecifications read a job spec for provided filters",
@@ -569,6 +536,65 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/update-job-state": {
+      "patch": {
+        "summary": "UpdateJobState enable / disable job on scheuler",
+        "operationId": "JobSpecificationService_UpdateJobsState",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1UpdateJobsStateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "remark": {
+                  "type": "string"
+                },
+                "state": {
+                  "$ref": "#/definitions/v1beta1SetState"
+                },
+                "jobNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "JobSpecificationService"
+        ]
+      }
+    },
     "/v1beta1/window": {
       "get": {
         "summary": "GetWindow provides the start and end dates provided a scheduled date\nof the execution window",
@@ -769,26 +795,6 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
-        }
-      }
-    },
-    "UpdateJobsStateRequestUpdateRequest": {
-      "type": "object",
-      "properties": {
-        "projectName": {
-          "type": "string"
-        },
-        "namespaceName": {
-          "type": "string"
-        },
-        "jobName": {
-          "type": "string"
-        },
-        "state": {
-          "$ref": "#/definitions/v1beta1JobState"
-        },
-        "remark": {
           "type": "string"
         }
       }
@@ -1267,15 +1273,6 @@
         }
       }
     },
-    "v1beta1JobState": {
-      "type": "string",
-      "enum": [
-        "JOB_STATE_UNSPECIFIED",
-        "JOB_STATE_ENABLED",
-        "JOB_STATE_DISABLED"
-      ],
-      "default": "JOB_STATE_UNSPECIFIED"
-    },
     "v1beta1JobTask": {
       "type": "object",
       "properties": {
@@ -1351,22 +1348,20 @@
         }
       }
     },
+    "v1beta1SetState": {
+      "type": "string",
+      "enum": [
+        "SET_STATE_UNSPECIFIED",
+        "SET_STATE_ENABLED",
+        "SET_STATE_DISABLED"
+      ],
+      "default": "SET_STATE_UNSPECIFIED"
+    },
     "v1beta1UpdateJobSpecificationsResponse": {
       "type": "object",
       "properties": {
         "log": {
           "type": "string"
-        }
-      }
-    },
-    "v1beta1UpdateJobsStateRequest": {
-      "type": "object",
-      "properties": {
-        "updateRequest": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/UpdateJobsStateRequestUpdateRequest"
-          }
         }
       }
     },

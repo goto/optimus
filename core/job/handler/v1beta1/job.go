@@ -44,7 +44,7 @@ func NewJobHandler(jobService JobService, logger log.Logger) *JobHandler {
 type JobService interface {
 	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
-	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error
+	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
 	Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (jobSpec *job.Job, err error)
@@ -489,40 +489,36 @@ func (jh *JobHandler) GetJobTask(ctx context.Context, req *pb.GetJobTaskRequest)
 }
 
 func (jh *JobHandler) UpdateJobsState(ctx context.Context, req *pb.UpdateJobsStateRequest) (*pb.UpdateJobsStateResponse, error) {
-	me := errors.NewMultiError("UpdateJobsStateErrors")
-	for _, req := range req.GetUpdateRequest() {
-		jobTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
-		if err != nil {
-			jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
-			me.Append(err)
-			continue
-		}
-		jobName, err := job.NameFrom(req.GetJobName())
-		if err != nil {
-			jh.l.Error("error adapting job name %s: %s", req.JobName, err)
-			me.Append(err)
-			continue
-		}
-
-		jobState, err := job.StateFrom(req.GetState().String())
-		if err != nil {
-			jh.l.Error("error adapting job state %s: %s", req.GetState().String(), err)
-			me.Append(err)
-			continue
-		}
-
-		remark := req.Remark
-		if len(remark) < 1 {
-			jh.l.Error("empty remark")
-			me.Append(errors.InvalidArgument(job.EntityJob, "can not update job state without a valid remark"))
-			continue
-		}
-		err = jh.jobService.UpdateState(ctx, jobTenant, jobName, jobState, remark)
-		me.Append(err)
+	jobTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, err
+	}
+	jobState, err := job.StateFrom(req.GetState().String())
+	if err != nil {
+		jh.l.Error("error adapting job state %s: %s", req.GetState().String(), err)
+		return nil, err
 	}
 
-	if len(me.Errors) > 0 {
-		return nil, errors.GRPCErr(me.ToErr(), "update job state error")
+	remark := req.Remark
+	if len(remark) < 1 {
+		jh.l.Error("empty remark for changing state to %s, for %s:%s ", jobState, jobTenant.ProjectName(), jobTenant.NamespaceName())
+		return nil, errors.InvalidArgument(job.EntityJob, "can not update job state without a valid remark")
+	}
+	var jobNames []*job.Name
+	for _, name := range req.GetJobNames() {
+		jobName, err := job.NameFrom(name)
+		if err != nil {
+			jh.l.Error("error adapting job name: '%s', err: %s", name, err.Error())
+			return nil, err
+		}
+		jobNames = append(jobNames, &jobName)
+	}
+
+	err = jh.jobService.UpdateState(ctx, jobTenant, jobNames, jobState, remark)
+	if err != nil {
+		jh.l.Error("error updating job state", err.Error())
+		return nil, err
 	}
 
 	return &pb.UpdateJobsStateResponse{}, nil

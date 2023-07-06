@@ -112,12 +112,12 @@ func NewJobStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.Stat
 
 func (j *JobStateChange) Bytes() ([]byte, error) {
 	occurredAt := timestamppb.New(j.Event.OccurredAt)
-	var jobStateEnum pbIntCore.JobState
+	var jobStateEnum pbIntCore.SetState
 	switch j.State {
 	case job.ENABLED:
-		jobStateEnum = pbIntCore.JobState_JOB_STATE_ENABLED
+		jobStateEnum = pbIntCore.SetState_SET_STATE_ENABLED
 	case job.DISABLED:
-		jobStateEnum = pbIntCore.JobState_JOB_STATE_DISABLED
+		jobStateEnum = pbIntCore.SetState_SET_STATE_DISABLED
 	}
 	optEvent := &pbInt.OptimusChangeEvent{
 		EventId:       j.Event.ID.String(),

@@ -3169,47 +3169,49 @@ func TestJobService(t *testing.T) {
 		})
 	})
 	t.Run("updateState", func(t *testing.T) {
-		specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+		jobName, _ := job.NameFrom("job-A")
+		jobsToUpdateState := []*job.Name{&jobName}
+		// specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 		state := job.DISABLED
 		updateRemark := "job disable remark"
 		t.Run("should fail if scheduler state change request fails", func(t *testing.T) {
 			scheduler := new(mockScheduler)
-			scheduler.On("UpdateJobState", ctx, sampleTenant, specA.Name(), state.String()).Return(fmt.Errorf("some error in update Job State"))
+			scheduler.On("UpdateJobState", ctx, sampleTenant, jobsToUpdateState, state.String()).Return(fmt.Errorf("some error in update Job State"))
 			defer scheduler.AssertExpectations(t)
 
 			jobService := service.NewJobService(nil, nil, nil, nil, nil, nil, nil, scheduler)
-			err := jobService.UpdateState(ctx, sampleTenant, specA.Name(), state, "job disable remark")
+			err := jobService.UpdateState(ctx, sampleTenant, jobsToUpdateState, state, "job disable remark")
 			assert.ErrorContains(t, err, "some error in update Job State")
 		})
 
 		t.Run("should fail if update state in job table fails", func(t *testing.T) {
 			scheduler := new(mockScheduler)
-			scheduler.On("UpdateJobState", ctx, sampleTenant, specA.Name(), state.String()).Return(nil)
+			scheduler.On("UpdateJobState", ctx, sampleTenant, jobsToUpdateState, state.String()).Return(nil)
 			defer scheduler.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
-			jobRepo.On("UpdateState", ctx, sampleTenant, specA.Name(), state, updateRemark).Return(fmt.Errorf("some error in update Job State repo"))
+			jobRepo.On("UpdateState", ctx, sampleTenant, jobsToUpdateState, state, updateRemark).Return(fmt.Errorf("some error in update Job State repo"))
 			defer jobRepo.AssertExpectations(t)
 
 			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil, scheduler)
-			err := jobService.UpdateState(ctx, sampleTenant, specA.Name(), state, updateRemark)
+			err := jobService.UpdateState(ctx, sampleTenant, jobsToUpdateState, state, updateRemark)
 			assert.ErrorContains(t, err, "some error in update Job State repo")
 		})
 
 		t.Run("should pass when no error in scheduler update and repo update", func(t *testing.T) {
 			scheduler := new(mockScheduler)
-			scheduler.On("UpdateJobState", ctx, sampleTenant, specA.Name(), state.String()).Return(nil)
+			scheduler.On("UpdateJobState", ctx, sampleTenant, jobsToUpdateState, state.String()).Return(nil)
 			defer scheduler.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
-			jobRepo.On("UpdateState", ctx, sampleTenant, specA.Name(), state, updateRemark).Return(nil)
+			jobRepo.On("UpdateState", ctx, sampleTenant, jobsToUpdateState, state, updateRemark).Return(nil)
 			defer jobRepo.AssertExpectations(t)
 
 			eventHandler := newEventHandler(t)
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			jobService := service.NewJobService(jobRepo, nil, nil, nil, eventHandler, nil, nil, scheduler)
-			err := jobService.UpdateState(ctx, sampleTenant, specA.Name(), state, updateRemark)
+			err := jobService.UpdateState(ctx, sampleTenant, jobsToUpdateState, state, updateRemark)
 			assert.Nil(t, err)
 		})
 	})
@@ -3264,8 +3266,8 @@ func (_m *JobRepository) ChangeJobNamespace(ctx context.Context, jobName job.Nam
 }
 
 // UpdateState provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
-func (_m *JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, jobState job.State, remark string) error {
-	ret := _m.Called(ctx, jobTenant, jobName, jobState, remark)
+func (_m *JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error {
+	ret := _m.Called(ctx, jobTenant, jobNames, jobState, remark)
 	return ret.Error(0)
 }
 
@@ -3694,7 +3696,7 @@ type mockScheduler struct {
 	mock.Mock
 }
 
-func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName job.Name, state string) error {
-	args := ms.Called(ctx, tnnt, jobName, state)
+func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []*job.Name, state string) error {
+	args := ms.Called(ctx, tnnt, jobNames, state)
 	return args.Error(0)
 }

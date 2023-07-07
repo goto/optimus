@@ -3713,7 +3713,6 @@ func TestJobService(t *testing.T) {
 	t.Run("updateState", func(t *testing.T) {
 		jobName, _ := job.NameFrom("job-A")
 		jobsToUpdateState := []*job.Name{&jobName}
-		// specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 		state := job.DISABLED
 		updateRemark := "job disable remark"
 		t.Run("should fail if scheduler state change request fails", func(t *testing.T) {

@@ -65,6 +65,8 @@ type JobSpecificationServiceClient interface {
 	GetWindow(ctx context.Context, in *GetWindowRequest, opts ...grpc.CallOption) (*GetWindowResponse, error)
 	// UpdateJobState enable / disable job on scheuler
 	UpdateJobsState(ctx context.Context, in *UpdateJobsStateRequest, opts ...grpc.CallOption) (*UpdateJobsStateResponse, error)
+	// SyncJobsState enable / disable job on scheuler
+	SyncJobsState(ctx context.Context, in *SyncJobsStateRequest, opts ...grpc.CallOption) (*SyncJobsStateResponse, error)
 }
 
 type jobSpecificationServiceClient struct {
@@ -327,6 +329,15 @@ func (c *jobSpecificationServiceClient) UpdateJobsState(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *jobSpecificationServiceClient) SyncJobsState(ctx context.Context, in *SyncJobsStateRequest, opts ...grpc.CallOption) (*SyncJobsStateResponse, error) {
+	out := new(SyncJobsStateResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/SyncJobsState", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobSpecificationServiceServer is the server API for JobSpecificationService service.
 // All implementations must embed UnimplementedJobSpecificationServiceServer
 // for forward compatibility
@@ -374,6 +385,8 @@ type JobSpecificationServiceServer interface {
 	GetWindow(context.Context, *GetWindowRequest) (*GetWindowResponse, error)
 	// UpdateJobState enable / disable job on scheuler
 	UpdateJobsState(context.Context, *UpdateJobsStateRequest) (*UpdateJobsStateResponse, error)
+	// SyncJobsState enable / disable job on scheuler
+	SyncJobsState(context.Context, *SyncJobsStateRequest) (*SyncJobsStateResponse, error)
 	mustEmbedUnimplementedJobSpecificationServiceServer()
 }
 
@@ -434,6 +447,9 @@ func (UnimplementedJobSpecificationServiceServer) GetWindow(context.Context, *Ge
 }
 func (UnimplementedJobSpecificationServiceServer) UpdateJobsState(context.Context, *UpdateJobsStateRequest) (*UpdateJobsStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateJobsState not implemented")
+}
+func (UnimplementedJobSpecificationServiceServer) SyncJobsState(context.Context, *SyncJobsStateRequest) (*SyncJobsStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SyncJobsState not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) mustEmbedUnimplementedJobSpecificationServiceServer() {
 }
@@ -795,6 +811,24 @@ func _JobSpecificationService_UpdateJobsState_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobSpecificationService_SyncJobsState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncJobsStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobSpecificationServiceServer).SyncJobsState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/SyncJobsState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobSpecificationServiceServer).SyncJobsState(ctx, req.(*SyncJobsStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobSpecificationService_ServiceDesc is the grpc.ServiceDesc for JobSpecificationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -857,6 +891,10 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateJobsState",
 			Handler:    _JobSpecificationService_UpdateJobsState_Handler,
+		},
+		{
+			MethodName: "SyncJobsState",
+			Handler:    _JobSpecificationService_SyncJobsState_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

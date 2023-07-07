@@ -1994,9 +1994,15 @@ func (_m *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTena
 	return ret.Error(0)
 }
 
-// UpdateState provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
+// UpdateState provides a mock function with given fields: ctx, jobTenant, jobNames, jobState, remark
 func (_m *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error {
 	ret := _m.Called(ctx, jobTenant, jobNames, jobState, remark)
+	return ret.Error(0)
+}
+
+// UpdateState provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
+func (_m *JobService) SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobs, enabledJobs []*job.Name) error {
+	ret := _m.Called(ctx, jobTenant, disabledJobs, enabledJobs)
 	return ret.Error(0)
 }
 

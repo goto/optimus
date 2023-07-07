@@ -536,6 +536,59 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/sync-job-state": {
+      "patch": {
+        "summary": "SyncJobsState enable / disable job on scheuler",
+        "operationId": "JobSpecificationService_SyncJobsState",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1SyncJobsStateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "jobStates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/SyncJobsStateRequestJobState"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "JobSpecificationService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/update-job-state": {
       "patch": {
         "summary": "UpdateJobState enable / disable job on scheuler",
@@ -796,6 +849,17 @@
         },
         "type": {
           "type": "string"
+        }
+      }
+    },
+    "SyncJobsStateRequestJobState": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/v1beta1SetState"
         }
       }
     },
@@ -1356,6 +1420,9 @@
         "SET_STATE_DISABLED"
       ],
       "default": "SET_STATE_UNSPECIFIED"
+    },
+    "v1beta1SyncJobsStateResponse": {
+      "type": "object"
     },
     "v1beta1UpdateJobSpecificationsResponse": {
       "type": "object",

@@ -92,6 +92,7 @@ type JobRepository interface {
 	GetDownstreamByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Downstream, error)
 
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error
+	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobs, enabledJobs []*job.Name) error
 }
 
 type EventHandler interface {
@@ -206,6 +207,10 @@ func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, j
 		j.raiseStateChangeEvent(jobTenant, *jobName, jobState)
 	}
 	return nil
+}
+
+func (j *JobService) SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobs, enabledJobs []*job.Name) error {
+	return j.repo.SyncState(ctx, jobTenant, disabledJobs, enabledJobs)
 }
 
 func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error) {

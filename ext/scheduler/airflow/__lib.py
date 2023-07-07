@@ -13,6 +13,7 @@ from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import Kubernete
 from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.state import TaskInstanceState
+from airflow.exceptions import AirflowFailException
 from croniter import croniter
 from kubernetes.client import models as k8s
 
@@ -26,15 +27,6 @@ TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 TIMESTAMP_MS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 SCHEDULER_ERR_MSG = "scheduler_error"
-
-JOB_START_EVENT_NAME = "job_start_event"
-JOB_END_EVENT_NAME = "job_end_event"
-
-EVENT_NAMES = {
-    "SENSOR_START_EVENT": "TYPE_SENSOR_START",
-    "TASK_START_EVENT": "TYPE_TASK_START"
-}
-
 
 def lookup_non_standard_cron_expression(expr: str) -> str:
     expr_mapping = {
@@ -264,7 +256,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
             self.log.info("job_run api response :: {}".format(api_response))
         except Exception as e:
             self.log.warning("error while fetching job runs :: {}".format(e))
-            return False
+            raise AirflowFailException(e)
         for job_run in api_response['jobRuns']:
             if job_run['state'] != 'success':
                 self.log.info("failed for run :: {}".format(job_run))
@@ -455,7 +447,8 @@ def optimus_sla_miss_notify(dag, task_list, blocking_task_list, slas, blocking_t
             sla_list.append({
                 'task_id': sla.task_id,
                 'dag_id': sla.dag_id,
-                'scheduled_at': sla.execution_date.strftime(TIMESTAMP_FORMAT),
+                'scheduled_at' : dag.following_schedule(sla.execution_date).strftime(TIMESTAMP_FORMAT),
+                'airflow_execution_time': sla.execution_date.strftime(TIMESTAMP_FORMAT),
                 'timestamp': sla.timestamp.strftime(TIMESTAMP_FORMAT)
             })
 

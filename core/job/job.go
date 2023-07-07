@@ -26,6 +26,8 @@ const (
 	MetricJobEventStateValidationFailed = "validation_failed"
 	MetricJobEventEnabled               = "enabled"
 	MetricJobEventDisabled              = "disabled"
+
+	MetricJobRefreshResourceDownstream = "refresh_resource_downstream_total"
 )
 
 type Job struct {

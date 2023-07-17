@@ -3712,7 +3712,7 @@ func TestJobService(t *testing.T) {
 	})
 	t.Run("updateState", func(t *testing.T) {
 		jobName, _ := job.NameFrom("job-A")
-		jobsToUpdateState := []*job.Name{&jobName}
+		jobsToUpdateState := []job.Name{jobName}
 		state := job.DISABLED
 		updateRemark := "job disable remark"
 		t.Run("should fail if scheduler state change request fails", func(t *testing.T) {
@@ -3807,7 +3807,7 @@ func (_m *JobRepository) ChangeJobNamespace(ctx context.Context, jobName job.Nam
 }
 
 // UpdateState provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
-func (_m *JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error {
+func (_m *JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
 	ret := _m.Called(ctx, jobTenant, jobNames, jobState, remark)
 	return ret.Error(0)
 }
@@ -4268,7 +4268,7 @@ type mockScheduler struct {
 	mock.Mock
 }
 
-func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []*job.Name, state string) error {
+func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []job.Name, state string) error {
 	args := ms.Called(ctx, tnnt, jobNames, state)
 	return args.Error(0)
 }

@@ -89,7 +89,7 @@ type JobRepository interface {
 	GetAllByResourceDestination(ctx context.Context, resourceDestination job.ResourceURN) ([]*job.Job, error)
 	GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error)
 	GetAllByProjectName(ctx context.Context, projectName tenant.ProjectName) ([]*job.Job, error)
-	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error
+	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 }
 
 type UpstreamRepository interface {
@@ -114,7 +114,7 @@ type UpstreamResolver interface {
 }
 
 type Scheduler interface {
-	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName []*job.Name, state string) error
+	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
@@ -193,7 +193,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	return me.ToErr()
 }
 
-func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error {
+func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
 	err := j.scheduler.UpdateJobState(ctx, jobTenant, jobNames, jobState.String())
 	if err != nil {
 		return err
@@ -213,7 +213,7 @@ func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, j
 
 	raiseJobEventMetric(jobTenant, metricName, len(jobNames))
 	for _, jobName := range jobNames {
-		j.raiseStateChangeEvent(jobTenant, *jobName, jobState)
+		j.raiseStateChangeEvent(jobTenant, jobName, jobState)
 	}
 	return nil
 }

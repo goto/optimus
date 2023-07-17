@@ -32,7 +32,7 @@ const (
 	EntityAirflow = "Airflow"
 
 	dagStatusBatchURL = "api/v1/dags/~/dagRuns/list"
-	dagURL            = "/api/v1/dags/%s"
+	dagURL            = "api/v1/dags/%s"
 	dagRunClearURL    = "api/v1/dags/%s/clearTaskInstances"
 	dagRunCreateURL   = "api/v1/dags/%s/dagRuns"
 	airflowDateFormat = "2006-01-02T15:04:05+00:00"
@@ -289,7 +289,7 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 }
 
 // UpdateJobState set the state of jobs as enabled / disabled on scheduler
-func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []*job.Name, state string) error {
+func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []job.Name, state string) error {
 	spanCtx, span := startChildSpan(ctx, "UpdateJobState")
 	defer span.End()
 
@@ -307,7 +307,7 @@ func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobN
 	}
 	ch := make(chan error, len(jobNames))
 	for _, jobName := range jobNames {
-		go func(jobName *job.Name) {
+		go func(jobName job.Name) {
 			req := airflowRequest{
 				path:   fmt.Sprintf(dagURL, jobName),
 				method: http.MethodPatch,

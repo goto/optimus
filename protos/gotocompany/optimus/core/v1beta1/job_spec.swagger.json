@@ -578,7 +578,7 @@
                   "type": "string"
                 },
                 "state": {
-                  "$ref": "#/definitions/v1beta1SetState"
+                  "$ref": "#/definitions/v1beta1JobState"
                 },
                 "jobNames": {
                   "type": "array",
@@ -1273,6 +1273,15 @@
         }
       }
     },
+    "v1beta1JobState": {
+      "type": "string",
+      "enum": [
+        "JOB_STATE_UNSPECIFIED",
+        "JOB_STATE_ENABLED",
+        "JOB_STATE_DISABLED"
+      ],
+      "default": "JOB_STATE_UNSPECIFIED"
+    },
     "v1beta1JobTask": {
       "type": "object",
       "properties": {
@@ -1347,15 +1356,6 @@
           "$ref": "#/definitions/v1beta1Log"
         }
       }
-    },
-    "v1beta1SetState": {
-      "type": "string",
-      "enum": [
-        "SET_STATE_UNSPECIFIED",
-        "SET_STATE_ENABLED",
-        "SET_STATE_DISABLED"
-      ],
-      "default": "SET_STATE_UNSPECIFIED"
     },
     "v1beta1UpdateJobSpecificationsResponse": {
       "type": "object",

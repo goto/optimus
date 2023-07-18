@@ -44,8 +44,8 @@ func NewJobHandler(jobService JobService, logger log.Logger) *JobHandler {
 type JobService interface {
 	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
-	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobs, enabledJobs []*job.Name) error
+	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
 	Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (jobSpec *job.Job, err error)
@@ -503,17 +503,17 @@ func (jh *JobHandler) UpdateJobsState(ctx context.Context, req *pb.UpdateJobsSta
 
 	remark := req.Remark
 	if len(remark) < 1 {
-		jh.l.Error("empty remark for changing state to %s, for %s:%s ", jobState, jobTenant.ProjectName(), jobTenant.NamespaceName())
+		jh.l.Error("empty remark for changing %d jobs state of %s:%s to %s", len(req.GetJobNames()), jobState, jobTenant.ProjectName(), jobTenant.NamespaceName())
 		return nil, errors.InvalidArgument(job.EntityJob, "can not update job state without a valid remark")
 	}
-	var jobNames []*job.Name
+	var jobNames []job.Name
 	for _, name := range req.GetJobNames() {
 		jobName, err := job.NameFrom(name)
 		if err != nil {
 			jh.l.Error("error adapting job name: '%s', err: %s", name, err.Error())
 			return nil, err
 		}
-		jobNames = append(jobNames, &jobName)
+		jobNames = append(jobNames, jobName)
 	}
 
 	err = jh.jobService.UpdateState(ctx, jobTenant, jobNames, jobState, remark)

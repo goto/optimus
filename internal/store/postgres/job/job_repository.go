@@ -105,7 +105,7 @@ func (j JobRepository) Update(ctx context.Context, jobs []*job.Job) ([]*job.Job,
 	return storedJobs, me.ToErr()
 }
 
-func (j JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error {
+func (j JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
 	updateJobStateQuery := `
 UPDATE job SET state = $1, remark = $2, updated_at = NOW()
 WHERE project_name = $4 AND namespace_name = $5 AND name = any ($3);`

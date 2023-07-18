@@ -694,7 +694,7 @@ func TestNewJobHandler(t *testing.T) {
 			request := &pb.UpdateJobsStateRequest{
 				ProjectName:   project.Name().String(),
 				NamespaceName: "",
-				State:         pb.SetState_SET_STATE_ENABLED,
+				State:         pb.JobState_JOB_STATE_ENABLED,
 				Remark:        updateRemark,
 				JobNames:      []string{jobAName.String()},
 			}
@@ -707,7 +707,7 @@ func TestNewJobHandler(t *testing.T) {
 			request := &pb.UpdateJobsStateRequest{
 				ProjectName:   project.Name().String(),
 				NamespaceName: namespace.Name().String(),
-				State:         pb.SetState_SET_STATE_ENABLED,
+				State:         pb.JobState_JOB_STATE_ENABLED,
 				Remark:        updateRemark,
 				JobNames:      []string{""},
 			}
@@ -720,7 +720,7 @@ func TestNewJobHandler(t *testing.T) {
 			request := &pb.UpdateJobsStateRequest{
 				ProjectName:   project.Name().String(),
 				NamespaceName: namespace.Name().String(),
-				State:         pb.SetState_SET_STATE_UNSPECIFIED,
+				State:         pb.JobState_JOB_STATE_UNSPECIFIED,
 				Remark:        updateRemark,
 				JobNames:      []string{jobAName.String()},
 			}
@@ -733,7 +733,7 @@ func TestNewJobHandler(t *testing.T) {
 				ProjectName:   project.Name().String(),
 				NamespaceName: namespace.Name().String(),
 				JobNames:      []string{jobAName.String()},
-				State:         pb.SetState_SET_STATE_ENABLED,
+				State:         pb.JobState_JOB_STATE_ENABLED,
 				Remark:        "",
 			}
 
@@ -1995,7 +1995,7 @@ func (_m *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTena
 }
 
 // UpdateState provides a mock function with given fields: ctx, jobTenant, jobNames, jobState, remark
-func (_m *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []*job.Name, jobState job.State, remark string) error {
+func (_m *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
 	ret := _m.Called(ctx, jobTenant, jobNames, jobState, remark)
 	return ret.Error(0)
 }

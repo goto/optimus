@@ -282,7 +282,7 @@ type JobStateChangePayload struct {
 	unknownFields protoimpl.UnknownFields
 
 	JobName string           `protobuf:"bytes,1,opt,name=job_name,json=jobName,proto3" json:"job_name,omitempty"`
-	State   v1beta1.SetState `protobuf:"varint,2,opt,name=state,proto3,enum=gotocompany.optimus.core.v1beta1.SetState" json:"state,omitempty"`
+	State   v1beta1.JobState `protobuf:"varint,2,opt,name=state,proto3,enum=gotocompany.optimus.core.v1beta1.JobState" json:"state,omitempty"`
 }
 
 func (x *JobStateChangePayload) Reset() {
@@ -324,11 +324,11 @@ func (x *JobStateChangePayload) GetJobName() string {
 	return ""
 }
 
-func (x *JobStateChangePayload) GetState() v1beta1.SetState {
+func (x *JobStateChangePayload) GetState() v1beta1.JobState {
 	if x != nil {
 		return x.State
 	}
-	return v1beta1.SetState(0)
+	return v1beta1.JobState(0)
 }
 
 type OptimusChangeEvent struct {
@@ -533,7 +533,7 @@ var file_gotocompany_optimus_integration_v1beta1_event_proto_rawDesc = []byte{
 	0x0a, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x2a, 0x2e,
 	0x67, 0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x6e, 0x79, 0x2e, 0x6f, 0x70, 0x74, 0x69,
 	0x6d, 0x75, 0x73, 0x2e, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31,
-	0x2e, 0x53, 0x65, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65,
+	0x2e, 0x4a, 0x6f, 0x62, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65,
 	0x22, 0x88, 0x08, 0x0a, 0x12, 0x4f, 0x70, 0x74, 0x69, 0x6d, 0x75, 0x73, 0x43, 0x68, 0x61, 0x6e,
 	0x67, 0x65, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x19, 0x0a, 0x08, 0x65, 0x76, 0x65, 0x6e, 0x74,
 	0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x65, 0x76, 0x65, 0x6e, 0x74,
@@ -630,14 +630,14 @@ var file_gotocompany_optimus_integration_v1beta1_event_proto_goTypes = []interfa
 	(*v1beta1.ResourceSpecification)(nil), // 6: gotocompany.optimus.core.v1beta1.ResourceSpecification
 	(*v1beta1.JobSpecification)(nil),      // 7: gotocompany.optimus.core.v1beta1.JobSpecification
 	(*timestamppb.Timestamp)(nil),         // 8: google.protobuf.Timestamp
-	(v1beta1.SetState)(0),                 // 9: gotocompany.optimus.core.v1beta1.SetState
+	(v1beta1.JobState)(0),                 // 9: gotocompany.optimus.core.v1beta1.JobState
 }
 var file_gotocompany_optimus_integration_v1beta1_event_proto_depIdxs = []int32{
 	6,  // 0: gotocompany.optimus.integration.v1beta1.ResourceChangePayload.resource:type_name -> gotocompany.optimus.core.v1beta1.ResourceSpecification
 	7,  // 1: gotocompany.optimus.integration.v1beta1.JobChangePayload.job_spec:type_name -> gotocompany.optimus.core.v1beta1.JobSpecification
 	8,  // 2: gotocompany.optimus.integration.v1beta1.JobRunPayload.scheduled_at:type_name -> google.protobuf.Timestamp
 	8,  // 3: gotocompany.optimus.integration.v1beta1.JobRunPayload.start_time:type_name -> google.protobuf.Timestamp
-	9,  // 4: gotocompany.optimus.integration.v1beta1.JobStateChangePayload.state:type_name -> gotocompany.optimus.core.v1beta1.SetState
+	9,  // 4: gotocompany.optimus.integration.v1beta1.JobStateChangePayload.state:type_name -> gotocompany.optimus.core.v1beta1.JobState
 	8,  // 5: gotocompany.optimus.integration.v1beta1.OptimusChangeEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	0,  // 6: gotocompany.optimus.integration.v1beta1.OptimusChangeEvent.event_type:type_name -> gotocompany.optimus.integration.v1beta1.OptimusChangeEvent.EventType
 	2,  // 7: gotocompany.optimus.integration.v1beta1.OptimusChangeEvent.job_change:type_name -> gotocompany.optimus.integration.v1beta1.JobChangePayload

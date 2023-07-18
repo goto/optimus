@@ -120,7 +120,7 @@ WHERE project_name = $4 AND namespace_name = $5 AND name = any ($3);`
 	return nil
 }
 
-func (j JobRepository) SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobs, enabledJobs []*job.Name) error {
+func (j JobRepository) SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error {
 	tx, err := j.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -129,13 +129,13 @@ func (j JobRepository) SyncState(ctx context.Context, jobTenant tenant.Tenant, d
 UPDATE job SET state = $1
 WHERE project_name = $2 AND namespace_name = $3 AND name = any ($4);`
 
-	_, err = tx.Exec(ctx, updateJobStateQuery, job.ENABLED, jobTenant.ProjectName(), jobTenant.NamespaceName(), enabledJobs)
+	_, err = tx.Exec(ctx, updateJobStateQuery, job.ENABLED, jobTenant.ProjectName(), jobTenant.NamespaceName(), enabledJobNames)
 	if err != nil {
 		tx.Rollback(ctx)
 		return errors.Wrap(job.EntityJob, "error during job state enable sync", err)
 	}
 
-	_, err = j.db.Exec(ctx, updateJobStateQuery, job.DISABLED, jobTenant.ProjectName(), jobTenant.NamespaceName(), disabledJobs)
+	_, err = j.db.Exec(ctx, updateJobStateQuery, job.DISABLED, jobTenant.ProjectName(), jobTenant.NamespaceName(), disabledJobNames)
 	if err != nil {
 		tx.Rollback(ctx)
 		return errors.Wrap(job.EntityJob, "error during job state disable sync", err)

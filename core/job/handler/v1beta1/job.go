@@ -44,7 +44,7 @@ func NewJobHandler(jobService JobService, logger log.Logger) *JobHandler {
 type JobService interface {
 	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
-	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobs, enabledJobs []*job.Name) error
+	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
@@ -532,7 +532,7 @@ func (jh *JobHandler) SyncJobsState(ctx context.Context, req *pb.SyncJobsStateRe
 		return nil, err
 	}
 
-	var disabledJobs, enabledJobs []*job.Name
+	var enabledJobNames, disabledJobNames []job.Name
 	for _, jobState := range req.GetJobStates() {
 		state, err := job.StateFrom(jobState.State.String())
 		if err != nil {
@@ -545,13 +545,13 @@ func (jh *JobHandler) SyncJobsState(ctx context.Context, req *pb.SyncJobsStateRe
 			return nil, err
 		}
 		if state == job.DISABLED {
-			disabledJobs = append(disabledJobs, &jobName)
+			disabledJobNames = append(disabledJobNames, jobName)
 		} else {
-			enabledJobs = append(enabledJobs, &jobName)
+			enabledJobNames = append(enabledJobNames, jobName)
 		}
 	}
 
-	err = jh.jobService.SyncState(ctx, jobTenant, disabledJobs, enabledJobs)
+	err = jh.jobService.SyncState(ctx, jobTenant, disabledJobNames, enabledJobNames)
 	if err != nil {
 		jh.l.Error("error syncing job state for project: %s, namespace: %s, err: %s", jobTenant.ProjectName, jobTenant.NamespaceName(), err.Error())
 		return nil, err

@@ -3813,8 +3813,8 @@ func (_m *JobRepository) UpdateState(ctx context.Context, jobTenant tenant.Tenan
 }
 
 // SyncState provides a mock function with given fields: ctx, jobTenant, disabledJobs, enabledJobs
-func (_m *JobRepository) SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobs, enabledJobs []*job.Name) error {
-	ret := _m.Called(ctx, jobTenant, disabledJobs, enabledJobs)
+func (_m *JobRepository) SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error {
+	ret := _m.Called(ctx, jobTenant, disabledJobNames, enabledJobNames)
 	return ret.Error(0)
 }
 

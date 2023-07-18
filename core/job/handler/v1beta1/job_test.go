@@ -2000,7 +2000,7 @@ func (_m *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, 
 	return ret.Error(0)
 }
 
-// UpdateState provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
+// UpdateState provides a mock function with given fields: ctx, jobTenant, disabledJobNames, enabledJobNames
 func (_m *JobService) SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error {
 	ret := _m.Called(ctx, jobTenant, disabledJobNames, enabledJobNames)
 	return ret.Error(0)

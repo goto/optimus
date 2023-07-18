@@ -577,7 +577,7 @@
                 "jobStates": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/definitions/SyncJobsStateRequestJobStates"
+                    "$ref": "#/definitions/SyncJobsStateRequestJobStatePair"
                   }
                 }
               }
@@ -852,7 +852,7 @@
         }
       }
     },
-    "SyncJobsStateRequestJobStates": {
+    "SyncJobsStateRequestJobStatePair": {
       "type": "object",
       "properties": {
         "jobName": {

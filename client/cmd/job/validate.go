@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/goto/optimus/client/cmd/internal/connectivity"
+
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
@@ -19,7 +20,7 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
-const validateTimeout = time.Minute * 5
+const validateTimeout = time.Minute * 15
 
 type validateCommand struct {
 	logger         log.Logger

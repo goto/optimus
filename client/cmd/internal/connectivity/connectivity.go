@@ -13,6 +13,7 @@ import (
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 const (
@@ -115,6 +116,11 @@ func getDefaultDialOptions() []grpc.DialOption {
 			otelgrpc.StreamClientInterceptor(),
 			grpc_prometheus.StreamClientInterceptor,
 		)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                time.Minute,     // send pings every 10 seconds if there is no activity
+			Timeout:             1 * time.Second, // wait 1 second for ping ack before considering the connection dead
+			PermitWithoutStream: true,            // send pings even without active streams
+		}),
 	)
 	return opts
 }

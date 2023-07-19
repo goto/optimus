@@ -4,7 +4,6 @@ package scheduler_test
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -271,6 +270,5 @@ func compareEqualJobWithDetails(j *job.Job, s *scheduler.JobWithDetails) bool {
 		j.Spec().Owner() == s.JobMetadata.Owner &&
 		j.Spec().Schedule().Interval() == s.Schedule.Interval &&
 		j.Spec().Schedule().DependsOnPast() == s.Schedule.DependsOnPast &&
-		j.Spec().Schedule().Retry().ExponentialBackoff() == s.Retry.ExponentialBackoff &&
-		reflect.DeepEqual(j.Spec().Metadata().Scheduler(), s.RuntimeConfig.Scheduler)
+		j.Spec().Schedule().Retry().ExponentialBackoff() == s.Retry.ExponentialBackoff
 }

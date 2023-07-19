@@ -20,13 +20,15 @@ import (
 )
 
 const (
-	pageLimit = 99999
+	pageLimit    = 99999
+	dagStatusURL = "api/v1/dags/%s/dagRuns"
 )
 
 type airflowRequest struct {
-	path   string
+	URL    string
 	method string
 	body   []byte
+	param  string
 }
 
 type DagRunListResponse struct {
@@ -65,21 +67,20 @@ func NewAirflowClient() *ClientAirflow {
 func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth SchedulerAuth) ([]byte, error) {
 	var resp []byte
 
-	endpoint := buildEndPoint(auth.host, r.path)
-	request, err := http.NewRequestWithContext(ctx, r.method, endpoint, bytes.NewBuffer(r.body))
+	request, err := http.NewRequestWithContext(ctx, r.method, buildEndPoint(auth.host, r.URL, r.param), bytes.NewBuffer(r.body))
 	if err != nil {
-		return resp, fmt.Errorf("failed to build http request for %s due to %w", endpoint, err)
+		return resp, fmt.Errorf("failed to build http request for %s due to %w", r.URL, err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(auth.token))))
 
 	httpResp, respErr := ac.client.Do(request)
 	if respErr != nil {
-		return resp, fmt.Errorf("failed to call airflow %s due to %w", endpoint, respErr)
+		return resp, fmt.Errorf("failed to call airflow %s due to %w", r.URL, respErr)
 	}
 	if httpResp.StatusCode != http.StatusOK {
 		httpResp.Body.Close()
-		return resp, fmt.Errorf("status code received %d on calling %s", httpResp.StatusCode, endpoint)
+		return resp, fmt.Errorf("status code received %d on calling %s", httpResp.StatusCode, r.URL)
 	}
 	return parseResponse(httpResp)
 }
@@ -94,12 +95,21 @@ func parseResponse(resp *http.Response) ([]byte, error) {
 	return body, nil
 }
 
-func buildEndPoint(host, path string) string {
+func buildEndPoint(host, reqURL, pathParam string) string {
 	host = strings.Trim(host, "/")
 	u := &url.URL{
 		Scheme: "http",
 		Host:   host,
-		Path:   path,
+	}
+	if pathParam != "" {
+		u.Path = "/" + strings.ReplaceAll(reqURL, "%s", pathParam)
+	} else {
+		u.Path = "/" + reqURL
+	}
+	if reqURL == dagStatusURL {
+		params := url.Values{}
+		params.Add("limit", "99999")
+		u.RawQuery = params.Encode()
 	}
 	return u.String()
 }

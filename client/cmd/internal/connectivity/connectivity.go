@@ -117,7 +117,7 @@ func getDefaultDialOptions() []grpc.DialOption {
 			grpc_prometheus.StreamClientInterceptor,
 		)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                time.Minute,     // send pings every 10 seconds if there is no activity
+			Time:                time.Minute,     // send pings every 1 Minute if there is no activity
 			Timeout:             1 * time.Second, // wait 1 second for ping ack before considering the connection dead
 			PermitWithoutStream: true,            // send pings even without active streams
 		}),

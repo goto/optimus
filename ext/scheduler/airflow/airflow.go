@@ -72,7 +72,7 @@ type Client interface {
 }
 
 type SecretGetter interface {
-	Get(ctx context.Context, projName tenant.ProjectName, namespaceName, name string) (*tenant.PlainTextSecret, error)
+	Get(ctx context.Context, projName tenant.ProjectName, namespaceName string, name tenant.SecretName) (*tenant.PlainTextSecret, error)
 }
 
 type ProjectGetter interface {

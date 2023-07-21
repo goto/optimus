@@ -24,9 +24,11 @@ func TestBigqueryStore(t *testing.T) {
 	ds := bigquery.Dataset{Project: "project", DatasetName: "dataset"}
 
 	t.Run("Create", func(t *testing.T) {
+		sn, err := tenant.SecretNameFrom("DATASTORE_BIGQUERY")
+		assert.Nil(t, err)
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(nil, errors.New("not found secret"))
 			defer secretProvider.AssertExpectations(t)
 
@@ -43,7 +45,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error when not able to get client", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -63,7 +65,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error when kind is invalid", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -87,7 +89,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for each dataset", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -115,7 +117,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for dataset", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -144,7 +146,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for table", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -173,7 +175,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for view", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -201,7 +203,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for each dataset", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -228,9 +230,11 @@ func TestBigqueryStore(t *testing.T) {
 		})
 	})
 	t.Run("Update", func(t *testing.T) {
+		sn, err := tenant.SecretNameFrom("DATASTORE_BIGQUERY")
+		assert.Nil(t, err)
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(nil, errors.New("not found secret"))
 			defer secretProvider.AssertExpectations(t)
 
@@ -247,7 +251,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error when not able to get client", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -267,7 +271,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error when kind is invalid", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 			client := new(mockClient)
@@ -290,7 +294,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for each dataset", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -318,7 +322,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for dataset", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -346,7 +350,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for table", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -374,7 +378,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for view", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -402,7 +406,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls appropriate handler for each dataset", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -428,6 +432,8 @@ func TestBigqueryStore(t *testing.T) {
 		})
 	})
 	t.Run("BatchUpdate", func(t *testing.T) {
+		sn, err := tenant.SecretNameFrom("DATASTORE_BIGQUERY")
+		assert.Nil(t, err)
 		t.Run("returns no error when empty list", func(t *testing.T) {
 			bqStore := bigquery.NewBigqueryDataStore(nil, nil)
 
@@ -436,7 +442,7 @@ func TestBigqueryStore(t *testing.T) {
 		})
 		t.Run("returns error when cannot get secret", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(nil, errors.New("not found secret"))
 			defer secretProvider.AssertExpectations(t)
 
@@ -453,7 +459,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error when cannot create client", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -474,7 +480,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error when one or more job fails", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -502,7 +508,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns no error when successfully updates", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -659,9 +665,12 @@ func TestBigqueryStore(t *testing.T) {
 		backup, backupErr := resource.NewBackup(store, tnnt, []string{"p.d.t"}, "", createdAt, nil)
 		assert.NoError(t, backupErr)
 
+		sn, err := tenant.SecretNameFrom("DATASTORE_BIGQUERY")
+		assert.Nil(t, err)
+
 		t.Run("returns error when cannot get secret", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(nil, errors.New("not found secret"))
 			defer secretProvider.AssertExpectations(t)
 
@@ -678,7 +687,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error when cannot create client", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -698,7 +707,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("calls backup resources to backup the resources", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, sn).
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -738,7 +747,7 @@ type mockSecretProvider struct {
 	mock.Mock
 }
 
-func (s *mockSecretProvider) GetSecret(ctx context.Context, ten tenant.Tenant, name string) (*tenant.PlainTextSecret, error) {
+func (s *mockSecretProvider) GetSecret(ctx context.Context, ten tenant.Tenant, name tenant.SecretName) (*tenant.PlainTextSecret, error) {
 	args := s.Called(ctx, ten, name)
 	var pts *tenant.PlainTextSecret
 	if args.Get(0) != nil {

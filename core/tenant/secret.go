@@ -1,6 +1,10 @@
 package tenant
 
-import "github.com/goto/optimus/internal/errors"
+import (
+	"strings"
+
+	"github.com/goto/optimus/internal/errors"
+)
 
 const (
 	EntitySecret = "secret"
@@ -16,11 +20,11 @@ func SecretNameFrom(name string) (SecretName, error) {
 	if name == "" {
 		return "", errors.InvalidArgument(EntitySecret, "secret name is empty")
 	}
-	return SecretName(name), nil
+	return SecretName(strings.ToUpper(name)), nil
 }
 
 func (sn SecretName) String() string {
-	return string(sn)
+	return strings.ToUpper(string(sn))
 }
 
 type PlainTextSecret struct {

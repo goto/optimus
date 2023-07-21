@@ -157,20 +157,19 @@ func TestTenantService(t *testing.T) {
 			secretsGetter := new(secretGetter)
 			tenantService := service.NewTenantService(nil, nil, secretsGetter, logger)
 			invalidTenant := tenant.Tenant{}
-
-			_, err := tenantService.GetSecret(ctx, invalidTenant, "secret")
+			secretName, _ := tenant.SecretNameFrom("secret")
+			_, err := tenantService.GetSecret(ctx, invalidTenant, secretName)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "invalid argument for entity tenant: tenant is invalid")
 		})
 		t.Run("calls secrets getter to get the secret for tenant", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 			secretsGetter := new(secretGetter)
-			secretsGetter.On("Get", ctx, proj.Name(), ns.Name().String(), "secret_name").Return(pts, nil)
+			secretsGetter.On("Get", ctx, proj.Name(), ns.Name().String(), pts.Name()).Return(pts, nil)
 			defer secretsGetter.AssertExpectations(t)
-
 			tenantService := service.NewTenantService(nil, nil, secretsGetter, logger)
 
-			secret, err := tenantService.GetSecret(ctx, tnnt, pts.Name().String())
+			secret, err := tenantService.GetSecret(ctx, tnnt, pts.Name())
 			assert.Nil(t, err)
 			assert.Equal(t, "secret_value", secret.Value())
 		})
@@ -207,7 +206,7 @@ type secretGetter struct {
 	mock.Mock
 }
 
-func (s *secretGetter) Get(ctx context.Context, projName tenant.ProjectName, namespaceName, name string) (*tenant.PlainTextSecret, error) {
+func (s *secretGetter) Get(ctx context.Context, projName tenant.ProjectName, namespaceName string, name tenant.SecretName) (*tenant.PlainTextSecret, error) {
 	args := s.Called(ctx, projName, namespaceName, name)
 	var pts *tenant.PlainTextSecret
 	if args.Get(0) != nil {

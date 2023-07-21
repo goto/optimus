@@ -60,13 +60,17 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 					secretMap = tenant.PlainTextSecrets(plainTextSecretsList).ToMap()
 				}
 
-				var secret string
+				var secretName tenant.SecretName
 				switch scheme {
 				case NotificationSchemeSlack:
-					secret = secretMap[tenant.SecretNotifySlack]
+					secretName, err = tenant.SecretNameFrom(tenant.SecretNotifySlack)
 				case NotificationSchemePagerDuty:
-					secret = secretMap[strings.ReplaceAll(route, "#", "notify_")]
+					secretName, err = tenant.SecretNameFrom(strings.ReplaceAll(route, "#", "notify_"))
 				}
+				if err != nil {
+					return err
+				}
+				secret := secretMap[secretName.String()]
 
 				if notifyChannel, ok := n.notifyChannels[scheme]; ok {
 					if currErr := notifyChannel.Notify(ctx,

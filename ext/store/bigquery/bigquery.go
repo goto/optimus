@@ -48,7 +48,7 @@ type ClientProvider interface {
 }
 
 type SecretProvider interface {
-	GetSecret(ctx context.Context, tnnt tenant.Tenant, key string) (*tenant.PlainTextSecret, error)
+	GetSecret(ctx context.Context, tnnt tenant.Tenant, key tenant.SecretName) (*tenant.PlainTextSecret, error)
 }
 
 type Store struct {

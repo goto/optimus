@@ -113,41 +113,34 @@ func TestSecretService(t *testing.T) {
 		})
 	})
 	t.Run("Get", func(t *testing.T) {
+		sn, err := tenant.SecretNameFrom("name")
+		assert.Nil(t, err)
 		t.Run("returns error when project name is invalid", func(t *testing.T) {
-			sn, err := tenant.SecretNameFrom("name")
-			assert.Nil(t, err)
-
 			secretRepo := new(secretRepo)
 			secretService := service.NewSecretService(key, secretRepo, logger)
 
-			_, err = secretService.Get(ctx, "", nsName, sn)
+			_, err := secretService.Get(ctx, "", nsName, "name")
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "invalid argument for entity secret: tenant is not valid")
 		})
 		t.Run("returns error when repo returns error", func(t *testing.T) {
-			sn, err := tenant.SecretNameFrom("name")
-			assert.Nil(t, err)
-
 			secretRepo := new(secretRepo)
 			secretRepo.On("Get", ctx, projectName, nsName, sn).Return(nil, errors.New("error in get"))
 			defer secretRepo.AssertExpectations(t)
 
 			secretService := service.NewSecretService(key, secretRepo, logger)
-			_, err = secretService.Get(ctx, projectName, nsName, sn)
+			_, err = secretService.Get(ctx, projectName, nsName, "name")
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "error in get")
 		})
 		t.Run("returns error when not able to decode", func(t *testing.T) {
-			sn, err := tenant.SecretNameFrom("name")
-			assert.Nil(t, err)
-
 			secretRepo := new(secretRepo)
 			secretRepo.On("Get", ctx, projectName, nsName, sn).Return(&invalidSecret, nil)
 			defer secretRepo.AssertExpectations(t)
 
 			secretService := service.NewSecretService(key, secretRepo, logger)
-			_, err = secretService.Get(ctx, projectName, nsName, sn)
+			_, err = secretService.Get(ctx, projectName, nsName, "name")
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "malformed ciphertext")
 		})
@@ -159,15 +152,12 @@ func TestSecretService(t *testing.T) {
 			sec, err := tenant.NewSecret("name", string(encodedArr), projectName, nsName)
 			assert.Nil(t, err)
 
-			sn, err := tenant.SecretNameFrom("name")
-			assert.Nil(t, err)
-
 			secretRepo := new(secretRepo)
 			secretRepo.On("Get", ctx, projectName, nsName, sn).Return(sec, nil)
 			defer secretRepo.AssertExpectations(t)
 
 			secretService := service.NewSecretService(key, secretRepo, logger)
-			s, err := secretService.Get(ctx, projectName, nsName, sn)
+			s, err := secretService.Get(ctx, projectName, nsName, "name")
 			assert.Nil(t, err)
 			assert.Equal(t, "NAME", s.Name().String())
 			assert.Equal(t, "value", s.Value())

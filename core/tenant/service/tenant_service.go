@@ -18,7 +18,7 @@ type NamespaceGetter interface {
 }
 
 type SecretsGetter interface {
-	Get(ctx context.Context, projName tenant.ProjectName, namespaceName string, name tenant.SecretName) (*tenant.PlainTextSecret, error)
+	Get(ctx context.Context, projName tenant.ProjectName, namespaceName, name string) (*tenant.PlainTextSecret, error)
 	GetAll(ctx context.Context, projName tenant.ProjectName, namespaceName string) ([]*tenant.PlainTextSecret, error)
 }
 
@@ -73,7 +73,7 @@ func (t TenantService) GetSecrets(ctx context.Context, tnnt tenant.Tenant) ([]*t
 	return t.secretsGetter.GetAll(ctx, tnnt.ProjectName(), tnnt.NamespaceName().String())
 }
 
-func (t TenantService) GetSecret(ctx context.Context, tnnt tenant.Tenant, name tenant.SecretName) (*tenant.PlainTextSecret, error) {
+func (t TenantService) GetSecret(ctx context.Context, tnnt tenant.Tenant, name string) (*tenant.PlainTextSecret, error) {
 	if tnnt.IsInvalid() {
 		t.logger.Error("tenant information is invalid")
 		return nil, errors.InvalidArgument(tenant.EntityTenant, "tenant is invalid")

@@ -24,7 +24,7 @@ func SecretNameFrom(name string) (SecretName, error) {
 }
 
 func (sn SecretName) String() string {
-	return strings.ToUpper(string(sn))
+	return string(sn)
 }
 
 type PlainTextSecret struct {
@@ -58,12 +58,29 @@ func (p *PlainTextSecret) Name() SecretName {
 
 type PlainTextSecrets []*PlainTextSecret
 
-func (p PlainTextSecrets) ToMap() map[string]string {
+type SecretMap map[string]string
+
+func (p PlainTextSecrets) ToSecretMap() SecretMap {
 	secretMap := map[string]string{}
 	for _, item := range p {
 		secretMap[item.Name().String()] = item.Value()
 	}
 	return secretMap
+}
+
+func (s SecretMap) Get(secretName string) (string, error) {
+	if secretName == "" {
+		return "", errors.InvalidArgument(EntitySecret, "empty secret name")
+	}
+
+	if secret, ok := s[strings.ToUpper(secretName)]; ok {
+		return secret, nil
+	}
+	return "", errors.NotFound(EntitySecret, "value not found for: "+secretName)
+}
+
+func (s SecretMap) ToMap() map[string]string {
+	return s
 }
 
 type Secret struct {

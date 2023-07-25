@@ -71,7 +71,13 @@ func (s SecretService) Update(ctx context.Context, projName tenant.ProjectName, 
 	return s.repo.Update(ctx, item)
 }
 
-func (s SecretService) Get(ctx context.Context, projName tenant.ProjectName, namespaceName string, secretName tenant.SecretName) (*tenant.PlainTextSecret, error) {
+func (s SecretService) Get(ctx context.Context, projName tenant.ProjectName, namespaceName, name string) (*tenant.PlainTextSecret, error) {
+	secretName, err := tenant.SecretNameFrom(name)
+	if err != nil {
+		s.logger.Error("error adapting secret name [%s]: %s", name, err)
+		return nil, errors.InvalidArgument(tenant.EntitySecret, "secret name is not valid")
+	}
+
 	if projName == "" {
 		s.logger.Error("project name for secret [%s] is empty")
 		return nil, errors.InvalidArgument(tenant.EntitySecret, "tenant is not valid")

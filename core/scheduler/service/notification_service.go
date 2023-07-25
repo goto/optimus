@@ -39,7 +39,7 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 	}
 	notificationConfig := jobDetails.Alerts
 	multierror := errors.NewMultiError("ErrorsInNotifypush")
-	var secretMap map[string]string
+	var secretMap tenant.SecretMap
 	var plainTextSecretsList []*tenant.PlainTextSecret
 	for _, notify := range notificationConfig {
 		if event.Type.IsOfType(notify.On) {
@@ -57,20 +57,20 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 						multierror.Append(err)
 						continue
 					}
-					secretMap = tenant.PlainTextSecrets(plainTextSecretsList).ToMap()
+					secretMap = tenant.PlainTextSecrets(plainTextSecretsList).ToSecretMap()
 				}
 
-				var secretName tenant.SecretName
+				var secretName string
 				switch scheme {
 				case NotificationSchemeSlack:
-					secretName, err = tenant.SecretNameFrom(tenant.SecretNotifySlack)
+					secretName = tenant.SecretNotifySlack
 				case NotificationSchemePagerDuty:
-					secretName, err = tenant.SecretNameFrom(strings.ReplaceAll(route, "#", "notify_"))
+					secretName = strings.ReplaceAll(route, "#", "notify_")
 				}
+				secret, err := secretMap.Get(secretName)
 				if err != nil {
 					return err
 				}
-				secret := secretMap[secretName.String()]
 
 				if notifyChannel, ok := n.notifyChannels[scheme]; ok {
 					if currErr := notifyChannel.Notify(ctx,

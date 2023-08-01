@@ -44,6 +44,8 @@ func NewJobHandler(jobService JobService, logger log.Logger) *JobHandler {
 type JobService interface {
 	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
+	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
+	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
 	Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (jobSpec *job.Job, err error)
@@ -485,6 +487,77 @@ func (jh *JobHandler) GetJobTask(ctx context.Context, req *pb.GetJobTaskRequest)
 	return &pb.GetJobTaskResponse{
 		Task: jobTaskSpec,
 	}, nil
+}
+
+func (jh *JobHandler) UpdateJobsState(ctx context.Context, req *pb.UpdateJobsStateRequest) (*pb.UpdateJobsStateResponse, error) {
+	jobTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, err
+	}
+	jobState, err := job.StateFrom(req.GetState().String())
+	if err != nil {
+		jh.l.Error("error adapting job state %s: %s", req.GetState().String(), err)
+		return nil, err
+	}
+
+	remark := req.Remark
+	if len(remark) < 1 {
+		jh.l.Error("empty remark for changing %d jobs state of %s:%s to %s", len(req.GetJobNames()), jobState, jobTenant.ProjectName(), jobTenant.NamespaceName())
+		return nil, errors.InvalidArgument(job.EntityJob, "can not update job state without a valid remark")
+	}
+	var jobNames []job.Name
+	for _, name := range req.GetJobNames() {
+		jobName, err := job.NameFrom(name)
+		if err != nil {
+			jh.l.Error("error adapting job name: '%s', err: %s", name, err.Error())
+			return nil, err
+		}
+		jobNames = append(jobNames, jobName)
+	}
+
+	err = jh.jobService.UpdateState(ctx, jobTenant, jobNames, jobState, remark)
+	if err != nil {
+		jh.l.Error("error updating job state", err.Error())
+		return nil, err
+	}
+
+	return &pb.UpdateJobsStateResponse{}, nil
+}
+
+func (jh *JobHandler) SyncJobsState(ctx context.Context, req *pb.SyncJobsStateRequest) (*pb.SyncJobsStateResponse, error) {
+	jobTenant, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		jh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, err
+	}
+
+	var enabledJobNames, disabledJobNames []job.Name
+	for _, jobState := range req.GetJobStates() {
+		state, err := job.StateFrom(jobState.State.String())
+		if err != nil {
+			jh.l.Error("error adapting job state %s: %s", jobState.State.String(), err)
+			return nil, err
+		}
+		jobName, err := job.NameFrom(jobState.JobName)
+		if err != nil {
+			jh.l.Error("error adapting job name: '%s', err: %s", jobState.JobName, err.Error())
+			return nil, err
+		}
+		if state == job.DISABLED {
+			disabledJobNames = append(disabledJobNames, jobName)
+		} else {
+			enabledJobNames = append(enabledJobNames, jobName)
+		}
+	}
+
+	err = jh.jobService.SyncState(ctx, jobTenant, disabledJobNames, enabledJobNames)
+	if err != nil {
+		jh.l.Error("error syncing job state for project: %s, namespace: %s, err: %s", jobTenant.ProjectName, jobTenant.NamespaceName(), err.Error())
+		return nil, err
+	}
+
+	return &pb.SyncJobsStateResponse{}, nil
 }
 
 func (jh *JobHandler) JobInspect(ctx context.Context, req *pb.JobInspectRequest) (*pb.JobInspectResponse, error) {

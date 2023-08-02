@@ -34,7 +34,6 @@ type JobService struct {
 	pluginService    PluginService
 	upstreamResolver UpstreamResolver
 	eventHandler     EventHandler
-	scheduler        Scheduler
 
 	tenantDetailsGetter TenantDetailsGetter
 
@@ -47,7 +46,7 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService, scheduler Scheduler,
+	jobDeploymentService JobDeploymentService,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -59,7 +58,6 @@ func NewJobService(
 		tenantDetailsGetter:  tenantDetailsGetter,
 		logger:               logger,
 		jobDeploymentService: jobDeploymentService,
-		scheduler:            scheduler,
 	}
 }
 
@@ -75,6 +73,7 @@ type TenantDetailsGetter interface {
 
 type JobDeploymentService interface {
 	UploadJobs(ctx context.Context, jobTenant tenant.Tenant, toUpdate, toDelete []string) error
+	UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error
 }
 
 type JobRepository interface {
@@ -112,10 +111,6 @@ type EventHandler interface {
 type UpstreamResolver interface {
 	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
-}
-
-type Scheduler interface {
-	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
@@ -195,7 +190,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
-	err := j.scheduler.UpdateJobState(ctx, jobTenant, jobNames, jobState.String())
+	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant, jobNames, jobState.String())
 	if err != nil {
 		return err
 	}

@@ -12,9 +12,9 @@ import (
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
-	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	ext "github.com/goto/optimus/ext/scheduler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
 	"github.com/goto/optimus/internal/telemetry"
@@ -67,13 +67,7 @@ type PriorityResolver interface {
 	Resolve(context.Context, []*scheduler.JobWithDetails) error
 }
 
-type Scheduler interface {
-	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
-	DeployJobs(ctx context.Context, t tenant.Tenant, jobs []*scheduler.JobWithDetails) error
-	ListJobs(ctx context.Context, t tenant.Tenant) ([]string, error)
-	DeleteJobs(ctx context.Context, t tenant.Tenant, jobsToDelete []string) error
-	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error
-}
+type SchedulerFactory ext.SchedulerFactory
 
 type EventHandler interface {
 	HandleEvent(moderator.Event)
@@ -85,7 +79,7 @@ type JobRunService struct {
 	replayRepo       JobReplayRepository
 	operatorRunRepo  OperatorRunRepository
 	eventHandler     EventHandler
-	scheduler        Scheduler
+	schedulerFactory SchedulerFactory
 	jobRepo          JobRepository
 	priorityResolver PriorityResolver
 	compiler         JobInputCompiler
@@ -135,6 +129,9 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		s.l.Error(msg)
 		return nil, errors.AddErrContext(err, scheduler.EntityJobRun, msg)
 	}
+
+	schedulerObj := s.schedulerFactory.New(ctx, jobWithDetails.Job.Tenant)
+
 	interval := jobWithDetails.Schedule.Interval
 	if interval == "" {
 		s.l.Error("job schedule interval is empty")
@@ -149,7 +146,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 
 	if criteria.OnlyLastRun {
 		s.l.Warn("getting last run only")
-		return s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
+		return schedulerObj.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
 	}
 	err = validateJobQuery(criteria, jobWithDetails)
 	if err != nil {
@@ -158,7 +155,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	}
 	expectedRuns := getExpectedRuns(jobCron, criteria.StartDate, criteria.EndDate)
 
-	actualRuns, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
+	actualRuns, err := schedulerObj.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
 	if err != nil {
 		s.l.Error("unable to get job runs from airflow err: %s", err)
 		actualRuns = []*scheduler.JobRunStatus{}
@@ -505,13 +502,13 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 }
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
-	operatorRunRepo OperatorRunRepository, scheduler Scheduler, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
+	operatorRunRepo OperatorRunRepository, schedulerFactory SchedulerFactory, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
 ) *JobRunService {
 	return &JobRunService{
 		l:                logger,
 		repo:             jobRunRepo,
 		operatorRunRepo:  operatorRunRepo,
-		scheduler:        scheduler,
+		schedulerFactory: schedulerFactory,
 		eventHandler:     eventHandler,
 		replayRepo:       replayRepo,
 		jobRepo:          jobRepo,

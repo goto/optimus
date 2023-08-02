@@ -45,7 +45,8 @@ func (s *JobRunService) UploadToScheduler(ctx context.Context, projectName tenan
 }
 
 func (s *JobRunService) deployJobsPerNamespace(ctx context.Context, t tenant.Tenant, jobs []*scheduler.JobWithDetails) error {
-	err := s.scheduler.DeployJobs(ctx, t, jobs)
+	schedulerObj := s.schedulerFactory.New(ctx, t)
+	err := schedulerObj.DeployJobs(ctx, t, jobs)
 	if err != nil {
 		s.l.Error("error deploying jobs under project [%s] namespace [%s]: %s", t.ProjectName().String(), t.NamespaceName().String(), err)
 		return err
@@ -55,7 +56,8 @@ func (s *JobRunService) deployJobsPerNamespace(ctx context.Context, t tenant.Ten
 
 func (s *JobRunService) cleanPerNamespace(ctx context.Context, t tenant.Tenant, jobs []*scheduler.JobWithDetails) error {
 	// get all stored job names
-	schedulerJobNames, err := s.scheduler.ListJobs(ctx, t)
+	schedulerObj := s.schedulerFactory.New(ctx, t)
+	schedulerJobNames, err := schedulerObj.ListJobs(ctx, t)
 	if err != nil {
 		s.l.Error("error listing jobs under project [%s] namespace [%s]: %s", t.ProjectName().String(), t.NamespaceName().String(), err)
 		return err
@@ -71,11 +73,12 @@ func (s *JobRunService) cleanPerNamespace(ctx context.Context, t tenant.Tenant, 
 			jobsToDelete = append(jobsToDelete, schedulerJobName)
 		}
 	}
-	return s.scheduler.DeleteJobs(ctx, t, jobsToDelete)
+	return schedulerObj.DeleteJobs(ctx, t, jobsToDelete)
 }
 
 func (s *JobRunService) UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error {
-	return s.scheduler.UpdateJobState(ctx, tnnt, jobName, state)
+	schedulerObj := s.schedulerFactory.New(ctx, tnnt)
+	return schedulerObj.UpdateJobState(ctx, tnnt, jobName, state)
 }
 
 func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUpdate, toDelete []string) (err error) {
@@ -90,7 +93,8 @@ func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUp
 	}
 
 	if len(toDelete) > 0 {
-		if err = s.scheduler.DeleteJobs(ctx, tnnt, toDelete); err == nil {
+		schedulerObj := s.schedulerFactory.New(ctx, tnnt)
+		if err = schedulerObj.DeleteJobs(ctx, tnnt, toDelete); err == nil {
 			s.l.Info("deleted %s jobs on project: %s", len(toDelete), tnnt.ProjectName())
 		}
 		me.Append(err)
@@ -110,5 +114,6 @@ func (s *JobRunService) resolveAndDeployJobs(ctx context.Context, tnnt tenant.Te
 		return err
 	}
 
-	return s.scheduler.DeployJobs(ctx, tnnt, allJobsWithDetails)
+	schedulerObj := s.schedulerFactory.New(ctx, tnnt)
+	return schedulerObj.DeployJobs(ctx, tnnt, allJobsWithDetails)
 }

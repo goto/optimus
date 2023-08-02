@@ -42,7 +42,8 @@ type ReplayValidator interface {
 type ReplayService struct {
 	replayRepo ReplayRepository
 	jobRepo    JobRepository
-	runGetter  SchedulerRunGetter
+
+	schedulerFactory SchedulerFactory
 
 	validator ReplayValidator
 
@@ -101,7 +102,8 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return nil, err
 	}
-	existingRuns, err := r.runGetter.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
+	schedulerObj := r.schedulerFactory.New(ctx, tenant)
+	existingRuns, err := schedulerObj.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
 	if err != nil {
 		return nil, err
 	}
@@ -114,8 +116,8 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 	return runs, nil
 }
 
-func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
-	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, runGetter: runGetter, logger: logger}
+func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, schedulerFactory SchedulerFactory, logger log.Logger) *ReplayService {
+	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, schedulerFactory: schedulerFactory, logger: logger}
 }
 
 func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt tenant.Tenant, jobName scheduler.JobName) (*cron.ScheduleSpec, error) {

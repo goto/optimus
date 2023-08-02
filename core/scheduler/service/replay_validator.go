@@ -18,12 +18,12 @@ var replayStatusToValidate = []scheduler.ReplayState{
 
 type Validator struct {
 	replayRepository ReplayRepository
-	scheduler        ReplayScheduler
+	schedulerFactory SchedulerFactory
 	jobRepo          JobRepository
 }
 
-func NewValidator(replayRepository ReplayRepository, scheduler ReplayScheduler, jobRepo JobRepository) *Validator {
-	return &Validator{replayRepository: replayRepository, scheduler: scheduler, jobRepo: jobRepo}
+func NewValidator(replayRepository ReplayRepository, schedulerFactory SchedulerFactory, jobRepo JobRepository) *Validator {
+	return &Validator{replayRepository: replayRepository, schedulerFactory: schedulerFactory, jobRepo: jobRepo}
 }
 
 func (v Validator) Validate(ctx context.Context, replayRequest *scheduler.Replay, jobCron *cron.ScheduleSpec) error {
@@ -88,7 +88,8 @@ func (v Validator) validateConflictedRun(ctx context.Context, replayRequest *sch
 		StartDate: replayRequest.Config().StartTime,
 		EndDate:   replayRequest.Config().EndTime,
 	}
-	runs, err := v.scheduler.GetJobRuns(ctx, replayRequest.Tenant(), jobRunCriteria, jobCron)
+	schedulerObj := v.schedulerFactory.New(ctx, replayRequest.Tenant())
+	runs, err := schedulerObj.GetJobRuns(ctx, replayRequest.Tenant(), jobRunCriteria, jobCron)
 	if err != nil {
 		return err
 	}

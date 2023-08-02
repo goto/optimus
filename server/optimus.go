@@ -34,6 +34,7 @@ import (
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
+	"github.com/goto/optimus/ext/scheduler"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
@@ -314,21 +315,18 @@ func (s *OptimusServer) setupHandlers() error {
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.pluginRepo, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
 	notificationService := schedulerService.NewNotifyService(s.logger, jobProviderRepo, tenantService, notifierChanels)
-	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
-	if err != nil {
-		return err
-	}
+	schedulerFactory := scheduler.NewSchedulerFactory(tenantService)
 
 	replayRepository := schedulerRepo.NewReplayRepository(s.dbPool)
-	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, newScheduler, jobProviderRepo, s.conf.Replay)
+	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, schedulerFactory, jobProviderRepo, s.conf.Replay)
 	replayManager := schedulerService.NewReplayManager(s.logger, replayRepository, replayWorker, func() time.Time {
 		return time.Now().UTC()
 	}, s.conf.Replay)
 
-	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
-	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, newScheduler, s.logger)
+	replayValidator := schedulerService.NewValidator(replayRepository, schedulerFactory, jobProviderRepo)
+	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, schedulerFactory, s.logger)
 
-	newJobRunService := schedulerService.NewJobRunService(s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler)
+	newJobRunService := schedulerService.NewJobRunService(s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, schedulerFactory, newPriorityResolver, jobInputCompiler, s.eventHandler)
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
@@ -373,7 +371,7 @@ func (s *OptimusServer) setupHandlers() error {
 	replayManager.Initialize()
 
 	s.cleanupFn = append(s.cleanupFn, func() {
-		err = notificationService.Close()
+		err := notificationService.Close()
 		if err != nil {
 			s.logger.Error("Error while closing event service: %s", err)
 		}

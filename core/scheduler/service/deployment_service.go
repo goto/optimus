@@ -5,6 +5,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -71,6 +72,10 @@ func (s *JobRunService) cleanPerNamespace(ctx context.Context, t tenant.Tenant, 
 		}
 	}
 	return s.scheduler.DeleteJobs(ctx, t, jobsToDelete)
+}
+
+func (s *JobRunService) UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error {
+	return s.scheduler.UpdateJobState(ctx, tnnt, jobName, state)
 }
 
 func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUpdate, toDelete []string) (err error) {

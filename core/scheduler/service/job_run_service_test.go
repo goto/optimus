@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/core/event/moderator"
+	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
@@ -1381,6 +1382,11 @@ func (ms *mockScheduler) ListJobs(ctx context.Context, t tenant.Tenant) ([]strin
 
 func (ms *mockScheduler) DeleteJobs(ctx context.Context, t tenant.Tenant, jobsToDelete []string) error {
 	args := ms.Called(ctx, t, jobsToDelete)
+	return args.Error(0)
+}
+
+func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []job.Name, state string) error {
+	args := ms.Called(ctx, tnnt, jobNames, state)
 	return args.Error(0)
 }
 

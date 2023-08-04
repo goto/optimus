@@ -349,7 +349,7 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 	case scheduler.StateFailed:
 		schedulerEvent, err = event.NewJobRunFailedEvent(jobRun)
 	default:
-		s.l.Error("unrecognised job run state, to raise job run state change event")
+		s.l.Error("state [%s] is unrecognized, event is not published", jobRun.State)
 		return
 	}
 	if err != nil {

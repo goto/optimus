@@ -347,6 +347,9 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 		schedulerEvent, err = event.NewJobRunSuccessEvent(jobRun)
 	case scheduler.StateFailed:
 		schedulerEvent, err = event.NewJobRunFailedEvent(jobRun)
+	default:
+		s.l.Error("unrecognised job run state, to raise job run state change event")
+		return
 	}
 	if err != nil {
 		s.l.Error("error creating event for job run state change : %s", err)
@@ -378,6 +381,7 @@ func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.
 			s.l.Error("error updating state for job run id [%d] to [%s]: %s", jobRun.ID, jobState, err)
 			return err
 		}
+		jobRun.State = jobState
 		s.raiseJobRunStateChangeEvent(jobRun)
 	}
 

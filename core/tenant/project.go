@@ -10,6 +10,7 @@ const (
 
 	ProjectStoragePathKey = "STORAGE_PATH"
 	ProjectSchedulerHost  = "SCHEDULER_HOST"
+	ProjectAirflowVersion = "AIRFLOW_VERSION"
 )
 
 type ProjectName string

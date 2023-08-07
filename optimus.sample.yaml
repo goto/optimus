@@ -19,6 +19,8 @@ project:
  config:
    environment: integration
    scheduler_host: http://example.io/
+   # scheduler version, in this case, airflow version on targeted host
+   scheduler_version: 2.1.4
    # storage_path is used for storing compiled job specifications that can be
    # consumed by schedulers like Airflow
    # it supports multiple schemes like: file://, gcs://

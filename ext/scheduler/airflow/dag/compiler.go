@@ -57,9 +57,9 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 		Upstreams:       upstreams,
 	}
 
-	airflowVersion, err := project.GetConfig(tenant.ProjectAirflowVersion)
+	airflowVersion, err := project.GetConfig(tenant.ProjectSchedulerVersion)
 	if err != nil {
-		msg := fmt.Sprintf("%s is not provided in project %s, %s", tenant.ProjectAirflowVersion, project.Name(), err.Error())
+		msg := fmt.Sprintf("%s is not provided in project %s, %s", tenant.ProjectSchedulerVersion, project.Name(), err.Error())
 		return nil, errors.InvalidArgument(EntitySchedulerAirflow, msg)
 	}
 	tmpl := c.templateFactory.New(airflowVersion)

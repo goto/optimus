@@ -60,7 +60,6 @@ func (w *Writer) Write(messages [][]byte) error {
 
 func (w *Writer) send(messages []kafka.Message) error {
 	err := w.kafkaWriter.WriteMessages(context.Background(), messages...)
-
 	if err != nil {
 		var messageSizeError *kafka.MessageTooLargeError
 		if errors.As(err, &messageSizeError) {

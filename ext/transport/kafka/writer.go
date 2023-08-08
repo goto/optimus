@@ -61,10 +61,10 @@ func (w *Writer) Write(messages [][]byte) error {
 func (w *Writer) send(messages []kafka.Message) error {
 	err := w.kafkaWriter.WriteMessages(context.Background(), messages...)
 	if err != nil {
-		var messageSizeError *kafka.MessageTooLargeError
+		var messageSizeError kafka.MessageTooLargeError
 		if errors.As(err, &messageSizeError) {
 			w.logger.Error("Received too large message error for a message, trying remaining")
-			w.logger.Error("Discarded message", messageSizeError.Message.Value)
+			w.logger.Error("Discarded message: %s", string(messageSizeError.Message.Value))
 
 			return w.send(messageSizeError.Remaining)
 		}

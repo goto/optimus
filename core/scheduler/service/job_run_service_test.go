@@ -931,7 +931,7 @@ func TestJobRunService(t *testing.T) {
 				Filter:    []string{"success"},
 			}
 			sch := new(mockScheduler)
-			sch.On("GetJobRuns", ctx, tnnt, criteria, jobCron).Return([]*scheduler.JobRunStatus{}, nil)
+			sch.On("GetScheduledJobRuns", ctx, tnnt, criteria, jobCron).Return([]*scheduler.JobRunStatus{}, nil)
 			defer sch.AssertExpectations(t)
 			jobRepo := new(JobRepository)
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
@@ -1067,7 +1067,7 @@ func TestJobRunService(t *testing.T) {
 			} {
 				t.Run(scenario.description, func(t *testing.T) {
 					sch := new(mockScheduler)
-					sch.On("GetJobRuns", ctx, tnnt, scenario.input, jobCron).Return(scenario.runs, nil)
+					sch.On("GetScheduledJobRuns", ctx, tnnt, scenario.input, jobCron).Return(scenario.runs, nil)
 					defer sch.AssertExpectations(t)
 					jobRepo := new(JobRepository)
 					jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
@@ -1247,7 +1247,7 @@ func TestJobRunService(t *testing.T) {
 			}
 
 			sch := new(mockScheduler)
-			sch.On("GetJobRuns", ctx, tnnt, criteria, jobCron).Return(runs, nil)
+			sch.On("GetScheduledJobRuns", ctx, tnnt, criteria, jobCron).Return(runs, nil)
 			defer sch.AssertExpectations(t)
 			jobRepo := new(JobRepository)
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
@@ -1373,6 +1373,14 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 
 type mockScheduler struct {
 	mock.Mock
+}
+
+func (ms *mockScheduler) GetScheduledJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+	args := ms.Called(ctx, t, criteria, jobCron)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
 }
 
 func (ms *mockScheduler) GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {

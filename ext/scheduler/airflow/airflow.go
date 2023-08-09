@@ -254,10 +254,7 @@ func jobNameFromPath(filePath, suffix string) string {
 	return strings.TrimSuffix(jobFileName, suffix)
 }
 
-func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
-	spanCtx, span := startChildSpan(ctx, "GetJobRuns")
-	defer span.End()
-
+func (s *Scheduler) getDagRunList(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) (*DagRunListResponse, error) {
 	dagRunRequest := getDagRunRequest(jobQuery, jobCron)
 	reqBody, err := json.Marshal(dagRunRequest)
 	if err != nil {
@@ -275,7 +272,7 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 		return nil, err
 	}
 
-	resp, err := s.client.Invoke(spanCtx, req, schdAuth)
+	resp, err := s.client.Invoke(ctx, req, schdAuth)
 	if err != nil {
 		return nil, errors.Wrap(EntityAirflow, "failure while fetching airflow dag runs", err)
 	}
@@ -284,8 +281,29 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 	if err := json.Unmarshal(resp, &dagRunList); err != nil {
 		return nil, errors.Wrap(EntityAirflow, fmt.Sprintf("json error on parsing airflow dag runs: %s", string(resp)), err)
 	}
+	return &dagRunList, nil
+}
 
-	return getJobRuns(dagRunList, jobCron)
+func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+	spanCtx, span := startChildSpan(ctx, "GetJobRuns")
+	defer span.End()
+
+	dagRunListResp, err := s.getDagRunList(spanCtx, tnnt, jobQuery, jobCron)
+	if err != nil {
+		return nil, err
+	}
+	return getJobRuns(*dagRunListResp, jobCron, true)
+}
+
+func (s *Scheduler) GetScheduledJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+	spanCtx, span := startChildSpan(ctx, "GetScheduledJobRuns")
+	defer span.End()
+
+	dagRunListResp, err := s.getDagRunList(spanCtx, tnnt, jobQuery, jobCron)
+	if err != nil {
+		return nil, err
+	}
+	return getJobRuns(*dagRunListResp, jobCron, false)
 }
 
 // UpdateJobState set the state of jobs as enabled / disabled on scheduler

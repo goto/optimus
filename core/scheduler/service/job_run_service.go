@@ -68,7 +68,7 @@ type PriorityResolver interface {
 }
 
 type Scheduler interface {
-	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
+	GetScheduledJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 	DeployJobs(ctx context.Context, t tenant.Tenant, jobs []*scheduler.JobWithDetails) error
 	ListJobs(ctx context.Context, t tenant.Tenant) ([]string, error)
 	DeleteJobs(ctx context.Context, t tenant.Tenant, jobsToDelete []string) error
@@ -149,7 +149,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 
 	if criteria.OnlyLastRun {
 		s.l.Warn("getting last run only")
-		return s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
+		return s.scheduler.GetScheduledJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
 	}
 	err = validateJobQuery(criteria, jobWithDetails)
 	if err != nil {
@@ -158,7 +158,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	}
 	expectedRuns := getExpectedRuns(jobCron, criteria.StartDate, criteria.EndDate)
 
-	actualRuns, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
+	actualRuns, err := s.scheduler.GetScheduledJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
 	if err != nil {
 		s.l.Error("unable to get job runs from airflow err: %s", err)
 		actualRuns = []*scheduler.JobRunStatus{}

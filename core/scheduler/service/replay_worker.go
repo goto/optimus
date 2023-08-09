@@ -176,12 +176,8 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 		return err
 	}
 
-	w.l.Debug("replay req range %s to %s", replayReq.Replay.Config().StartTime, replayReq.Replay.Config().EndTime)
-	w.l.Debug("incoming runs %+v", scheduler.JobRunStatusList(incomingRuns).ToRunStatusMap())
-
 	updatedReplayMap := identifyUpdatedRunStatus(replayReq.Runs, incomingRuns)
 	updatedRuns := scheduler.JobRunStatusList(replayReq.Runs).MergeWithUpdatedRuns(updatedReplayMap)
-	w.l.Debug("updated runs %+v", scheduler.JobRunStatusList(updatedRuns).ToRunStatusMap())
 
 	replayedRuns := scheduler.JobRunStatusList(updatedRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
 	toBeReplayedRuns := scheduler.JobRunStatusList(updatedRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StatePending})

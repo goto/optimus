@@ -140,6 +140,14 @@ func (j JobRunStatusList) OverrideWithStatus(status State) []*JobRunStatus {
 	return overridedRuns
 }
 
+type Time time.Time
+
+// NewTimeFrom creates scheduler context time from optimus context time
+// it always 1 shift late
+func NewTimeFrom(t time.Time, cron *cron.ScheduleSpec) time.Time {
+	return cron.Prev(t)
+}
+
 // JobRunsCriteria represents the filter condition to get run status from scheduler
 type JobRunsCriteria struct {
 	Name        string
@@ -149,17 +157,12 @@ type JobRunsCriteria struct {
 	OnlyLastRun bool
 }
 
-func (c *JobRunsCriteria) ExecutionStart(cron *cron.ScheduleSpec) time.Time {
-	return cron.Prev(c.StartDate)
+func (c *JobRunsCriteria) ExecutionStart(jobCron *cron.ScheduleSpec) time.Time {
+	startDate := jobCron.Next(c.StartDate.Add(-time.Second * 1)) // normalize
+	return NewTimeFrom(startDate, jobCron)
 }
 
 func (c *JobRunsCriteria) ExecutionEndDate(jobCron *cron.ScheduleSpec) time.Time {
-	scheduleEndTime := c.EndDate
-
-	// when the current time matches one of the schedule times execution time means previous schedule.
-	if jobCron.Next(scheduleEndTime.Add(-time.Second * 1)).Equal(scheduleEndTime) {
-		return jobCron.Prev(scheduleEndTime)
-	}
-	// else it is previous to previous schedule.
-	return jobCron.Prev(jobCron.Prev(scheduleEndTime))
+	endDate := jobCron.Prev(c.EndDate.Add(time.Second * 1)) // normalize
+	return NewTimeFrom(endDate, jobCron)
 }

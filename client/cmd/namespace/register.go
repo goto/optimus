@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -22,7 +21,9 @@ import (
 const registerTimeout = time.Minute * 15
 
 type registerCommand struct {
-	logger log.Logger
+	logger         log.Logger
+	configFilePath string
+	clientConfig   *config.ClientConfig
 
 	dirPath       string
 	namespaceName string
@@ -38,37 +39,45 @@ func NewRegisterCommand() *cobra.Command {
 		Use:     "register",
 		Short:   "Register namespace if it does not exist and update if it does",
 		Example: "optimus namespace register [--flag]",
+		PreRunE: register.PreRunE,
 		RunE:    register.RunE,
 	}
+	// Config filepath flag
+	cmd.Flags().StringVarP(&register.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
 	cmd.Flags().StringVar(&register.dirPath, "dir", register.dirPath, "Directory where the Optimus client config resides")
 	cmd.Flags().StringVar(&register.namespaceName, "name", register.namespaceName, "If set, then only that namespace will be registered")
 	return cmd
 }
 
-func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
-	filePath := path.Join(r.dirPath, config.DefaultFilename)
-	clientConfig, err := config.LoadClientConfig(filePath)
+func (r *registerCommand) PreRunE(_ *cobra.Command, _ []string) error {
+	// Load mandatory config
+	conf, err := config.LoadClientConfig(r.configFilePath)
 	if err != nil {
 		return err
 	}
 
-	conn := connection.New(r.logger, clientConfig)
-	c, err := conn.Create(clientConfig.Host)
+	r.clientConfig = conf
+	return nil
+}
+
+func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
+	conn := connection.New(r.logger, r.clientConfig)
+	c, err := conn.Create(r.clientConfig.Host)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
 
 	if r.namespaceName != "" {
-		r.logger.Info("Registering namespace [%s] to [%s]", r.namespaceName, clientConfig.Host)
-		namespace, err := clientConfig.GetNamespaceByName(r.namespaceName)
+		r.logger.Info("Registering namespace [%s] to [%s]", r.namespaceName, r.clientConfig.Host)
+		namespace, err := r.clientConfig.GetNamespaceByName(r.namespaceName)
 		if err != nil {
 			return err
 		}
-		return RegisterNamespace(r.logger, c, clientConfig.Project.Name, namespace)
+		return RegisterNamespace(r.logger, c, r.clientConfig.Project.Name, namespace)
 	}
-	r.logger.Info("Registering all available namespaces from client config to [%s]", clientConfig.Host)
-	return RegisterSelectedNamespaces(r.logger, c, clientConfig.Project.Name, clientConfig.Namespaces...)
+	r.logger.Info("Registering all available namespaces from client config to [%s]", r.clientConfig.Host)
+	return RegisterSelectedNamespaces(r.logger, c, r.clientConfig.Project.Name, r.clientConfig.Namespaces...)
 }
 
 // RegisterSelectedNamespaces registers all selected namespaces

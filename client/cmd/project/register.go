@@ -73,7 +73,7 @@ func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	if r.withNamespaces {
-		r.logger.Info("Registering all namespaces from: %s", r.clientConfig)
+		r.logger.Info("Registering all namespaces from: %s", r.configFilePath)
 		if err := namespace.RegisterSelectedNamespaces(r.logger, c, r.clientConfig.Project.Name, r.clientConfig.Namespaces...); err != nil {
 			return err
 		}

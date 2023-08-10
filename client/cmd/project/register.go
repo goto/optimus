@@ -3,7 +3,6 @@ package project
 import (
 	"context"
 	"fmt"
-	"path"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -22,7 +21,9 @@ import (
 const registerTimeout = time.Minute * 15
 
 type registerCommand struct {
-	logger log.Logger
+	logger         log.Logger
+	configFilePath string
+	clientConfig   *config.ClientConfig
 
 	dirPath        string
 	withNamespaces bool
@@ -38,34 +39,41 @@ func NewRegisterCommand() *cobra.Command {
 		Use:     "register",
 		Short:   "Register project if it does not exist and update if it does",
 		Example: "optimus project register [--flag]",
+		PreRunE: register.PreRunE,
 		RunE:    register.RunE,
 	}
+
+	cmd.Flags().StringVarP(&register.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
 	cmd.Flags().StringVar(&register.dirPath, "dir", register.dirPath, "Directory where the Optimus client config resides")
 	cmd.Flags().BoolVar(&register.withNamespaces, "with-namespaces", register.withNamespaces, "If yes, then namespace will be registered or updated as well")
 	return cmd
 }
 
-func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
-	filePath := path.Join(r.dirPath, config.DefaultFilename)
-	clientConfig, err := config.LoadClientConfig(filePath)
+func (r *registerCommand) PreRunE(_ *cobra.Command, _ []string) error {
+	conf, err := config.LoadClientConfig(r.configFilePath)
 	if err != nil {
 		return err
 	}
 
-	conn := connection.New(r.logger, clientConfig)
-	c, err := conn.Create(clientConfig.Host)
+	r.clientConfig = conf
+	return nil
+}
+
+func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
+	conn := connection.New(r.logger, r.clientConfig)
+	c, err := conn.Create(r.clientConfig.Host)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
 
-	r.logger.Info("Registering project [%s] to server [%s]", clientConfig.Project.Name, clientConfig.Host)
-	if err := RegisterProject(r.logger, c, clientConfig.Project); err != nil {
+	r.logger.Info("Registering project [%s] to server [%s]", r.clientConfig.Project.Name, r.clientConfig.Host)
+	if err := RegisterProject(r.logger, c, r.clientConfig.Project); err != nil {
 		return err
 	}
 	if r.withNamespaces {
-		r.logger.Info("Registering all namespaces from: %s", filePath)
-		if err := namespace.RegisterSelectedNamespaces(r.logger, c, clientConfig.Project.Name, clientConfig.Namespaces...); err != nil {
+		r.logger.Info("Registering all namespaces from: %s", r.configFilePath)
+		if err := namespace.RegisterSelectedNamespaces(r.logger, c, r.clientConfig.Project.Name, r.clientConfig.Namespaces...); err != nil {
 			return err
 		}
 	}

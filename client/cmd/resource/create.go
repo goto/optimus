@@ -38,14 +38,12 @@ func NewCreateCommand() *cobra.Command {
 		PreRunE: create.PreRunE,
 		RunE:    create.RunE,
 	}
-	// Config filepath flag
 	cmd.Flags().StringVarP(&create.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
 
 	return cmd
 }
 
 func (c *createCommand) PreRunE(_ *cobra.Command, _ []string) error {
-	// Load mandatory config
 	conf, err := config.LoadClientConfig(c.configFilePath)
 	if err != nil {
 		return err

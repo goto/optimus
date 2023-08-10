@@ -42,7 +42,7 @@ func NewRegisterCommand() *cobra.Command {
 		PreRunE: register.PreRunE,
 		RunE:    register.RunE,
 	}
-	// Config filepath flag
+
 	cmd.Flags().StringVarP(&register.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
 	cmd.Flags().StringVar(&register.dirPath, "dir", register.dirPath, "Directory where the Optimus client config resides")
 	cmd.Flags().BoolVar(&register.withNamespaces, "with-namespaces", register.withNamespaces, "If yes, then namespace will be registered or updated as well")
@@ -50,7 +50,6 @@ func NewRegisterCommand() *cobra.Command {
 }
 
 func (r *registerCommand) PreRunE(_ *cobra.Command, _ []string) error {
-	// Load mandatory config
 	conf, err := config.LoadClientConfig(r.configFilePath)
 	if err != nil {
 		return err

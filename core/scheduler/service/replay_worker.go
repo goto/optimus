@@ -158,7 +158,7 @@ func (w ReplayWorker) processNewReplayRequestSequential(ctx context.Context, rep
 	if runToReplay == nil {
 		return replayReq.Runs, nil
 	}
-	err := w.replayRun(ctx, replayReq, jobCron, runToReplay)
+	err := w.replayRunOnScheduler(ctx, replayReq, jobCron, runToReplay)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 	replayState := scheduler.ReplayStatePartialReplayed
 	if len(replayedRuns) == 0 && len(toBeReplayedRuns) > 0 {
 		runToReplay := toBeReplayedRuns[0]
-		err := w.replayRun(ctx, replayReq, jobCron, runToReplay)
+		err := w.replayRunOnScheduler(ctx, replayReq, jobCron, runToReplay)
 		if err != nil {
 			return err
 		}
@@ -207,7 +207,8 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 	return nil
 }
 
-func (w ReplayWorker) replayRun(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec, runToReplay *scheduler.JobRunStatus) error {
+// replayRunOnScheduler create run if targeted run is not exist, otherwise clear existing run on scheduler
+func (w ReplayWorker) replayRunOnScheduler(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec, runToReplay *scheduler.JobRunStatus) error {
 	_, err := w.fetchRun(ctx, replayReq, jobCron, runToReplay.ScheduledAt)
 	if err != nil && errors.IsErrorType(err, errors.ErrNotFound) {
 		if err := w.scheduler.CreateRun(ctx, replayReq.Replay.Tenant(), replayReq.Replay.JobName(), runToReplay.GetLogicalTime(jobCron), prefixReplayed); err != nil {

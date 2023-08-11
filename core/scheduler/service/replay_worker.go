@@ -276,9 +276,10 @@ func identifyUpdatedRunStatus(existingJobRuns, incomingJobRuns []*scheduler.JobR
 
 func (w ReplayWorker) fetchRun(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec, scheduledAt time.Time) (*scheduler.JobRunStatus, error) {
 	jobRunCriteria := &scheduler.JobRunsCriteria{
-		Name:      replayReq.Replay.JobName().String(),
-		StartDate: scheduledAt,
-		EndDate:   scheduledAt,
+		Name:                replayReq.Replay.JobName().String(),
+		StartDate:           scheduledAt,
+		EndDate:             scheduledAt,
+		WithExternalTrigger: true,
 	}
 	runs, err := w.scheduler.GetJobRuns(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
 	if err != nil {
@@ -292,9 +293,10 @@ func (w ReplayWorker) fetchRun(ctx context.Context, replayReq *scheduler.ReplayW
 
 func (w ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
 	jobRunCriteria := &scheduler.JobRunsCriteria{
-		Name:      replayReq.Replay.JobName().String(),
-		StartDate: replayReq.Replay.Config().StartTime,
-		EndDate:   replayReq.Replay.Config().EndTime,
+		Name:                replayReq.Replay.JobName().String(),
+		StartDate:           replayReq.Replay.Config().StartTime,
+		EndDate:             replayReq.Replay.Config().EndTime,
+		WithExternalTrigger: true,
 	}
 	return w.scheduler.GetJobRuns(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
 }

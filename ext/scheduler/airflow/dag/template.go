@@ -2,55 +2,66 @@ package dag
 
 import (
 	_ "embed"
+	"fmt"
+	"io/fs"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"text/template"
+
+	"github.com/spf13/afero"
 
 	"github.com/goto/optimus/internal/errors"
 )
 
-//go:embed dag.2.1.py.tmpl
-var dagTemplate214 []byte
-
-//go:embed dag.2.4.py.tmpl
-var dagTemplate243 []byte
+const defaultVersion = "2.1"
 
 type TemplateFactory interface {
 	New(airflowVersion string) *template.Template
 }
 
 type templateFactory struct {
-	tmpl21 *template.Template
-	tmpl24 *template.Template
+	templates map[string]*template.Template
 }
 
-func NewTemplateFactory() (TemplateFactory, error) {
-	if len(dagTemplate214) == 0 {
-		return nil, errors.InternalError("SchedulerAirflow", "dag template v2.1.4 is empty", nil)
-	}
-
-	if len(dagTemplate243) == 0 {
-		return nil, errors.InternalError("SchedulerAirflow", "dag template v2.4.3 is empty", nil)
-	}
-
-	tmpl214, err := template.New("optimus_dag_compiler").Funcs(OptimusFuncMap()).Parse(string(dagTemplate214))
+func NewTemplateFactory(aferoFs afero.Fs, templateDir string) (TemplateFactory, error) {
+	templates := map[string]*template.Template{}
+	re := regexp.MustCompile(`dag\.(\d.\d)\.py\.tmpl`)
+	err := afero.Walk(aferoFs, templateDir, func(path string, d fs.FileInfo, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+		fileName := filepath.Base(path)
+		if re.MatchString(fileName) {
+			version := strings.TrimSuffix(strings.TrimPrefix(fileName, "dag."), ".py.tmpl")
+			rawTemplate, err := afero.ReadFile(aferoFs, path)
+			if err != nil {
+				return errors.InternalError(EntitySchedulerAirflow, fmt.Sprintf("dag template v%s is fail to load", version), err)
+			}
+			tmpl, err := template.New(fmt.Sprintf("optimus_dag_v%s_compiler", version)).Funcs(OptimusFuncMap()).Parse(string(rawTemplate))
+			if err != nil {
+				return errors.InternalError(EntitySchedulerAirflow, fmt.Sprintf("unable to parse scheduler dag template v%s", version), err)
+			}
+			templates[version] = tmpl
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to parse scheduler dag template", err)
+		return nil, err
 	}
-	tmpl243, err := template.New("optimus_dag_compiler").Funcs(OptimusFuncMap()).Parse(string(dagTemplate243))
-	if err != nil {
-		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to parse scheduler dag template", err)
+	if _, ok := templates[defaultVersion]; !ok {
+		return nil, errors.InternalError(EntitySchedulerAirflow, fmt.Sprintf("template default v%s is not exist", defaultVersion), nil)
 	}
 	return &templateFactory{
-		tmpl21: tmpl214,
-		tmpl24: tmpl243,
+		templates: templates,
 	}, nil
 }
 
 func (f *templateFactory) New(airflowVersion string) *template.Template {
-	switch airflowVersion {
-	case "2.1.4":
-		return f.tmpl21
-	case "2.4.3":
-		return f.tmpl24
+	version := strings.Join(strings.Split(airflowVersion, ".")[:2], ".")
+	if tmpl, ok := f.templates[version]; ok {
+		return tmpl
+	} else {
+		return f.templates[version]
 	}
-	return f.tmpl21 // fallback
 }

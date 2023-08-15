@@ -9,6 +9,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/sdk/plugin"
+	"github.com/spf13/afero"
 )
 
 type PluginRepo interface {
@@ -74,7 +75,7 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 }
 
 func NewDagCompiler(hostname string, repo PluginRepo) (*Compiler, error) {
-	templateFactory, err := NewTemplateFactory()
+	templateFactory, err := NewTemplateFactory(afero.NewReadOnlyFs(afero.NewOsFs()), "template")
 	if err != nil {
 		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate template factory", err)
 	}

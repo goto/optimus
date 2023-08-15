@@ -84,7 +84,7 @@ func (w ReplayWorker) createMissingRuns(ctx context.Context, replayReq *schedule
 
 	// check each runs if there's no existing run from the above
 	runsToBeCreated := getMissingRuns(replayReq.Runs, existedRuns)
-	w.l.Info("create %d missing runs", len(runsToBeCreated))
+	w.l.Info("create %d missing runs with replay id %s", len(runsToBeCreated), replayReq.Replay.ID().String())
 	me := errors.NewMultiError("create runs")
 	for _, run := range runsToBeCreated {
 		// create missing runs
@@ -138,8 +138,7 @@ func (w ReplayWorker) processNewReplayRequestParallel(ctx context.Context, repla
 		w.l.Error("unable to clear job run for replay with replay_id [%s]: %s", replayReq.Replay.ID().String(), err)
 		return nil, err
 	}
-	err := w.createMissingRuns(ctx, replayReq, jobCron)
-	if err != nil {
+	if err := w.createMissingRuns(ctx, replayReq, jobCron); err != nil {
 		w.l.Error("unable to create missing runs for replay with replay_id [%s]: %s", replayReq.Replay.ID().String(), err)
 		return nil, err
 	}
@@ -158,8 +157,7 @@ func (w ReplayWorker) processNewReplayRequestSequential(ctx context.Context, rep
 	if runToReplay == nil {
 		return replayReq.Runs, nil
 	}
-	err := w.replayRunOnScheduler(ctx, replayReq, jobCron, runToReplay)
-	if err != nil {
+	if err := w.replayRunOnScheduler(ctx, replayReq, jobCron, runToReplay); err != nil {
 		return nil, err
 	}
 	updatedReplayMap := map[time.Time]scheduler.State{
@@ -185,8 +183,7 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 	replayState := scheduler.ReplayStatePartialReplayed
 	if len(replayedRuns) == 0 && len(toBeReplayedRuns) > 0 {
 		runToReplay := toBeReplayedRuns[0]
-		err := w.replayRunOnScheduler(ctx, replayReq, jobCron, runToReplay)
-		if err != nil {
+		if err := w.replayRunOnScheduler(ctx, replayReq, jobCron, runToReplay); err != nil {
 			return err
 		}
 

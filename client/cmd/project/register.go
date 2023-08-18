@@ -104,3 +104,18 @@ func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Pr
 	logger.Info("Project registration finished successfully")
 	return nil
 }
+
+func getProjectPresets(presetsPath string) (*model.PresetsMap, error) {
+	specFS := afero.NewOsFs()
+	fileSpec, err := specFS.Open(presetsPath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening presets file[%s]: %w", presetsPath, err)
+	}
+	defer fileSpec.Close()
+
+	var spec model.PresetsMap
+	if err := yaml.NewDecoder(fileSpec).Decode(&spec); err != nil {
+		return nil, fmt.Errorf("error decoding spec under [%s]: %w", presetsPath, err)
+	}
+	return &spec, nil
+}

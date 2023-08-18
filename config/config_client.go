@@ -27,8 +27,9 @@ type Job struct {
 }
 
 type Project struct {
-	Name   string            `mapstructure:"name"`
-	Config map[string]string `mapstructure:"config"`
+	Name        string            `mapstructure:"name"`
+	Config      map[string]string `mapstructure:"config"`
+	PresetsPath string            `mapstructure:"preset_path"`
 }
 
 type Auth struct {

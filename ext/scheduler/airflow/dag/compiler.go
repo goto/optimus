@@ -9,7 +9,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/sdk/plugin"
-	"github.com/spf13/afero"
 )
 
 type PluginRepo interface {
@@ -19,8 +18,8 @@ type PluginRepo interface {
 type Compiler struct {
 	hostname string
 
-	templateFactory TemplateFactory
-	pluginRepo      PluginRepo
+	templates  templates
+	pluginRepo PluginRepo
 }
 
 func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWithDetails) ([]byte, error) {
@@ -63,7 +62,7 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 		msg := fmt.Sprintf("%s is not provided in project %s, %s", tenant.ProjectSchedulerVersion, project.Name(), err.Error())
 		return nil, errors.InvalidArgument(EntitySchedulerAirflow, msg)
 	}
-	tmpl := c.templateFactory.New(airflowVersion)
+	tmpl := c.templates.GetTemplate(airflowVersion)
 
 	var buf bytes.Buffer
 	if err = tmpl.Execute(&buf, templateContext); err != nil {
@@ -75,14 +74,14 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 }
 
 func NewDagCompiler(hostname string, repo PluginRepo) (*Compiler, error) {
-	templateFactory, err := NewTemplateFactory(afero.NewReadOnlyFs(afero.NewOsFs()), "template")
+	templates, err := NewTemplates()
 	if err != nil {
-		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate template factory", err)
+		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate templates", err)
 	}
 
 	return &Compiler{
-		hostname:        hostname,
-		templateFactory: templateFactory,
-		pluginRepo:      repo,
+		hostname:   hostname,
+		templates:  templates,
+		pluginRepo: repo,
 	}, nil
 }

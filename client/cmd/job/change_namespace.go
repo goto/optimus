@@ -454,7 +454,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 			}
 			if exists {
 				if areFilesIdentical(fs, parentFilePath, newParentFilePath) {
-					c.logger.Info("[info] parent spec files are identical ")
+					c.logger.Info("[ok] parent spec files are identical ")
 					continue
 				}
 				c.logger.Info("[info] parent spec file already exists at %s, attempting to merge %s with it", newParentFilePath, parentFilePath)

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
@@ -16,8 +18,8 @@ type PluginRepo interface {
 }
 
 type Compiler struct {
-	hostname string
-
+	hostname   string
+	log        log.Logger
 	templates  templates
 	pluginRepo PluginRepo
 }
@@ -59,8 +61,8 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 
 	airflowVersion, err := project.GetConfig(tenant.ProjectSchedulerVersion)
 	if err != nil {
-		msg := fmt.Sprintf("%s is not provided in project %s, %s", tenant.ProjectSchedulerVersion, project.Name(), err.Error())
-		return nil, errors.InvalidArgument(EntitySchedulerAirflow, msg)
+		c.log.Warn("%s is not provided in project %s, %s. Use default version %s instead", tenant.ProjectSchedulerVersion, project.Name(), err.Error(), defaultVersion)
+		airflowVersion = defaultVersion
 	}
 	tmpl := c.templates.GetTemplate(airflowVersion)
 
@@ -73,13 +75,14 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 	return buf.Bytes(), nil
 }
 
-func NewDagCompiler(hostname string, repo PluginRepo) (*Compiler, error) {
+func NewDagCompiler(l log.Logger, hostname string, repo PluginRepo) (*Compiler, error) {
 	templates, err := NewTemplates()
 	if err != nil {
 		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate templates", err)
 	}
 
 	return &Compiler{
+		log:        l,
 		hostname:   hostname,
 		templates:  templates,
 		pluginRepo: repo,

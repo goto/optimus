@@ -140,7 +140,7 @@ func getJobParentsFilePathList(fileFS afero.Fs, jobDirPath string) ([]string, er
 	}
 	var err error
 	if len(errorMsg) > 0 {
-		err = fmt.Errorf(errorMsg)
+		err = errors.New(errorMsg)
 	}
 	return parentsFilePathList, err
 }
@@ -285,6 +285,7 @@ func readYaml(fs afero.Fs, filePath string) (interface{}, error) {
 	}
 	return fileInterface, nil
 }
+
 func areFilesIdentical(fs afero.Fs, filePath1, filePath2 string) bool {
 	file1, err := fs.Open(filePath1)
 	if err != nil {
@@ -321,17 +322,17 @@ func areFilesIdentical(fs afero.Fs, filePath1, filePath2 string) bool {
 
 func fileCopy(fs afero.Fs, srcFilePath, dstFilePath string) error {
 	srcFile, err := fs.Open(srcFilePath)
-	defer srcFile.Close()
 	if err != nil {
 		return err
 	}
+	defer srcFile.Close()
 
 	// Create or open the destination file for writing
 	dstFile, err := fs.Create(dstFilePath)
-	defer dstFile.Close()
 	if err != nil {
 		return err
 	}
+	defer dstFile.Close()
 
 	// Copy the content from the source file to the destination file
 	_, err = io.Copy(dstFile, srcFile)

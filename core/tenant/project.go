@@ -8,8 +8,9 @@ import (
 const (
 	EntityProject = "project"
 
-	ProjectStoragePathKey = "STORAGE_PATH"
-	ProjectSchedulerHost  = "SCHEDULER_HOST"
+	ProjectStoragePathKey   = "STORAGE_PATH"
+	ProjectSchedulerHost    = "SCHEDULER_HOST"
+	ProjectSchedulerVersion = "SCHEDULER_VERSION"
 )
 
 type ProjectName string

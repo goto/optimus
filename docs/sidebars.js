@@ -70,6 +70,7 @@ module.exports = {
         "client-guide/backup-bigquery-resource",
         "client-guide/replay-a-job",
         "client-guide/work-with-extension",
+        "client-guide/defining-scheduler-version",
       ],
     },
     {

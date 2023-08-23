@@ -2,31 +2,29 @@ package dag
 
 import (
 	"bytes"
-	_ "embed"
 	"fmt"
-	"text/template"
+
+	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/sdk/plugin"
 )
-
-//go:embed dag.py.tmpl
-var dagTemplate []byte
 
 type PluginRepo interface {
 	GetByName(name string) (*plugin.Plugin, error)
 }
 
 type Compiler struct {
-	hostname string
-
-	template   *template.Template
+	hostname   string
+	log        log.Logger
+	templates  templates
 	pluginRepo PluginRepo
 }
 
-func (c *Compiler) Compile(jobDetails *scheduler.JobWithDetails) ([]byte, error) {
+func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWithDetails) ([]byte, error) {
 	task, err := PrepareTask(jobDetails.Job, c.pluginRepo)
 	if err != nil {
 		return nil, err
@@ -61,28 +59,32 @@ func (c *Compiler) Compile(jobDetails *scheduler.JobWithDetails) ([]byte, error)
 		Upstreams:       upstreams,
 	}
 
+	airflowVersion, err := project.GetConfig(tenant.ProjectSchedulerVersion)
+	if err != nil {
+		c.log.Warn("%s is not provided in project %s, %s. Use default version %s instead", tenant.ProjectSchedulerVersion, project.Name(), err.Error(), defaultVersion)
+		airflowVersion = defaultVersion
+	}
+	tmpl := c.templates.GetTemplate(airflowVersion)
+
 	var buf bytes.Buffer
-	if err = c.template.Execute(&buf, templateContext); err != nil {
-		msg := fmt.Sprintf("unable to compile template for job %s, %s", jobDetails.Name.String(), err.Error())
+	if err = tmpl.Execute(&buf, templateContext); err != nil {
+		msg := fmt.Sprintf("unable to compile template for job %s with airflow version %s, %s", jobDetails.Name.String(), airflowVersion, err.Error())
 		return nil, errors.InvalidArgument(EntitySchedulerAirflow, msg)
 	}
 
 	return buf.Bytes(), nil
 }
 
-func NewDagCompiler(hostname string, repo PluginRepo) (*Compiler, error) {
-	if len(dagTemplate) == 0 {
-		return nil, errors.InternalError("SchedulerAirflow", "dag template is empty", nil)
-	}
-
-	tmpl, err := template.New("optimus_dag_compiler").Funcs(OptimusFuncMap()).Parse(string(dagTemplate))
+func NewDagCompiler(l log.Logger, hostname string, repo PluginRepo) (*Compiler, error) {
+	templates, err := NewTemplates()
 	if err != nil {
-		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to parse scheduler dag template", err)
+		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate templates", err)
 	}
 
 	return &Compiler{
+		log:        l,
 		hostname:   hostname,
-		template:   tmpl,
+		templates:  templates,
 		pluginRepo: repo,
 	}, nil
 }

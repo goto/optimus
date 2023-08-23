@@ -6,7 +6,6 @@ type ServerConfig struct {
 	Version          Version           `mapstructure:"version"`
 	Log              LogConfig         `mapstructure:"log"`
 	Serve            Serve             `mapstructure:"serve"`
-	Scheduler        SchedulerConfig   `mapstructure:"scheduler"`
 	Telemetry        TelemetryConfig   `mapstructure:"telemetry"`
 	ResourceManagers []ResourceManager `mapstructure:"resource_managers"`
 	Plugin           PluginConfig      `mapstructure:"plugin"`
@@ -25,10 +24,6 @@ type DBConfig struct {
 	DSN               string `mapstructure:"dsn"`                              // data source name e.g.: postgres://user:password@host:123/database?sslmode=disable
 	MinOpenConnection int    `mapstructure:"min_open_connection" default:"5"`  // minimum open DB connections
 	MaxOpenConnection int    `mapstructure:"max_open_connection" default:"20"` // maximum allowed open DB connections
-}
-
-type SchedulerConfig struct {
-	Name string `mapstructure:"name" default:"airflow"`
 }
 
 type TelemetryConfig struct {

@@ -3,10 +3,11 @@ package tenant
 import (
 	"strings"
 
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/models"
 )
 
-const presetWindowVersion = 2
+const EntityPreset = "preset"
 
 type Preset struct {
 	name        string
@@ -28,19 +29,24 @@ func (p Preset) Window() models.Window {
 }
 
 func NewPreset(name, description, truncateTo, offset, size string) (Preset, error) {
-	window, err := models.NewWindow(presetWindowVersion, truncateTo, offset, size)
-	if err != nil {
-		return Preset{}, err
+	cleanedName := strings.ToLower(strings.TrimSpace(name))
+	if cleanedName == "" {
+		return Preset{}, errors.InvalidArgument(EntityPreset, "cleaned preset name is empty")
 	}
 
-	err = window.Validate()
+	cleanedDescription := strings.TrimSpace(description)
+	if cleanedDescription == "" {
+		return Preset{}, errors.InvalidArgument(EntityPreset, "cleaned preset description is empty")
+	}
+
+	window, err := models.NewWindow(2, truncateTo, offset, size)
 	if err != nil {
 		return Preset{}, err
 	}
 
 	return Preset{
-		name:        strings.ToLower(name),
-		description: description,
+		name:        cleanedName,
+		description: cleanedDescription,
 		window:      window,
 	}, nil
 }

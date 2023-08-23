@@ -62,6 +62,8 @@ namespaces:
     path or a Google Cloud Storage path.
   - **scheduler_host** being used for job execution and sensors.
   - Specific secrets might be needed for the above configs. Take a look at the detail [here](managing-secrets.md).
+- Several configs are optional:
+  - **scheduler_version** to define the scheduler version. More detail is explained [here](defining-scheduler-version.md).
 - You can put any other project configurations which can be used in job specifications.
 
 ## Namespaces

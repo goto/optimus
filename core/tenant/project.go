@@ -69,7 +69,7 @@ func (p *Project) GetPreset(name string) (Preset, error) {
 	return preset, nil
 }
 
-func NewProject(name string, config map[string]string) (*Project, error) {
+func NewProject(name string, config map[string]string, presets map[string]Preset) (*Project, error) {
 	prjName, err := ProjectNameFrom(name)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,8 @@ func NewProject(name string, config map[string]string) (*Project, error) {
 	}
 
 	return &Project{
-		name:   prjName,
-		config: config,
+		name:    prjName,
+		config:  config,
+		presets: presets,
 	}, nil
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
 
@@ -64,6 +65,8 @@ type Window struct {
 	WindowSize       string
 	WindowOffset     string
 	WindowTruncateTo string
+	Preset           string
+	Type             string
 }
 
 type Retry struct {
@@ -156,7 +159,7 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 		return nil, err
 	}
 
-	windowBytes, err := toStorageWindow(jobSpec.Window())
+	windowBytes, err := toStorageWindow(jobSpec.WindowConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -191,13 +194,15 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 	}, nil
 }
 
-func toStorageWindow(windowSpec models.Window) ([]byte, error) {
-	window := Window{
-		WindowSize:       windowSpec.GetSize(),
-		WindowOffset:     windowSpec.GetOffset(),
-		WindowTruncateTo: windowSpec.GetTruncateTo(),
+func toStorageWindow(windowSpec window.Config) ([]byte, error) {
+	w := Window{
+		Type:             string(windowSpec.Type()),
+		Preset:           windowSpec.Preset,
+		WindowSize:       windowSpec.Window.GetSize(),
+		WindowOffset:     windowSpec.Window.GetOffset(),
+		WindowTruncateTo: windowSpec.Window.GetTruncateTo(),
 	}
-	windowJSON, err := json.Marshal(window)
+	windowJSON, err := json.Marshal(w)
 	if err != nil {
 		return nil, err
 	}
@@ -329,9 +334,9 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 		}
 	}
 
-	var window models.Window
+	var w window.Config
 	if jobSpec.WindowSpec != nil {
-		window, err = fromStorageWindow(jobSpec.WindowSpec, jobSpec.Version)
+		w, err = fromStorageWindow(jobSpec.WindowSpec, jobSpec.Version)
 		if err != nil {
 			return nil, err
 		}
@@ -350,7 +355,7 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 	}
 	task := job.NewTask(taskName, taskConfig)
 
-	jobSpecBuilder := job.NewSpecBuilder(version, jobName, owner, schedule, window, task).WithDescription(jobSpec.Description)
+	jobSpecBuilder := job.NewSpecBuilder(version, jobName, owner, schedule, w, task).WithDescription(jobSpec.Description)
 
 	if jobSpec.Labels != nil {
 		jobSpecBuilder = jobSpecBuilder.WithLabels(jobSpec.Labels)
@@ -436,18 +441,31 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 	return jobSpecBuilder.Build()
 }
 
-func fromStorageWindow(raw []byte, jobVersion int) (models.Window, error) {
+func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 	var storageWindow Window
 	if err := json.Unmarshal(raw, &storageWindow); err != nil {
-		return nil, err
+		return window.Config{}, err
 	}
 
-	return models.NewWindow(
+	if storageWindow.Type == string(window.Preset) {
+		return window.NewPresetConfig(storageWindow.Preset)
+	}
+
+	if storageWindow.Type == string(window.Incremental) {
+		return window.NewIncrementalConfig(), nil
+	}
+
+	w, err := models.NewWindow(
 		jobVersion,
 		storageWindow.WindowTruncateTo,
 		storageWindow.WindowOffset,
 		storageWindow.WindowSize,
 	)
+	if err != nil {
+		return window.Config{}, err
+	}
+
+	return window.NewCustomConfig(w), nil
 }
 
 func fromStorageSchedule(raw []byte) (*job.Schedule, error) {

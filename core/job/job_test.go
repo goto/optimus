@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
 
@@ -16,7 +17,7 @@ func TestEntityJob(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, nil)
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
@@ -25,7 +26,8 @@ func TestEntityJob(t *testing.T) {
 	jobVersion := 1
 	startDate, _ := job.ScheduleDateFrom("2022-10-01")
 	jobSchedule, _ := job.NewScheduleBuilder(startDate).Build()
-	jobWindow, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
+	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
+	jobWindow := window.NewCustomConfig(w)
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	jobTask := job.NewTask("bq2bq", jobTaskConfig)
 

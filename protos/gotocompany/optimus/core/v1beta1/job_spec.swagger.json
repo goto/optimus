@@ -1279,6 +1279,9 @@
         "windowTruncateTo": {
           "type": "string"
         },
+        "windowPreset": {
+          "type": "string"
+        },
         "dependencies": {
           "type": "array",
           "items": {

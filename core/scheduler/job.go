@@ -7,7 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/lib/window"
 )
 
 type (
@@ -49,8 +49,9 @@ type Job struct {
 	Destination string
 	Task        *Task
 	Hooks       []*Hook
-	Window      models.Window
-	Assets      map[string]string
+
+	WindowConfig window.Config
+	Assets       map[string]string
 }
 
 func (j *Job) GetHook(hookName string) (*Hook, error) {

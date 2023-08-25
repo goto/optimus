@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
 	optErrors "github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/optimus/sdk/plugin"
@@ -28,7 +29,7 @@ func TestJobService(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, nil)
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
@@ -53,7 +54,8 @@ func TestJobService(t *testing.T) {
 	assert.NoError(t, err)
 	jobSchedule, err := job.NewScheduleBuilder(startDate).Build()
 	assert.NoError(t, err)
-	jobWindow, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
+	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
+	jobWindow := window.NewCustomConfig(w)
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	assert.NoError(t, err)
 	taskName, _ := job.TaskNameFrom("bq2bq")
@@ -1295,7 +1297,8 @@ func TestJobService(t *testing.T) {
 
 			incomingSpecs := []*job.Spec{specA}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, existingJobWindow, jobTask).Build()
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName)
 			existingSpecs := []*job.Job{existingJobA}
@@ -1479,7 +1482,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			incomingSpecs := []*job.Spec{specA, specB}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, "", nil)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -1558,7 +1562,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			incomingSpecs := []*job.Spec{specA, specB}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, "", nil)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -1693,7 +1698,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			incomingSpecs := []*job.Spec{specB}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, "", nil)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -1898,7 +1904,8 @@ func TestJobService(t *testing.T) {
 
 			incomingSpecs := []*job.Spec{specA}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, existingJobWindow, jobTask).Build()
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName)
 			existingSpecs := []*job.Job{existingJobA}

@@ -13,6 +13,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/sdk/plugin"
 	smock "github.com/goto/optimus/sdk/plugin/mock"
@@ -23,12 +24,14 @@ func TestJobAssetsCompiler(t *testing.T) {
 	project, _ := tenant.NewProject("proj1", map[string]string{
 		"STORAGE_PATH":   "somePath",
 		"SCHEDULER_HOST": "localhost",
-	})
+	}, nil)
 	namespace, _ := tenant.NewNamespace("ns1", project.Name(), map[string]string{})
 	tnnt, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	currentTime := time.Now()
 	scheduleTime := currentTime.Add(-time.Hour)
-	window, _ := models.NewWindow(2, "d", "1h", "24h")
+	w1, _ := models.NewWindow(2, "d", "1h", "24h")
+	windowConfig1 := window.NewCustomConfig(w1)
+
 	job := &scheduler.Job{
 		Name:   "jobName",
 		Tenant: tnnt,
@@ -38,19 +41,21 @@ func TestJobAssetsCompiler(t *testing.T) {
 				"configName": "configVale",
 			},
 		},
-		Hooks:  nil,
-		Window: window,
+		Hooks:        nil,
+		WindowConfig: windowConfig1,
 		Assets: map[string]string{
 			"assetName": "assetVale",
 		},
 	}
 	taskName := job.Task.Name
-	startTime, _ := job.Window.GetStartTime(scheduleTime)
-	endTime, _ := job.Window.GetEndTime(scheduleTime)
+	w2 := window.FromBaseWindow(w1)
+	interval, err := w2.GetInterval(scheduleTime)
+	assert.NoError(t, err)
+
 	executedAt := currentTime.Add(time.Hour)
 	systemEnvVars := map[string]string{
-		"DSTART":          startTime.Format(time.RFC3339),
-		"DEND":            endTime.Format(time.RFC3339),
+		"DSTART":          interval.Start.Format(time.RFC3339),
+		"DEND":            interval.End.Format(time.RFC3339),
 		"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 		"JOB_DESTINATION": job.Destination,
 	}
@@ -66,40 +71,9 @@ func TestJobAssetsCompiler(t *testing.T) {
 			contextForTask := map[string]any{}
 
 			jobRunAssetsCompiler := service.NewJobAssetsCompiler(nil, pluginRepo, logger)
-			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, scheduleTime, contextForTask)
+			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "error in getting plugin by name")
-			assert.Nil(t, assets)
-		})
-		t.Run("should give error if window get start fails", func(t *testing.T) {
-			pluginRepo := new(mockPluginRepo)
-			pluginRepo.On("GetByName", "pluginName").Return(&plugin.Plugin{}, nil)
-			defer pluginRepo.AssertExpectations(t)
-
-			window1, _ := models.NewWindow(2, "d2", "1h", "24h")
-			job1 := &scheduler.Job{
-				Name:   "jobName",
-				Tenant: tnnt,
-				Task: &scheduler.Task{
-					Name: "pluginName",
-					Config: map[string]string{
-						"configName": "configVale",
-					},
-				},
-				Hooks:  nil,
-				Window: window1,
-				Assets: map[string]string{
-					"assetName": "assetVale",
-				},
-			}
-
-			jobRunAssetsCompiler := service.NewJobAssetsCompiler(nil, pluginRepo, logger)
-
-			contextForTask := map[string]any{}
-			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job1, systemEnvVars, scheduleTime, contextForTask)
-
-			assert.NotNil(t, err)
-			assert.EqualError(t, err, "error getting start time: error validating truncate_to: invalid option provided, provide one of: [h d w M]")
 			assert.Nil(t, assets)
 		})
 		t.Run("compile should return error when DependencyMod CompileAssets fails", func(t *testing.T) {
@@ -117,7 +91,7 @@ func TestJobAssetsCompiler(t *testing.T) {
 			jobRunAssetsCompiler := service.NewJobAssetsCompiler(nil, pluginRepo, logger)
 
 			contextForTask := map[string]any{}
-			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, scheduleTime, contextForTask)
+			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "error in dependencyMod compile assets")
@@ -154,7 +128,7 @@ func TestJobAssetsCompiler(t *testing.T) {
 				defer filesCompiler.AssertExpectations(t)
 
 				jobRunAssetsCompiler := service.NewJobAssetsCompiler(filesCompiler, pluginRepo, logger)
-				assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, scheduleTime, contextForTask)
+				assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
 
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "error in compiling")
@@ -171,7 +145,7 @@ func TestJobAssetsCompiler(t *testing.T) {
 				defer filesCompiler.AssertExpectations(t)
 
 				jobRunAssetsCompiler := service.NewJobAssetsCompiler(filesCompiler, pluginRepo, logger)
-				assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, scheduleTime, contextForTask)
+				assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
 
 				assert.Nil(t, err)
 				assert.Equal(t, expectedFileMap, assets)

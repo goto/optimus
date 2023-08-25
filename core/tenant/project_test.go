@@ -23,16 +23,17 @@ func TestEntityProject(t *testing.T) {
 		})
 	})
 
+	// TODO: add test for presets
 	t.Run("Project", func(t *testing.T) {
 		t.Run("fails to create if name is empty", func(t *testing.T) {
-			project, err := tenant.NewProject("", map[string]string{"a": "b"})
+			project, err := tenant.NewProject("", map[string]string{"a": "b"}, nil)
 
 			assert.Nil(t, project)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "invalid argument for entity project: project name is empty")
 		})
 		t.Run("fails to create if config is empty", func(t *testing.T) {
-			project, err := tenant.NewProject("name", map[string]string{})
+			project, err := tenant.NewProject("name", map[string]string{}, nil)
 
 			assert.Nil(t, project)
 			assert.NotNil(t, err)
@@ -42,7 +43,7 @@ func TestEntityProject(t *testing.T) {
 			project, err := tenant.NewProject("t-optimus", map[string]string{
 				tenant.ProjectSchedulerHost:  "b",
 				tenant.ProjectStoragePathKey: "d",
-			})
+			}, nil)
 			assert.Nil(t, err)
 
 			assert.NotNil(t, project)

@@ -39,10 +39,6 @@ type DownstreamRefresher interface {
 	RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error
 }
 
-type TenantDetailsGetter interface {
-	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
-}
-
 type EventHandler interface {
 	HandleEvent(moderator.Event)
 }

@@ -1,6 +1,12 @@
 package tenant
 
-import "github.com/goto/optimus/internal/models"
+import (
+	"strings"
+
+	"github.com/goto/optimus/internal/models"
+)
+
+const presetWindowVersion = 2
 
 type Preset struct {
 	name        string
@@ -22,13 +28,18 @@ func (p Preset) Window() models.Window {
 }
 
 func NewPreset(name, description, truncateTo, offset, size string) (Preset, error) {
-	window, err := models.NewWindow(2, truncateTo, offset, size)
+	window, err := models.NewWindow(presetWindowVersion, truncateTo, offset, size)
+	if err != nil {
+		return Preset{}, err
+	}
+
+	err = window.Validate()
 	if err != nil {
 		return Preset{}, err
 	}
 
 	return Preset{
-		name:        name,
+		name:        strings.ToLower(name),
 		description: description,
 		window:      window,
 	}, nil

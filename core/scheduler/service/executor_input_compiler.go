@@ -11,6 +11,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils"
 )
 
@@ -51,7 +52,7 @@ type TemplateCompiler interface {
 }
 
 type AssetCompiler interface {
-	CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, scheduledAt time.Time, contextForTask map[string]interface{}) (map[string]string, error)
+	CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error)
 }
 
 type InputCompiler struct {
@@ -62,14 +63,24 @@ type InputCompiler struct {
 	logger log.Logger
 }
 
-func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
-	tenantDetails, err := i.tenantService.GetDetails(ctx, job.Tenant)
+func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
+	tenantDetails, err := i.tenantService.GetDetails(ctx, job.Job.Tenant)
 	if err != nil {
 		i.logger.Error("error getting tenant details: %s", err)
 		return nil, err
 	}
 
-	systemDefinedVars, err := getSystemDefinedConfigs(job, config, executedAt)
+	w, err := getWindow(tenantDetails, job)
+	if err != nil {
+		return nil, err
+	}
+
+	interval, err := w.GetInterval(config.ScheduledAt)
+	if err != nil {
+		return nil, err
+	}
+
+	systemDefinedVars, err := getSystemDefinedConfigs(job.Job, interval, executedAt)
 	if err != nil {
 		i.logger.Error("error getting config for job [%s]: %s", job.Name.String(), err)
 		return nil, err
@@ -83,19 +94,19 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config s
 	)
 
 	// Compile asset files
-	fileMap, err := i.assetCompiler.CompileJobRunAssets(ctx, job, systemDefinedVars, config.ScheduledAt, taskContext)
+	fileMap, err := i.assetCompiler.CompileJobRunAssets(ctx, job.Job, systemDefinedVars, interval, taskContext)
 	if err != nil {
 		i.logger.Error("error compiling job run assets: %s", err)
 		return nil, err
 	}
 
-	confs, secretConfs, err := i.compileConfigs(job.Task.Config, taskContext)
+	confs, secretConfs, err := i.compileConfigs(job.Job.Task.Config, taskContext)
 	if err != nil {
 		i.logger.Error("error compiling task config: %s", err)
 		return nil, err
 	}
 
-	jobAttributionLabels := fmt.Sprintf("project=%s,namespace=%s,job=%s", job.Tenant.ProjectName(), job.Tenant.NamespaceName(), job.Name)
+	jobAttributionLabels := fmt.Sprintf("project=%s,namespace=%s,job=%s", job.Job.Tenant.ProjectName(), job.Job.Tenant.NamespaceName(), job.Job.Name)
 	if jobLables, ok := confs[JobAttributionLabelsKey]; ok {
 		confs[JobAttributionLabelsKey] = jobLables + "," + jobAttributionLabels
 	} else {
@@ -117,7 +128,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config s
 
 	mergedContext := utils.MergeAnyMaps(taskContext, hookContext)
 
-	hook, err := job.GetHook(config.Executor.Name)
+	hook, err := job.Job.GetHook(config.Executor.Name)
 	if err != nil {
 		i.logger.Error("error getting hook [%s]: %s", config.Executor.Name, err)
 		return nil, err
@@ -153,18 +164,10 @@ func (i InputCompiler) compileConfigs(configs map[string]string, templateCtx map
 	return conf, secretsConfig, nil
 }
 
-func getSystemDefinedConfigs(job *scheduler.Job, runConfig scheduler.RunConfig, executedAt time.Time) (map[string]string, error) {
-	startTime, err := job.Window.GetStartTime(runConfig.ScheduledAt)
-	if err != nil {
-		return nil, err
-	}
-	endTime, err := job.Window.GetEndTime(runConfig.ScheduledAt)
-	if err != nil {
-		return nil, err
-	}
+func getSystemDefinedConfigs(job *scheduler.Job, interval window.Interval, executedAt time.Time) (map[string]string, error) {
 	return map[string]string{
-		configDstart:        startTime.Format(TimeISOFormat),
-		configDend:          endTime.Format(TimeISOFormat),
+		configDstart:        interval.Start.Format(TimeISOFormat),
+		configDend:          interval.End.Format(TimeISOFormat),
 		configExecutionTime: executedAt.Format(TimeISOFormat),
 		configDestination:   job.Destination,
 	}, nil
@@ -191,4 +194,22 @@ func NewJobInputCompiler(tenantService TenantService, compiler TemplateCompiler,
 		assetCompiler: assetCompiler,
 		logger:        logger,
 	}
+}
+
+func getWindow(jobTenant *tenant.WithDetails, job *scheduler.JobWithDetails) (window.Window, error) {
+	config := job.Job.WindowConfig
+
+	if config.Type() == window.Incremental {
+		return window.FromSchedule(job.Schedule.Interval)
+	}
+
+	if config.Type() == window.Preset {
+		preset, err := jobTenant.Project().GetPreset(config.Preset)
+		if err != nil {
+			return window.Window{}, err
+		}
+		return window.FromBaseWindow(preset.Window()), nil
+	}
+
+	return window.FromBaseWindow(config.Window), nil
 }

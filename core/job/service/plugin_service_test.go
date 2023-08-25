@@ -13,6 +13,7 @@ import (
 	"github.com/goto/optimus/core/job/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/sdk/plugin"
 	mockOpt "github.com/goto/optimus/sdk/plugin/mock"
@@ -25,7 +26,7 @@ func TestPluginService(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, nil)
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
@@ -44,8 +45,9 @@ func TestPluginService(t *testing.T) {
 	assert.NoError(t, err)
 	jobVersion := 1
 	assert.NoError(t, err)
-	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
+	w, err := models.NewWindow(jobVersion, "d", "24h", "24h")
 	assert.NoError(t, err)
+	jobWindow := window.NewCustomConfig(w)
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{
 		"SECRET_TABLE_NAME": "{{.secret.table_name}}",
 	})

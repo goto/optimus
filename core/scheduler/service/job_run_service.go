@@ -60,7 +60,7 @@ type OperatorRunRepository interface {
 }
 
 type JobInputCompiler interface {
-	Compile(ctx context.Context, job *scheduler.Job, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
 }
 
 type PriorityResolver interface {
@@ -92,7 +92,7 @@ type JobRunService struct {
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
-	job, err := s.jobRepo.GetJob(ctx, projectName, jobName)
+	details, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
 		s.l.Error("error getting job [%s]: %s", jobName, err)
 		return nil, err
@@ -102,7 +102,7 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	var jobRun *scheduler.JobRun
 	if config.JobRunID.IsEmpty() {
 		s.l.Warn("getting job run by scheduled at")
-		jobRun, err = s.repo.GetByScheduledAt(ctx, job.Tenant, jobName, config.ScheduledAt)
+		jobRun, err = s.repo.GetByScheduledAt(ctx, details.Job.Tenant, jobName, config.ScheduledAt)
 	} else {
 		s.l.Warn("getting job run by id")
 		jobRun, err = s.repo.GetByID(ctx, config.JobRunID)
@@ -116,16 +116,16 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		executedAt = jobRun.StartTime
 	}
 	// Additional task config from existing replay
-	replayJobConfig, err := s.replayRepo.GetReplayJobConfig(ctx, job.Tenant, job.Name, config.ScheduledAt)
+	replayJobConfig, err := s.replayRepo.GetReplayJobConfig(ctx, details.Job.Tenant, details.Job.Name, config.ScheduledAt)
 	if err != nil {
 		s.l.Error("error getting replay job config from db: %s", err)
 		return nil, err
 	}
 	for k, v := range replayJobConfig {
-		job.Task.Config[k] = v
+		details.Job.Task.Config[k] = v
 	}
 
-	return s.compiler.Compile(ctx, job, config, executedAt)
+	return s.compiler.Compile(ctx, details, config, executedAt)
 }
 
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {

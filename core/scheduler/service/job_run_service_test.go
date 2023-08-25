@@ -640,7 +640,7 @@ func TestJobRunService(t *testing.T) {
 	t.Run("JobRunInput", func(t *testing.T) {
 		t.Run("should return error if getJob fails", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-			jobRepo.On("GetJob", ctx, projName, jobName).Return(&scheduler.Job{}, fmt.Errorf("some error"))
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&scheduler.JobWithDetails{}, fmt.Errorf("some error"))
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
@@ -659,6 +659,7 @@ func TestJobRunService(t *testing.T) {
 					Config: map[string]string{},
 				},
 			}
+			details := scheduler.JobWithDetails{Job: &job}
 
 			someScheduleTime := todayDate.Add(time.Hour * 24 * -1)
 			executedAt := todayDate.Add(time.Hour * 23 * -1)
@@ -670,8 +671,8 @@ func TestJobRunService(t *testing.T) {
 			}
 
 			jobRepo := new(JobRepository)
-			jobRepo.On("GetJob", ctx, projName, jobName).
-				Return(&job, nil)
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).
+				Return(&details, nil)
 			defer jobRepo.AssertExpectations(t)
 
 			jobRun := scheduler.JobRun{
@@ -691,13 +692,14 @@ func TestJobRunService(t *testing.T) {
 			}
 			jobToCompile := job
 			jobToCompile.Task.Config["EXECUTION_PROJECT"] = "example"
+			jobToCompileDetails := scheduler.JobWithDetails{Job: &jobToCompile}
 
 			jobReplayRepo := new(ReplayRepository)
 			jobReplayRepo.On("GetReplayJobConfig", ctx, tnnt, jobName, someScheduleTime).Return(map[string]string{"EXECUTION_PROJECT": "example"}, nil)
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompile, runConfig, executedAt).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
@@ -717,6 +719,7 @@ func TestJobRunService(t *testing.T) {
 					Config: map[string]string{},
 				},
 			}
+			details := scheduler.JobWithDetails{Job: &job}
 
 			someScheduleTime := todayDate.Add(time.Hour * 24 * -1)
 			executedAt := todayDate.Add(time.Hour * 23 * -1)
@@ -729,8 +732,8 @@ func TestJobRunService(t *testing.T) {
 			}
 
 			jobRepo := new(JobRepository)
-			jobRepo.On("GetJob", ctx, projName, jobName).
-				Return(&job, nil)
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).
+				Return(&details, nil)
 			defer jobRepo.AssertExpectations(t)
 
 			jobRun := scheduler.JobRun{
@@ -751,13 +754,14 @@ func TestJobRunService(t *testing.T) {
 
 			jobToCompile := job
 			jobToCompile.Task.Config["EXECUTION_PROJECT"] = "example"
+			jobToCompileDetails := scheduler.JobWithDetails{Job: &jobToCompile}
 
 			jobReplayRepo := new(ReplayRepository)
 			jobReplayRepo.On("GetReplayJobConfig", ctx, tnnt, jobName, someScheduleTime).Return(map[string]string{"EXECUTION_PROJECT": "example"}, nil)
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompile, runConfig, executedAt).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
@@ -777,6 +781,7 @@ func TestJobRunService(t *testing.T) {
 					Config: map[string]string{},
 				},
 			}
+			details := scheduler.JobWithDetails{Job: &job}
 
 			someScheduleTime := todayDate.Add(time.Hour * 24 * -1)
 			jobRunID := scheduler.JobRunID(uuid.New())
@@ -787,8 +792,8 @@ func TestJobRunService(t *testing.T) {
 			}
 
 			jobRepo := new(JobRepository)
-			jobRepo.On("GetJob", ctx, projName, jobName).
-				Return(&job, nil)
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).
+				Return(&details, nil)
 			defer jobRepo.AssertExpectations(t)
 
 			jobRunRepo := new(mockJobRunRepository)
@@ -804,13 +809,14 @@ func TestJobRunService(t *testing.T) {
 
 			jobToCompile := job
 			jobToCompile.Task.Config["EXECUTION_PROJECT"] = "example"
+			jobToCompileDetails := scheduler.JobWithDetails{Job: &jobToCompile}
 
 			jobReplayRepo := new(ReplayRepository)
 			jobReplayRepo.On("GetReplayJobConfig", ctx, tnnt, jobName, someScheduleTime).Return(map[string]string{"EXECUTION_PROJECT": "example"}, nil)
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompile, runConfig, someScheduleTime).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
@@ -830,6 +836,7 @@ func TestJobRunService(t *testing.T) {
 					Config: map[string]string{},
 				},
 			}
+			details := scheduler.JobWithDetails{Job: &job}
 
 			someScheduleTime := todayDate.Add(time.Hour * 24 * -1)
 			jobRunID := scheduler.JobRunID(uuid.New())
@@ -840,8 +847,8 @@ func TestJobRunService(t *testing.T) {
 			}
 
 			jobRepo := new(JobRepository)
-			jobRepo.On("GetJob", ctx, projName, jobName).
-				Return(&job, nil)
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).
+				Return(&details, nil)
 			defer jobRepo.AssertExpectations(t)
 
 			jobRunRepo := new(mockJobRunRepository)
@@ -856,13 +863,14 @@ func TestJobRunService(t *testing.T) {
 			}
 			jobToCompile := job
 			jobToCompile.Task.Config["EXECUTION_PROJECT"] = "example"
+			jobToCompileDetails := scheduler.JobWithDetails{Job: &jobToCompile}
 
 			jobReplayRepo := new(ReplayRepository)
 			jobReplayRepo.On("GetReplayJobConfig", ctx, tnnt, jobName, someScheduleTime).Return(map[string]string{"EXECUTION_PROJECT": "example"}, nil)
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompile, runConfig, someScheduleTime).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
@@ -1282,7 +1290,7 @@ type mockJobInputCompiler struct {
 	mock.Mock
 }
 
-func (m *mockJobInputCompiler) Compile(ctx context.Context, job *scheduler.Job, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
+func (m *mockJobInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
 	args := m.Called(ctx, job, config, executedAt)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

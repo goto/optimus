@@ -30,7 +30,7 @@ type Project struct {
 }
 
 func (p *Project) toTenantProject() (*tenant.Project, error) {
-	return tenant.NewProject(p.Name, p.Config)
+	return tenant.NewProject(p.Name, p.Config, nil) // TODO: add presets
 }
 
 func (repo ProjectRepository) Save(ctx context.Context, tenantProject *tenant.Project) error {

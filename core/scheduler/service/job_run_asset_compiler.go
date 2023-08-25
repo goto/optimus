@@ -2,12 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -38,22 +37,11 @@ func NewJobAssetsCompiler(engine FilesCompiler, pluginRepo PluginRepo, logger lo
 	}
 }
 
-func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, scheduledAt time.Time, contextForTask map[string]interface{}) (map[string]string, error) {
+func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
 	taskPlugin, err := c.pluginRepo.GetByName(job.Task.Name)
 	if err != nil {
 		c.logger.Error("error getting plugin [%s]: %s", job.Task.Name, err)
 		return nil, err
-	}
-
-	startTime, err := job.Window.GetStartTime(scheduledAt)
-	if err != nil {
-		c.logger.Error("error getting window start time: %s", err)
-		return nil, fmt.Errorf("error getting start time: %w", err)
-	}
-	endTime, err := job.Window.GetEndTime(scheduledAt)
-	if err != nil {
-		c.logger.Error("error getting window end time: %s", err)
-		return nil, fmt.Errorf("error getting end time: %w", err)
 	}
 
 	inputFiles := job.Assets
@@ -61,8 +49,8 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *sch
 	if taskPlugin.DependencyMod != nil {
 		// check if task needs to override the compilation behaviour
 		compiledAssetResponse, err := taskPlugin.DependencyMod.CompileAssets(ctx, plugin.CompileAssetsRequest{
-			StartTime:    startTime,
-			EndTime:      endTime,
+			StartTime:    interval.Start,
+			EndTime:      interval.End,
 			Config:       toPluginConfig(job.Task.Config),
 			Assets:       toPluginAssets(job.Assets),
 			InstanceData: toJobRunSpecData(systemEnvVars),

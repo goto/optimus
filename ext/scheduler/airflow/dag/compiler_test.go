@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/scheduler/airflow/dag"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/sdk/plugin"
 	"github.com/goto/optimus/sdk/plugin/mock"
@@ -76,7 +77,8 @@ func TestDagCompiler(t *testing.T) {
 }
 
 func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
-	window, err := models.NewWindow(1, "d", "0", "1h")
+	w1, err := models.NewWindow(1, "d", "0", "1h")
+	window1 := window.NewCustomConfig(w1)
 	if err != nil {
 		panic(err)
 	}
@@ -115,13 +117,13 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 
 	jobName := scheduler.JobName("infra.billing.weekly-status-reports")
 	job := &scheduler.Job{
-		Name:        jobName,
-		Tenant:      tnnt,
-		Destination: "bigquery://billing:reports.weekly-status",
-		Task:        &scheduler.Task{Name: "bq-bq"},
-		Hooks:       hooks,
-		Window:      window,
-		Assets:      nil,
+		Name:         jobName,
+		Tenant:       tnnt,
+		Destination:  "bigquery://billing:reports.weekly-status",
+		Task:         &scheduler.Task{Name: "bq-bq"},
+		Hooks:        hooks,
+		WindowConfig: window1,
+		Assets:       nil,
 	}
 
 	runtimeConfig := scheduler.RuntimeConfig{

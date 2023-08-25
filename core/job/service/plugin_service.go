@@ -34,11 +34,6 @@ type PluginRepo interface {
 	GetByName(string) (*plugin.Plugin, error)
 }
 
-type Engine interface {
-	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
-	CompileString(input string, context map[string]any) (string, error)
-}
-
 type JobPluginService struct {
 	pluginRepo PluginRepo
 	engine     Engine

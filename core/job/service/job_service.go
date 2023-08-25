@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/telemetry"
@@ -39,6 +40,8 @@ type JobService struct {
 
 	jobDeploymentService JobDeploymentService
 
+	engine Engine
+
 	logger log.Logger
 }
 
@@ -46,7 +49,7 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService,
+	jobDeploymentService JobDeploymentService, engine Engine,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -58,7 +61,13 @@ func NewJobService(
 		tenantDetailsGetter:  tenantDetailsGetter,
 		logger:               logger,
 		jobDeploymentService: jobDeploymentService,
+		engine:               engine,
 	}
+}
+
+type Engine interface {
+	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
+	CompileString(input string, context map[string]any) (string, error)
 }
 
 type PluginService interface {
@@ -107,7 +116,6 @@ type DownstreamRepository interface {
 type EventHandler interface {
 	HandleEvent(moderator.Event)
 }
-
 type UpstreamResolver interface {
 	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
@@ -903,21 +911,57 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 }
 
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
-	destination, err := j.pluginService.GenerateDestination(ctx, tenantWithDetails, spec.Task())
-	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
-		j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
-		errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+	if spec.Task().Name() == "bq2bq" { // for now, destination generation and upstream generation only for bq2bq
+		destination, err := j.generateDestination(ctx, tenantWithDetails, spec.Task())
+		if err != nil {
+			j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
+			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
+			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
+
+		sources, err := j.pluginService.GenerateUpstreams(ctx, tenantWithDetails, spec, true)
+		if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
+			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
+			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
+			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
+		return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
 	}
 
-	sources, err := j.pluginService.GenerateUpstreams(ctx, tenantWithDetails, spec, true)
-	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
-		j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
-		errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
-	}
+	return job.NewJob(tenantWithDetails.ToTenant(), spec, "", []job.ResourceURN{}), nil
+}
 
-	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
+func (j *JobService) generateDestination(ctx context.Context, tenantWithDetails *tenant.WithDetails, task job.Task) (job.ResourceURN, error) {
+	compiledConfigs := j.compileConfig(task.Config().Map(), tenantWithDetails)
+
+	// generate destination based on bq2bq config format
+	proj, ok1 := compiledConfigs["PROJECT"]
+	dataset, ok2 := compiledConfigs["DATASET"]
+	tab, ok3 := compiledConfigs["TABLE"]
+	if ok1 && ok2 && ok3 {
+		return job.ResourceURN(fmt.Sprintf("%s:%s.%s", proj, dataset, tab)), nil
+	}
+	err := fmt.Errorf("missing config key required to generate destination")
+	j.logger.Error("error generating destination: %s", err)
+	return "", fmt.Errorf("failed to generate destination: %w", err)
+}
+
+func (j *JobService) compileConfig(configs job.Config, tnnt *tenant.WithDetails) map[string]string {
+	tmplCtx := compiler.PrepareContext(
+		compiler.From(tnnt.GetConfigs()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
+		compiler.From(tnnt.SecretsMap()).WithName("secret"),
+	)
+
+	compiledConfigs := map[string]string{}
+	for key, val := range configs {
+		compiledConf, err := j.engine.CompileString(val, tmplCtx)
+		if err != nil {
+			j.logger.Warn("template compilation encountered suppressed error: %s", err.Error())
+			compiledConf = val
+		}
+		compiledConfigs[key] = compiledConf
+	}
+	return compiledConfigs
 }
 
 func (j *JobService) validateCyclic(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) ([]string, error) {

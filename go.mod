@@ -17,6 +17,7 @@ require (
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/google/uuid v1.3.0
+	github.com/googleapis/google-cloud-go-testing v0.0.0-20200911160855-bcd43fbb19e8
 	github.com/goto/optimus/sdk v0.0.0-20230313071811-2d68a9c815bf
 	github.com/goto/salt v0.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0

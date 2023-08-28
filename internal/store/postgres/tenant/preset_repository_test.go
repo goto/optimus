@@ -1,14 +1,17 @@
+//go:build !unit_test
+
 package tenant_test
 
 import (
 	"context"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/goto/optimus/core/tenant"
 	postgres "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPostgresPresetRepository(t *testing.T) {

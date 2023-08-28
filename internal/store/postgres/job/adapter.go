@@ -62,10 +62,10 @@ type Schedule struct {
 }
 
 type Window struct {
-	WindowSize       string
-	WindowOffset     string
-	WindowTruncateTo string
-	Preset           string
+	WindowSize       string `json:",omitempty"`
+	WindowOffset     string `json:",omitempty"`
+	WindowTruncateTo string `json:",omitempty"`
+	Preset           string `json:",omitempty"`
 	Type             string
 }
 
@@ -195,12 +195,19 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 }
 
 func toStorageWindow(windowSpec window.Config) ([]byte, error) {
+	var size, offset, truncateTo string
+	if windowSpec.Window != nil {
+		size = windowSpec.Window.GetSize()
+		offset = windowSpec.Window.GetOffset()
+		truncateTo = windowSpec.Window.GetTruncateTo()
+	}
+
 	w := Window{
 		Type:             string(windowSpec.Type()),
 		Preset:           windowSpec.Preset,
-		WindowSize:       windowSpec.Window.GetSize(),
-		WindowOffset:     windowSpec.Window.GetOffset(),
-		WindowTruncateTo: windowSpec.Window.GetTruncateTo(),
+		WindowSize:       size,
+		WindowOffset:     offset,
+		WindowTruncateTo: truncateTo,
 	}
 	windowJSON, err := json.Marshal(w)
 	if err != nil {

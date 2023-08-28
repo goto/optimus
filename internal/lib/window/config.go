@@ -23,6 +23,22 @@ type Config struct {
 	Window models.Window
 }
 
+func (c Config) GetSize() string {
+	if c.Window == nil {
+		return ""
+	}
+
+	return c.Window.GetSize()
+}
+
+func (c Config) GetVersion() int {
+	if c.Window == nil {
+		return 0
+	}
+
+	return c.Window.GetVersion()
+}
+
 func NewPresetConfig(preset string) (Config, error) {
 	presetName := strings.ToLower(strings.TrimPrefix(preset, "@"))
 	if preset == "" {

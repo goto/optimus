@@ -120,10 +120,10 @@ type Job struct {
 	DeletedAt sql.NullTime
 }
 type Window struct {
-	WindowSize       string
-	WindowOffset     string
-	WindowTruncateTo string
-	Preset           string
+	WindowSize       string `json:",omitempty"`
+	WindowOffset     string `json:",omitempty"`
+	WindowTruncateTo string `json:",omitempty"`
+	Preset           string `json:",omitempty"`
 	Type             string
 }
 

@@ -15,16 +15,16 @@ import (
 
 func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 	return &pb.JobSpecification{
-		Version:       int32(jobEntity.Spec().Version()),
-		Name:          jobEntity.Spec().Name().String(),
-		Owner:         jobEntity.Spec().Owner(),
-		StartDate:     jobEntity.Spec().Schedule().StartDate().String(),
-		EndDate:       jobEntity.Spec().Schedule().EndDate().String(),
-		Interval:      jobEntity.Spec().Schedule().Interval(),
-		DependsOnPast: jobEntity.Spec().Schedule().DependsOnPast(),
-		TaskName:      jobEntity.Spec().Task().Name().String(),
-		Config:        fromConfig(jobEntity.Spec().Task().Config()),
-		// TODO: send the correct properties for window
+		Version:          int32(jobEntity.Spec().Version()),
+		Name:             jobEntity.Spec().Name().String(),
+		Owner:            jobEntity.Spec().Owner(),
+		StartDate:        jobEntity.Spec().Schedule().StartDate().String(),
+		EndDate:          jobEntity.Spec().Schedule().EndDate().String(),
+		Interval:         jobEntity.Spec().Schedule().Interval(),
+		DependsOnPast:    jobEntity.Spec().Schedule().DependsOnPast(),
+		TaskName:         jobEntity.Spec().Task().Name().String(),
+		Config:           fromConfig(jobEntity.Spec().Task().Config()),
+		WindowPreset:     jobEntity.Spec().WindowConfig().Preset,
 		WindowSize:       jobEntity.Spec().WindowConfig().Window.GetSize(),
 		WindowOffset:     jobEntity.Spec().WindowConfig().Window.GetOffset(),
 		WindowTruncateTo: jobEntity.Spec().WindowConfig().Window.GetTruncateTo(),

@@ -20,7 +20,7 @@ func TestTenantService(t *testing.T) {
 		tenant.ProjectStoragePathKey: "gs://location",
 		"BUCKET":                     "gs://some_folder",
 	}
-	proj, _ := tenant.NewProject("testProj", conf, nil)
+	proj, _ := tenant.NewProject("testProj", conf)
 	ns, _ := tenant.NewNamespace("testNS", proj.Name(), map[string]string{})
 	tnnt, _ := tenant.NewTenant(proj.Name().String(), ns.Name().String())
 

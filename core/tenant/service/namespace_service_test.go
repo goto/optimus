@@ -19,7 +19,7 @@ func TestNamespaceService(t *testing.T) {
 		tenant.ProjectStoragePathKey: "gs://location",
 		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", conf, nil)
+	savedProject, _ := tenant.NewProject("savedProj", conf)
 	savedNS, _ := tenant.NewNamespace("savedNS", savedProject.Name(), map[string]string{})
 
 	t.Run("Save", func(t *testing.T) {

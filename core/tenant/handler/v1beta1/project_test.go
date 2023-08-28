@@ -22,7 +22,7 @@ func TestProjectHandler(t *testing.T) {
 		tenant.ProjectStoragePathKey: "gs://location",
 		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", conf, nil)
+	savedProject, _ := tenant.NewProject("savedProj", conf)
 
 	t.Run("RegisterProject", func(t *testing.T) {
 		t.Run("returns error when name is empty", func(t *testing.T) {

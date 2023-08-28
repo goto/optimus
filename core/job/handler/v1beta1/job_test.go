@@ -31,7 +31,7 @@ func TestNewJobHandler(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		}, nil) // TODO: add test for presets
+		}) // TODO: add test for presets
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",

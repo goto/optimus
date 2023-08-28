@@ -101,7 +101,13 @@ func fromProjectProto(conf *pb.ProjectSpecification) (*tenant.Project, error) {
 		presets[lowerName] = newPreset
 	}
 
-	return tenant.NewProject(conf.GetName(), pConf, presets)
+	project, err := tenant.NewProject(conf.GetName(), pConf)
+	if err != nil {
+		return nil, err
+	}
+
+	project.SetPresets(presets)
+	return project, nil
 }
 
 func toProjectProto(project *tenant.Project) *pb.ProjectSpecification {

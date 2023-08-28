@@ -36,7 +36,7 @@ func TestAggregateRootTenant(t *testing.T) {
 			"BUCKET":                     "gs://some_folder",
 		}
 
-		project, _ := tenant.NewProject("test-project", projectConf, nil)
+		project, _ := tenant.NewProject("test-project", projectConf)
 		namespace, _ := tenant.NewNamespace("test-ns", project.Name(), map[string]string{
 			"BUCKET":       "gs://ns_folder",
 			"OTHER_CONFIG": "optimus",

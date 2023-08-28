@@ -19,7 +19,7 @@ func TestProjectService(t *testing.T) {
 		tenant.ProjectStoragePathKey: "gs://location",
 		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", conf, nil)
+	savedProject, _ := tenant.NewProject("savedProj", conf)
 
 	t.Run("Save", func(t *testing.T) {
 		t.Run("returns error when fails in service", func(t *testing.T) {
@@ -27,7 +27,7 @@ func TestProjectService(t *testing.T) {
 			projectRepo.On("Save", ctx, mock.Anything).Return(errors.New("error in saving"))
 			defer projectRepo.AssertExpectations(t)
 
-			toSaveProj, _ := tenant.NewProject("proj", map[string]string{"BUCKET": "gs://some_folder"}, nil)
+			toSaveProj, _ := tenant.NewProject("proj", map[string]string{"BUCKET": "gs://some_folder"})
 
 			projService := service.NewProjectService(projectRepo)
 			err := projService.Save(ctx, toSaveProj)
@@ -40,7 +40,7 @@ func TestProjectService(t *testing.T) {
 			projectRepo.On("Save", ctx, mock.Anything).Return(nil)
 			defer projectRepo.AssertExpectations(t)
 
-			toSaveProj, _ := tenant.NewProject("proj", map[string]string{"BUCKET": "gs://some_folder"}, nil)
+			toSaveProj, _ := tenant.NewProject("proj", map[string]string{"BUCKET": "gs://some_folder"})
 
 			projService := service.NewProjectService(projectRepo)
 			err := projService.Save(ctx, toSaveProj)

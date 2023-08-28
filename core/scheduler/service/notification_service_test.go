@@ -22,7 +22,7 @@ func TestNotificationService(t *testing.T) {
 	project, _ := tenant.NewProject("proj1", map[string]string{
 		"STORAGE_PATH":   "somePath",
 		"SCHEDULER_HOST": "localhost",
-	}, nil)
+	})
 	namespace, _ := tenant.NewNamespace("ns1", project.Name(), map[string]string{})
 	tnnt, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	startDate, _ := time.Parse(time.RFC3339, "2022-03-20T02:00:00+00:00")

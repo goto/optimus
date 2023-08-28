@@ -277,8 +277,10 @@ func (s *OptimusServer) setupHandlers() error {
 	tProjectRepo := tenant.NewProjectRepository(s.dbPool)
 	tNamespaceRepo := tenant.NewNamespaceRepository(s.dbPool)
 	tSecretRepo := tenant.NewSecretRepository(s.dbPool)
+	presetRepo := tenant.NewPresetRepository(s.dbPool)
 
-	tProjectService := tService.NewProjectService(tProjectRepo)
+	// TODO: add repo for preset
+	tProjectService := tService.NewProjectService(tProjectRepo, presetRepo)
 	tNamespaceService := tService.NewNamespaceService(tNamespaceRepo)
 	tSecretService := tService.NewSecretService(s.key, tSecretRepo, s.logger)
 	tenantService := tService.NewTenantService(tProjectService, tNamespaceService, tSecretService, s.logger)

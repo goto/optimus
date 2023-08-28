@@ -16,7 +16,7 @@ type PresetRepository struct {
 }
 
 const (
-	presetColumns           = `id, project_name, name, description, truncate_to, offset, size, created_at, updated_at`
+	presetColumns           = `id, project_name, name, description, window_truncate_to, window_offset, window_size, created_at, updated_at`
 	getPresetsByProjectName = `select ` + presetColumns + ` from preset where project_name = $1`
 )
 
@@ -43,7 +43,7 @@ type Preset struct {
 
 func (p PresetRepository) Create(ctx context.Context, projectName tenant.ProjectName, preset tenant.Preset) error {
 	insertStatement := `INSERT INTO preset
-	(project_name, name, description, truncate_to, offset, size, created_at, updated_at)
+	(project_name, name, description, window_truncate_to, window_offset, window_size, created_at, updated_at)
 VALUES
 	($1, $2, $3, $4, $5, $6, NOW(), NOW())
 `
@@ -85,9 +85,9 @@ func (p PresetRepository) Update(ctx context.Context, projectName tenant.Project
 	updateStatement := `UPDATE preset
 SET
 	description = $1,
-	truncate_to = $2,
-	offset = $3,
-	size = $4,
+	window_truncate_to = $2,
+	window_offset = $3,
+	window_size = $4,
 	updated_at = NOW()
 WHERE
 	project_name = $5

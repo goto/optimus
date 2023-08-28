@@ -16,9 +16,23 @@ import (
 
 func TestPostgresPresetRepository(t *testing.T) {
 	ctx := context.Background()
+
+	proj, _ := tenant.NewProject("t-optimus-1",
+		map[string]string{
+			"bucket":                     "gs://some_folder-2",
+			tenant.ProjectSchedulerHost:  "host",
+			tenant.ProjectStoragePathKey: "gs://location",
+		})
+
 	dbSetup := func() *pgxpool.Pool {
 		dbPool := setup.TestPool()
 		setup.TruncateTablesWith(dbPool)
+
+		prjRepo := postgres.NewProjectRepository(dbPool)
+		err := prjRepo.Save(ctx, proj)
+		if err != nil {
+			panic(err)
+		}
 
 		return dbPool
 	}
@@ -28,18 +42,15 @@ func TestPostgresPresetRepository(t *testing.T) {
 	preset2, err := tenant.NewPreset("yesterday_v2", "preset for testing v2", "d", "-1h", "24h")
 	assert.NoError(t, err)
 
-	projectName, err := tenant.ProjectNameFrom("project_test")
-	assert.NoError(t, err)
-
 	t.Run("Create", func(t *testing.T) {
 		t.Run("should store presets with the given project name", func(t *testing.T) {
 			db := dbSetup()
 			repo := postgres.NewPresetRepository(db)
 
-			actualError := repo.Create(ctx, projectName, preset1)
+			actualError := repo.Create(ctx, proj.Name(), preset1)
 			assert.Nil(t, actualError)
 
-			actualPresets, err := repo.Read(ctx, projectName)
+			actualPresets, err := repo.Read(ctx, proj.Name())
 			assert.NoError(t, err)
 			assert.Len(t, actualPresets, 1)
 			assert.EqualValues(t, preset1, actualPresets[0])
@@ -49,12 +60,12 @@ func TestPostgresPresetRepository(t *testing.T) {
 			db := dbSetup()
 			repo := postgres.NewPresetRepository(db)
 
-			actualError := repo.Create(ctx, projectName, preset1)
+			actualError := repo.Create(ctx, proj.Name(), preset1)
 			assert.Nil(t, actualError)
-			actualError = repo.Create(ctx, projectName, preset1)
+			actualError = repo.Create(ctx, proj.Name(), preset1)
 			assert.Error(t, actualError)
 
-			actualPresets, err := repo.Read(ctx, projectName)
+			actualPresets, err := repo.Read(ctx, proj.Name())
 			assert.NoError(t, err)
 			assert.Len(t, actualPresets, 1)
 			assert.EqualValues(t, preset1, actualPresets[0])
@@ -66,12 +77,12 @@ func TestPostgresPresetRepository(t *testing.T) {
 			db := dbSetup()
 			repo := postgres.NewPresetRepository(db)
 
-			actualError := repo.Create(ctx, projectName, preset1)
+			actualError := repo.Create(ctx, proj.Name(), preset1)
 			assert.Nil(t, actualError)
-			actualError = repo.Create(ctx, projectName, preset2)
+			actualError = repo.Create(ctx, proj.Name(), preset2)
 			assert.Nil(t, actualError)
 
-			actualPresets, err := repo.Read(ctx, projectName)
+			actualPresets, err := repo.Read(ctx, proj.Name())
 			assert.NoError(t, err)
 			assert.Len(t, actualPresets, 2)
 			assert.EqualValues(t, preset1, actualPresets[0])
@@ -82,7 +93,7 @@ func TestPostgresPresetRepository(t *testing.T) {
 			db := dbSetup()
 			repo := postgres.NewPresetRepository(db)
 
-			actualPresets, err := repo.Read(ctx, projectName)
+			actualPresets, err := repo.Read(ctx, proj.Name())
 			assert.NoError(t, err)
 			assert.Empty(t, actualPresets)
 		})
@@ -93,7 +104,7 @@ func TestPostgresPresetRepository(t *testing.T) {
 			db := dbSetup()
 			repo := postgres.NewPresetRepository(db)
 
-			actualError := repo.Create(ctx, projectName, preset1)
+			actualError := repo.Create(ctx, proj.Name(), preset1)
 			assert.Nil(t, actualError)
 
 			updatedDescription := "updated description"
@@ -103,10 +114,10 @@ func TestPostgresPresetRepository(t *testing.T) {
 			)
 			assert.NoError(t, err)
 
-			actualError = repo.Update(ctx, projectName, incomingPreset)
+			actualError = repo.Update(ctx, proj.Name(), incomingPreset)
 			assert.NoError(t, actualError)
 
-			storedPresets, err := repo.Read(ctx, projectName)
+			storedPresets, err := repo.Read(ctx, proj.Name())
 			assert.NoError(t, err)
 			assert.Len(t, storedPresets, 1)
 			assert.EqualValues(t, storedPresets[0], incomingPreset)
@@ -116,7 +127,7 @@ func TestPostgresPresetRepository(t *testing.T) {
 			db := dbSetup()
 			repo := postgres.NewPresetRepository(db)
 
-			actualError := repo.Update(ctx, projectName, preset1)
+			actualError := repo.Update(ctx, proj.Name(), preset1)
 			assert.Error(t, actualError)
 		})
 	})
@@ -126,23 +137,23 @@ func TestPostgresPresetRepository(t *testing.T) {
 			db := dbSetup()
 			repo := postgres.NewPresetRepository(db)
 
-			actualError := repo.Create(ctx, projectName, preset1)
+			actualError := repo.Create(ctx, proj.Name(), preset1)
 			assert.Nil(t, actualError)
-			actualError = repo.Create(ctx, projectName, preset2)
+			actualError = repo.Create(ctx, proj.Name(), preset2)
 			assert.Nil(t, actualError)
 
-			storedPresets, err := repo.Read(ctx, projectName)
+			storedPresets, err := repo.Read(ctx, proj.Name())
 			assert.NoError(t, err)
 			assert.Len(t, storedPresets, 2)
 
-			actualError = repo.Delete(ctx, projectName, preset1.Name())
+			actualError = repo.Delete(ctx, proj.Name(), preset1.Name())
 			assert.Nil(t, actualError)
 
-			storedPresets, err = repo.Read(ctx, projectName)
+			storedPresets, err = repo.Read(ctx, proj.Name())
 			assert.NoError(t, err)
 			assert.Len(t, storedPresets, 1)
 
-			assert.EqualValues(t, preset1, storedPresets[0])
+			assert.EqualValues(t, preset2, storedPresets[0])
 		})
 	})
 }

@@ -14,10 +14,11 @@ import (
 	"github.com/goto/optimus/core/job/service/bq2bq/upstream"
 )
 
-type DefaultBQClientFactory struct {
+type UpstreamExtractor interface {
+	ExtractUpstreams(ctx context.Context, query string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error)
 }
 
-func (fac *DefaultBQClientFactory) New(ctx context.Context, svcAccount string) (bqiface.Client, error) {
+func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error) {
 	cred, err := google.CredentialsFromJSON(ctx, []byte(svcAccount),
 		bigquery.Scope, storageV1.CloudPlatformScope, drive.DriveScope)
 	if err != nil {
@@ -32,9 +33,6 @@ func (fac *DefaultBQClientFactory) New(ctx context.Context, svcAccount string) (
 	return bqiface.AdaptClient(client), nil
 }
 
-type DefaultUpstreamExtractorFactory struct {
-}
-
-func (d *DefaultUpstreamExtractorFactory) New(client bqiface.Client) (UpstreamExtractor, error) {
+func newUpstreamExtractor(client bqiface.Client) (UpstreamExtractor, error) {
 	return upstream.NewExtractor(client)
 }

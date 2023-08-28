@@ -3,9 +3,9 @@ package tenant_test
 import (
 	"testing"
 
-	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/models"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/core/tenant"
 )
 
 func TestPreset(t *testing.T) {
@@ -32,18 +32,7 @@ func TestPreset(t *testing.T) {
 						offset:      "-1h",
 						size:        "24h",
 					},
-					expectedErrorMessage: "invalid argument for entity project: cleaned preset name is empty",
-				},
-				{
-					caseName: "cleaned name resulted in empty",
-					presetInput: presetInput{
-						name:        "	  ",
-						description: "preset for testing",
-						truncateTo:  "d",
-						offset:      "-1h",
-						size:        "24h",
-					},
-					expectedErrorMessage: "invalid argument for entity project: cleaned preset name is empty",
+					expectedErrorMessage: "invalid argument for entity project: name is empty",
 				},
 				{
 					caseName: "description is empty",
@@ -54,18 +43,7 @@ func TestPreset(t *testing.T) {
 						offset:      "-1h",
 						size:        "24h",
 					},
-					expectedErrorMessage: "invalid argument for entity project: cleaned preset description is empty",
-				},
-				{
-					caseName: "cleaned description resulted in empty",
-					presetInput: presetInput{
-						name:        "yesterday",
-						description: "   	",
-						truncateTo:  "d",
-						offset:      "-1h",
-						size:        "24h",
-					},
-					expectedErrorMessage: "invalid argument for entity project: cleaned preset description is empty",
+					expectedErrorMessage: "invalid argument for entity project: description is empty",
 				},
 				{
 					caseName: "window is invalid",
@@ -110,26 +88,8 @@ func TestPreset(t *testing.T) {
 
 	t.Run("Preset", func(t *testing.T) {
 		t.Run("Name", func(t *testing.T) {
-			t.Run("should return trimmed name", func(t *testing.T) {
-				name := "yesterday  "
-				description := "preset for testing"
-				truncateTo := "d"
-				offset := "-1h"
-				size := "24h"
-
-				preset, err := tenant.NewPreset(name, description, truncateTo, offset, size)
-				assert.NotZero(t, preset)
-				assert.NoError(t, err)
-
-				expectedName := "yesterday"
-
-				actualName := preset.Name()
-
-				assert.Equal(t, expectedName, actualName)
-			})
-
-			t.Run("should return lowered case of name", func(t *testing.T) {
-				name := "Yesterday"
+			t.Run("should return name", func(t *testing.T) {
+				name := "yesterday"
 				description := "preset for testing"
 				truncateTo := "d"
 				offset := "-1h"
@@ -148,9 +108,9 @@ func TestPreset(t *testing.T) {
 		})
 
 		t.Run("Description", func(t *testing.T) {
-			t.Run("should return trimmed description", func(t *testing.T) {
+			t.Run("should return description", func(t *testing.T) {
 				name := "yesterday"
-				description := "preset for testing  "
+				description := "preset for testing"
 				truncateTo := "d"
 				offset := "-1h"
 				size := "24h"
@@ -164,27 +124,6 @@ func TestPreset(t *testing.T) {
 				actualDescription := preset.Description()
 
 				assert.Equal(t, expectedDescription, actualDescription)
-			})
-		})
-
-		t.Run("Window", func(t *testing.T) {
-			t.Run("should return window", func(t *testing.T) {
-				name := "yesterday"
-				description := "preset for testing"
-				truncateTo := "d"
-				offset := "-1h"
-				size := "24h"
-
-				preset, err := tenant.NewPreset(name, description, truncateTo, offset, size)
-				assert.NotZero(t, preset)
-				assert.NoError(t, err)
-
-				expectedWindow, err := models.NewWindow(2, truncateTo, offset, size)
-				assert.NoError(t, err)
-
-				actualWindow := preset.Window()
-
-				assert.EqualValues(t, expectedWindow, actualWindow)
 			})
 		})
 

@@ -1,8 +1,6 @@
 package tenant
 
 import (
-	"strings"
-
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/models"
 )
@@ -51,14 +49,12 @@ func (p Preset) Equal(incoming Preset) bool {
 }
 
 func NewPreset(name, description, truncateTo, offset, size string) (Preset, error) {
-	cleanedName := strings.ToLower(strings.TrimSpace(name))
-	if cleanedName == "" {
-		return Preset{}, errors.InvalidArgument(EntityProject, "cleaned preset name is empty")
+	if name == "" {
+		return Preset{}, errors.InvalidArgument(EntityProject, "name is empty")
 	}
 
-	cleanedDescription := strings.TrimSpace(description)
-	if cleanedDescription == "" {
-		return Preset{}, errors.InvalidArgument(EntityProject, "cleaned preset description is empty")
+	if description == "" {
+		return Preset{}, errors.InvalidArgument(EntityProject, "description is empty")
 	}
 
 	window, err := models.NewWindow(2, truncateTo, offset, size)
@@ -71,8 +67,8 @@ func NewPreset(name, description, truncateTo, offset, size string) (Preset, erro
 	}
 
 	return Preset{
-		name:        cleanedName,
-		description: cleanedDescription,
+		name:        name,
+		description: description,
 		window:      window,
 	}, nil
 }

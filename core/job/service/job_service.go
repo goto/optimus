@@ -5,14 +5,22 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
+	"cloud.google.com/go/bigquery"
+	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/drive/v2"
+	"google.golang.org/api/option"
+	storageV1 "google.golang.org/api/storage/v1"
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service/filter"
+	"github.com/goto/optimus/core/job/service/upstream"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
@@ -40,7 +48,8 @@ type JobService struct {
 
 	jobDeploymentService JobDeploymentService
 
-	engine Engine
+	engine            Engine
+	upstreamExtractor UpstreamExtractor
 
 	logger log.Logger
 }
@@ -63,6 +72,10 @@ func NewJobService(
 		jobDeploymentService: jobDeploymentService,
 		engine:               engine,
 	}
+}
+
+type UpstreamExtractor interface {
+	ExtractUpstreams(ctx context.Context, query string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error)
 }
 
 type Engine interface {
@@ -919,7 +932,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
 		}
 
-		sources, err := j.pluginService.GenerateUpstreams(ctx, tenantWithDetails, spec, true)
+		sources, err := j.generateUpstreams(ctx, tenantWithDetails, spec, destination)
 		if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
@@ -929,6 +942,156 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	}
 
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, "", []job.ResourceURN{}), nil
+}
+
+func (j *JobService) generateUpstreams(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec, destination job.ResourceURN) ([]job.ResourceURN, error) {
+	// compile the assets
+	// do we need JOB_DESTINATION?
+	// TODO: this now will always be a same time for start of service, is it correct ?
+	assets, err := j.compileAssets(ctx, spec, time.Now(), destination.String())
+	if err != nil {
+		j.logger.Error("error compiling asset: %s", err)
+		return nil, fmt.Errorf("asset compilation failure: %w", err)
+	}
+
+	// compile the config
+	compiledConfigs := j.compileConfig(spec.Task().Config(), tenantWithDetails)
+
+	// generate dependencies from the compield assets
+	upstreamURNs, err := j.generateUpstreamURNs(ctx, assets, compiledConfigs, destination.String())
+	if err != nil {
+		j.logger.Error("error generating dependencies: %s", err)
+		return nil, err
+	}
+
+	return upstreamURNs, nil
+}
+
+// adopted from https://github.com/goto/transformers/blob/a96357a7d170f9c89a52600eab4bc57a8e18489c/task/bq2bq/main.go#L204
+func (j *JobService) generateUpstreamURNs(ctx context.Context, assets map[string]string, configs map[string]string, destination string) ([]job.ResourceURN, error) {
+	upstreamURNs := []job.ResourceURN{}
+
+	svcAcc, ok := configs["BQ_SERVICE_ACCOUNT"]
+	if !ok || svcAcc == "" {
+		j.logger.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
+		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found for bq2bq")
+	}
+
+	queryData, ok := assets["query.sql"]
+	if !ok {
+		return nil, fmt.Errorf("empty sql file")
+	}
+
+	destinationResource, err := destinationToResource(destination)
+	if err != nil {
+		return nil, fmt.Errorf("error getting destination resource: %w", err)
+	}
+
+	upstreams, err := j.extractUpstreams(ctx, queryData, svcAcc, []upstream.Resource{destinationResource})
+	if err != nil {
+		return nil, fmt.Errorf("error extracting upstreams: %w", err)
+	}
+
+	flattenedUpstreams := upstream.FlattenUpstreams(upstreams)
+	uniqueUpstreams := upstream.UniqueFilterResources(flattenedUpstreams)
+
+	for _, r := range uniqueUpstreams {
+		formattedUpstream := fmt.Sprintf("%s:%s.%s", r.Project, r.Dataset, r.Name)
+		upstreamURNs = append(upstreamURNs, job.ResourceURN(formattedUpstream))
+	}
+
+	return upstreamURNs, nil
+}
+
+func (j *JobService) extractUpstreams(ctx context.Context, query, svcAcc string, resourceToIgnore []upstream.Resource) ([]*upstream.Upstream, error) {
+	for try := 1; try <= MaxBQApiRetries; try++ {
+		bqClient, err := newBQClient(ctx, svcAcc)
+		if err != nil {
+			return nil, fmt.Errorf("error creating bigquery client: %w", err)
+		}
+		upstreamExtractor, err := upstream.NewExtractor(bqClient)
+		if err != nil {
+			return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
+		}
+		upstreams, err := upstreamExtractor.ExtractUpstreams(ctx, query, resourceToIgnore)
+		if err != nil {
+			if strings.Contains(err.Error(), "net/http: TLS handshake timeout") ||
+				strings.Contains(err.Error(), "unexpected EOF") ||
+				strings.Contains(err.Error(), "i/o timeout") ||
+				strings.Contains(err.Error(), "connection reset by peer") {
+				// retry
+				continue
+			}
+
+			j.logger.Error("error extracting upstreams", err)
+		}
+		return upstreams, nil
+	}
+}
+
+func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error) {
+	cred, err := google.CredentialsFromJSON(ctx, []byte(svcAccount),
+		bigquery.Scope, storageV1.CloudPlatformScope, drive.DriveScope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read secret: %w", err)
+	}
+
+	client, err := bigquery.NewClient(ctx, cred.ProjectID, option.WithCredentials(cred))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create BQ client: %w", err)
+	}
+
+	return bqiface.AdaptClient(client), nil
+}
+
+func destinationToResource(destination string) (upstream.Resource, error) {
+	splitDestination := strings.Split(destination, ":")
+	if len(splitDestination) != 2 {
+		return upstream.Resource{}, fmt.Errorf("cannot get project from destination [%s]", destination)
+	}
+
+	project, datasetTable := splitDestination[0], splitDestination[1]
+
+	splitDataset := strings.Split(datasetTable, ".")
+	if len(splitDataset) != 2 {
+		return upstream.Resource{}, fmt.Errorf("cannot get dataset and table from [%s]", datasetTable)
+	}
+
+	return upstream.Resource{
+		Project: project,
+		Dataset: splitDataset[0],
+		Name:    splitDataset[1],
+	}, nil
+}
+
+func (j *JobService) compileAssets(ctx context.Context, spec *job.Spec, scheduledAt time.Time, jobDestination string) (map[string]string, error) {
+	startTime, err := spec.Window().GetStartTime(scheduledAt)
+	if err != nil {
+		j.logger.Error("error getting start time: %s", err)
+		return nil, fmt.Errorf("error getting start time: %w", err)
+	}
+	endTime, err := spec.Window().GetEndTime(scheduledAt)
+	if err != nil {
+		j.logger.Error("error getting end time: %s", err)
+		return nil, fmt.Errorf("error getting end time: %w", err)
+	}
+
+	var assets map[string]string
+	if spec.Asset() != nil {
+		assets = spec.Asset()
+	}
+	templates, err := j.engine.Compile(assets, map[string]interface{}{
+		configKeyDstart:        startTime.Format(TimeISOFormat),
+		configKeyDend:          endTime.Format(TimeISOFormat),
+		configKeyExecutionTime: scheduledAt.Format(TimeISOFormat),
+		configKeyDestination:   jobDestination, // do we need this?
+	})
+	if err != nil {
+		j.logger.Error("error compiling asset: %s", err)
+		return nil, fmt.Errorf("failed to compile templates: %w", err)
+	}
+
+	return templates, nil
 }
 
 func (j *JobService) generateDestination(ctx context.Context, tenantWithDetails *tenant.WithDetails, task job.Task) (job.ResourceURN, error) {

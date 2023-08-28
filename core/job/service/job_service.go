@@ -50,7 +50,7 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService,
+	jobDeploymentService JobDeploymentService, engine Engine,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -62,13 +62,17 @@ func NewJobService(
 		tenantDetailsGetter:  tenantDetailsGetter,
 		logger:               logger,
 		jobDeploymentService: jobDeploymentService,
+		engine:               engine,
 	}
+}
+
+type Engine interface {
+	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
+	CompileString(input string, context map[string]any) (string, error)
 }
 
 type PluginService interface {
 	Info(context.Context, job.TaskName) (*plugin.Info, error)
-	GenerateDestination(context.Context, *tenant.WithDetails, job.Task) (job.ResourceURN, error)
-	GenerateUpstreams(ctx context.Context, jobTenant *tenant.WithDetails, spec *job.Spec, dryRun bool) ([]job.ResourceURN, error)
 }
 
 type TenantDetailsGetter interface {

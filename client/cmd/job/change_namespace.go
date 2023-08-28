@@ -126,8 +126,7 @@ func getJobParentsFilePathList(fileFS afero.Fs, jobDirPath string) ([]string, er
 	splitDirPaths := strings.Split(jobDirPath, "/")
 	for i := range splitDirPaths {
 		pathNearSpecIdx := len(splitDirPaths) - i
-		rootToNearSpecPaths := splitDirPaths[:pathNearSpecIdx]
-		parentDirPath := filepath.Join(rootToNearSpecPaths...)
+		parentDirPath := filepath.Join(splitDirPaths[:pathNearSpecIdx]...)
 		parenFilePath := filepath.Join(parentDirPath, "this.yaml")
 		exist, err := afero.Exists(fileFS, parenFilePath)
 		if err != nil {

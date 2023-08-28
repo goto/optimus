@@ -12,8 +12,10 @@ import (
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/job/service/bq2bq"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/telemetry"
@@ -38,6 +40,7 @@ type JobService struct {
 	tenantDetailsGetter TenantDetailsGetter
 
 	jobDeploymentService JobDeploymentService
+	engine               Engine
 
 	logger log.Logger
 }
@@ -902,15 +905,41 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 	return generatedJobs, me.ToErr()
 }
 
+func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails) map[string]string {
+	tmplCtx := compiler.PrepareContext(
+		compiler.From(tnnt.GetConfigs()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
+		compiler.From(tnnt.SecretsMap()).WithName("secret"),
+	)
+
+	var compiledConfigs map[string]string
+	for key, val := range configs {
+		compiledConf, err := j.engine.CompileString(val, tmplCtx)
+		if err != nil {
+			j.logger.Warn("template compilation encountered suppressed error: %s", err.Error())
+			compiledConf = val
+		}
+		compiledConfigs[key] = compiledConf
+	}
+	return compiledConfigs
+}
+
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
-	destination, err := j.pluginService.GenerateDestination(ctx, tenantWithDetails, spec.Task())
-	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
-		j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
-		errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+	var destination job.ResourceURN = ""
+	var sources []job.ResourceURN = nil
+	var err error = nil
+	if spec.Task().Name() == "bq2bq" { // for now, only work for bq2bq plugin
+		compileConfigs := j.compileConfigs(spec.Task().Config().Map(), tenantWithDetails)
+
+		// generate destination
+		destination, err = bq2bq.GenerateDestination(ctx, compileConfigs)
+		if err != nil {
+			j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
+			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
+			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
 	}
 
-	sources, err := j.pluginService.GenerateUpstreams(ctx, tenantWithDetails, spec, true)
+	sources, err = j.pluginService.GenerateUpstreams(ctx, tenantWithDetails, spec, true)
 	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
 		j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 		errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())

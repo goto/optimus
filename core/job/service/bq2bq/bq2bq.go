@@ -10,6 +10,7 @@ import (
 	"github.com/goto/optimus/sdk/plugin"
 	"github.com/goto/salt/log"
 
+	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service/bq2bq/upstream"
 )
 
@@ -107,17 +108,14 @@ func CompileAssets(ctx context.Context, compiler FilesCompiler, startTime, endTi
 
 // GenerateDestination uses config details to build target table
 // this format should match with GenerateDependencies output
-func (b *BQ2BQ) GenerateDestination(ctx context.Context, request plugin.GenerateDestinationRequest) (*plugin.GenerateDestinationResponse, error) {
-	proj, ok1 := request.Config.Get("PROJECT")
-	dataset, ok2 := request.Config.Get("DATASET")
-	tab, ok3 := request.Config.Get("TABLE")
+func GenerateDestination(ctx context.Context, configs map[string]string) (job.ResourceURN, error) {
+	proj, ok1 := configs["PROJECT"]
+	dataset, ok2 := configs["DATASET"]
+	tab, ok3 := configs["TABLE"]
 	if ok1 && ok2 && ok3 {
-		return &plugin.GenerateDestinationResponse{
-			Destination: fmt.Sprintf("%s:%s.%s", proj.Value, dataset.Value, tab.Value),
-			Type:        destinationTypeBigquery,
-		}, nil
+		return job.ResourceURN(fmt.Sprintf("%s:%s.%s", proj, dataset, tab)), nil
 	}
-	return nil, errors.New("missing config key required to generate destination")
+	return "", errors.New("missing config key required to generate destination")
 }
 
 // GenerateDependencies uses assets to find out the source tables of this
@@ -146,7 +144,7 @@ func (b *BQ2BQ) GenerateDependencies(ctx context.Context, request plugin.Generat
 		return nil, errors.New("empty sql file")
 	}
 
-	selfTable, err := b.GenerateDestination(ctx, plugin.GenerateDestinationRequest{
+	selfTable, err := GenerateDestination(ctx, plugin.GenerateDestinationRequest{
 		Config: request.Config,
 		Assets: request.Assets,
 	})

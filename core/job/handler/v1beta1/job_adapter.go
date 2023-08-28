@@ -204,7 +204,7 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 		if err != nil {
 			return window.Config{}, err
 		}
-		if err = w.Validate(); err != nil {
+		if err := w.Validate(); err != nil {
 			return window.Config{}, err
 		}
 		return window.NewCustomConfig(w), nil

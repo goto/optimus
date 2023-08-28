@@ -120,8 +120,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			interval, err := window.FromBaseWindow(w).GetInterval(config.ScheduledAt)
-			//startTime, _ := job.WindowConfig.Window.GetStartTime(config.ScheduledAt)
-			//endTime, _ := job.WindowConfig.Window.GetEndTime(config.ScheduledAt)
+			assert.NoError(t, err)
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start.Format(time.RFC3339),
@@ -289,6 +288,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			interval, err := window.FromBaseWindow(w1).GetInterval(config.ScheduledAt)
+			assert.NoError(t, err)
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start.Format(time.RFC3339),
@@ -375,8 +375,6 @@ func TestExecutorCompiler(t *testing.T) {
 
 			interval, err := window.FromBaseWindow(w1).GetInterval(config.ScheduledAt)
 			assert.NoError(t, err)
-			//startTime, _ := job.WindowConfig.Window.GetStartTime(config.ScheduledAt)
-			//endTime, _ := job.WindowConfig.Window.GetEndTime(config.ScheduledAt)
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start.Format(time.RFC3339),

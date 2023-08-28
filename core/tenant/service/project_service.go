@@ -75,8 +75,8 @@ func (s ProjectService) GetAll(ctx context.Context) ([]*tenant.Project, error) {
 	return projects, me.ToErr()
 }
 
-func (p ProjectService) getPresets(ctx context.Context, projectName tenant.ProjectName) (map[string]tenant.Preset, error) {
-	existings, err := p.presetRepo.Read(ctx, projectName)
+func (s ProjectService) getPresets(ctx context.Context, projectName tenant.ProjectName) (map[string]tenant.Preset, error) {
+	existings, err := s.presetRepo.Read(ctx, projectName)
 	if err != nil {
 		return nil, err
 	}
@@ -89,31 +89,31 @@ func (p ProjectService) getPresets(ctx context.Context, projectName tenant.Proje
 	return output, nil
 }
 
-func (p ProjectService) replacePresets(ctx context.Context, projectName tenant.ProjectName, incomings map[string]tenant.Preset) error {
-	existings, err := p.presetRepo.Read(ctx, projectName)
+func (s ProjectService) replacePresets(ctx context.Context, projectName tenant.ProjectName, incomings map[string]tenant.Preset) error {
+	existings, err := s.presetRepo.Read(ctx, projectName)
 	if err != nil {
 		return err
 	}
 
 	me := errors.NewMultiError("replace presets within project")
 
-	toCreate, toUpdate, toDelete := p.getPresetsDiff(incomings, existings)
+	toCreate, toUpdate, toDelete := s.getPresetsDiff(incomings, existings)
 	for _, preset := range toCreate {
-		me.Append(p.presetRepo.Create(ctx, projectName, preset))
+		me.Append(s.presetRepo.Create(ctx, projectName, preset))
 	}
 
 	for _, preset := range toUpdate {
-		me.Append(p.presetRepo.Update(ctx, projectName, preset))
+		me.Append(s.presetRepo.Update(ctx, projectName, preset))
 	}
 
 	for _, preset := range toDelete {
-		me.Append(p.presetRepo.Delete(ctx, projectName, preset.Name()))
+		me.Append(s.presetRepo.Delete(ctx, projectName, preset.Name()))
 	}
 
 	return me.ToErr()
 }
 
-func (p ProjectService) getPresetsDiff(incomings map[string]tenant.Preset, existings []tenant.Preset) (toCreate, toUpdate, toDelete []tenant.Preset) {
+func (ProjectService) getPresetsDiff(incomings map[string]tenant.Preset, existings []tenant.Preset) (toCreate, toUpdate, toDelete []tenant.Preset) {
 	existingsMap := make(map[string]tenant.Preset)
 	for _, existing := range existings {
 		if _, ok := incomings[existing.Name()]; !ok {

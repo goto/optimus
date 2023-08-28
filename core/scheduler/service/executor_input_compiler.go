@@ -80,11 +80,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		return nil, err
 	}
 
-	systemDefinedVars, err := getSystemDefinedConfigs(job.Job, interval, executedAt)
-	if err != nil {
-		i.logger.Error("error getting config for job [%s]: %s", job.Name.String(), err)
-		return nil, err
-	}
+	systemDefinedVars := getSystemDefinedConfigs(job.Job, interval, executedAt)
 
 	// Prepare template context and compile task config
 	taskContext := compiler.PrepareContext(
@@ -164,13 +160,13 @@ func (i InputCompiler) compileConfigs(configs map[string]string, templateCtx map
 	return conf, secretsConfig, nil
 }
 
-func getSystemDefinedConfigs(job *scheduler.Job, interval window.Interval, executedAt time.Time) (map[string]string, error) {
+func getSystemDefinedConfigs(job *scheduler.Job, interval window.Interval, executedAt time.Time) map[string]string {
 	return map[string]string{
 		configDstart:        interval.Start.Format(TimeISOFormat),
 		configDend:          interval.End.Format(TimeISOFormat),
 		configExecutionTime: executedAt.Format(TimeISOFormat),
 		configDestination:   job.Destination,
-	}, nil
+	}
 }
 
 func splitConfigWithSecrets(conf map[string]string) (map[string]string, map[string]string) {

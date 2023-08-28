@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/errors"
 )
 
 type PresetRepository struct {
@@ -115,8 +116,8 @@ func (p PresetRepository) Delete(ctx context.Context, projectName tenant.Project
 	return errors.WrapIfErr(tenant.EntityProject, "error deleting preset", err)
 }
 
-func (PresetRepository) scanRows(rows pgx.Rows) ([]Preset, error) {
-	var presets []Preset
+func (PresetRepository) scanRows(rows pgx.Rows) ([]*Preset, error) {
+	var presets []*Preset
 	for rows.Next() {
 		var preset Preset
 		err := rows.Scan(
@@ -134,7 +135,7 @@ func (PresetRepository) scanRows(rows pgx.Rows) ([]Preset, error) {
 			return nil, errors.Wrap(tenant.EntityProject, "error scanning rows", err)
 		}
 
-		presets = append(presets, preset)
+		presets = append(presets, &preset)
 	}
 
 	return presets, nil

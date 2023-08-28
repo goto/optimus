@@ -57,7 +57,7 @@ func NewPreset(name, description, truncateTo, offset, size string) (Preset, erro
 		return Preset{}, errors.InvalidArgument(EntityProject, "description is empty")
 	}
 
-	window, err := models.NewWindow(2, truncateTo, offset, size)
+	window, err := models.NewWindow(2, truncateTo, offset, size) //nolint:gomnd
 	if err != nil {
 		return Preset{}, err
 	}

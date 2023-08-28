@@ -43,41 +43,34 @@ type BQ2BQ struct {
 	logger log.Logger
 }
 
-func (b *BQ2BQ) CompileAssets(ctx context.Context, req plugin.CompileAssetsRequest) (*plugin.CompileAssetsResponse, error) {
-	method, ok := req.Config.Get(LoadMethod)
-	if !ok || method.Value != LoadMethodReplace {
-		return &plugin.CompileAssetsResponse{
-			Assets: req.Assets,
-		}, nil
+type FilesCompiler interface {
+	Compile(fileMap map[string]string, context map[string]any) (map[string]string, error)
+}
+
+func CompileAssets(ctx context.Context, compiler FilesCompiler, startTime, endTime time.Time, configs, systemEnvVars, assets map[string]string) (map[string]string, error) {
+	method, ok := configs["LOAD_METHOD"]
+	if !ok || method != "REPLACE" {
+		return assets, nil
 	}
 
 	// partition window in range
-	instanceFileMap := map[string]string{}
 	instanceEnvMap := map[string]interface{}{}
-	if req.InstanceData != nil {
-		for _, jobRunData := range req.InstanceData {
-			switch jobRunData.Type {
-			case dataTypeFile:
-				instanceFileMap[jobRunData.Name] = jobRunData.Value
-			case dataTypeEnv:
-				instanceEnvMap[jobRunData.Name] = jobRunData.Value
-			}
-		}
+	for name, value := range systemEnvVars {
+		instanceEnvMap[name] = value
 	}
 
 	// TODO: making few assumptions here, should be documented
 	// assume destination table is time partitioned
 	// assume table is partitioned as DAY
-	partitionDelta := time.Hour * 24
+	const dayHours = time.Duration(24)
+	partitionDelta := time.Hour * dayHours
 
 	// find destination partitions
 	var destinationsPartitions []struct {
 		start time.Time
 		end   time.Time
 	}
-	dstart := req.StartTime
-	dend := req.EndTime
-	for currentPart := dstart; currentPart.Before(dend); currentPart = currentPart.Add(partitionDelta) {
+	for currentPart := startTime; currentPart.Before(endTime); currentPart = currentPart.Add(partitionDelta) {
 		destinationsPartitions = append(destinationsPartitions, struct {
 			start time.Time
 			end   time.Time
@@ -88,52 +81,28 @@ func (b *BQ2BQ) CompileAssets(ctx context.Context, req plugin.CompileAssetsReque
 	}
 
 	// check if window size is greater than partition delta(a DAY), if not do nothing
-	if dend.Sub(dstart) <= partitionDelta {
-		return &plugin.CompileAssetsResponse{
-			Assets: req.Assets,
-		}, nil
+	if endTime.Sub(startTime) <= partitionDelta {
+		return assets, nil
 	}
 
 	var parsedQueries []string
 	var err error
 
-	compiledAssetMap := map[string]string{}
-	for _, asset := range req.Assets {
-		compiledAssetMap[asset.Name] = asset.Value
-	}
+	compiledAssetMap := assets
 	// append job spec assets to list of files need to write
-	fileMap := mergeStringMap(instanceFileMap, compiledAssetMap)
+	fileMap := compiledAssetMap
+	queryFileReplaceBreakMarker := "\n--*--optimus-break-marker--*--\n"
 	for _, part := range destinationsPartitions {
-		instanceEnvMap[ConfigKeyDstart] = part.start.Format(scheduledAtTimeLayout)
-		instanceEnvMap[ConfigKeyDend] = part.end.Format(scheduledAtTimeLayout)
-		if compiledAssetMap, err = b.Compiler.Compile(fileMap, instanceEnvMap); err != nil {
-			return &plugin.CompileAssetsResponse{}, err
+		instanceEnvMap["DSTART"] = part.start.Format(time.RFC3339)
+		instanceEnvMap["DEND"] = part.end.Format(time.RFC3339)
+		if compiledAssetMap, err = compiler.Compile(fileMap, instanceEnvMap); err != nil {
+			return nil, err
 		}
-		parsedQueries = append(parsedQueries, compiledAssetMap[QueryFileName])
+		parsedQueries = append(parsedQueries, compiledAssetMap["query.sql"])
 	}
-	compiledAssetMap[QueryFileName] = strings.Join(parsedQueries, QueryFileReplaceBreakMarker)
+	compiledAssetMap["query.sql"] = strings.Join(parsedQueries, queryFileReplaceBreakMarker)
 
-	taskAssets := plugin.Assets{}
-	for name, val := range compiledAssetMap {
-		taskAssets = append(taskAssets, plugin.Asset{
-			Name:  name,
-			Value: val,
-		})
-	}
-	return &plugin.CompileAssetsResponse{
-		Assets: taskAssets,
-	}, nil
-}
-
-func mergeStringMap(mp1, mp2 map[string]string) (mp3 map[string]string) {
-	mp3 = make(map[string]string)
-	for k, v := range mp1 {
-		mp3[k] = v
-	}
-	for k, v := range mp2 {
-		mp3[k] = v
-	}
-	return mp3
+	return compiledAssetMap, nil
 }
 
 // GenerateDestination uses config details to build target table

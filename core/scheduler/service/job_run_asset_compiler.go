@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/salt/log"
 
+	"github.com/goto/optimus/core/job/service/bq2bq"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/sdk/plugin"
 )
@@ -39,12 +40,6 @@ func NewJobAssetsCompiler(engine FilesCompiler, pluginRepo PluginRepo, logger lo
 }
 
 func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, scheduledAt time.Time, contextForTask map[string]interface{}) (map[string]string, error) {
-	taskPlugin, err := c.pluginRepo.GetByName(job.Task.Name)
-	if err != nil {
-		c.logger.Error("error getting plugin [%s]: %s", job.Task.Name, err)
-		return nil, err
-	}
-
 	startTime, err := job.Window.GetStartTime(scheduledAt)
 	if err != nil {
 		c.logger.Error("error getting window start time: %s", err)
@@ -58,20 +53,14 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *sch
 
 	inputFiles := job.Assets
 
-	if taskPlugin.DependencyMod != nil {
+	if job.Task.Name == "bq2bq" { // compile assets exclusive only for bq2bq plugin
 		// check if task needs to override the compilation behaviour
-		compiledAssetResponse, err := taskPlugin.DependencyMod.CompileAssets(ctx, plugin.CompileAssetsRequest{
-			StartTime:    startTime,
-			EndTime:      endTime,
-			Config:       toPluginConfig(job.Task.Config),
-			Assets:       toPluginAssets(job.Assets),
-			InstanceData: toJobRunSpecData(systemEnvVars),
-		})
+		compiledAssets, err := bq2bq.CompileAssets(ctx, c.compiler, startTime, endTime, job.Task.Config, job.Assets, systemEnvVars)
 		if err != nil {
 			c.logger.Error("error compiling assets through plugin dependency mod: %s", err)
 			return nil, err
 		}
-		inputFiles = compiledAssetResponse.Assets.ToMap()
+		inputFiles = compiledAssets
 	}
 
 	fileMap, err := c.compiler.Compile(inputFiles, contextForTask)

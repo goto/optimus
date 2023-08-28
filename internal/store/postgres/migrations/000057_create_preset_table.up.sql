@@ -5,9 +5,9 @@ CREATE TABLE IF NOT EXISTS preset (
     name            VARCHAR(100) NOT NULL,
     description     TEXT NOT NULL,
 
-    truncate_to     VARCHAR(10),
-    offset          VARCHAR(10),
-    size            VARCHAR(10),
+    window_truncate_to     VARCHAR(10),
+    window_offset          VARCHAR(10),
+    window_size            VARCHAR(10),
 
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL,

@@ -57,6 +57,11 @@ func (p *Project) GetConfigs() map[string]string {
 }
 
 func (p *Project) SetPresets(presets map[string]Preset) {
+	if presets == nil {
+		p.presets = make(map[string]Preset)
+		return
+	}
+
 	p.presets = presets
 }
 

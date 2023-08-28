@@ -23,7 +23,6 @@ func TestEntityProject(t *testing.T) {
 		})
 	})
 
-	// TODO: add test for presets
 	t.Run("Project", func(t *testing.T) {
 		t.Run("fails to create if name is empty", func(t *testing.T) {
 			project, err := tenant.NewProject("", map[string]string{"a": "b"})

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goto/optimus/sdk/plugin"
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/job"
@@ -22,6 +21,8 @@ const (
 	dataTypeFile            = "file"
 	destinationTypeBigquery = "bigquery"
 	scheduledAtTimeLayout   = time.RFC3339
+
+	DestinationURNFormat = "%s://%s"
 )
 
 var (
@@ -38,19 +39,13 @@ var (
 	QueryFileReplaceBreakMarker = "\n--*--optimus-break-marker--*--\n"
 )
 
-type BQ2BQ struct {
-	Compiler *Compiler
-
-	logger log.Logger
-}
-
 type FilesCompiler interface {
 	Compile(fileMap map[string]string, context map[string]any) (map[string]string, error)
 }
 
 func CompileAssets(ctx context.Context, compiler FilesCompiler, startTime, endTime time.Time, configs, systemEnvVars, assets map[string]string) (map[string]string, error) {
-	method, ok := configs["LOAD_METHOD"]
-	if !ok || method != "REPLACE" {
+	method, ok := configs[LoadMethod]
+	if !ok || method != LoadMethodReplace {
 		return assets, nil
 	}
 
@@ -92,7 +87,6 @@ func CompileAssets(ctx context.Context, compiler FilesCompiler, startTime, endTi
 	compiledAssetMap := assets
 	// append job spec assets to list of files need to write
 	fileMap := compiledAssetMap
-	queryFileReplaceBreakMarker := "\n--*--optimus-break-marker--*--\n"
 	for _, part := range destinationsPartitions {
 		instanceEnvMap["DSTART"] = part.start.Format(time.RFC3339)
 		instanceEnvMap["DEND"] = part.end.Format(time.RFC3339)
@@ -101,7 +95,7 @@ func CompileAssets(ctx context.Context, compiler FilesCompiler, startTime, endTi
 		}
 		parsedQueries = append(parsedQueries, compiledAssetMap["query.sql"])
 	}
-	compiledAssetMap["query.sql"] = strings.Join(parsedQueries, queryFileReplaceBreakMarker)
+	compiledAssetMap["query.sql"] = strings.Join(parsedQueries, QueryFileReplaceBreakMarker)
 
 	return compiledAssetMap, nil
 }
@@ -126,56 +120,42 @@ func GenerateDestination(ctx context.Context, configs map[string]string) (job.Re
 // case regex based table is a view & not actually a source table. Because this
 // fn should generate the actual source as dependency
 // BQ2BQ dependencies are BQ tables in format "project:dataset.table"
-func (b *BQ2BQ) GenerateDependencies(ctx context.Context, request plugin.GenerateDependenciesRequest) (response *plugin.GenerateDependenciesResponse, err error) {
-	response = &plugin.GenerateDependenciesResponse{}
-	response.Dependencies = []string{}
-
-	var svcAcc string
-	accConfig, ok := request.Config.Get(BqServiceAccount)
-	if !ok || len(accConfig.Value) == 0 {
-		b.logger.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
-		return response, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found for %s", Name)
-	} else {
-		svcAcc = accConfig.Value
+func GenerateDependencies(ctx context.Context, l log.Logger, configs, assets map[string]string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
+	svcAcc, ok := configs[BqServiceAccount]
+	if !ok || len(svcAcc) == 0 {
+		l.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
+		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found for %s", Name)
 	}
 
-	queryData, ok := request.Assets.Get(QueryFileName)
+	query, ok := assets[QueryFileName]
 	if !ok {
 		return nil, errors.New("empty sql file")
 	}
 
-	selfTable, err := GenerateDestination(ctx, plugin.GenerateDestinationRequest{
-		Config: request.Config,
-		Assets: request.Assets,
-	})
+	destinationResource, err := destinationToResource(destinationURN)
 	if err != nil {
-		return response, err
+		return nil, fmt.Errorf("error getting destination resource: %w", err)
 	}
 
-	destinationResource, err := b.destinationToResource(selfTable)
+	upstreams, err := extractUpstreams(ctx, l, query, svcAcc, []upstream.Resource{destinationResource})
 	if err != nil {
-		return response, fmt.Errorf("error getting destination resource: %w", err)
-	}
-
-	upstreams, err := b.extractUpstreams(ctx, queryData.Value, svcAcc, []upstream.Resource{destinationResource})
-	if err != nil {
-		return response, fmt.Errorf("error extracting upstreams: %w", err)
+		return nil, fmt.Errorf("error extracting upstreams: %w", err)
 	}
 
 	flattenedUpstreams := upstream.FlattenUpstreams(upstreams)
 	uniqueUpstreams := upstream.UniqueFilterResources(flattenedUpstreams)
 
-	formattedUpstreams := b.formatUpstreams(uniqueUpstreams, func(r upstream.Resource) string {
-		name := fmt.Sprintf("%s:%s.%s", r.Project, r.Dataset, r.Name)
-		return fmt.Sprintf(plugin.DestinationURNFormat, selfTable.Type, name)
-	})
+	formattedUpstreams := []job.ResourceURN{}
+	for _, u := range uniqueUpstreams {
+		name := fmt.Sprintf("%s:%s.%s", u.Project, u.Dataset, u.Name)
+		formattedUpstream := fmt.Sprintf(DestinationURNFormat, destinationTypeBigquery, name)
+		formattedUpstreams = append(formattedUpstreams, job.ResourceURN(formattedUpstream))
+	}
 
-	response.Dependencies = formattedUpstreams
-
-	return response, nil
+	return formattedUpstreams, nil
 }
 
-func (b *BQ2BQ) extractUpstreams(ctx context.Context, query, svcAccSecret string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error) {
+func extractUpstreams(ctx context.Context, l log.Logger, query, svcAccSecret string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error) {
 	for try := 1; try <= MaxBQApiRetries; try++ {
 		client, err := newBQClient(ctx, svcAccSecret)
 		if err != nil {
@@ -197,7 +177,7 @@ func (b *BQ2BQ) extractUpstreams(ctx context.Context, query, svcAccSecret string
 				continue
 			}
 
-			b.logger.Error("error extracting upstreams", err)
+			l.Error("error extracting upstreams", err)
 		}
 
 		return upstreams, nil
@@ -205,10 +185,10 @@ func (b *BQ2BQ) extractUpstreams(ctx context.Context, query, svcAccSecret string
 	return nil, errors.New("bigquery api retries exhausted")
 }
 
-func (b *BQ2BQ) destinationToResource(destination *plugin.GenerateDestinationResponse) (upstream.Resource, error) {
-	splitDestination := strings.Split(destination.Destination, ":")
+func destinationToResource(destination job.ResourceURN) (upstream.Resource, error) {
+	splitDestination := strings.Split(destination.String(), ":")
 	if len(splitDestination) != 2 {
-		return upstream.Resource{}, fmt.Errorf("cannot get project from destination [%s]", destination.Destination)
+		return upstream.Resource{}, fmt.Errorf("cannot get project from destination [%s]", destination.String())
 	}
 
 	project, datasetTable := splitDestination[0], splitDestination[1]
@@ -223,13 +203,4 @@ func (b *BQ2BQ) destinationToResource(destination *plugin.GenerateDestinationRes
 		Dataset: splitDataset[0],
 		Name:    splitDataset[1],
 	}, nil
-}
-
-func (b *BQ2BQ) formatUpstreams(upstreams []upstream.Resource, fn func(r upstream.Resource) string) []string {
-	var output []string
-	for _, u := range upstreams {
-		output = append(output, fn(u))
-	}
-
-	return output
 }

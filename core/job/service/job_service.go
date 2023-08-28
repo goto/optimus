@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
@@ -937,13 +938,36 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
 			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
 		}
-	}
 
-	sources, err = j.pluginService.GenerateUpstreams(ctx, tenantWithDetails, spec, true)
-	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
-		j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
-		errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		// generate upstream dependencies
+		scheduledAt := time.Now()
+		startTime, err := spec.Window().GetStartTime(scheduledAt)
+		if err != nil {
+			j.logger.Error("error getting start time: %s", err)
+			return nil, fmt.Errorf("error getting start time: %w", err)
+		}
+		endTime, err := spec.Window().GetEndTime(scheduledAt)
+		if err != nil {
+			j.logger.Error("error getting end time: %s", err)
+			return nil, fmt.Errorf("error getting end time: %w", err)
+		}
+		compiledAssets, err := bq2bq.CompileAssets(ctx, j.engine, startTime, endTime, spec.Task().Config(), spec.Asset(), map[string]string{
+			configKeyDstart:        startTime.Format(TimeISOFormat),
+			configKeyDend:          endTime.Format(TimeISOFormat),
+			configKeyExecutionTime: scheduledAt.Format(TimeISOFormat),
+			configKeyDestination:   destination.String(),
+		})
+		if err != nil {
+			j.logger.Error("error compiling asset: %s", err)
+			return nil, fmt.Errorf("failed to compile templates: %w", err)
+		}
+
+		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, compileConfigs, compiledAssets, destination)
+		if err != nil {
+			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
+			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
+			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
 	}
 
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil

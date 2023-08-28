@@ -153,7 +153,7 @@ func mergeYAMLFiles(fs afero.Fs, sourcePath, targetPath string) error {
 	if err != nil {
 		return err
 	}
-	mergedObj, err := mergeObjects(sourceObj, targetObj)
+	mergedObj, err := unionInterface(sourceObj, targetObj)
 	if err != nil {
 		return err
 	}
@@ -164,34 +164,12 @@ func mergeYAMLFiles(fs afero.Fs, sourcePath, targetPath string) error {
 	return afero.WriteFile(fs, targetPath, mergedFile, os.ModePerm)
 }
 
-func mergeObjects(interfaces ...interface{}) (interface{}, error) {
-	merged := make(map[string]interface{})
-	for _, intf := range interfaces {
-		val := reflect.ValueOf(intf)
-		if val.Kind() != reflect.Map {
-			return nil, errors.New("automatic merge not possible")
-		}
-		iter := val.MapRange()
-		for iter.Next() {
-			key := iter.Key().Interface()
-			value := iter.Value().Interface()
-			if existingValue, exists := merged[key.(string)]; exists {
-				mergedValue := mergeValues(existingValue, value)
-				merged[key.(string)] = mergedValue
-			} else {
-				merged[key.(string)] = value
-			}
-		}
-	}
-	return merged, nil
-}
-
-func mergeValues(value1, value2 interface{}) interface{} {
+func unionInterface(value1, value2 interface{}) (interface{}, error) {
 	val1 := reflect.ValueOf(value1)
 	val2 := reflect.ValueOf(value2)
 
 	if val1.Kind() != val2.Kind() {
-		return value2
+		return nil, errors.New("mismatched types")
 	}
 
 	switch val1.Kind() {
@@ -208,16 +186,19 @@ func mergeValues(value1, value2 interface{}) interface{} {
 			key := iter2.Key().Interface()
 			value := iter2.Value().Interface()
 			if existingValue, exists := merged[key.(string)]; exists {
-				mergedValue := mergeValues(existingValue, value)
+				mergedValue, err := unionInterface(existingValue, value)
+				if err != nil {
+					return nil, err
+				}
 				merged[key.(string)] = mergedValue
 			} else {
 				merged[key.(string)] = value
 			}
 		}
-		return merged
+		return merged, nil
 
 	default:
-		return value2
+		return value2, nil
 	}
 }
 

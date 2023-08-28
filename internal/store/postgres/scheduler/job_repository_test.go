@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	jobRepo "github.com/goto/optimus/internal/store/postgres/job"
 	postgres "github.com/goto/optimus/internal/store/postgres/scheduler"
@@ -160,6 +161,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	jobSchedule, err := job.NewScheduleBuilder(startDate).WithRetry(jobRetry).WithDependsOnPast(true).Build()
 	assert.NoError(t, err)
 	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
+	customConfig := window.NewCustomConfig(jobWindow)
 	assert.NoError(t, err)
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	assert.NoError(t, err)
@@ -212,7 +214,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 		WithResource(resourceMetadata).
 		WithScheduler(map[string]string{"scheduler_config_key": "value"}).
 		Build()
-	jobSpecA, err := job.NewSpecBuilder(jobVersion, jobAName, jobOwner, jobSchedule, jobWindow, jobTask).
+	jobSpecA, err := job.NewSpecBuilder(jobVersion, jobAName, jobOwner, jobSchedule, customConfig, jobTask).
 		WithDescription(jobDescription).
 		WithLabels(jobLabels).
 		WithHooks(jobHooks).
@@ -226,7 +228,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"resource-3"})
 
-	jobSpecB, err := job.NewSpecBuilder(jobVersion, jobBName, jobOwner, jobSchedule, jobWindow, jobTask).
+	jobSpecB, err := job.NewSpecBuilder(jobVersion, jobBName, jobOwner, jobSchedule, customConfig, jobTask).
 		WithDescription(jobDescription).
 		WithLabels(jobLabels).
 		WithHooks(jobHooks).

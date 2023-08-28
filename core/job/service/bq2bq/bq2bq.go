@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/goto/optimus/sdk/plugin"
 	"github.com/goto/salt/log"
 
@@ -36,32 +35,12 @@ var (
 	LoadMethodReplace = "REPLACE"
 
 	QueryFileReplaceBreakMarker = "\n--*--optimus-break-marker--*--\n"
-
-	_ plugin.DependencyResolverMod = &BQ2BQ{}
 )
 
-type ClientFactory interface {
-	New(ctx context.Context, svcAccount string) (bqiface.Client, error)
-}
-
-type UpstreamExtractor interface {
-	ExtractUpstreams(ctx context.Context, query string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error)
-}
-
-type ExtractorFactory interface {
-	New(client bqiface.Client) (UpstreamExtractor, error)
-}
-
 type BQ2BQ struct {
-	ClientFac    ClientFactory
-	ExtractorFac ExtractorFactory
-	Compiler     *Compiler
+	Compiler *Compiler
 
 	logger log.Logger
-}
-
-func (*BQ2BQ) GetName(_ context.Context) (string, error) {
-	return Name, nil
 }
 
 func (b *BQ2BQ) CompileAssets(ctx context.Context, req plugin.CompileAssetsRequest) (*plugin.CompileAssetsResponse, error) {
@@ -231,12 +210,12 @@ func (b *BQ2BQ) GenerateDependencies(ctx context.Context, request plugin.Generat
 
 func (b *BQ2BQ) extractUpstreams(ctx context.Context, query, svcAccSecret string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error) {
 	for try := 1; try <= MaxBQApiRetries; try++ {
-		client, err := b.ClientFac.New(ctx, svcAccSecret)
+		client, err := newBQClient(ctx, svcAccSecret)
 		if err != nil {
 			return nil, fmt.Errorf("error creating bigquery client: %w", err)
 		}
 
-		extractor, err := b.ExtractorFac.New(client)
+		extractor, err := newUpstreamExtractor(client)
 		if err != nil {
 			return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
 		}

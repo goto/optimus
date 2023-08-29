@@ -131,7 +131,11 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config s
 	}
 	jobAttributionLabels := getJobLabelsString(jobLabelsToAdd)
 	if jobLabels, ok := confs[JobAttributionLabelsKey]; ok {
-		confs[JobAttributionLabelsKey] = jobLabels + "," + jobAttributionLabels
+		var separator string
+		if len(jobLabels) != 0 {
+			separator = ","
+		}
+		confs[JobAttributionLabelsKey] = jobLabels + separator + jobAttributionLabels
 	} else {
 		confs[JobAttributionLabelsKey] = jobAttributionLabels
 	}

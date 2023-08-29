@@ -114,22 +114,30 @@ func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Pr
 	return nil
 }
 
-func getProjectPresets(presetsPath string) (*model.PresetsMap, error) {
+func getProjectPresets(presetsPath string) (model.PresetsMap, error) {
+	if presetsPath == "" {
+		return model.PresetsMap{}, nil
+	}
+
 	specFS := afero.NewOsFs()
 	fileSpec, err := specFS.Open(presetsPath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening presets file[%s]: %w", presetsPath, err)
+		return model.PresetsMap{}, fmt.Errorf("error opening presets file[%s]: %w", presetsPath, err)
 	}
 	defer fileSpec.Close()
 
 	var spec model.PresetsMap
 	if err := yaml.NewDecoder(fileSpec).Decode(&spec); err != nil {
-		return nil, fmt.Errorf("error decoding spec under [%s]: %w", presetsPath, err)
+		return model.PresetsMap{}, fmt.Errorf("error decoding spec under [%s]: %w", presetsPath, err)
 	}
-	return &spec, nil
+	return spec, nil
 }
 
-func toPresetProto(presetMap *model.PresetsMap) map[string]*pb.ProjectSpecification_ProjectPreset {
+func toPresetProto(presetMap model.PresetsMap) map[string]*pb.ProjectSpecification_ProjectPreset {
+	if len(presetMap.Presets) == 0 {
+		return nil
+	}
+
 	presets := make(map[string]*pb.ProjectSpecification_ProjectPreset, len(presetMap.Presets))
 	for name, p := range presetMap.Presets {
 		presets[name] = &pb.ProjectSpecification_ProjectPreset{

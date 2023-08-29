@@ -23,12 +23,30 @@ type Config struct {
 	Window models.Window
 }
 
+// Following functions are for backward compatibility
+
 func (c Config) GetSize() string {
 	if c.Window == nil {
 		return ""
 	}
 
 	return c.Window.GetSize()
+}
+
+func (c Config) GetOffset() string {
+	if c.Window == nil {
+		return ""
+	}
+
+	return c.Window.GetOffset()
+}
+
+func (c Config) GetTruncateTo() string {
+	if c.Window == nil {
+		return ""
+	}
+
+	return c.Window.GetTruncateTo()
 }
 
 func (c Config) GetVersion() int {

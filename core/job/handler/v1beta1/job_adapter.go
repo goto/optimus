@@ -25,9 +25,9 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		TaskName:         jobEntity.Spec().Task().Name().String(),
 		Config:           fromConfig(jobEntity.Spec().Task().Config()),
 		WindowPreset:     jobEntity.Spec().WindowConfig().Preset,
-		WindowSize:       jobEntity.Spec().WindowConfig().Window.GetSize(),
-		WindowOffset:     jobEntity.Spec().WindowConfig().Window.GetOffset(),
-		WindowTruncateTo: jobEntity.Spec().WindowConfig().Window.GetTruncateTo(),
+		WindowSize:       jobEntity.Spec().WindowConfig().GetSize(),
+		WindowOffset:     jobEntity.Spec().WindowConfig().GetOffset(),
+		WindowTruncateTo: jobEntity.Spec().WindowConfig().GetTruncateTo(),
 		Dependencies:     fromSpecUpstreams(jobEntity.Spec().UpstreamSpec()),
 		Assets:           fromAsset(jobEntity.Spec().Asset()),
 		Hooks:            fromHooks(jobEntity.Spec().Hooks()),
@@ -199,7 +199,7 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 		return window.NewPresetConfig(js.WindowPreset)
 	}
 
-	if js.WindowSize != "" && js.WindowTruncateTo != "" {
+	if js.WindowSize != "" {
 		w, err := models.NewWindow(int(js.Version), js.WindowTruncateTo, js.WindowOffset, js.WindowSize)
 		if err != nil {
 			return window.Config{}, err

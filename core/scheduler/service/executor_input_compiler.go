@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -62,6 +63,33 @@ type InputCompiler struct {
 	logger log.Logger
 }
 
+func sanitiseLabel(key string) string {
+	// implements validation from https://cloud.google.com/bigquery/docs/labels-intro#requirements
+
+	// max length 63 chars
+	// if length greater than 63 then truncate to 61 and add __ at end to denote truncation
+	if maxLabelLength := 63; len(key) > maxLabelLength {
+		key = key[:61] + "__"
+	}
+	// Keys can contain only lowercase letters, numeric characters, underscores, and dashes.
+	key = strings.ToLower(key)
+	re := regexp.MustCompile(`[^\w-]`)
+	key = re.ReplaceAllString(key, "-")
+	return key
+}
+
+func getJobLabelsString(labels map[string]string) string {
+	labelString := ""
+	for key, value := range labels {
+		var separator string
+		if len(labelString) != 0 {
+			separator = ","
+		}
+		labelString = labelString + separator + fmt.Sprintf("%s=%s", sanitiseLabel(key), sanitiseLabel(value))
+	}
+	return labelString
+}
+
 func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
 	tenantDetails, err := i.tenantService.GetDetails(ctx, job.Tenant)
 	if err != nil {
@@ -95,9 +123,15 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config s
 		return nil, err
 	}
 
-	jobAttributionLabels := fmt.Sprintf("project=%s,namespace=%s,job=%s", job.Tenant.ProjectName(), job.Tenant.NamespaceName(), job.Name)
-	if jobLables, ok := confs[JobAttributionLabelsKey]; ok {
-		confs[JobAttributionLabelsKey] = jobLables + "," + jobAttributionLabels
+	jobLabelsToAdd := map[string]string{
+		"project":   job.Tenant.ProjectName().String(),
+		"namespace": job.Tenant.NamespaceName().String(),
+		"job_name":  job.Name.String(),
+		"job_id":    job.ID.String(),
+	}
+	jobAttributionLabels := getJobLabelsString(jobLabelsToAdd)
+	if jobLabels, ok := confs[JobAttributionLabelsKey]; ok {
+		confs[JobAttributionLabelsKey] = jobLabels + "," + jobAttributionLabels
 	} else {
 		confs[JobAttributionLabelsKey] = jobAttributionLabels
 	}

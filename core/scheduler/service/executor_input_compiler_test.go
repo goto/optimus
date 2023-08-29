@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,11 +229,22 @@ func TestExecutorCompiler(t *testing.T) {
 						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
 						"JOB_DESTINATION":      job.Destination,
 						"some.config.compiled": "val.compiled",
-						"JOB_LABELS":           "project=proj1,namespace=ns1,job=job1",
 					},
 					Secrets: map[string]string{"secret.config.compiled": "a.secret.val.compiled"},
 					Files:   compiledFile,
 				}
+				expecrtedJobLabels := map[string]bool{
+					"project=proj1": true,
+					"namespace=ns1": true,
+					"job_name=job1": true,
+					"job_id=00000000-0000-0000-0000-000000000000": true,
+				}
+
+				for _, v := range strings.Split(inputExecutorResp.Configs["JOB_LABELS"], ",") {
+					_, ok := expecrtedJobLabels[v]
+					assert.True(t, ok)
+				}
+				delete(inputExecutorResp.Configs, "JOB_LABELS")
 				assert.Equal(t, expectedInputExecutor, inputExecutorResp)
 			})
 		})

@@ -14,11 +14,6 @@ import (
 )
 
 const (
-	ConfigKeyDstart = "DSTART"
-	ConfigKeyDend   = "DEND"
-
-	dataTypeEnv             = "env"
-	dataTypeFile            = "file"
 	destinationTypeBigquery = "bigquery"
 	scheduledAtTimeLayout   = time.RFC3339
 
@@ -41,6 +36,10 @@ var (
 
 type FilesCompiler interface {
 	Compile(fileMap map[string]string, context map[string]any) (map[string]string, error)
+}
+
+type UpstreamExtractorFactory interface {
+	New(ctx context.Context, bqSvcAccount string) (UpstreamExtractor, error)
 }
 
 func CompileAssets(ctx context.Context, compiler FilesCompiler, startTime, endTime time.Time, configs, systemEnvVars, assets map[string]string) (map[string]string, error) {
@@ -120,7 +119,7 @@ func GenerateDestination(ctx context.Context, configs map[string]string) (job.Re
 // case regex based table is a view & not actually a source table. Because this
 // fn should generate the actual source as dependency
 // BQ2BQ dependencies are BQ tables in format "project:dataset.table"
-func GenerateDependencies(ctx context.Context, l log.Logger, configs, assets map[string]string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
+func GenerateDependencies(ctx context.Context, l log.Logger, extractorFactory UpstreamExtractorFactory, configs, assets map[string]string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
 	svcAcc, ok := configs[BqServiceAccount]
 	if !ok || len(svcAcc) == 0 {
 		l.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
@@ -137,7 +136,11 @@ func GenerateDependencies(ctx context.Context, l log.Logger, configs, assets map
 		return nil, fmt.Errorf("error getting destination resource: %w", err)
 	}
 
-	upstreams, err := extractUpstreams(ctx, l, query, svcAcc, []upstream.Resource{destinationResource})
+	upstreamExtractor, err := extractorFactory.New(ctx, svcAcc)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
+	}
+	upstreams, err := extractUpstreams(ctx, l, upstreamExtractor, query, svcAcc, []upstream.Resource{destinationResource})
 	if err != nil {
 		return nil, fmt.Errorf("error extracting upstreams: %w", err)
 	}
@@ -155,18 +158,8 @@ func GenerateDependencies(ctx context.Context, l log.Logger, configs, assets map
 	return formattedUpstreams, nil
 }
 
-func extractUpstreams(ctx context.Context, l log.Logger, query, svcAccSecret string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error) {
+func extractUpstreams(ctx context.Context, l log.Logger, extractor UpstreamExtractor, query, svcAccSecret string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error) {
 	for try := 1; try <= MaxBQApiRetries; try++ {
-		client, err := newBQClient(ctx, svcAccSecret)
-		if err != nil {
-			return nil, fmt.Errorf("error creating bigquery client: %w", err)
-		}
-
-		extractor, err := newUpstreamExtractor(client)
-		if err != nil {
-			return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
-		}
-
 		upstreams, err := extractor.ExtractUpstreams(ctx, query, resourcesToIgnore)
 		if err != nil {
 			if strings.Contains(err.Error(), "net/http: TLS handshake timeout") ||

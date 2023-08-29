@@ -44,6 +44,8 @@ type JobService struct {
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
+	upstreamExtractorFactory bq2bq.UpstreamExtractorFactory
+
 	logger log.Logger
 }
 
@@ -51,19 +53,20 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService, engine Engine,
+	jobDeploymentService JobDeploymentService, engine Engine, upstreamExtractorFactory bq2bq.UpstreamExtractorFactory,
 ) *JobService {
 	return &JobService{
-		jobRepo:              jobRepo,
-		upstreamRepo:         upstreamRepo,
-		downstreamRepo:       downstreamRepo,
-		pluginService:        pluginService,
-		upstreamResolver:     upstreamResolver,
-		eventHandler:         eventHandler,
-		tenantDetailsGetter:  tenantDetailsGetter,
-		logger:               logger,
-		jobDeploymentService: jobDeploymentService,
-		engine:               engine,
+		jobRepo:                  jobRepo,
+		upstreamRepo:             upstreamRepo,
+		downstreamRepo:           downstreamRepo,
+		pluginService:            pluginService,
+		upstreamResolver:         upstreamResolver,
+		eventHandler:             eventHandler,
+		tenantDetailsGetter:      tenantDetailsGetter,
+		logger:                   logger,
+		jobDeploymentService:     jobDeploymentService,
+		engine:                   engine,
+		upstreamExtractorFactory: upstreamExtractorFactory,
 	}
 }
 
@@ -975,7 +978,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 			return nil, fmt.Errorf("failed to compile templates: %w", err)
 		}
 
-		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, compileConfigs, compiledAssets, destination)
+		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, compileConfigs, compiledAssets, destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())

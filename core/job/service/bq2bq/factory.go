@@ -18,6 +18,16 @@ type UpstreamExtractor interface {
 	ExtractUpstreams(ctx context.Context, query string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error)
 }
 
+type DefaultUpstreamExtractorFactory struct{}
+
+func (d *DefaultUpstreamExtractorFactory) New(ctx context.Context, bqSvcAccount string) (UpstreamExtractor, error) {
+	client, err := newBQClient(ctx, bqSvcAccount)
+	if err != nil {
+		return nil, fmt.Errorf("error creating bigquery client: %w", err)
+	}
+	return upstream.NewExtractor(client)
+}
+
 func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error) {
 	cred, err := google.CredentialsFromJSON(ctx, []byte(svcAccount),
 		bigquery.Scope, storageV1.CloudPlatformScope, drive.DriveScope)
@@ -31,8 +41,4 @@ func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error)
 	}
 
 	return bqiface.AdaptClient(client), nil
-}
-
-func newUpstreamExtractor(client bqiface.Client) (UpstreamExtractor, error) {
-	return upstream.NewExtractor(client)
 }

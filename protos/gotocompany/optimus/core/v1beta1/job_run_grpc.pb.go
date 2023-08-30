@@ -30,6 +30,8 @@ type JobRunServiceClient interface {
 	RegisterJobEvent(ctx context.Context, in *RegisterJobEventRequest, opts ...grpc.CallOption) (*RegisterJobEventResponse, error)
 	// UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler
 	UploadToScheduler(ctx context.Context, in *UploadToSchedulerRequest, opts ...grpc.CallOption) (*UploadToSchedulerResponse, error)
+	// GetInterval gets interval on specific job given reference time.
+	GetInterval(ctx context.Context, in *GetIntervalRequest, opts ...grpc.CallOption) (*GetIntervalResponse, error)
 }
 
 type jobRunServiceClient struct {
@@ -76,6 +78,15 @@ func (c *jobRunServiceClient) UploadToScheduler(ctx context.Context, in *UploadT
 	return out, nil
 }
 
+func (c *jobRunServiceClient) GetInterval(ctx context.Context, in *GetIntervalRequest, opts ...grpc.CallOption) (*GetIntervalResponse, error) {
+	out := new(GetIntervalResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GetInterval", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobRunServiceServer is the server API for JobRunService service.
 // All implementations must embed UnimplementedJobRunServiceServer
 // for forward compatibility
@@ -88,6 +99,8 @@ type JobRunServiceServer interface {
 	RegisterJobEvent(context.Context, *RegisterJobEventRequest) (*RegisterJobEventResponse, error)
 	// UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler
 	UploadToScheduler(context.Context, *UploadToSchedulerRequest) (*UploadToSchedulerResponse, error)
+	// GetInterval gets interval on specific job given reference time.
+	GetInterval(context.Context, *GetIntervalRequest) (*GetIntervalResponse, error)
 	mustEmbedUnimplementedJobRunServiceServer()
 }
 
@@ -106,6 +119,9 @@ func (UnimplementedJobRunServiceServer) RegisterJobEvent(context.Context, *Regis
 }
 func (UnimplementedJobRunServiceServer) UploadToScheduler(context.Context, *UploadToSchedulerRequest) (*UploadToSchedulerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UploadToScheduler not implemented")
+}
+func (UnimplementedJobRunServiceServer) GetInterval(context.Context, *GetIntervalRequest) (*GetIntervalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInterval not implemented")
 }
 func (UnimplementedJobRunServiceServer) mustEmbedUnimplementedJobRunServiceServer() {}
 
@@ -192,6 +208,24 @@ func _JobRunService_UploadToScheduler_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobRunService_GetInterval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIntervalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobRunServiceServer).GetInterval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GetInterval",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobRunServiceServer).GetInterval(ctx, req.(*GetIntervalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobRunService_ServiceDesc is the grpc.ServiceDesc for JobRunService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -214,6 +248,10 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UploadToScheduler",
 			Handler:    _JobRunService_UploadToScheduler_Handler,
+		},
+		{
+			MethodName: "GetInterval",
+			Handler:    _JobRunService_GetInterval_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

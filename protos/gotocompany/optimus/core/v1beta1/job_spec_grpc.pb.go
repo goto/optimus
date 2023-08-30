@@ -60,6 +60,7 @@ type JobSpecificationServiceClient interface {
 	ReplaceAllJobSpecifications(ctx context.Context, opts ...grpc.CallOption) (JobSpecificationService_ReplaceAllJobSpecificationsClient, error)
 	// GetJobTask provides task details specific to plugin used in a job
 	GetJobTask(ctx context.Context, in *GetJobTaskRequest, opts ...grpc.CallOption) (*GetJobTaskResponse, error)
+	// Deprecated: Do not use.
 	// GetWindow provides the start and end dates provided a scheduled date
 	// of the execution window
 	GetWindow(ctx context.Context, in *GetWindowRequest, opts ...grpc.CallOption) (*GetWindowResponse, error)
@@ -311,6 +312,7 @@ func (c *jobSpecificationServiceClient) GetJobTask(ctx context.Context, in *GetJ
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *jobSpecificationServiceClient) GetWindow(ctx context.Context, in *GetWindowRequest, opts ...grpc.CallOption) (*GetWindowResponse, error) {
 	out := new(GetWindowResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetWindow", in, out, opts...)
@@ -380,6 +382,7 @@ type JobSpecificationServiceServer interface {
 	ReplaceAllJobSpecifications(JobSpecificationService_ReplaceAllJobSpecificationsServer) error
 	// GetJobTask provides task details specific to plugin used in a job
 	GetJobTask(context.Context, *GetJobTaskRequest) (*GetJobTaskResponse, error)
+	// Deprecated: Do not use.
 	// GetWindow provides the start and end dates provided a scheduled date
 	// of the execution window
 	GetWindow(context.Context, *GetWindowRequest) (*GetWindowResponse, error)

@@ -69,7 +69,7 @@ func sanitiseLabel(key string) string {
 	// max length 63 chars
 	// if length greater than 63 then truncate to 61 and add __ at end to denote truncation
 	if maxLabelLength := 63; len(key) > maxLabelLength {
-		key = key[:61] + "__"
+		key = key[len(key)-61:] + "__"
 	}
 	// Keys can contain only lowercase letters, numeric characters, underscores, and dashes.
 	key = strings.ToLower(key)

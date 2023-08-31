@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/job/resolver"
 	"github.com/goto/optimus/core/job/service/bq2bq"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
@@ -931,14 +932,14 @@ func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails
 }
 
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
-	var destination job.ResourceURN = ""
+	var destination string = ""
 	var sources []job.ResourceURN = nil
 	var err error = nil
 	if spec.Task().Name() == "bq2bq" { // for now, only work for bq2bq plugin
 		compileConfigs := j.compileConfigs(spec.Task().Config().Map(), tenantWithDetails)
 
 		// generate destination
-		destination, err = bq2bq.GenerateDestination(ctx, compileConfigs)
+		destination, err = resolver.GenerateDestination(ctx, compileConfigs)
 		if err != nil {
 			j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
@@ -956,7 +957,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		if !ok {
 			return nil, fmt.Errorf("empty sql file")
 		}
-		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, svcAcc, query, destination)
+		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, svcAcc, query, job.ResourceURN(destination))
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
@@ -964,7 +965,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
+	return job.NewJob(tenantWithDetails.ToTenant(), spec, job.ResourceURN(destination), sources), nil
 }
 
 func (j *JobService) validateCyclic(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) ([]string, error) {

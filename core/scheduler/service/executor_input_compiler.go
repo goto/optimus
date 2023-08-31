@@ -63,15 +63,11 @@ type InputCompiler struct {
 	logger log.Logger
 }
 
+// sanitiseLabel implements validation from https://cloud.google.com/bigquery/docs/labels-intro#requirements
 func sanitiseLabel(key string) string {
-	// implements validation from https://cloud.google.com/bigquery/docs/labels-intro#requirements
-
-	// max length 63 chars
-	// if length greater than 63 then truncate to 61 and add __ at end to denote truncation
 	if maxLabelLength := 63; len(key) > maxLabelLength {
 		key = "__" + key[len(key)-61:]
 	}
-	// Keys can contain only lowercase letters, numeric characters, underscores, and dashes.
 	key = strings.ToLower(key)
 	re := regexp.MustCompile(`[^\w-]`)
 	key = re.ReplaceAllString(key, "-")

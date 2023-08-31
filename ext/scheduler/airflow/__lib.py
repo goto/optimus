@@ -75,13 +75,18 @@ class OptimusAPIClient:
             return host
         return "http://" + host
 
-    def get_job_run(self, optimus_project: str, optimus_job: str, startDate: str, endDate: str) -> dict:
+    def get_job_run(self, project_name: str, job_name: str, start_date: str, end_date: str, downstream_project_name: str, downstream_job_name: str) -> dict:
         url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/run'.format(
             optimus_host=self.host,
-            optimus_project=optimus_project,
-            optimus_job=optimus_job,
+            optimus_project=project_name,
+            optimus_job=job_name,
         )
-        response = requests.get(url, params={'start_date': startDate, 'end_date': endDate})
+        response = requests.get(url, params={
+            'start_date': start_date,
+            'end_date': end_date,
+            'downstream_project_name': downstream_project_name,
+            'downstream_job_name': downstream_job_name
+        })
         self._raise_error_if_request_failed(response)
         return response.json()
 
@@ -245,8 +250,10 @@ class SuperExternalTaskSensor(BaseSensorOperator):
     #  it points to execution_date
     def _are_all_job_runs_successful(self, schedule_time_window_start, schedule_time_window_end) -> bool:
         try:
-            api_response = self._upstream_optimus_client.get_job_run(self.upstream_optimus_project, self.upstream_optimus_job,
-                                                            schedule_time_window_start, schedule_time_window_end)
+            api_response = self._upstream_optimus_client.get_job_run(
+                self.upstream_optimus_project, self.upstream_optimus_job,
+                schedule_time_window_start, schedule_time_window_end,
+                self.project_name, self.job_name)
             self.log.info("job_run api response :: {}".format(api_response))
         except Exception as e:
             self.log.warning("error while fetching job runs :: {}".format(e))

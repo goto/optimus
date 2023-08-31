@@ -119,6 +119,18 @@
               "type": "string"
             },
             "collectionFormat": "multi"
+          },
+          {
+            "name": "downstreamProjectName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "downstreamJobName",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [

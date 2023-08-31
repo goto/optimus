@@ -72,6 +72,7 @@ func NewJobService(
 type Engine interface {
 	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
 	CompileString(input string, context map[string]any) (string, error)
+	CompileAssets(ctx context.Context, startTime, endTime time.Time, configs, assets, systemEnvVars map[string]string) (map[string]string, error)
 }
 
 type PluginService interface {
@@ -958,7 +959,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 			j.logger.Error("error getting end time: %s", err)
 			return nil, fmt.Errorf("error getting end time: %w", err)
 		}
-		compiledAssets, err := bq2bq.CompileAssets(ctx, j.engine, startTime, endTime, spec.Task().Config(), spec.Asset(), map[string]string{
+		compiledAssets, err := j.engine.CompileAssets(ctx, startTime, endTime, spec.Task().Config(), spec.Asset(), map[string]string{
 			configKeyDstart:        startTime.Format(TimeISOFormat),
 			configKeyDend:          endTime.Format(TimeISOFormat),
 			configKeyExecutionTime: scheduledAt.Format(TimeISOFormat),

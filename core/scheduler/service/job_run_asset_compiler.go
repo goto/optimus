@@ -7,7 +7,6 @@ import (
 
 	"github.com/goto/salt/log"
 
-	"github.com/goto/optimus/core/job/service/bq2bq"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/sdk/plugin"
 )
@@ -17,6 +16,7 @@ const (
 )
 
 type FilesCompiler interface {
+	CompileAssets(ctx context.Context, startTime, endTime time.Time, configs, assets, systemEnvVars map[string]string) (map[string]string, error)
 	Compile(fileMap map[string]string, context map[string]any) (map[string]string, error)
 }
 
@@ -55,7 +55,7 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *sch
 
 	if job.Task.Name == "bq2bq" { // compile assets exclusive only for bq2bq plugin
 		// check if task needs to override the compilation behaviour
-		compiledAssets, err := bq2bq.CompileAssets(ctx, c.compiler, startTime, endTime, job.Task.Config, job.Assets, systemEnvVars)
+		compiledAssets, err := c.compiler.CompileAssets(ctx, startTime, endTime, job.Task.Config, job.Assets, systemEnvVars)
 		if err != nil {
 			c.logger.Error("error compiling assets through plugin dependency mod: %s", err)
 			return nil, err

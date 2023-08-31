@@ -70,7 +70,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		return nil, err
 	}
 
-	w, err := getWindow(tenantDetails, job)
+	w, err := getWindow(tenantDetails.Project(), job)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func NewJobInputCompiler(tenantService TenantService, compiler TemplateCompiler,
 	}
 }
 
-func getWindow(jobTenant *tenant.WithDetails, job *scheduler.JobWithDetails) (window.Window, error) {
+func getWindow(project *tenant.Project, job *scheduler.JobWithDetails) (window.Window, error) {
 	config := job.Job.WindowConfig
 
 	if config.Type() == window.Incremental {
@@ -200,7 +200,7 @@ func getWindow(jobTenant *tenant.WithDetails, job *scheduler.JobWithDetails) (wi
 	}
 
 	if config.Type() == window.Preset {
-		preset, err := jobTenant.Project().GetPreset(config.Preset)
+		preset, err := project.GetPreset(config.Preset)
 		if err != nil {
 			return window.Window{}, err
 		}

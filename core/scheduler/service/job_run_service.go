@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/telemetry"
 )
 
@@ -79,6 +80,10 @@ type EventHandler interface {
 	HandleEvent(moderator.Event)
 }
 
+type ProjectGetter interface {
+	GetByName(context.Context, tenant.ProjectName) (*tenant.Project, error)
+}
+
 type JobRunService struct {
 	l                log.Logger
 	repo             JobRunRepository
@@ -89,6 +94,7 @@ type JobRunService struct {
 	jobRepo          JobRepository
 	priorityResolver PriorityResolver
 	compiler         JobInputCompiler
+	projectGetter    ProjectGetter
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
@@ -168,6 +174,25 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	result := filterRuns(totalRuns, createFilterSet(criteria.Filter))
 
 	return result, nil
+}
+
+func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
+	project, err := s.projectGetter.GetByName(ctx, projectName)
+	if err != nil {
+		return window.Interval{}, err
+	}
+
+	job, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
+	if err != nil {
+		return window.Interval{}, err
+	}
+
+	w, err := getWindow(project, job)
+	if err != nil {
+		return window.Interval{}, err
+	}
+
+	return w.GetInterval(referenceTime)
 }
 
 func getExpectedRuns(spec *cron.ScheduleSpec, startTime, endTime time.Time) []*scheduler.JobRunStatus {

@@ -2,6 +2,7 @@ package v1beta1
 
 import (
 	"context"
+	"time"
 
 	"github.com/goto/salt/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -9,6 +10,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -17,6 +19,7 @@ type JobRunService interface {
 	UpdateJobState(context.Context, *scheduler.Event) error
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
+	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error)
 }
 
 type Notifier interface {
@@ -181,6 +184,32 @@ func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJob
 	me.Append(err)
 
 	return &pb.RegisterJobEventResponse{}, me.ToErr()
+}
+
+// GetInterval gets interval on specific job given reference time.
+func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalRequest) (*pb.GetIntervalResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %v", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt project name")
+	}
+
+	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %v", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt job name")
+	}
+
+	interval, err := h.service.GetInterval(ctx, projectName, scheduler.JobName(jobName), req.ReferenceTime.AsTime())
+	if err != nil {
+		h.l.Error("error getting interval for job [%s] under project [%s]: %v", jobName, projectName, err)
+		return nil, errors.GRPCErr(err, "error getting interval")
+	}
+
+	return &pb.GetIntervalResponse{
+		StartTime: timestamppb.New(interval.Start),
+		EndTime:   timestamppb.New(interval.End),
+	}, nil
 }
 
 func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier) *JobRunHandler {

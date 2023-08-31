@@ -237,7 +237,7 @@ func TestExecutorCompiler(t *testing.T) {
 					Secrets: map[string]string{"secret.config.compiled": "a.secret.val.compiled"},
 					Files:   compiledFile,
 				}
-				expecrtedJobLabels := map[string]bool{
+				expectedJobLabels := map[string]bool{
 					"project=proj1": true,
 					"namespace=ns1": true,
 					"job_name=job1": true,
@@ -245,7 +245,7 @@ func TestExecutorCompiler(t *testing.T) {
 				}
 
 				for _, v := range strings.Split(inputExecutorResp.Configs["JOB_LABELS"], ",") {
-					_, ok := expecrtedJobLabels[v]
+					_, ok := expectedJobLabels[v]
 					assert.True(t, ok)
 				}
 				delete(inputExecutorResp.Configs, "JOB_LABELS")

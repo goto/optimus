@@ -40,6 +40,8 @@ const (
 	configDestination   = "JOB_DESTINATION"
 
 	JobAttributionLabelsKey = "JOB_LABELS"
+
+	maxJobAttributionLabelLength = 63
 )
 
 type TenantService interface {
@@ -65,7 +67,7 @@ type InputCompiler struct {
 
 // sanitiseLabel implements validation from https://cloud.google.com/bigquery/docs/labels-intro#requirements
 func sanitiseLabel(key string) string {
-	if maxLabelLength := 63; len(key) > maxLabelLength {
+	if len(key) > maxJobAttributionLabelLength {
 		key = "__" + key[len(key)-61:]
 	}
 	key = strings.ToLower(key)
@@ -75,15 +77,11 @@ func sanitiseLabel(key string) string {
 }
 
 func getJobLabelsString(labels map[string]string) string {
-	labelString := ""
+	var labelStringArray []string
 	for key, value := range labels {
-		var separator string
-		if len(labelString) != 0 {
-			separator = ","
-		}
-		labelString = labelString + separator + fmt.Sprintf("%s=%s", sanitiseLabel(key), sanitiseLabel(value))
+		labelStringArray = append(labelStringArray, fmt.Sprintf("%s=%s", sanitiseLabel(key), sanitiseLabel(value)))
 	}
-	return labelString
+	return strings.Join(labelStringArray, ",")
 }
 
 func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
@@ -127,11 +125,11 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.Job, config s
 	}
 	jobAttributionLabels := getJobLabelsString(jobLabelsToAdd)
 	if jobLabels, ok := confs[JobAttributionLabelsKey]; ok {
-		var separator string
-		if len(jobLabels) != 0 {
-			separator = ","
+		if len(jobLabels) == 0 {
+			confs[JobAttributionLabelsKey] = jobAttributionLabels
+		} else {
+			confs[JobAttributionLabelsKey] = jobLabels + "," + jobAttributionLabels
 		}
-		confs[JobAttributionLabelsKey] = jobLabels + separator + jobAttributionLabels
 	} else {
 		confs[JobAttributionLabelsKey] = jobAttributionLabels
 	}

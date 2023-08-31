@@ -256,6 +256,8 @@ hook_failureHook = SuperKubernetesPodOperator(
 # create upstream sensors
 wait_foo__dash__intra__dash__dep__dash__job = SuperExternalTaskSensor(
     optimus_hostname="http://optimus.example.com",
+    project_name="example-proj",
+    job_name="infra.billing.weekly-status-reports",
     upstream_optimus_hostname="http://optimus.example.com",
     upstream_optimus_project="example-proj",
     upstream_optimus_namespace="billing",
@@ -272,6 +274,8 @@ wait_foo__dash__intra__dash__dep__dash__job = SuperExternalTaskSensor(
 
 wait_foo__dash__inter__dash__dep__dash__job = SuperExternalTaskSensor(
     optimus_hostname="http://optimus.example.com",
+    project_name="example-proj",
+    job_name="infra.billing.weekly-status-reports",
     upstream_optimus_hostname="http://optimus.example.com",
     upstream_optimus_project="project",
     upstream_optimus_namespace="namespace",
@@ -288,6 +292,8 @@ wait_foo__dash__inter__dash__dep__dash__job = SuperExternalTaskSensor(
 
 wait_foo__dash__external__dash__optimus__dash__dep__dash__job = SuperExternalTaskSensor(
     optimus_hostname="http://optimus.example.com",
+    project_name="example-proj",
+    job_name="infra.billing.weekly-status-reports",
     upstream_optimus_hostname="http://optimus.external.io",
     upstream_optimus_project="external-project",
     upstream_optimus_namespace="external-namespace",

@@ -15,6 +15,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -552,6 +553,10 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Equal(t, &pb.RegisterJobEventResponse{}, resp)
 		})
 	})
+	t.Run("GetInterval", func(t *testing.T) {
+		t.Run("should return interval", func(t *testing.T) {
+		})
+	})
 }
 
 type mockJobRunService struct {
@@ -582,6 +587,14 @@ func (m *mockJobRunService) GetJobRuns(ctx context.Context, projectName tenant.P
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
+}
+
+func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
+	args := m.Called(ctx, projectName, jobName, referenceTime)
+	if args.Get(0) == nil {
+		return window.Interval{}, args.Error(1)
+	}
+	return args.Get(0).(window.Interval), args.Error(1)
 }
 
 type mockNotifier struct {

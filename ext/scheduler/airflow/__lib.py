@@ -85,15 +85,12 @@ class OptimusAPIClient:
         self._raise_error_if_request_failed(response)
         return response.json()
 
-    def get_task_window(self, scheduled_at: str, version: int, window_size: str, window_offset: str,
-                        window_truncate_upto: str) -> dict:
-        url = '{optimus_host}/api/v1beta1/window?scheduledAt={scheduled_at}&version={window_version}&size={window_size}&offset={window_offset}&truncate_to={window_truncate_upto}'.format(
+    def get_task_window(self, project_name: str, job_name: str, scheduled_at: str) -> dict:
+        url = '{optimus_host}/api/v1beta1/project/{project_name}/job/{job_name}/interval?reference_time={reference_time}'.format(
             optimus_host=self.host,
-            scheduled_at=scheduled_at,
-            window_version=version,
-            window_size=window_size,
-            window_offset=window_offset,
-            window_truncate_upto=window_truncate_upto,
+            project_name=project_name,
+            job_name=job_name,
+            reference_time=scheduled_at,
         )
         response = requests.get(url)
         self._raise_error_if_request_failed(response)
@@ -141,12 +138,10 @@ class OptimusAPIClient:
 
 
 class JobSpecTaskWindow:
-    def __init__(self, version: int, size: str, offset: str, truncate_to: str, optimus_client: OptimusAPIClient):
-        self.version = version
-        self.size = size
-        self.offset = offset
-        self.truncate_to = truncate_to
+    def __init__(self, optimus_client: OptimusAPIClient, project_name: str, job_name: str):
         self._optimus_client = optimus_client
+        self.project_name = project_name
+        self.job_name = job_name
 
     def get(self, scheduled_at: str) -> (datetime, datetime):
         api_response = self._fetch_task_window(scheduled_at)
@@ -159,8 +154,8 @@ class JobSpecTaskWindow:
     def get_schedule_window(self, scheduled_at: str, upstream_schedule: str) -> (str, str):
         api_response = self._fetch_task_window(scheduled_at)
 
-        schedule_time_window_start = self._parse_datetime(api_response['start'])
-        schedule_time_window_end = self._parse_datetime(api_response['end'])
+        schedule_time_window_start = self._parse_datetime(api_response['start_time'])
+        schedule_time_window_end = self._parse_datetime(api_response['end_time'])
 
         job_cron_iter = croniter(upstream_schedule, schedule_time_window_start)
         schedule_time_window_inclusive_start = job_cron_iter.get_next(datetime)
@@ -176,8 +171,7 @@ class JobSpecTaskWindow:
         return timestamp.strftime(TIMESTAMP_FORMAT)
 
     def _fetch_task_window(self, scheduled_at: str) -> dict:
-        return self._optimus_client.get_task_window(scheduled_at, self.version, self.size, self.offset,
-                                                    self.truncate_to)
+        return self._optimus_client.get_task_window(self.project_name, self.job_name, scheduled_at)
 
 
 class SuperExternalTaskSensor(BaseSensorOperator):
@@ -185,21 +179,21 @@ class SuperExternalTaskSensor(BaseSensorOperator):
     def __init__(
             self,
             optimus_hostname: str,
+            project_name: str,
+            job_name: str,
             upstream_optimus_hostname: str,
             upstream_optimus_project: str,
             upstream_optimus_namespace: str,
             upstream_optimus_job: str,
-            window_size: str,
-            window_version: int,
             *args,
             **kwargs) -> None:
         kwargs['mode'] = kwargs.get('mode', 'reschedule')
         super().__init__(**kwargs)
-        self.optimus_project = upstream_optimus_project
-        self.optimus_namespace = upstream_optimus_namespace
-        self.optimus_job = upstream_optimus_job
-        self.window_size = window_size
-        self.window_version = window_version
+        self.project_name = project_name
+        self.job_name = job_name
+        self.upstream_optimus_project = upstream_optimus_project
+        self.upstream_optimus_namespace = upstream_optimus_namespace
+        self.upstream_optimus_job = upstream_optimus_job
         self._optimus_client = OptimusAPIClient(optimus_hostname)
         self._upstream_optimus_client = OptimusAPIClient(upstream_optimus_hostname)
 
@@ -217,7 +211,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
             schedule_time, upstream_schedule)
 
         # get schedule window
-        task_window = JobSpecTaskWindow(self.window_version, self.window_size, 0, "", self._optimus_client)
+        task_window = JobSpecTaskWindow(self._optimus_client, self.project_name, self.job_name)
         schedule_time_window_start, schedule_time_window_end = task_window.get_schedule_window(
             last_upstream_schedule_time.strftime(TIMESTAMP_FORMAT), upstream_schedule)
 
@@ -228,7 +222,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         if not self._are_all_job_runs_successful(schedule_time_window_start, schedule_time_window_end):
             self.log.warning("unable to find enough successful executions for upstream '{}' in "
                              "'{}' dated between {} and {}(inclusive), rescheduling sensor".
-                             format(self.optimus_job, self.optimus_project, schedule_time_window_start,
+                             format(self.upstream_optimus_job, self.upstream_optimus_project, schedule_time_window_start,
                                     schedule_time_window_end))
             return False
         return True
@@ -242,8 +236,8 @@ class SuperExternalTaskSensor(BaseSensorOperator):
 
     def get_schedule_interval(self, schedule_time):
         schedule_time_str = schedule_time.strftime(TIMESTAMP_FORMAT)
-        job_metadata = self._upstream_optimus_client.get_job_metadata(schedule_time_str, self.optimus_namespace,
-                                                             self.optimus_project, self.optimus_job)
+        job_metadata = self._upstream_optimus_client.get_job_metadata(schedule_time_str, self.upstream_optimus_namespace,
+                                                             self.upstream_optimus_project, self.upstream_optimus_job)
         upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
         return upstream_schedule
 
@@ -251,7 +245,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
     #  it points to execution_date
     def _are_all_job_runs_successful(self, schedule_time_window_start, schedule_time_window_end) -> bool:
         try:
-            api_response = self._upstream_optimus_client.get_job_run(self.optimus_project, self.optimus_job,
+            api_response = self._upstream_optimus_client.get_job_run(self.upstream_optimus_project, self.upstream_optimus_job,
                                                             schedule_time_window_start, schedule_time_window_end)
             self.log.info("job_run api response :: {}".format(api_response))
         except Exception as e:

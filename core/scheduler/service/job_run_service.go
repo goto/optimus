@@ -535,6 +535,7 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
 	operatorRunRepo OperatorRunRepository, scheduler Scheduler, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
+	projectGetter ProjectGetter,
 ) *JobRunService {
 	return &JobRunService{
 		l:                logger,
@@ -546,5 +547,6 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 		jobRepo:          jobRepo,
 		priorityResolver: resolver,
 		compiler:         compiler,
+		projectGetter:    projectGetter,
 	}
 }

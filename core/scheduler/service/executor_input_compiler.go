@@ -193,19 +193,5 @@ func NewJobInputCompiler(tenantService TenantService, compiler TemplateCompiler,
 }
 
 func getWindow(project *tenant.Project, job *scheduler.JobWithDetails) (window.Window, error) {
-	config := job.Job.WindowConfig
-
-	if config.Type() == window.Incremental {
-		return window.FromSchedule(job.Schedule.Interval)
-	}
-
-	if config.Type() == window.Preset {
-		preset, err := project.GetPreset(config.Preset)
-		if err != nil {
-			return window.Window{}, err
-		}
-		return window.FromBaseWindow(preset.Window()), nil
-	}
-
-	return window.FromBaseWindow(config.Window), nil
+	return window.From(job.Job.WindowConfig, job.Schedule.Interval, project.GetPreset)
 }

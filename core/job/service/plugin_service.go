@@ -206,19 +206,5 @@ func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.P
 }
 
 func getWindow(jobTenant *tenant.WithDetails, spec *job.Spec) (window.Window, error) {
-	config := spec.WindowConfig()
-
-	if config.Type() == window.Incremental {
-		return window.FromSchedule(spec.Schedule().Interval())
-	}
-
-	if config.Type() == window.Preset {
-		preset, err := jobTenant.Project().GetPreset(config.Preset)
-		if err != nil {
-			return window.Window{}, err
-		}
-		return window.FromBaseWindow(preset.Window()), nil
-	}
-
-	return window.FromBaseWindow(config.Window), nil
+	return window.From(spec.WindowConfig(), spec.Schedule().Interval(), jobTenant.Project().GetPreset)
 }

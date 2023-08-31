@@ -18,6 +18,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/lib/window"
 )
 
 func TestJobRunService(t *testing.T) {
@@ -882,6 +883,7 @@ func TestJobRunService(t *testing.T) {
 			assert.Equal(t, &dummyExecutorInput, executorInput)
 		})
 	})
+
 	t.Run("GetJobRunList", func(t *testing.T) {
 		startDate, err := time.Parse(time.RFC3339, "2022-03-20T02:00:00+00:00")
 		if err != nil {
@@ -1267,6 +1269,94 @@ func TestJobRunService(t *testing.T) {
 			assert.Equal(t, runs, returnedRuns)
 		})
 	})
+
+	t.Run("GetInterval", func(t *testing.T) {
+		referenceTime := time.Now()
+
+		conf := map[string]string{
+			"STORAGE_PATH":   "file://",
+			"SCHEDULER_HOST": "http://scheduler",
+		}
+
+		project, err := tenant.NewProject(projName.String(), conf)
+		assert.NotNil(t, project)
+		assert.NoError(t, err)
+
+		preset, err := tenant.NewPreset("yesterday", "preset for test", "d", "-24h", "24h")
+		assert.NotZero(t, preset)
+		assert.NoError(t, err)
+
+		presets := map[string]tenant.Preset{
+			"yesterday": preset,
+		}
+		project.SetPresets(presets)
+
+		t.Run("returns zero and error if cannot get project by its name", func(t *testing.T) {
+			projectGetter := new(mockProjectGetter)
+			defer mock.AssertExpectationsForObjects(t, projectGetter)
+
+			projectGetter.On("GetByName", ctx, projName).Return(nil, errors.NewError(errors.ErrInternalError, tenant.EntityProject, "unexpected error"))
+
+			service := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter)
+
+			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
+
+			assert.Zero(t, actualInterval)
+			assert.ErrorContains(t, actualError, "unexpected error")
+		})
+
+		t.Run("returns zero and error if cannot get project by its name", func(t *testing.T) {
+			projectGetter := new(mockProjectGetter)
+			defer mock.AssertExpectationsForObjects(t, projectGetter)
+
+			jobRepo := new(JobRepository)
+			defer mock.AssertExpectationsForObjects(t, jobRepo)
+
+			projectGetter.On("GetByName", ctx, projName).Return(project, nil)
+
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(nil, errors.NewError(errors.ErrInternalError, job.EntityJob, "unexpected error"))
+
+			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter)
+
+			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
+
+			assert.Zero(t, actualInterval)
+			assert.ErrorContains(t, actualError, "unexpected error")
+		})
+
+		t.Run("returns interval and nil if no error is encountered", func(t *testing.T) {
+			projectGetter := new(mockProjectGetter)
+			defer mock.AssertExpectationsForObjects(t, projectGetter)
+
+			jobRepo := new(JobRepository)
+			defer mock.AssertExpectationsForObjects(t, jobRepo)
+
+			projectGetter.On("GetByName", ctx, projName).Return(project, nil)
+
+			windowConfig, err := window.NewPresetConfig("yesterday")
+			assert.NotNil(t, windowConfig)
+			assert.NoError(t, err)
+
+			job := &scheduler.JobWithDetails{
+				Name: jobName,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+				Job: &scheduler.Job{
+					WindowConfig: windowConfig,
+				},
+			}
+
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(job, nil)
+
+			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter)
+
+			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
+
+			assert.NotZero(t, actualInterval)
+			assert.NoError(t, actualError)
+		})
+	})
 }
 
 func mockGetJobRuns(afterDays int, date time.Time, interval string, status scheduler.State) ([]*scheduler.JobRunStatus, error) {
@@ -1453,4 +1543,16 @@ func newEventHandler(t mockConstructorEventHandler) *mockEventHandler {
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
 	return mock
+}
+
+type mockProjectGetter struct {
+	mock.Mock
+}
+
+func (m *mockProjectGetter) GetByName(ctx context.Context, projectName tenant.ProjectName) (*tenant.Project, error) {
+	args := m.Called(ctx, projectName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*tenant.Project), args.Error(1)
 }

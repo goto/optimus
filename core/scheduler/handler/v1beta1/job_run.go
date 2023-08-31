@@ -200,7 +200,7 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 		return nil, errors.GRPCErr(err, "unable to adapt job name")
 	}
 
-	interval, err := h.service.GetInterval(ctx, projectName, scheduler.JobName(jobName), req.ReferenceTime.AsTime())
+	interval, err := h.service.GetInterval(ctx, projectName, jobName, req.ReferenceTime.AsTime())
 	if err != nil {
 		h.l.Error("error getting interval for job [%s] under project [%s]: %v", jobName, projectName, err)
 		return nil, errors.GRPCErr(err, "error getting interval")

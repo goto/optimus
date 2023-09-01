@@ -1293,7 +1293,7 @@ func TestJobRunService(t *testing.T) {
 
 		t.Run("returns zero and error if cannot get project by its name", func(t *testing.T) {
 			projectGetter := new(mockProjectGetter)
-			defer mock.AssertExpectationsForObjects(t, projectGetter)
+			defer projectGetter.AssertExpectations(t)
 
 			projectGetter.On("GetByName", ctx, projName).Return(nil, errors.NewError(errors.ErrInternalError, tenant.EntityProject, "unexpected error"))
 
@@ -1307,10 +1307,10 @@ func TestJobRunService(t *testing.T) {
 
 		t.Run("returns zero and error if cannot get project by its name", func(t *testing.T) {
 			projectGetter := new(mockProjectGetter)
-			defer mock.AssertExpectationsForObjects(t, projectGetter)
+			defer projectGetter.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
-			defer mock.AssertExpectationsForObjects(t, jobRepo)
+			defer jobRepo.AssertExpectations(t)
 
 			projectGetter.On("GetByName", ctx, projName).Return(project, nil)
 
@@ -1326,10 +1326,10 @@ func TestJobRunService(t *testing.T) {
 
 		t.Run("returns interval and nil if no error is encountered", func(t *testing.T) {
 			projectGetter := new(mockProjectGetter)
-			defer mock.AssertExpectationsForObjects(t, projectGetter)
+			defer projectGetter.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
-			defer mock.AssertExpectationsForObjects(t, jobRepo)
+			defer jobRepo.AssertExpectations(t)
 
 			projectGetter.On("GetByName", ctx, projName).Return(project, nil)
 

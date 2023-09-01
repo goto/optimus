@@ -66,15 +66,20 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.EqualError(t, err, "get details error")
 			assert.Nil(t, inputExecutor)
 		})
-		t.Run("should give error if getSystemDefinedConfigs fails", func(t *testing.T) {
-			w1, _ := models.NewWindow(1, "d", "2", "2")
+		t.Run("should give error if get interval fails", func(t *testing.T) {
+			w1, _ := models.NewWindow(1, "d", "2h", "2")
 			window1 := window.NewCustomConfig(w1)
 			job := scheduler.Job{
 				Name:         "job1",
 				Tenant:       tnnt,
 				WindowConfig: window1,
 			}
-			details := scheduler.JobWithDetails{Job: &job}
+			details := scheduler.JobWithDetails{
+				Job: &job,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+			}
 
 			config := scheduler.RunConfig{
 				Executor: scheduler.Executor{
@@ -105,7 +110,12 @@ func TestExecutorCompiler(t *testing.T) {
 				WindowConfig: cw,
 				Assets:       nil,
 			}
-			details := scheduler.JobWithDetails{Job: &job}
+			details := scheduler.JobWithDetails{
+				Job: &job,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+			}
 			config := scheduler.RunConfig{
 				Executor: scheduler.Executor{
 					Name: "transformer",
@@ -159,7 +169,12 @@ func TestExecutorCompiler(t *testing.T) {
 				WindowConfig: window1,
 				Assets:       nil,
 			}
-			details := scheduler.JobWithDetails{Job: &job}
+			details := scheduler.JobWithDetails{
+				Job: &job,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+			}
 			config := scheduler.RunConfig{
 				Executor: scheduler.Executor{
 					Name: "bq2bq",
@@ -273,7 +288,12 @@ func TestExecutorCompiler(t *testing.T) {
 				WindowConfig: window1,
 				Assets:       nil,
 			}
-			details := scheduler.JobWithDetails{Job: &job}
+			details := scheduler.JobWithDetails{
+				Job: &job,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+			}
 			config := scheduler.RunConfig{
 				Executor: scheduler.Executor{
 					Name: "predator",
@@ -359,7 +379,12 @@ func TestExecutorCompiler(t *testing.T) {
 				WindowConfig: window1,
 				Assets:       nil,
 			}
-			details := scheduler.JobWithDetails{Job: &job}
+			details := scheduler.JobWithDetails{
+				Job: &job,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+			}
 			config := scheduler.RunConfig{
 				Executor: scheduler.Executor{
 					Name: "predator",
@@ -426,7 +451,12 @@ func TestExecutorCompiler(t *testing.T) {
 				WindowConfig: window1,
 				Assets:       nil,
 			}
-			details := scheduler.JobWithDetails{Job: &job}
+			details := scheduler.JobWithDetails{
+				Job: &job,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+			}
 			config := scheduler.RunConfig{
 				Executor: scheduler.Executor{
 					Name: "predator",

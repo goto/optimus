@@ -179,16 +179,19 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
 	project, err := s.projectGetter.GetByName(ctx, projectName)
 	if err != nil {
+		s.l.Error("error getting project [%s]: %s", projectName, err)
 		return window.Interval{}, err
 	}
 
 	job, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
+		s.l.Error("error getting job detail [%s] under project [%s]: %s", jobName, projectName, err)
 		return window.Interval{}, err
 	}
 
 	w, err := getWindow(project, job)
 	if err != nil {
+		s.l.Error("error getting window: %s", err)
 		return window.Interval{}, err
 	}
 

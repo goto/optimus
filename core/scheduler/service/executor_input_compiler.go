@@ -44,6 +44,8 @@ const (
 	maxJobAttributionLabelLength = 63
 )
 
+var invalidLabelCharacterRegex *regexp.Regexp
+
 type TenantService interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 	GetSecrets(ctx context.Context, tnnt tenant.Tenant) ([]*tenant.PlainTextSecret, error)
@@ -71,8 +73,7 @@ func sanitiseLabel(key string) string {
 		key = "__" + key[len(key)-61:]
 	}
 	key = strings.ToLower(key)
-	re := regexp.MustCompile(`[^\w-]`)
-	key = re.ReplaceAllString(key, "-")
+	key = invalidLabelCharacterRegex.ReplaceAllString(key, "-")
 	return key
 }
 
@@ -217,6 +218,7 @@ func splitConfigWithSecrets(conf map[string]string) (map[string]string, map[stri
 }
 
 func NewJobInputCompiler(tenantService TenantService, compiler TemplateCompiler, assetCompiler AssetCompiler, logger log.Logger) *InputCompiler {
+	invalidLabelCharacterRegex = regexp.MustCompile(`[^\w-]`)
 	return &InputCompiler{
 		tenantService: tenantService,
 		compiler:      compiler,

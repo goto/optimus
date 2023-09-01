@@ -62,18 +62,7 @@ func GenerateDestination(ctx context.Context, configs map[string]string) (job.Re
 // case regex based table is a view & not actually a source table. Because this
 // fn should generate the actual source as dependency
 // BQ2BQ dependencies are BQ tables in format "project:dataset.table"
-func GenerateDependencies(ctx context.Context, l log.Logger, extractorFactory UpstreamExtractorFactory, configs, assets map[string]string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
-	svcAcc, ok := configs[BqServiceAccount]
-	if !ok || len(svcAcc) == 0 {
-		l.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
-		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found for %s", Name)
-	}
-
-	query, ok := assets[QueryFileName]
-	if !ok {
-		return nil, errors.New("empty sql file")
-	}
-
+func GenerateDependencies(ctx context.Context, l log.Logger, extractorFactory UpstreamExtractorFactory, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
 	destinationResource, err := destinationToResource(destinationURN)
 	if err != nil {
 		return nil, fmt.Errorf("error getting destination resource: %w", err)

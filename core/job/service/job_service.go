@@ -952,11 +952,11 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 			return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found")
 		}
 
-		_, ok = spec.Asset()["query.sql"]
+		query, ok := spec.Asset()["query.sql"]
 		if !ok {
 			return nil, fmt.Errorf("empty sql file")
 		}
-		upstreamResources, err := resolver.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, compileConfigs, spec.Asset(), destination)
+		upstreamResources, err := resolver.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, svcAcc, query, destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())

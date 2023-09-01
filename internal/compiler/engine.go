@@ -75,12 +75,7 @@ func (e *Engine) CompileString(input string, context map[string]any) (string, er
 	return strings.TrimSpace(buf.String()), nil
 }
 
-func (e *Engine) CompileAssets(ctx context.Context, startTime, endTime time.Time, configs, assets, systemEnvVars map[string]string) (map[string]string, error) {
-	method, ok := configs[LoadMethod]
-	if !ok || method != LoadMethodReplace {
-		return assets, nil
-	}
-
+func (e *Engine) CompileQuery(ctx context.Context, startTime, endTime time.Time, query string, systemEnvVars map[string]string) (string, error) {
 	// partition window in range
 	instanceEnvMap := map[string]interface{}{}
 	for name, value := range systemEnvVars {
@@ -110,24 +105,20 @@ func (e *Engine) CompileAssets(ctx context.Context, startTime, endTime time.Time
 
 	// check if window size is greater than partition delta(a DAY), if not do nothing
 	if endTime.Sub(startTime) <= partitionDelta {
-		return assets, nil
+		return "", nil
 	}
 
 	var parsedQueries []string
-	var err error
-
-	compiledAssetMap := assets
-	// append job spec assets to list of files need to write
-	fileMap := compiledAssetMap
+	queryMap := map[string]string{"query": query}
 	for _, part := range destinationsPartitions {
 		instanceEnvMap["DSTART"] = part.start.Format(time.RFC3339)
 		instanceEnvMap["DEND"] = part.end.Format(time.RFC3339)
-		if compiledAssetMap, err = e.Compile(fileMap, instanceEnvMap); err != nil {
-			return nil, err
+		compiledQueryMap, err := e.Compile(queryMap, instanceEnvMap)
+		if err != nil {
+			return "", err
 		}
-		parsedQueries = append(parsedQueries, compiledAssetMap["query.sql"])
+		parsedQueries = append(parsedQueries, compiledQueryMap["query"])
 	}
-	compiledAssetMap["query.sql"] = strings.Join(parsedQueries, QueryFileReplaceBreakMarker)
 
-	return compiledAssetMap, nil
+	return strings.Join(parsedQueries, QueryFileReplaceBreakMarker), nil
 }

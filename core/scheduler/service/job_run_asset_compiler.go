@@ -16,7 +16,7 @@ const (
 )
 
 type FilesCompiler interface {
-	CompileAssets(ctx context.Context, startTime, endTime time.Time, configs, assets, systemEnvVars map[string]string) (map[string]string, error)
+	CompileQuery(ctx context.Context, startTime, endTime time.Time, query string, systemEnvVars map[string]string) (map[string]string, error)
 	Compile(fileMap map[string]string, context map[string]any) (map[string]string, error)
 }
 
@@ -52,12 +52,14 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *sch
 	}
 
 	inputFiles := job.Assets
-
-	if job.Task.Name == "bq2bq" { // compile assets exclusive only for bq2bq plugin
+	method, ok1 := job.Task.Config["LOAD_METHOD"]
+	query, ok2 := job.Assets["query.sql"]
+	// compile assets exclusive only for bq2bq plugin with replace load method and contains query.sql in asset
+	if ok1 && ok2 && method == "REPLACE" && job.Task.Name == "bq2bq" {
 		// check if task needs to override the compilation behaviour
-		compiledAssets, err := c.compiler.CompileAssets(ctx, startTime, endTime, job.Task.Config, job.Assets, systemEnvVars)
+		compiledAssets, err := c.compiler.CompileQuery(ctx, startTime, endTime, query, systemEnvVars)
 		if err != nil {
-			c.logger.Error("error compiling assets through plugin dependency mod: %s", err)
+			c.logger.Error("error compiling assets: %s", err.Error())
 			return nil, err
 		}
 		inputFiles = compiledAssets

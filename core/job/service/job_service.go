@@ -948,29 +948,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 
 		// generate upstream dependencies
-		scheduledAt := time.Now()
-		startTime, err := spec.Window().GetStartTime(scheduledAt)
-		if err != nil {
-			j.logger.Error("error getting start time: %s", err)
-			return nil, fmt.Errorf("error getting start time: %w", err)
-		}
-		endTime, err := spec.Window().GetEndTime(scheduledAt)
-		if err != nil {
-			j.logger.Error("error getting end time: %s", err)
-			return nil, fmt.Errorf("error getting end time: %w", err)
-		}
-		compiledAssets, err := j.engine.CompileAssets(ctx, startTime, endTime, spec.Task().Config(), spec.Asset(), map[string]string{
-			configKeyDstart:        startTime.Format(TimeISOFormat),
-			configKeyDend:          endTime.Format(TimeISOFormat),
-			configKeyExecutionTime: scheduledAt.Format(TimeISOFormat),
-			configKeyDestination:   destination.String(),
-		})
-		if err != nil {
-			j.logger.Error("error compiling asset: %s", err)
-			return nil, fmt.Errorf("failed to compile templates: %w", err)
-		}
-
-		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, compileConfigs, compiledAssets, destination)
+		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, compileConfigs, spec.Asset(), destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())

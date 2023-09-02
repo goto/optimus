@@ -26,12 +26,12 @@ func (w Window) GetInterval(referenceTime time.Time) (Interval, error) {
 		}, nil
 	}
 
-	startTime, err := w.window.GetStartTime(referenceTime)
+	endTime, err := w.window.GetEndTime(referenceTime)
 	if err != nil {
 		return Interval{}, err
 	}
 
-	endTime, err := w.window.GetEndTime(referenceTime)
+	startTime, err := w.window.GetStartTime(referenceTime)
 	if err != nil {
 		return Interval{}, err
 	}

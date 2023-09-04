@@ -13,7 +13,6 @@ import (
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/resolver"
-	"github.com/goto/optimus/core/job/service/bq2bq"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
@@ -43,7 +42,7 @@ type JobService struct {
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
-	upstreamExtractorFactory bq2bq.UpstreamExtractorFactory
+	upstreamExtractorFactory resolver.UpstreamExtractorFactory
 
 	logger log.Logger
 }
@@ -52,7 +51,7 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService, engine Engine, upstreamExtractorFactory bq2bq.UpstreamExtractorFactory,
+	jobDeploymentService JobDeploymentService, engine Engine, upstreamExtractorFactory resolver.UpstreamExtractorFactory,
 ) *JobService {
 	return &JobService{
 		jobRepo:                  jobRepo,
@@ -953,15 +952,18 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 			return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found")
 		}
 
-		query, ok := spec.Asset()["query.sql"]
+		_, ok = spec.Asset()["query.sql"]
 		if !ok {
 			return nil, fmt.Errorf("empty sql file")
 		}
-		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, svcAcc, query, job.ResourceURN(destination))
+		upstreamResources, err := resolver.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, compileConfigs, spec.Asset(), destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
 			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
+		for _, upstreamResource := range upstreamResources {
+			sources = append(sources, job.ResourceURN(upstreamResource))
 		}
 	}
 

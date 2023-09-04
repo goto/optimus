@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
@@ -72,7 +71,6 @@ func NewJobService(
 type Engine interface {
 	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
 	CompileString(input string, context map[string]any) (string, error)
-	CompileAssets(ctx context.Context, startTime, endTime time.Time, configs, assets, systemEnvVars map[string]string) (map[string]string, error)
 }
 
 type PluginService interface {

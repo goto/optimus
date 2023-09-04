@@ -195,17 +195,19 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 	oldJobPath, err := c.deleteJobFile(fs, jobName)
 	if err != nil {
 		c.logger.Error(fmt.Sprintf("[error] unable to remove job from old namespace , err: %s", err.Error()))
-		c.logger.Warn("[info] consider deleting source files manually if they exist")
+		c.logger.Warn("[info] consider deleting source files from old namespace manually, if they exist")
 	}
 
 	var newJobPath string
 	newNamespaceConfig, err := c.getNamespaceConfig(c.newNamespaceName)
 	if err != nil || newNamespaceConfig.Job.Path == "" {
-		if err == nil {
-			c.logger.Warn("[warn] new namespace not recognised for jobs: err: %s", err.Error())
+		if err != nil {
+			c.logger.Error("[error] new namespace not recognised for jobs: err: %s", err.Error())
+		} else {
+			c.logger.Error("[error] namespace config does not have a defined jobs path")
 		}
-		c.logger.Warn("[info] register the new namespace and run \n\t`optimus job export -p %s -n %s -r %s --dir=<NEW_JOB_DIRECTORY>`, to fetch the newly moved job.",
-			c.project, c.oldNamespaceName, jobName)
+		c.logger.Warn("[info] register the new namespace and run \n\t`optimus job export -p %s -n %s -r %s `, to fetch the newly moved job.",
+			c.project, c.newNamespaceName, jobName)
 		return nil
 	}
 
@@ -219,8 +221,8 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 	err = c.downloadJobSpecFile(fs, jobName, newJobPath)
 	if err != nil {
 		c.logger.Error(fmt.Sprintf("[error] unable to download job spec to new namespace directory, err: %s", err.Error()))
-		c.logger.Warn("[info] manually run \n\t`optimus job export -p %s -n %s -r %s --dir=%s`, to fetch the newly moved job.",
-			c.project, c.oldNamespaceName, jobName, newJobPath)
+		c.logger.Warn("[info] manually run \n\t`optimus job export -p %s -n %s -r %s `, to fetch the newly moved job.",
+			c.project, c.newNamespaceName, jobName)
 	}
 	c.logger.Info("[OK] Job moved successfully")
 	return nil

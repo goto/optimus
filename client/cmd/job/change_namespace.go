@@ -209,7 +209,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 	if err != nil || newNamespaceConfig.Job.Path == "" {
 		c.logger.Warn("[info] register the new namespace and run \n\t`optimus job export -p %s -n %s -r %s `, to fetch the newly moved job.",
 			c.project, c.newNamespaceName, jobName)
-		return nil
+		return err
 	}
 
 	oldNamespaceConfig, nsConfigErr := c.getNamespaceConfig(c.oldNamespaceName)

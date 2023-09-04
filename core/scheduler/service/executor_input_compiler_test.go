@@ -212,7 +212,7 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(nil, fmt.Errorf("some.config compilation error"))
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, scheduleTime, taskContext).Return(compiledFile, nil)
+				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
@@ -229,7 +229,7 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(nil, fmt.Errorf("secret.config compilation error"))
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, scheduleTime, taskContext).Return(compiledFile, nil)
+				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
@@ -246,7 +246,7 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(map[string]string{"secret.config.compiled": "a.secret.val.compiled"}, nil)
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, scheduleTime, taskContext).Return(compiledFile, nil)
+				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
@@ -288,20 +288,24 @@ func TestExecutorCompiler(t *testing.T) {
 				jobNew := job
 				jobNew.ID = uuid.New()
 				jobNew.Name = "nameWith Invalid~Characters)(Which Are.even.LongerThan^63Charancters"
+				detailsNew := scheduler.JobWithDetails{
+					Job:      &jobNew,
+					Schedule: &scheduler.Schedule{Interval: "0 0 1 * *"},
+				}
 
 				assetCompilerNew := new(mockAssetCompiler)
-				assetCompilerNew.On("CompileJobRunAssets", ctx, &jobNew, systemDefinedVars, scheduleTime, taskContext).Return(compiledFile, nil)
+				assetCompilerNew.On("CompileJobRunAssets", ctx, &jobNew, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompilerNew.AssertExpectations(t)
 
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompilerNew, logger)
 
-				inputExecutorResp, err := inputCompiler.Compile(ctx, &jobNew, config, executedAt)
+				inputExecutorResp, err := inputCompiler.Compile(ctx, &detailsNew, config, executedAt)
 				assert.Nil(t, err)
 
 				expectedInputExecutor := &scheduler.ExecutorInput{
 					Configs: map[string]string{
-						"DSTART":               startTime.Format(time.RFC3339),
-						"DEND":                 endTime.Format(time.RFC3339),
+						"DSTART":               interval.Start.Format(time.RFC3339),
+						"DEND":                 interval.End.Format(time.RFC3339),
 						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
 						"JOB_DESTINATION":      job.Destination,
 						"some.config.compiled": "val.compiled",

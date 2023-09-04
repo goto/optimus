@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"strings"
 	"text/template"
@@ -18,13 +17,6 @@ const (
 	ISODateFormat = "2006-01-02"
 
 	ISOTimeFormat = time.RFC3339
-
-	QueryFileName = "query.sql"
-
-	LoadMethod        = "LOAD_METHOD"
-	LoadMethodReplace = "REPLACE"
-
-	QueryFileReplaceBreakMarker = "\n--*--optimus-break-marker--*--\n"
 )
 
 // Engine compiles a set of defined macros using the provided context
@@ -73,52 +65,4 @@ func (e *Engine) CompileString(input string, context map[string]any) (string, er
 		return "", errors.InvalidArgument(EntityCompiler, "unable to render string "+input)
 	}
 	return strings.TrimSpace(buf.String()), nil
-}
-
-func (e *Engine) CompileQuery(ctx context.Context, startTime, endTime time.Time, query string, systemEnvVars map[string]string) (string, error) {
-	// partition window in range
-	instanceEnvMap := map[string]interface{}{}
-	for name, value := range systemEnvVars {
-		instanceEnvMap[name] = value
-	}
-
-	// TODO: making few assumptions here, should be documented
-	// assume destination table is time partitioned
-	// assume table is partitioned as DAY
-	const dayHours = time.Duration(24)
-	partitionDelta := time.Hour * dayHours
-
-	// find destination partitions
-	var destinationsPartitions []struct {
-		start time.Time
-		end   time.Time
-	}
-	for currentPart := startTime; currentPart.Before(endTime); currentPart = currentPart.Add(partitionDelta) {
-		destinationsPartitions = append(destinationsPartitions, struct {
-			start time.Time
-			end   time.Time
-		}{
-			start: currentPart,
-			end:   currentPart.Add(partitionDelta),
-		})
-	}
-
-	// check if window size is greater than partition delta(a DAY), if not do nothing
-	if endTime.Sub(startTime) <= partitionDelta {
-		return "", nil
-	}
-
-	var parsedQueries []string
-	queryMap := map[string]string{"query": query}
-	for _, part := range destinationsPartitions {
-		instanceEnvMap["DSTART"] = part.start.Format(time.RFC3339)
-		instanceEnvMap["DEND"] = part.end.Format(time.RFC3339)
-		compiledQueryMap, err := e.Compile(queryMap, instanceEnvMap)
-		if err != nil {
-			return "", err
-		}
-		parsedQueries = append(parsedQueries, compiledQueryMap["query"])
-	}
-
-	return strings.Join(parsedQueries, QueryFileReplaceBreakMarker), nil
 }

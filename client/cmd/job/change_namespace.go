@@ -200,12 +200,13 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 
 	var newJobPath string
 	newNamespaceConfig, err := c.getNamespaceConfig(c.newNamespaceName)
+	if err != nil {
+		c.logger.Error("[error] new namespace not recognised for jobs: err: %s", err.Error())
+	}
+	if newNamespaceConfig.Job.Path == "" {
+		c.logger.Error("[error] namespace config does not have a defined jobs path")
+	}
 	if err != nil || newNamespaceConfig.Job.Path == "" {
-		if err != nil {
-			c.logger.Error("[error] new namespace not recognised for jobs: err: %s", err.Error())
-		} else {
-			c.logger.Error("[error] namespace config does not have a defined jobs path")
-		}
 		c.logger.Warn("[info] register the new namespace and run \n\t`optimus job export -p %s -n %s -r %s `, to fetch the newly moved job.",
 			c.project, c.newNamespaceName, jobName)
 		return nil

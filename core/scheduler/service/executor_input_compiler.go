@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -40,7 +41,11 @@ const (
 	configDestination   = "JOB_DESTINATION"
 
 	JobAttributionLabelsKey = "JOB_LABELS"
+
+	maxJobAttributionLabelLength = 63
 )
+
+var invalidLabelCharacterRegex *regexp.Regexp
 
 type TenantService interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
@@ -61,6 +66,24 @@ type InputCompiler struct {
 	assetCompiler AssetCompiler
 
 	logger log.Logger
+}
+
+// sanitiseLabel implements validation from https://cloud.google.com/bigquery/docs/labels-intro#requirements
+func sanitiseLabel(key string) string {
+	if len(key) > maxJobAttributionLabelLength {
+		key = "__" + key[len(key)-61:]
+	}
+	key = strings.ToLower(key)
+	key = invalidLabelCharacterRegex.ReplaceAllString(key, "-")
+	return key
+}
+
+func getJobLabelsString(labels map[string]string) string {
+	var labelStringArray []string
+	for key, value := range labels {
+		labelStringArray = append(labelStringArray, fmt.Sprintf("%s=%s", sanitiseLabel(key), sanitiseLabel(value)))
+	}
+	return strings.Join(labelStringArray, ",")
 }
 
 func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
@@ -102,9 +125,19 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		return nil, err
 	}
 
-	jobAttributionLabels := fmt.Sprintf("project=%s,namespace=%s,job=%s", job.Job.Tenant.ProjectName(), job.Job.Tenant.NamespaceName(), job.Job.Name)
-	if jobLables, ok := confs[JobAttributionLabelsKey]; ok {
-		confs[JobAttributionLabelsKey] = jobLables + "," + jobAttributionLabels
+	jobLabelsToAdd := map[string]string{
+		"project":   job.Job.Tenant.ProjectName().String(),
+		"namespace": job.Job.Tenant.NamespaceName().String(),
+		"job_name":  job.Job.Name.String(),
+		"job_id":    job.Job.ID.String(),
+	}
+	jobAttributionLabels := getJobLabelsString(jobLabelsToAdd)
+	if jobLabels, ok := confs[JobAttributionLabelsKey]; ok {
+		if len(jobLabels) == 0 {
+			confs[JobAttributionLabelsKey] = jobAttributionLabels
+		} else {
+			confs[JobAttributionLabelsKey] = jobLabels + "," + jobAttributionLabels
+		}
 	} else {
 		confs[JobAttributionLabelsKey] = jobAttributionLabels
 	}
@@ -184,6 +217,7 @@ func splitConfigWithSecrets(conf map[string]string) (map[string]string, map[stri
 }
 
 func NewJobInputCompiler(tenantService TenantService, compiler TemplateCompiler, assetCompiler AssetCompiler, logger log.Logger) *InputCompiler {
+	invalidLabelCharacterRegex = regexp.MustCompile(`[^\w-]`)
 	return &InputCompiler{
 		tenantService: tenantService,
 		compiler:      compiler,

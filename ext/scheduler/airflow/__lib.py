@@ -13,7 +13,7 @@ from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import Kubernete
 from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.state import TaskInstanceState
-from airflow.exceptions import AirflowFailException
+from airflow.exceptions import AirflowException
 from croniter import croniter
 from kubernetes.client import models as k8s
 
@@ -203,7 +203,8 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self._upstream_optimus_client = OptimusAPIClient(upstream_optimus_hostname)
 
     def poke(self, context):
-        schedule_time = context['next_execution_date']
+        job_cron_iter = croniter(context.get("dag").schedule_interval, context.get('execution_date'))
+        schedule_time = job_cron_iter.get_next(datetime)
 
         try:
             upstream_schedule = self.get_schedule_interval(schedule_time)
@@ -257,7 +258,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
             self.log.info("job_run api response :: {}".format(api_response))
         except Exception as e:
             self.log.warning("error while fetching job runs :: {}".format(e))
-            raise AirflowFailException(e)
+            raise AirflowException(e)
         for job_run in api_response['jobRuns']:
             if job_run['state'] != 'success':
                 self.log.info("failed for run :: {}".format(job_run))
@@ -277,7 +278,8 @@ def optimus_notify(context, event_meta):
 
     current_dag_id = context.get('task_instance').dag_id
     current_execution_date = context.get('execution_date')
-    current_schedule_date = context.get('next_execution_date')
+    job_cron_iter = croniter(context.get("dag").schedule_interval, current_execution_date)
+    current_schedule_date = job_cron_iter.get_next(datetime)
 
     # failure message pushed by failed tasks
     failure_messages = []

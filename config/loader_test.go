@@ -49,9 +49,6 @@ serve:
     dsn: postgres://user:password@localhost:5432/database?sslmode=disable
     max_idle_connection: 5
     max_open_connection: 10
-scheduler:
-  name: airflow2
-  skip_init: true
 telemetry:
   profile_addr: ":9110"
   jaeger_addr: "http://localhost:14268/api/traces"
@@ -268,9 +265,6 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 	s.expectedServerConfig.Serve.DB.MinOpenConnection = 5
 	s.expectedServerConfig.Serve.DB.MaxOpenConnection = 10
 
-	s.expectedServerConfig.Scheduler = config.SchedulerConfig{}
-	s.expectedServerConfig.Scheduler.Name = "airflow2"
-
 	s.expectedServerConfig.Telemetry = config.TelemetryConfig{}
 	s.expectedServerConfig.Telemetry.ProfileAddr = ":9110"
 	s.expectedServerConfig.Telemetry.JaegerAddr = "http://localhost:14268/api/traces"
@@ -310,8 +304,6 @@ func (*ConfigTestSuite) initServerConfigEnv() {
 	os.Setenv("OPTIMUS_SERVE_DB_DSN", "postgres://user:password@localhost:5432/database?sslmode=disable")
 	os.Setenv("OPTIMUS_SERVE_DB_MAX_IDLE_CONNECTION", "5")
 	os.Setenv("OPTIMUS_SERVE_DB_MAX_OPEN_CONNECTION", "10")
-	os.Setenv("OPTIMUS_SCHEDULER_NAME", "airflow2")
-	os.Setenv("OPTIMUS_SCHEDULER_SKIP_INIT", "true")
 	os.Setenv("OPTIMUS_TELEMETRY_PROFILE_ADDR", ":9110")
 	os.Setenv("OPTIMUS_TELEMETRY_JAEGER_ADDR", "http://localhost:14268/api/traces")
 }
@@ -330,8 +322,6 @@ func unsetServerConfigEnv() {
 	os.Unsetenv("OPTIMUS_SERVE_DB_DSN")
 	os.Unsetenv("OPTIMUS_SERVE_DB_MAX_IDLE_CONNECTION")
 	os.Unsetenv("OPTIMUS_SERVE_DB_MAX_OPEN_CONNECTION")
-	os.Unsetenv("OPTIMUS_SCHEDULER_NAME")
-	os.Unsetenv("OPTIMUS_SCHEDULER_SKIP_INIT")
 	os.Unsetenv("OPTIMUS_TELEMETRY_PROFILE_ADDR")
 	os.Unsetenv("OPTIMUS_TELEMETRY_JAEGER_ADDR")
 }

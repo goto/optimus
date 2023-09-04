@@ -110,12 +110,10 @@ func getJobRuns(res DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.J
 		return jobRunList, errors.InternalError(EntityAirflow, "total number of entries exceed page limit", nil)
 	}
 	for _, dag := range res.DagRuns {
-		if !dag.ExternalTrigger { // only include scheduled runs
-			scheduledAt := spec.Next(dag.ExecutionDate)
-			jobRunStatus, _ := scheduler.JobRunStatusFrom(scheduledAt, dag.State)
-			// use multi error to collect errors and proceed
-			jobRunList = append(jobRunList, &jobRunStatus)
-		}
+		scheduledAt := spec.Next(dag.ExecutionDate)
+		jobRunStatus, _ := scheduler.JobRunStatusFrom(scheduledAt, dag.State)
+		// use multi error to collect errors and proceed
+		jobRunList = append(jobRunList, &jobRunStatus)
 	}
 	return jobRunList, nil
 }

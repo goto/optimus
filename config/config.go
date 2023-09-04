@@ -16,7 +16,6 @@ type Optimus struct {
 
 	Server    Serve           `mapstructure:"serve"`
 	Log       LogConfig       `mapstructure:"log"`
-	Scheduler SchedulerConfig `mapstructure:"scheduler"`
 	Telemetry TelemetryConfig `mapstructure:"telemetry"`
 
 	namespaceNameToNamespace map[string]*Namespace

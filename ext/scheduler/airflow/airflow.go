@@ -64,7 +64,7 @@ type BucketFactory interface {
 }
 
 type DagCompiler interface {
-	Compile(job *scheduler.JobWithDetails) ([]byte, error)
+	Compile(project *tenant.Project, job *scheduler.JobWithDetails) ([]byte, error)
 }
 
 type Client interface {
@@ -106,10 +106,15 @@ func (s *Scheduler) DeployJobs(ctx context.Context, tenant tenant.Tenant, jobs [
 	}
 	multiError := errors.NewMultiError("ErrorsInDeployJobs")
 	runner := parallel.NewRunner(parallel.WithTicket(concurrentTicketPerSec), parallel.WithLimit(concurrentLimit))
+	project, err := s.projectGetter.Get(ctx, tenant.ProjectName())
+	if err != nil {
+		s.l.Error("failed fetch project details")
+		return errors.AddErrContext(err, EntityAirflow, "error in getting project details")
+	}
 	for _, job := range jobs {
 		runner.Add(func(currentJob *scheduler.JobWithDetails) func() (interface{}, error) {
 			return func() (interface{}, error) {
-				return nil, s.compileAndUpload(ctx, currentJob, bucket)
+				return nil, s.compileAndUpload(ctx, project, currentJob, bucket)
 			}
 		}(job))
 	}
@@ -219,11 +224,11 @@ func deleteDirectoryIfEmpty(ctx context.Context, nsDirectoryIdentifier string, b
 	return nil
 }
 
-func (s *Scheduler) compileAndUpload(ctx context.Context, job *scheduler.JobWithDetails, bucket Bucket) error {
+func (s *Scheduler) compileAndUpload(ctx context.Context, project *tenant.Project, job *scheduler.JobWithDetails, bucket Bucket) error {
 	namespaceName := job.Job.Tenant.NamespaceName().String()
 	blobKey := pathFromJobName(jobsDir, namespaceName, job.Name.String(), jobsExtension)
 
-	compiledJob, err := s.compiler.Compile(job)
+	compiledJob, err := s.compiler.Compile(project, job)
 	if err != nil {
 		s.l.Error(fmt.Sprintf("failed compilation %s:%s, err:%s", namespaceName, blobKey, err.Error()))
 		return errors.AddErrContext(err, EntityAirflow, "job:"+job.Name.String())

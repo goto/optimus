@@ -18,8 +18,11 @@ import (
 	"github.com/goto/optimus/sdk/plugin/mock"
 )
 
-//go:embed expected_dag.py
-var compiledTemplate []byte
+//go:embed expected_dag.2.1.py
+var compiledTemplate21 []byte
+
+//go:embed expected_dag.2.4.py
+var compiledTemplate24 []byte
 
 func TestDagCompiler(t *testing.T) {
 	t.Run("Compile", func(t *testing.T) {
@@ -29,27 +32,29 @@ func TestDagCompiler(t *testing.T) {
 
 		t.Run("returns error when cannot find task", func(t *testing.T) {
 			emptyRepo := mockPluginRepo{plugins: []*plugin.Plugin{}}
-			com, err := dag.NewDagCompiler("http://optimus.example.com", emptyRepo)
+			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", emptyRepo)
 			assert.NoError(t, err)
 
 			job := setupJobDetails(tnnt)
-			_, err = com.Compile(job)
+			project := setProject(tnnt, "2.1.4")
+			_, err = com.Compile(project, job)
 			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
 			assert.ErrorContains(t, err, "plugin not found for bq-bq")
 		})
 		t.Run("returns error when cannot find hook", func(t *testing.T) {
-			com, err := dag.NewDagCompiler("http://optimus.example.com", repo)
+			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
 			assert.NoError(t, err)
 
 			job := setupJobDetails(tnnt)
 			job.Job.Hooks = append(job.Job.Hooks, &scheduler.Hook{Name: "invalid"})
-			_, err = com.Compile(job)
+			project := setProject(tnnt, "2.1.4")
+			_, err = com.Compile(project, job)
 			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
 			assert.ErrorContains(t, err, "hook not found for name invalid")
 		})
 
 		t.Run("returns error when sla duration is invalid", func(t *testing.T) {
-			com, err := dag.NewDagCompiler("http://optimus.example.com", repo)
+			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
 			assert.NoError(t, err)
 
 			job := setupJobDetails(tnnt)
@@ -60,20 +65,43 @@ func TestDagCompiler(t *testing.T) {
 					On:     scheduler.EventCategorySLAMiss,
 					Config: map[string]string{"duration": "2"},
 				})
-			_, err = com.Compile(job)
+			project := setProject(tnnt, "2.1.4")
+			_, err = com.Compile(project, job)
 			assert.ErrorContains(t, err, "failed to parse sla_miss duration 2")
 		})
 
 		t.Run("compiles basic template without any error", func(t *testing.T) {
-			com, err := dag.NewDagCompiler("http://optimus.example.com", repo)
-			assert.NoError(t, err)
+			t.Run("with airflow version 2.1.4", func(t *testing.T) {
+				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
+				assert.NoError(t, err)
 
-			job := setupJobDetails(tnnt)
-			compiledDag, err := com.Compile(job)
-			assert.NoError(t, err)
-			assert.Equal(t, string(compiledTemplate), string(compiledDag))
+				job := setupJobDetails(tnnt)
+				project := setProject(tnnt, "2.1.4")
+				compiledDag, err := com.Compile(project, job)
+				assert.NoError(t, err)
+				assert.Equal(t, string(compiledTemplate21), string(compiledDag))
+			})
+			t.Run("with airflow version 2.4.3", func(t *testing.T) {
+				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
+				assert.NoError(t, err)
+
+				job := setupJobDetails(tnnt)
+				project := setProject(tnnt, "2.4.3")
+				compiledDag, err := com.Compile(project, job)
+				assert.NoError(t, err)
+				assert.Equal(t, string(compiledTemplate24), string(compiledDag))
+			})
 		})
 	})
+}
+
+func setProject(tnnt tenant.Tenant, airflowVersion string) *tenant.Project {
+	p, _ := tenant.NewProject(tnnt.ProjectName().String(), map[string]string{
+		tenant.ProjectSchedulerVersion: airflowVersion,
+		tenant.ProjectStoragePathKey:   "./path/to/storage",
+		tenant.ProjectSchedulerHost:    "http://airflow.com",
+	})
+	return p
 }
 
 func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {

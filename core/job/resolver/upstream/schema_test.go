@@ -9,11 +9,10 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	"github.com/goto/optimus/core/job/resolver/upstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/iterator"
-
-	"github.com/goto/optimus/core/job/service/bq2bq/upstream"
 )
 
 func TestReadSchemasUnderGroup(t *testing.T) {

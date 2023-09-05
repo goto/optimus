@@ -63,7 +63,7 @@ func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error)
 // case regex based table is a view & not actually a source table. Because this
 // fn should generate the actual source as dependency
 // BQ2BQ dependencies are BQ tables in format "project:dataset.table"
-// Note: only for bq2bq jobs
+// Note: only for bq2bq job, previously named as GenerateDependencies
 func GenerateDependencies(ctx context.Context, l log.Logger, extractorFactory UpstreamExtractorFactory, svcAcc, query, destinationURN string) ([]string, error) {
 	destinationResource, err := destinationToResource(destinationURN)
 	if err != nil {

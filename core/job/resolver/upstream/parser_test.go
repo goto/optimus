@@ -3,9 +3,8 @@ package upstream_test
 import (
 	"testing"
 
+	"github.com/goto/optimus/core/job/resolver/upstream"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/goto/optimus/core/job/service/bq2bq/upstream"
 )
 
 func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {

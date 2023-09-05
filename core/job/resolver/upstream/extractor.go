@@ -5,54 +5,44 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 )
 
 type Extractor struct {
-	mutex  *sync.Mutex
 	client bqiface.Client
 
-	schemaToUpstreams map[string][]*Upstream
+	resourceURNToUpstreams map[string][]*Resource
+	parserFunc             QueryParser
 }
 
-func NewExtractor(client bqiface.Client) (*Extractor, error) {
+func NewExtractor(client bqiface.Client, parserFunc QueryParser) (*Extractor, error) {
 	if client == nil {
 		return nil, errors.New("client is nil")
 	}
 
+	if parserFunc == nil {
+		return nil, errors.New("parser function is nil")
+	}
+
 	return &Extractor{
-		mutex:             &sync.Mutex{},
-		client:            client,
-		schemaToUpstreams: make(map[string][]*Upstream),
+		client:                 client,
+		resourceURNToUpstreams: make(map[string][]*Resource),
+		parserFunc:             parserFunc,
 	}, nil
 }
 
-func (e *Extractor) ExtractUpstreams(ctx context.Context, query string, resourcesToIgnore []Resource) ([]*Upstream, error) {
-	ignoredResources := make(map[Resource]bool)
-	for _, r := range resourcesToIgnore {
-		ignoredResources[r] = true
-	}
-
-	metResource := make(map[Resource]bool)
-	return e.extractUpstreamsFromQuery(ctx, query, ignoredResources, metResource, ParseTopLevelUpstreamsFromQuery)
+func (e *Extractor) ExtractUpstreams(ctx context.Context, query string, resourceDestination *Resource) ([]*Resource, error) {
+	return e.extractResourcesFromQuery(ctx, query, resourceDestination, map[string]bool{})
 }
 
-func (e *Extractor) extractUpstreamsFromQuery(
-	ctx context.Context, query string,
-	ignoredResources, metResource map[Resource]bool,
-	parseFn QueryParser,
-) ([]*Upstream, error) {
-	upstreamResources := parseFn(query)
+func (e *Extractor) extractResourcesFromQuery(ctx context.Context, query string, resourceDestination *Resource, metResource map[string]bool) ([]*Resource, error) {
+	resources := Resources(e.parserFunc(query))
+	uniqueResources := Resources(resources).GetUnique()
+	filteredResources := Resources(uniqueResources).GetWithoutResource(resourceDestination)
+	resourceGroups := Resources(filteredResources).GroupResources()
 
-	uniqueUpstreamResources := UniqueFilterResources(upstreamResources)
-
-	filteredUpstreamResources := FilterResources(uniqueUpstreamResources, func(r Resource) bool { return ignoredResources[r] })
-
-	resourceGroups := GroupResources(filteredUpstreamResources)
-
-	var output []*Upstream
+	var output []*Resource
 	var errorMessages []string
 
 	for _, group := range resourceGroups {
@@ -61,17 +51,15 @@ func (e *Extractor) extractUpstreamsFromQuery(
 			errorMessages = append(errorMessages, err.Error())
 		}
 
-		nestedable, rest := splitNestedableFromRest(schemas)
+		nestedtableSchemas, rest := Schemas(schemas).SplitSchemasByType(View)
+		output = append(output, rest.ToResources()...)
 
-		restsNodes := convertSchemasToNodes(rest)
-		output = append(output, restsNodes...)
-
-		nestedNodes, err := e.extractNestedNodes(ctx, nestedable, ignoredResources, metResource)
+		nestedResources, err := e.extractNestedSchemas(ctx, nestedtableSchemas, resourceDestination, metResource)
 		if err != nil {
 			errorMessages = append(errorMessages, err.Error())
 		}
 
-		output = append(output, nestedNodes...)
+		output = append(output, nestedResources...)
 	}
 
 	if len(errorMessages) > 0 {
@@ -80,30 +68,26 @@ func (e *Extractor) extractUpstreamsFromQuery(
 	return output, nil
 }
 
-func (e *Extractor) extractNestedNodes(
-	ctx context.Context, schemas []*Schema,
-	ignoredResources, metResource map[Resource]bool,
-) ([]*Upstream, error) {
-	var output []*Upstream
+func (e *Extractor) extractNestedSchemas(ctx context.Context, schemas []*Schema, resourceDestination *Resource, metResource map[string]bool) ([]*Resource, error) {
+	var output []*Resource
 	var errorMessages []string
 
 	for _, sch := range schemas {
-		if metResource[sch.Resource] {
+		if metResource[sch.Resource.URN()] {
 			msg := fmt.Sprintf("circular reference is detected: [%s]", e.getCircularURNs(metResource))
 			errorMessages = append(errorMessages, msg)
 			continue
 		}
-		metResource[sch.Resource] = true
+		metResource[sch.Resource.URN()] = true
 
-		nodes, err := e.getNodes(ctx, sch, ignoredResources, metResource)
+		upstreamResources, err := e.getResourcesFromSchema(ctx, sch, resourceDestination, metResource)
 		if err != nil {
 			errorMessages = append(errorMessages, err.Error())
 		}
 
-		output = append(output, &Upstream{
-			Resource:  sch.Resource,
-			Upstreams: nodes,
-		})
+		resource := sch.Resource
+		resource.Upstreams = upstreamResources
+		output = append(output, &resource)
 	}
 
 	if len(errorMessages) > 0 {
@@ -112,33 +96,22 @@ func (e *Extractor) extractNestedNodes(
 	return output, nil
 }
 
-func (e *Extractor) getNodes(
-	ctx context.Context, schema *Schema,
-	ignoredResources, metResource map[Resource]bool,
-) ([]*Upstream, error) {
-	key := schema.Resource.URN()
+func (e *Extractor) getResourcesFromSchema(ctx context.Context, schema *Schema, destinationResource *Resource, metResource map[string]bool) ([]*Resource, error) {
+	resourceURN := schema.Resource.URN()
 
-	e.mutex.Lock()
-	existingNodes, ok := e.schemaToUpstreams[key]
-	e.mutex.Unlock()
-
-	if ok {
-		return existingNodes, nil
+	if _, ok := e.resourceURNToUpstreams[resourceURN]; !ok {
+		upstreamResources, err := e.extractResourcesFromQuery(ctx, schema.DDL, destinationResource, metResource)
+		e.resourceURNToUpstreams[resourceURN] = upstreamResources
+		return upstreamResources, err
 	}
 
-	nodes, err := e.extractUpstreamsFromQuery(ctx, schema.DDL, ignoredResources, metResource, ParseNestedUpsreamsFromDDL)
-
-	e.mutex.Lock()
-	e.schemaToUpstreams[key] = nodes
-	e.mutex.Unlock()
-
-	return nodes, err
+	return e.resourceURNToUpstreams[resourceURN], nil
 }
 
-func (*Extractor) getCircularURNs(metResource map[Resource]bool) string {
+func (*Extractor) getCircularURNs(metResource map[string]bool) string {
 	var urns []string
-	for resource := range metResource {
-		urns = append(urns, resource.URN())
+	for resourceURN := range metResource {
+		urns = append(urns, resourceURN)
 	}
 
 	return strings.Join(urns, ", ")

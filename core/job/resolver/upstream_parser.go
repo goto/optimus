@@ -23,7 +23,7 @@ var (
 )
 
 type UpstreamExtractor interface {
-	ExtractUpstreams(ctx context.Context, query string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error)
+	ExtractUpstreams(ctx context.Context, query string, destinationResource *upstream.Resource) ([]*upstream.Resource, error)
 }
 
 type UpstreamExtractorFactory interface {
@@ -37,7 +37,7 @@ func (d *DefaultUpstreamExtractorFactory) New(ctx context.Context, bqSvcAccount 
 	if err != nil {
 		return nil, fmt.Errorf("error creating bigquery client: %w", err)
 	}
-	return upstream.NewExtractor(client)
+	return upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
 }
 
 func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error) {
@@ -74,26 +74,25 @@ func GenerateDependencies(ctx context.Context, l log.Logger, extractorFactory Up
 	if err != nil {
 		return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
 	}
-	upstreams, err := extractUpstreams(ctx, l, upstreamExtractor, query, svcAcc, []upstream.Resource{destinationResource})
+	upstreams, err := extractUpstreams(ctx, l, upstreamExtractor, query, svcAcc, &destinationResource)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting upstreams: %w", err)
 	}
 
-	flattenedUpstreams := upstream.FlattenUpstreams(upstreams)
-	uniqueUpstreams := upstream.UniqueFilterResources(flattenedUpstreams)
+	flattenedUpstreams := upstream.Resources(upstreams).GetFlattened()
+	uniqueUpstreams := upstream.Resources(flattenedUpstreams).GetUnique()
 
 	upstreamResources := []string{}
 	for _, u := range uniqueUpstreams {
-		name := fmt.Sprintf("%s:%s.%s", u.Project, u.Dataset, u.Name)
-		upstreamResources = append(upstreamResources, name)
+		upstreamResources = append(upstreamResources, u.URN())
 	}
 
 	return upstreamResources, nil
 }
 
-func extractUpstreams(ctx context.Context, l log.Logger, extractor UpstreamExtractor, query, svcAccSecret string, resourcesToIgnore []upstream.Resource) ([]*upstream.Upstream, error) {
+func extractUpstreams(ctx context.Context, l log.Logger, extractor UpstreamExtractor, query, svcAccSecret string, destinationResource *upstream.Resource) ([]*upstream.Resource, error) {
 	for try := 1; try <= MaxBQApiRetries; try++ {
-		upstreams, err := extractor.ExtractUpstreams(ctx, query, resourcesToIgnore)
+		upstreams, err := extractor.ExtractUpstreams(ctx, query, destinationResource)
 		if err != nil {
 			if strings.Contains(err.Error(), "net/http: TLS handshake timeout") ||
 				strings.Contains(err.Error(), "unexpected EOF") ||

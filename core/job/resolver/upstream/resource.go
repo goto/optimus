@@ -1,9 +1,10 @@
 package upstream
 
 type Resource struct {
-	Project string
-	Dataset string
-	Name    string
+	Project   string
+	Dataset   string
+	Name      string
+	Upstreams []*Resource
 }
 
 func (r Resource) URN() string {
@@ -20,37 +21,36 @@ func (r ResourceGroup) URN() string {
 	return r.Project + "." + r.Dataset
 }
 
-func FilterResources(input []Resource, isToExcludeFn func(Resource) bool) []Resource {
-	var output []Resource
+type Resources []*Resource
 
-	for _, r := range input {
-		if !isToExcludeFn(r) {
-			output = append(output, r)
+func (r Resources) GetWithoutResource(resourceToIgnore *Resource) []*Resource {
+	var output []*Resource
+	for _, resource := range r {
+		if resourceToIgnore != nil && resource.URN() == resourceToIgnore.URN() {
+			continue
 		}
+		output = append(output, resource)
 	}
-
 	return output
 }
 
-func UniqueFilterResources(input []Resource) []Resource {
-	ref := make(map[string]Resource)
-	for _, i := range input {
-		key := i.URN()
-		ref[key] = i
+func (r Resources) GetUnique() []*Resource {
+	ref := make(map[string]*Resource)
+	for _, resource := range r {
+		ref[resource.URN()] = resource
 	}
 
-	var output []Resource
+	var output []*Resource
 	for _, r := range ref {
 		output = append(output, r)
 	}
-
 	return output
 }
 
-func GroupResources(infos []Resource) []*ResourceGroup {
+func (r Resources) GroupResources() []*ResourceGroup {
 	ref := make(map[string]*ResourceGroup)
 
-	for _, info := range infos {
+	for _, info := range r {
 		key := info.Project + "." + info.Dataset
 
 		if _, ok := ref[key]; ok {
@@ -67,6 +67,21 @@ func GroupResources(infos []Resource) []*ResourceGroup {
 	var output []*ResourceGroup
 	for _, r := range ref {
 		output = append(output, r)
+	}
+
+	return output
+}
+
+func (r Resources) GetFlattened() []*Resource {
+	var output []*Resource
+	for _, u := range r {
+		if u == nil {
+			continue
+		}
+		nested := Resources(u.Upstreams).GetFlattened()
+		u.Upstreams = nil
+		output = append(output, u)
+		output = append(output, nested...)
 	}
 
 	return output

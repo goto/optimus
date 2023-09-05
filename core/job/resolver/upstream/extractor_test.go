@@ -16,7 +16,7 @@ func TestNewExtractor(t *testing.T) {
 	t.Run("should return nil and error if client is nil", func(t *testing.T) {
 		var client bqiface.Client
 
-		actualExtractor, actualError := upstream.NewExtractor(client)
+		actualExtractor, actualError := upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
 
 		assert.Nil(t, actualExtractor)
 		assert.EqualError(t, actualError, "client is nil")
@@ -25,7 +25,7 @@ func TestNewExtractor(t *testing.T) {
 	t.Run("should return extractor and nil if no error is encountered", func(t *testing.T) {
 		client := new(ClientMock)
 
-		actualExtractor, actualError := upstream.NewExtractor(client)
+		actualExtractor, actualError := upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
 
 		assert.NotNil(t, actualExtractor)
 		assert.NoError(t, actualError)
@@ -38,31 +38,27 @@ func TestExtractor(t *testing.T) {
 			testCases := []struct {
 				Message           string
 				QueryRequest      string
-				ExpectedUpstreams []*upstream.Upstream
+				ExpectedUpstreams []*upstream.Resource
 			}{
 				{
 					Message:      "should return upstreams and generate dependencies for select statements",
 					QueryRequest: "Select * from proj.dataset.table1",
-					ExpectedUpstreams: []*upstream.Upstream{
+					ExpectedUpstreams: []*upstream.Resource{
 						{
-							Resource: upstream.Resource{
-								Project: "proj",
-								Dataset: "dataset",
-								Name:    "table1",
-							},
+							Project: "proj",
+							Dataset: "dataset",
+							Name:    "table1",
 						},
 					},
 				},
 				{
 					Message:      "should return unique upstreams and nil for select statements",
 					QueryRequest: "Select * from proj.dataset.table1 t1 join proj.dataset.table1 t2 on t1.col1 = t2.col1",
-					ExpectedUpstreams: []*upstream.Upstream{
+					ExpectedUpstreams: []*upstream.Resource{
 						{
-							Resource: upstream.Resource{
-								Project: "proj",
-								Dataset: "dataset",
-								Name:    "table1",
-							},
+							Project: "proj",
+							Dataset: "dataset",
+							Name:    "table1",
 						},
 					},
 				},
@@ -74,13 +70,11 @@ func TestExtractor(t *testing.T) {
 				{
 					Message:      "should return filtered upstreams for select statements with ignore statement for view",
 					QueryRequest: "Select * from proj.dataset.table1 t1 join proj.dataset.table1 t2 on t1.col1 = t2.col1",
-					ExpectedUpstreams: []*upstream.Upstream{
+					ExpectedUpstreams: []*upstream.Resource{
 						{
-							Resource: upstream.Resource{
-								Project: "proj",
-								Dataset: "dataset",
-								Name:    "table1",
-							},
+							Project: "proj",
+							Dataset: "dataset",
+							Name:    "table1",
 						},
 					},
 				},
@@ -98,7 +92,7 @@ func TestExtractor(t *testing.T) {
 					},
 				}
 
-				extractor, err := upstream.NewExtractor(client)
+				extractor, err := upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
 				assert.NotNil(t, extractor)
 				assert.NoError(t, err)
 
@@ -114,7 +108,7 @@ func TestExtractor(t *testing.T) {
 				}).Return(nil).Once()
 				rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-				actualUpstreams, actualError := extractor.ExtractUpstreams(ctx, test.QueryRequest, resourcestoIgnore)
+				actualUpstreams, actualError := extractor.ExtractUpstreams(ctx, test.QueryRequest, &resourcestoIgnore[0])
 
 				assert.EqualValues(t, test.ExpectedUpstreams, actualUpstreams, test.Message)
 				assert.NoError(t, actualError, test.Message)
@@ -133,7 +127,7 @@ func TestExtractor(t *testing.T) {
 				},
 			}
 
-			extractor, err := upstream.NewExtractor(client)
+			extractor, err := upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
 			assert.NotNil(t, extractor)
 			assert.NoError(t, err)
 
@@ -159,33 +153,27 @@ func TestExtractor(t *testing.T) {
 			}).Return(nil).Once()
 			rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-			expectedUpstreams := []*upstream.Upstream{
+			expectedUpstreams := []*upstream.Resource{
 				{
-					Resource: upstream.Resource{
-						Project: "project_test_1",
-						Dataset: "dataset_test_1",
-						Name:    "name_test_1",
-					},
+					Project: "project_test_1",
+					Dataset: "dataset_test_1",
+					Name:    "name_test_1",
 				},
 				{
-					Resource: upstream.Resource{
-						Project: "project_test_2",
-						Dataset: "dataset_test_2",
-						Name:    "name_test_2",
-					},
-					Upstreams: []*upstream.Upstream{
+					Project: "project_test_2",
+					Dataset: "dataset_test_2",
+					Name:    "name_test_2",
+					Upstreams: []*upstream.Resource{
 						{
-							Resource: upstream.Resource{
-								Project: "project_test_3",
-								Dataset: "dataset_test_3",
-								Name:    "name_test_3",
-							},
+							Project: "project_test_3",
+							Dataset: "dataset_test_3",
+							Name:    "name_test_3",
 						},
 					},
 				},
 			}
 
-			actualUpstreams, actualError := extractor.ExtractUpstreams(ctx, queryRequest, resourcestoIgnore)
+			actualUpstreams, actualError := extractor.ExtractUpstreams(ctx, queryRequest, &resourcestoIgnore[0])
 
 			assert.EqualValues(t, expectedUpstreams, actualUpstreams)
 			assert.NoError(t, actualError)
@@ -195,9 +183,8 @@ func TestExtractor(t *testing.T) {
 			client := new(ClientMock)
 			query := new(QueryMock)
 			rowIterator := new(RowIteratorMock)
-			resourcestoIgnore := []upstream.Resource{}
 
-			extractor, err := upstream.NewExtractor(client)
+			extractor, err := upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
 			assert.NotNil(t, extractor)
 			assert.NoError(t, err)
 
@@ -229,27 +216,21 @@ func TestExtractor(t *testing.T) {
 			}).Return(nil).Once()
 			rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-			expectedUpstreams := []*upstream.Upstream{
+			expectedUpstreams := []*upstream.Resource{
 				{
-					Resource: upstream.Resource{
-						Project: "project_test_1",
-						Dataset: "dataset_test_1",
-						Name:    "cyclic_test_1",
-					},
-					Upstreams: []*upstream.Upstream{
+					Project: "project_test_1",
+					Dataset: "dataset_test_1",
+					Name:    "cyclic_test_1",
+					Upstreams: []*upstream.Resource{
 						{
-							Resource: upstream.Resource{
-								Project: "project_test_3",
-								Dataset: "dataset_test_3",
-								Name:    "cyclic_test_3",
-							},
-							Upstreams: []*upstream.Upstream{
+							Project: "project_test_3",
+							Dataset: "dataset_test_3",
+							Name:    "cyclic_test_3",
+							Upstreams: []*upstream.Resource{
 								{
-									Resource: upstream.Resource{
-										Project: "project_test_2",
-										Dataset: "dataset_test_2",
-										Name:    "cyclic_test_2",
-									},
+									Project: "project_test_2",
+									Dataset: "dataset_test_2",
+									Name:    "cyclic_test_2",
 								},
 							},
 						},
@@ -257,7 +238,7 @@ func TestExtractor(t *testing.T) {
 				},
 			}
 
-			actualUpstreams, actualError := extractor.ExtractUpstreams(ctx, queryRequest, resourcestoIgnore)
+			actualUpstreams, actualError := extractor.ExtractUpstreams(ctx, queryRequest, nil)
 
 			assert.EqualValues(t, expectedUpstreams, actualUpstreams)
 			assert.ErrorContains(t, actualError, "circular reference is detected")

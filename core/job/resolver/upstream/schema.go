@@ -166,26 +166,25 @@ func convertToSchema(values []bigquery.Value) (*Schema, error) {
 	}, nil
 }
 
-func splitNestedableFromRest(schemas []*Schema) (nestedable, rests []*Schema) {
-	for _, sch := range schemas {
-		switch sch.Type {
-		case View:
-			nestedable = append(nestedable, sch)
-		default:
-			rests = append(rests, sch)
+type Schemas []*Schema
+
+func (s Schemas) SplitSchemasByType(target SchemaType) (Schemas, Schemas) {
+	result := []*Schema{}
+	rest := []*Schema{}
+	for _, sch := range s {
+		if sch.Type == target {
+			result = append(result, sch)
+		} else {
+			rest = append(rest, sch)
 		}
 	}
-
-	return nestedable, rests
+	return result, rest
 }
 
-func convertSchemasToNodes(schemas []*Schema) []*Upstream {
-	output := make([]*Upstream, len(schemas))
-	for i, sch := range schemas {
-		output[i] = &Upstream{
-			Resource: sch.Resource,
-		}
+func (s Schemas) ToResources() []*Resource {
+	output := make([]*Resource, len(s))
+	for i, sch := range s {
+		output[i] = &sch.Resource
 	}
-
 	return output
 }

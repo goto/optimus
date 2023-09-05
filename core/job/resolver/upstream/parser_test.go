@@ -9,12 +9,12 @@ import (
 
 func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 	t.Run("parse test", func(t *testing.T) {
-		type set map[upstream.Resource]bool
-		newSetFn := func(resources ...upstream.Resource) set {
+		type set map[string]bool
+		newSetFn := func(resources ...*upstream.Resource) set {
 			set := make(set)
 
 			for _, r := range resources {
-				set[r] = true
+				set[r.URN()] = true
 			}
 
 			return set
@@ -23,12 +23,12 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 		testCases := []struct {
 			Name            string
 			InputQuery      string
-			ExpectedSources []upstream.Resource
+			ExpectedSources []*upstream.Resource
 		}{
 			{
 				Name:       "simple query",
 				InputQuery: "select * from data-engineering.testing.table1",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -39,7 +39,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "simple query with hyphenated table name",
 				InputQuery: "select * from data-engineering.testing.table_name-1",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -50,7 +50,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "simple query with quotes",
 				InputQuery: "select * from `data-engineering.testing.table1`",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -61,12 +61,12 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:            "simple query without project name",
 				InputQuery:      "select * from testing.table1",
-				ExpectedSources: []upstream.Resource{},
+				ExpectedSources: []*upstream.Resource{},
 			},
 			{
 				Name:       "simple query with simple join",
 				InputQuery: "select * from data-engineering.testing.table1 join data-engineering.testing.table2 on some_field",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -82,7 +82,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "simple query with outer join",
 				InputQuery: "select * from data-engineering.testing.table1 outer join data-engineering.testing.table2 on some_field",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -98,7 +98,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "subquery",
 				InputQuery: "select * from (select order_id from data-engineering.testing.orders)",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -109,7 +109,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "`with` clause + simple query",
 				InputQuery: "with `information.foo.bar` as (select * from `data-engineering.testing.data`) select * from `information.foo.bar`",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -120,7 +120,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "`with` clause with missing project name",
 				InputQuery: "with `foo.bar` as (select * from `data-engineering.testing.data`) select * from `foo.bar`",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -131,7 +131,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "project name with dashes",
 				InputQuery: "select * from `foo-bar.baz.data`",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "foo-bar",
 						Dataset: "baz",
@@ -142,7 +142,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "dataset and project name with dashes",
 				InputQuery: "select * from `foo-bar.bar-baz.data",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "foo-bar",
 						Dataset: "bar-baz",
@@ -153,7 +153,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "`with` clause + join",
 				InputQuery: "with dedup_source as (select * from `project.fire.fly`) select * from dedup_source join `project.maximum.overdrive` on dedup_source.left = `project.maximum.overdrive`.right",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "project",
 						Dataset: "fire",
@@ -174,7 +174,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "double `with` + pseudoreference",
 				InputQuery: "with s1 as (select * from internal.pseudo.ref), with internal.pseudo.ref as (select * from `project.another.name`) select * from s1",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "project",
 						Dataset: "another",
@@ -185,17 +185,17 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:            "simple query that ignores from upstream",
 				InputQuery:      "select * from /* @ignoreupstream */ data-engineering.testing.table1",
-				ExpectedSources: []upstream.Resource{},
+				ExpectedSources: []*upstream.Resource{},
 			},
 			{
 				Name:            "simple query that ignores from upstream with quotes",
 				InputQuery:      "select * from /* @ignoreupstream */ `data-engineering.testing.table1`",
-				ExpectedSources: []upstream.Resource{},
+				ExpectedSources: []*upstream.Resource{},
 			},
 			{
 				Name:       "simple query with simple join that ignores from upstream",
 				InputQuery: "select * from /* @ignoreupstream */ data-engineering.testing.table1 join data-engineering.testing.table2 on some_field",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -206,7 +206,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "simple query with simple join that has comments but does not ignores upstream",
 				InputQuery: "select * from /*  */ data-engineering.testing.table1 join data-engineering.testing.table2 on some_field",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -222,7 +222,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:       "simple query with simple join that ignores upstream of join",
 				InputQuery: "select * from data-engineering.testing.table1 join /* @ignoreupstream */ data-engineering.testing.table2 on some_field",
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -238,7 +238,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					)
 					SELECT id FROM /* @ignoreupstream */ my_temp_table
 					`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -254,12 +254,12 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					)
 					SELECT id FROM my_temp_table
 					`,
-				ExpectedSources: []upstream.Resource{},
+				ExpectedSources: []*upstream.Resource{},
 			},
 			{
 				Name:            "simple query with simple join that ignores upstream of join",
 				InputQuery:      "WITH my_temp_table AS ( SELECT id, name FROM /* @ignoreupstream */ data-engineering.testing.an_upstream_table ) SELECT id FROM /* @ignoreupstream */ my_temp_table",
-				ExpectedSources: []upstream.Resource{},
+				ExpectedSources: []*upstream.Resource{},
 			},
 			{
 				Name: "simple query with another query inside comment",
@@ -267,7 +267,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					select * from data-engineering.testing.tableABC
 					-- select * from data-engineering.testing.table1 join data-engineering.testing.table2 on some_field
 					`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -282,7 +282,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					/* select * from data-engineering.testing.table1 join data-engineering.testing.table2 on some_field */
 					join /* @ignoreupstream */ data-engineering.testing.table2 on some_field
 					`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -298,7 +298,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					from
 						data-engineering.testing.tableDEF,
 					`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -317,7 +317,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 						` + "`data-engineering.testing.tableDEF`," + ` as backup_table,
 						/* @ignoreupstream */ data-engineering.testing.tableGHI as ignored_table,
 					`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -344,7 +344,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					from
 						/*@ignoreupstream*/ data-engineering.testing.tableC*
 					`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -371,7 +371,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				from data-engineering.testing.table_a
 				join /* @ignoreupstream */ data-engineering.testing.table_d
 				`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",
@@ -389,7 +389,6 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					from data-engineering.testing.tabel_c
 				*/
 
-
 				select *
 				from
 					data-engineering.testing.table_a
@@ -398,7 +397,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				join
 					/* @ignoreupstream */ data-engineering.testing.table_e
 				`,
-				ExpectedSources: []upstream.Resource{
+				ExpectedSources: []*upstream.Resource{
 					{
 						Project: "data-engineering",
 						Dataset: "testing",

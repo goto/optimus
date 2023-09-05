@@ -35,7 +35,7 @@ type operatorRun struct {
 	Status       string
 
 	StartTime time.Time
-	EndTime   time.Time
+	EndTime   *time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

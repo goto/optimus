@@ -61,7 +61,7 @@ type OperatorRun struct {
 	OperatorType OperatorType
 	Status       State
 	StartTime    time.Time
-	EndTime      time.Time
+	EndTime      *time.Time
 }
 
 type NotifyAttrs struct {

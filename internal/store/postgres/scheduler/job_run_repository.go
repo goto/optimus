@@ -18,7 +18,7 @@ import (
 const (
 	columnsToStore = `job_name, namespace_name, project_name, scheduled_at, start_time, end_time, status, sla_definition, sla_alert`
 	jobRunColumns  = `id, ` + columnsToStore + `, monitoring`
-	dbTimeFormat   = "2006-01-02 15:04:05"
+	dbTimeFormat   = "2006-01-02 15:04:05.000000"
 )
 
 type JobRunRepository struct {
@@ -181,6 +181,7 @@ func (j *JobRunRepository) UpdateMonitoring(ctx context.Context, jobRunID uuid.U
 }
 
 func (j *JobRunRepository) Create(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, slaDefinitionInSec int64) error {
+	// TODO: startTime should be event time
 	insertJobRun := `INSERT INTO job_run (` + columnsToStore + `, created_at, updated_at) values ($1, $2, $3, $4, NOW(), null, $5, $6, FALSE, NOW(), NOW()) ON CONFLICT DO NOTHING`
 	_, err := j.db.Exec(ctx, insertJobRun, jobName, t.NamespaceName(), t.ProjectName(), scheduledAt, scheduler.StateRunning, slaDefinitionInSec)
 	return errors.WrapIfErr(scheduler.EntityJobRun, "unable to create job run", err)

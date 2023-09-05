@@ -1324,8 +1324,13 @@ func (m *mockJobRunRepository) UpdateState(ctx context.Context, jobRunID uuid.UU
 	return args.Error(0)
 }
 
-func (m *mockJobRunRepository) UpdateSLA(ctx context.Context, slaObjects []*scheduler.SLAObject) error {
-	args := m.Called(ctx, slaObjects)
+func (m *mockJobRunRepository) GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error) {
+	args := m.Called(ctx, tenant, jobName, scheduledTimes)
+	return args.Get(0).([]*scheduler.JobRun), args.Error(1)
+}
+
+func (m *mockJobRunRepository) UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error {
+	args := m.Called(ctx, jobName, project, scheduledTimes)
 	return args.Error(0)
 }
 

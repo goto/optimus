@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/bigquery"
-	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	bq "github.com/goto/optimus/ext/store/bigquery"
 	"google.golang.org/api/iterator"
 )
 
@@ -31,7 +31,7 @@ type Schema struct {
 	DDL      string
 }
 
-func ReadSchemasUnderGroup(ctx context.Context, client bqiface.Client, group *ResourceGroup) ([]*Schema, error) {
+func ReadSchemasUnderGroup(ctx context.Context, client bq.Client, group *ResourceGroup) ([]*Schema, error) {
 	queryContent := buildQuery(group)
 
 	queryStatement := client.Query(queryContent)

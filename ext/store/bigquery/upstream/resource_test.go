@@ -3,7 +3,7 @@ package upstream_test
 import (
 	"testing"
 
-	"github.com/goto/optimus/core/job/resolver/upstream"
+	"github.com/goto/optimus/ext/store/bigquery/upstream"
 	"github.com/stretchr/testify/assert"
 )
 

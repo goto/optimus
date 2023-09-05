@@ -1,10 +1,35 @@
 package upstream
 
+import (
+	"fmt"
+	"strings"
+)
+
 type Resource struct {
 	Project   string
 	Dataset   string
 	Name      string
 	Upstreams []*Resource
+}
+
+func FromDestinationURN(destination string) (*Resource, error) {
+	splitDestination := strings.Split(destination, ":")
+	if len(splitDestination) != 2 {
+		return nil, fmt.Errorf("cannot get project from destination [%s]", destination)
+	}
+
+	project, datasetTable := splitDestination[0], splitDestination[1]
+
+	splitDataset := strings.Split(datasetTable, ".")
+	if len(splitDataset) != 2 {
+		return nil, fmt.Errorf("cannot get dataset and table from [%s]", datasetTable)
+	}
+
+	return &Resource{
+		Project: project,
+		Dataset: splitDataset[0],
+		Name:    splitDataset[1],
+	}, nil
 }
 
 func (r Resource) URN() string {

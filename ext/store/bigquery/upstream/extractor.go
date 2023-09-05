@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	"github.com/goto/optimus/ext/store/bigquery"
 )
 
 type Extractor struct {
-	client bqiface.Client
+	client bigquery.Client
 
 	resourceURNToUpstreams map[string][]*Resource
 	parserFunc             QueryParser
 }
 
-func NewExtractor(client bqiface.Client, parserFunc QueryParser) (*Extractor, error) {
+func NewExtractor(client bigquery.Client, parserFunc QueryParser) (*Extractor, error) {
 	if client == nil {
 		return nil, errors.New("client is nil")
 	}

@@ -6,53 +6,17 @@ import (
 	"fmt"
 	"strings"
 
-	"cloud.google.com/go/bigquery"
-	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
-	"github.com/goto/optimus/core/job/resolver/upstream"
+	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/ext/store/bigquery/upstream"
 	"github.com/goto/salt/log"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/drive/v2"
-	"google.golang.org/api/option"
-	storageV1 "google.golang.org/api/storage/v1"
 )
 
 var (
-	QueryFileName    = "query.sql"
-	BqServiceAccount = "BQ_SERVICE_ACCOUNT"
-	MaxBQApiRetries  = 3
+	MaxBQApiRetries = 3
 )
 
 type UpstreamExtractor interface {
 	ExtractUpstreams(ctx context.Context, query string, destinationResource *upstream.Resource) ([]*upstream.Resource, error)
-}
-
-type UpstreamExtractorFactory interface {
-	New(ctx context.Context, bqSvcAccount string) (UpstreamExtractor, error)
-}
-
-type DefaultUpstreamExtractorFactory struct{}
-
-func (d *DefaultUpstreamExtractorFactory) New(ctx context.Context, bqSvcAccount string) (UpstreamExtractor, error) {
-	client, err := newBQClient(ctx, bqSvcAccount)
-	if err != nil {
-		return nil, fmt.Errorf("error creating bigquery client: %w", err)
-	}
-	return upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
-}
-
-func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error) {
-	cred, err := google.CredentialsFromJSON(ctx, []byte(svcAccount),
-		bigquery.Scope, storageV1.CloudPlatformScope, drive.DriveScope)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read secret: %w", err)
-	}
-
-	client, err := bigquery.NewClient(ctx, cred.ProjectID, option.WithCredentials(cred))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create BQ client: %w", err)
-	}
-
-	return bqiface.AdaptClient(client), nil
 }
 
 // GenerateDependencies uses assets to find out the source tables of this
@@ -64,17 +28,21 @@ func newBQClient(ctx context.Context, svcAccount string) (bqiface.Client, error)
 // fn should generate the actual source as dependency
 // BQ2BQ dependencies are BQ tables in format "project:dataset.table"
 // Note: only for bq2bq job, previously named as GenerateDependencies
-func GenerateDependencies(ctx context.Context, l log.Logger, extractorFactory UpstreamExtractorFactory, svcAcc, query, destinationURN string) ([]string, error) {
-	destinationResource, err := destinationToResource(destinationURN)
+func GenerateDependencies(ctx context.Context, l log.Logger, queryParserFunc upstream.QueryParser, svcAcc, query, destinationURN string) ([]string, error) {
+	destinationResource, err := upstream.FromDestinationURN(destinationURN)
 	if err != nil {
 		return nil, fmt.Errorf("error getting destination resource: %w", err)
 	}
 
-	upstreamExtractor, err := extractorFactory.New(ctx, svcAcc)
+	bqClient, err := bigquery.NewClient(ctx, svcAcc)
+	if err != nil {
+		return nil, fmt.Errorf("error creating bigquery client: %w", err)
+	}
+	upstreamExtractor, err := upstream.NewExtractor(bqClient, queryParserFunc)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
 	}
-	upstreams, err := extractUpstreams(ctx, l, upstreamExtractor, query, svcAcc, &destinationResource)
+	upstreams, err := extractUpstreams(ctx, l, upstreamExtractor, query, destinationResource)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting upstreams: %w", err)
 	}
@@ -90,7 +58,7 @@ func GenerateDependencies(ctx context.Context, l log.Logger, extractorFactory Up
 	return upstreamResources, nil
 }
 
-func extractUpstreams(ctx context.Context, l log.Logger, extractor UpstreamExtractor, query, svcAccSecret string, destinationResource *upstream.Resource) ([]*upstream.Resource, error) {
+func extractUpstreams(ctx context.Context, l log.Logger, extractor UpstreamExtractor, query string, destinationResource *upstream.Resource) ([]*upstream.Resource, error) {
 	for try := 1; try <= MaxBQApiRetries; try++ {
 		upstreams, err := extractor.ExtractUpstreams(ctx, query, destinationResource)
 		if err != nil {
@@ -108,24 +76,4 @@ func extractUpstreams(ctx context.Context, l log.Logger, extractor UpstreamExtra
 		return upstreams, nil
 	}
 	return nil, errors.New("bigquery api retries exhausted")
-}
-
-func destinationToResource(destination string) (upstream.Resource, error) {
-	splitDestination := strings.Split(destination, ":")
-	if len(splitDestination) != 2 {
-		return upstream.Resource{}, fmt.Errorf("cannot get project from destination [%s]", destination)
-	}
-
-	project, datasetTable := splitDestination[0], splitDestination[1]
-
-	splitDataset := strings.Split(datasetTable, ".")
-	if len(splitDataset) != 2 {
-		return upstream.Resource{}, fmt.Errorf("cannot get dataset and table from [%s]", datasetTable)
-	}
-
-	return upstream.Resource{
-		Project: project,
-		Dataset: splitDataset[0],
-		Name:    splitDataset[1],
-	}, nil
 }

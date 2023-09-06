@@ -43,8 +43,6 @@ type JobService struct {
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
-	upstreamExtractorFactory resolver.UpstreamExtractorFactory
-
 	logger log.Logger
 }
 
@@ -52,20 +50,19 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService, engine Engine, upstreamExtractorFactory resolver.UpstreamExtractorFactory,
+	jobDeploymentService JobDeploymentService, engine Engine,
 ) *JobService {
 	return &JobService{
-		jobRepo:                  jobRepo,
-		upstreamRepo:             upstreamRepo,
-		downstreamRepo:           downstreamRepo,
-		pluginService:            pluginService,
-		upstreamResolver:         upstreamResolver,
-		eventHandler:             eventHandler,
-		tenantDetailsGetter:      tenantDetailsGetter,
-		logger:                   logger,
-		jobDeploymentService:     jobDeploymentService,
-		engine:                   engine,
-		upstreamExtractorFactory: upstreamExtractorFactory,
+		jobRepo:              jobRepo,
+		upstreamRepo:         upstreamRepo,
+		downstreamRepo:       downstreamRepo,
+		pluginService:        pluginService,
+		upstreamResolver:     upstreamResolver,
+		eventHandler:         eventHandler,
+		tenantDetailsGetter:  tenantDetailsGetter,
+		logger:               logger,
+		jobDeploymentService: jobDeploymentService,
+		engine:               engine,
 	}
 }
 

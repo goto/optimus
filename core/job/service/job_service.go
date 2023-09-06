@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
@@ -956,29 +955,17 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 
 		// generate upstream dependencies
-		scheduledAt := time.Now()
-		startTime, err := spec.Window().GetStartTime(scheduledAt)
-		if err != nil {
-			j.logger.Error("error getting start time: %s", err)
-			return nil, fmt.Errorf("error getting start time: %w", err)
-		}
-		endTime, err := spec.Window().GetEndTime(scheduledAt)
-		if err != nil {
-			j.logger.Error("error getting end time: %s", err)
-			return nil, fmt.Errorf("error getting end time: %w", err)
-		}
-		compiledAssets, err := bq2bq.CompileAssets(ctx, j.engine, startTime, endTime, spec.Task().Config(), spec.Asset(), map[string]string{
-			configKeyDstart:        startTime.Format(TimeISOFormat),
-			configKeyDend:          endTime.Format(TimeISOFormat),
-			configKeyExecutionTime: scheduledAt.Format(TimeISOFormat),
-			configKeyDestination:   destination.String(),
-		})
-		if err != nil {
-			j.logger.Error("error compiling asset: %s", err)
-			return nil, fmt.Errorf("failed to compile templates: %w", err)
+		svcAcc, ok := compileConfigs["BQ_SERVICE_ACCOUNT"]
+		if !ok || len(svcAcc) == 0 {
+			j.logger.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
+			return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found")
 		}
 
-		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, compileConfigs, compiledAssets, destination)
+		query, ok := spec.Asset()["query.sql"]
+		if !ok {
+			return nil, fmt.Errorf("empty sql file")
+		}
+		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, svcAcc, query, destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())

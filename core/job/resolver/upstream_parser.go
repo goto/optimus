@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/goto/optimus/ext/extractor/upstream"
 	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/optimus/ext/store/bigquery/upstream"
 	"github.com/goto/salt/log"
 )
 

@@ -15,7 +15,7 @@ import (
 	"github.com/goto/optimus/core/job/resolver"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/store/bigquery/upstream"
+	"github.com/goto/optimus/ext/extractor/upstream"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"

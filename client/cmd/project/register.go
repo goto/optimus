@@ -6,13 +6,12 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v3"
 
+	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/namespace"
@@ -85,7 +84,7 @@ func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
 
 // RegisterProject registers a project to the targeted server host
 func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Project) error {
-	presets, err := getProjectPresets(project.PresetsPath)
+	presets, err := internal.GetProjectPresets(project.PresetsPath)
 	if err != nil {
 		return err
 	}
@@ -112,25 +111,6 @@ func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Pr
 	}
 	logger.Info("Project registration finished successfully")
 	return nil
-}
-
-func getProjectPresets(presetsPath string) (model.PresetsMap, error) {
-	if presetsPath == "" {
-		return model.PresetsMap{}, nil
-	}
-
-	specFS := afero.NewOsFs()
-	fileSpec, err := specFS.Open(presetsPath)
-	if err != nil {
-		return model.PresetsMap{}, fmt.Errorf("error opening presets file[%s]: %w", presetsPath, err)
-	}
-	defer fileSpec.Close()
-
-	var spec model.PresetsMap
-	if err := yaml.NewDecoder(fileSpec).Decode(&spec); err != nil {
-		return model.PresetsMap{}, fmt.Errorf("error decoding spec under [%s]: %w", presetsPath, err)
-	}
-	return spec, nil
 }
 
 func toPresetProto(presetMap model.PresetsMap) map[string]*pb.ProjectSpecification_ProjectPreset {

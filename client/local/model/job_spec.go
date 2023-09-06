@@ -52,13 +52,13 @@ type JobSpecBehaviorNotifier struct {
 type JobSpecTask struct {
 	Name   string            `yaml:"name"`
 	Config map[string]string `yaml:"config,omitempty"`
-	Window JobSpecTaskWindow `yaml:"window"`
+	Window JobSpecTaskWindow `yaml:"window,omitempty"`
 }
 
 type JobSpecTaskWindow struct {
-	Size       string `yaml:"size"`
-	Offset     string `yaml:"offset"`
-	TruncateTo string `yaml:"truncate_to"`
+	Size       string `yaml:"size,omitempty"`
+	Offset     string `yaml:"offset,omitempty"`
+	TruncateTo string `yaml:"truncate_to,omitempty"`
 	Preset     string `yaml:"preset,omitempty"`
 }
 

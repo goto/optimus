@@ -283,10 +283,6 @@ behavior:
   depends_on_past: false
 task:
   name: ""
-  window:
-    size: ""
-    offset: ""
-    truncate_to: ""
 hooks: []
 dependencies: []
 `

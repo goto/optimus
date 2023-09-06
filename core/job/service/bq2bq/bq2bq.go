@@ -42,18 +42,6 @@ type UpstreamExtractorFactory interface {
 	New(ctx context.Context, bqSvcAccount string) (UpstreamExtractor, error)
 }
 
-// GenerateDestination uses config details to build target table
-// this format should match with GenerateDependencies output
-func GenerateDestination(ctx context.Context, configs map[string]string) (job.ResourceURN, error) {
-	proj, ok1 := configs["PROJECT"]
-	dataset, ok2 := configs["DATASET"]
-	tab, ok3 := configs["TABLE"]
-	if ok1 && ok2 && ok3 {
-		return job.ResourceURN(fmt.Sprintf("%s:%s.%s", proj, dataset, tab)), nil
-	}
-	return "", errors.New("missing config key required to generate destination")
-}
-
 // GenerateDependencies uses assets to find out the source tables of this
 // transformation.
 // Try using BQ APIs to search for referenced tables. This work for Select stmts

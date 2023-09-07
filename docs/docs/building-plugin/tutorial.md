@@ -224,7 +224,7 @@ _Note: Take a look at installing plugins in server [guide](../server-guide/insta
 Install the plugin in client side by syncing it from server using below command.
 ```shell
 $ optimus plugin sync
-````
+```
 
 Once finished, the `Neo` plugin will be available in the `.plugins` directory.
 
@@ -239,9 +239,10 @@ optimus create job
 ? Which task to run? neo
 ? Specify the start date 2022-01-25
 ? Specify the interval (in crontab notation) 0 2 * * *
-? Transformation window daily
-? Date range start {{.DSTART}}
-? Date range end {{.DEND}}
+? Window truncate to:  d
+? Window offset:  0
+? Window size:  24h
+...
 job created successfully is_last_day_on_earth
 ```
 

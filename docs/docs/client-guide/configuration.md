@@ -66,6 +66,10 @@ namespaces:
   - **scheduler_version** to define the scheduler version. More detail is explained [here](defining-scheduler-version.md).
 - You can put any other project configurations which can be used in job specifications.
 
+### Preset (since v0.10.0)
+
+Window preset can be configured within the specified project. Preset allows for easier usage of window configuration. For more information, please refer to [this page](../concepts/intervals-and-windows.md).
+
 ## Namespaces
 - Name should be unique in the project.
 - You can put any namespace configurations which can be used in specifications.

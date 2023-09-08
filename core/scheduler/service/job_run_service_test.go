@@ -696,7 +696,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.Nil(t, err)

@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	getter "github.com/hashicorp/go-getter"
-	"github.com/hashicorp/go-hclog"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/plugin/yaml"
+	"github.com/goto/salt/log"
 )
 
 var (
@@ -29,12 +29,10 @@ type IPluginManager interface {
 }
 
 func NewPluginManager() *PluginManager {
-	pluginLoggerOpt := &hclog.LoggerOptions{
-		Name:   "plugin-manager",
-		Output: os.Stdout,
-		Level:  hclog.Info,
-	}
-	logger := hclog.New(pluginLoggerOpt)
+	logger := log.NewLogrus(
+		log.LogrusWithLevel(config.LogLevelInfo.String()),
+		log.LogrusWithWriter(os.Stdout),
+	)
 
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -53,7 +51,7 @@ func NewPluginManager() *PluginManager {
 }
 
 type PluginManager struct {
-	logger hclog.Logger
+	logger log.Logger
 	client *getter.Client
 }
 

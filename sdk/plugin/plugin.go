@@ -13,8 +13,7 @@ const (
 	HookTypePost HookType = "post"
 	HookTypeFail HookType = "fail"
 
-	ModTypeCLI                Mod = "cli"
-	ModTypeDependencyResolver Mod = "dependencyresolver"
+	ModTypeCLI Mod = "cli"
 
 	DestinationURNFormat = "%s://%s"
 )
@@ -168,8 +167,7 @@ func (a Assets) ToMap() map[string]string {
 type Plugin struct {
 	// Mods apply multiple modifications to existing registered plugins which
 	// can be used in different circumstances
-	DependencyMod DependencyResolverMod
-	YamlMod       YamlMod
+	YamlMod YamlMod
 }
 
 func (p *Plugin) IsYamlPlugin() bool {

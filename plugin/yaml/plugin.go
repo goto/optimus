@@ -7,12 +7,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v2"
 
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/sdk/plugin"
+	"github.com/goto/salt/log"
 )
 
 const (
@@ -118,19 +118,19 @@ func NewPluginSpec(pluginPath string) (*PluginSpec, error) {
 
 // if error in loading, initializing or adding to pluginsrepo , skipping that particular plugin
 // NOTE: binary plugins are loaded after yaml plugins loaded
-func Init(pluginsRepo *models.PluginRepository, discoveredYamlPlugins []string, pluginLogger hclog.Logger) error {
+func Init(pluginsRepo *models.PluginRepository, discoveredYamlPlugins []string, l log.Logger) error {
 	for _, yamlPluginPath := range discoveredYamlPlugins {
 		yamlPluginSpec, err := NewPluginSpec(yamlPluginPath)
 		if err != nil {
-			pluginLogger.Error(fmt.Sprintf("plugin Init: %s", yamlPluginPath), err)
+			l.Error(fmt.Sprintf("plugin Init: %s", yamlPluginPath), err)
 			return err
 		}
 		pluginInfo := yamlPluginSpec.PluginInfo()
 		if err := pluginsRepo.AddYaml(yamlPluginSpec); err != nil {
-			pluginLogger.Error(fmt.Sprintf("PluginRegistry.Add: %s", yamlPluginPath), err)
+			l.Error(fmt.Sprintf("PluginRegistry.Add: %s", yamlPluginPath), err)
 			return err
 		}
-		pluginLogger.Debug("plugin ready: ", pluginInfo.Name)
+		l.Debug("plugin ready: ", pluginInfo.Name)
 	}
 
 	return nil

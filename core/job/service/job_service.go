@@ -917,7 +917,7 @@ func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails
 		compiler.From(tnnt.SecretsMap()).WithName("secret"),
 	)
 
-	var compiledConfigs map[string]string
+	compiledConfigs := map[string]string{}
 	for key, val := range configs {
 		compiledConf, err := j.engine.CompileString(val, tmplCtx)
 		if err != nil {
@@ -942,7 +942,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	}
 
 	if spec.Task().Name() == "bq2bq" { // for now, only work for bq2bq plugin
-		compileConfigs := j.compileConfigs(spec.Task().Config().Map(), tenantWithDetails)
+		compileConfigs := j.compileConfigs(spec.Task().Config(), tenantWithDetails)
 
 		// generate destination
 		destination, err = resolver.GenerateDestination(ctx, compileConfigs)

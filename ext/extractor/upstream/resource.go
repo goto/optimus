@@ -36,16 +36,6 @@ func (r Resource) URN() string {
 	return r.Project + "." + r.Dataset + "." + r.Name
 }
 
-type ResourceGroup struct {
-	Project string
-	Dataset string
-	Names   []string
-}
-
-func (r ResourceGroup) URN() string {
-	return r.Project + "." + r.Dataset
-}
-
 type Resources []*Resource
 
 func (r Resources) GetWithoutResource(resourceToIgnore *Resource) []*Resource {
@@ -72,26 +62,15 @@ func (r Resources) GetUnique() []*Resource {
 	return output
 }
 
-func (r Resources) GroupResources() []*ResourceGroup {
-	ref := make(map[string]*ResourceGroup)
+func (r Resources) GroupResources() map[string][]string {
+	output := make(map[string][]string)
 
-	for _, info := range r {
-		key := info.Project + "." + info.Dataset
-
-		if _, ok := ref[key]; ok {
-			ref[key].Names = append(ref[key].Names, info.Name)
-		} else {
-			ref[key] = &ResourceGroup{
-				Project: info.Project,
-				Dataset: info.Dataset,
-				Names:   []string{info.Name},
-			}
+	for _, resource := range r {
+		key := resource.Project + "." + resource.Dataset
+		if _, ok := output[key]; !ok {
+			output[key] = []string{}
 		}
-	}
-
-	var output []*ResourceGroup
-	for _, r := range ref {
-		output = append(output, r)
+		output[key] = append(output[key], resource.Name)
 	}
 
 	return output

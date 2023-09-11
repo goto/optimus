@@ -45,8 +45,9 @@ func (e *Extractor) extractResourcesFromQuery(ctx context.Context, query string,
 	var output []*Resource
 	var errorMessages []string
 
-	for _, group := range resourceGroups {
-		schemas, err := ReadSchemasUnderGroup(ctx, e.client, group)
+	for group, names := range resourceGroups {
+		project, dataset := strings.Split(group, ".")[0], strings.Split(group, ".")[1]
+		schemas, err := ReadInformationSchemasUnderGroup(ctx, e.client, project, dataset, names...)
 		if err != nil {
 			errorMessages = append(errorMessages, err.Error())
 		}
@@ -68,7 +69,7 @@ func (e *Extractor) extractResourcesFromQuery(ctx context.Context, query string,
 	return output, nil
 }
 
-func (e *Extractor) extractNestedSchemas(ctx context.Context, schemas []*Schema, resourceDestination *Resource, metResource map[string]bool) ([]*Resource, error) {
+func (e *Extractor) extractNestedSchemas(ctx context.Context, schemas []*InformationSchema, resourceDestination *Resource, metResource map[string]bool) ([]*Resource, error) {
 	var output []*Resource
 	var errorMessages []string
 
@@ -96,7 +97,7 @@ func (e *Extractor) extractNestedSchemas(ctx context.Context, schemas []*Schema,
 	return output, nil
 }
 
-func (e *Extractor) getResourcesFromSchema(ctx context.Context, schema *Schema, destinationResource *Resource, metResource map[string]bool) ([]*Resource, error) {
+func (e *Extractor) getResourcesFromSchema(ctx context.Context, schema *InformationSchema, destinationResource *Resource, metResource map[string]bool) ([]*Resource, error) {
 	resourceURN := schema.Resource.URN()
 
 	if _, ok := e.resourceURNToUpstreams[resourceURN]; !ok {

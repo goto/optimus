@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/bigquery"
-	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	bq "github.com/goto/optimus/ext/store/bigquery"
 	"google.golang.org/api/iterator"
 )
 
@@ -25,14 +25,14 @@ const (
 	View             SchemaType = "VIEW"
 )
 
-type Schema struct {
+type InformationSchema struct {
 	Resource Resource
 	Type     SchemaType
 	DDL      string
 }
 
-func ReadSchemasUnderGroup(ctx context.Context, client bqiface.Client, group *ResourceGroup) ([]*Schema, error) {
-	queryContent := buildQuery(group)
+func ReadInformationSchemasUnderGroup(ctx context.Context, client bq.Client, project, dataset string, names ...string) ([]*InformationSchema, error) {
+	queryContent := buildQuery(project, dataset, names...)
 
 	queryStatement := client.Query(queryContent)
 
@@ -41,7 +41,7 @@ func ReadSchemasUnderGroup(ctx context.Context, client bqiface.Client, group *Re
 		return nil, err
 	}
 
-	var schemas []*Schema
+	var schemas []*InformationSchema
 	var errorMessages []string
 
 	for {
@@ -69,15 +69,15 @@ func ReadSchemasUnderGroup(ctx context.Context, client bqiface.Client, group *Re
 	}
 
 	if len(errorMessages) > 0 {
-		err = fmt.Errorf("error encountered when reading reading schema: [%s]", strings.Join(errorMessages, ", "))
+		err = fmt.Errorf("error encountered when reading schema: [%s]", strings.Join(errorMessages, ", "))
 	}
 
 	return schemas, err
 }
 
-func buildQuery(group *ResourceGroup) string {
+func buildQuery(project, dataset string, tables ...string) string {
 	var nameQueries, prefixQueries []string
-	for _, n := range group.Names {
+	for _, n := range tables {
 		if strings.HasSuffix(n, wildCardSuffix) {
 			prefix, _ := strings.CutSuffix(n, wildCardSuffix)
 			prefixQuery := fmt.Sprintf("STARTS_WITH(table_name, '%s')", prefix)
@@ -101,11 +101,11 @@ func buildQuery(group *ResourceGroup) string {
 	}
 
 	return "SELECT table_catalog, table_schema, table_name, table_type, ddl\n" +
-		fmt.Sprintf("FROM `%s.%s.INFORMATION_SCHEMA.TABLES`\n", group.Project, group.Dataset) +
+		fmt.Sprintf("FROM `%s.%s.INFORMATION_SCHEMA.TABLES`\n", project, dataset) +
 		whereClause
 }
 
-func convertToSchema(values []bigquery.Value) (*Schema, error) {
+func convertToSchema(values []bigquery.Value) (*InformationSchema, error) {
 	const expectedSchemaRowLen = 5
 
 	if l := len(values); l != expectedSchemaRowLen {
@@ -159,33 +159,32 @@ func convertToSchema(values []bigquery.Value) (*Schema, error) {
 		schemaType = Unknown
 	}
 
-	return &Schema{
+	return &InformationSchema{
 		Resource: resource,
 		Type:     schemaType,
 		DDL:      ddl,
 	}, nil
 }
 
-func splitNestedableFromRest(schemas []*Schema) (nestedable, rests []*Schema) {
-	for _, sch := range schemas {
-		switch sch.Type {
-		case View:
-			nestedable = append(nestedable, sch)
-		default:
-			rests = append(rests, sch)
+type InformationSchemas []*InformationSchema
+
+func (s InformationSchemas) SplitSchemasByType(target SchemaType) (InformationSchemas, InformationSchemas) {
+	result := []*InformationSchema{}
+	rest := []*InformationSchema{}
+	for _, sch := range s {
+		if sch.Type == target {
+			result = append(result, sch)
+		} else {
+			rest = append(rest, sch)
 		}
 	}
-
-	return nestedable, rests
+	return result, rest
 }
 
-func convertSchemasToNodes(schemas []*Schema) []*Upstream {
-	output := make([]*Upstream, len(schemas))
-	for i, sch := range schemas {
-		output[i] = &Upstream{
-			Resource: sch.Resource,
-		}
+func (s InformationSchemas) ToResources() []*Resource {
+	output := make([]*Resource, len(s))
+	for i, sch := range s {
+		output[i] = &sch.Resource
 	}
-
 	return output
 }

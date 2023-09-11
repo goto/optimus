@@ -40,6 +40,7 @@ type Client interface {
 	TableHandleFrom(dataset Dataset, name string) TableResourceHandle
 	ExternalTableHandleFrom(dataset Dataset, name string) ResourceHandle
 	ViewHandleFrom(dataset Dataset, name string) ResourceHandle
+	Query(query string) *bq.Query
 	Close()
 }
 

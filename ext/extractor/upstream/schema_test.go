@@ -9,11 +9,10 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	"github.com/goto/optimus/ext/extractor/upstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/iterator"
-
-	"github.com/goto/optimus/core/job/service/bq2bq/upstream"
 )
 
 func TestReadSchemasUnderGroup(t *testing.T) {
@@ -34,7 +33,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 		unexpectedError := errors.New("unexpected error")
 		queryStatement.On("Read", ctx).Return(nil, unexpectedError)
 
-		actualSchemas, actualError := upstream.ReadSchemasUnderGroup(ctx, client, group)
+		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
 
 		assert.Nil(t, actualSchemas)
 		assert.ErrorContains(t, actualError, unexpectedError.Error())
@@ -62,7 +61,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 			rowIterator.On("Next", mock.Anything).Return(unexpectedError).Once()
 			rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-			actualSchemas, actualError := upstream.ReadSchemasUnderGroup(ctx, client, group)
+			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
 
 			assert.Nil(t, actualSchemas)
 			assert.ErrorContains(t, actualError, unexpectedError.Error())
@@ -93,7 +92,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 			}).Return(nil).Once()
 			rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-			expectedSchemas := []*upstream.Schema{
+			expectedSchemas := []*upstream.InformationSchema{
 				{
 					Resource: upstream.Resource{
 						Project: "project_test",
@@ -104,7 +103,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 				},
 			}
 
-			actualSchemas, actualError := upstream.ReadSchemasUnderGroup(ctx, client, group)
+			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
 
 			assert.EqualValues(t, expectedSchemas, actualSchemas)
 			assert.ErrorContains(t, actualError, unexpectedError.Error())
@@ -134,7 +133,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 		}).Return(nil).Once()
 		rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-		actualSchemas, actualError := upstream.ReadSchemasUnderGroup(ctx, client, group)
+		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
 
 		assert.Nil(t, actualSchemas)
 		assert.NoError(t, actualError)
@@ -199,7 +198,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 			}).Return(nil).Once()
 			rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-			expectedSchemas := []*upstream.Schema{
+			expectedSchemas := []*upstream.InformationSchema{
 				{
 					Resource: upstream.Resource{
 						Project: "project_test",
@@ -210,7 +209,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 				},
 			}
 
-			actualSchemas, actualError := upstream.ReadSchemasUnderGroup(ctx, client, group)
+			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
 
 			assert.EqualValues(t, expectedSchemas, actualSchemas)
 			assert.ErrorContains(t, actualError, test.ErrorMessage)
@@ -248,7 +247,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 		}).Return(nil).Once()
 		rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-		expectedSchemas := []*upstream.Schema{
+		expectedSchemas := []*upstream.InformationSchema{
 			{
 				Resource: upstream.Resource{
 					Project: "project_test",
@@ -276,7 +275,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 			},
 		}
 
-		actualSchemas, actualError := upstream.ReadSchemasUnderGroup(ctx, client, group)
+		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
 
 		assert.Equal(t, expectedSchemas, actualSchemas)
 		assert.NoError(t, actualError)

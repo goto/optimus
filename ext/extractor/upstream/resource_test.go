@@ -1,16 +1,14 @@
 package upstream_test
 
 import (
-	"strings"
 	"testing"
 
+	"github.com/goto/optimus/ext/extractor/upstream"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/goto/optimus/core/job/service/bq2bq/upstream"
 )
 
 func TestFilterResources(t *testing.T) {
-	input := []upstream.Resource{
+	input := []*upstream.Resource{
 		{
 			Project: "project_test",
 			Dataset: "dataset_test",
@@ -27,19 +25,17 @@ func TestFilterResources(t *testing.T) {
 			Name:    "name_3_test",
 		},
 	}
-	excludeIfContains3 := func(r upstream.Resource) bool {
-		return strings.Contains(r.Name, "3")
-	}
+	exclude3 := input[2]
 
 	expectedResult := input[:2]
 
-	actualResult := upstream.FilterResources(input, excludeIfContains3)
+	actualResult := upstream.Resources(input).GetWithoutResource(exclude3)
 
 	assert.ElementsMatch(t, expectedResult, actualResult)
 }
 
 func TestUniqueFilterResources(t *testing.T) {
-	input := []upstream.Resource{
+	input := []*upstream.Resource{
 		{
 			Project: "project_test",
 			Dataset: "dataset_1_test",
@@ -64,13 +60,13 @@ func TestUniqueFilterResources(t *testing.T) {
 
 	expectedResult := input[:2]
 
-	actualResult := upstream.UniqueFilterResources(input)
+	actualResult := upstream.Resources(input).GetUnique()
 
 	assert.ElementsMatch(t, expectedResult, actualResult)
 }
 
 func TestGroupResources(t *testing.T) {
-	input := []upstream.Resource{
+	input := []*upstream.Resource{
 		{
 			Project: "project_test",
 			Dataset: "dataset_1_test",
@@ -106,7 +102,64 @@ func TestGroupResources(t *testing.T) {
 		},
 	}
 
-	actualResult := upstream.GroupResources(input)
+	actualResult := upstream.Resources(input).GroupResources()
 
 	assert.ElementsMatch(t, expectedResult, actualResult)
+}
+
+func TestFlattenUpstreams(t *testing.T) {
+	t.Run("should return flattened upstream in the form of resource", func(t *testing.T) {
+		upstreams := []*upstream.Resource{
+			{
+				Project: "project_test_1",
+				Dataset: "dataset_test_1",
+				Name:    "name_test_1",
+			},
+			{
+				Project: "project_test_2",
+				Dataset: "dataset_test_2",
+				Name:    "name_test_2",
+				Upstreams: []*upstream.Resource{
+					{
+						Project: "project_test_3",
+						Dataset: "dataset_test_3",
+						Name:    "name_test_3",
+					},
+					{
+						Project: "project_test_4",
+						Dataset: "dataset_test_4",
+						Name:    "name_test_4",
+					},
+					nil,
+				},
+			},
+		}
+
+		expectedResources := []*upstream.Resource{
+			{
+				Project: "project_test_1",
+				Dataset: "dataset_test_1",
+				Name:    "name_test_1",
+			},
+			{
+				Project: "project_test_2",
+				Dataset: "dataset_test_2",
+				Name:    "name_test_2",
+			},
+			{
+				Project: "project_test_3",
+				Dataset: "dataset_test_3",
+				Name:    "name_test_3",
+			},
+			{
+				Project: "project_test_4",
+				Dataset: "dataset_test_4",
+				Name:    "name_test_4",
+			},
+		}
+
+		actualResources := upstream.Resources(upstreams).GetFlattened()
+
+		assert.Equal(t, expectedResources, actualResources)
+	})
 }

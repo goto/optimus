@@ -13,9 +13,9 @@ import (
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/resolver"
-	"github.com/goto/optimus/core/job/service/bq2bq"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/extractor/upstream"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
@@ -44,8 +44,6 @@ type JobService struct {
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
-	upstreamExtractorFactory bq2bq.UpstreamExtractorFactory
-
 	logger log.Logger
 }
 
@@ -53,20 +51,19 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService, engine Engine, upstreamExtractorFactory bq2bq.UpstreamExtractorFactory,
+	jobDeploymentService JobDeploymentService, engine Engine,
 ) *JobService {
 	return &JobService{
-		jobRepo:                  jobRepo,
-		upstreamRepo:             upstreamRepo,
-		downstreamRepo:           downstreamRepo,
-		pluginService:            pluginService,
-		upstreamResolver:         upstreamResolver,
-		eventHandler:             eventHandler,
-		tenantDetailsGetter:      tenantDetailsGetter,
-		logger:                   logger,
-		jobDeploymentService:     jobDeploymentService,
-		engine:                   engine,
-		upstreamExtractorFactory: upstreamExtractorFactory,
+		jobRepo:              jobRepo,
+		upstreamRepo:         upstreamRepo,
+		downstreamRepo:       downstreamRepo,
+		pluginService:        pluginService,
+		upstreamResolver:     upstreamResolver,
+		eventHandler:         eventHandler,
+		tenantDetailsGetter:  tenantDetailsGetter,
+		logger:               logger,
+		jobDeploymentService: jobDeploymentService,
+		engine:               engine,
 	}
 }
 
@@ -966,11 +963,15 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		if !ok {
 			return nil, fmt.Errorf("empty sql file")
 		}
-		sources, err = bq2bq.GenerateDependencies(ctx, j.logger, j.upstreamExtractorFactory, svcAcc, query, job.ResourceURN(destination))
+		queryParserFunc := upstream.ParseTopLevelUpstreamsFromQuery
+		upstreamResources, err := resolver.GenerateDependencies(ctx, j.logger, queryParserFunc, svcAcc, query, destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
 			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
+		for _, upstreamResource := range upstreamResources {
+			sources = append(sources, job.ResourceURN(upstreamResource))
 		}
 	}
 

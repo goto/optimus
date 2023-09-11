@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type QueryParser func(query string) []Resource
+type QueryParser func(query string) []*Resource
 
 var (
 	topLevelUpstreamsPattern = regexp.MustCompile("" +
@@ -24,11 +24,11 @@ var (
 	specialCommentPattern     = regexp.MustCompile(`(\/\*\s*(@[a-zA-Z0-9_-]+)\s*\*\/)`)
 )
 
-func ParseTopLevelUpstreamsFromQuery(query string) []Resource {
+func ParseTopLevelUpstreamsFromQuery(query string) []*Resource {
 	cleanedQuery := cleanQueryFromComment(query)
 
-	resourcesFound := make(map[Resource]bool)
-	pseudoResources := make(map[Resource]bool)
+	resourcesFound := make(map[string]bool)
+	pseudoResources := make(map[string]bool)
 
 	matches := topLevelUpstreamsPattern.FindAllStringSubmatch(cleanedQuery, -1)
 
@@ -73,19 +73,24 @@ func ParseTopLevelUpstreamsFromQuery(query string) []Resource {
 		}
 
 		if clause == "with" {
-			pseudoResources[resource] = true
+			pseudoResources[resource.URN()] = true
 		} else {
-			resourcesFound[resource] = true
+			resourcesFound[resource.URN()] = true
 		}
 	}
 
-	var output []Resource
+	var output []*Resource
 
-	for resource := range resourcesFound {
-		if pseudoResources[resource] {
+	for resourceURN := range resourcesFound {
+		if pseudoResources[resourceURN] {
 			continue
 		}
-		output = append(output, resource)
+		splittedURN := strings.Split(resourceURN, ".")
+		output = append(output, &Resource{
+			Project: splittedURN[0],
+			Dataset: splittedURN[1],
+			Name:    splittedURN[2],
+		})
 	}
 
 	return output
@@ -106,6 +111,6 @@ func cleanQueryFromComment(query string) string {
 }
 
 // TODO: check if ddl requires custom query, if not then we can remove this function
-func ParseNestedUpsreamsFromDDL(ddl string) []Resource {
+func ParseNestedUpsreamsFromDDL(ddl string) []*Resource {
 	return ParseTopLevelUpstreamsFromQuery(ddl)
 }

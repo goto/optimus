@@ -24,7 +24,6 @@ import (
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
 	jResolver "github.com/goto/optimus/core/job/resolver"
 	jService "github.com/goto/optimus/core/job/service"
-	"github.com/goto/optimus/core/job/service/bq2bq"
 	rModel "github.com/goto/optimus/core/resource"
 	rHandler "github.com/goto/optimus/core/resource/handler/v1beta1"
 	rService "github.com/goto/optimus/core/resource/service"
@@ -341,7 +340,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
-	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, jPluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine, &bq2bq.DefaultUpstreamExtractorFactory{})
+	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, jPluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
 
 	// Resource Bounded Context
 	resourceRepository := resource.NewRepository(s.dbPool)

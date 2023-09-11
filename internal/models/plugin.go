@@ -1,7 +1,6 @@
 package models
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -80,24 +79,6 @@ func (s *PluginRepository) AddYaml(yamlMod plugin.YamlMod) error {
 	}
 
 	s.data[info.Name] = &plugin.Plugin{YamlMod: yamlMod}
-	return nil
-}
-
-func (s *PluginRepository) AddBinary(drMod plugin.DependencyResolverMod) error {
-	name, err := drMod.GetName(context.Background())
-	if err != nil {
-		return err
-	}
-
-	if plugin, ok := s.data[name]; !ok || plugin.YamlMod == nil {
-		// any binary plugin should have its yaml version (for the plugin information)
-		return fmt.Errorf("please provide yaml version of the plugin %s", name)
-	} else if s.data[name].DependencyMod != nil {
-		// duplicated binary plugin
-		return fmt.Errorf("plugin name already in use %s", name)
-	}
-
-	s.data[name].DependencyMod = drMod
 	return nil
 }
 

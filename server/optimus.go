@@ -6,13 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/goto/salt/log"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/hashicorp/go-hclog"
-	hPlugin "github.com/hashicorp/go-plugin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
@@ -147,26 +144,9 @@ func (s *OptimusServer) setupPublisher() error {
 }
 
 func (s *OptimusServer) setupPlugins() error {
-	pluginLogLevel := hclog.Info
-	if s.conf.Log.Level == config.LogLevelDebug {
-		pluginLogLevel = hclog.Debug
-	}
-
-	pluginLoggerOpt := &hclog.LoggerOptions{
-		Name:   "optimus",
-		Output: os.Stdout,
-		Level:  pluginLogLevel,
-	}
-	pluginLogger := hclog.New(pluginLoggerOpt)
-	s.cleanupFn = append(s.cleanupFn, hPlugin.CleanupClients)
-
-	var pluginArgs []string
-	if s.conf.Telemetry.JaegerAddr != "" {
-		pluginArgs = append(pluginArgs, "-t", s.conf.Telemetry.JaegerAddr)
-	}
 	// discover and load plugins.
 	var err error
-	s.pluginRepo, err = plugin.Initialize(pluginLogger, pluginArgs...)
+	s.pluginRepo, err = plugin.Initialize(s.logger)
 	return err
 }
 

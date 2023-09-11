@@ -52,7 +52,7 @@ func (e *Extractor) extractResourcesFromQuery(ctx context.Context, query string,
 			errorMessages = append(errorMessages, err.Error())
 		}
 
-		nestedtableSchemas, rest := Schemas(schemas).SplitSchemasByType(View)
+		nestedtableSchemas, rest := InformationSchemas(schemas).SplitSchemasByType(View)
 		output = append(output, rest.ToResources()...)
 
 		nestedResources, err := e.extractNestedSchemas(ctx, nestedtableSchemas, resourceDestination, metResource)

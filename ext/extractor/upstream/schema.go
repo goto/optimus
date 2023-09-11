@@ -166,9 +166,9 @@ func convertToSchema(values []bigquery.Value) (*InformationSchema, error) {
 	}, nil
 }
 
-type Schemas []*InformationSchema
+type InformationSchemas []*InformationSchema
 
-func (s Schemas) SplitSchemasByType(target SchemaType) (Schemas, Schemas) {
+func (s InformationSchemas) SplitSchemasByType(target SchemaType) (InformationSchemas, InformationSchemas) {
 	result := []*InformationSchema{}
 	rest := []*InformationSchema{}
 	for _, sch := range s {
@@ -181,7 +181,7 @@ func (s Schemas) SplitSchemasByType(target SchemaType) (Schemas, Schemas) {
 	return result, rest
 }
 
-func (s Schemas) ToResources() []*Resource {
+func (s InformationSchemas) ToResources() []*Resource {
 	output := make([]*Resource, len(s))
 	for i, sch := range s {
 		output[i] = &sch.Resource

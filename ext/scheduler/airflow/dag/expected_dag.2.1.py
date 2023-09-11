@@ -21,7 +21,6 @@ SENSOR_DEFAULT_TIMEOUT_IN_SECS = int(Variable.get("sensor_timeout_in_secs", defa
 DAG_RETRIES = int(Variable.get("dag_retries", default_var=3))
 DAG_RETRY_DELAY = int(Variable.get("dag_retry_delay_in_secs", default_var=5 * 60))
 DAGRUN_TIMEOUT_IN_SECS = int(Variable.get("dagrun_timeout_in_secs", default_var=3 * 24 * 60 * 60))
-STARTUP_TIMEOUT_IN_SECS = int(Variable.get("startup_timeout_in_secs", default_var=2 * 60))
 POOL_SENSOR = Variable.get("sensor_pool", default_var="default_pool")
 POOL_TASK = Variable.get("task_pool", default_var="default_pool")
 POOL_HOOK = Variable.get("hook_pool", default_var="default_pool")
@@ -37,7 +36,6 @@ default_args = {
     "depends_on_past": True,
     "retries": 2,
     "retry_delay": timedelta(seconds=100),
-    "startup_timeout_seconds": STARTUP_TIMEOUT_IN_SECS,
     "retry_exponential_backoff": True,
     "priority_weight": 2000,
     "start_date": datetime.strptime("2022-11-10T05:02:00", "%Y-%m-%dT%H:%M:%S"),

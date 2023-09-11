@@ -27,6 +27,7 @@ TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 TIMESTAMP_MS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 SCHEDULER_ERR_MSG = "scheduler_error"
+STARTUP_TIMEOUT_IN_SECS = int(Variable.get("startup_timeout_in_secs", default_var=2 * 60))
 
 def lookup_non_standard_cron_expression(expr: str) -> str:
     expr_mapping = {
@@ -46,6 +47,7 @@ def lookup_non_standard_cron_expression(expr: str) -> str:
 
 class SuperKubernetesPodOperator(KubernetesPodOperator):
     def __init__(self, *args, **kwargs):
+        kwargs["startup_timeout_seconds"] = STARTUP_TIMEOUT_IN_SECS
         super(SuperKubernetesPodOperator, self).__init__(*args, **kwargs)
         self.do_xcom_push = kwargs.get('do_xcom_push')
         self.namespace = kwargs.get('namespace')

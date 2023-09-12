@@ -68,7 +68,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			defer client.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
@@ -99,7 +99,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer datasetHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			client.On("DatasetHandleFrom", ds).Return(datasetHandle)
 			defer client.AssertExpectations(t)
 
@@ -127,7 +127,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer datasetHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 
 			client.On("DatasetHandleFrom", ds).Return(datasetHandle)
 			defer client.AssertExpectations(t)
@@ -156,7 +156,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer tableHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 
 			client.On("TableHandleFrom", ds, "table").Return(tableHandle)
 			defer client.AssertExpectations(t)
@@ -185,7 +185,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer viewHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			client.On("ViewHandleFrom", ds, "view").Return(viewHandle)
 			defer client.AssertExpectations(t)
 
@@ -213,7 +213,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer extTableHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			client.On("ExternalTableHandleFrom", ds, "extTable").Return(extTableHandle)
 			defer client.AssertExpectations(t)
 
@@ -271,7 +271,7 @@ func TestBigqueryStore(t *testing.T) {
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			defer client.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
@@ -302,7 +302,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer datasetHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 
 			client.On("DatasetHandleFrom", ds).Return(datasetHandle)
 			defer client.AssertExpectations(t)
@@ -330,7 +330,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer datasetHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 
 			client.On("DatasetHandleFrom", ds).Return(datasetHandle)
 			defer client.AssertExpectations(t)
@@ -358,7 +358,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer tableHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 
 			client.On("TableHandleFrom", ds, "table").Return(tableHandle)
 			defer client.AssertExpectations(t)
@@ -386,7 +386,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer viewHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			client.On("ViewHandleFrom", ds, "view").Return(viewHandle)
 			defer client.AssertExpectations(t)
 
@@ -414,7 +414,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer extTableHandle.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			client.On("ExternalTableHandleFrom", ds, "extTable").Return(extTableHandle)
 			defer client.AssertExpectations(t)
 
@@ -703,7 +703,7 @@ func TestBigqueryStore(t *testing.T) {
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)
-			client.On("Close")
+			client.On("Close").Return(nil)
 			defer client.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
@@ -771,8 +771,9 @@ func (m *mockClient) ViewHandleFrom(ds bigquery.Dataset, name string) bigquery.R
 	return args.Get(0).(bigquery.ResourceHandle)
 }
 
-func (m *mockClient) Close() {
-	m.Called()
+func (m *mockClient) Close() error {
+	args := m.Called()
+	return args.Error(0)
 }
 
 type mockTableResourceHandle struct {

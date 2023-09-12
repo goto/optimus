@@ -21,13 +21,11 @@ func (BqClientProvider) Get(ctx context.Context, account string) (Client, error)
 }
 
 type BqClient struct {
-	bq *bigquery.Client
+	*bigquery.Client
 }
 
 func NewClient(ctx context.Context, svcAccount string) (*BqClient, error) {
 	cred, err := google.CredentialsFromJSON(ctx, []byte(svcAccount), bigquery.Scope)
-	// 	cred, err := google.CredentialsFromJSON(ctx, []byte(svcAccount),
-	// 		bigquery.Scope, storageV1.CloudPlatformScope, drive.DriveScope) // from bq2bq plugin, are these opts needed?
 	if err != nil {
 		return nil, errors.InternalError(store, "failed to read account", err)
 	}
@@ -37,33 +35,25 @@ func NewClient(ctx context.Context, svcAccount string) (*BqClient, error) {
 		return nil, errors.InternalError(store, "failed to create BQ client", err)
 	}
 
-	return &BqClient{bq: c}, nil
+	return &BqClient{c}, nil
 }
 
 func (c *BqClient) DatasetHandleFrom(ds Dataset) ResourceHandle {
-	dsHandle := c.bq.DatasetInProject(ds.Project, ds.DatasetName)
+	dsHandle := c.DatasetInProject(ds.Project, ds.DatasetName)
 	return NewDatasetHandle(dsHandle)
 }
 
 func (c *BqClient) TableHandleFrom(ds Dataset, name string) TableResourceHandle {
-	t := c.bq.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
+	t := c.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
 	return NewTableHandle(t)
 }
 
 func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHandle {
-	t := c.bq.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
+	t := c.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
 	return NewExternalTableHandle(t)
 }
 
 func (c *BqClient) ViewHandleFrom(ds Dataset, name string) ResourceHandle {
-	t := c.bq.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
+	t := c.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
 	return NewViewHandle(t)
-}
-
-func (c *BqClient) Query(query string) *bigquery.Query {
-	return c.bq.Query(query)
-}
-
-func (c *BqClient) Close() {
-	c.bq.Close()
 }

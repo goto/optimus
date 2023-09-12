@@ -24,9 +24,26 @@ func NewCommand() *cobra.Command {
 }
 
 func (j *command) RunE(_ *cobra.Command, _ []string) error {
-	j.log.Info("Hi, this is an interactive CLI to play around with window configuration.")
-	j.log.Info("Navigate around the available configurations input with arrow keys.")
-	j.log.Info("If you want to quit, just press 'q' or 'ctr+c' key.\n")
+	message := `
+ __          __    _                              
+ \ \        / /   | |                             
+  \ \  /\  / /___ | |  ___  ___   _ __ ___    ___ 
+   \ \/  \/ // _ \| | / __|/ _ \ | '_ ' _ \  / _ \
+    \  /\  /|  __/| || (__| (_) || | | | | ||  __/
+     \/  \/  \___||_| \___|\___/ |_| |_| |_| \___|
+                                                  
+                                                  
+Hi, this is an interactive CLI to play around with window configuration.
+You can navigate around the available configurations with the following keys:
+   ______________________________
+  |  up   | : arrow up    ↑ or w |
+  | down  | : arrow down  ↓ or s |
+  | right | : arrow right → or d |
+  | left  | : arrow left  ← or a |
+  | quit  | : q or ctrl+c        |
+   ------------------------------
+`
+	j.log.Info(message)
 	p := tea.NewProgram(newModel())
 	return p.Start()
 }

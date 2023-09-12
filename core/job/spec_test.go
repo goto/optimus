@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
 
@@ -21,7 +22,8 @@ func TestEntitySpec(t *testing.T) {
 		WithRetry(retry).
 		WithDependsOnPast(false).
 		Build()
-	jobWindow, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
+	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
+	jobWindow := window.NewCustomConfig(w)
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	jobTask := job.NewTask("bq2bq", jobTaskConfig)
 	description := "sample description"
@@ -70,7 +72,7 @@ func TestEntitySpec(t *testing.T) {
 			assert.Equal(t, jobSchedule.DependsOnPast(), specA.Schedule().DependsOnPast())
 			assert.Equal(t, jobSchedule.Interval(), specA.Schedule().Interval())
 
-			assert.Equal(t, jobWindow, specA.Window())
+			assert.Equal(t, jobWindow.Window, specA.WindowConfig().Window)
 
 			assert.Equal(t, jobTask, specA.Task())
 			assert.Equal(t, jobTask.Name(), specA.Task().Name())

@@ -39,6 +39,26 @@ func TestProjectHandler(t *testing.T) {
 			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
 				"project: project name is empty: not able to register project ")
 		})
+		t.Run("returns error when preset has error", func(t *testing.T) {
+			projectService := new(projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService)
+
+			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
+				Name:   "proj",
+				Config: conf,
+				Presets: map[string]*pb.ProjectSpecification_ProjectPreset{
+					"yesterday": {
+						Name: "yesterday",
+						Size: "24h",
+					},
+				},
+			}}
+
+			_, err := handler.RegisterProject(ctx, &registerReq)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
+				"project: description is empty: not able to register project proj")
+		})
 		t.Run("returns error when fails in service", func(t *testing.T) {
 			projectService := new(projectService)
 			projectService.On("Save", ctx, mock.Anything).Return(errors.New("error in saving"))
@@ -66,6 +86,15 @@ func TestProjectHandler(t *testing.T) {
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
 				Name:   "proj",
 				Config: conf,
+				Presets: map[string]*pb.ProjectSpecification_ProjectPreset{
+					"yesterday": {
+						Name:        "yesterday",
+						Description: "window configuration for yesterday data",
+						TruncateTo:  "d",
+						Offset:      "0",
+						Size:        "24h",
+					},
+				},
 			}}
 
 			_, err := handler.RegisterProject(ctx, &registerReq)
@@ -125,8 +154,13 @@ func TestProjectHandler(t *testing.T) {
 				"retrieve project [savedProj]")
 		})
 		t.Run("returns the project successfully", func(t *testing.T) {
+			savedProj, _ := tenant.NewProject("savedProj", conf)
+			pres, err := tenant.NewPreset("yesterday", "description", "d", "0", "24h")
+			assert.NoError(t, err)
+			savedProj.SetPresets(map[string]tenant.Preset{"yesterday": pres})
+
 			projectService := new(projectService)
-			projectService.On("Get", ctx, tenant.ProjectName("savedProj")).Return(savedProject, nil)
+			projectService.On("Get", ctx, tenant.ProjectName("savedProj")).Return(savedProj, nil)
 			defer projectService.AssertExpectations(t)
 
 			handler := v1beta1.NewProjectHandler(logger, projectService)
@@ -136,7 +170,9 @@ func TestProjectHandler(t *testing.T) {
 			})
 			assert.Nil(t, err)
 
-			assert.Equal(t, savedProject.Name().String(), proj.Project.GetName())
+			assert.Equal(t, savedProj.Name().String(), proj.Project.GetName())
+			assert.Equal(t, len(savedProj.GetConfigs()), len(proj.Project.Config))
+			assert.Equal(t, len(savedProj.GetPresets()), len(proj.Project.Presets))
 		})
 	})
 }

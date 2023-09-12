@@ -11,6 +11,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/resolver"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/writer"
 )
@@ -34,8 +35,9 @@ func TestUpstreamResolver(t *testing.T) {
 	assert.NoError(t, err)
 	jobSchedule, err := job.NewScheduleBuilder(startDate).Build()
 	assert.NoError(t, err)
-	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
+	w, err := models.NewWindow(jobVersion, "d", "24h", "24h")
 	assert.NoError(t, err)
+	jobWindow := window.NewCustomConfig(w)
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	assert.NoError(t, err)
 	taskName, _ := job.TaskNameFrom("sample-task")

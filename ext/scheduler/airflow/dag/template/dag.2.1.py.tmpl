@@ -224,17 +224,16 @@ hook_{{$hookName}} = SuperKubernetesPodOperator(
 
 
 # create upstream sensors
-{{- $baseWindow := $.JobDetails.Job.Window }}
 {{- range $_, $upstream := .Upstreams.Upstreams}}
 {{- $dependencyName := $upstream.JobName | DisplayName }}
 wait_{{ $dependencyName }} = SuperExternalTaskSensor(
     optimus_hostname="{{$.Hostname}}",
+    project_name="{{ $.Tenant.ProjectName.String }}",
+    job_name="{{ $.JobDetails.Name.String }}",
     upstream_optimus_hostname="{{$upstream.Host}}",
     upstream_optimus_project="{{$upstream.Tenant.ProjectName.String}}",
     upstream_optimus_namespace="{{$upstream.Tenant.NamespaceName.String}}",
     upstream_optimus_job="{{$upstream.JobName}}",
-    window_size="{{ $baseWindow.GetSize }}",
-    window_version=int("{{ $baseWindow.GetVersion }}"),
     poke_interval=SENSOR_DEFAULT_POKE_INTERVAL_IN_SECS,
     timeout=SENSOR_DEFAULT_TIMEOUT_IN_SECS,
     task_id="wait_{{$upstream.JobName}}-{{$upstream.TaskName}}",

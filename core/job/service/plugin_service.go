@@ -11,6 +11,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -104,8 +105,12 @@ func (p JobPluginService) GenerateUpstreams(ctx context.Context, jobTenant *tena
 		return nil, ErrUpstreamModNotFound
 	}
 
-	// TODO: this now will always be a same time for start of service, is it correct ?
-	assets, err := p.compileAsset(ctx, taskPlugin, spec, p.now())
+	w, err := getWindow(jobTenant, spec)
+	if err != nil {
+		return nil, err
+	}
+
+	assets, err := p.compileAsset(ctx, taskPlugin, spec, w, p.now())
 	if err != nil {
 		p.logger.Error("error compiling asset: %s", err)
 		return nil, fmt.Errorf("asset compilation failure: %w", err)
@@ -155,7 +160,7 @@ func (p JobPluginService) compileConfig(configs job.Config, tnnt *tenant.WithDet
 	return pluginConfigs
 }
 
-func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.Plugin, spec *job.Spec, scheduledAt time.Time) (map[string]string, error) {
+func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.Plugin, spec *job.Spec, w window.Window, scheduledAt time.Time) (map[string]string, error) {
 	var jobDestination string
 	if taskPlugin.DependencyMod != nil {
 		var assets map[string]string
@@ -176,15 +181,9 @@ func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.P
 		jobDestination = jobDestinationResponse.Destination
 	}
 
-	startTime, err := spec.Window().GetStartTime(scheduledAt)
+	interval, err := w.GetInterval(scheduledAt)
 	if err != nil {
-		p.logger.Error("error getting start time: %s", err)
-		return nil, fmt.Errorf("error getting start time: %w", err)
-	}
-	endTime, err := spec.Window().GetEndTime(scheduledAt)
-	if err != nil {
-		p.logger.Error("error getting end time: %s", err)
-		return nil, fmt.Errorf("error getting end time: %w", err)
+		return nil, err
 	}
 
 	var assets map[string]string
@@ -193,8 +192,8 @@ func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.P
 	}
 
 	templates, err := p.engine.Compile(assets, map[string]interface{}{
-		configKeyDstart:        startTime.Format(TimeISOFormat),
-		configKeyDend:          endTime.Format(TimeISOFormat),
+		configKeyDstart:        interval.Start.Format(TimeISOFormat),
+		configKeyDend:          interval.End.Format(TimeISOFormat),
 		configKeyExecutionTime: scheduledAt.Format(TimeISOFormat),
 		configKeyDestination:   jobDestination,
 	})
@@ -204,4 +203,8 @@ func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.P
 	}
 
 	return templates, nil
+}
+
+func getWindow(jobTenant *tenant.WithDetails, spec *job.Spec) (window.Window, error) {
+	return window.From(spec.WindowConfig(), spec.Schedule().Interval(), jobTenant.Project().GetPreset)
 }

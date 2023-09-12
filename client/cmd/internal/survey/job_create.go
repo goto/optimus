@@ -5,15 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/client/local"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
 	"github.com/goto/optimus/sdk/plugin"
+)
+
+const (
+	windowTypeCustom = "custom"
+	windowTypePreset = "preset"
 )
 
 const (
@@ -33,27 +40,40 @@ var (
 // JobCreateSurvey defines survey for job creation operation
 type JobCreateSurvey struct {
 	jobSurvey *JobSurvey
+
+	logger log.Logger
 }
 
 // NewJobCreateSurvey initializes job create survey
-func NewJobCreateSurvey() *JobCreateSurvey {
+func NewJobCreateSurvey(logger log.Logger) *JobCreateSurvey {
 	return &JobCreateSurvey{
 		jobSurvey: NewJobSurvey(),
+		logger:    logger,
 	}
 }
 
 // AskToCreateJob asks questions to create job
-func (j *JobCreateSurvey) AskToCreateJob(pluginRepo *models.PluginRepository, jobSpecReader local.SpecReader[*model.JobSpec], jobDir, defaultJobName string) (model.JobSpec, error) {
+func (j *JobCreateSurvey) AskToCreateJob(
+	pluginRepo *models.PluginRepository,
+	jobSpecReader local.SpecReader[*model.JobSpec], jobDir string,
+	presets model.PresetsMap,
+) (model.JobSpec, error) {
 	availableTaskNames := j.getAvailableTaskNames(pluginRepo)
 	if len(availableTaskNames) == 0 {
 		return model.JobSpec{}, errors.New("no supported task plugin found")
 	}
 
-	createQuestions := j.getCreateQuestions(jobSpecReader, jobDir, defaultJobName, availableTaskNames)
-	jobInput, err := j.askCreateQuestions(createQuestions)
+	baseQuestions := j.getBaseQuestions(jobSpecReader, jobDir, availableTaskNames)
+	jobInput, err := j.askBaseQuestions(baseQuestions)
 	if err != nil {
 		return model.JobSpec{}, err
 	}
+
+	jobTaskWindow, err := j.askWindowQuestions(presets)
+	if err != nil {
+		return model.JobSpec{}, err
+	}
+	jobInput.Task.Window = jobTaskWindow
 
 	cliMod, err := j.getPluginCliMod(pluginRepo, jobInput.Task.Name)
 	if err != nil {
@@ -126,7 +146,9 @@ func (*JobCreateSurvey) getAvailableTaskNames(pluginRepo *models.PluginRepositor
 	return output
 }
 
-func (j *JobCreateSurvey) getCreateQuestions(jobSpecReader local.SpecReader[*model.JobSpec], jobDir, defaultJobName string, availableTaskNames []string) []*survey.Question {
+func (j *JobCreateSurvey) getBaseQuestions(jobSpecReader local.SpecReader[*model.JobSpec], jobDir string, availableTaskNames []string) []*survey.Question {
+	defaultJobName := strings.ReplaceAll(strings.ReplaceAll(jobDir, "/", "."), "\\", ".")
+
 	return []*survey.Question{
 		{
 			Name: "name",
@@ -173,20 +195,10 @@ Note: remove interval field from job specification for manually triggered jobs`,
 			},
 			Validate: utils.ValidateCronInterval,
 		},
-		{
-			Name: "window",
-			Prompt: &survey.Select{
-				Message: "Transformation window",
-				Options: []string{"hourly", "daily", "weekly", "monthly"},
-				Default: "daily",
-				Help: `Time window for which transformation is consuming data,
-this effects runtime dependencies and template macros`,
-			},
-		},
 	}
 }
 
-func (j *JobCreateSurvey) askCreateQuestions(questions []*survey.Question) (model.JobSpec, error) {
+func (*JobCreateSurvey) askBaseQuestions(questions []*survey.Question) (model.JobSpec, error) {
 	baseInputsRaw := make(map[string]interface{})
 	if err := survey.Ask(questions, &baseInputsRaw); err != nil {
 		return model.JobSpec{}, err
@@ -205,8 +217,7 @@ func (j *JobCreateSurvey) askCreateQuestions(questions []*survey.Question) (mode
 			Interval:  baseInputs["interval"],
 		},
 		Task: model.JobSpecTask{
-			Name:   baseInputs["task"],
-			Window: j.getWindowParameters(baseInputs["window"]),
+			Name: baseInputs["task"],
 		},
 		Asset: map[string]string{},
 		Behavior: model.JobSpecBehavior{
@@ -247,6 +258,118 @@ func (j *JobCreateSurvey) askPluginQuestions(cliMod plugin.CommandLineMod, jobNa
 	return answers, nil
 }
 
+func (j *JobCreateSurvey) askWindowQuestions(presets model.PresetsMap) (model.JobSpecTaskWindow, error) {
+	windowType := windowTypeCustom
+	if len(presets.Presets) > 0 {
+		var selectedType string
+		if err := survey.AskOne(&survey.Select{
+			Message: "What is the type of window being used?",
+			Options: []string{windowTypeCustom, windowTypePreset},
+			Help:    "Window type 'preset' refers to the presets under project using Window V2",
+			Default: windowType,
+		}, &selectedType); err != nil {
+			return model.JobSpecTaskWindow{}, err
+		}
+
+		windowType = selectedType
+	}
+
+	switch windowType {
+	case windowTypeCustom:
+		return j.askWindowCustomQuestion()
+	case windowTypePreset:
+		return j.askWindowPresetQuestion(presets)
+	default:
+		return model.JobSpecTaskWindow{}, fmt.Errorf("window type [%s] is not recognized", windowType)
+	}
+}
+
+func (j *JobCreateSurvey) askWindowCustomQuestion() (model.JobSpecTaskWindow, error) {
+	questions := []*survey.Question{
+		{
+			Name: "window_truncate_to",
+			Prompt: &survey.Input{
+				Message: "Window truncate to: ",
+				Default: "d",
+				Help:    "Configures the window truncate to",
+			},
+		},
+		{
+			Name: "window_offset",
+			Prompt: &survey.Input{
+				Message: "Window offset: ",
+				Default: "0",
+				Help:    "Configures the window offset",
+			},
+		},
+		{
+			Name: "window_size",
+			Prompt: &survey.Input{
+				Message: "Window size: ",
+				Default: "24h",
+				Help:    "Configures the window size",
+			},
+		},
+	}
+
+	for {
+		baseInputsRaw := make(map[string]interface{})
+		if err := survey.Ask(questions, &baseInputsRaw); err != nil {
+			return model.JobSpecTaskWindow{}, err
+		}
+
+		baseInputs, err := utils.ConvertToStringMap(baseInputsRaw)
+		if err != nil {
+			j.logger.Error("error converting answers: %v", err)
+			j.logger.Info("Please try again")
+			continue
+		}
+
+		truncateTo := baseInputs["window_truncate_to"]
+		offset := baseInputs["window_offset"]
+		size := baseInputs["window_size"]
+
+		window, err := models.NewWindow(jobSpecDefaultVersion, truncateTo, offset, size)
+		if err != nil {
+			j.logger.Error("error building window based on the configuration: %v", err)
+			j.logger.Info("Please try again")
+			continue
+		}
+
+		if _, err := window.GetStartTime(time.Now()); err != nil {
+			j.logger.Error("error validating window on start time: %v", err)
+			j.logger.Info("Please try again")
+			continue
+		}
+
+		return model.JobSpecTaskWindow{
+			TruncateTo: truncateTo,
+			Offset:     offset,
+			Size:       size,
+		}, nil
+	}
+}
+
+func (*JobCreateSurvey) askWindowPresetQuestion(presets model.PresetsMap) (model.JobSpecTaskWindow, error) {
+	var availablePresets []string
+	for name := range presets.Presets {
+		availablePresets = append(availablePresets, name)
+	}
+
+	var selectedPreset string
+	if err := survey.AskOne(&survey.Select{
+		Message: "Select the available presets:",
+		Options: availablePresets,
+		Default: availablePresets[0],
+	}, &selectedPreset); err != nil {
+		return model.JobSpecTaskWindow{}, err
+	}
+
+	return model.JobSpecTaskWindow{
+		Preset: selectedPreset,
+	}, nil
+}
+
 // getValidateJobUniqueness return a validator that checks if the job already exists with the same name
 func (*JobCreateSurvey) getValidateJobUniqueness(jobSpecReader local.SpecReader[*model.JobSpec], jobDir string) survey.Validator {
 	return func(val interface{}) error {
@@ -258,41 +381,5 @@ func (*JobCreateSurvey) getValidateJobUniqueness(jobSpecReader local.SpecReader[
 			return fmt.Errorf("job with the provided name already exists")
 		}
 		return nil
-	}
-}
-
-func (*JobCreateSurvey) getWindowParameters(winName string) model.JobSpecTaskWindow {
-	switch winName {
-	case "hourly":
-		return model.JobSpecTaskWindow{
-			Size:       "1h",
-			Offset:     "0",
-			TruncateTo: "h",
-		}
-	case "daily":
-		return model.JobSpecTaskWindow{
-			Size:       "24h",
-			Offset:     "0",
-			TruncateTo: "d",
-		}
-	case "weekly":
-		return model.JobSpecTaskWindow{
-			Size:       "168h",
-			Offset:     "0",
-			TruncateTo: "w",
-		}
-	case "monthly":
-		return model.JobSpecTaskWindow{
-			Size:       "720h",
-			Offset:     "0",
-			TruncateTo: "M",
-		}
-	}
-
-	// default
-	return model.JobSpecTaskWindow{
-		Size:       "24h",
-		Offset:     "0",
-		TruncateTo: "h",
 	}
 }

@@ -2,6 +2,7 @@ package v1beta1_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -552,6 +554,133 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Equal(t, &pb.RegisterJobEventResponse{}, resp)
 		})
 	})
+	t.Run("GetInterval", func(t *testing.T) {
+		referenceTime := timestamppb.Now()
+
+		t.Run("should return nil and error if project name is invalid", func(t *testing.T) {
+			service := new(mockJobRunService)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, service, nil)
+			request := &pb.GetIntervalRequest{
+				ProjectName:   "",
+				JobName:       "test_job",
+				ReferenceTime: referenceTime,
+			}
+
+			actualResponse, actualError := handler.GetInterval(ctx, request)
+
+			assert.Nil(t, actualResponse)
+			assert.Error(t, actualError)
+			assert.EqualError(t, actualError, "rpc error: code = InvalidArgument desc = invalid argument for entity project: project name is empty: unable to adapt project name")
+		})
+
+		t.Run("should return nil and error if job name is invalid", func(t *testing.T) {
+			service := new(mockJobRunService)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, service, nil)
+			request := &pb.GetIntervalRequest{
+				ProjectName:   "test_project",
+				JobName:       "",
+				ReferenceTime: referenceTime,
+			}
+
+			actualResponse, actualError := handler.GetInterval(ctx, request)
+
+			assert.Nil(t, actualResponse)
+			assert.Error(t, actualError)
+			assert.EqualError(t, actualError, "rpc error: code = InvalidArgument desc = invalid argument for entity jobRun: job name is empty: unable to adapt job name")
+		})
+
+		t.Run("should return nil and error if reference time is invalid", func(t *testing.T) {
+			service := new(mockJobRunService)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, service, nil)
+			request := &pb.GetIntervalRequest{
+				ProjectName:   "test_project",
+				JobName:       "test_job",
+				ReferenceTime: nil,
+			}
+
+			actualResponse, actualError := handler.GetInterval(ctx, request)
+
+			assert.Nil(t, actualResponse)
+			assert.Error(t, actualError)
+			assert.EqualError(t, actualError, "rpc error: code = InvalidArgument desc = invalid argument for entity jobRun: invalid reference time: unable to get interval for test_job")
+		})
+
+		t.Run("should return nil and error if error when getting interval", func(t *testing.T) {
+			service := new(mockJobRunService)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, service, nil)
+			request := &pb.GetIntervalRequest{
+				ProjectName:   "test_project",
+				JobName:       "test_job",
+				ReferenceTime: referenceTime,
+			}
+
+			service.On("GetInterval", ctx, mock.Anything, mock.Anything, referenceTime.AsTime()).Return(window.Interval{}, errors.New("unexpected error"))
+
+			actualResponse, actualError := handler.GetInterval(ctx, request)
+
+			assert.Nil(t, actualResponse)
+			assert.Error(t, actualError)
+			assert.EqualError(t, actualError, "rpc error: code = Internal desc = unexpected error: error getting interval for job test_job")
+		})
+
+		t.Run("should return response and nil if no error is encountered", func(t *testing.T) {
+			service := new(mockJobRunService)
+			defer service.AssertExpectations(t)
+
+			projectName := "test_project"
+			projectConfig := map[string]string{
+				"STORAGE_PATH":   "file://",
+				"SCHEDULER_HOST": "http://scheduler",
+			}
+
+			project, err := tenant.NewProject(projectName, projectConfig)
+			assert.NotNil(t, project)
+			assert.NoError(t, err)
+
+			preset, err := tenant.NewPreset("yesterday", "preset for test", "d", "-24h", "24h")
+			assert.NotZero(t, preset)
+			assert.NoError(t, err)
+
+			presets := map[string]tenant.Preset{
+				"yesterday": preset,
+			}
+			project.SetPresets(presets)
+
+			windowConfig, err := window.NewPresetConfig("yesterday")
+			assert.NotNil(t, windowConfig)
+			assert.NoError(t, err)
+
+			window, err := window.From(windowConfig, "0 * * * *", project.GetPreset)
+			assert.NotNil(t, window)
+			assert.NoError(t, err)
+
+			interval, err := window.GetInterval(referenceTime.AsTime())
+			assert.NotNil(t, interval)
+			assert.NoError(t, err)
+
+			handler := v1beta1.NewJobRunHandler(logger, service, nil)
+			request := &pb.GetIntervalRequest{
+				ProjectName:   "test_project",
+				JobName:       "test_job",
+				ReferenceTime: referenceTime,
+			}
+
+			service.On("GetInterval", ctx, mock.Anything, mock.Anything, referenceTime.AsTime()).Return(interval, nil)
+
+			actualResponse, actualError := handler.GetInterval(ctx, request)
+
+			assert.NotNil(t, actualResponse)
+			assert.NoError(t, actualError)
+		})
+	})
 }
 
 type mockJobRunService struct {
@@ -582,6 +711,14 @@ func (m *mockJobRunService) GetJobRuns(ctx context.Context, projectName tenant.P
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
+}
+
+func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
+	args := m.Called(ctx, projectName, jobName, referenceTime)
+	if args.Get(0) == nil {
+		return window.Interval{}, args.Error(1)
+	}
+	return args.Get(0).(window.Interval), args.Error(1)
 }
 
 type mockNotifier struct {

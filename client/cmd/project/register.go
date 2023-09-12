@@ -11,9 +11,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/namespace"
+	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -82,16 +84,22 @@ func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
 
 // RegisterProject registers a project to the targeted server host
 func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Project) error {
+	presets, err := internal.GetProjectPresets(project.PresetsPath)
+	if err != nil {
+		return err
+	}
+
 	projectServiceClient := pb.NewProjectServiceClient(conn)
 	projectSpec := &pb.ProjectSpecification{
-		Name:   project.Name,
-		Config: project.Config,
+		Name:    project.Name,
+		Config:  project.Config,
+		Presets: toPresetProto(presets),
 	}
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), registerTimeout)
 	defer cancelFunc()
 
-	_, err := projectServiceClient.RegisterProject(ctx, &pb.RegisterProjectRequest{
+	_, err = projectServiceClient.RegisterProject(ctx, &pb.RegisterProjectRequest{
 		Project: projectSpec,
 	})
 	if err != nil {
@@ -103,4 +111,22 @@ func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Pr
 	}
 	logger.Info("Project registration finished successfully")
 	return nil
+}
+
+func toPresetProto(presetMap model.PresetsMap) map[string]*pb.ProjectSpecification_ProjectPreset {
+	if len(presetMap.Presets) == 0 {
+		return nil
+	}
+
+	presets := make(map[string]*pb.ProjectSpecification_ProjectPreset, len(presetMap.Presets))
+	for name, p := range presetMap.Presets {
+		presets[name] = &pb.ProjectSpecification_ProjectPreset{
+			Name:        name,
+			Description: p.Description,
+			TruncateTo:  p.Window.TruncateTo,
+			Offset:      p.Window.Offset,
+			Size:        p.Window.Size,
+		}
+	}
+	return presets
 }

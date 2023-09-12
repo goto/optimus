@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -23,9 +24,10 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		DependsOnPast:    jobEntity.Spec().Schedule().DependsOnPast(),
 		TaskName:         jobEntity.Spec().Task().Name().String(),
 		Config:           fromConfig(jobEntity.Spec().Task().Config()),
-		WindowSize:       jobEntity.Spec().Window().GetSize(),
-		WindowOffset:     jobEntity.Spec().Window().GetOffset(),
-		WindowTruncateTo: jobEntity.Spec().Window().GetTruncateTo(),
+		WindowPreset:     jobEntity.Spec().WindowConfig().Preset,
+		WindowSize:       jobEntity.Spec().WindowConfig().GetSize(),
+		WindowOffset:     jobEntity.Spec().WindowConfig().GetOffset(),
+		WindowTruncateTo: jobEntity.Spec().WindowConfig().GetTruncateTo(),
 		Dependencies:     fromSpecUpstreams(jobEntity.Spec().UpstreamSpec()),
 		Assets:           fromAsset(jobEntity.Spec().Asset()),
 		Hooks:            fromHooks(jobEntity.Spec().Hooks()),
@@ -105,11 +107,8 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 		return nil, err
 	}
 
-	window, err := models.NewWindow(int(js.Version), js.WindowTruncateTo, js.WindowOffset, js.WindowSize)
+	window, err := toWindow(js)
 	if err != nil {
-		return nil, err
-	}
-	if err := window.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -193,6 +192,24 @@ func fromRetryAndAlerts(jobRetry *job.Retry, alerts []*job.AlertSpec) *pb.JobSpe
 		Retry:  retryProto,
 		Notify: notifierProto,
 	}
+}
+
+func toWindow(js *pb.JobSpecification) (window.Config, error) {
+	if js.WindowPreset != "" {
+		return window.NewPresetConfig(js.WindowPreset)
+	}
+
+	if js.WindowSize != "" {
+		w, err := models.NewWindow(int(js.Version), js.WindowTruncateTo, js.WindowOffset, js.WindowSize)
+		if err != nil {
+			return window.Config{}, err
+		}
+		if err := w.Validate(); err != nil {
+			return window.Config{}, err
+		}
+		return window.NewCustomConfig(w), nil
+	}
+	return window.NewIncrementalConfig(), nil
 }
 
 func toRetry(protoRetry *pb.JobSpecification_Behavior_Retry) *job.Retry {

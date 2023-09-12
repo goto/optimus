@@ -7,7 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/lib/window"
 )
 
 const (
@@ -16,12 +16,12 @@ const (
 )
 
 type Spec struct {
-	version  int
-	name     Name
-	owner    string
-	schedule *Schedule
-	window   models.Window
-	task     Task
+	version      int
+	name         Name
+	owner        string
+	schedule     *Schedule
+	windowConfig window.Config
+	task         Task
 
 	description  string
 	labels       map[string]string
@@ -48,8 +48,8 @@ func (s *Spec) Schedule() *Schedule {
 	return s.schedule
 }
 
-func (s *Spec) Window() models.Window {
-	return s.window
+func (s *Spec) WindowConfig() window.Config {
+	return s.windowConfig
 }
 
 func (s *Spec) Task() Task {
@@ -88,15 +88,15 @@ type SpecBuilder struct {
 	spec *Spec
 }
 
-func NewSpecBuilder(version int, name Name, owner string, schedule *Schedule, window models.Window, task Task) *SpecBuilder {
+func NewSpecBuilder(version int, name Name, owner string, schedule *Schedule, w window.Config, task Task) *SpecBuilder {
 	return &SpecBuilder{
 		spec: &Spec{
-			version:  version,
-			name:     name,
-			owner:    owner,
-			schedule: schedule,
-			window:   window,
-			task:     task,
+			version:      version,
+			name:         name,
+			owner:        owner,
+			schedule:     schedule,
+			windowConfig: w,
+			task:         task,
 		},
 	}
 }

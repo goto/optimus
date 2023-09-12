@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/core/job/handler/v1beta1"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -30,7 +31,7 @@ func TestNewJobHandler(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}) // TODO: add test for presets
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
@@ -41,8 +42,9 @@ func TestNewJobHandler(t *testing.T) {
 	assert.NoError(t, err)
 	jobSchedule, err := job.NewScheduleBuilder(startDate).Build()
 	assert.NoError(t, err)
-	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
+	w, err := models.NewWindow(jobVersion, "d", "24h", "24h")
 	assert.NoError(t, err)
+	jobWindow := window.NewCustomConfig(w)
 	jobConfig, err := job.ConfigFrom(map[string]string{"sample_key": "sample_value"})
 	assert.NoError(t, err)
 	jobTask := job.NewTask("bq2bq", jobConfig)
@@ -1495,9 +1497,9 @@ func TestNewJobHandler(t *testing.T) {
 						Interval:         specA.Schedule().Interval(),
 						DependsOnPast:    specA.Schedule().DependsOnPast(),
 						TaskName:         specA.Task().Name().String(),
-						WindowSize:       specA.Window().GetSize(),
-						WindowOffset:     specA.Window().GetOffset(),
-						WindowTruncateTo: specA.Window().GetTruncateTo(),
+						WindowSize:       specA.WindowConfig().GetSize(),
+						WindowOffset:     specA.WindowConfig().GetOffset(),
+						WindowTruncateTo: specA.WindowConfig().GetTruncateTo(),
 						Destination:      "resource-A",
 						Config: []*pb.JobConfigItem{{
 							Name:  "sample_key",
@@ -1634,9 +1636,9 @@ func TestNewJobHandler(t *testing.T) {
 						Interval:         specA.Schedule().Interval(),
 						DependsOnPast:    specA.Schedule().DependsOnPast(),
 						TaskName:         specA.Task().Name().String(),
-						WindowSize:       specA.Window().GetSize(),
-						WindowOffset:     specA.Window().GetOffset(),
-						WindowTruncateTo: specA.Window().GetTruncateTo(),
+						WindowSize:       specA.WindowConfig().GetSize(),
+						WindowOffset:     specA.WindowConfig().GetOffset(),
+						WindowTruncateTo: specA.WindowConfig().GetTruncateTo(),
 						Destination:      "resource-A",
 						Config:           configs,
 						Dependencies:     jobDependenciesWithHTTPProto,
@@ -1779,9 +1781,9 @@ func TestNewJobHandler(t *testing.T) {
 						Interval:         specA.Schedule().Interval(),
 						DependsOnPast:    specA.Schedule().DependsOnPast(),
 						TaskName:         specA.Task().Name().String(),
-						WindowSize:       specA.Window().GetSize(),
-						WindowOffset:     specA.Window().GetOffset(),
-						WindowTruncateTo: specA.Window().GetTruncateTo(),
+						WindowSize:       specA.WindowConfig().GetSize(),
+						WindowOffset:     specA.WindowConfig().GetOffset(),
+						WindowTruncateTo: specA.WindowConfig().GetTruncateTo(),
 						Destination:      "resource-A",
 						Config: []*pb.JobConfigItem{{
 							Name:  "sample_key",

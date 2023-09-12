@@ -30,7 +30,7 @@ serve:
 
 plugin:
   artifacts:
-   - https://github.com/goto/transformers/releases/download/v0.2.1/transformers_0.2.1_macos_x86_64.tar.gz
+   - https://github.com/goto/transformers/releases/download/v0.3.15/transformers_0.3.15_macos_x86_64.tar.gz
 ```
 _Note: make sure you put artifacts link that suitable to your system._
 
@@ -219,7 +219,9 @@ $ optimus job create
 ? Select task to run? bq2bq
 ? Specify the schedule start date 2023-01-26
 ? Specify the schedule interval (in crontab notation) 0 2 * * *
-? Transformation window daily
+? Window truncate to:  d
+? Window offset:  0
+? Window size:  24h
 ? Project ID sample-project
 ? Dataset Name sample_namespace
 ? Table ID table1
@@ -271,10 +273,10 @@ task:
     PROJECT: sample-project
     SQL_TYPE: STANDARD
     TABLE: table1
-window:
-  size: 24h
-  offset: "0"
-  truncate_to: d
+  window:
+    size: 24h
+    offset: "0"
+    truncate_to: d
 labels:
   orchestrator: optimus
 hooks: []

@@ -28,13 +28,17 @@ $ optimus job create
 ? Select task to run? bq2bq
 ? Specify the schedule start date 2023-01-26
 ? Specify the schedule interval (in crontab notation) 0 2 * * *
-? Transformation window daily
+? Window truncate to:  d
+? Window offset:  0
+? Window size:  24h
 ? Project ID sample-project
 ? Dataset Name playground
 ? Table ID table1
 ? Load method to use on destination REPLACE
 Job successfully created at sample-project.playground.table1
 ```
+
+_Note: window configuration option may be different, depending on the provided presets under project configuration [reference](../concepts/intervals-and-windows.md)_
 
 After running the job create command, the job specification file and assets directory are created in the following directory.
 ```
@@ -72,30 +76,43 @@ task:
     PROJECT: sample-project
     SQL_TYPE: STANDARD
     TABLE: table1
-window:
-  size: 24h
-  offset: "0"
-  truncate_to: d
+  window:
+    size: 24h
+    offset: "0"
+    truncate_to: d
 labels:
   orchestrator: optimus
 hooks: []
 dependencies: []
 ```
 
+Note that if presets are specified under project, then `window` may contains only the name of the presets, like the following example:
+
+```yaml
+...
+task:
+  ...
+  window:
+    preset: yesterday
+...
+```
+
+For more detail about window configuration and preset, please check [this page](../concepts/intervals-and-windows.md).
+
 ## Understanding the Job Specifications
 
-| Job Configuration | Description                                                                                              |
-|-------------------|----------------------------------------------------------------------------------------------------------|
-| Version           | Version 1 and 2 (recommended) are available. This affects the windowing capability.                      | 
-| Name              | Should be unique in the project.                                                                         |
-| Owner             | Owner of the job, can be an email, team name, slack handle, or anything that works for your team.        |
-| Schedule          | Specifications needed to schedule a job, such as start_date, end_date and interval (cron)                |
-| Behavior          | Specifications that represents how the scheduled jobs should behave, for example when the run is failed. |
-| Task              | Specifications related to the transformation task                                                        |
-| Hooks             | Name & configuration of pre/post hooks. Take a look at how to add hooks [here](#adding-hook).            |
-| Labels            | Help you to identify your job. Any of the values will also be marked as a tag in Airflow.                |
-| Dependencies      | Represent the list of jobs that are considered upstream.                                                 |
-| Metadata          | Represents additional resource and scheduler configurations.                                             |
+| Job Configuration | Description                                                                                                                     |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| Version           | Version 1 and 2 (recommended) are available. This affects the window version to be used. Note that presets always use window v2 | 
+| Name              | Should be unique in the project.                                                                                                |
+| Owner             | Owner of the job, can be an email, team name, slack handle, or anything that works for your team.                               |
+| Schedule          | Specifications needed to schedule a job, such as start_date, end_date and interval (cron)                                       |
+| Behavior          | Specifications that represents how the scheduled jobs should behave, for example when the run is failed.                        |
+| Task              | Specifications related to the transformation task                                                                               |
+| Hooks             | Name & configuration of pre/post hooks. Take a look at how to add hooks [here](#adding-hook).                                   |
+| Labels            | Help you to identify your job. Any of the values will also be marked as a tag in Airflow.                                       |
+| Dependencies      | Represent the list of jobs that are considered upstream.                                                                        |
+| Metadata          | Represents additional resource and scheduler configurations.                                                                    |
 
 
 ### Behavior
@@ -147,10 +164,10 @@ task:
     PROJECT: sample-project
     SQL_TYPE: STANDARD
     TABLE: table1
-window:
-  size: 24h
-  offset: "0"
-  truncate_to: d
+  window:
+    size: 24h
+    offset: "0"
+    truncate_to: d
 ```
 
 Here are the details of each configuration and the allowed values:

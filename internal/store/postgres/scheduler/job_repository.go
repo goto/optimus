@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
 )
@@ -119,23 +120,38 @@ type Job struct {
 	DeletedAt sql.NullTime
 }
 type Window struct {
-	WindowSize       string
-	WindowOffset     string
-	WindowTruncateTo string
+	WindowSize       string `json:",omitempty"`
+	WindowOffset     string `json:",omitempty"`
+	WindowTruncateTo string `json:",omitempty"`
+	Preset           string `json:",omitempty"`
+	Type             string
 }
 
-func fromStorageWindow(raw []byte, jobVersion int) (models.Window, error) {
+func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 	var storageWindow Window
 	if err := json.Unmarshal(raw, &storageWindow); err != nil {
-		return nil, err
+		return window.Config{}, err
 	}
 
-	return models.NewWindow(
+	if storageWindow.Type == string(window.Preset) {
+		return window.NewPresetConfig(storageWindow.Preset)
+	}
+
+	if storageWindow.Type == string(window.Incremental) {
+		return window.NewIncrementalConfig(), nil
+	}
+
+	w, err := models.NewWindow(
 		jobVersion,
 		storageWindow.WindowTruncateTo,
 		storageWindow.WindowOffset,
 		storageWindow.WindowSize,
 	)
+	if err != nil {
+		return window.Config{}, err
+	}
+
+	return window.NewCustomConfig(w), nil
 }
 
 type Metadata struct {
@@ -193,20 +209,20 @@ func (j *Job) toJob() (*scheduler.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	var window models.Window
+	var w window.Config
 	if j.WindowSpec != nil {
-		window, err = fromStorageWindow(j.WindowSpec, j.Version)
+		w, err = fromStorageWindow(j.WindowSpec, j.Version)
 		if err != nil {
 			return nil, err
 		}
 	}
 	schedulerJob := scheduler.Job{
-		ID:          j.ID,
-		Name:        scheduler.JobName(j.Name),
-		Tenant:      t,
-		Destination: j.Destination,
-		Window:      window,
-		Assets:      j.Assets,
+		ID:           j.ID,
+		Name:         scheduler.JobName(j.Name),
+		Tenant:       t,
+		Destination:  j.Destination,
+		WindowConfig: w,
+		Assets:       j.Assets,
 		Task: &scheduler.Task{
 			Name:   j.TaskName,
 			Config: j.TaskConfig,

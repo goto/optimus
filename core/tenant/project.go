@@ -1,6 +1,8 @@
 package tenant
 
 import (
+	"strings"
+
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
 )
@@ -29,6 +31,8 @@ func (pn ProjectName) String() string {
 type Project struct {
 	name   ProjectName
 	config map[string]string
+
+	presets map[string]Preset
 }
 
 func (p *Project) Name() ProjectName {
@@ -53,6 +57,28 @@ func (p *Project) GetConfigs() map[string]string {
 	return confs
 }
 
+func (p *Project) SetPresets(presets map[string]Preset) {
+	if presets == nil {
+		p.presets = make(map[string]Preset)
+		return
+	}
+
+	p.presets = presets
+}
+
+func (p *Project) GetPresets() map[string]Preset {
+	return p.presets
+}
+
+func (p *Project) GetPreset(name string) (Preset, error) {
+	preset, ok := p.presets[strings.ToLower(name)]
+	if !ok {
+		return Preset{}, errors.NotFound(EntityProject, "preset not found "+name)
+	}
+
+	return preset, nil
+}
+
 func NewProject(name string, config map[string]string) (*Project, error) {
 	prjName, err := ProjectNameFrom(name)
 	if err != nil {
@@ -64,7 +90,8 @@ func NewProject(name string, config map[string]string) (*Project, error) {
 	}
 
 	return &Project{
-		name:   prjName,
-		config: config,
+		name:    prjName,
+		config:  config,
+		presets: make(map[string]Preset),
 	}, nil
 }

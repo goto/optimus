@@ -277,8 +277,9 @@ func (s *OptimusServer) setupHandlers() error {
 	tProjectRepo := tenant.NewProjectRepository(s.dbPool)
 	tNamespaceRepo := tenant.NewNamespaceRepository(s.dbPool)
 	tSecretRepo := tenant.NewSecretRepository(s.dbPool)
+	presetRepo := tenant.NewPresetRepository(s.dbPool)
 
-	tProjectService := tService.NewProjectService(tProjectRepo)
+	tProjectService := tService.NewProjectService(tProjectRepo, presetRepo)
 	tNamespaceService := tService.NewNamespaceService(tNamespaceRepo)
 	tSecretService := tService.NewSecretService(s.key, tSecretRepo, s.logger)
 	tenantService := tService.NewTenantService(tProjectService, tNamespaceService, tSecretService, s.logger)
@@ -328,7 +329,10 @@ func (s *OptimusServer) setupHandlers() error {
 	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
 	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, newScheduler, s.logger)
 
-	newJobRunService := schedulerService.NewJobRunService(s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler)
+	newJobRunService := schedulerService.NewJobRunService(
+		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
+		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectRepo,
+	)
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)

@@ -52,13 +52,14 @@ type JobSpecBehaviorNotifier struct {
 type JobSpecTask struct {
 	Name   string            `yaml:"name"`
 	Config map[string]string `yaml:"config,omitempty"`
-	Window JobSpecTaskWindow `yaml:"window"`
+	Window JobSpecTaskWindow `yaml:"window,omitempty"`
 }
 
 type JobSpecTaskWindow struct {
-	Size       string `yaml:"size"`
-	Offset     string `yaml:"offset"`
-	TruncateTo string `yaml:"truncate_to"`
+	Size       string `yaml:"size,omitempty"`
+	Offset     string `yaml:"offset,omitempty"`
+	TruncateTo string `yaml:"truncate_to,omitempty"`
+	Preset     string `yaml:"preset,omitempty"`
 }
 
 type JobSpecHook struct {
@@ -113,6 +114,7 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 		WindowSize:       j.Task.Window.Size,
 		WindowOffset:     j.Task.Window.Offset,
 		WindowTruncateTo: j.Task.Window.TruncateTo,
+		WindowPreset:     j.Task.Window.Preset,
 		Dependencies:     j.getProtoJobDependencies(),
 		Assets:           j.Asset,
 		Hooks:            j.getProtoJobSpecHooks(),
@@ -436,6 +438,7 @@ func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 				Size:       protoSpec.WindowSize,
 				Offset:     protoSpec.WindowOffset,
 				TruncateTo: protoSpec.WindowTruncateTo,
+				Preset:     protoSpec.WindowPreset,
 			},
 		},
 		Asset:        protoSpec.Assets,

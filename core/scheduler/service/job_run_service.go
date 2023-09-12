@@ -17,6 +17,8 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/lib/window"
+	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/telemetry"
 )
 
@@ -61,7 +63,7 @@ type OperatorRunRepository interface {
 }
 
 type JobInputCompiler interface {
-	Compile(ctx context.Context, job *scheduler.Job, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
 }
 
 type PriorityResolver interface {
@@ -80,6 +82,10 @@ type EventHandler interface {
 	HandleEvent(moderator.Event)
 }
 
+type ProjectGetter interface {
+	GetByName(context.Context, tenant.ProjectName) (*tenant.Project, error)
+}
+
 type JobRunService struct {
 	l                log.Logger
 	repo             JobRunRepository
@@ -90,10 +96,11 @@ type JobRunService struct {
 	jobRepo          JobRepository
 	priorityResolver PriorityResolver
 	compiler         JobInputCompiler
+	projectGetter    ProjectGetter
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
-	job, err := s.jobRepo.GetJob(ctx, projectName, jobName)
+	details, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
 		s.l.Error("error getting job [%s]: %s", jobName, err)
 		return nil, err
@@ -103,7 +110,7 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	var jobRun *scheduler.JobRun
 	if config.JobRunID.IsEmpty() {
 		s.l.Warn("getting job run by scheduled at")
-		jobRun, err = s.repo.GetByScheduledAt(ctx, job.Tenant, jobName, config.ScheduledAt)
+		jobRun, err = s.repo.GetByScheduledAt(ctx, details.Job.Tenant, jobName, config.ScheduledAt)
 	} else {
 		s.l.Warn("getting job run by id")
 		jobRun, err = s.repo.GetByID(ctx, config.JobRunID)
@@ -117,16 +124,16 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		executedAt = jobRun.StartTime
 	}
 	// Additional task config from existing replay
-	replayJobConfig, err := s.replayRepo.GetReplayJobConfig(ctx, job.Tenant, job.Name, config.ScheduledAt)
+	replayJobConfig, err := s.replayRepo.GetReplayJobConfig(ctx, details.Job.Tenant, details.Job.Name, config.ScheduledAt)
 	if err != nil {
 		s.l.Error("error getting replay job config from db: %s", err)
 		return nil, err
 	}
 	for k, v := range replayJobConfig {
-		job.Task.Config[k] = v
+		details.Job.Task.Config[k] = v
 	}
 
-	return s.compiler.Compile(ctx, job, config, executedAt)
+	return s.compiler.Compile(ctx, details, config, executedAt)
 }
 
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
@@ -169,6 +176,73 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	result := filterRuns(totalRuns, createFilterSet(criteria.Filter))
 
 	return result, nil
+}
+
+func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
+	project, err := s.projectGetter.GetByName(ctx, projectName)
+	if err != nil {
+		s.l.Error("error getting project [%s]: %s", projectName, err)
+		return window.Interval{}, err
+	}
+
+	job, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
+	if err != nil {
+		s.l.Error("error getting job detail [%s] under project [%s]: %s", jobName, projectName, err)
+		return window.Interval{}, err
+	}
+
+	return s.getInterval(project, job, referenceTime)
+}
+
+// TODO: this method is only for backward compatibility, it will be deprecated soon
+func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobWithDetails, referenceTime time.Time) (window.Interval, error) {
+	if job.Job.WindowConfig.Type() == window.Incremental {
+		w, err := window.FromSchedule(job.Schedule.Interval)
+		if err != nil {
+			s.l.Error("error getting window with type incremental: %v", err)
+			return window.Interval{}, err
+		}
+
+		return w.GetInterval(referenceTime)
+	}
+
+	var baseWindow models.Window
+	if job.Job.WindowConfig.Type() == window.Preset {
+		preset, err := project.GetPreset(job.Job.WindowConfig.Preset)
+		if err != nil {
+			s.l.Error("error getting preset [%s] for project [%s]: %v", job.Job.WindowConfig.Preset, project.Name(), err)
+			return window.Interval{}, err
+		}
+		baseWindow = preset.Window()
+	} else {
+		baseWindow = job.Job.WindowConfig.Window
+	}
+
+	w, err := models.NewWindow(baseWindow.GetVersion(), "", "0", baseWindow.GetSize())
+	if err != nil {
+		s.l.Error("error initializing window: %v", err)
+		return window.Interval{}, err
+	}
+
+	if err := w.Validate(); err != nil {
+		s.l.Error("error validating window: %v", err)
+		return window.Interval{}, err
+	}
+
+	startTime, err := w.GetStartTime(referenceTime)
+	if err != nil {
+		return window.Interval{}, err
+	}
+
+	endTime, err := w.GetEndTime(referenceTime)
+	if err != nil {
+		return window.Interval{}, err
+	}
+
+	return window.Interval{
+		Start: startTime,
+		End:   endTime,
+	}, nil
 }
 
 func getExpectedRuns(spec *cron.ScheduleSpec, startTime, endTime time.Time) []*scheduler.JobRunStatus {
@@ -543,6 +617,7 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
 	operatorRunRepo OperatorRunRepository, scheduler Scheduler, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
+	projectGetter ProjectGetter,
 ) *JobRunService {
 	return &JobRunService{
 		l:                logger,
@@ -554,5 +629,6 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 		jobRepo:          jobRepo,
 		priorityResolver: resolver,
 		compiler:         compiler,
+		projectGetter:    projectGetter,
 	}
 }

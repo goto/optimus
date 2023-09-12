@@ -10,6 +10,7 @@ assuming there are 2 namespaces in a project.
 ```
 .
 ├── optimus.yaml
+├── preset.yaml
 ├── README.md
 ├── namespace-1
 │   ├── jobs
@@ -23,11 +24,10 @@ assuming there are 2 namespaces in a project.
 |       |   └── this.yaml
 │       └── postgres
 │           └── table1
-└── namespace-2
-└── jobs
+├── namespace-2
+├── jobs
 └── resources
 ```
-
 
 You might have also noticed there are `this.yaml` files being used in some directories. This file is used to share a 
 single set of configurations across multiple sub-directories. For example, if you create a file at 
@@ -66,9 +66,9 @@ task:
     dataset: project_dataset
     table: sample_replace
     load_method: REPLACE
-window:
-  size: 48h
-  offset: 24h
+  window:
+    size: 48h
+    offset: 24h
 ```
 
 will result in final computed job.yaml during deployment as
@@ -92,7 +92,11 @@ task:
     table: sample_replace
     load_method: REPLACE
     BQ_SERVICE_ACCOUNT: "{{.secret.BQ_SERVICE_ACCOUNT}}"
-window:
-  size: 48h
-  offset: 24h
+  window:
+    size: 48h
+    offset: 24h
 ```
+
+**Preset (since v0.10.0)**
+
+Window preset allows for easier usage of window configuration and can be specified through a YAML file. It is optional in nature and is recommended to be put in the same directory as `optimus.yaml` if being set. For more information on how to utilize window preset, please check [this page](../concepts/intervals-and-windows.md).

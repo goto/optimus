@@ -3,6 +3,7 @@ package setup
 import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
 
@@ -14,7 +15,7 @@ type DummyJobBuilder struct {
 	retry     *job.Retry
 	startDate job.ScheduleDate
 
-	window models.Window
+	windowConfig window.Config
 
 	taskConfig job.Config
 	taskName   job.TaskName
@@ -50,10 +51,11 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 	}
 
 	version := 1
-	window, err := models.NewWindow(version, "d", "24h", "24h")
+	w, err := models.NewWindow(version, "d", "24h", "24h")
 	if err != nil {
 		panic(err)
 	}
+	windowConfig := window.NewCustomConfig(w)
 
 	taskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_task_value"})
 	if err != nil {
@@ -101,14 +103,14 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 	}
 
 	return &DummyJobBuilder{
-		version:     version,
-		owner:       "dev_test",
-		description: "description for job",
-		retry:       job.NewRetry(5, 0, false),
-		startDate:   startDate,
-		window:      window,
-		taskConfig:  taskConfig,
-		taskName:    taskName,
+		version:      version,
+		owner:        "dev_test",
+		description:  "description for job",
+		retry:        job.NewRetry(5, 0, false),
+		startDate:    startDate,
+		windowConfig: windowConfig,
+		taskConfig:   taskConfig,
+		taskName:     taskName,
 		labels: map[string]string{
 			"environment": "production",
 		},
@@ -159,9 +161,9 @@ func (d *DummyJobBuilder) OverrideStartDate(startDate job.ScheduleDate) *DummyJo
 	return &output
 }
 
-func (d *DummyJobBuilder) OverrideWindow(window models.Window) *DummyJobBuilder {
+func (d *DummyJobBuilder) OverrideWindow(window window.Config) *DummyJobBuilder {
 	output := *d
-	output.window = window
+	output.windowConfig = window
 	return &output
 }
 
@@ -303,7 +305,7 @@ func (d *DummyJobBuilder) Build(tnnt tenant.Tenant) *job.Job {
 		panic(err)
 	}
 
-	spec, err := job.NewSpecBuilder(d.version, d.name, d.owner, schedule, d.window, task).
+	spec, err := job.NewSpecBuilder(d.version, d.name, d.owner, schedule, d.windowConfig, task).
 		WithDescription(d.description).
 		WithLabels(d.labels).
 		WithHooks(hooks).

@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
+	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/optimus/sdk/plugin"
@@ -903,6 +904,13 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 }
 
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
+	if windowConfig := spec.WindowConfig(); windowConfig.Type() == window.Preset {
+		if _, err := tenantWithDetails.Project().GetPreset(windowConfig.Preset); err != nil {
+			errorMsg := fmt.Sprintf("error getting preset for job [%s]: %s", spec.Name(), err)
+			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
+	}
+
 	destination, err := j.pluginService.GenerateDestination(ctx, tenantWithDetails, spec.Task())
 	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
 		j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)

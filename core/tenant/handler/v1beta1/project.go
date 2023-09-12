@@ -42,7 +42,6 @@ func (ph *ProjectHandler) RegisterProject(ctx context.Context, req *pb.RegisterP
 		return nil, errors.GRPCErr(err, fmt.Sprintf("not able to register project %s", req.GetProject().Name))
 	}
 
-	// TODO update the proto to remove the success & Message
 	return &pb.RegisterProjectResponse{}, nil
 }
 
@@ -92,12 +91,43 @@ func fromProjectProto(conf *pb.ProjectSpecification) (*tenant.Project, error) {
 		pConf[strings.ToUpper(key)] = val
 	}
 
-	return tenant.NewProject(conf.GetName(), pConf)
+	presets := make(map[string]tenant.Preset, len(conf.GetPresets()))
+	for name, preset := range conf.GetPresets() {
+		lowerName := strings.ToLower(name)
+		newPreset, err := tenant.NewPreset(lowerName, preset.Description, preset.GetTruncateTo(), preset.GetOffset(), preset.GetSize())
+		if err != nil {
+			return nil, err
+		}
+		presets[lowerName] = newPreset
+	}
+
+	project, err := tenant.NewProject(conf.GetName(), pConf)
+	if err != nil {
+		return nil, err
+	}
+
+	project.SetPresets(presets)
+	return project, nil
 }
 
 func toProjectProto(project *tenant.Project) *pb.ProjectSpecification {
 	return &pb.ProjectSpecification{
-		Name:   project.Name().String(),
-		Config: project.GetConfigs(),
+		Name:    project.Name().String(),
+		Config:  project.GetConfigs(),
+		Presets: toProjectPresets(project.GetPresets()),
 	}
+}
+
+func toProjectPresets(presets map[string]tenant.Preset) map[string]*pb.ProjectSpecification_ProjectPreset {
+	presetPb := make(map[string]*pb.ProjectSpecification_ProjectPreset, len(presets))
+	for name, preset := range presets {
+		presetPb[name] = &pb.ProjectSpecification_ProjectPreset{
+			Name:        preset.Name(),
+			Description: preset.Description(),
+			TruncateTo:  preset.Window().GetTruncateTo(),
+			Offset:      preset.Window().GetOffset(),
+			Size:        preset.Window().GetSize(),
+		}
+	}
+	return presetPb
 }

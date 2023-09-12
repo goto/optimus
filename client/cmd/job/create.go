@@ -3,7 +3,6 @@ package job
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
@@ -32,7 +31,7 @@ func NewCreateCommand() *cobra.Command {
 	create := &createCommand{
 		logger:          l,
 		namespaceSurvey: survey.NewNamespaceSurvey(l),
-		jobCreateSurvey: survey.NewJobCreateSurvey(),
+		jobCreateSurvey: survey.NewJobCreateSurvey(l),
 	}
 	cmd := &cobra.Command{
 		Use:      "create",
@@ -79,13 +78,18 @@ func (c *createCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	jobDirectory := filepath.Join(jwd, newDirName)
-	defaultJobName := strings.ReplaceAll(strings.ReplaceAll(jobDirectory, "/", "."), "\\", ".")
 
 	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(jobSpecFs)
 	if err != nil {
 		return err
 	}
-	jobSpec, err := c.jobCreateSurvey.AskToCreateJob(c.pluginRepo, jobSpecReadWriter, jobDirectory, defaultJobName)
+
+	presets, err := internal.GetProjectPresets(c.clientConfig.Project.PresetsPath)
+	if err != nil {
+		return fmt.Errorf("error reading presets: %w", err)
+	}
+
+	jobSpec, err := c.jobCreateSurvey.AskToCreateJob(c.pluginRepo, jobSpecReadWriter, jobDirectory, presets)
 	if err != nil {
 		return err
 	}

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"cloud.google.com/go/bigquery"
-	bq "github.com/goto/optimus/ext/store/bigquery"
 	"google.golang.org/api/iterator"
 )
 
@@ -31,7 +30,7 @@ type InformationSchema struct {
 	DDL      string
 }
 
-func ReadInformationSchemasUnderGroup(ctx context.Context, client bq.Client, project, dataset string, names ...string) ([]*InformationSchema, error) {
+func ReadInformationSchemasUnderGroup(ctx context.Context, client BigqueryClient, project, dataset string, names ...string) ([]*InformationSchema, error) {
 	queryContent := buildQuery(project, dataset, names...)
 
 	queryStatement := client.Query(queryContent)

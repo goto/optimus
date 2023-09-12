@@ -12,7 +12,8 @@ type Resource struct {
 	Upstreams []*Resource
 }
 
-func FromDestinationURN(destination string) (*Resource, error) {
+func FromDestinationURN(destinationURN string) (*Resource, error) { // as of now only support bigquery
+	destination := strings.TrimPrefix(destinationURN, "bigquery://")
 	splitDestination := strings.Split(destination, ":")
 	if len(splitDestination) != 2 {
 		return nil, fmt.Errorf("cannot get project from destination [%s]", destination)
@@ -32,8 +33,8 @@ func FromDestinationURN(destination string) (*Resource, error) {
 	}, nil
 }
 
-func (r Resource) URN() string {
-	return r.Project + "." + r.Dataset + "." + r.Name
+func (r Resource) URN() string { // as of now only support bigquery
+	return "bigquery://" + r.Project + ":" + r.Dataset + "." + r.Name
 }
 
 type Resources []*Resource

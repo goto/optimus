@@ -14,7 +14,7 @@ func GenerateDestination(ctx context.Context, configs map[string]string) (string
 	dataset, ok2 := configs["DATASET"]
 	tab, ok3 := configs["TABLE"]
 	if ok1 && ok2 && ok3 {
-		return fmt.Sprintf("%s:%s.%s", proj, dataset, tab), nil
+		return "bigquery://" + fmt.Sprintf("%s:%s.%s", proj, dataset, tab), nil
 	}
 	return "", errors.New("missing config key required to generate destination")
 }

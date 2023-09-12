@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/extractor/upstream"
+	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
@@ -963,8 +964,16 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		if !ok {
 			return nil, fmt.Errorf("empty sql file")
 		}
-		queryParserFunc := upstream.ParseTopLevelUpstreamsFromQuery
-		upstreamResources, err := resolver.GenerateDependencies(ctx, j.logger, queryParserFunc, svcAcc, query, destination)
+
+		bqClient, err := bigquery.NewClient(ctx, svcAcc)
+		if err != nil {
+			return nil, fmt.Errorf("error creating bigquery client: %w", err)
+		}
+		upstreamExtractor, err := upstream.NewExtractor(bqClient, upstream.ParseTopLevelUpstreamsFromQuery)
+		if err != nil {
+			return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
+		}
+		upstreamResources, err := resolver.GenerateDependencies(ctx, j.logger, upstreamExtractor, query, destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())

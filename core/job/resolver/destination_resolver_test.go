@@ -18,7 +18,7 @@ func TestGenerateDestination(t *testing.T) {
 		}
 		destination, err := resolver.GenerateDestination(ctx, configs)
 		assert.Nil(t, err)
-		assert.Equal(t, "proj:datas.tab", destination)
+		assert.Equal(t, "bigquery://proj:datas.tab", destination)
 	})
 	t.Run("should throw an error if any on of the config is missing to generate destination", func(t *testing.T) {
 		configs := map[string]string{

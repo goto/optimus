@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/goto/optimus/ext/extractor/upstream"
-	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/salt/log"
 )
 
@@ -28,20 +27,12 @@ type UpstreamExtractor interface {
 // fn should generate the actual source as dependency
 // BQ2BQ dependencies are BQ tables in format "project:dataset.table"
 // Note: only for bq2bq job, previously named as GenerateDependencies
-func GenerateDependencies(ctx context.Context, l log.Logger, queryParserFunc upstream.QueryParser, svcAcc, query, destinationURN string) ([]string, error) {
+func GenerateDependencies(ctx context.Context, l log.Logger, upstreamExtractor UpstreamExtractor, query, destinationURN string) ([]string, error) {
 	destinationResource, err := upstream.FromDestinationURN(destinationURN)
 	if err != nil {
 		return nil, fmt.Errorf("error getting destination resource: %w", err)
 	}
 
-	bqClient, err := bigquery.NewClient(ctx, svcAcc)
-	if err != nil {
-		return nil, fmt.Errorf("error creating bigquery client: %w", err)
-	}
-	upstreamExtractor, err := upstream.NewExtractor(bqClient, queryParserFunc)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
-	}
 	upstreams, err := extractUpstreams(ctx, l, upstreamExtractor, query, destinationResource)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting upstreams: %w", err)

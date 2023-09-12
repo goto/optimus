@@ -85,12 +85,8 @@ func ParseTopLevelUpstreamsFromQuery(query string) []*Resource {
 		if pseudoResources[resourceURN] {
 			continue
 		}
-		splittedURN := strings.Split(resourceURN, ".")
-		output = append(output, &Resource{
-			Project: splittedURN[0],
-			Dataset: splittedURN[1],
-			Name:    splittedURN[2],
-		})
+		r, _ := FromDestinationURN(resourceURN)
+		output = append(output, r)
 	}
 
 	return output

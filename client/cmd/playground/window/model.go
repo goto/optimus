@@ -50,17 +50,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msgStr {
 	case "ctrl+c", "q":
 		return m, tea.Quit
-	case "up":
+	case "up", "w":
 		m.handleUp()
-	case "down":
+	case "down", "s":
 		m.handleDown()
-	case "left":
+	case "left", "a":
 		m.handleLeft()
-	case "right":
+	case "right", "d":
 		m.handleRight()
-	case "shift+up":
+	case "shift+up", "W":
 		m.handleIncrement()
-	case "shift+down":
+	case "shift+down", "S":
 		m.handleDecrement()
 	case "M", "h", "-",
 		"1", "2", "3", "4", "5",
@@ -108,8 +108,8 @@ func (m *model) generateWindowInputHintView() string {
 - d: truncate to day
 - h: truncate to hour
 
-press shift+up to increment value
-press shift+down to decrement value
+press (shift+up) or (shift+w) to increment value
+press (shift+down) or (shift+s) to decrement value
 `
 	case pointToOffset:
 		hint = `valid formats are:
@@ -128,32 +128,32 @@ both n and m can NOT be negative
 	case pointToYear:
 		hint = `year of the scheduled time
 
-press shift+up to increment value
-press shift+down to decrement value
+press (shift+up) or (shift+w) to increment value
+press (shift+down) or (shift+s) to decrement value
 `
 	case pointToMonth:
 		hint = `month of the scheduled time
 
-press shift+up to increment value
-press shift+down to decrement value
+press (shift+up) or (shift+w) to increment value
+press (shift+down) or (shift+s) to decrement value
 `
 	case pointToDay:
 		hint = `day of the scheduled time
 
-press shift+up to increment value
-press shift+down to decrement value
+press (shift+up) or (shift+w) to increment value
+press (shift+down) or (shift+s) to decrement value
 `
 	case pointToHour:
 		hint = `hour of the scheduled time
 
-press shift+up to increment value
-press shift+down to decrement value
+press (shift+up) or (shift+w) to increment value
+press (shift+down) or (shift+s) to decrement value
 `
 	case pointToMinute:
 		hint = `minute of the scheduled time
 
-press shift+up to increment value
-press shift+down to decrement value
+press (shift+up) or (shift+w) to increment value
+press (shift+down) or (shift+s) to decrement value
 `
 	}
 	return hint

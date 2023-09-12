@@ -65,48 +65,6 @@ func TestUniqueFilterResources(t *testing.T) {
 	assert.ElementsMatch(t, expectedResult, actualResult)
 }
 
-func TestGroupResources(t *testing.T) {
-	input := []*upstream.Resource{
-		{
-			Project: "project_test",
-			Dataset: "dataset_1_test",
-			Name:    "name_1_test",
-		},
-		{
-			Project: "project_test",
-			Dataset: "dataset_1_test",
-			Name:    "name_2_test",
-		},
-		{
-			Project: "project_test",
-			Dataset: "dataset_2_test",
-			Name:    "name_1_test",
-		},
-		{
-			Project: "project_test",
-			Dataset: "dataset_2_test",
-			Name:    "name_2_test",
-		},
-	}
-
-	expectedResult := []*upstream.ResourceGroup{
-		{
-			Project: "project_test",
-			Dataset: "dataset_1_test",
-			Names:   []string{"name_1_test", "name_2_test"},
-		},
-		{
-			Project: "project_test",
-			Dataset: "dataset_2_test",
-			Names:   []string{"name_1_test", "name_2_test"},
-		},
-	}
-
-	actualResult := upstream.Resources(input).GroupResources()
-
-	assert.ElementsMatch(t, expectedResult, actualResult)
-}
-
 func TestFlattenUpstreams(t *testing.T) {
 	t.Run("should return flattened upstream in the form of resource", func(t *testing.T) {
 		upstreams := []*upstream.Resource{

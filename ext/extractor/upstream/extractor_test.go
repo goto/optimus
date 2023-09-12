@@ -14,16 +14,24 @@ import (
 
 func TestNewExtractor(t *testing.T) {
 	t.Run("should return nil and error if client is nil", func(t *testing.T) {
-		var client bqiface.Client
-
-		actualExtractor, actualError := upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
+		actualExtractor, actualError := upstream.NewExtractor(nil, upstream.ParseTopLevelUpstreamsFromQuery)
 
 		assert.Nil(t, actualExtractor)
 		assert.EqualError(t, actualError, "client is nil")
 	})
 
+	t.Run("should return nil and error if parser is nil", func(t *testing.T) {
+		client := new(mockClient)
+		defer client.AssertExpectations(t)
+		actualExtractor, actualError := upstream.NewExtractor(client, nil)
+
+		assert.Nil(t, actualExtractor)
+		assert.EqualError(t, actualError, "parser function is nil")
+	})
+
 	t.Run("should return extractor and nil if no error is encountered", func(t *testing.T) {
-		client := new(ClientMock)
+		client := new(mockClient)
+		defer client.AssertExpectations(t)
 
 		actualExtractor, actualError := upstream.NewExtractor(client, upstream.ParseTopLevelUpstreamsFromQuery)
 
@@ -81,7 +89,7 @@ func TestExtractor(t *testing.T) {
 			}
 
 			for _, test := range testCases {
-				client := new(ClientMock)
+				client := new(mockClient)
 				query := new(QueryMock)
 				rowIterator := new(RowIteratorMock)
 				resourcestoIgnore := []upstream.Resource{
@@ -116,7 +124,7 @@ func TestExtractor(t *testing.T) {
 		})
 
 		t.Run("should return upstreams with its nested ones if found any", func(t *testing.T) {
-			client := new(ClientMock)
+			client := new(mockClient)
 			query := new(QueryMock)
 			rowIterator := new(RowIteratorMock)
 			resourcestoIgnore := []upstream.Resource{
@@ -180,7 +188,7 @@ func TestExtractor(t *testing.T) {
 		})
 
 		t.Run("should return error if circular reference is detected", func(t *testing.T) {
-			client := new(ClientMock)
+			client := new(mockClient)
 			query := new(QueryMock)
 			rowIterator := new(RowIteratorMock)
 
@@ -244,4 +252,13 @@ func TestExtractor(t *testing.T) {
 			assert.ErrorContains(t, actualError, "circular reference is detected")
 		})
 	})
+}
+
+type mockClient struct {
+	mock.Mock
+}
+
+func (m *mockClient) Query(query string) bqiface.Query {
+	args := m.Called(query)
+	return args.Get(0).(bqiface.Query)
 }

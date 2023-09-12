@@ -17,23 +17,21 @@ import (
 
 func TestReadSchemasUnderGroup(t *testing.T) {
 	t.Run("should return nil and error if failed reading from query", func(t *testing.T) {
-		client := new(ClientMock)
+		client := new(mockClient)
 		queryStatement := new(QueryMock)
 
 		ctx := context.Background()
-		group := &upstream.ResourceGroup{
-			Project: "project_test",
-			Dataset: "dataset_test",
-			Names:   []string{"table_test"},
-		}
+		project := "project_test"
+		dataset := "dataset_test"
+		tables := []string{"table_test"}
 
-		queryContent := buildQuery(group)
+		queryContent := buildQuery(project, dataset, tables...)
 		client.On("Query", queryContent).Return(queryStatement)
 
 		unexpectedError := errors.New("unexpected error")
 		queryStatement.On("Read", ctx).Return(nil, unexpectedError)
 
-		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
+		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, project, dataset, tables...)
 
 		assert.Nil(t, actualSchemas)
 		assert.ErrorContains(t, actualError, unexpectedError.Error())
@@ -41,18 +39,16 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 
 	t.Run("should return schema and error if failed getting next value iterator", func(t *testing.T) {
 		t.Run("should return nil schema if no other values available", func(t *testing.T) {
-			client := new(ClientMock)
+			client := new(mockClient)
 			queryStatement := new(QueryMock)
 			rowIterator := new(RowIteratorMock)
 
 			ctx := context.Background()
-			group := &upstream.ResourceGroup{
-				Project: "project_test",
-				Dataset: "dataset_test",
-				Names:   []string{"table_test"},
-			}
+			project := "project_test"
+			dataset := "dataset_test"
+			tables := []string{"table_test"}
 
-			queryContent := buildQuery(group)
+			queryContent := buildQuery(project, dataset, tables...)
 			client.On("Query", queryContent).Return(queryStatement)
 
 			queryStatement.On("Read", ctx).Return(rowIterator, nil)
@@ -61,25 +57,24 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 			rowIterator.On("Next", mock.Anything).Return(unexpectedError).Once()
 			rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
+			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, project, dataset, tables...)
 
 			assert.Nil(t, actualSchemas)
 			assert.ErrorContains(t, actualError, unexpectedError.Error())
 		})
 
 		t.Run("should return available schema if other values available", func(t *testing.T) {
-			client := new(ClientMock)
+			client := new(mockClient)
 			queryStatement := new(QueryMock)
 			rowIterator := new(RowIteratorMock)
 
 			ctx := context.Background()
-			group := &upstream.ResourceGroup{
-				Project: "project_test",
-				Dataset: "dataset_test",
-				Names:   []string{"table_test"},
-			}
 
-			queryContent := buildQuery(group)
+			project := "project_test"
+			dataset := "dataset_test"
+			tables := []string{"table_test"}
+
+			queryContent := buildQuery(project, dataset, tables...)
 			client.On("Query", queryContent).Return(queryStatement)
 
 			queryStatement.On("Read", ctx).Return(rowIterator, nil)
@@ -103,7 +98,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 				},
 			}
 
-			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
+			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, project, dataset, tables...)
 
 			assert.EqualValues(t, expectedSchemas, actualSchemas)
 			assert.ErrorContains(t, actualError, unexpectedError.Error())
@@ -111,18 +106,16 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 	})
 
 	t.Run("should return schema and nil if row iterator results in zero value", func(t *testing.T) {
-		client := new(ClientMock)
+		client := new(mockClient)
 		queryStatement := new(QueryMock)
 		rowIterator := new(RowIteratorMock)
 
 		ctx := context.Background()
-		group := &upstream.ResourceGroup{
-			Project: "project_test",
-			Dataset: "dataset_test",
-			Names:   []string{"table_test"},
-		}
+		project := "project_test"
+		dataset := "dataset_test"
+		tables := []string{"table_test"}
 
-		queryContent := buildQuery(group)
+		queryContent := buildQuery(project, dataset, tables...)
 		client.On("Query", queryContent).Return(queryStatement)
 
 		queryStatement.On("Read", ctx).Return(rowIterator, nil)
@@ -133,7 +126,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 		}).Return(nil).Once()
 		rowIterator.On("Next", mock.Anything).Return(iterator.Done).Once()
 
-		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
+		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, project, dataset, tables...)
 
 		assert.Nil(t, actualSchemas)
 		assert.NoError(t, actualError)
@@ -171,16 +164,14 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		group := &upstream.ResourceGroup{
-			Project: "project_test",
-			Dataset: "dataset_test",
-			Names:   []string{"table_test"},
-		}
+		project := "project_test"
+		dataset := "dataset_test"
+		tables := []string{"table_test"}
 
-		queryContent := buildQuery(group)
+		queryContent := buildQuery(project, dataset, tables...)
 
 		for _, test := range testCases {
-			client := new(ClientMock)
+			client := new(mockClient)
 			queryStatement := new(QueryMock)
 			rowIterator := new(RowIteratorMock)
 
@@ -209,7 +200,7 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 				},
 			}
 
-			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
+			actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, project, dataset, tables...)
 
 			assert.EqualValues(t, expectedSchemas, actualSchemas)
 			assert.ErrorContains(t, actualError, test.ErrorMessage)
@@ -217,18 +208,16 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 	})
 
 	t.Run("should return schemas and nil if no error is encountered", func(t *testing.T) {
-		client := new(ClientMock)
+		client := new(mockClient)
 		queryStatement := new(QueryMock)
 		rowIterator := new(RowIteratorMock)
 
 		ctx := context.Background()
-		group := &upstream.ResourceGroup{
-			Project: "project_test",
-			Dataset: "dataset_test",
-			Names:   []string{"table_test", "table_wild*"},
-		}
+		project := "project_test"
+		dataset := "dataset_test"
+		tables := []string{"table_test"}
 
-		queryContent := buildQuery(group)
+		queryContent := buildQuery(project, dataset, tables...)
 		client.On("Query", queryContent).Return(queryStatement)
 
 		queryStatement.On("Read", ctx).Return(rowIterator, nil)
@@ -275,17 +264,17 @@ func TestReadSchemasUnderGroup(t *testing.T) {
 			},
 		}
 
-		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, group)
+		actualSchemas, actualError := upstream.ReadInformationSchemasUnderGroup(ctx, client, project, dataset, tables...)
 
 		assert.Equal(t, expectedSchemas, actualSchemas)
 		assert.NoError(t, actualError)
 	})
 }
 
-func buildQuery(group *upstream.ResourceGroup) string {
+func buildQuery(project, dataset string, tables ...string) string {
 	var nameQueries, prefixQueries []string
-	for _, n := range group.Names {
-		suffix := "*"
+	suffix := "*"
+	for _, n := range tables {
 		if strings.HasSuffix(n, suffix) {
 			prefix, _ := strings.CutSuffix(n, suffix)
 			prefixQuery := fmt.Sprintf("STARTS_WITH(table_name, '%s')", prefix)
@@ -309,7 +298,7 @@ func buildQuery(group *upstream.ResourceGroup) string {
 	}
 
 	return "SELECT table_catalog, table_schema, table_name, table_type, ddl\n" +
-		fmt.Sprintf("FROM `%s.%s.INFORMATION_SCHEMA.TABLES`\n", group.Project, group.Dataset) +
+		fmt.Sprintf("FROM `%s.%s.INFORMATION_SCHEMA.TABLES`\n", project, dataset) +
 		whereClause
 }
 

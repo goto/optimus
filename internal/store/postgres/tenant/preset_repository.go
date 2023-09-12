@@ -104,7 +104,7 @@ WHERE
 	}
 
 	if result.RowsAffected() == 0 {
-		return errors.NewError(errors.ErrNotFound, tenant.EntityProject, "no row is updated")
+		return errors.NotFound(tenant.EntityProject, "no row is updated")
 	}
 
 	return nil

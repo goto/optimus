@@ -8,8 +8,7 @@ import (
 
 func NewMockBinaryPlugin(name, pluginType string) *plugin.Plugin {
 	return &plugin.Plugin{
-		YamlMod:       &MockYamlMod{Name: name, Type: pluginType},
-		DependencyMod: &MockDependencyMod{Name: name, Type: pluginType},
+		YamlMod: &MockYamlMod{Name: name, Type: pluginType},
 	}
 }
 
@@ -55,25 +54,4 @@ func (*MockYamlMod) DefaultConfig(context.Context, plugin.DefaultConfigRequest) 
 
 func (*MockYamlMod) DefaultAssets(context.Context, plugin.DefaultAssetsRequest) (*plugin.DefaultAssetsResponse, error) {
 	return &plugin.DefaultAssetsResponse{Assets: plugin.Assets{}}, nil
-}
-
-type MockDependencyMod struct {
-	Name string
-	Type string
-}
-
-func (*MockDependencyMod) GetName(context.Context) (string, error) {
-	return "", nil
-}
-
-func (*MockDependencyMod) GenerateDestination(context.Context, plugin.GenerateDestinationRequest) (*plugin.GenerateDestinationResponse, error) {
-	return &plugin.GenerateDestinationResponse{}, nil
-}
-
-func (*MockDependencyMod) GenerateDependencies(context.Context, plugin.GenerateDependenciesRequest) (*plugin.GenerateDependenciesResponse, error) {
-	return &plugin.GenerateDependenciesResponse{}, nil
-}
-
-func (*MockDependencyMod) CompileAssets(context.Context, plugin.CompileAssetsRequest) (*plugin.CompileAssetsResponse, error) {
-	return &plugin.CompileAssetsResponse{}, nil
 }

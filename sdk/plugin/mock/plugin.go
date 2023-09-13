@@ -6,12 +6,6 @@ import (
 	"github.com/goto/optimus/sdk/plugin"
 )
 
-func NewMockBinaryPlugin(name, pluginType string) *plugin.Plugin {
-	return &plugin.Plugin{
-		YamlMod: &MockYamlMod{Name: name, Type: pluginType},
-	}
-}
-
 func NewMockYamlPlugin(name, pluginType string) *plugin.Plugin {
 	return &plugin.Plugin{
 		YamlMod: &MockYamlMod{Name: name, Type: pluginType},

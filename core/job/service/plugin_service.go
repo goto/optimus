@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -52,5 +53,24 @@ func (p JobPluginService) Info(_ context.Context, taskName job.TaskName) (*plugi
 		return nil, ErrYamlModNotExist
 	}
 
-	return taskPlugin.YamlMod.PluginInfo(), nil
+	return taskPlugin.Info(), nil
+}
+
+func (p JobPluginService) GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error) {
+	taskPlugin, err := p.pluginRepo.GetByName(taskName.String())
+	if err != nil {
+		p.logger.Error("error getting plugin [%s]: %s", taskName.String(), err)
+		return "", err
+	}
+	if taskPlugin.Info().Name != "bq2bq" {
+		return "", nil
+	}
+
+	proj, ok1 := configs["PROJECT"]
+	dataset, ok2 := configs["DATASET"]
+	tab, ok3 := configs["TABLE"]
+	if ok1 && ok2 && ok3 {
+		return job.ResourceURN("bigquery://" + fmt.Sprintf("%s:%s.%s", proj, dataset, tab)), nil
+	}
+	return "", errors.New("missing config key required to generate destination")
 }

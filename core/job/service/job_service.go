@@ -75,6 +75,7 @@ type Engine interface {
 
 type PluginService interface {
 	Info(context.Context, job.TaskName) (*plugin.Info, error)
+	GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error)
 }
 
 type TenantDetailsGetter interface {
@@ -931,7 +932,7 @@ func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails
 }
 
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
-	var destination string = ""
+	var destination job.ResourceURN = ""
 	var sources []job.ResourceURN = nil
 	var err error = nil
 
@@ -946,7 +947,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		compileConfigs := j.compileConfigs(spec.Task().Config(), tenantWithDetails)
 
 		// generate destination
-		destination, err = resolver.GenerateDestination(ctx, compileConfigs)
+		destination, err = j.pluginService.GenerateDestination(ctx, spec.Task().Name(), compileConfigs)
 		if err != nil {
 			j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())

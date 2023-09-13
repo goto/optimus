@@ -14,7 +14,7 @@ type DataStore interface {
 	Create(context.Context, *resource.Resource) error
 	Update(context.Context, *resource.Resource) error
 	BatchUpdate(context.Context, []*resource.Resource) error
-	Validate(*resource.Resource) error
+	Validate(context.Context, *resource.Resource) error
 	GetURN(res *resource.Resource) (string, error)
 	Backup(context.Context, *resource.Backup, []*resource.Resource) (*resource.BackupResult, error)
 }
@@ -105,7 +105,7 @@ func (m *ResourceMgr) SyncResource(ctx context.Context, res *resource.Resource) 
 	return nil
 }
 
-func (m *ResourceMgr) Validate(res *resource.Resource) error {
+func (m *ResourceMgr) Validate(ctx context.Context, res *resource.Resource) error {
 	store := res.Store()
 	datastore, ok := m.datastoreMap[store]
 	if !ok {
@@ -114,7 +114,7 @@ func (m *ResourceMgr) Validate(res *resource.Resource) error {
 		return errors.InternalError(resource.EntityResource, msg, nil)
 	}
 
-	return datastore.Validate(res)
+	return datastore.Validate(ctx, res)
 }
 
 func (m *ResourceMgr) GetURN(res *resource.Resource) (string, error) {

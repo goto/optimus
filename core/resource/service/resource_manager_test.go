@@ -253,7 +253,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			err = manager.Validate(updateRequest)
+			err = manager.Validate(ctx, updateRequest)
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "datastore [snowflake] for resource [proj.ds.name1] is not found")
 		})
@@ -267,12 +267,12 @@ func TestResourceManager(t *testing.T) {
 			manager := service.NewResourceManager(nil, logger)
 
 			storeService := new(mockDataStore)
-			storeService.On("Validate", updateRequest).Return(nil)
+			storeService.On("Validate", ctx, updateRequest).Return(nil)
 			defer storeService.AssertExpectations(t)
 
 			manager.RegisterDatastore(store, storeService)
 
-			err = manager.Validate(updateRequest)
+			err = manager.Validate(ctx, updateRequest)
 			assert.NoError(t, err)
 		})
 	})
@@ -598,8 +598,8 @@ func (m *mockDataStore) BatchUpdate(ctx context.Context, resources []*resource.R
 	return m.Called(ctx, resources).Error(0)
 }
 
-func (m *mockDataStore) Validate(r *resource.Resource) error {
-	return m.Called(r).Error(0)
+func (m *mockDataStore) Validate(ctx context.Context, r *resource.Resource) error {
+	return m.Called(ctx, r).Error(0)
 }
 
 func (m *mockDataStore) GetURN(r *resource.Resource) (string, error) {

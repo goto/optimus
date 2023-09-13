@@ -535,7 +535,7 @@ func TestBigqueryStore(t *testing.T) {
 		t.Run("returns error for invalid resource", func(t *testing.T) {
 			res := resource.Resource{}
 			bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-			err := bqStore.Validate(&res)
+			err := bqStore.Validate(ctx, &res)
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "invalid sections in name:")
 		})
@@ -545,7 +545,7 @@ func TestBigqueryStore(t *testing.T) {
 			assert.NoError(t, err)
 
 			bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-			err = bqStore.Validate(res)
+			err = bqStore.Validate(ctx, res)
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "unknown kind")
 		})
@@ -558,7 +558,7 @@ func TestBigqueryStore(t *testing.T) {
 				assert.Equal(t, "project.set.view_name1", res.FullName())
 
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "not able to decode spec for project.set.view_name1")
 			})
@@ -569,7 +569,7 @@ func TestBigqueryStore(t *testing.T) {
 
 				assert.Equal(t, "project.set.view_name1", res.FullName())
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "view query is empty for project.set.view_name1")
 			})
@@ -582,7 +582,7 @@ func TestBigqueryStore(t *testing.T) {
 
 				assert.Equal(t, "project.set.external_name1", res.FullName())
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "not able to decode spec for project.set.external_name1")
 			})
@@ -593,7 +593,7 @@ func TestBigqueryStore(t *testing.T) {
 
 				assert.Equal(t, "project.set.external_name1", res.FullName())
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "empty external table source for project.set.external_name1")
 			})
@@ -606,7 +606,7 @@ func TestBigqueryStore(t *testing.T) {
 
 				assert.Equal(t, "project.set.table_name1", res.FullName())
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "not able to decode spec for project.set.table_name1")
 			})
@@ -617,7 +617,7 @@ func TestBigqueryStore(t *testing.T) {
 
 				assert.Equal(t, "project.set.table_name1", res.FullName())
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "empty schema for table project.set.table_name1")
 			})
@@ -628,7 +628,7 @@ func TestBigqueryStore(t *testing.T) {
 					tnnt, &resource.Metadata{}, invalidSpec)
 				assert.Nil(t, err)
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "not able to decode spec for project.set_name1")
 			})
@@ -637,7 +637,7 @@ func TestBigqueryStore(t *testing.T) {
 					tnnt, &resource.Metadata{}, specWithoutValues)
 				assert.Nil(t, err)
 				bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-				err = bqStore.Validate(res)
+				err = bqStore.Validate(ctx, res)
 				assert.Nil(t, err)
 			})
 		})

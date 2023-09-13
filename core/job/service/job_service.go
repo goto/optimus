@@ -12,11 +12,8 @@ import (
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/core/job/resolver"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/extractor/upstream"
-	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
@@ -76,6 +73,7 @@ type Engine interface {
 type PluginService interface {
 	Info(context.Context, job.TaskName) (*plugin.Info, error)
 	GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error)
+	GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error)
 }
 
 type TenantDetailsGetter interface {
@@ -943,6 +941,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
+	// TODO(generic deps resolution): move plugin check inside pluginService methods
 	if spec.Task().Name() == "bq2bq" { // for now, only work for bq2bq plugin
 		compileConfigs := j.compileConfigs(spec.Task().Config(), tenantWithDetails)
 
@@ -966,22 +965,11 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 			return nil, fmt.Errorf("empty sql file")
 		}
 
-		bqClient, err := bigquery.NewClient(ctx, svcAcc)
-		if err != nil {
-			return nil, fmt.Errorf("error creating bigquery client: %w", err)
-		}
-		upstreamExtractor, err := upstream.NewExtractor(bqClient, upstream.ParseTopLevelUpstreamsFromQuery)
-		if err != nil {
-			return nil, fmt.Errorf("error initializing upstream extractor: %w", err)
-		}
-		upstreamResources, err := resolver.GenerateDependencies(ctx, j.logger, upstreamExtractor, query, destination)
+		sources, err = j.pluginService.GenerateDependencies(ctx, spec.Task().Name(), svcAcc, query, destination)
 		if err != nil {
 			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
 			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
 			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
-		}
-		for _, upstreamResource := range upstreamResources {
-			sources = append(sources, job.ResourceURN(upstreamResource))
 		}
 	}
 

@@ -68,9 +68,6 @@ func TestPluginService(t *testing.T) {
 			pluginRepo := new(mockPluginRepo)
 			defer pluginRepo.AssertExpectations(t)
 
-			depMod := new(mockOpt.DependencyResolverMod)
-			defer depMod.AssertExpectations(t)
-
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
 
@@ -86,9 +83,6 @@ func TestPluginService(t *testing.T) {
 		t.Run("returns plugin info", func(t *testing.T) {
 			pluginRepo := new(mockPluginRepo)
 			defer pluginRepo.AssertExpectations(t)
-
-			depMod := new(mockOpt.DependencyResolverMod)
-			defer depMod.AssertExpectations(t)
 
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
@@ -121,6 +115,11 @@ func TestPluginService(t *testing.T) {
 			defer pluginRepo.AssertExpectations(t)
 
 			yamlMod := new(mockOpt.YamlMod)
+			yamlMod.On("PluginInfo").Return(&plugin.Info{
+				Name:        jobTask.Name().String(),
+				Description: "example",
+				Image:       "http://to.repo",
+			}, nil)
 			defer yamlMod.AssertExpectations(t)
 
 			taskPlugin := &plugin.Plugin{YamlMod: yamlMod}
@@ -131,7 +130,7 @@ func TestPluginService(t *testing.T) {
 				"DATASET": "datas",
 				"TABLE":   "tab",
 			}
-			destinationURN := job.ResourceURN("bigquery://project:dataset.table")
+			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
 
 			pluginService := service.NewJobPluginService(pluginRepo, logger)
 			result, err := pluginService.GenerateDestination(ctx, jobTask.Name(), configs)
@@ -158,6 +157,11 @@ func TestPluginService(t *testing.T) {
 			defer pluginRepo.AssertExpectations(t)
 
 			yamlMod := new(mockOpt.YamlMod)
+			yamlMod.On("PluginInfo").Return(&plugin.Info{
+				Name:        jobTask.Name().String(),
+				Description: "example",
+				Image:       "http://to.repo",
+			}, nil)
 			defer yamlMod.AssertExpectations(t)
 
 			configs := map[string]string{

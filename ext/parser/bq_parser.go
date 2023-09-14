@@ -1,11 +1,17 @@
-package upstream
+package parser
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/goto/optimus/core/job"
 )
 
-type QueryParser func(query string) []*Resource
+type (
+	// ParserFunc parses rawResource to list of resource urn
+	ParserFunc func(rawResource string) []job.ResourceURN
+)
 
 var (
 	topLevelUpstreamsPattern = regexp.MustCompile("" +
@@ -24,11 +30,11 @@ var (
 	specialCommentPattern     = regexp.MustCompile(`(\/\*\s*(@[a-zA-Z0-9_-]+)\s*\*\/)`)
 )
 
-func ParseTopLevelUpstreamsFromQuery(query string) []*Resource {
+func ParseTopLevelUpstreamsFromQuery(query string) []job.ResourceURN {
 	cleanedQuery := cleanQueryFromComment(query)
 
-	resourcesFound := make(map[string]bool)
-	pseudoResources := make(map[string]bool)
+	resourcesFound := make(map[job.ResourceURN]bool)
+	pseudoResources := make(map[job.ResourceURN]bool)
 
 	matches := topLevelUpstreamsPattern.FindAllStringSubmatch(cleanedQuery, -1)
 
@@ -66,27 +72,22 @@ func ParseTopLevelUpstreamsFromQuery(query string) []*Resource {
 			continue
 		}
 
-		resource := Resource{
-			Project: project,
-			Dataset: dataset,
-			Name:    name,
-		}
+		resourceURN := job.ResourceURN("bigquery://" + fmt.Sprintf("%s:%s.%s", project, dataset, name))
 
 		if clause == "with" {
-			pseudoResources[resource.URN()] = true
+			pseudoResources[resourceURN] = true
 		} else {
-			resourcesFound[resource.URN()] = true
+			resourcesFound[resourceURN] = true
 		}
 	}
 
-	var output []*Resource
+	output := []job.ResourceURN{}
 
 	for resourceURN := range resourcesFound {
 		if pseudoResources[resourceURN] {
 			continue
 		}
-		r, _ := FromDestinationURN(resourceURN)
-		output = append(output, r)
+		output = append(output, resourceURN)
 	}
 
 	return output
@@ -104,9 +105,4 @@ func cleanQueryFromComment(query string) string {
 	}
 
 	return cleanedQuery
-}
-
-// TODO: check if ddl requires custom query, if not then we can remove this function
-func ParseNestedUpsreamsFromDDL(ddl string) []*Resource {
-	return ParseTopLevelUpstreamsFromQuery(ddl)
 }

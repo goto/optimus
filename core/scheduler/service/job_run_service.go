@@ -83,7 +83,7 @@ type EventHandler interface {
 }
 
 type ProjectGetter interface {
-	GetByName(context.Context, tenant.ProjectName) (*tenant.Project, error)
+	Get(context.Context, tenant.ProjectName) (*tenant.Project, error)
 }
 
 type JobRunService struct {
@@ -179,7 +179,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 }
 
 func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
-	project, err := s.projectGetter.GetByName(ctx, projectName)
+	project, err := s.projectGetter.Get(ctx, projectName)
 	if err != nil {
 		s.l.Error("error getting project [%s]: %s", projectName, err)
 		return window.Interval{}, err

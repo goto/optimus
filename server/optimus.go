@@ -331,7 +331,7 @@ func (s *OptimusServer) setupHandlers() error {
 
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
-		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectRepo,
+		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
 	)
 
 	// Job Bounded Context Setup

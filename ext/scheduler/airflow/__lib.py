@@ -153,16 +153,16 @@ class JobSpecTaskWindow:
     def get(self, scheduled_at: str) -> (datetime, datetime):
         api_response = self._fetch_task_window(scheduled_at)
         return (
-            self._parse_datetime(api_response['start']),
-            self._parse_datetime(api_response['end']),
+            self._parse_datetime(api_response['startTime']),
+            self._parse_datetime(api_response['endTime']),
         )
 
     # window start is inclusive
     def get_schedule_window(self, scheduled_at: str, upstream_schedule: str) -> (str, str):
         api_response = self._fetch_task_window(scheduled_at)
 
-        schedule_time_window_start = self._parse_datetime(api_response['start_time'])
-        schedule_time_window_end = self._parse_datetime(api_response['end_time'])
+        schedule_time_window_start = self._parse_datetime(api_response['startTime'])
+        schedule_time_window_end = self._parse_datetime(api_response['endTime'])
 
         job_cron_iter = croniter(upstream_schedule, schedule_time_window_start)
         schedule_time_window_inclusive_start = job_cron_iter.get_next(datetime)

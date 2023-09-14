@@ -111,19 +111,19 @@ func (c *JobRunAssetsCompiler) CompileQuery(ctx context.Context, startTime, endT
 	return strings.Join(parsedQueries, queryFileReplaceBreakMarker), nil
 }
 
-// TODO: deprecate after changing type for plugin
-func toJobRunSpecData(mapping map[string]string) []plugin.JobRunSpecData {
-	var jobRunData []plugin.JobRunSpecData
-	for name, value := range mapping {
-		jrData := plugin.JobRunSpecData{
-			Name:  name,
-			Value: value,
-			Type:  typeEnv,
-		}
-		jobRunData = append(jobRunData, jrData)
-	}
-	return jobRunData
-}
+// // TODO: deprecate after changing type for plugin
+// func toJobRunSpecData(mapping map[string]string) []plugin.JobRunSpecData {
+// 	var jobRunData []plugin.JobRunSpecData
+// 	for name, value := range mapping {
+// 		jrData := plugin.JobRunSpecData{
+// 			Name:  name,
+// 			Value: value,
+// 			Type:  typeEnv,
+// 		}
+// 		jobRunData = append(jobRunData, jrData)
+// 	}
+// 	return jobRunData
+// }
 
 // TODO: deprecate
 func toPluginAssets(assets map[string]string) plugin.Assets {

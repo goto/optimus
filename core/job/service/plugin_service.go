@@ -1,16 +1,17 @@
 package service
 
 import (
-	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
 	"golang.org/x/net/context"
 
 	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/ext/extractor/upstream"
+	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/ext/extractor"
+	"github.com/goto/optimus/ext/parser"
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -29,12 +30,12 @@ const (
 )
 
 var (
-	ErrYamlModNotExist = errors.New("yaml mod not found for plugin")
+	ErrYamlModNotExist = fmt.Errorf("yaml mod not found for plugin")
 )
 
 // TODO: decouple extractor from plugin
-type UpstreamExtractorFactory interface {
-	New(ctx context.Context, svcAcc string, parserFunc upstream.QueryParser) (upstream.Extractor, error)
+type ExtractorFactory interface {
+	New(ctx context.Context, svcAcc string) (extractor.ExtractorFunc, error)
 }
 
 type PluginRepo interface {
@@ -42,14 +43,25 @@ type PluginRepo interface {
 }
 
 type JobPluginService struct {
-	pluginRepo   PluginRepo
-	extractorFac UpstreamExtractorFactory
+	pluginRepo PluginRepo
+
+	// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
+	parserFunc     parser.ParserFunc
+	extractorFac   ExtractorFactory
+	_extractorFunc extractor.ExtractorFunc
 
 	logger log.Logger
 }
 
-func NewJobPluginService(pluginRepo PluginRepo, extractorFac UpstreamExtractorFactory, logger log.Logger) *JobPluginService {
-	return &JobPluginService{pluginRepo: pluginRepo, extractorFac: extractorFac, logger: logger}
+func NewJobPluginService(pluginRepo PluginRepo, extractorFac ExtractorFactory, logger log.Logger) *JobPluginService {
+	return &JobPluginService{
+		logger:     logger,
+		pluginRepo: pluginRepo,
+
+		// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
+		parserFunc:   parser.ParseTopLevelUpstreamsFromQuery,
+		extractorFac: extractorFac,
+	}
 }
 
 func (p JobPluginService) Info(_ context.Context, taskName job.TaskName) (*plugin.Info, error) {
@@ -77,14 +89,14 @@ func (p JobPluginService) GenerateDestination(ctx context.Context, taskName job.
 		return "", nil
 	}
 
-	// TODO(generic deps resolution): delegate destination construction to resolver(?)
+	// TODO(generic deps resolution): make it generic by leverage desination templating from plugin
 	proj, ok1 := configs["PROJECT"]
 	dataset, ok2 := configs["DATASET"]
 	tab, ok3 := configs["TABLE"]
 	if ok1 && ok2 && ok3 {
 		return job.ResourceURN("bigquery://" + fmt.Sprintf("%s:%s.%s", proj, dataset, tab)), nil
 	}
-	return "", errors.New("missing config key required to generate destination")
+	return "", fmt.Errorf("missing config key required to generate destination")
 }
 
 func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
@@ -97,48 +109,58 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 		return []job.ResourceURN{}, nil
 	}
 
-	// TODO(generic deps resolution): delegate upstream generator to resolver(?)
-	upstreamExtractor, err := p.extractorFac.New(ctx, svcAcc, upstream.ParseTopLevelUpstreamsFromQuery) // currently parse the upstream based on query
+	// TODO(generic deps resolution): make it generic by leverage the parser
+	visited := map[job.ResourceURN][]*resource.Resource{}
+	visited[destinationURN] = []*resource.Resource{}
+	if extractorFunc, err := p.extractorFac.New(ctx, svcAcc); err != nil {
+		return nil, err
+	} else {
+		p._extractorFunc = extractorFunc // set on runtime
+	}
+
+	resources, err := p.generateResources(ctx, query, visited, map[job.ResourceURN]bool{})
 	if err != nil {
-		return nil, fmt.Errorf("error create upstream extractor: %w", err)
-	}
-	destinationResource, err := upstream.FromDestinationURN(destinationURN.String())
-	if err != nil {
-		return nil, fmt.Errorf("error getting destination resource: %w", err)
+		return nil, err
 	}
 
-	upstreams, err := p.extractUpstreams(ctx, upstreamExtractor, query, destinationResource)
-	if err != nil {
-		return nil, fmt.Errorf("error extracting upstreams: %w", err)
+	// flatten
+	resourceURNs := []job.ResourceURN{}
+	for _, r := range resource.Resources(resources).GetFlattened() {
+		resourceURNs = append(resourceURNs, job.ResourceURN(r.URN()))
 	}
-
-	flattenedUpstreams := upstream.Resources(upstreams).GetFlattened()
-	uniqueUpstreams := upstream.Resources(flattenedUpstreams).GetUnique()
-
-	upstreamResourceURNs := []job.ResourceURN{}
-	for _, u := range uniqueUpstreams {
-		upstreamResourceURNs = append(upstreamResourceURNs, job.ResourceURN(u.URN()))
-	}
-
-	return upstreamResourceURNs, nil
+	return resourceURNs, nil
 }
 
-func (p JobPluginService) extractUpstreams(ctx context.Context, extractor upstream.Extractor, query string, destinationResource *upstream.Resource) ([]*upstream.Resource, error) {
-	for try := 1; try <= MaxBQApiRetries; try++ {
-		upstreams, err := extractor.ExtractUpstreams(ctx, query, destinationResource)
-		if err != nil {
-			if strings.Contains(err.Error(), "net/http: TLS handshake timeout") ||
-				strings.Contains(err.Error(), "unexpected EOF") ||
-				strings.Contains(err.Error(), "i/o timeout") ||
-				strings.Contains(err.Error(), "connection reset by peer") {
-				// retry
-				continue
-			}
+func (p JobPluginService) generateResources(ctx context.Context, rawResource string, visited map[job.ResourceURN][]*resource.Resource, paths map[job.ResourceURN]bool) ([]*resource.Resource, error) {
+	errs := errors.NewMultiError("generate resources")
+	resourceURNs := p.parserFunc(rawResource)
+	urnToRawResource, err := p._extractorFunc(ctx, p.logger, resourceURNs)
+	if err != nil {
+		p.logger.Error("error when extract ddl resource")
+		return []*resource.Resource{}, nil
+	}
 
-			p.logger.Error("error extracting upstreams", err)
+	resources := make([]*resource.Resource, len(resourceURNs))
+	for i, urn := range resourceURNs {
+		resources[i] = &resource.Resource{}
+		resources[i].UpdateURN(urn.String())
+		resourceURN := job.ResourceURN(urn)
+
+		if paths[resourceURN] {
+			errs.Append(fmt.Errorf("circular reference is detected"))
+			continue
 		}
 
-		return upstreams, nil
+		if visited[resourceURN] == nil {
+			rawResource := urnToRawResource[urn]
+			paths[resourceURN] = true
+			upstreamResources, err := p.generateResources(ctx, rawResource, visited, paths)
+			visited[resourceURN] = upstreamResources
+			errs.Append(err)
+			delete(paths, resourceURN)
+		}
+		resources[i].Upstreams = visited[resourceURN]
 	}
-	return nil, errors.New("bigquery api retries exhausted")
+
+	return resources, errs.ToErr()
 }

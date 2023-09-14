@@ -11,7 +11,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service"
-	"github.com/goto/optimus/ext/extractor/upstream"
+	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/sdk/plugin"
 	mockOpt "github.com/goto/optimus/sdk/plugin/mock"
 )
@@ -109,9 +109,8 @@ func TestPluginService(t *testing.T) {
 	})
 
 	t.Run("GenerateDestination", func(t *testing.T) {
+		logger := log.NewNoop()
 		t.Run("should properly generate a destination provided correct config inputs", func(t *testing.T) {
-			logger := log.NewLogrus()
-
 			pluginRepo := new(mockPluginRepo)
 			defer pluginRepo.AssertExpectations(t)
 
@@ -139,8 +138,6 @@ func TestPluginService(t *testing.T) {
 			assert.Equal(t, destinationURN, result)
 		})
 		t.Run("returns error if unable to find the plugin", func(t *testing.T) {
-			logger := log.NewLogrus()
-
 			pluginRepo := new(mockPluginRepo)
 			defer pluginRepo.AssertExpectations(t)
 
@@ -152,8 +149,6 @@ func TestPluginService(t *testing.T) {
 			assert.Equal(t, "", result.String())
 		})
 		t.Run("returns error if generate destination failed", func(t *testing.T) {
-			logger := log.NewLogrus()
-
 			pluginRepo := new(mockPluginRepo)
 			defer pluginRepo.AssertExpectations(t)
 
@@ -181,8 +176,8 @@ func TestPluginService(t *testing.T) {
 	})
 
 	t.Run("GenerateDependencies", func(t *testing.T) {
+		logger := log.NewNoop()
 		t.Run("should return error when specific plugin is fail to fetch", func(t *testing.T) {
-			logger := log.NewLogrus()
 			svcAcc := "service_account"
 			query := "Select * from proj.dataset.table1"
 			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
@@ -197,8 +192,7 @@ func TestPluginService(t *testing.T) {
 			assert.Error(t, err)
 			assert.Nil(t, result)
 		})
-		t.Run("should return error when fail to create upstream extractor", func(t *testing.T) {
-			logger := log.NewLogrus()
+		t.Run("should return error when fail to create extractor", func(t *testing.T) {
 			svcAcc := "service_account"
 			query := "Select * from proj.dataset.table1"
 			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
@@ -209,10 +203,10 @@ func TestPluginService(t *testing.T) {
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
 
-			extractorFac := new(UpstreamExtractorFactory)
+			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(nil, errors.New("error creating extractor"))
+			extractorFac.On("New", ctx, svcAcc).Return(nil, errors.New("error creating extractor"))
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -224,44 +218,10 @@ func TestPluginService(t *testing.T) {
 
 			pluginService := service.NewJobPluginService(pluginRepo, extractorFac, logger)
 			result, err := pluginService.GenerateDependencies(ctx, jobTask.Name(), svcAcc, query, destinationURN)
-			assert.ErrorContains(t, err, "error create upstream extractor")
+			assert.ErrorContains(t, err, "error creating extractor")
 			assert.Nil(t, result)
 		})
-		t.Run("should return error when destinationURN is not valid", func(t *testing.T) {
-			logger := log.NewLogrus()
-			svcAcc := "service_account"
-			query := "Select * from proj.dataset.table1"
-			destinationURN := job.ResourceURN("proj.datas.tab")
-
-			pluginRepo := new(mockPluginRepo)
-			defer pluginRepo.AssertExpectations(t)
-
-			yamlMod := new(mockOpt.YamlMod)
-			defer yamlMod.AssertExpectations(t)
-
-			extractor := new(UpstreamExtractor)
-			defer extractor.AssertExpectations(t)
-
-			extractorFac := new(UpstreamExtractorFactory)
-			defer extractorFac.AssertExpectations(t)
-
-			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractor, nil)
-
-			yamlMod.On("PluginInfo").Return(&plugin.Info{
-				Name:        jobTask.Name().String(),
-				Description: "example",
-				Image:       "http://to.repo",
-			}, nil)
-			taskPlugin := &plugin.Plugin{YamlMod: yamlMod}
-			pluginRepo.On("GetByName", jobTask.Name().String()).Return(taskPlugin, nil)
-
-			pluginService := service.NewJobPluginService(pluginRepo, extractorFac, logger)
-			result, err := pluginService.GenerateDependencies(ctx, jobTask.Name(), svcAcc, query, destinationURN)
-			assert.ErrorContains(t, err, "error getting destination resource")
-			assert.Nil(t, result)
-		})
-		t.Run("should return empty upstream when upstream extractor error", func(t *testing.T) {
-			logger := log.NewLogrus()
+		t.Run("should return empty resources when extractor error", func(t *testing.T) {
 			svcAcc := "service_account"
 			query := "Select * from proj.dataset.table1"
 			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
@@ -272,14 +232,14 @@ func TestPluginService(t *testing.T) {
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
 
-			extractor := new(UpstreamExtractor)
-			defer extractor.AssertExpectations(t)
-
-			extractorFac := new(UpstreamExtractorFactory)
+			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			extractor.On("ExtractUpstreams", ctx, query, mock.Anything).Return(nil, errors.New("error extract upstream"))
-			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractor, nil)
+			var extractorFunc extractor.ExtractorFunc
+			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+				return nil, errors.New("error extract resource")
+			}
+			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -295,7 +255,6 @@ func TestPluginService(t *testing.T) {
 			assert.Empty(t, result)
 		})
 		t.Run("should generate dependencies for select statements", func(t *testing.T) {
-			logger := log.NewLogrus()
 			svcAcc := "service_account"
 			query := "Select * from proj.dataset.table1"
 			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
@@ -307,20 +266,16 @@ func TestPluginService(t *testing.T) {
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
 
-			extractor := new(UpstreamExtractor)
-			defer extractor.AssertExpectations(t)
-
-			extractorFac := new(UpstreamExtractorFactory)
+			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			extractor.On("ExtractUpstreams", ctx, query, mock.Anything).Return([]*upstream.Resource{
-				{
-					Project: "proj",
-					Dataset: "dataset",
-					Name:    "table1",
-				},
-			}, nil)
-			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractor, nil)
+			var extractorFunc extractor.ExtractorFunc
+			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+				return map[job.ResourceURN]string{
+					"bigquery://proj:dataset.table1": "",
+				}, nil
+			}
+			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -336,7 +291,6 @@ func TestPluginService(t *testing.T) {
 			assert.ElementsMatch(t, expectedDeps, result)
 		})
 		t.Run("should generate unique dependencies for select statements", func(t *testing.T) {
-			logger := log.NewLogrus()
 			svcAcc := "service_account"
 			query := "Select * from proj.dataset.table1 t1 join proj.dataset.table1 t2 on t1.col1 = t2.col1"
 			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
@@ -348,37 +302,17 @@ func TestPluginService(t *testing.T) {
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
 
-			extractor := new(UpstreamExtractor)
-			defer extractor.AssertExpectations(t)
-
-			extractorFac := new(UpstreamExtractorFactory)
+			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			extractor.On("ExtractUpstreams", ctx, query, mock.Anything).Return([]*upstream.Resource{
-				{
-					Project: "proj",
-					Dataset: "dataset",
-					Name:    "table1",
-					Upstreams: []*upstream.Resource{
-						{
-							Project: "proj",
-							Dataset: "dataset",
-							Name:    "table2",
-						},
-					},
-				},
-				{
-					Project: "proj",
-					Dataset: "dataset",
-					Name:    "table2",
-				},
-				{
-					Project: "proj",
-					Dataset: "dataset",
-					Name:    "table1",
-				},
-			}, nil)
-			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractor, nil)
+			var extractorFunc extractor.ExtractorFunc
+			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+				return map[job.ResourceURN]string{
+					"bigquery://proj:dataset.table1": "CREATE VIEW `proj.dataset.table1` AS select * from `proj.dataset.table2`;;",
+					"bigquery://proj:dataset.table2": "",
+				}, nil
+			}
+			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -395,7 +329,6 @@ func TestPluginService(t *testing.T) {
 
 		})
 		t.Run("should generate dependencies for select statements but ignore if asked explicitly", func(t *testing.T) {
-			logger := log.NewLogrus()
 			svcAcc := "service_account"
 			query := "Select * from /* @ignoreupstream */ proj.dataset.table1"
 			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
@@ -407,14 +340,14 @@ func TestPluginService(t *testing.T) {
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
 
-			extractor := new(UpstreamExtractor)
-			defer extractor.AssertExpectations(t)
-
-			extractorFac := new(UpstreamExtractorFactory)
+			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			extractor.On("ExtractUpstreams", ctx, query, mock.Anything).Return([]*upstream.Resource{}, nil)
-			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractor, nil)
+			var extractorFunc extractor.ExtractorFunc
+			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+				return map[job.ResourceURN]string{}, nil
+			}
+			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -431,7 +364,6 @@ func TestPluginService(t *testing.T) {
 
 		})
 		t.Run("should generate dependencies for select statements but ignore if asked explicitly for view", func(t *testing.T) {
-			logger := log.NewLogrus()
 			svcAcc := "service_account"
 			query := "Select * from proj.dataset.table1 t1 left join /* @ignoreupstream */ proj.dataset.view1 v1 on t1.date=v1.date"
 			destinationURN := job.ResourceURN("bigquery://proj:datas.tab")
@@ -443,20 +375,16 @@ func TestPluginService(t *testing.T) {
 			yamlMod := new(mockOpt.YamlMod)
 			defer yamlMod.AssertExpectations(t)
 
-			extractor := new(UpstreamExtractor)
-			defer extractor.AssertExpectations(t)
-
-			extractorFac := new(UpstreamExtractorFactory)
+			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			extractor.On("ExtractUpstreams", ctx, query, mock.Anything).Return([]*upstream.Resource{
-				{
-					Project: "proj",
-					Dataset: "dataset",
-					Name:    "table1",
-				},
-			}, nil)
-			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractor, nil)
+			var extractorFunc extractor.ExtractorFunc
+			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+				return map[job.ResourceURN]string{
+					"bigquery://proj:dataset.table1": "",
+				}, nil
+			}
+			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -487,61 +415,30 @@ func (m *mockPluginRepo) GetByName(name string) (*plugin.Plugin, error) {
 	return args.Get(0).(*plugin.Plugin), args.Error(1)
 }
 
-// UpstreamExtractorFactory is an autogenerated mock type for the UpstreamExtractorFactory type
-type UpstreamExtractorFactory struct {
+// ExtractorFactory is an autogenerated mock type for the ExtractorFactory type
+type ExtractorFactory struct {
 	mock.Mock
 }
 
-// New provides a mock function with given fields: ctx, svcAcc, parserFunc
-func (_m *UpstreamExtractorFactory) New(ctx context.Context, svcAcc string, parserFunc upstream.QueryParser) (upstream.Extractor, error) {
-	ret := _m.Called(ctx, svcAcc, parserFunc)
+// New provides a mock function with given fields: ctx, svcAcc
+func (_m *ExtractorFactory) New(ctx context.Context, svcAcc string) (extractor.ExtractorFunc, error) {
+	ret := _m.Called(ctx, svcAcc)
 
-	var r0 upstream.Extractor
+	var r0 extractor.ExtractorFunc
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, upstream.QueryParser) (upstream.Extractor, error)); ok {
-		return rf(ctx, svcAcc, parserFunc)
+	if rf, ok := ret.Get(0).(func(context.Context, string) (extractor.ExtractorFunc, error)); ok {
+		return rf(ctx, svcAcc)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, upstream.QueryParser) upstream.Extractor); ok {
-		r0 = rf(ctx, svcAcc, parserFunc)
+	if rf, ok := ret.Get(0).(func(context.Context, string) extractor.ExtractorFunc); ok {
+		r0 = rf(ctx, svcAcc)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(upstream.Extractor)
+			r0 = ret.Get(0).(extractor.ExtractorFunc)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, upstream.QueryParser) error); ok {
-		r1 = rf(ctx, svcAcc, parserFunc)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpstreamExtractor is an autogenerated mock type for the UpstreamExtractor type
-type UpstreamExtractor struct {
-	mock.Mock
-}
-
-// ExtractUpstreams provides a mock function with given fields: ctx, query, destinationResource
-func (_m *UpstreamExtractor) ExtractUpstreams(ctx context.Context, query string, destinationResource *upstream.Resource) ([]*upstream.Resource, error) {
-	ret := _m.Called(ctx, query, destinationResource)
-
-	var r0 []*upstream.Resource
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, *upstream.Resource) ([]*upstream.Resource, error)); ok {
-		return rf(ctx, query, destinationResource)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, *upstream.Resource) []*upstream.Resource); ok {
-		r0 = rf(ctx, query, destinationResource)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*upstream.Resource)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, string, *upstream.Resource) error); ok {
-		r1 = rf(ctx, query, destinationResource)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, svcAcc)
 	} else {
 		r1 = ret.Error(1)
 	}

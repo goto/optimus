@@ -46,6 +46,8 @@ type Resource struct {
 	metadata *Metadata
 
 	status Status
+
+	Upstreams []*Resource
 }
 
 func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *Metadata, spec map[string]any) (*Resource, error) {
@@ -146,6 +148,23 @@ func (r *Resource) Equal(incoming *Resource) bool {
 		return false
 	}
 	return reflect.DeepEqual(r.metadata, incoming.metadata)
+}
+
+type Resources []*Resource
+
+func (rs Resources) GetFlattened() []*Resource {
+	var output []*Resource
+	for _, u := range rs {
+		if u == nil {
+			continue
+		}
+		nested := Resources(u.Upstreams).GetFlattened()
+		u.Upstreams = nil
+		output = append(output, u)
+		output = append(output, nested...)
+	}
+
+	return output
 }
 
 type FromExistingOpt func(r *Resource)

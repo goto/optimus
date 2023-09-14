@@ -29,6 +29,7 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
+	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
@@ -315,8 +316,9 @@ func (s *OptimusServer) setupHandlers() error {
 	)
 
 	// Job Bounded Context Setup
+	jExtractorFactory := extractor.DefaultBQExtractorFactory{}
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
-	jPluginService := jService.NewJobPluginService(s.pluginRepo, s.logger)
+	jPluginService := jService.NewJobPluginService(s.pluginRepo, jExtractorFactory, s.logger)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)

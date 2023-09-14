@@ -1369,7 +1369,7 @@ func TestJobRunService(t *testing.T) {
 			projectGetter := new(mockProjectGetter)
 			defer projectGetter.AssertExpectations(t)
 
-			projectGetter.On("GetByName", ctx, projName).Return(nil, errors.NewError(errors.ErrInternalError, tenant.EntityProject, "unexpected error"))
+			projectGetter.On("Get", ctx, projName).Return(nil, errors.NewError(errors.ErrInternalError, tenant.EntityProject, "unexpected error"))
 
 			service := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter)
 
@@ -1386,7 +1386,7 @@ func TestJobRunService(t *testing.T) {
 			jobRepo := new(JobRepository)
 			defer jobRepo.AssertExpectations(t)
 
-			projectGetter.On("GetByName", ctx, projName).Return(project, nil)
+			projectGetter.On("Get", ctx, projName).Return(project, nil)
 
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(nil, errors.NewError(errors.ErrInternalError, job.EntityJob, "unexpected error"))
 
@@ -1405,7 +1405,7 @@ func TestJobRunService(t *testing.T) {
 			jobRepo := new(JobRepository)
 			defer jobRepo.AssertExpectations(t)
 
-			projectGetter.On("GetByName", ctx, projName).Return(project, nil)
+			projectGetter.On("Get", ctx, projName).Return(project, nil)
 
 			windowConfig, err := window.NewPresetConfig("yesterday")
 			assert.NotNil(t, windowConfig)
@@ -1628,7 +1628,7 @@ type mockProjectGetter struct {
 	mock.Mock
 }
 
-func (m *mockProjectGetter) GetByName(ctx context.Context, projectName tenant.ProjectName) (*tenant.Project, error) {
+func (m *mockProjectGetter) Get(ctx context.Context, projectName tenant.ProjectName) (*tenant.Project, error) {
 	args := m.Called(ctx, projectName)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

@@ -25,17 +25,15 @@ type PluginRepo interface {
 }
 
 type JobRunAssetsCompiler struct {
-	compiler   FilesCompiler
-	pluginRepo PluginRepo
+	compiler FilesCompiler
 
 	logger log.Logger
 }
 
-func NewJobAssetsCompiler(engine FilesCompiler, pluginRepo PluginRepo, logger log.Logger) *JobRunAssetsCompiler {
+func NewJobAssetsCompiler(engine FilesCompiler, logger log.Logger) *JobRunAssetsCompiler {
 	return &JobRunAssetsCompiler{
-		compiler:   engine,
-		pluginRepo: pluginRepo,
-		logger:     logger,
+		compiler: engine,
+		logger:   logger,
 	}
 }
 
@@ -92,9 +90,10 @@ func (c *JobRunAssetsCompiler) CompileQuery(ctx context.Context, startTime, endT
 
 	// check if window size is greater than partition delta(a DAY), if not do nothing
 	if endTime.Sub(startTime) <= partitionDelta {
-		return "", nil
+		return query, nil
 	}
 
+	// TODO: investigate from this part to the end is never called anywhere
 	var parsedQueries []string
 	queryMap := map[string]string{"query": query}
 	for _, part := range destinationsPartitions {

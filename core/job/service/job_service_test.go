@@ -57,7 +57,10 @@ func TestJobService(t *testing.T) {
 	assert.NoError(t, err)
 	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
 	jobWindow := window.NewCustomConfig(w)
-	jobTaskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
+	jobTaskConfig, err := job.ConfigFrom(map[string]string{
+		"sample_task_key":    "sample_value",
+		"BQ_SERVICE_ACCOUNT": "service_account",
+	})
 	assert.NoError(t, err)
 	taskName, _ := job.TaskNameFrom("bq2bq")
 	jobTask := job.NewTask(taskName, jobTaskConfig)
@@ -1294,7 +1297,8 @@ func TestJobService(t *testing.T) {
 
 			incomingSpecs := []*job.Spec{specA}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName)
 			existingSpecs := []*job.Job{existingJobA}
@@ -1478,7 +1482,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			incomingSpecs := []*job.Spec{specA, specB}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, "", nil)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -1557,7 +1562,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			incomingSpecs := []*job.Spec{specA, specB}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, "", nil)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -1692,7 +1698,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			incomingSpecs := []*job.Spec{specB}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, "", nil)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -1897,7 +1904,8 @@ func TestJobService(t *testing.T) {
 
 			incomingSpecs := []*job.Spec{specA}
 
-			existingJobWindow, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
+			existingJobWindow := window.NewCustomConfig(w2)
 			existingSpecA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName)
 			existingSpecs := []*job.Job{existingJobA}
@@ -3705,7 +3713,7 @@ func TestJobService(t *testing.T) {
 			assert.Equal(t, jobADownstream, result)
 		})
 	})
-	t.Run("updateState", func(t *testing.T) {
+	t.Run("UpdateState", func(t *testing.T) {
 		jobName, _ := job.NameFrom("job-A")
 		jobsToUpdateState := []job.Name{jobName}
 		state := job.DISABLED

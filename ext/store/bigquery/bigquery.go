@@ -2,7 +2,6 @@ package bigquery
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	bq "cloud.google.com/go/bigquery"
@@ -76,7 +75,6 @@ func (s Store) Create(ctx context.Context, res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-
 	resourceName, err := ResourceNameFor(res)
 	if err != nil {
 		return err
@@ -185,16 +183,47 @@ func (s Store) BatchUpdate(ctx context.Context, resources []*resource.Resource) 
 	return me.ToErr()
 }
 
-func (s Store) Validate(ctx context.Context, res *resource.Resource) error {
-	if err := ValidateName(res); err != nil {
+func (Store) Validate(r *resource.Resource) error {
+	err := ValidateName(r)
+	if err != nil {
 		return err
 	}
 
-	if err := s.validateByKind(res); err != nil {
-		return err
-	}
+	switch r.Kind() {
+	case KindTable:
+		table, err := ConvertSpecTo[Table](r)
+		if err != nil {
+			return err
+		}
+		table.Name = r.Name()
+		return table.Validate()
 
-	return s.validateDatasetOf(ctx, res)
+	case KindExternalTable:
+		externalTable, err := ConvertSpecTo[ExternalTable](r)
+		if err != nil {
+			return err
+		}
+		externalTable.Name = r.Name()
+		return externalTable.Validate()
+
+	case KindView:
+		view, err := ConvertSpecTo[View](r)
+		if err != nil {
+			return err
+		}
+		view.Name = r.Name()
+		return view.Validate()
+
+	case KindDataset:
+		ds, err := ConvertSpecTo[DatasetDetails](r)
+		if err != nil {
+			return err
+		}
+		return ds.Validate()
+
+	default:
+		return errors.InvalidArgument(resource.EntityResource, "unknown kind")
+	}
 }
 
 func (Store) GetURN(res *resource.Resource) (string, error) {
@@ -214,74 +243,6 @@ func (s Store) Backup(ctx context.Context, backup *resource.Backup, resources []
 	defer client.Close()
 
 	return BackupResources(ctx, backup, resources, client)
-}
-
-func (Store) validateByKind(res *resource.Resource) error {
-	switch res.Kind() {
-	case KindTable:
-		table, err := ConvertSpecTo[Table](res)
-		if err != nil {
-			return err
-		}
-		table.Name = res.Name()
-		return table.Validate()
-
-	case KindExternalTable:
-		externalTable, err := ConvertSpecTo[ExternalTable](res)
-		if err != nil {
-			return err
-		}
-		externalTable.Name = res.Name()
-		return externalTable.Validate()
-
-	case KindView:
-		view, err := ConvertSpecTo[View](res)
-		if err != nil {
-			return err
-		}
-		view.Name = res.Name()
-		return view.Validate()
-
-	case KindDataset:
-		ds, err := ConvertSpecTo[DatasetDetails](res)
-		if err != nil {
-			return err
-		}
-		return ds.Validate()
-
-	default:
-		return errors.InvalidArgument(resource.EntityResource, "unknown kind")
-	}
-}
-
-func (s Store) validateDatasetOf(ctx context.Context, res *resource.Resource) error {
-	if res.Kind() == KindDataset {
-		return nil
-	}
-
-	account, err := s.secretProvider.GetSecret(ctx, res.Tenant(), accountKey)
-	if err != nil {
-		return err
-	}
-
-	client, err := s.clientProvider.Get(ctx, account.Value())
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	dataset, err := DataSetFor(res)
-	if err != nil {
-		return err
-	}
-
-	handle := client.DatasetHandleFrom(dataset)
-	if !handle.Exists(ctx) {
-		message := fmt.Sprintf("dataset [%s] is not found", dataset.FullName())
-		return errors.NotFound(EntityDataset, message)
-	}
-
-	return nil
 }
 
 func startChildSpan(ctx context.Context, name string) (context.Context, trace.Span) {

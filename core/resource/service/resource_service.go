@@ -31,7 +31,7 @@ type ResourceManager interface {
 	UpdateResource(ctx context.Context, res *resource.Resource) error
 	SyncResource(ctx context.Context, res *resource.Resource) error
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
-	Validate(ctx context.Context, res *resource.Resource) error
+	Validate(res *resource.Resource) error
 	GetURN(res *resource.Resource) (string, error)
 }
 
@@ -67,7 +67,7 @@ func NewResourceService(
 }
 
 func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resource) error { // nolint:gocritic
-	if err := rs.mgr.Validate(ctx, incoming); err != nil {
+	if err := rs.mgr.Validate(incoming); err != nil {
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
@@ -122,7 +122,7 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 }
 
 func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
-	if err := rs.mgr.Validate(ctx, incoming); err != nil {
+	if err := rs.mgr.Validate(incoming); err != nil {
 		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
@@ -236,7 +236,7 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
 	multiError := errors.NewMultiError("error batch updating resources")
 	for _, r := range incomings {
-		if err := rs.mgr.Validate(ctx, r); err != nil {
+		if err := rs.mgr.Validate(r); err != nil {
 			msg := fmt.Sprintf("error validating [%s]: %s", r.FullName(), err)
 			multiError.Append(errors.Wrap(resource.EntityResource, msg, err))
 

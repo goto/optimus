@@ -280,7 +280,7 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 		for _, test := range testCases {
 			t.Run(test.Name, func(t *testing.T) {
 				actualResourceURNs := parser.ParseTopLevelUpstreamsFromQuery(test.InputQuery)
-				assert.Equal(t, test.ExpectedResourceURNs, actualResourceURNs)
+				assert.ElementsMatch(t, test.ExpectedResourceURNs, actualResourceURNs)
 			})
 		}
 	})

@@ -4079,7 +4079,7 @@ type PluginService struct {
 }
 
 // GenerateDependencies provides a mock function with given fields: ctx, taskName, svcAcc, query, destinationURN
-func (_m *PluginService) GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc string, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
+func (_m *PluginService) GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
 	ret := _m.Called(ctx, taskName, svcAcc, query, destinationURN)
 
 	var r0 []job.ResourceURN

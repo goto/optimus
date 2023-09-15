@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/plugin/yaml"
-	"github.com/goto/salt/log"
 )
 
 func Initialize(l log.Logger) (*models.PluginRepository, error) {

@@ -18,20 +18,13 @@ import (
 const (
 	projectConfigPrefix = "GLOBAL__"
 
-	configKeyDstart        = "DSTART"
-	configKeyDend          = "DEND"
-	configKeyExecutionTime = "EXECUTION_TIME"
-	configKeyDestination   = "JOB_DESTINATION"
-
 	TimeISOFormat = time.RFC3339
 
 	// TODO: remove bq dependencies
 	MaxBQApiRetries = 3
 )
 
-var (
-	ErrYamlModNotExist = fmt.Errorf("yaml mod not found for plugin")
-)
+var ErrYamlModNotExist = fmt.Errorf("yaml mod not found for plugin")
 
 // TODO: decouple extractor from plugin
 type ExtractorFactory interface {
@@ -79,13 +72,14 @@ func (p JobPluginService) Info(_ context.Context, taskName job.TaskName) (*plugi
 	return taskPlugin.Info(), nil
 }
 
-func (p JobPluginService) GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error) {
+func (p JobPluginService) GenerateDestination(_ context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error) {
 	taskPlugin, err := p.pluginRepo.GetByName(taskName.String())
 	if err != nil {
 		p.logger.Error("error getting plugin [%s]: %s", taskName.String(), err)
 		return "", err
 	}
-	if taskPlugin.Info().Name != "bq2bq" {
+	const bq2bq = "bq2bq"
+	if taskPlugin.Info().Name != bq2bq {
 		return "", nil
 	}
 
@@ -105,18 +99,19 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 		p.logger.Error("error getting plugin [%s]: %s", taskName.String(), err)
 		return nil, err
 	}
-	if taskPlugin.Info().Name != "bq2bq" {
+	const bq2bq = "bq2bq"
+	if taskPlugin.Info().Name != bq2bq {
 		return []job.ResourceURN{}, nil
 	}
 
 	// TODO(generic deps resolution): make it generic by leverage the parser
 	visited := map[job.ResourceURN][]*resource.Resource{}
 	visited[destinationURN] = []*resource.Resource{}
-	if extractorFunc, err := p.extractorFac.New(ctx, svcAcc); err != nil {
+	extractorFunc, err := p.extractorFac.New(ctx, svcAcc)
+	if err != nil {
 		return nil, err
-	} else {
-		p._extractorFunc = extractorFunc // set on runtime
 	}
+	p._extractorFunc = extractorFunc // set on runtime
 
 	resources, err := p.generateResources(ctx, query, visited, map[job.ResourceURN]bool{})
 	if err != nil {
@@ -134,17 +129,16 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 func (p JobPluginService) generateResources(ctx context.Context, rawResource string, visited map[job.ResourceURN][]*resource.Resource, paths map[job.ResourceURN]bool) ([]*resource.Resource, error) {
 	errs := errors.NewMultiError("generate resources")
 	resourceURNs := p.parserFunc(rawResource)
+	resources := []*resource.Resource{}
 	urnToRawResource, err := p._extractorFunc(ctx, p.logger, resourceURNs)
 	if err != nil {
-		p.logger.Error("error when extract ddl resource")
-		return []*resource.Resource{}, nil
+		p.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
+		return resources, nil
 	}
 
-	resources := make([]*resource.Resource, len(resourceURNs))
-	for i, urn := range resourceURNs {
-		resources[i] = &resource.Resource{}
-		resources[i].UpdateURN(urn.String())
-		resourceURN := job.ResourceURN(urn)
+	for _, resourceURN := range resourceURNs {
+		resource := &resource.Resource{}
+		resource.UpdateURN(resourceURN.String())
 
 		if paths[resourceURN] {
 			errs.Append(fmt.Errorf("circular reference is detected"))
@@ -152,14 +146,15 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 		}
 
 		if visited[resourceURN] == nil {
-			rawResource := urnToRawResource[urn]
+			rawResource := urnToRawResource[resourceURN]
 			paths[resourceURN] = true
 			upstreamResources, err := p.generateResources(ctx, rawResource, visited, paths)
 			visited[resourceURN] = upstreamResources
 			errs.Append(err)
 			delete(paths, resourceURN)
 		}
-		resources[i].Upstreams = visited[resourceURN]
+		resource.Upstreams = visited[resourceURN]
+		resources = append(resources, resource)
 	}
 
 	return resources, errs.ToErr()

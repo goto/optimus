@@ -943,7 +943,8 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	}
 
 	// TODO(generic deps resolution): move plugin check inside pluginService methods
-	if spec.Task().Name() == "bq2bq" { // for now, only work for bq2bq plugin
+	const bq2bq = "bq2bq"
+	if spec.Task().Name() == bq2bq { // for now, only work for bq2bq plugin
 		compileConfigs := j.compileConfigs(spec.Task().Config(), tenantWithDetails)
 
 		// generate destination
@@ -974,7 +975,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	return job.NewJob(tenantWithDetails.ToTenant(), spec, job.ResourceURN(destination), sources), nil
+	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
 }
 
 func (j *JobService) validateCyclic(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) ([]string, error) {

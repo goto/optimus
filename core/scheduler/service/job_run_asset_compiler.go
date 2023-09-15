@@ -12,10 +12,6 @@ import (
 	"github.com/goto/optimus/sdk/plugin"
 )
 
-const (
-	typeEnv = "env"
-)
-
 type FilesCompiler interface {
 	Compile(fileMap map[string]string, context map[string]any) (map[string]string, error)
 }
@@ -37,14 +33,15 @@ func NewJobAssetsCompiler(engine FilesCompiler, logger log.Logger) *JobRunAssets
 	}
 }
 
-func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
+func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
 	inputFiles := job.Assets
 	method, ok1 := job.Task.Config["LOAD_METHOD"]
 	query, ok2 := job.Assets["query.sql"]
 	// compile assets exclusive only for bq2bq plugin with replace load method and contains query.sql in asset
-	if ok1 && ok2 && method == "REPLACE" && job.Task.Name == "bq2bq" {
+	const bq2bq = "bq2bq"
+	if ok1 && ok2 && method == "REPLACE" && job.Task.Name == bq2bq {
 		// check if task needs to override the compilation behaviour
-		compiledQuery, err := c.CompileQuery(ctx, interval.Start, interval.End, query, systemEnvVars)
+		compiledQuery, err := c.CompileQuery(interval.Start, interval.End, query, systemEnvVars)
 		if err != nil {
 			c.logger.Error("error compiling assets: %s", err.Error())
 			return nil, err
@@ -60,7 +57,7 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *sch
 	return fileMap, nil
 }
 
-func (c *JobRunAssetsCompiler) CompileQuery(ctx context.Context, startTime, endTime time.Time, query string, envs map[string]string) (string, error) {
+func (c *JobRunAssetsCompiler) CompileQuery(startTime, endTime time.Time, query string, envs map[string]string) (string, error) {
 	// partition window in range
 	instanceEnvMap := map[string]interface{}{}
 	for name, value := range envs {
@@ -70,8 +67,8 @@ func (c *JobRunAssetsCompiler) CompileQuery(ctx context.Context, startTime, endT
 	// TODO: making few assumptions here, should be documented
 	// assume destination table is time partitioned
 	// assume table is partitioned as DAY
-	const dayHours = time.Duration(24)
-	partitionDelta := time.Hour * dayHours
+	const dayHours = 24
+	partitionDelta := time.Hour * time.Duration(dayHours)
 
 	// find destination partitions
 	var destinationsPartitions []struct {
@@ -108,44 +105,4 @@ func (c *JobRunAssetsCompiler) CompileQuery(ctx context.Context, startTime, endT
 
 	queryFileReplaceBreakMarker := "\n--*--optimus-break-marker--*--\n"
 	return strings.Join(parsedQueries, queryFileReplaceBreakMarker), nil
-}
-
-// // TODO: deprecate after changing type for plugin
-// func toJobRunSpecData(mapping map[string]string) []plugin.JobRunSpecData {
-// 	var jobRunData []plugin.JobRunSpecData
-// 	for name, value := range mapping {
-// 		jrData := plugin.JobRunSpecData{
-// 			Name:  name,
-// 			Value: value,
-// 			Type:  typeEnv,
-// 		}
-// 		jobRunData = append(jobRunData, jrData)
-// 	}
-// 	return jobRunData
-// }
-
-// TODO: deprecate
-func toPluginAssets(assets map[string]string) plugin.Assets {
-	var modelAssets plugin.Assets
-	for name, val := range assets {
-		pa := plugin.Asset{
-			Name:  name,
-			Value: val,
-		}
-		modelAssets = append(modelAssets, pa)
-	}
-	return modelAssets
-}
-
-// TODO: deprecate
-func toPluginConfig(conf map[string]string) plugin.Configs {
-	var pluginConfigs plugin.Configs
-	for name, val := range conf {
-		pc := plugin.Config{
-			Name:  name,
-			Value: val,
-		}
-		pluginConfigs = append(pluginConfigs, pc)
-	}
-	return pluginConfigs
 }

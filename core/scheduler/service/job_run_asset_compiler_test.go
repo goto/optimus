@@ -16,7 +16,6 @@ import (
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
-	"github.com/goto/optimus/sdk/plugin"
 )
 
 func TestJobAssetsCompiler(t *testing.T) {
@@ -113,18 +112,6 @@ func TestJobAssetsCompiler(t *testing.T) {
 			})
 		})
 	})
-}
-
-type mockPluginRepo struct {
-	mock.Mock
-}
-
-func (m *mockPluginRepo) GetByName(name string) (*plugin.Plugin, error) {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*plugin.Plugin), args.Error(1)
 }
 
 type mockFilesCompiler struct {

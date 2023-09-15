@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goto/salt/log"
 	getter "github.com/hashicorp/go-getter"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/plugin/yaml"
-	"github.com/goto/salt/log"
 )
 
 var (

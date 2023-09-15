@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/salt/log"
 )
 
 type (

@@ -235,8 +235,7 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc
-			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
 				return nil, errors.New("error extract resource")
 			}
 			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
@@ -269,8 +268,7 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc
-			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
 				return map[job.ResourceURN]string{
 					"bigquery://proj:dataset.table1": "",
 				}, nil
@@ -305,8 +303,7 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc
-			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
 				return map[job.ResourceURN]string{
 					"bigquery://proj:dataset.table1": "CREATE VIEW `proj.dataset.table1` AS select * from `proj.dataset.table2`;;",
 					"bigquery://proj:dataset.table2": "",
@@ -326,7 +323,6 @@ func TestPluginService(t *testing.T) {
 			result, err := pluginService.GenerateDependencies(ctx, jobTask.Name(), svcAcc, query, destinationURN)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, expectedDeps, result)
-
 		})
 		t.Run("should generate dependencies for select statements but ignore if asked explicitly", func(t *testing.T) {
 			svcAcc := "service_account"
@@ -343,8 +339,7 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc
-			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
 				return map[job.ResourceURN]string{}, nil
 			}
 			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
@@ -361,7 +356,6 @@ func TestPluginService(t *testing.T) {
 			result, err := pluginService.GenerateDependencies(ctx, jobTask.Name(), svcAcc, query, destinationURN)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, expectedDeps, result)
-
 		})
 		t.Run("should generate dependencies for select statements but ignore if asked explicitly for view", func(t *testing.T) {
 			svcAcc := "service_account"
@@ -378,8 +372,7 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc
-			extractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
 				return map[job.ResourceURN]string{
 					"bigquery://proj:dataset.table1": "",
 				}, nil
@@ -398,7 +391,6 @@ func TestPluginService(t *testing.T) {
 			result, err := pluginService.GenerateDependencies(ctx, jobTask.Name(), svcAcc, query, destinationURN)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, expectedDeps, result)
-
 		})
 	})
 }

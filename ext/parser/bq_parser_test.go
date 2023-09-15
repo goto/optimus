@@ -3,9 +3,10 @@ package parser_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/ext/parser"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {

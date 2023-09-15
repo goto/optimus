@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/salt/log"
 )
 
 func TestDefaultExtractorFunc(t *testing.T) {

@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/plugin/yaml"
 	"github.com/goto/optimus/sdk/plugin"
-	"github.com/goto/salt/log"
 )
 
 type mockYamlMod struct {

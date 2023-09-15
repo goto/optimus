@@ -7,12 +7,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v2"
 
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/sdk/plugin"
-	"github.com/goto/salt/log"
 )
 
 const (

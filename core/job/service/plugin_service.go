@@ -145,7 +145,7 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 			continue
 		}
 
-		if visited[resourceURN] == nil {
+		if _, ok := visited[resourceURN]; !ok {
 			rawResource := urnToRawResource[resourceURN]
 			paths[resourceURN] = true
 			upstreamResources, err := p.generateResources(ctx, rawResource, visited, paths)

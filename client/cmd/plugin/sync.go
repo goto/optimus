@@ -96,7 +96,7 @@ func (s *syncCommand) RunE(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	return plugin.NewPluginManager().UnArchive(
+	return plugin.NewPluginManager(s.clientConfig.Log.Level).UnArchive(
 		plugin.PluginsArchiveName,
 		plugin.PluginsDir,
 	)

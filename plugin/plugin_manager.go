@@ -28,9 +28,9 @@ type IPluginManager interface {
 	UnArchive(src, dest string) error
 }
 
-func NewPluginManager() *PluginManager {
+func NewPluginManager(logLevel config.LogLevel) *PluginManager {
 	logger := log.NewLogrus(
-		log.LogrusWithLevel(config.LogLevelInfo.String()),
+		log.LogrusWithLevel(logLevel.String()),
 		log.LogrusWithWriter(os.Stdout),
 	)
 
@@ -172,7 +172,7 @@ func (p *PluginManager) Archive(archiveName string) error {
 func InstallPlugins(conf *config.ServerConfig) error {
 	dst := PluginsDir
 	sources := conf.Plugin.Artifacts
-	pluginManger := NewPluginManager()
+	pluginManger := NewPluginManager(conf.Log.Level)
 
 	installErr := pluginManger.Install(dst, sources...)
 	if installErr != nil {

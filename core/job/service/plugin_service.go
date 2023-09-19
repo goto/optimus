@@ -105,8 +105,8 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 	}
 
 	// TODO(generic deps resolution): make it generic by leverage the parser
-	visited := map[job.ResourceURN][]*resource.Resource{}
-	visited[destinationURN] = []*resource.Resource{}
+	visited := map[job.ResourceURN][]*resource.WithUpstreams{}
+	visited[destinationURN] = []*resource.WithUpstreams{}
 	extractorFunc, err := p.extractorFac.New(ctx, svcAcc)
 	if err != nil {
 		return nil, err
@@ -120,16 +120,16 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 
 	// flatten
 	resourceURNs := []job.ResourceURN{}
-	for _, r := range resource.Resources(resources).GetFlattened() {
+	for _, r := range resource.WithUpstreamsList(resources).Flatten() {
 		resourceURNs = append(resourceURNs, job.ResourceURN(r.URN()))
 	}
 	return resourceURNs, nil
 }
 
-func (p JobPluginService) generateResources(ctx context.Context, rawResource string, visited map[job.ResourceURN][]*resource.Resource, paths map[job.ResourceURN]bool) ([]*resource.Resource, error) {
+func (p JobPluginService) generateResources(ctx context.Context, rawResource string, visited map[job.ResourceURN][]*resource.WithUpstreams, paths map[job.ResourceURN]bool) ([]*resource.WithUpstreams, error) {
 	errs := errors.NewMultiError("generate resources")
 	resourceURNs := p.parserFunc(rawResource)
-	resources := []*resource.Resource{}
+	resources := []*resource.WithUpstreams{}
 	urnToRawResource, err := p._extractorFunc(ctx, p.logger, resourceURNs)
 	if err != nil {
 		p.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
@@ -137,7 +137,7 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 	}
 
 	for _, resourceURN := range resourceURNs {
-		resource := &resource.Resource{}
+		resource := &resource.WithUpstreams{}
 		resource.UpdateURN(resourceURN.String())
 
 		if paths[resourceURN] {
@@ -153,7 +153,7 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 			errs.Append(err)
 			delete(paths, resourceURN)
 		}
-		resource.Upstreams = visited[resourceURN]
+		resource.UpdateUpstreams(visited[resourceURN])
 		resources = append(resources, resource)
 	}
 

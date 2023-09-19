@@ -66,7 +66,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []
 	}
 
 	urnToDDL := map[job.ResourceURN]string{}
-	var errorMessages []string
+	me := errors.NewMultiError("bulk get ddl view errors")
 	for {
 		var values []bigquery.Value
 		if err := rowIterator.Next(&values); err != nil {
@@ -74,7 +74,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []
 				break
 			}
 
-			errorMessages = append(errorMessages, err.Error())
+			me.Append(err)
 			continue
 		}
 
@@ -84,7 +84,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []
 
 		name, ddl, err := getViewDDL(values)
 		if err != nil {
-			errorMessages = append(errorMessages, err.Error())
+			me.Append(err)
 			continue
 		}
 
@@ -92,11 +92,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []
 		urnToDDL[resourceURN] = ddl
 	}
 
-	if len(errorMessages) > 0 {
-		err = fmt.Errorf("error encountered when reading schema: [%s]", strings.Join(errorMessages, ", "))
-	}
-
-	return urnToDDL, err
+	return urnToDDL, me.ToErr()
 }
 
 func (c *BqClient) ViewHandleFrom(ds Dataset, name string) ResourceHandle {

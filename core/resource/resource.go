@@ -46,8 +46,6 @@ type Resource struct {
 	metadata *Metadata
 
 	status Status
-
-	Upstreams []*Resource
 }
 
 func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *Metadata, spec map[string]any) (*Resource, error) {

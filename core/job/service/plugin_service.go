@@ -8,7 +8,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/parser"
 	"github.com/goto/optimus/ext/store/bigquery"
@@ -108,8 +107,8 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 	}
 
 	// TODO(generic deps resolution): make it generic by leverage the parser
-	visited := map[job.ResourceURN][]*resource.WithUpstreams{}
-	visited[destinationURN] = []*resource.WithUpstreams{}
+	visited := map[job.ResourceURN][]*job.ResourceURNWithUpstreams{}
+	visited[destinationURN] = []*job.ResourceURNWithUpstreams{}
 	bqExtractorFunc, err := p.extractorFac.New(ctx, svcAcc, p.logger)
 	if err != nil {
 		return nil, err
@@ -123,16 +122,16 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 
 	// flatten
 	resourceURNs := []job.ResourceURN{}
-	for _, r := range resource.WithUpstreamsList(resources).Flatten() {
-		resourceURNs = append(resourceURNs, job.ResourceURN(r.URN()))
+	for _, r := range job.ResourceURNWithUpstreamsList(resources).Flatten() {
+		resourceURNs = append(resourceURNs, r.URN)
 	}
 	return resourceURNs, nil
 }
 
-func (p JobPluginService) generateResources(ctx context.Context, rawResource string, visited map[job.ResourceURN][]*resource.WithUpstreams, paths map[job.ResourceURN]bool) ([]*resource.WithUpstreams, error) {
+func (p JobPluginService) generateResources(ctx context.Context, rawResource string, visited map[job.ResourceURN][]*job.ResourceURNWithUpstreams, paths map[job.ResourceURN]bool) ([]*job.ResourceURNWithUpstreams, error) {
 	errs := errors.NewMultiError("generate resources")
 	resourceURNs := p.parserFunc(rawResource)
-	resources := []*resource.WithUpstreams{}
+	resources := []*job.ResourceURNWithUpstreams{}
 	urnToRawResource, err := p._extractorFunc(ctx, resourceURNs)
 	if err != nil {
 		p.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
@@ -140,8 +139,7 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 	}
 
 	for _, resourceURN := range resourceURNs {
-		resource := &resource.WithUpstreams{}
-		resource.UpdateURN(resourceURN.String())
+		resource := &job.ResourceURNWithUpstreams{URN: resourceURN}
 
 		if paths[resourceURN] {
 			errs.Append(fmt.Errorf("circular reference is detected"))
@@ -156,7 +154,7 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 			errs.Append(err)
 			delete(paths, resourceURN)
 		}
-		resource.UpdateUpstreams(visited[resourceURN])
+		resource.Upstreams = visited[resourceURN]
 		resources = append(resources, resource)
 	}
 

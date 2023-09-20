@@ -150,40 +150,6 @@ func (r *Resource) Equal(incoming *Resource) bool {
 	return reflect.DeepEqual(r.metadata, incoming.metadata)
 }
 
-type WithUpstreams struct {
-	urn       string
-	upstreams []*WithUpstreams
-}
-
-func (ru WithUpstreams) URN() string {
-	return ru.urn
-}
-
-func (ru *WithUpstreams) UpdateURN(urn string) {
-	ru.urn = urn
-}
-
-func (ru *WithUpstreams) UpdateUpstreams(upstreams []*WithUpstreams) {
-	ru.upstreams = upstreams
-}
-
-type WithUpstreamsList []*WithUpstreams
-
-func (rs WithUpstreamsList) Flatten() []*WithUpstreams {
-	var output []*WithUpstreams
-	for _, u := range rs {
-		if u == nil {
-			continue
-		}
-		nested := WithUpstreamsList(u.upstreams).Flatten()
-		u.upstreams = nil
-		output = append(output, u)
-		output = append(output, nested...)
-	}
-
-	return output
-}
-
 type FromExistingOpt func(r *Resource)
 
 func ReplaceStatus(status Status) FromExistingOpt {

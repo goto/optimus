@@ -41,9 +41,8 @@ type JobPluginService struct {
 	pluginRepo PluginRepo
 
 	// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
-	parserFunc     parser.ParserFunc
-	extractorFac   ExtractorFactory
-	_extractorFunc ExtractorFunc
+	parserFunc   parser.ParserFunc
+	extractorFac ExtractorFactory
 
 	logger log.Logger
 }
@@ -113,9 +112,8 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 	if err != nil {
 		return nil, err
 	}
-	p._extractorFunc = bqExtractorDecorator(bqExtractorFunc) // set on runtime
 
-	resources, err := p.generateResources(ctx, query, visited, map[job.ResourceURN]bool{})
+	resources, err := p.generateResources(ctx, bqExtractorDecorator(bqExtractorFunc), query, visited, map[job.ResourceURN]bool{})
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +126,7 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 	return resourceURNs, nil
 }
 
-func (p JobPluginService) generateResources(ctx context.Context, rawResource string, visited map[job.ResourceURN][]*job.ResourceURNWithUpstreams, paths map[job.ResourceURN]bool) ([]*job.ResourceURNWithUpstreams, error) {
+func (p JobPluginService) generateResources(ctx context.Context, extractorFunc ExtractorFunc, rawResource string, visited map[job.ResourceURN][]*job.ResourceURNWithUpstreams, paths map[job.ResourceURN]bool) ([]*job.ResourceURNWithUpstreams, error) {
 	errs := errors.NewMultiError("generate resources")
 	resourceURNs := p.parserFunc(rawResource)
 	resources := []*job.ResourceURNWithUpstreams{}
@@ -149,7 +147,7 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 		if _, ok := visited[resourceURN]; !ok {
 			rawResource := urnToRawResource[resourceURN]
 			paths[resourceURN] = true
-			upstreamResources, err := p.generateResources(ctx, rawResource, visited, paths)
+			upstreamResources, err := p.generateResources(ctx, extractorFunc, rawResource, visited, paths)
 			visited[resourceURN] = upstreamResources
 			errs.Append(err)
 			delete(paths, resourceURN)

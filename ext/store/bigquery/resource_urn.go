@@ -12,7 +12,7 @@ type ResourceURN struct {
 	name    string
 }
 
-func NewResourceURN(project, dataset, name string) (*ResourceURN, error) {
+func NewResourceURN(project, dataset, name string) (ResourceURN, error) {
 	me := errors.NewMultiError("resource urn constructor errors")
 	if project == "" {
 		me.Append(fmt.Errorf("project is empty"))
@@ -25,10 +25,10 @@ func NewResourceURN(project, dataset, name string) (*ResourceURN, error) {
 	}
 
 	if len(me.Errors) > 0 {
-		return nil, me.ToErr()
+		return ResourceURN{}, me.ToErr()
 	}
 
-	return &ResourceURN{
+	return ResourceURN{
 		project: project,
 		dataset: dataset,
 		name:    name,
@@ -56,7 +56,7 @@ type ProjectDataset struct {
 	Dataset string
 }
 
-type ResourceURNs []*ResourceURN
+type ResourceURNs []ResourceURN
 
 func (n ResourceURNs) GroupByProjectDataset() map[ProjectDataset][]string {
 	output := make(map[ProjectDataset][]string)

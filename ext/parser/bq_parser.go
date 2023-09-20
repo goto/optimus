@@ -1,16 +1,15 @@
 package parser
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/ext/store/bigquery"
 )
 
 type (
 	// ParserFunc parses rawResource to list of resource urn
-	ParserFunc func(rawResource string) []job.ResourceURN
+	ParserFunc func(rawResource string) []bigquery.ResourceURN
 )
 
 var (
@@ -30,11 +29,11 @@ var (
 	specialCommentPattern     = regexp.MustCompile(`(\/\*\s*(@[a-zA-Z0-9_-]+)\s*\*\/)`)
 )
 
-func ParseTopLevelUpstreamsFromQuery(query string) []job.ResourceURN {
+func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 	cleanedQuery := cleanQueryFromComment(query)
 
-	resourcesFound := make(map[job.ResourceURN]bool)
-	pseudoResources := make(map[job.ResourceURN]bool)
+	resourcesFound := make(map[bigquery.ResourceURN]bool)
+	pseudoResources := make(map[bigquery.ResourceURN]bool)
 
 	matches := topLevelUpstreamsPattern.FindAllStringSubmatch(cleanedQuery, -1)
 
@@ -72,7 +71,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []job.ResourceURN {
 			continue
 		}
 
-		resourceURN := job.ResourceURN("bigquery://" + fmt.Sprintf("%s:%s.%s", project, dataset, name))
+		resourceURN, _ := bigquery.NewResourceURN(project, dataset, name)
 
 		if clause == "with" {
 			pseudoResources[resourceURN] = true
@@ -81,7 +80,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []job.ResourceURN {
 		}
 	}
 
-	output := []job.ResourceURN{}
+	output := []bigquery.ResourceURN{}
 
 	for resourceURN := range resourcesFound {
 		if pseudoResources[resourceURN] {

@@ -12,17 +12,17 @@ func TestNewResource(t *testing.T) {
 	t.Run("return error when project is empty", func(t *testing.T) {
 		resourceURN, err := bigquery.NewResourceURN("", "dataset", "table")
 		assert.ErrorContains(t, err, "project is empty")
-		assert.Nil(t, resourceURN)
+		assert.Empty(t, resourceURN)
 	})
 	t.Run("return error when dataset is empty", func(t *testing.T) {
 		resourceURN, err := bigquery.NewResourceURN("project", "", "table")
 		assert.ErrorContains(t, err, "dataset is empty")
-		assert.Nil(t, resourceURN)
+		assert.Empty(t, resourceURN)
 	})
 	t.Run("return error when name is empty", func(t *testing.T) {
 		resourceURN, err := bigquery.NewResourceURN("project", "dataset", "")
 		assert.ErrorContains(t, err, "name is empty")
-		assert.Nil(t, resourceURN)
+		assert.Empty(t, resourceURN)
 	})
 	t.Run("return success", func(t *testing.T) {
 		resourceURN, err := bigquery.NewResourceURN("project", "dataset", "table")

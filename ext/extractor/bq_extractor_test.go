@@ -31,7 +31,7 @@ func TestBQExtractor(t *testing.T) {
 	})
 	t.Run("should return no error if get ddl is fail", func(t *testing.T) {
 		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "name")
-		resourceURNs := []*bigquery.ResourceURN{resourceURNTable}
+		resourceURNs := []bigquery.ResourceURN{resourceURNTable}
 
 		client := new(Client)
 		defer client.AssertExpectations(t)
@@ -45,12 +45,12 @@ func TestBQExtractor(t *testing.T) {
 	t.Run("should return ddl given corresponding resourceURN", func(t *testing.T) {
 		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "name")
 		resourceURNView, _ := bigquery.NewResourceURN("project", "dataset", "view")
-		resourceURNs := []*bigquery.ResourceURN{resourceURNTable, resourceURNView}
+		resourceURNs := []bigquery.ResourceURN{resourceURNTable, resourceURNView}
 
 		client := new(Client)
 		defer client.AssertExpectations(t)
 
-		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(map[*bigquery.ResourceURN]string{
+		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(map[bigquery.ResourceURN]string{
 			resourceURNTable: "",
 			resourceURNView:  "select * from anotherproject.dataset.anothertable",
 		}, nil)
@@ -67,19 +67,19 @@ type Client struct {
 }
 
 // BulkGetDDLView provides a mock function with given fields: ctx, dataset, names
-func (_m *Client) BulkGetDDLView(ctx context.Context, pd bigquery.ProjectDataset, names []string) (map[*bigquery.ResourceURN]string, error) {
+func (_m *Client) BulkGetDDLView(ctx context.Context, pd bigquery.ProjectDataset, names []string) (map[bigquery.ResourceURN]string, error) {
 	ret := _m.Called(ctx, pd, names)
 
-	var r0 map[*bigquery.ResourceURN]string
+	var r0 map[bigquery.ResourceURN]string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) (map[*bigquery.ResourceURN]string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) (map[bigquery.ResourceURN]string, error)); ok {
 		return rf(ctx, pd, names)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) map[*bigquery.ResourceURN]string); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) map[bigquery.ResourceURN]string); ok {
 		r0 = rf(ctx, pd, names)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[*bigquery.ResourceURN]string)
+			r0 = ret.Get(0).(map[bigquery.ResourceURN]string)
 		}
 	}
 

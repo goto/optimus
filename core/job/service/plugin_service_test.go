@@ -209,7 +209,7 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
 				return nil, errors.New("error extract resource")
 			}
 			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractorFunc, nil)
@@ -243,8 +243,8 @@ func TestPluginService(t *testing.T) {
 			defer extractorFac.AssertExpectations(t)
 
 			table1BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table1")
-			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
-				return map[*bigquery.ResourceURN]string{
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
+				return map[bigquery.ResourceURN]string{
 					table1BqResourceURN: "",
 				}, nil
 			}
@@ -280,8 +280,8 @@ func TestPluginService(t *testing.T) {
 
 			table1BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table1")
 			table2BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table2")
-			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
-				return map[*bigquery.ResourceURN]string{
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
+				return map[bigquery.ResourceURN]string{
 					table1BqResourceURN: "CREATE VIEW `proj.dataset.table1` AS select * from `proj.dataset.table2`;;",
 					table2BqResourceURN: "",
 				}, nil
@@ -316,8 +316,8 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
-				return map[*bigquery.ResourceURN]string{}, nil
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
+				return map[bigquery.ResourceURN]string{}, nil
 			}
 			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractorFunc, nil)
 
@@ -350,8 +350,8 @@ func TestPluginService(t *testing.T) {
 			defer extractorFac.AssertExpectations(t)
 
 			table1BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table1")
-			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
-				return map[*bigquery.ResourceURN]string{
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
+				return map[bigquery.ResourceURN]string{
 					table1BqResourceURN: "",
 				}, nil
 			}

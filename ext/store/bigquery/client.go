@@ -56,7 +56,7 @@ func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHand
 	return NewExternalTableHandle(t)
 }
 
-func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names []string) (map[*ResourceURN]string, error) {
+func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names []string) (map[ResourceURN]string, error) {
 	queryContent := buildGetDDLQuery(pd.Project, pd.Dataset, names...)
 	queryStatement := c.Client.Query(queryContent)
 	rowIterator, err := queryStatement.Read(ctx)
@@ -64,7 +64,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names 
 		return nil, err
 	}
 
-	urnToDDL := map[*ResourceURN]string{}
+	urnToDDL := map[ResourceURN]string{}
 	me := errors.NewMultiError("bulk get ddl view errors")
 	for {
 		var values []bigquery.Value

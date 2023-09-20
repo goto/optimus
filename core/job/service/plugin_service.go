@@ -26,6 +26,7 @@ const (
 
 var ErrYamlModNotExist = fmt.Errorf("yaml mod not found for plugin")
 
+type ParserFunc func(rawResource string) []job.ResourceURN
 type ExtractorFunc func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error)
 
 // TODO: decouple extractor from plugin
@@ -41,7 +42,7 @@ type JobPluginService struct {
 	pluginRepo PluginRepo
 
 	// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
-	parserFunc   parser.ParserFunc
+	parserFunc   ParserFunc
 	extractorFac ExtractorFactory
 
 	logger log.Logger
@@ -53,7 +54,7 @@ func NewJobPluginService(pluginRepo PluginRepo, extractorFac ExtractorFactory, l
 		pluginRepo: pluginRepo,
 
 		// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
-		parserFunc:   parser.ParseTopLevelUpstreamsFromQuery,
+		parserFunc:   bqParserDecorator(parser.ParseTopLevelUpstreamsFromQuery),
 		extractorFac: extractorFac,
 	}
 }
@@ -130,7 +131,7 @@ func (p JobPluginService) generateResources(ctx context.Context, extractorFunc E
 	errs := errors.NewMultiError("generate resources")
 	resourceURNs := p.parserFunc(rawResource)
 	resources := []*job.ResourceURNWithUpstreams{}
-	urnToRawResource, err := p._extractorFunc(ctx, resourceURNs)
+	urnToRawResource, err := extractorFunc(ctx, resourceURNs)
 	if err != nil {
 		p.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
 		return resources, nil
@@ -159,10 +160,22 @@ func (p JobPluginService) generateResources(ctx context.Context, extractorFunc E
 	return resources, errs.ToErr()
 }
 
+// bqParserDecorator to convert bigquery resource urn to job resource urn
+func bqParserDecorator(fn parser.ParserFunc) ParserFunc {
+	return func(rawResource string) []job.ResourceURN {
+		bqURNs := fn(rawResource)
+		urns := make([]job.ResourceURN, len(bqURNs))
+		for i, bqURN := range bqURNs {
+			urns[i] = job.ResourceURN(bqURN.URN())
+		}
+		return urns
+	}
+}
+
 // bqExtractorDecorator to convert bigquery resource urn to job resource urn
 func bqExtractorDecorator(fn extractor.BQExtractorFunc) ExtractorFunc {
 	return func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error) {
-		bqURNs := make([]*bigquery.ResourceURN, len(resourceURNs))
+		bqURNs := make([]bigquery.ResourceURN, len(resourceURNs))
 		extractedBqURNToDDL, err := fn(ctx, bqURNs)
 		if err != nil {
 			return nil, err

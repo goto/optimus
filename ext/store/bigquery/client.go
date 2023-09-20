@@ -10,7 +10,6 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
-	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -57,7 +56,7 @@ func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHand
 	return NewExternalTableHandle(t)
 }
 
-func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []string) (map[job.ResourceURN]string, error) {
+func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []string) (map[*ResourceURN]string, error) {
 	queryContent := buildGetDDLQuery(dataset.Project, dataset.DatasetName, names...)
 	queryStatement := c.Client.Query(queryContent)
 	rowIterator, err := queryStatement.Read(ctx)
@@ -65,7 +64,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []
 		return nil, err
 	}
 
-	urnToDDL := map[job.ResourceURN]string{}
+	urnToDDL := map[*ResourceURN]string{}
 	me := errors.NewMultiError("bulk get ddl view errors")
 	for {
 		var values []bigquery.Value
@@ -88,7 +87,11 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []
 			continue
 		}
 
-		resourceURN := job.ResourceURN("bigquery://" + fmt.Sprintf("%s:%s.%s", dataset.Project, dataset.DatasetName, name))
+		resourceURN, err := NewResourceURN(dataset.Project, dataset.DatasetName, name)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
 		urnToDDL[resourceURN] = ddl
 	}
 

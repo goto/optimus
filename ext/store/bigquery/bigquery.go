@@ -9,7 +9,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -41,7 +40,7 @@ type Client interface {
 	TableHandleFrom(dataset Dataset, name string) TableResourceHandle
 	ExternalTableHandleFrom(dataset Dataset, name string) ResourceHandle
 	ViewHandleFrom(dataset Dataset, name string) ResourceHandle
-	BulkGetDDLView(ctx context.Context, dataset Dataset, names []string) (map[job.ResourceURN]string, error)
+	BulkGetDDLView(ctx context.Context, dataset Dataset, names []string) (map[*ResourceURN]string, error)
 	Close() error
 }
 

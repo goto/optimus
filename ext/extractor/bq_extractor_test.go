@@ -45,9 +45,11 @@ func TestDefaultExtractorFunc(t *testing.T) {
 		client := new(Client)
 		defer client.AssertExpectations(t)
 
-		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(map[job.ResourceURN]string{
-			"bigquery://project:dataset.table": "",
-			"bigquery://project:dataset.view":  "select * from anotherproject.dataset.anothertable",
+		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "table")
+		resourceURNView, _ := bigquery.NewResourceURN("project", "dataset", "view")
+		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(map[*bigquery.ResourceURN]string{
+			resourceURNTable: "",
+			resourceURNView:  "select * from anotherproject.dataset.anothertable",
 		}, nil)
 		extractorFunc := extractor.DefaultExtractorFunc(client)
 		urnToDDL, err := extractorFunc(ctx, l, resourceURNs)
@@ -62,19 +64,19 @@ type Client struct {
 }
 
 // BulkGetDDLView provides a mock function with given fields: ctx, dataset, names
-func (_m *Client) BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[job.ResourceURN]string, error) {
+func (_m *Client) BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error) {
 	ret := _m.Called(ctx, dataset, names)
 
-	var r0 map[job.ResourceURN]string
+	var r0 map[*bigquery.ResourceURN]string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) (map[job.ResourceURN]string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) (map[*bigquery.ResourceURN]string, error)); ok {
 		return rf(ctx, dataset, names)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) map[job.ResourceURN]string); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) map[*bigquery.ResourceURN]string); ok {
 		r0 = rf(ctx, dataset, names)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[job.ResourceURN]string)
+			r0 = ret.Get(0).(map[*bigquery.ResourceURN]string)
 		}
 	}
 

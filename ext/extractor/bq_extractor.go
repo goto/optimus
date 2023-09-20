@@ -18,7 +18,7 @@ type (
 )
 
 type DDLViewGetter interface {
-	BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[job.ResourceURN]string, error)
+	BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error)
 }
 
 func (DefaultBQExtractorFactory) New(ctx context.Context, svcAcc string) (ExtractorFunc, error) {
@@ -48,7 +48,7 @@ func DefaultExtractorFunc(client DDLViewGetter) ExtractorFunc {
 				return nil, err
 			}
 			for urn, ddl := range urnToDDLView {
-				urnToDDL[urn] = ddl
+				urnToDDL[job.ResourceURN(urn.URN())] = ddl
 			}
 		}
 
@@ -74,8 +74,8 @@ func datasetToNames(resourceURNs []job.ResourceURN) map[bigquery.Dataset][]strin
 	return output
 }
 
-func bulkGetDDLViewWithRetry(c DDLViewGetter, l log.Logger, retry int) func(context.Context, bigquery.Dataset, []string) (map[job.ResourceURN]string, error) {
-	return func(ctx context.Context, dataset bigquery.Dataset, names []string) (map[job.ResourceURN]string, error) {
+func bulkGetDDLViewWithRetry(c DDLViewGetter, l log.Logger, retry int) func(context.Context, bigquery.Dataset, []string) (map[*bigquery.ResourceURN]string, error) {
+	return func(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error) {
 		for try := 1; try <= retry; try++ {
 			urnToDDL, err := c.BulkGetDDLView(ctx, dataset, names)
 			if err != nil {

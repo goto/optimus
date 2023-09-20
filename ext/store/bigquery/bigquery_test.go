@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/bigquery"
@@ -772,19 +771,19 @@ func (m *mockClient) ViewHandleFrom(ds bigquery.Dataset, name string) bigquery.R
 	return args.Get(0).(bigquery.ResourceHandle)
 }
 
-func (m *mockClient) BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[job.ResourceURN]string, error) {
+func (m *mockClient) BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error) {
 	ret := m.Called(ctx, dataset, names)
 
-	var r0 map[job.ResourceURN]string
+	var r0 map[*bigquery.ResourceURN]string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) (map[job.ResourceURN]string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) (map[*bigquery.ResourceURN]string, error)); ok {
 		return rf(ctx, dataset, names)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) map[job.ResourceURN]string); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) map[*bigquery.ResourceURN]string); ok {
 		r0 = rf(ctx, dataset, names)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[job.ResourceURN]string)
+			r0 = ret.Get(0).(map[*bigquery.ResourceURN]string)
 		}
 	}
 

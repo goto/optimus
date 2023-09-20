@@ -26,8 +26,10 @@ const (
 
 var ErrYamlModNotExist = fmt.Errorf("yaml mod not found for plugin")
 
-type ParserFunc func(rawResource string) []job.ResourceURN
-type ExtractorFunc func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error)
+type (
+	ParserFunc    func(rawResource string) []job.ResourceURN
+	ExtractorFunc func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error)
+)
 
 // TODO: decouple extractor from plugin
 type ExtractorFactory interface {

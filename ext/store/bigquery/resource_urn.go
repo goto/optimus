@@ -50,3 +50,24 @@ func (n ResourceURN) Dataset() string {
 func (n ResourceURN) Name() string {
 	return n.name
 }
+
+type ProjectDataset struct {
+	Project string
+	Dataset string
+}
+
+type ResourceURNs []*ResourceURN
+
+func (n ResourceURNs) GroupByProjectDataset() map[ProjectDataset][]string {
+	output := make(map[ProjectDataset][]string)
+
+	for _, resourceURN := range n {
+		pd := ProjectDataset{Project: resourceURN.project, Dataset: resourceURN.dataset}
+		if _, ok := output[pd]; !ok {
+			output[pd] = []string{}
+		}
+		output[pd] = append(output[pd], resourceURN.name)
+	}
+
+	return output
+}

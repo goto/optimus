@@ -771,24 +771,24 @@ func (m *mockClient) ViewHandleFrom(ds bigquery.Dataset, name string) bigquery.R
 	return args.Get(0).(bigquery.ResourceHandle)
 }
 
-func (m *mockClient) BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error) {
-	ret := m.Called(ctx, dataset, names)
+func (m *mockClient) BulkGetDDLView(ctx context.Context, pd bigquery.ProjectDataset, names []string) (map[*bigquery.ResourceURN]string, error) {
+	ret := m.Called(ctx, pd, names)
 
 	var r0 map[*bigquery.ResourceURN]string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) (map[*bigquery.ResourceURN]string, error)); ok {
-		return rf(ctx, dataset, names)
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) (map[*bigquery.ResourceURN]string, error)); ok {
+		return rf(ctx, pd, names)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) map[*bigquery.ResourceURN]string); ok {
-		r0 = rf(ctx, dataset, names)
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) map[*bigquery.ResourceURN]string); ok {
+		r0 = rf(ctx, pd, names)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(map[*bigquery.ResourceURN]string)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, bigquery.Dataset, []string) error); ok {
-		r1 = rf(ctx, dataset, names)
+	if rf, ok := ret.Get(1).(func(context.Context, bigquery.ProjectDataset, []string) error); ok {
+		r1 = rf(ctx, pd, names)
 	} else {
 		r1 = ret.Error(1)
 	}

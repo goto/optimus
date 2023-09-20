@@ -11,6 +11,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/parser"
+	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/sdk/plugin"
 )
@@ -26,9 +27,11 @@ const (
 
 var ErrYamlModNotExist = fmt.Errorf("yaml mod not found for plugin")
 
+type ExtractorFunc func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error)
+
 // TODO: decouple extractor from plugin
 type ExtractorFactory interface {
-	New(ctx context.Context, svcAcc string) (extractor.ExtractorFunc, error)
+	New(ctx context.Context, svcAcc string, l log.Logger) (extractor.BQExtractorFunc, error)
 }
 
 type PluginRepo interface {
@@ -41,7 +44,7 @@ type JobPluginService struct {
 	// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
 	parserFunc     parser.ParserFunc
 	extractorFac   ExtractorFactory
-	_extractorFunc extractor.ExtractorFunc
+	_extractorFunc ExtractorFunc
 
 	logger log.Logger
 }
@@ -107,11 +110,11 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 	// TODO(generic deps resolution): make it generic by leverage the parser
 	visited := map[job.ResourceURN][]*resource.WithUpstreams{}
 	visited[destinationURN] = []*resource.WithUpstreams{}
-	extractorFunc, err := p.extractorFac.New(ctx, svcAcc)
+	bqExtractorFunc, err := p.extractorFac.New(ctx, svcAcc, p.logger)
 	if err != nil {
 		return nil, err
 	}
-	p._extractorFunc = extractorFunc // set on runtime
+	p._extractorFunc = bqExtractorDecorator(bqExtractorFunc) // set on runtime
 
 	resources, err := p.generateResources(ctx, query, visited, map[job.ResourceURN]bool{})
 	if err != nil {
@@ -130,7 +133,7 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 	errs := errors.NewMultiError("generate resources")
 	resourceURNs := p.parserFunc(rawResource)
 	resources := []*resource.WithUpstreams{}
-	urnToRawResource, err := p._extractorFunc(ctx, p.logger, resourceURNs)
+	urnToRawResource, err := p._extractorFunc(ctx, resourceURNs)
 	if err != nil {
 		p.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
 		return resources, nil
@@ -158,4 +161,20 @@ func (p JobPluginService) generateResources(ctx context.Context, rawResource str
 	}
 
 	return resources, errs.ToErr()
+}
+
+// bqExtractorDecorator to convert bigquery resource urn to job resource urn
+func bqExtractorDecorator(fn extractor.BQExtractorFunc) ExtractorFunc {
+	return func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error) {
+		bqURNs := make([]*bigquery.ResourceURN, len(resourceURNs))
+		extractedBqURNToDDL, err := fn(ctx, bqURNs)
+		if err != nil {
+			return nil, err
+		}
+		urnToDDL := make(map[job.ResourceURN]string, len(extractedBqURNToDDL))
+		for bqURN, ddl := range extractedBqURNToDDL {
+			urnToDDL[job.ResourceURN(bqURN.URN())] = ddl
+		}
+		return urnToDDL, nil
+	}
 }

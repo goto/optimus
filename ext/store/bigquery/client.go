@@ -56,8 +56,8 @@ func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHand
 	return NewExternalTableHandle(t)
 }
 
-func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []string) (map[*ResourceURN]string, error) {
-	queryContent := buildGetDDLQuery(dataset.Project, dataset.DatasetName, names...)
+func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names []string) (map[*ResourceURN]string, error) {
+	queryContent := buildGetDDLQuery(pd.Project, pd.Dataset, names...)
 	queryStatement := c.Client.Query(queryContent)
 	rowIterator, err := queryStatement.Read(ctx)
 	if err != nil {
@@ -87,7 +87,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, dataset Dataset, names []
 			continue
 		}
 
-		resourceURN, err := NewResourceURN(dataset.Project, dataset.DatasetName, name)
+		resourceURN, err := NewResourceURN(pd.Project, pd.Dataset, name)
 		if err != nil {
 			me.Append(err)
 			continue

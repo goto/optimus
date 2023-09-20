@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service"
 	"github.com/goto/optimus/ext/extractor"
+	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/sdk/plugin"
 	mockOpt "github.com/goto/optimus/sdk/plugin/mock"
 )
@@ -179,7 +180,7 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			extractorFac.On("New", ctx, svcAcc).Return(nil, errors.New("error creating extractor"))
+			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(nil, errors.New("error creating extractor"))
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -208,10 +209,10 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
 				return nil, errors.New("error extract resource")
 			}
-			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
+			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -241,12 +242,13 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
-				return map[job.ResourceURN]string{
-					"bigquery://proj:dataset.table1": "",
+			table1BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table1")
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
+				return map[*bigquery.ResourceURN]string{
+					table1BqResourceURN: "",
 				}, nil
 			}
-			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
+			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -276,13 +278,15 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
-				return map[job.ResourceURN]string{
-					"bigquery://proj:dataset.table1": "CREATE VIEW `proj.dataset.table1` AS select * from `proj.dataset.table2`;;",
-					"bigquery://proj:dataset.table2": "",
+			table1BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table1")
+			table2BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table2")
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
+				return map[*bigquery.ResourceURN]string{
+					table1BqResourceURN: "CREATE VIEW `proj.dataset.table1` AS select * from `proj.dataset.table2`;;",
+					table2BqResourceURN: "",
 				}, nil
 			}
-			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
+			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -312,10 +316,10 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
-				return map[job.ResourceURN]string{}, nil
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
+				return map[*bigquery.ResourceURN]string{}, nil
 			}
-			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
+			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -345,12 +349,13 @@ func TestPluginService(t *testing.T) {
 			extractorFac := new(ExtractorFactory)
 			defer extractorFac.AssertExpectations(t)
 
-			var extractorFunc extractor.ExtractorFunc = func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error) {
-				return map[job.ResourceURN]string{
-					"bigquery://proj:dataset.table1": "",
+			table1BqResourceURN, _ := bigquery.NewResourceURN("proj", "dataset", "table1")
+			var extractorFunc extractor.BQExtractorFunc = func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error) {
+				return map[*bigquery.ResourceURN]string{
+					table1BqResourceURN: "",
 				}, nil
 			}
-			extractorFac.On("New", ctx, svcAcc).Return(extractorFunc, nil)
+			extractorFac.On("New", ctx, svcAcc, mock.Anything).Return(extractorFunc, nil)
 
 			yamlMod.On("PluginInfo").Return(&plugin.Info{
 				Name:        jobTask.Name().String(),
@@ -385,25 +390,25 @@ type ExtractorFactory struct {
 	mock.Mock
 }
 
-// New provides a mock function with given fields: ctx, svcAcc
-func (_m *ExtractorFactory) New(ctx context.Context, svcAcc string) (extractor.ExtractorFunc, error) {
-	ret := _m.Called(ctx, svcAcc)
+// New provides a mock function with given fields: ctx, svcAcc, l
+func (_m *ExtractorFactory) New(ctx context.Context, svcAcc string, l log.Logger) (extractor.BQExtractorFunc, error) {
+	ret := _m.Called(ctx, svcAcc, l)
 
-	var r0 extractor.ExtractorFunc
+	var r0 extractor.BQExtractorFunc
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (extractor.ExtractorFunc, error)); ok {
-		return rf(ctx, svcAcc)
+	if rf, ok := ret.Get(0).(func(context.Context, string, log.Logger) (extractor.BQExtractorFunc, error)); ok {
+		return rf(ctx, svcAcc, l)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) extractor.ExtractorFunc); ok {
-		r0 = rf(ctx, svcAcc)
+	if rf, ok := ret.Get(0).(func(context.Context, string, log.Logger) extractor.BQExtractorFunc); ok {
+		r0 = rf(ctx, svcAcc, l)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(extractor.ExtractorFunc)
+			r0 = ret.Get(0).(extractor.BQExtractorFunc)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, svcAcc)
+	if rf, ok := ret.Get(1).(func(context.Context, string, log.Logger) error); ok {
+		r1 = rf(ctx, svcAcc, l)
 	} else {
 		r1 = ret.Error(1)
 	}

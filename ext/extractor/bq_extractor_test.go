@@ -9,50 +9,53 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/store/bigquery"
 )
 
-func TestDefaultExtractorFunc(t *testing.T) {
+func TestBQExtractor(t *testing.T) {
 	ctx := context.Background()
 	l := log.NewNoop()
 
 	t.Run("should return error if client is nil", func(t *testing.T) {
-		extractorFunc := extractor.DefaultExtractorFunc(nil)
-		urnToDDL, err := extractorFunc(nil, nil, nil)
-		assert.Error(t, err)
-		assert.Nil(t, urnToDDL)
+		bqExtractor, err := extractor.NewBQExtractor(nil, l)
+		assert.ErrorContains(t, err, "client is nil")
+		assert.Nil(t, bqExtractor)
+	})
+	t.Run("should return error if logger is nil", func(t *testing.T) {
+		client := new(Client)
+		defer client.AssertExpectations(t)
+		bqExtractor, err := extractor.NewBQExtractor(client, nil)
+		assert.ErrorContains(t, err, "logger is nil")
+		assert.Nil(t, bqExtractor)
 	})
 	t.Run("should return no error if get ddl is fail", func(t *testing.T) {
-		resourceURNs := []job.ResourceURN{"bigquery://project:dataset.name"}
+		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "name")
+		resourceURNs := []*bigquery.ResourceURN{resourceURNTable}
 
 		client := new(Client)
 		defer client.AssertExpectations(t)
 
 		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("some error"))
-		extractorFunc := extractor.DefaultExtractorFunc(client)
-		urnToDDL, err := extractorFunc(ctx, l, resourceURNs)
+		bqExtractor, _ := extractor.NewBQExtractor(client, l)
+		urnToDDL, err := bqExtractor.Extract(ctx, resourceURNs)
 		assert.NoError(t, err)
 		assert.Empty(t, urnToDDL)
 	})
 	t.Run("should return ddl given corresponding resourceURN", func(t *testing.T) {
-		resourceURNs := []job.ResourceURN{
-			"bigquery://project:dataset.table",
-			"bigquery://project:dataset.view",
-		}
+		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "name")
+		resourceURNView, _ := bigquery.NewResourceURN("project", "dataset", "view")
+		resourceURNs := []*bigquery.ResourceURN{resourceURNTable, resourceURNView}
 
 		client := new(Client)
 		defer client.AssertExpectations(t)
 
-		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "table")
-		resourceURNView, _ := bigquery.NewResourceURN("project", "dataset", "view")
 		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(map[*bigquery.ResourceURN]string{
 			resourceURNTable: "",
 			resourceURNView:  "select * from anotherproject.dataset.anothertable",
 		}, nil)
-		extractorFunc := extractor.DefaultExtractorFunc(client)
-		urnToDDL, err := extractorFunc(ctx, l, resourceURNs)
+		bqExtractor, _ := extractor.NewBQExtractor(client, l)
+		urnToDDL, err := bqExtractor.Extract(ctx, resourceURNs)
 		assert.NoError(t, err)
 		assert.Len(t, urnToDDL, 2)
 	})
@@ -64,24 +67,24 @@ type Client struct {
 }
 
 // BulkGetDDLView provides a mock function with given fields: ctx, dataset, names
-func (_m *Client) BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error) {
-	ret := _m.Called(ctx, dataset, names)
+func (_m *Client) BulkGetDDLView(ctx context.Context, pd bigquery.ProjectDataset, names []string) (map[*bigquery.ResourceURN]string, error) {
+	ret := _m.Called(ctx, pd, names)
 
 	var r0 map[*bigquery.ResourceURN]string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) (map[*bigquery.ResourceURN]string, error)); ok {
-		return rf(ctx, dataset, names)
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) (map[*bigquery.ResourceURN]string, error)); ok {
+		return rf(ctx, pd, names)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, bigquery.Dataset, []string) map[*bigquery.ResourceURN]string); ok {
-		r0 = rf(ctx, dataset, names)
+	if rf, ok := ret.Get(0).(func(context.Context, bigquery.ProjectDataset, []string) map[*bigquery.ResourceURN]string); ok {
+		r0 = rf(ctx, pd, names)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(map[*bigquery.ResourceURN]string)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, bigquery.Dataset, []string) error); ok {
-		r1 = rf(ctx, dataset, names)
+	if rf, ok := ret.Get(1).(func(context.Context, bigquery.ProjectDataset, []string) error); ok {
+		r1 = rf(ctx, pd, names)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -104,11 +107,11 @@ func (_m *Client) Close() error {
 }
 
 // DatasetHandleFrom provides a mock function with given fields: dataset
-func (_m *Client) DatasetHandleFrom(dataset bigquery.Dataset) bigquery.ResourceHandle {
+func (_m *Client) DatasetHandleFrom(dataset bigquery.ProjectDataset) bigquery.ResourceHandle {
 	ret := _m.Called(dataset)
 
 	var r0 bigquery.ResourceHandle
-	if rf, ok := ret.Get(0).(func(bigquery.Dataset) bigquery.ResourceHandle); ok {
+	if rf, ok := ret.Get(0).(func(bigquery.ProjectDataset) bigquery.ResourceHandle); ok {
 		r0 = rf(dataset)
 	} else {
 		if ret.Get(0) != nil {
@@ -120,11 +123,11 @@ func (_m *Client) DatasetHandleFrom(dataset bigquery.Dataset) bigquery.ResourceH
 }
 
 // ExternalTableHandleFrom provides a mock function with given fields: dataset, name
-func (_m *Client) ExternalTableHandleFrom(dataset bigquery.Dataset, name string) bigquery.ResourceHandle {
+func (_m *Client) ExternalTableHandleFrom(dataset bigquery.ProjectDataset, name string) bigquery.ResourceHandle {
 	ret := _m.Called(dataset, name)
 
 	var r0 bigquery.ResourceHandle
-	if rf, ok := ret.Get(0).(func(bigquery.Dataset, string) bigquery.ResourceHandle); ok {
+	if rf, ok := ret.Get(0).(func(bigquery.ProjectDataset, string) bigquery.ResourceHandle); ok {
 		r0 = rf(dataset, name)
 	} else {
 		if ret.Get(0) != nil {
@@ -136,11 +139,11 @@ func (_m *Client) ExternalTableHandleFrom(dataset bigquery.Dataset, name string)
 }
 
 // TableHandleFrom provides a mock function with given fields: dataset, name
-func (_m *Client) TableHandleFrom(dataset bigquery.Dataset, name string) bigquery.TableResourceHandle {
+func (_m *Client) TableHandleFrom(dataset bigquery.ProjectDataset, name string) bigquery.TableResourceHandle {
 	ret := _m.Called(dataset, name)
 
 	var r0 bigquery.TableResourceHandle
-	if rf, ok := ret.Get(0).(func(bigquery.Dataset, string) bigquery.TableResourceHandle); ok {
+	if rf, ok := ret.Get(0).(func(bigquery.ProjectDataset, string) bigquery.TableResourceHandle); ok {
 		r0 = rf(dataset, name)
 	} else {
 		if ret.Get(0) != nil {
@@ -152,11 +155,11 @@ func (_m *Client) TableHandleFrom(dataset bigquery.Dataset, name string) bigquer
 }
 
 // ViewHandleFrom provides a mock function with given fields: dataset, name
-func (_m *Client) ViewHandleFrom(dataset bigquery.Dataset, name string) bigquery.ResourceHandle {
+func (_m *Client) ViewHandleFrom(dataset bigquery.ProjectDataset, name string) bigquery.ResourceHandle {
 	ret := _m.Called(dataset, name)
 
 	var r0 bigquery.ResourceHandle
-	if rf, ok := ret.Get(0).(func(bigquery.Dataset, string) bigquery.ResourceHandle); ok {
+	if rf, ok := ret.Get(0).(func(bigquery.ProjectDataset, string) bigquery.ResourceHandle); ok {
 		r0 = rf(dataset, name)
 	} else {
 		if ret.Get(0) != nil {

@@ -7,75 +7,77 @@ import (
 
 	"github.com/goto/salt/log"
 
-	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/internal/errors"
 )
 
 type (
-	// ExtractorFunc extracts the rawSources from given list of resource
-	ExtractorFunc             func(context.Context, log.Logger, []job.ResourceURN) (map[job.ResourceURN]string, error)
+	// BQExtractorFunc extracts the rawSources from given list of resource
+	BQExtractorFunc           func(context.Context, []*bigquery.ResourceURN) (map[*bigquery.ResourceURN]string, error)
 	DefaultBQExtractorFactory struct{}
 )
 
 type DDLViewGetter interface {
-	BulkGetDDLView(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error)
+	BulkGetDDLView(ctx context.Context, dataset bigquery.ProjectDataset, names []string) (map[*bigquery.ResourceURN]string, error)
 }
 
-func (DefaultBQExtractorFactory) New(ctx context.Context, svcAcc string) (ExtractorFunc, error) {
+func (DefaultBQExtractorFactory) New(ctx context.Context, svcAcc string, l log.Logger) (BQExtractorFunc, error) {
 	client, err := bigquery.NewClient(ctx, svcAcc)
 	if err != nil {
 		return nil, err
 	}
-
-	return DefaultExtractorFunc(client), nil
-}
-
-func DefaultExtractorFunc(client DDLViewGetter) ExtractorFunc {
-	return func(ctx context.Context, l log.Logger, resourceURNs []job.ResourceURN) (urnToDDL map[job.ResourceURN]string, err error) {
-		if client == nil {
-			return nil, fmt.Errorf("client is nil")
-		}
-
-		// grouping
-		dsToNames := datasetToNames(resourceURNs)
-
-		// fetch ddl for each resourceURN
-		urnToDDL = make(map[job.ResourceURN]string, len(resourceURNs))
-		const maxRetry = 3
-		for ds, names := range dsToNames {
-			urnToDDLView, err := bulkGetDDLViewWithRetry(client, l, maxRetry)(ctx, ds, names)
-			if err != nil {
-				return nil, err
-			}
-			for urn, ddl := range urnToDDLView {
-				urnToDDL[job.ResourceURN(urn.URN())] = ddl
-			}
-		}
-
-		return urnToDDL, nil
+	bqExtractor, err := NewBQExtractor(client, l)
+	if err != nil {
+		return nil, err
 	}
+	return bqExtractor.Extract, nil
 }
 
-// TODO: find a better way for grouping
-func datasetToNames(resourceURNs []job.ResourceURN) map[bigquery.Dataset][]string {
-	output := make(map[bigquery.Dataset][]string)
+type BQExtractor struct {
+	client DDLViewGetter
+	l      log.Logger
+}
 
-	for _, resourceURN := range resourceURNs {
-		resourceFullName := strings.TrimPrefix(resourceURN.String(), "bigquery://")
-		project, datasetName := strings.Split(resourceFullName, ":")[0], strings.Split(resourceFullName, ":")[1]
-		dataset, name := strings.Split(datasetName, ".")[0], strings.Split(datasetName, ".")[1]
-		ds := bigquery.Dataset{Project: project, DatasetName: dataset}
-		if _, ok := output[ds]; !ok {
-			output[ds] = []string{}
-		}
-		output[ds] = append(output[ds], name)
+func NewBQExtractor(client DDLViewGetter, l log.Logger) (*BQExtractor, error) {
+	me := errors.NewMultiError("construct bq extractor errors")
+	if client == nil {
+		me.Append(fmt.Errorf("client is nil"))
+	}
+	if l == nil {
+		me.Append(fmt.Errorf("logger is nil"))
+	}
+	if len(me.Errors) > 0 {
+		return nil, me.ToErr()
 	}
 
-	return output
+	return &BQExtractor{
+		client: client,
+		l:      l,
+	}, nil
 }
 
-func bulkGetDDLViewWithRetry(c DDLViewGetter, l log.Logger, retry int) func(context.Context, bigquery.Dataset, []string) (map[*bigquery.ResourceURN]string, error) {
-	return func(ctx context.Context, dataset bigquery.Dataset, names []string) (map[*bigquery.ResourceURN]string, error) {
+func (e BQExtractor) Extract(ctx context.Context, resourceURNs []*bigquery.ResourceURN) (urnToDDL map[*bigquery.ResourceURN]string, err error) {
+	// grouping
+	dsToNames := bigquery.ResourceURNs(resourceURNs).GroupByProjectDataset()
+
+	// fetch ddl for each resourceURN
+	urnToDDL = make(map[*bigquery.ResourceURN]string, len(resourceURNs))
+	const maxRetry = 3
+	for ds, names := range dsToNames {
+		urnToDDLView, err := bulkGetDDLViewWithRetry(e.client, e.l, maxRetry)(ctx, ds, names)
+		if err != nil {
+			return nil, err
+		}
+		for urn, ddl := range urnToDDLView {
+			urnToDDL[urn] = ddl
+		}
+	}
+
+	return urnToDDL, nil
+}
+
+func bulkGetDDLViewWithRetry(c DDLViewGetter, l log.Logger, retry int) func(context.Context, bigquery.ProjectDataset, []string) (map[*bigquery.ResourceURN]string, error) {
+	return func(ctx context.Context, dataset bigquery.ProjectDataset, names []string) (map[*bigquery.ResourceURN]string, error) {
 		for try := 1; try <= retry; try++ {
 			urnToDDL, err := c.BulkGetDDLView(ctx, dataset, names)
 			if err != nil {

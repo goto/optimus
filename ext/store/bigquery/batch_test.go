@@ -164,10 +164,6 @@ func TestBatches(t *testing.T) {
 		assert.Equal(t, resource.StatusSuccess, updateView1.Status())
 		assert.Equal(t, resource.StatusUpdateFailure, updateExt1.Status())
 		assert.Equal(t, resource.StatusSuccess, updateView2.Status())
-		// Dataset for batch2
-		ds2, ok := states[6].Val.(*resource.Resource)
-		assert.True(t, ok)
-		assert.Equal(t, resource.StatusSuccess, ds2.Status())
 
 		var errMsgs []string
 		for _, st := range states {

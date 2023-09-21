@@ -31,17 +31,10 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 	}
 
 	if b.DatasetDetails != nil {
-		runner.Add(func(res *resource.Resource) func() (interface{}, error) {
-			return func() (interface{}, error) {
-				ds, err := DataSetFor(res)
-				if err != nil {
-					return res, err
-				}
-				dsHandle := client.DatasetHandleFrom(ds)
-				err = createOrUpdate(ctx, dsHandle, res)
-				return res, err
-			}
-		}(b.DatasetDetails))
+		dsHandle := client.DatasetHandleFrom(b.Dataset)
+		if err := createOrUpdate(ctx, dsHandle, b.DatasetDetails); err != nil {
+			return err
+		}
 	}
 
 	for _, table := range b.Tables {

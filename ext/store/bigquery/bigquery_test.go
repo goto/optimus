@@ -497,7 +497,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			err = bqStore.BatchUpdate(ctx, []*resource.Resource{updateDS})
 			assert.NotNil(t, err)
-			assert.EqualError(t, err, "error while resource batch update:\n failed to update")
+			assert.EqualError(t, err, "failed to update")
 		})
 		t.Run("returns no error when successfully updates", func(t *testing.T) {
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")

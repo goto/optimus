@@ -41,6 +41,26 @@ type Entrypoint struct {
 	Script string
 }
 
+type (
+	ParserType              string
+	EvaluatorType           string
+	DestinationTemplateType string
+
+	Evaluator map[EvaluatorType]string
+)
+
+const (
+	BQParser              ParserType              = "bq"
+	JsonEvaluator         EvaluatorType           = "jsonpath"
+	BQDestinationTemplate DestinationTemplateType = "bq"
+)
+
+type AssetParser struct {
+	Type      ParserType
+	FilePath  string
+	Evaluator Evaluator
+}
+
 type Info struct {
 	// Name should as simple as possible with no special characters
 	// should start with a character, better if all lowercase
@@ -48,6 +68,9 @@ type Info struct {
 	Description string
 	PluginType  Type  `yaml:",omitempty"`
 	PluginMods  []Mod `yaml:",omitempty"`
+
+	AssetParser            AssetParser
+	DestinationURNTemplate string
 
 	PluginVersion string   `yaml:",omitempty"`
 	APIVersion    []string `yaml:",omitempty"`

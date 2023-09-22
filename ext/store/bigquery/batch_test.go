@@ -164,10 +164,6 @@ func TestBatches(t *testing.T) {
 		assert.Equal(t, resource.StatusSuccess, updateView1.Status())
 		assert.Equal(t, resource.StatusUpdateFailure, updateExt1.Status())
 		assert.Equal(t, resource.StatusSuccess, updateView2.Status())
-		// Dataset for batch2
-		ds2, ok := states[6].Val.(*resource.Resource)
-		assert.True(t, ok)
-		assert.Equal(t, resource.StatusSuccess, ds2.Status())
 
 		var errMsgs []string
 		for _, st := range states {
@@ -179,5 +175,101 @@ func TestBatches(t *testing.T) {
 		assert.Equal(t, 2, len(errMsgs))
 		assert.Contains(t, errMsgs, "internal error for entity view1: some err")
 		assert.Contains(t, errMsgs, "internal error for entity ext1: err")
+	})
+
+	t.Run("should return error if dataset does not exist", func(t *testing.T) {
+		client := new(mockClient)
+		defer client.AssertExpectations(t)
+
+		clientProvider := new(mockClientProvider)
+		defer clientProvider.AssertExpectations(t)
+
+		datasetHandle := new(mockTableResourceHandle)
+		defer datasetHandle.AssertExpectations(t)
+
+		accountSecret := "secret for account"
+
+		tab1Dataset, err := bigquery.DataSetFor(tab1)
+		assert.NoError(t, err)
+
+		datasetHandle.On("Exists", ctx).Return(false)
+
+		client.On("DatasetHandleFrom", tab1Dataset).Return(datasetHandle)
+
+		clientProvider.On("Get", ctx, accountSecret).Return(client, nil)
+
+		batches, err := bigquery.BatchesFrom([]*resource.Resource{tab1}, clientProvider)
+		assert.NoError(t, err)
+
+		testParallel := parallel.NewRunner()
+		for _, batch := range batches {
+			actualError := batch.QueueJobs(ctx, accountSecret, testParallel)
+			assert.ErrorContains(t, actualError, "dataset is not found")
+		}
+	})
+
+	t.Run("should return no error if dataset exists", func(t *testing.T) {
+		client := new(mockClient)
+		defer client.AssertExpectations(t)
+
+		clientProvider := new(mockClientProvider)
+		defer clientProvider.AssertExpectations(t)
+
+		datasetHandle := new(mockTableResourceHandle)
+		defer datasetHandle.AssertExpectations(t)
+
+		accountSecret := "secret for account"
+
+		tab1Dataset, err := bigquery.DataSetFor(tab1)
+		assert.NoError(t, err)
+
+		datasetHandle.On("Exists", ctx).Return(true)
+
+		client.On("DatasetHandleFrom", tab1Dataset).Return(datasetHandle)
+
+		clientProvider.On("Get", ctx, accountSecret).Return(client, nil)
+
+		batches, err := bigquery.BatchesFrom([]*resource.Resource{tab1}, clientProvider)
+		assert.NoError(t, err)
+
+		testParallel := parallel.NewRunner()
+		for _, batch := range batches {
+			actualError := batch.QueueJobs(ctx, accountSecret, testParallel)
+			assert.NoError(t, actualError)
+		}
+	})
+
+	t.Run("should return error if creating dataset resulted in error", func(t *testing.T) {
+		client := new(mockClient)
+		defer client.AssertExpectations(t)
+
+		clientProvider := new(mockClientProvider)
+		defer clientProvider.AssertExpectations(t)
+
+		datasetHandle := new(mockTableResourceHandle)
+		defer datasetHandle.AssertExpectations(t)
+
+		accountSecret := "secret for account"
+
+		dsToCreate := resource.FromExisting(ds1, resource.ReplaceStatus(resource.StatusToCreate))
+
+		dsToCreateDataset, err := bigquery.DataSetFor(dsToCreate)
+		assert.NoError(t, err)
+
+		datasetHandle.On("Exists", ctx).Return(false)
+		datasetHandle.On("Create", ctx, dsToCreate).Return(errors.NewError(errors.ErrInternalError, bigquery.EntityDataset, "unknown error"))
+
+		client.On("DatasetHandleFrom", dsToCreateDataset).Return(datasetHandle)
+
+		clientProvider.On("Get", ctx, accountSecret).Return(client, nil)
+
+		batches, err := bigquery.BatchesFrom([]*resource.Resource{dsToCreate, tab1}, clientProvider)
+		assert.NoError(t, err)
+
+		testParallel := parallel.NewRunner()
+		for _, batch := range batches {
+			actualError := batch.QueueJobs(ctx, accountSecret, testParallel)
+			assert.ErrorContains(t, actualError, "unknown error")
+		}
 	})
 }

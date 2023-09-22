@@ -20,6 +20,7 @@ import (
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/writer"
+	p "github.com/goto/optimus/plugin"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -34,6 +35,7 @@ type JobService struct {
 	downstreamRepo DownstreamRepository
 
 	pluginService    PluginService
+	pService         PluginServiceI
 	upstreamResolver UpstreamResolver
 	eventHandler     EventHandler
 
@@ -74,6 +76,16 @@ type PluginService interface {
 	Info(context.Context, job.TaskName) (*plugin.Info, error)
 	GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error)
 	GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error)
+}
+
+type (
+	GenerateUpstreamFunc     func(assets p.Assets) []p.ResourceURN
+	ConstructDestinationFunc func(config p.TaskConfig) p.ResourceURN
+)
+
+type PluginServiceI interface {
+	GetUpstreamGeneratorFunc(taskName p.Name, config p.TaskConfig) GenerateUpstreamFunc
+	GetDestinationConstructorFunc(taskName p.Name) ConstructDestinationFunc
 }
 
 type TenantDetailsGetter interface {
@@ -935,10 +947,6 @@ func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails
 }
 
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
-	var destination job.ResourceURN = ""
-	var sources []job.ResourceURN = nil
-	var err error = nil
-
 	if windowConfig := spec.WindowConfig(); windowConfig.Type() == window.Preset {
 		if _, err := tenantWithDetails.Project().GetPreset(windowConfig.Preset); err != nil {
 			errorMsg := fmt.Sprintf("error getting preset for job [%s]: %s", spec.Name(), err)
@@ -946,39 +954,8 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	// TODO(generic deps resolution): move plugin check inside pluginService methods
-	const bq2bq = "bq2bq"
-	if spec.Task().Name() == bq2bq { // for now, only work for bq2bq plugin
-		compileConfigs := j.compileConfigs(spec.Task().Config(), tenantWithDetails)
-
-		// generate destination
-		destination, err = j.pluginService.GenerateDestination(ctx, spec.Task().Name(), compileConfigs)
-		if err != nil {
-			j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
-			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
-		}
-
-		// generate upstream dependencies
-		svcAcc, ok := compileConfigs["BQ_SERVICE_ACCOUNT"]
-		if !ok || len(svcAcc) == 0 {
-			j.logger.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
-			return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found")
-		}
-
-		query, ok := spec.Asset()["query.sql"]
-		if !ok {
-			return nil, fmt.Errorf("empty sql file")
-		}
-
-		sources, err = j.pluginService.GenerateDependencies(ctx, spec.Task().Name(), svcAcc, query, destination)
-		if err != nil {
-			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
-			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
-		}
-	}
-
+	sources := j.generateUpstreamResourceURNs(spec)
+	destination := j.generateDestinationURN(spec)
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
 }
 
@@ -1153,4 +1130,27 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 		"namespace": jobTenant.NamespaceName().String(),
 		"status":    state,
 	}).Add(float64(metricValue))
+}
+
+func (j *JobService) generateUpstreamResourceURNs(spec *job.Spec) []job.ResourceURN {
+	taskName := p.Name(spec.Task().Name())
+	taskConfig := p.TaskConfig(spec.Task().Config())
+
+	generateUpstreams := j.pService.GetUpstreamGeneratorFunc(taskName, taskConfig)
+	resourceURNs := generateUpstreams(p.Assets(spec.Asset()))
+
+	jobResourceURNs := make([]job.ResourceURN, len(resourceURNs))
+	for i, resourceURN := range resourceURNs {
+		jobResourceURNs[i] = job.ResourceURN(resourceURN)
+	}
+
+	return jobResourceURNs
+}
+
+func (j *JobService) generateDestinationURN(spec *job.Spec) job.ResourceURN {
+	taskName := p.Name(spec.Task().Name())
+	taskConfig := p.TaskConfig(spec.Task().Config())
+
+	constructDestination := j.pService.GetDestinationConstructorFunc(taskName)
+	return job.ResourceURN(constructDestination(taskConfig))
 }

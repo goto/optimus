@@ -6,7 +6,6 @@ import (
 	"github.com/kushsharma/parallel"
 
 	"github.com/goto/optimus/core/resource"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -27,22 +26,16 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 		return err
 	}
 
-	dataset, err := b.DatasetOrDefault()
-	if err != nil {
+	if err := b.validateDataset(ctx, client); err != nil {
 		return err
 	}
 
-	runner.Add(func(res *resource.Resource) func() (interface{}, error) {
-		return func() (interface{}, error) {
-			ds, err := DataSetFor(res)
-			if err != nil {
-				return res, err
-			}
-			dsHandle := client.DatasetHandleFrom(ds)
-			err = createOrUpdate(ctx, dsHandle, res)
-			return res, err
+	if b.DatasetDetails != nil {
+		dsHandle := client.DatasetHandleFrom(b.Dataset)
+		if err := createOrUpdate(ctx, dsHandle, b.DatasetDetails); err != nil {
+			return err
 		}
-	}(dataset))
+	}
 
 	for _, table := range b.Tables {
 		runner.Add(func(res *resource.Resource) func() (interface{}, error) {
@@ -131,23 +124,17 @@ func update(ctx context.Context, handle ResourceHandle, res *resource.Resource) 
 	return res.MarkSuccess()
 }
 
-func (b *Batch) DatasetOrDefault() (*resource.Resource, error) {
+func (b *Batch) validateDataset(ctx context.Context, client Client) error {
 	if b.DatasetDetails != nil {
-		return b.DatasetDetails, nil
+		return nil
 	}
 
-	fakeTnnt := tenant.Tenant{}
-	fakeMeta := &resource.Metadata{
-		Description: "dataset created by optimus",
-		Labels:      map[string]string{"created_by": "optimus"},
+	dsHandle := client.DatasetHandleFrom(b.Dataset)
+	if !dsHandle.Exists(ctx) {
+		return errors.NotFound(EntityDataset, "dataset is not found")
 	}
-	spec := map[string]any{"description": fakeMeta.Description}
-	r, err := resource.NewResource(b.Dataset.FullName(), KindDataset, resource.Bigquery, fakeTnnt, fakeMeta, spec)
-	if err != nil {
-		return nil, err
-	}
-	resToCreate := resource.FromExisting(r, resource.ReplaceStatus(resource.StatusToCreate))
-	return resToCreate, nil
+
+	return nil
 }
 
 func BatchesFrom(resources []*resource.Resource, provider ClientProvider) (map[string]*Batch, error) {

@@ -204,7 +204,7 @@ func TestBatches(t *testing.T) {
 		testParallel := parallel.NewRunner()
 		for _, batch := range batches {
 			actualError := batch.QueueJobs(ctx, accountSecret, testParallel)
-			assert.ErrorContains(t, actualError, "dataset is not found")
+			assert.ErrorContains(t, actualError, "dataset ["+tab1Dataset.FullName()+"] is not found")
 		}
 	})
 

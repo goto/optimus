@@ -131,7 +131,7 @@ func (b *Batch) validateDataset(ctx context.Context, client Client) error {
 
 	dsHandle := client.DatasetHandleFrom(b.Dataset)
 	if !dsHandle.Exists(ctx) {
-		return errors.NotFound(EntityDataset, "dataset is not found")
+		return errors.NotFound(EntityDataset, "dataset ["+b.Dataset.FullName()+"] is not found")
 	}
 
 	return nil

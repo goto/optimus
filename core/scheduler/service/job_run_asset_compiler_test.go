@@ -13,10 +13,9 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
-	"github.com/goto/optimus/sdk/plugin"
-	smock "github.com/goto/optimus/sdk/plugin/mock"
 )
 
 func TestJobAssetsCompiler(t *testing.T) {
@@ -36,18 +35,19 @@ func TestJobAssetsCompiler(t *testing.T) {
 		Name:   "jobName",
 		Tenant: tnnt,
 		Task: &scheduler.Task{
-			Name: "taskName",
+			Name: "bq2bq",
 			Config: map[string]string{
-				"configName": "configVale",
+				"configName":  "configValue",
+				"LOAD_METHOD": "REPLACE",
 			},
 		},
 		Hooks:        nil,
 		WindowConfig: windowConfig1,
 		Assets: map[string]string{
-			"assetName": "assetVale",
+			"assetName": "assetValue",
+			"query.sql": "select 1;",
 		},
 	}
-	taskName := job.Task.Name
 	w2 := window.FromBaseWindow(w1)
 	interval, err := w2.GetInterval(scheduleTime)
 	assert.NoError(t, err)
@@ -60,74 +60,33 @@ func TestJobAssetsCompiler(t *testing.T) {
 		"JOB_DESTINATION": job.Destination,
 	}
 
-	logger := log.NewLogrus()
+	logger := log.NewNoop()
 
 	t.Run("CompileJobRunAssets", func(t *testing.T) {
-		t.Run("should error if plugin repo get plugin by name fails", func(t *testing.T) {
-			pluginRepo := new(mockPluginRepo)
-			pluginRepo.On("GetByName", taskName).Return(nil, fmt.Errorf("error in getting plugin by name"))
-			defer pluginRepo.AssertExpectations(t)
+		t.Run("compile should return no error when task is not bq2bq", func(t *testing.T) {
+			jobRunAssetsCompiler := service.NewJobAssetsCompiler(compiler.NewEngine(), logger)
 
 			contextForTask := map[string]any{}
+			jobNonBq2bq := job
+			jobNonBq2bq.Task = &scheduler.Task{
+				Name:   "python",
+				Config: map[string]string{},
+			}
+			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, jobNonBq2bq, systemEnvVars, interval, contextForTask)
 
-			jobRunAssetsCompiler := service.NewJobAssetsCompiler(nil, pluginRepo, logger)
-			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
-			assert.NotNil(t, err)
-			assert.EqualError(t, err, "error in getting plugin by name")
-			assert.Nil(t, assets)
-		})
-		t.Run("compile should return error when DependencyMod CompileAssets fails", func(t *testing.T) {
-			yamlMod := new(smock.YamlMod)
-			defer yamlMod.AssertExpectations(t)
-
-			dependencyResolverMod := new(smock.DependencyResolverMod)
-			dependencyResolverMod.On("CompileAssets", ctx, mock.Anything).Return(nil, fmt.Errorf("error in dependencyMod compile assets"))
-			pluginRepo := new(mockPluginRepo)
-			pluginRepo.On("GetByName", taskName).Return(&plugin.Plugin{
-				DependencyMod: dependencyResolverMod,
-				YamlMod:       yamlMod,
-			}, nil)
-			defer pluginRepo.AssertExpectations(t)
-			jobRunAssetsCompiler := service.NewJobAssetsCompiler(nil, pluginRepo, logger)
-
-			contextForTask := map[string]any{}
-			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
-
-			assert.NotNil(t, err)
-			assert.EqualError(t, err, "error in dependencyMod compile assets")
-			assert.Nil(t, assets)
+			assert.NoError(t, err)
+			assert.NotNil(t, assets)
 		})
 		t.Run("compile", func(t *testing.T) {
-			yamlMod := new(smock.YamlMod)
-			defer yamlMod.AssertExpectations(t)
-
-			dependencyResolverMod := new(smock.DependencyResolverMod)
-			dependencyResolverMod.On("CompileAssets", ctx, mock.Anything).Return(&plugin.CompileAssetsResponse{
-				Assets: plugin.Assets{
-					plugin.Asset{
-						Name:  "assetName",
-						Value: "assetValue",
-					},
-				},
-			}, nil)
-			defer dependencyResolverMod.AssertExpectations(t)
-
-			pluginRepo := new(mockPluginRepo)
-			pluginRepo.On("GetByName", taskName).Return(&plugin.Plugin{
-				DependencyMod: dependencyResolverMod,
-				YamlMod:       yamlMod,
-			}, nil)
-			defer pluginRepo.AssertExpectations(t)
-
 			contextForTask := map[string]any{}
 
 			t.Run("return error if compiler.compile fails", func(t *testing.T) {
 				filesCompiler := new(mockFilesCompiler)
-				filesCompiler.On("Compile", map[string]string{"assetName": "assetValue"}, contextForTask).
+				filesCompiler.On("Compile", map[string]string{"assetName": "assetValue", "query.sql": "select 1;"}, contextForTask).
 					Return(nil, fmt.Errorf("error in compiling"))
 				defer filesCompiler.AssertExpectations(t)
 
-				jobRunAssetsCompiler := service.NewJobAssetsCompiler(filesCompiler, pluginRepo, logger)
+				jobRunAssetsCompiler := service.NewJobAssetsCompiler(filesCompiler, logger)
 				assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
 
 				assert.NotNil(t, err)
@@ -136,15 +95,16 @@ func TestJobAssetsCompiler(t *testing.T) {
 			})
 			t.Run("return compiled assets", func(t *testing.T) {
 				expectedFileMap := map[string]string{
-					"filename": "fileContent",
+					"assetName": "assetValue",
+					"query.sql": "select 1;",
 				}
 
 				filesCompiler := new(mockFilesCompiler)
-				filesCompiler.On("Compile", map[string]string{"assetName": "assetValue"}, contextForTask).
+				filesCompiler.On("Compile", map[string]string{"assetName": "assetValue", "query.sql": "select 1;"}, contextForTask).
 					Return(expectedFileMap, nil)
 				defer filesCompiler.AssertExpectations(t)
 
-				jobRunAssetsCompiler := service.NewJobAssetsCompiler(filesCompiler, pluginRepo, logger)
+				jobRunAssetsCompiler := service.NewJobAssetsCompiler(filesCompiler, logger)
 				assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval, contextForTask)
 
 				assert.Nil(t, err)
@@ -152,18 +112,6 @@ func TestJobAssetsCompiler(t *testing.T) {
 			})
 		})
 	})
-}
-
-type mockPluginRepo struct {
-	mock.Mock
-}
-
-func (m *mockPluginRepo) GetByName(name string) (*plugin.Plugin, error) {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*plugin.Plugin), args.Error(1)
 }
 
 type mockFilesCompiler struct {

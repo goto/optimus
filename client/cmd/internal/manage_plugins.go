@@ -3,8 +3,7 @@ package internal
 import (
 	"os"
 
-	"github.com/hashicorp/go-hclog"
-	hPlugin "github.com/hashicorp/go-plugin"
+	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/internal/models"
@@ -13,23 +12,14 @@ import (
 
 // InitPlugins triggers initialization of all available plugins
 func InitPlugins(logLevel config.LogLevel) (*models.PluginRepository, error) {
-	pluginLogLevel := hclog.Info
-	if logLevel == config.LogLevelDebug {
-		pluginLogLevel = hclog.Debug
+	if logLevel != config.LogLevelDebug {
+		logLevel = config.LogLevelInfo
 	}
-
-	pluginLoggerOpt := &hclog.LoggerOptions{
-		Name:   "optimus",
-		Output: os.Stdout,
-		Level:  pluginLogLevel,
-	}
-	pluginLogger := hclog.New(pluginLoggerOpt)
-
+	logger := log.NewLogrus(
+		log.LogrusWithLevel(logLevel.String()),
+		log.LogrusWithWriter(os.Stdout),
+	)
 	// discover and load plugins.
-	pluginRepo, err := oPlugin.Initialize(pluginLogger)
+	pluginRepo, err := oPlugin.Initialize(logger)
 	return pluginRepo, err
-}
-
-func CleanupPlugins() {
-	hPlugin.CleanupClients()
 }

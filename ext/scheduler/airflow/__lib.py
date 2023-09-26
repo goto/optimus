@@ -8,7 +8,11 @@ import pendulum
 import requests
 from airflow.configuration import conf
 from airflow.hooks.base import BaseHook
-from airflow.models import (XCOM_RETURN_KEY, Variable, XCom, TaskReschedule )
+from airflow.models import (Variable, XCom, TaskReschedule )
+try:
+    from airflow.models import XCOM_RETURN_KEY
+except ImportError:
+    from airflow.utils.xcom import XCOM_RETURN_KEY  # airflow >= 2.5
 from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
 from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 from airflow.sensors.base import BaseSensorOperator

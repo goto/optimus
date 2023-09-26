@@ -13,7 +13,7 @@ func TestNewTemplates(t *testing.T) {
 		templates, err := dag.NewTemplates()
 		assert.NotNil(t, templates)
 		assert.NoError(t, err)
-		assert.Len(t, templates, 2)
+		assert.Len(t, templates, 3)
 	})
 }
 

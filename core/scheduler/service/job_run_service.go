@@ -174,7 +174,7 @@ func getExpectedRuns(spec *cron.ScheduleSpec, startTime, endTime time.Time) []*s
 	start := spec.Next(startTime.Add(-time.Second * 1))
 	end := endTime
 	exit := spec.Next(end)
-	for !start.Equal(exit) {
+	for start.Before(exit) {
 		jobRuns = append(jobRuns, &scheduler.JobRunStatus{
 			State:       scheduler.StatePending,
 			ScheduledAt: start,

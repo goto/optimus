@@ -41,12 +41,11 @@ func NewVersionCommand() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:      "version",
-		Short:    "Print the client version information",
-		Example:  "optimus version [--with-server]",
-		RunE:     v.RunE,
-		PreRunE:  v.PreRunE,
-		PostRunE: v.PostRunE,
+		Use:     "version",
+		Short:   "Print the client version information",
+		Example: "optimus version [--with-server]",
+		RunE:    v.RunE,
+		PreRunE: v.PreRunE,
 	}
 
 	v.injectFlags(cmd)
@@ -104,11 +103,6 @@ func (v *versionCommand) RunE(_ *cobra.Command, _ []string) error {
 		v.logger.Info(updateNotice)
 	}
 	v.printAllPluginInfos()
-	return nil
-}
-
-func (*versionCommand) PostRunE(_ *cobra.Command, _ []string) error {
-	internal.CleanupPlugins()
 	return nil
 }
 

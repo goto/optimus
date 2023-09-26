@@ -2,16 +2,14 @@ package service
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/sdk/plugin"
-)
-
-const (
-	typeEnv = "env"
 )
 
 type FilesCompiler interface {
@@ -23,43 +21,32 @@ type PluginRepo interface {
 }
 
 type JobRunAssetsCompiler struct {
-	compiler   FilesCompiler
-	pluginRepo PluginRepo
+	compiler FilesCompiler
 
 	logger log.Logger
 }
 
-func NewJobAssetsCompiler(engine FilesCompiler, pluginRepo PluginRepo, logger log.Logger) *JobRunAssetsCompiler {
+func NewJobAssetsCompiler(engine FilesCompiler, logger log.Logger) *JobRunAssetsCompiler {
 	return &JobRunAssetsCompiler{
-		compiler:   engine,
-		pluginRepo: pluginRepo,
-		logger:     logger,
+		compiler: engine,
+		logger:   logger,
 	}
 }
 
-func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
-	taskPlugin, err := c.pluginRepo.GetByName(job.Task.Name)
-	if err != nil {
-		c.logger.Error("error getting plugin [%s]: %s", job.Task.Name, err)
-		return nil, err
-	}
-
+func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
 	inputFiles := job.Assets
-
-	if taskPlugin.DependencyMod != nil {
+	method, ok1 := job.Task.Config["LOAD_METHOD"]
+	query, ok2 := job.Assets["query.sql"]
+	// compile assets exclusive only for bq2bq plugin with replace load method and contains query.sql in asset
+	const bq2bq = "bq2bq"
+	if ok1 && ok2 && method == "REPLACE" && job.Task.Name == bq2bq {
 		// check if task needs to override the compilation behaviour
-		compiledAssetResponse, err := taskPlugin.DependencyMod.CompileAssets(ctx, plugin.CompileAssetsRequest{
-			StartTime:    interval.Start,
-			EndTime:      interval.End,
-			Config:       toPluginConfig(job.Task.Config),
-			Assets:       toPluginAssets(job.Assets),
-			InstanceData: toJobRunSpecData(systemEnvVars),
-		})
+		compiledQuery, err := c.CompileQuery(interval.Start, interval.End, query, systemEnvVars)
 		if err != nil {
-			c.logger.Error("error compiling assets through plugin dependency mod: %s", err)
+			c.logger.Error("error compiling assets: %s", err.Error())
 			return nil, err
 		}
-		inputFiles = compiledAssetResponse.Assets.ToMap()
+		inputFiles["query.sql"] = compiledQuery
 	}
 
 	fileMap, err := c.compiler.Compile(inputFiles, contextForTask)
@@ -70,42 +57,52 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(ctx context.Context, job *sch
 	return fileMap, nil
 }
 
-// TODO: deprecate after changing type for plugin
-func toJobRunSpecData(mapping map[string]string) []plugin.JobRunSpecData {
-	var jobRunData []plugin.JobRunSpecData
-	for name, value := range mapping {
-		jrData := plugin.JobRunSpecData{
-			Name:  name,
-			Value: value,
-			Type:  typeEnv,
-		}
-		jobRunData = append(jobRunData, jrData)
+func (c *JobRunAssetsCompiler) CompileQuery(startTime, endTime time.Time, query string, envs map[string]string) (string, error) {
+	// partition window in range
+	instanceEnvMap := map[string]interface{}{}
+	for name, value := range envs {
+		instanceEnvMap[name] = value
 	}
-	return jobRunData
-}
 
-// TODO: deprecate
-func toPluginAssets(assets map[string]string) plugin.Assets {
-	var modelAssets plugin.Assets
-	for name, val := range assets {
-		pa := plugin.Asset{
-			Name:  name,
-			Value: val,
-		}
-		modelAssets = append(modelAssets, pa)
-	}
-	return modelAssets
-}
+	// TODO: making few assumptions here, should be documented
+	// assume destination table is time partitioned
+	// assume table is partitioned as DAY
+	const dayHours = 24
+	partitionDelta := time.Hour * time.Duration(dayHours)
 
-// TODO: deprecate
-func toPluginConfig(conf map[string]string) plugin.Configs {
-	var pluginConfigs plugin.Configs
-	for name, val := range conf {
-		pc := plugin.Config{
-			Name:  name,
-			Value: val,
-		}
-		pluginConfigs = append(pluginConfigs, pc)
+	// find destination partitions
+	var destinationsPartitions []struct {
+		start time.Time
+		end   time.Time
 	}
-	return pluginConfigs
+	for currentPart := startTime; currentPart.Before(endTime); currentPart = currentPart.Add(partitionDelta) {
+		destinationsPartitions = append(destinationsPartitions, struct {
+			start time.Time
+			end   time.Time
+		}{
+			start: currentPart,
+			end:   currentPart.Add(partitionDelta),
+		})
+	}
+
+	// check if window size is greater than partition delta(a DAY), if not do nothing
+	if endTime.Sub(startTime) <= partitionDelta {
+		return query, nil
+	}
+
+	// TODO: investigate from this part to the end is never called anywhere
+	var parsedQueries []string
+	queryMap := map[string]string{"query": query}
+	for _, part := range destinationsPartitions {
+		instanceEnvMap["DSTART"] = part.start.Format(time.RFC3339)
+		instanceEnvMap["DEND"] = part.end.Format(time.RFC3339)
+		compiledQueryMap, err := c.compiler.Compile(queryMap, instanceEnvMap)
+		if err != nil {
+			return "", err
+		}
+		parsedQueries = append(parsedQueries, compiledQueryMap["query"])
+	}
+
+	queryFileReplaceBreakMarker := "\n--*--optimus-break-marker--*--\n"
+	return strings.Join(parsedQueries, queryFileReplaceBreakMarker), nil
 }

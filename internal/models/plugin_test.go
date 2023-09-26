@@ -16,32 +16,22 @@ func TestPluginModels(t *testing.T) {
 		plugins := map[string]*plugin.Plugin{
 			"c": mockPlugin.NewMockYamlPlugin("c", plugin.TypeTask.String()),
 			"b": mockPlugin.NewMockYamlPlugin("b", plugin.TypeTask.String()),
-			"z": mockPlugin.NewMockYamlPlugin("z", plugin.TypeTask.String()),
-			"a": mockPlugin.NewMockBinaryPlugin("a", plugin.TypeHook.String()),
+			"z": mockPlugin.NewMockYamlPlugin("z", plugin.TypeHook.String()),
 		}
 		for _, p := range plugins {
 			repo.AddYaml(p.YamlMod)
-			if p.DependencyMod != nil {
-				repo.AddBinary(p.DependencyMod)
-			}
 		}
-		t.Run("should allow both yaml and bin implementations in plugin", func(t *testing.T) {
-			yamlPlugin, _ := repo.GetByName("a")
-			assert.Equal(t, yamlPlugin.IsYamlPlugin(), true)
-			assert.NotNil(t, yamlPlugin.YamlMod)
-		})
-
 		t.Run("should return sorted plugins", func(t *testing.T) {
 			list := repo.GetAll()
-			assert.Equal(t, list[0].Info().Name, "a")
-			assert.Equal(t, list[1].Info().Name, "b")
-			assert.Equal(t, list[2].Info().Name, "c")
+			assert.Equal(t, list[0].Info().Name, "b")
+			assert.Equal(t, list[1].Info().Name, "c")
+			assert.Equal(t, list[2].Info().Name, "z")
 
 			list = repo.GetTasks()
 			assert.Equal(t, list[0].Info().Name, "b")
 
 			list = repo.GetHooks()
-			assert.Equal(t, list[0].Info().Name, "a")
+			assert.Equal(t, list[0].Info().Name, "z")
 		})
 	})
 }

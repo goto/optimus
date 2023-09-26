@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -9,48 +8,57 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/compiler"
-	"github.com/goto/optimus/internal/lib/window"
+	"github.com/goto/optimus/ext/extractor"
+	"github.com/goto/optimus/ext/parser"
+	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
 const (
 	projectConfigPrefix = "GLOBAL__"
 
-	configKeyDstart        = "DSTART"
-	configKeyDend          = "DEND"
-	configKeyExecutionTime = "EXECUTION_TIME"
-	configKeyDestination   = "JOB_DESTINATION"
-
 	TimeISOFormat = time.RFC3339
+
+	// TODO: remove bq dependencies
+	MaxBQApiRetries = 3
 )
 
-var (
-	ErrUpstreamModNotFound = errors.New("upstream mod not found for plugin")
-	ErrYamlModNotExist     = errors.New("yaml mod not found for plugin")
+var ErrYamlModNotExist = fmt.Errorf("yaml mod not found for plugin")
+
+type (
+	ParserFunc    func(rawResource string) []job.ResourceURN
+	ExtractorFunc func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error)
 )
+
+// TODO: decouple extractor from plugin
+type ExtractorFactory interface {
+	New(ctx context.Context, svcAcc string, l log.Logger) (extractor.BQExtractorFunc, error)
+}
 
 type PluginRepo interface {
 	GetByName(string) (*plugin.Plugin, error)
 }
 
-type Engine interface {
-	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
-	CompileString(input string, context map[string]any) (string, error)
-}
-
 type JobPluginService struct {
 	pluginRepo PluginRepo
-	engine     Engine
 
-	now func() time.Time
+	// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
+	parserFunc   ParserFunc
+	extractorFac ExtractorFactory
 
 	logger log.Logger
 }
 
-func NewJobPluginService(pluginRepo PluginRepo, engine Engine, logger log.Logger) *JobPluginService {
-	return &JobPluginService{pluginRepo: pluginRepo, engine: engine, logger: logger, now: time.Now}
+func NewJobPluginService(pluginRepo PluginRepo, extractorFac ExtractorFactory, logger log.Logger) *JobPluginService {
+	return &JobPluginService{
+		logger:     logger,
+		pluginRepo: pluginRepo,
+
+		// TODO(generic deps resolution): move this components alongside with resource parser implementation(?)
+		parserFunc:   bqParserDecorator(parser.ParseTopLevelUpstreamsFromQuery),
+		extractorFac: extractorFac,
+	}
 }
 
 func (p JobPluginService) Info(_ context.Context, taskName job.TaskName) (*plugin.Info, error) {
@@ -65,146 +73,119 @@ func (p JobPluginService) Info(_ context.Context, taskName job.TaskName) (*plugi
 		return nil, ErrYamlModNotExist
 	}
 
-	return taskPlugin.YamlMod.PluginInfo(), nil
+	return taskPlugin.Info(), nil
 }
 
-func (p JobPluginService) GenerateDestination(ctx context.Context, tnnt *tenant.WithDetails, task job.Task) (job.ResourceURN, error) {
-	taskPlugin, err := p.pluginRepo.GetByName(task.Name().String())
+func (p JobPluginService) GenerateDestination(_ context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error) {
+	taskPlugin, err := p.pluginRepo.GetByName(taskName.String())
 	if err != nil {
-		p.logger.Error("error getting plugin [%s]: %s", task.Name().String(), err)
+		p.logger.Error("error getting plugin [%s]: %s", taskName.String(), err)
 		return "", err
 	}
-
-	if taskPlugin.DependencyMod == nil {
-		p.logger.Error(ErrUpstreamModNotFound.Error())
-		return "", ErrUpstreamModNotFound
+	const bq2bq = "bq2bq"
+	if taskPlugin.Info().Name != bq2bq {
+		return "", nil
 	}
 
-	compiledConfig := p.compileConfig(task.Config().Map(), tnnt)
-
-	destination, err := taskPlugin.DependencyMod.GenerateDestination(ctx, plugin.GenerateDestinationRequest{
-		Config: compiledConfig,
-	})
-	if err != nil {
-		p.logger.Error("error generating destination: %s", err)
-		return "", fmt.Errorf("failed to generate destination: %w", err)
+	// TODO(generic deps resolution): make it generic by leverage desination templating from plugin
+	proj, ok1 := configs["PROJECT"]
+	dataset, ok2 := configs["DATASET"]
+	tab, ok3 := configs["TABLE"]
+	if ok1 && ok2 && ok3 {
+		return job.ResourceURN("bigquery://" + fmt.Sprintf("%s:%s.%s", proj, dataset, tab)), nil
 	}
-
-	return job.ResourceURN(destination.URN()), nil
+	return "", fmt.Errorf("missing config key required to generate destination")
 }
 
-func (p JobPluginService) GenerateUpstreams(ctx context.Context, jobTenant *tenant.WithDetails, spec *job.Spec, dryRun bool) ([]job.ResourceURN, error) {
-	taskPlugin, err := p.pluginRepo.GetByName(spec.Task().Name().String())
+func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error) {
+	taskPlugin, err := p.pluginRepo.GetByName(taskName.String())
 	if err != nil {
-		p.logger.Error("error getting plugin [%s]: %s", spec.Task().Name().String(), err)
+		p.logger.Error("error getting plugin [%s]: %s", taskName.String(), err)
+		return nil, err
+	}
+	const bq2bq = "bq2bq"
+	if taskPlugin.Info().Name != bq2bq {
+		return []job.ResourceURN{}, nil
+	}
+
+	// TODO(generic deps resolution): make it generic by leverage the parser
+	visited := map[job.ResourceURN][]*job.ResourceURNWithUpstreams{}
+	visited[destinationURN] = []*job.ResourceURNWithUpstreams{}
+	bqExtractorFunc, err := p.extractorFac.New(ctx, svcAcc, p.logger)
+	if err != nil {
 		return nil, err
 	}
 
-	if taskPlugin.DependencyMod == nil {
-		p.logger.Error(ErrUpstreamModNotFound.Error())
-		return nil, ErrUpstreamModNotFound
-	}
-
-	w, err := getWindow(jobTenant, spec)
+	resources, err := p.generateResources(ctx, bqExtractorDecorator(bqExtractorFunc), query, visited, map[job.ResourceURN]bool{})
 	if err != nil {
 		return nil, err
 	}
 
-	assets, err := p.compileAsset(ctx, taskPlugin, spec, w, p.now())
-	if err != nil {
-		p.logger.Error("error compiling asset: %s", err)
-		return nil, fmt.Errorf("asset compilation failure: %w", err)
+	// flatten
+	resourceURNs := []job.ResourceURN{}
+	for _, r := range job.ResourceURNWithUpstreamsList(resources).Flatten() {
+		resourceURNs = append(resourceURNs, r.URN)
 	}
-
-	compiledConfigs := p.compileConfig(spec.Task().Config(), jobTenant)
-
-	resp, err := taskPlugin.DependencyMod.GenerateDependencies(ctx, plugin.GenerateDependenciesRequest{
-		Config: compiledConfigs,
-		Assets: plugin.AssetsFromMap(assets),
-		Options: plugin.Options{
-			DryRun: dryRun,
-		},
-	})
-	if err != nil {
-		p.logger.Error("error generating dependencies: %s", err)
-		return nil, err
-	}
-
-	var upstreamURNs []job.ResourceURN
-	for _, dependency := range resp.Dependencies {
-		resourceURN := job.ResourceURN(dependency)
-		upstreamURNs = append(upstreamURNs, resourceURN)
-	}
-
-	return upstreamURNs, nil
+	return resourceURNs, nil
 }
 
-func (p JobPluginService) compileConfig(configs job.Config, tnnt *tenant.WithDetails) plugin.Configs {
-	tmplCtx := compiler.PrepareContext(
-		compiler.From(tnnt.GetConfigs()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
-		compiler.From(tnnt.SecretsMap()).WithName("secret"),
-	)
+func (p JobPluginService) generateResources(ctx context.Context, extractorFunc ExtractorFunc, rawResource string, visited map[job.ResourceURN][]*job.ResourceURNWithUpstreams, paths map[job.ResourceURN]bool) ([]*job.ResourceURNWithUpstreams, error) {
+	errs := errors.NewMultiError("generate resources")
+	resourceURNs := p.parserFunc(rawResource)
+	resources := []*job.ResourceURNWithUpstreams{}
+	urnToRawResource, err := extractorFunc(ctx, resourceURNs)
+	if err != nil {
+		p.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
+		return resources, nil
+	}
 
-	var pluginConfigs plugin.Configs
-	for key, val := range configs {
-		compiledConf, err := p.engine.CompileString(val, tmplCtx)
-		if err != nil {
-			p.logger.Warn("template compilation encountered suppressed error: %s", err.Error())
-			compiledConf = val
+	for _, resourceURN := range resourceURNs {
+		resource := &job.ResourceURNWithUpstreams{URN: resourceURN}
+
+		if paths[resourceURN] {
+			errs.Append(fmt.Errorf("circular reference is detected"))
+			continue
 		}
-		pluginConfigs = append(pluginConfigs, plugin.Config{
-			Name:  key,
-			Value: compiledConf,
-		})
+
+		if _, ok := visited[resourceURN]; !ok {
+			rawResource := urnToRawResource[resourceURN]
+			paths[resourceURN] = true
+			upstreamResources, err := p.generateResources(ctx, extractorFunc, rawResource, visited, paths)
+			visited[resourceURN] = upstreamResources
+			errs.Append(err)
+			delete(paths, resourceURN)
+		}
+		resource.Upstreams = visited[resourceURN]
+		resources = append(resources, resource)
 	}
-	return pluginConfigs
+
+	return resources, errs.ToErr()
 }
 
-func (p JobPluginService) compileAsset(ctx context.Context, taskPlugin *plugin.Plugin, spec *job.Spec, w window.Window, scheduledAt time.Time) (map[string]string, error) {
-	var jobDestination string
-	if taskPlugin.DependencyMod != nil {
-		var assets map[string]string
-		if spec.Asset() != nil {
-			assets = spec.Asset()
+// bqParserDecorator to convert bigquery resource urn to job resource urn
+func bqParserDecorator(fn parser.ParserFunc) ParserFunc {
+	return func(rawResource string) []job.ResourceURN {
+		bqURNs := fn(rawResource)
+		urns := make([]job.ResourceURN, len(bqURNs))
+		for i, bqURN := range bqURNs {
+			urns[i] = job.ResourceURN(bqURN.URN())
 		}
-		jobDestinationResponse, err := taskPlugin.DependencyMod.GenerateDestination(ctx, plugin.GenerateDestinationRequest{
-			Config: plugin.ConfigsFromMap(spec.Task().Config()),
-			Assets: plugin.AssetsFromMap(assets),
-			Options: plugin.Options{
-				DryRun: true,
-			},
-		})
+		return urns
+	}
+}
+
+// bqExtractorDecorator to convert bigquery resource urn to job resource urn
+func bqExtractorDecorator(fn extractor.BQExtractorFunc) ExtractorFunc {
+	return func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error) {
+		bqURNs := make([]bigquery.ResourceURN, len(resourceURNs))
+		extractedBqURNToDDL, err := fn(ctx, bqURNs)
 		if err != nil {
-			p.logger.Error("error generating destination: %s", err)
 			return nil, err
 		}
-		jobDestination = jobDestinationResponse.Destination
+		urnToDDL := make(map[job.ResourceURN]string, len(extractedBqURNToDDL))
+		for bqURN, ddl := range extractedBqURNToDDL {
+			urnToDDL[job.ResourceURN(bqURN.URN())] = ddl
+		}
+		return urnToDDL, nil
 	}
-
-	interval, err := w.GetInterval(scheduledAt)
-	if err != nil {
-		return nil, err
-	}
-
-	var assets map[string]string
-	if spec.Asset() != nil {
-		assets = spec.Asset()
-	}
-
-	templates, err := p.engine.Compile(assets, map[string]interface{}{
-		configKeyDstart:        interval.Start.Format(TimeISOFormat),
-		configKeyDend:          interval.End.Format(TimeISOFormat),
-		configKeyExecutionTime: scheduledAt.Format(TimeISOFormat),
-		configKeyDestination:   jobDestination,
-	})
-	if err != nil {
-		p.logger.Error("error compiling asset: %s", err)
-		return nil, fmt.Errorf("failed to compile templates: %w", err)
-	}
-
-	return templates, nil
-}
-
-func getWindow(jobTenant *tenant.WithDetails, spec *job.Spec) (window.Window, error) {
-	return window.From(spec.WindowConfig(), spec.Schedule().Interval(), jobTenant.Project().GetPreset)
 }

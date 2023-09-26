@@ -2,10 +2,9 @@ package yaml_test
 
 import (
 	"context"
-	"os"
 	"testing"
 
-	"github.com/hashicorp/go-hclog"
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/internal/models"
@@ -161,10 +160,7 @@ func TestYamlPlugin(t *testing.T) {
 	})
 
 	t.Run("PluginsInitialization", func(t *testing.T) {
-		pluginLogger := hclog.New(&hclog.LoggerOptions{
-			Name:   "optimus",
-			Output: os.Stdout,
-		})
+		pluginLogger := log.NewNoop()
 		t.Run("should load plugin for valid paths", func(t *testing.T) {
 			repo := models.NewPluginRepository()
 			err := yaml.Init(repo, []string{testYamlPluginPath}, pluginLogger)

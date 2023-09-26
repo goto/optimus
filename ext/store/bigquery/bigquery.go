@@ -40,7 +40,8 @@ type Client interface {
 	TableHandleFrom(dataset Dataset, name string) TableResourceHandle
 	ExternalTableHandleFrom(dataset Dataset, name string) ResourceHandle
 	ViewHandleFrom(dataset Dataset, name string) ResourceHandle
-	Close()
+	BulkGetDDLView(ctx context.Context, dataset ProjectDataset, names []string) (map[ResourceURN]string, error)
+	Close() error
 }
 
 type ClientProvider interface {

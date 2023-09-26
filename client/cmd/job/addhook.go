@@ -33,14 +33,13 @@ func NewAddHookCommand() *cobra.Command {
 		namespaceSurvey:  survey.NewNamespaceSurvey(l),
 	}
 	cmd := &cobra.Command{
-		Use:      "addhook",
-		Aliases:  []string{"add_hook", "add-hook", "addHook", "attach_hook", "attach-hook", "attachHook"},
-		Short:    "Attach a new Hook to existing job",
-		Long:     "Add a runnable instance that will be triggered before or after the base transformation.",
-		Example:  "optimus addhook",
-		RunE:     addHook.RunE,
-		PreRunE:  addHook.PreRunE,
-		PostRunE: addHook.PostRunE,
+		Use:     "addhook",
+		Aliases: []string{"add_hook", "add-hook", "addHook", "attach_hook", "attach-hook", "attachHook"},
+		Short:   "Attach a new Hook to existing job",
+		Long:    "Add a runnable instance that will be triggered before or after the base transformation.",
+		Example: "optimus addhook",
+		RunE:    addHook.RunE,
+		PreRunE: addHook.PreRunE,
 	}
 	// Config filepath flag
 	cmd.Flags().StringVarP(&addHook.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
@@ -88,10 +87,5 @@ func (a *addHookCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	a.logger.Info("Hook successfully added to %s", selectedJobName)
-	return nil
-}
-
-func (*addHookCommand) PostRunE(*cobra.Command, []string) error {
-	internal.CleanupPlugins()
 	return nil
 }

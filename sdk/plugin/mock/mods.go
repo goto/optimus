@@ -36,30 +36,3 @@ func (repo *YamlMod) ValidateQuestion(ctx context.Context, inp plugin.ValidateQu
 	args := repo.Called(ctx, inp)
 	return args.Get(0).(*plugin.ValidateQuestionResponse), args.Error(1)
 }
-
-type DependencyResolverMod struct {
-	mock.Mock `hash:"-"`
-}
-
-func (repo *DependencyResolverMod) GetName(ctx context.Context) (string, error) {
-	args := repo.Called(ctx)
-	return args.Get(0).(string), args.Error(1)
-}
-
-func (repo *DependencyResolverMod) GenerateDestination(ctx context.Context, inp plugin.GenerateDestinationRequest) (*plugin.GenerateDestinationResponse, error) {
-	args := repo.Called(ctx, inp)
-	return args.Get(0).(*plugin.GenerateDestinationResponse), args.Error(1)
-}
-
-func (repo *DependencyResolverMod) GenerateDependencies(ctx context.Context, inp plugin.GenerateDependenciesRequest) (*plugin.GenerateDependenciesResponse, error) {
-	args := repo.Called(ctx, inp)
-	return args.Get(0).(*plugin.GenerateDependenciesResponse), args.Error(1)
-}
-
-func (repo *DependencyResolverMod) CompileAssets(ctx context.Context, inp plugin.CompileAssetsRequest) (*plugin.CompileAssetsResponse, error) {
-	args := repo.Called(ctx, inp)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*plugin.CompileAssetsResponse), args.Error(1)
-}

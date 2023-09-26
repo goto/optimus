@@ -108,6 +108,28 @@ func (n ResourceURN) String() string {
 	return string(n)
 }
 
+type ResourceURNWithUpstreams struct {
+	URN       ResourceURN
+	Upstreams []*ResourceURNWithUpstreams
+}
+
+type ResourceURNWithUpstreamsList []*ResourceURNWithUpstreams
+
+func (rs ResourceURNWithUpstreamsList) Flatten() []*ResourceURNWithUpstreams {
+	var output []*ResourceURNWithUpstreams
+	for _, u := range rs {
+		if u == nil {
+			continue
+		}
+		nested := ResourceURNWithUpstreamsList(u.Upstreams).Flatten()
+		u.Upstreams = nil
+		output = append(output, u)
+		output = append(output, nested...)
+	}
+
+	return output
+}
+
 func (j *Job) Destination() ResourceURN {
 	return j.destination
 }

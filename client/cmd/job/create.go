@@ -34,12 +34,11 @@ func NewCreateCommand() *cobra.Command {
 		jobCreateSurvey: survey.NewJobCreateSurvey(l),
 	}
 	cmd := &cobra.Command{
-		Use:      "create",
-		Short:    "Create a new Job",
-		Example:  "optimus job create",
-		RunE:     create.RunE,
-		PreRunE:  create.PreRunE,
-		PostRunE: create.PostRunE,
+		Use:     "create",
+		Short:   "Create a new Job",
+		Example: "optimus job create",
+		RunE:    create.RunE,
+		PreRunE: create.PreRunE,
 	}
 	// Config filepath flag
 	cmd.Flags().StringVarP(&create.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
@@ -99,10 +98,5 @@ func (c *createCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	c.logger.Info("Job successfully created at %s", jobDirectory)
-	return nil
-}
-
-func (*createCommand) PostRunE(*cobra.Command, []string) error {
-	internal.CleanupPlugins()
 	return nil
 }

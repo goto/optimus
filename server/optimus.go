@@ -6,13 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/goto/salt/log"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/hashicorp/go-hclog"
-	hPlugin "github.com/hashicorp/go-plugin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,6 +29,7 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
+	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
@@ -147,26 +145,9 @@ func (s *OptimusServer) setupPublisher() error {
 }
 
 func (s *OptimusServer) setupPlugins() error {
-	pluginLogLevel := hclog.Info
-	if s.conf.Log.Level == config.LogLevelDebug {
-		pluginLogLevel = hclog.Debug
-	}
-
-	pluginLoggerOpt := &hclog.LoggerOptions{
-		Name:   "optimus",
-		Output: os.Stdout,
-		Level:  pluginLogLevel,
-	}
-	pluginLogger := hclog.New(pluginLoggerOpt)
-	s.cleanupFn = append(s.cleanupFn, hPlugin.CleanupClients)
-
-	var pluginArgs []string
-	if s.conf.Telemetry.JaegerAddr != "" {
-		pluginArgs = append(pluginArgs, "-t", s.conf.Telemetry.JaegerAddr)
-	}
 	// discover and load plugins.
 	var err error
-	s.pluginRepo, err = plugin.Initialize(pluginLogger, pluginArgs...)
+	s.pluginRepo, err = plugin.Initialize(s.logger)
 	return err
 }
 
@@ -312,7 +293,7 @@ func (s *OptimusServer) setupHandlers() error {
 	newEngine := compiler.NewEngine()
 
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
-	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.pluginRepo, s.logger)
+	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
 	notificationService := schedulerService.NewNotifyService(s.logger, jobProviderRepo, tenantService, notifierChanels)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
@@ -335,12 +316,13 @@ func (s *OptimusServer) setupHandlers() error {
 	)
 
 	// Job Bounded Context Setup
+	jExtractorFactory := extractor.DefaultBQExtractorFactory{}
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
-	jPluginService := jService.NewJobPluginService(s.pluginRepo, newEngine, s.logger)
+	jPluginService := jService.NewJobPluginService(s.pluginRepo, jExtractorFactory, s.logger)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
-	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, jPluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService)
+	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, jPluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
 
 	// Resource Bounded Context
 	resourceRepository := resource.NewRepository(s.dbPool)

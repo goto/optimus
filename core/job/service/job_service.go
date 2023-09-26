@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
@@ -39,6 +40,7 @@ type JobService struct {
 	tenantDetailsGetter TenantDetailsGetter
 
 	jobDeploymentService JobDeploymentService
+	engine               Engine
 
 	logger log.Logger
 }
@@ -47,7 +49,7 @@ func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService,
+	jobDeploymentService JobDeploymentService, engine Engine,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -59,13 +61,19 @@ func NewJobService(
 		tenantDetailsGetter:  tenantDetailsGetter,
 		logger:               logger,
 		jobDeploymentService: jobDeploymentService,
+		engine:               engine,
 	}
+}
+
+type Engine interface {
+	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
+	CompileString(input string, context map[string]any) (string, error)
 }
 
 type PluginService interface {
 	Info(context.Context, job.TaskName) (*plugin.Info, error)
-	GenerateDestination(context.Context, *tenant.WithDetails, job.Task) (job.ResourceURN, error)
-	GenerateUpstreams(ctx context.Context, jobTenant *tenant.WithDetails, spec *job.Spec, dryRun bool) ([]job.ResourceURN, error)
+	GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error)
+	GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error)
 }
 
 type TenantDetailsGetter interface {
@@ -562,6 +570,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, toUpdate...), logWriter)
 	me.Append(err)
 
+	// TODO: resolve job dependencies before check cyclic
 	err = j.validateDeleteJobs(ctx, jobTenant, toDelete, logWriter)
 	me.Append(err)
 
@@ -903,7 +912,29 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 	return generatedJobs, me.ToErr()
 }
 
+func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails) map[string]string {
+	tmplCtx := compiler.PrepareContext(
+		compiler.From(tnnt.GetConfigs()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
+		compiler.From(tnnt.SecretsMap()).WithName("secret"),
+	)
+
+	compiledConfigs := map[string]string{}
+	for key, val := range configs {
+		compiledConf, err := j.engine.CompileString(val, tmplCtx)
+		if err != nil {
+			j.logger.Warn("template compilation encountered suppressed error: %s", err.Error())
+			compiledConf = val
+		}
+		compiledConfigs[key] = compiledConf
+	}
+	return compiledConfigs
+}
+
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
+	var destination job.ResourceURN = ""
+	var sources []job.ResourceURN = nil
+	var err error = nil
+
 	if windowConfig := spec.WindowConfig(); windowConfig.Type() == window.Preset {
 		if _, err := tenantWithDetails.Project().GetPreset(windowConfig.Preset); err != nil {
 			errorMsg := fmt.Sprintf("error getting preset for job [%s]: %s", spec.Name(), err)
@@ -911,18 +942,37 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	destination, err := j.pluginService.GenerateDestination(ctx, tenantWithDetails, spec.Task())
-	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
-		j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
-		errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
-	}
+	// TODO(generic deps resolution): move plugin check inside pluginService methods
+	const bq2bq = "bq2bq"
+	if spec.Task().Name() == bq2bq { // for now, only work for bq2bq plugin
+		compileConfigs := j.compileConfigs(spec.Task().Config(), tenantWithDetails)
 
-	sources, err := j.pluginService.GenerateUpstreams(ctx, tenantWithDetails, spec, true)
-	if err != nil && !errors.Is(err, ErrUpstreamModNotFound) {
-		j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
-		errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		// generate destination
+		destination, err = j.pluginService.GenerateDestination(ctx, spec.Task().Name(), compileConfigs)
+		if err != nil {
+			j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
+			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
+			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
+
+		// generate upstream dependencies
+		svcAcc, ok := compileConfigs["BQ_SERVICE_ACCOUNT"]
+		if !ok || len(svcAcc) == 0 {
+			j.logger.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
+			return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found")
+		}
+
+		query, ok := spec.Asset()["query.sql"]
+		if !ok {
+			return nil, fmt.Errorf("empty sql file")
+		}
+
+		sources, err = j.pluginService.GenerateDependencies(ctx, spec.Task().Name(), svcAcc, query, destination)
+		if err != nil {
+			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
+			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
+			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
+		}
 	}
 
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil

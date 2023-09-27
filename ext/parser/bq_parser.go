@@ -9,7 +9,7 @@ import (
 
 type (
 	// ParserFunc parses rawResource to list of resource urn
-	ParserFunc func(rawResource string) []bigquery.ResourceURN
+	ParserFunc func(rawResource string) (resourceURNs []string)
 )
 
 var (
@@ -29,7 +29,7 @@ var (
 	specialCommentPattern     = regexp.MustCompile(`(\/\*\s*(@[a-zA-Z0-9_-]+)\s*\*\/)`)
 )
 
-func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
+func ParseTopLevelUpstreamsFromQuery(query string) []string {
 	cleanedQuery := cleanQueryFromComment(query)
 
 	resourcesFound := make(map[bigquery.ResourceURN]bool)
@@ -80,13 +80,13 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 		}
 	}
 
-	output := []bigquery.ResourceURN{}
+	output := []string{}
 
 	for resourceURN := range resourcesFound {
 		if pseudoResources[resourceURN] {
 			continue
 		}
-		output = append(output, resourceURN)
+		output = append(output, resourceURN.URN())
 	}
 
 	return output

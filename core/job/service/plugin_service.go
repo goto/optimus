@@ -168,7 +168,7 @@ func bqParserDecorator(fn parser.ParserFunc) ParserFunc {
 		bqURNs := fn(rawResource)
 		urns := make([]job.ResourceURN, len(bqURNs))
 		for i, bqURN := range bqURNs {
-			urns[i] = job.ResourceURN(bqURN.URN())
+			urns[i] = job.ResourceURN(bqURN)
 		}
 		return urns
 	}

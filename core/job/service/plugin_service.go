@@ -116,7 +116,7 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 		return nil, err
 	}
 
-	resources, err := p.generateResources(ctx, bqExtractorDecorator(bqExtractorFunc), query, visited, map[job.ResourceURN]bool{})
+	resources, err := p.generateResources(ctx, bqExtractorDecorator(p.logger, bqExtractorFunc), query, visited, map[job.ResourceURN]bool{})
 	if err != nil {
 		return nil, err
 	}
@@ -175,16 +175,27 @@ func bqParserDecorator(fn parser.ParserFunc) ParserFunc {
 }
 
 // bqExtractorDecorator to convert bigquery resource urn to job resource urn
-func bqExtractorDecorator(fn extractor.BQExtractorFunc) ExtractorFunc {
+func bqExtractorDecorator(logger log.Logger, fn extractor.BQExtractorFunc) ExtractorFunc {
 	return func(ctx context.Context, resourceURNs []job.ResourceURN) (map[job.ResourceURN]string, error) {
-		bqURNs := make([]bigquery.ResourceURN, len(resourceURNs))
-		extractedBqURNToDDL, err := fn(ctx, bqURNs)
+		urnToDDL := make(map[job.ResourceURN]string, len(resourceURNs))
+		bqURNs := []bigquery.ResourceURN{}
+		for _, resourceURN := range resourceURNs {
+			urnToDDL[resourceURN] = "" // initialization
+			bqURN, err := bigquery.NewResourceURNFromString(resourceURN.String())
+			if err != nil {
+				logger.Error(err.Error())
+				continue
+			}
+			bqURNs = append(bqURNs, bqURN)
+		}
+
+		extractedBqURNToQuery, err := fn(ctx, bqURNs)
 		if err != nil {
 			return nil, err
 		}
-		urnToDDL := make(map[job.ResourceURN]string, len(extractedBqURNToDDL))
-		for bqURN, ddl := range extractedBqURNToDDL {
-			urnToDDL[job.ResourceURN(bqURN.URN())] = ddl
+
+		for bqURN, query := range extractedBqURNToQuery {
+			urnToDDL[job.ResourceURN(bqURN.URN())] = query
 		}
 		return urnToDDL, nil
 	}

@@ -2,14 +2,27 @@ package bigquery
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/goto/optimus/internal/errors"
 )
+
+var bqResourceURNRegex = regexp.MustCompile(`bigquery:\/\/([^:]+):([^\.]+)\.(.+)`)
 
 type ResourceURN struct {
 	project string
 	dataset string
 	name    string
+}
+
+func NewResourceURNFromString(urn string) (ResourceURN, error) {
+	const lengthMatchedString = 3
+	matchedString := bqResourceURNRegex.FindStringSubmatch(urn)[1:]
+	if len(matchedString) != lengthMatchedString {
+		return ResourceURN{}, fmt.Errorf("urn %s can't be parsed to bigquery urn format", urn)
+	}
+	project, dataset, table := matchedString[0], matchedString[1], matchedString[2]
+	return ResourceURN{project: project, dataset: dataset, name: table}, nil
 }
 
 func NewResourceURN(project, dataset, name string) (ResourceURN, error) {

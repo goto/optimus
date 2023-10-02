@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/goto/optimus/ext/parser"
 	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/plugin/upstream_generator/parser"
 )
 
 func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
@@ -16,6 +16,11 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			InputQuery           string
 			ExpectedResourceURNs []string
 		}{
+			{
+				Name:                 "empty query",
+				InputQuery:           "",
+				ExpectedResourceURNs: []string{},
+			},
 			{
 				Name:       "simple query",
 				InputQuery: "select * from data-engineering.testing.table1",

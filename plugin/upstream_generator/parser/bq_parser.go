@@ -7,11 +7,6 @@ import (
 	"github.com/goto/optimus/ext/store/bigquery"
 )
 
-type (
-	// ParserFunc parses rawResource to list of resource urn
-	ParserFunc func(rawResource string) (resourceURNs []string)
-)
-
 var (
 	topLevelUpstreamsPattern = regexp.MustCompile(
 		"(?i)(?:FROM)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-\\*?]+)`?" + //nolint:gocritic

@@ -2,60 +2,137 @@ package plugin
 
 import (
 	"context"
+	"fmt"
+	"html/template"
+	"strings"
 
-	"github.com/goto/optimus/internal/models"
+	"github.com/goto/salt/log"
+
+	"github.com/goto/optimus/internal/errors"
+	ug "github.com/goto/optimus/plugin/upstream_generator"
+	"github.com/goto/optimus/sdk/plugin"
 )
 
 type (
-	ResourceURN string
-	Name        string
-	TaskConfig  map[string]string
-	Assets      map[string]string
-
-	ParserFunc               func(rawResource string) []ResourceURN
-	ExtractorFunc            func(ctx context.Context, resourceURNs []ResourceURN) (map[ResourceURN]string, error)
-	GenerateUpstreamFunc     func(assets Assets) []ResourceURN
-	EvalAssetFunc            func(assets Assets) (rawResource string)
-	ConstructDestinationFunc func(config TaskConfig) ResourceURN
+	Assets map[string]string
 )
 
-type UptreamGenerator interface {
-	GenerateUpstreams(rawResource string) []ResourceURN
+type PluginGetter interface {
+	GetByName(name string) (*plugin.Plugin, error)
+}
+
+type Evaluator interface {
+	Evaluate(assets map[string]string) (rawResource string)
+}
+
+type EvaluatorFactory interface {
+	GetFileEvaluator(filepath string) (Evaluator, error)
+}
+
+type UpstreamGeneratorFactory interface {
+	GetBQUpstreamGenerator(ctx context.Context, evaluator Evaluator, svcAcc string) (ug.UpstreamGenerator, error)
 }
 
 type PluginService struct {
-	pluginRepo *models.PluginRepository
+	l            log.Logger
+	pluginGetter PluginGetter
+
+	upstreamGeneratorFactory UpstreamGeneratorFactory
+	evaluatorFactory         EvaluatorFactory
 }
 
-func (s PluginService) GetUpstreamGeneratorFunc(taskName Name, config TaskConfig) GenerateUpstreamFunc {
-	// return upstream generator based on the plugin spec
-	plugin, _ := s.pluginRepo.GetByName(string(taskName))
-
-	// plugin.Info().AssetParser.Type -> bq
-	filepath := plugin.Info().AssetParser.FilePath
-	fileEvaluator := FileEvaluator{ // example for now is file evaluator
-		filepath: filepath, // use filepath from plugin yaml spec
+func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamGeneratorFactory UpstreamGeneratorFactory, evaluatorFactory EvaluatorFactory) (*PluginService, error) {
+	me := errors.NewMultiError("construct plugin service errors")
+	if logger == nil {
+		me.Append(fmt.Errorf("logger is nil"))
+	}
+	if pluginGetter == nil {
+		me.Append(fmt.Errorf("pluginGetter is nil"))
+	}
+	if upstreamGeneratorFactory == nil {
+		me.Append(fmt.Errorf("upstreamGeneratorFactory is nil"))
+	}
+	if evaluatorFactory == nil {
+		me.Append(fmt.Errorf("evaluatorFactory is nil"))
 	}
 
-	return BQUpstreamGenerator{ // example for now is BQ
-		parserFunc:    nil, // use bq parser -> parser.ParseTopLevelUpstreamsFromQuery
-		extractorFunc: nil, // use extractor -> extractor.NewBQExtractor(client, l).Extract                                                   // use bq extractor
-		evaluate:      fileEvaluator.Evaluate,
-	}.GenerateUpstreams
+	return &PluginService{
+		l:                        logger,
+		pluginGetter:             pluginGetter,
+		upstreamGeneratorFactory: upstreamGeneratorFactory,
+		evaluatorFactory:         evaluatorFactory,
+	}, me.ToErr()
 }
 
-func (s PluginService) GetDestinationConstructorFunc(taskName Name) ConstructDestinationFunc {
-	// return destination constructor based on the template provided from plugin spec
-	plugin, _ := s.pluginRepo.GetByName(string(taskName))
-
-	template := plugin.Info().DestinationURNTemplate // get template from plugin spec
-	return func(config TaskConfig) ResourceURN {
-		// construct resource urn from template and task config
-		return generateResourceURNFromTemplate(template, config)
+func (s PluginService) GenerateUpstreams(ctx context.Context, taskName string, config map[string]string, assets map[string]string) ([]string, error) {
+	plugin, err := s.pluginGetter.GetByName(taskName)
+	if err != nil {
+		return nil, err
 	}
+
+	assetParser := plugin.Info().AssetParser
+	if assetParser == nil {
+		// if plugin doesn't contain parser, then it doesn't support auto upstream generation
+		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", plugin.Info().Name)
+		return []string{}, nil
+	}
+
+	// for now the evaluator is only scoped for file evaluator
+	evaluator, err := s.evaluatorFactory.GetFileEvaluator(assetParser.FilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// for now upstream generator is only scoped for bigquery
+	svcAcc, ok := config["BQ_SERVICE_ACCOUNT"]
+	if !ok {
+		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate upstream is not found")
+	}
+	upstreamGenerator, err := s.upstreamGeneratorFactory.GetBQUpstreamGenerator(ctx, evaluator, svcAcc)
+	if err != nil {
+		return nil, err
+	}
+
+	return upstreamGenerator.GenerateResources(ctx, assets)
 }
 
-func generateResourceURNFromTemplate(template string, config TaskConfig) ResourceURN {
-	// implement resource urn construction
-	return ResourceURN("")
+func (s PluginService) ConstructDestinationURN(ctx context.Context, taskName string, config map[string]string) (string, error) {
+	plugin, err := s.pluginGetter.GetByName(taskName)
+	if err != nil {
+		return "", err
+	}
+
+	// for now only support single template
+	destinationURNTemplate := plugin.Info().DestinationURNTemplate
+	if destinationURNTemplate == "" {
+		// if plugin doesn't contain destination template, then it doesn't support auto destination generation
+		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", plugin.Info().Name)
+		return "", nil
+	}
+
+	convertedURNTemplate := convertToGoTemplate(destinationURNTemplate)
+	tmpl, err := template.New("destination_urn_" + plugin.Info().Name).Parse(convertedURNTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	return generateResourceURNFromTemplate(tmpl, config)
+}
+
+// convertToGoTemplate transforms plugin destination urn template format to go template format
+// eg. `bigquery://<PROJECT_NAME>:<DATASET_NAME>.<TABLE_NAME>` with map name config
+// will be converted to `bigquery://{{ index .config "PROJECT_NAME" }}:{{ index .config "DATASET_NAME" }}.{{ index .config "TABLE_NAME" }}`
+func convertToGoTemplate(destinationURNTemplate string) string {
+	convertedTemplate := destinationURNTemplate
+	convertedTemplate = strings.ReplaceAll(convertedTemplate, "<", `{{ index .config "`)
+	convertedTemplate = strings.ReplaceAll(convertedTemplate, ">", `" }}`)
+	return convertedTemplate
+}
+
+func generateResourceURNFromTemplate(tmpl *template.Template, config map[string]string) (string, error) {
+	s := &strings.Builder{}
+	if err := tmpl.Execute(s, config); err != nil {
+		return "", err
+	}
+	return s.String(), nil
 }

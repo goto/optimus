@@ -20,7 +20,6 @@ import (
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/writer"
-	p "github.com/goto/optimus/plugin"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -78,14 +77,9 @@ type PluginService interface {
 	GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error)
 }
 
-type (
-	GenerateUpstreamFunc     func(assets p.Assets) []p.ResourceURN
-	ConstructDestinationFunc func(config p.TaskConfig) p.ResourceURN
-)
-
 type PluginServiceI interface {
-	GetUpstreamGeneratorFunc(taskName p.Name, config p.TaskConfig) GenerateUpstreamFunc
-	GetDestinationConstructorFunc(taskName p.Name) ConstructDestinationFunc
+	GenerateUpstreams(ctx context.Context, taskName string, config map[string]string, assets map[string]string) (resourceURNs []string, err error)
+	ConstructDestinationURN(ctx context.Context, taskName string, config map[string]string) (destinationURN string, err error)
 }
 
 type TenantDetailsGetter interface {
@@ -929,6 +923,7 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 }
 
 func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails) map[string]string {
+	const projectConfigPrefix = "GLOBAL__"
 	tmplCtx := compiler.PrepareContext(
 		compiler.From(tnnt.GetConfigs()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
 		compiler.From(tnnt.SecretsMap()).WithName("secret"),
@@ -954,8 +949,15 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	sources := j.generateUpstreamResourceURNs(spec)
-	destination := j.generateDestinationURN(spec)
+	sources, err := j.generateUpstreamResourceURNs(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	destination, err := j.generateDestinationURN(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
 }
 
@@ -1132,25 +1134,32 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	}).Add(float64(metricValue))
 }
 
-func (j *JobService) generateUpstreamResourceURNs(spec *job.Spec) []job.ResourceURN {
-	taskName := p.Name(spec.Task().Name())
-	taskConfig := p.TaskConfig(spec.Task().Config())
+func (j *JobService) generateUpstreamResourceURNs(ctx context.Context, spec *job.Spec) ([]job.ResourceURN, error) {
+	taskName := spec.Task().Name().String()
+	taskConfig := spec.Task().Config()
+	assets := spec.Asset()
 
-	generateUpstreams := j.pService.GetUpstreamGeneratorFunc(taskName, taskConfig)
-	resourceURNs := generateUpstreams(p.Assets(spec.Asset()))
+	resourceURNs, err := j.pService.GenerateUpstreams(ctx, taskName, taskConfig, assets)
+	if err != nil {
+		return nil, err
+	}
 
 	jobResourceURNs := make([]job.ResourceURN, len(resourceURNs))
 	for i, resourceURN := range resourceURNs {
 		jobResourceURNs[i] = job.ResourceURN(resourceURN)
 	}
 
-	return jobResourceURNs
+	return jobResourceURNs, nil
 }
 
-func (j *JobService) generateDestinationURN(spec *job.Spec) job.ResourceURN {
-	taskName := p.Name(spec.Task().Name())
-	taskConfig := p.TaskConfig(spec.Task().Config())
+func (j *JobService) generateDestinationURN(ctx context.Context, spec *job.Spec) (job.ResourceURN, error) {
+	taskName := spec.Task().Name().String()
+	taskConfig := spec.Task().Config()
 
-	constructDestination := j.pService.GetDestinationConstructorFunc(taskName)
-	return job.ResourceURN(constructDestination(taskConfig))
+	destinationURN, err := j.pService.ConstructDestinationURN(ctx, taskName, taskConfig)
+	if err != nil {
+		return "", err
+	}
+
+	return job.ResourceURN(destinationURN), nil
 }

@@ -58,7 +58,7 @@ const (
 type AssetParser struct {
 	Type      ParserType
 	FilePath  string
-	Evaluator Evaluator
+	Evaluator Evaluator `yaml:",omitempty"`
 }
 
 type Info struct {
@@ -69,8 +69,8 @@ type Info struct {
 	PluginType  Type  `yaml:",omitempty"`
 	PluginMods  []Mod `yaml:",omitempty"`
 
-	AssetParser            AssetParser
-	DestinationURNTemplate string
+	AssetParser            *AssetParser `yaml:"asset_parser,omitempty"`
+	DestinationURNTemplate string       `yaml:",omitempty"`
 
 	PluginVersion string   `yaml:",omitempty"`
 	APIVersion    []string `yaml:",omitempty"`

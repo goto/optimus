@@ -132,11 +132,11 @@ func (s PluginService) ConstructDestinationURN(ctx context.Context, taskName str
 
 // convertToGoTemplate transforms plugin destination urn template format to go template format
 // eg. `bigquery://<PROJECT_NAME>:<DATASET_NAME>.<TABLE_NAME>` with map name config
-// will be converted to `bigquery://{{ index .config "PROJECT_NAME" }}:{{ index .config "DATASET_NAME" }}.{{ index .config "TABLE_NAME" }}`
+// will be converted to `bigquery://{{ .PROJECT_NAME }}:{{ .DATASET_NAME }}.{{ .TABLE_NAME }}`
 func convertToGoTemplate(destinationURNTemplate string) string {
 	convertedTemplate := destinationURNTemplate
-	convertedTemplate = strings.ReplaceAll(convertedTemplate, "<", `{{ index .config "`)
-	convertedTemplate = strings.ReplaceAll(convertedTemplate, ">", `" }}`)
+	convertedTemplate = strings.ReplaceAll(convertedTemplate, "<", `{{ .`)
+	convertedTemplate = strings.ReplaceAll(convertedTemplate, ">", ` }}`)
 	return convertedTemplate
 }
 

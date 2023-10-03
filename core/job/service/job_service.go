@@ -34,7 +34,6 @@ type JobService struct {
 	downstreamRepo DownstreamRepository
 
 	pluginService    PluginService
-	pService         PluginServiceI
 	upstreamResolver UpstreamResolver
 	eventHandler     EventHandler
 
@@ -72,12 +71,7 @@ type Engine interface {
 }
 
 type PluginService interface {
-	Info(context.Context, job.TaskName) (*plugin.Info, error)
-	GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error)
-	GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error)
-}
-
-type PluginServiceI interface {
+	Info(ctx context.Context, taskName string) (*plugin.Info, error)
 	GenerateUpstreams(ctx context.Context, taskName string, config map[string]string, assets map[string]string) (resourceURNs []string, err error)
 	ConstructDestinationURN(ctx context.Context, taskName string, config map[string]string) (destinationURN string, err error)
 }
@@ -313,7 +307,7 @@ func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName j
 }
 
 func (j *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error) {
-	return j.pluginService.Info(ctx, task.Name())
+	return j.pluginService.Info(ctx, task.Name().String())
 }
 
 func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOpt) ([]*job.Job, error) {
@@ -949,11 +943,15 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	sources, err := j.generateUpstreamResourceURNs(ctx, spec)
+	if spec.Task().Name() != "bq2bq" {
+		return job.NewJob(tenantWithDetails.ToTenant(), spec, job.ResourceURN(""), nil), nil
+	}
+
+	destination, err := j.generateDestinationURN(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
-	destination, err := j.generateDestinationURN(ctx, spec)
+	sources, err := j.generateUpstreamResourceURNs(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -1139,7 +1137,7 @@ func (j *JobService) generateUpstreamResourceURNs(ctx context.Context, spec *job
 	taskConfig := spec.Task().Config()
 	assets := spec.Asset()
 
-	resourceURNs, err := j.pService.GenerateUpstreams(ctx, taskName, taskConfig, assets)
+	resourceURNs, err := j.pluginService.GenerateUpstreams(ctx, taskName, taskConfig, assets)
 	if err != nil {
 		return nil, err
 	}
@@ -1156,7 +1154,7 @@ func (j *JobService) generateDestinationURN(ctx context.Context, spec *job.Spec)
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
 
-	destinationURN, err := j.pService.ConstructDestinationURN(ctx, taskName, taskConfig)
+	destinationURN, err := j.pluginService.ConstructDestinationURN(ctx, taskName, taskConfig)
 	if err != nil {
 		return "", err
 	}

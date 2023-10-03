@@ -10,6 +10,7 @@ import (
 
 	"github.com/goto/optimus/internal/errors"
 	ug "github.com/goto/optimus/plugin/upstream_generator"
+	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -21,16 +22,12 @@ type PluginGetter interface {
 	GetByName(name string) (*plugin.Plugin, error)
 }
 
-type Evaluator interface {
-	Evaluate(assets map[string]string) (rawResource string)
-}
-
 type EvaluatorFactory interface {
-	GetFileEvaluator(filepath string) (Evaluator, error)
+	GetFileEvaluator(filepath string) (evaluator.Evaluator, error)
 }
 
 type UpstreamGeneratorFactory interface {
-	GetBQUpstreamGenerator(ctx context.Context, evaluator Evaluator, svcAcc string) (ug.UpstreamGenerator, error)
+	GetBQUpstreamGenerator(ctx context.Context, evaluator evaluator.Evaluator, svcAcc string) (ug.UpstreamGenerator, error)
 }
 
 type PluginService struct {
@@ -62,6 +59,20 @@ func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamGene
 		upstreamGeneratorFactory: upstreamGeneratorFactory,
 		evaluatorFactory:         evaluatorFactory,
 	}, me.ToErr()
+}
+
+func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, error) {
+	taskPlugin, err := s.pluginGetter.GetByName(taskName)
+	if err != nil {
+		s.l.Error("error getting plugin [%s]: %s", taskName, err)
+		return nil, err
+	}
+	if taskPlugin.YamlMod == nil {
+		s.l.Error("task plugin yaml mod is not found")
+		return nil, fmt.Errorf("yaml mod not exist")
+	}
+
+	return taskPlugin.Info(), nil
 }
 
 func (s PluginService) GenerateUpstreams(ctx context.Context, taskName string, config map[string]string, assets map[string]string) ([]string, error) {

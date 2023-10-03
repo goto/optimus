@@ -8,6 +8,7 @@ import (
 
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 	"github.com/goto/optimus/plugin/upstream_generator/parser"
 )
 
@@ -22,15 +23,11 @@ type UpstreamGeneratorFactory struct {
 	l log.Logger
 }
 
-type Evaluator interface {
-	Evaluate(assets map[string]string) (rawResource string)
-}
-
 type UpstreamGenerator interface {
 	GenerateResources(ctx context.Context, assets map[string]string) ([]string, error)
 }
 
-func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluator Evaluator, svcAcc string) (UpstreamGenerator, error) {
+func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluator evaluator.Evaluator, svcAcc string) (UpstreamGenerator, error) {
 	client, err := bigquery.NewClient(ctx, svcAcc)
 	if err != nil {
 		return nil, err

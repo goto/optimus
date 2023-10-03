@@ -12,6 +12,7 @@ import (
 
 	"github.com/goto/optimus/plugin"
 	"github.com/goto/optimus/plugin/upstream_generator"
+	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 	"github.com/goto/optimus/plugin/yaml"
 	p "github.com/goto/optimus/sdk/plugin"
 )
@@ -279,24 +280,24 @@ type UpstreamGeneratorFactory struct {
 }
 
 // GetBQUpstreamGenerator provides a mock function with given fields: ctx, evaluator, svcAcc
-func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluator plugin.Evaluator, svcAcc string) (upstream_generator.UpstreamGenerator, error) {
-	ret := _m.Called(ctx, evaluator, svcAcc)
+func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluatorFunc evaluator.Evaluator, svcAcc string) (upstream_generator.UpstreamGenerator, error) {
+	ret := _m.Called(ctx, evaluatorFunc, svcAcc)
 
 	var r0 upstream_generator.UpstreamGenerator
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, plugin.Evaluator, string) (upstream_generator.UpstreamGenerator, error)); ok {
-		return rf(ctx, evaluator, svcAcc)
+	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) (upstream_generator.UpstreamGenerator, error)); ok {
+		return rf(ctx, evaluatorFunc, svcAcc)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, plugin.Evaluator, string) upstream_generator.UpstreamGenerator); ok {
-		r0 = rf(ctx, evaluator, svcAcc)
+	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) upstream_generator.UpstreamGenerator); ok {
+		r0 = rf(ctx, evaluatorFunc, svcAcc)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(upstream_generator.UpstreamGenerator)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, plugin.Evaluator, string) error); ok {
-		r1 = rf(ctx, evaluator, svcAcc)
+	if rf, ok := ret.Get(1).(func(context.Context, evaluator.Evaluator, string) error); ok {
+		r1 = rf(ctx, evaluatorFunc, svcAcc)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -310,19 +311,19 @@ type EvaluatorFactory struct {
 }
 
 // GetFileEvaluator provides a mock function with given fields: filepath
-func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (plugin.Evaluator, error) {
+func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (evaluator.Evaluator, error) {
 	ret := _m.Called(filepath)
 
-	var r0 plugin.Evaluator
+	var r0 evaluator.Evaluator
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string) (plugin.Evaluator, error)); ok {
+	if rf, ok := ret.Get(0).(func(string) (evaluator.Evaluator, error)); ok {
 		return rf(filepath)
 	}
-	if rf, ok := ret.Get(0).(func(string) plugin.Evaluator); ok {
+	if rf, ok := ret.Get(0).(func(string) evaluator.Evaluator); ok {
 		r0 = rf(filepath)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(plugin.Evaluator)
+			r0 = ret.Get(0).(evaluator.Evaluator)
 		}
 	}
 

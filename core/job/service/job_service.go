@@ -947,7 +947,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		return job.NewJob(tenantWithDetails.ToTenant(), spec, job.ResourceURN(""), nil), nil
 	}
 
-	destination, err := j.generateDestinationURN(ctx, spec)
+	destination, err := j.generateDestinationURN(ctx, tenantWithDetails, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -1150,11 +1150,12 @@ func (j *JobService) generateUpstreamResourceURNs(ctx context.Context, spec *job
 	return jobResourceURNs, nil
 }
 
-func (j *JobService) generateDestinationURN(ctx context.Context, spec *job.Spec) (job.ResourceURN, error) {
+func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (job.ResourceURN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
+	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
 
-	destinationURN, err := j.pluginService.ConstructDestinationURN(ctx, taskName, taskConfig)
+	destinationURN, err := j.pluginService.ConstructDestinationURN(ctx, taskName, compileConfigs)
 	if err != nil {
 		return "", err
 	}

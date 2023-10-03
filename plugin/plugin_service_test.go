@@ -78,10 +78,76 @@ func TestNewPluginService(t *testing.T) {
 	})
 }
 
+func TestInfo(t *testing.T) {
+	logger := log.NewNoop()
+	ctx := context.Background()
+	taskName := "bq2bqtest"
+	pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser.yaml")
+	assert.NoError(t, err)
+	pluginTest := &p.Plugin{
+		YamlMod: pluginYamlTest,
+	}
+	t.Run("returns error when no plugin", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginGetter.On("GetByName", mock.Anything).Return(nil, fmt.Errorf("some error"))
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		result, err := pluginService.Info(ctx, taskName)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Equal(t, "some error", err.Error())
+	})
+	t.Run("returns error when yaml mod not supported", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginWithoutYaml := &p.Plugin{}
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginWithoutYaml, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		result, err := pluginService.Info(ctx, taskName)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Equal(t, "yaml mod not exist", err.Error())
+	})
+	t.Run("returns plugin info", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		result, err := pluginService.Info(ctx, taskName)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, "docker.io/goto/optimus-task-bq2bq-executor:latest", result.Image)
+	})
+}
+
 func TestGenerateUpstreams(t *testing.T) {
 	logger := log.NewNoop()
 	ctx := context.Background()
-	taskName := "bq2bq"
+	taskName := "bq2bqtest"
 	config := map[string]string{
 		"BQ_SERVICE_ACCOUNT": "service_account_value",
 	}
@@ -221,6 +287,101 @@ func TestGenerateUpstreams(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)
 		assert.Len(t, resourceURNs, 1)
+	})
+}
+
+func TestConstructDestinationURN(t *testing.T) {
+	logger := log.NewNoop()
+	ctx := context.Background()
+	taskName := "bq2bqtest"
+	config := map[string]string{
+		"BQ_SERVICE_ACCOUNT": "service_account_value",
+		"PROJECT":            "project1",
+		"DATASET":            "dataset1",
+		"TABLE":              "table1",
+	}
+	pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_destination_template.yaml")
+	assert.NoError(t, err)
+	pluginTest := &p.Plugin{
+		YamlMod: pluginYamlTest,
+	}
+	t.Run("returns error if unable to find the plugin", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginGetter.On("GetByName", mock.Anything).Return(nil, fmt.Errorf("some error"))
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		result, err := pluginService.ConstructDestinationURN(ctx, taskName, config)
+		assert.Error(t, err)
+		assert.Empty(t, result)
+	})
+	t.Run("should return empty destination if the plugin doesn't contain destination template", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser.yaml")
+		assert.NoError(t, err)
+		pluginTestWithoutDestinationTemplate := &p.Plugin{
+			YamlMod: pluginYamlTest,
+		}
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithoutDestinationTemplate, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		result, err := pluginService.ConstructDestinationURN(ctx, taskName, config)
+		assert.NoError(t, err)
+		assert.Empty(t, result)
+	})
+	t.Run("returns error if template is not proper", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+		pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_unproper_destination_template.yaml")
+		assert.NoError(t, err)
+		pluginTestUnproperTemplate := &p.Plugin{
+			YamlMod: pluginYamlTest,
+		}
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestUnproperTemplate, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		result, err := pluginService.ConstructDestinationURN(ctx, taskName, config)
+		assert.Error(t, err)
+		assert.Empty(t, result)
+	})
+	t.Run("should properly generate a destination provided correct config inputs", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		result, err := pluginService.ConstructDestinationURN(ctx, taskName, config)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, result)
+		assert.Equal(t, "bigquery://project1:dataset1.table1", result)
 	})
 }
 

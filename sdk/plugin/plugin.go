@@ -70,7 +70,7 @@ type Info struct {
 	PluginMods  []Mod `yaml:",omitempty"`
 
 	AssetParser            *AssetParser `yaml:"asset_parser,omitempty"`
-	DestinationURNTemplate string       `yaml:",omitempty"`
+	DestinationURNTemplate string       `yaml:"destination_urn_template,omitempty"`
 
 	PluginVersion string   `yaml:",omitempty"`
 	APIVersion    []string `yaml:",omitempty"`

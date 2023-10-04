@@ -4105,7 +4105,7 @@ func (_m *PluginService) ConstructDestinationURN(ctx context.Context, taskName s
 }
 
 // GenerateUpstreams provides a mock function with given fields: ctx, taskName, config, assets
-func (_m *PluginService) GenerateUpstreams(ctx context.Context, taskName string, config map[string]string, assets map[string]string) ([]string, error) {
+func (_m *PluginService) GenerateUpstreams(ctx context.Context, taskName string, config, assets map[string]string) ([]string, error) {
 	ret := _m.Called(ctx, taskName, config, assets)
 
 	var r0 []string

@@ -72,7 +72,7 @@ type Engine interface {
 
 type PluginService interface {
 	Info(ctx context.Context, taskName string) (*plugin.Info, error)
-	GenerateUpstreams(ctx context.Context, taskName string, config map[string]string, assets map[string]string) (resourceURNs []string, err error)
+	GenerateUpstreams(ctx context.Context, taskName string, config, assets map[string]string) (resourceURNs []string, err error)
 	ConstructDestinationURN(ctx context.Context, taskName string, config map[string]string) (destinationURN string, err error)
 }
 

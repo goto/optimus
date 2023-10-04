@@ -75,7 +75,7 @@ func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, e
 	return taskPlugin.Info(), nil
 }
 
-func (s PluginService) GenerateUpstreams(ctx context.Context, taskName string, config map[string]string, assets map[string]string) ([]string, error) {
+func (s PluginService) GenerateUpstreams(ctx context.Context, taskName string, config, assets map[string]string) ([]string, error) {
 	plugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (s PluginService) GenerateUpstreams(ctx context.Context, taskName string, c
 	return upstreamGenerator.GenerateResources(ctx, assets)
 }
 
-func (s PluginService) ConstructDestinationURN(ctx context.Context, taskName string, config map[string]string) (string, error) {
+func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, config map[string]string) (string, error) {
 	plugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return "", err

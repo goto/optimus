@@ -3,9 +3,10 @@ package evaluator_test
 import (
 	"testing"
 
-	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 )
 
 func TestNewEvaluatorFactory(t *testing.T) {

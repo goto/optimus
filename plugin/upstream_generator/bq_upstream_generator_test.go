@@ -1,46 +1,47 @@
-package upstream_generator_test
+package upstreamgenerator_test
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/optimus/plugin/upstream_generator"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/goto/optimus/ext/store/bigquery"
+	upstreamgenerator "github.com/goto/optimus/plugin/upstream_generator"
 )
 
 func TestNewBQUpstreamGenerator(t *testing.T) {
 	logger := log.NewNoop()
 	parserFunc := func(string) []string { return nil }
 	bqExtractorFunc := func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
-		return nil, nil
+		return nil, nil // nolint: nilnil
 	}
 	evaluatorFunc := func(map[string]string) string { return "" }
 	t.Run("should return error when logger is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(nil, parserFunc, bqExtractorFunc, evaluatorFunc)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(nil, parserFunc, bqExtractorFunc, evaluatorFunc)
 		assert.ErrorContains(t, err, "logger is nil")
 		assert.Nil(t, bqUpstreamGenerator)
 	})
 	t.Run("should return error when parser is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, nil, bqExtractorFunc, evaluatorFunc)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, nil, bqExtractorFunc, evaluatorFunc)
 		assert.ErrorContains(t, err, "parserFunc is nil")
 		assert.Nil(t, bqUpstreamGenerator)
 	})
 	t.Run("should return error when extractor is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc, nil, evaluatorFunc)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, nil, evaluatorFunc)
 		assert.ErrorContains(t, err, "bqExtractorFunc is nil")
 		assert.Nil(t, bqUpstreamGenerator)
 	})
 	t.Run("should return error when evaluator is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc, nil)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc, nil)
 		assert.ErrorContains(t, err, "evaluatorFunc is nil")
 		assert.Nil(t, bqUpstreamGenerator)
 	})
 	t.Run("should return success", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc, evaluatorFunc)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc, evaluatorFunc)
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 	})
@@ -61,7 +62,7 @@ func TestGenerateResources(t *testing.T) {
 		defer bqExtractorFunc.AssertExpectations(t)
 
 		evaluatorFunc.On("Execute", assets).Return("")
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
@@ -81,7 +82,7 @@ func TestGenerateResources(t *testing.T) {
 		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"bigquery://project1:dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, mock.Anything).Return(nil, errors.New("some error"))
 
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
@@ -102,7 +103,7 @@ func TestGenerateResources(t *testing.T) {
 		// bq extractor should receives empty resource urn, since the urn construction is fail
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{}).Return(map[bigquery.ResourceURN]string{}, nil)
 
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
@@ -139,7 +140,7 @@ func TestGenerateResources(t *testing.T) {
 
 		parserFunc.On("Execute", "").Return([]string{})
 
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
@@ -176,7 +177,7 @@ func TestGenerateResources(t *testing.T) {
 
 		parserFunc.On("Execute", "").Return([]string{})
 
-		bqUpstreamGenerator, err := upstream_generator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 

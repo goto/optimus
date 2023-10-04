@@ -1,12 +1,13 @@
-package upstream_generator
+package upstreamgenerator
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/salt/log"
 )
 
 type (

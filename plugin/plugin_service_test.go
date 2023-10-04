@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/plugin"
-	"github.com/goto/optimus/plugin/upstream_generator"
+	upstreamgenerator "github.com/goto/optimus/plugin/upstream_generator"
 	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 	"github.com/goto/optimus/plugin/yaml"
 	p "github.com/goto/optimus/sdk/plugin"
@@ -441,19 +441,19 @@ type UpstreamGeneratorFactory struct {
 }
 
 // GetBQUpstreamGenerator provides a mock function with given fields: ctx, evaluator, svcAcc
-func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluatorFunc evaluator.Evaluator, svcAcc string) (upstream_generator.UpstreamGenerator, error) {
+func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluatorFunc evaluator.Evaluator, svcAcc string) (upstreamgenerator.UpstreamGenerator, error) {
 	ret := _m.Called(ctx, evaluatorFunc, svcAcc)
 
-	var r0 upstream_generator.UpstreamGenerator
+	var r0 upstreamgenerator.UpstreamGenerator
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) (upstream_generator.UpstreamGenerator, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) (upstreamgenerator.UpstreamGenerator, error)); ok {
 		return rf(ctx, evaluatorFunc, svcAcc)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) upstream_generator.UpstreamGenerator); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) upstreamgenerator.UpstreamGenerator); ok {
 		r0 = rf(ctx, evaluatorFunc, svcAcc)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(upstream_generator.UpstreamGenerator)
+			r0 = ret.Get(0).(upstreamgenerator.UpstreamGenerator)
 		}
 	}
 

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/salt/log"
+
+	"github.com/goto/optimus/internal/errors"
 )
 
 type fileEvaluator struct {

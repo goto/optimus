@@ -1,4 +1,4 @@
-package upstream_generator
+package upstreamgenerator
 
 import (
 	"context"

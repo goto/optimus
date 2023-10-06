@@ -100,8 +100,8 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 		evaluators = append(evaluators, fileEvaluator)
 	}
 	for evaluatorType, selector := range assetParser.Evaluator {
-		switch evaluatorType {
-		case plugin.YamlEvaluator:
+		// for now we only support yamlpath as specialized evaluator
+		if evaluatorType == plugin.YamlEvaluator {
 			yamlpathEvaluator, err := s.evaluatorFactory.GetYamlpathEvaluator(assetParser.FilePath, selector)
 			if err != nil {
 				s.l.Error("yamlpath evaluator couldn't instantiated: %s", err.Error())

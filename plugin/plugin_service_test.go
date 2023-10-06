@@ -528,7 +528,7 @@ func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (evaluator.Evaluat
 }
 
 // GetYamlpathEvaluator provides a mock function with given fields: filepath, selector
-func (_m *EvaluatorFactory) GetYamlpathEvaluator(filepath string, selector string) (evaluator.Evaluator, error) {
+func (_m *EvaluatorFactory) GetYamlpathEvaluator(filepath, selector string) (evaluator.Evaluator, error) {
 	ret := _m.Called(filepath, selector)
 
 	var r0 evaluator.Evaluator

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/goto/salt/log"
 	"github.com/vmware-labs/yaml-jsonpath/pkg/yamlpath"
 	"gopkg.in/yaml.v3"
 
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/salt/log"
 )
 
 type yamlpathEvaluator struct {
@@ -55,7 +55,7 @@ func newYamlpathEvaluator(logger log.Logger, filepath, selector string) (*yamlpa
 	}
 	pathSelector, err := yamlpath.NewPath(selector)
 	if err != nil {
-		me.Append(fmt.Errorf("instantiate yamlpath error: %s", err.Error()))
+		me.Append(fmt.Errorf("instantiate yamlpath error: %w", err))
 	}
 	if me.ToErr() != nil {
 		return nil, me.ToErr()

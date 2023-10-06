@@ -1,0 +1,8 @@
+query: SELECT * FROM `project1.dataset1.table1`
+foo: "bar"
+any_other_field:
+  - "lorem ipsum"
+  - "dolor"
+  - "sit amet"
+nested:
+  query: SELECT * FROM `project2.dataset2.table2`

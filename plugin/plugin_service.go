@@ -24,10 +24,11 @@ type PluginGetter interface {
 
 type EvaluatorFactory interface {
 	GetFileEvaluator(filepath string) (evaluator.Evaluator, error)
+	GetYamlpathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
 }
 
 type UpstreamGeneratorFactory interface {
-	GetBQUpstreamGenerator(ctx context.Context, evaluator evaluator.Evaluator, svcAcc string) (ug.UpstreamGenerator, error)
+	GetBQUpstreamGenerator(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (ug.UpstreamGenerator, error)
 }
 
 type PluginService struct {
@@ -76,22 +77,38 @@ func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, e
 }
 
 func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, config, assets map[string]string) ([]string, error) {
-	plugin, err := s.pluginGetter.GetByName(taskName)
+	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return nil, err
 	}
 
-	assetParser := plugin.Info().AssetParser
+	assetParser := taskPlugin.Info().AssetParser
 	if assetParser == nil {
 		// if plugin doesn't contain parser, then it doesn't support auto upstream generation
-		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", plugin.Info().Name)
+		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", taskPlugin.Info().Name)
 		return []string{}, nil
 	}
 
-	// for now the evaluator is only scoped for file evaluator
-	evaluator, err := s.evaluatorFactory.GetFileEvaluator(assetParser.FilePath)
-	if err != nil {
-		return nil, err
+	// instantiate evaluators
+	evaluators := []evaluator.Evaluator{}
+	if len(assetParser.Evaluator) == 0 {
+		// use file evaluator if there's no specialized evaluator defined
+		fileEvaluator, err := s.evaluatorFactory.GetFileEvaluator(assetParser.FilePath)
+		if err != nil {
+			return nil, err
+		}
+		evaluators = append(evaluators, fileEvaluator)
+	}
+	for evaluatorType, selector := range assetParser.Evaluator {
+		switch evaluatorType {
+		case plugin.YamlEvaluator:
+			yamlpathEvaluator, err := s.evaluatorFactory.GetYamlpathEvaluator(assetParser.FilePath, selector)
+			if err != nil {
+				s.l.Error("yamlpath evaluator couldn't instantiated: %s", err.Error())
+				return nil, err
+			}
+			evaluators = append(evaluators, yamlpathEvaluator)
+		}
 	}
 
 	// for now upstream generator is only scoped for bigquery
@@ -99,7 +116,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	if !ok {
 		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate upstream is not found")
 	}
-	upstreamGenerator, err := s.upstreamGeneratorFactory.GetBQUpstreamGenerator(ctx, evaluator, svcAcc)
+	upstreamGenerator, err := s.upstreamGeneratorFactory.GetBQUpstreamGenerator(ctx, svcAcc, evaluators...)
 	if err != nil {
 		return nil, err
 	}
@@ -108,21 +125,21 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 }
 
 func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, config map[string]string) (string, error) {
-	plugin, err := s.pluginGetter.GetByName(taskName)
+	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return "", err
 	}
 
 	// for now only support single template
-	destinationURNTemplate := plugin.Info().DestinationURNTemplate
+	destinationURNTemplate := taskPlugin.Info().DestinationURNTemplate
 	if destinationURNTemplate == "" {
 		// if plugin doesn't contain destination template, then it doesn't support auto destination generation
-		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", plugin.Info().Name)
+		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", taskPlugin.Info().Name)
 		return "", nil
 	}
 
 	convertedURNTemplate := convertToGoTemplate(destinationURNTemplate)
-	tmpl, err := template.New("destination_urn_" + plugin.Info().Name).Parse(convertedURNTemplate)
+	tmpl, err := template.New("destination_urn_" + taskPlugin.Info().Name).Parse(convertedURNTemplate)
 	if err != nil {
 		return "", err
 	}

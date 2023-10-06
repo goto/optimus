@@ -35,7 +35,12 @@ func TestNewBQUpstreamGenerator(t *testing.T) {
 		assert.ErrorContains(t, err, "bqExtractorFunc is nil")
 		assert.Nil(t, bqUpstreamGenerator)
 	})
-	t.Run("should return error when evaluator is nil", func(t *testing.T) {
+	t.Run("should return error when no evaluators", func(t *testing.T) {
+		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc)
+		assert.ErrorContains(t, err, "evaluatorFuncs is needed")
+		assert.Nil(t, bqUpstreamGenerator)
+	})
+	t.Run("should return error when one of evaluator is nil", func(t *testing.T) {
 		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc, nil)
 		assert.ErrorContains(t, err, "evaluatorFunc is nil")
 		assert.Nil(t, bqUpstreamGenerator)

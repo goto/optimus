@@ -16,27 +16,34 @@ type (
 )
 
 type BQUpstreamGenerator struct {
-	logger        log.Logger
-	parserFunc    ParserFunc
-	extractorFunc extractorFunc
-	evaluatorFunc EvalAssetFunc
+	logger         log.Logger
+	parserFunc     ParserFunc
+	extractorFunc  extractorFunc
+	evaluatorFuncs []EvalAssetFunc
 }
 
 func (g BQUpstreamGenerator) GenerateResources(ctx context.Context, assets map[string]string) ([]string, error) {
-	query := g.evaluatorFunc(assets)
-	if query == "" {
-		return []string{}, nil
+	resourcesAccumulation := []*bigquery.ResourceURNWithUpstreams{}
+
+	// generate resource urn with upstream from each evaluator
+	for _, evaluatorFunc := range g.evaluatorFuncs {
+		query := evaluatorFunc(assets)
+		if query == "" {
+			return []string{}, nil
+		}
+
+		visited := map[string][]*bigquery.ResourceURNWithUpstreams{}
+		paths := map[string]bool{}
+		resources, err := g.generateResources(ctx, query, visited, paths)
+		if err != nil {
+			return nil, err
+		}
+		resourcesAccumulation = append(resourcesAccumulation, resources...)
 	}
 
-	visited := map[string][]*bigquery.ResourceURNWithUpstreams{}
-	paths := map[string]bool{}
-	resources, err := g.generateResources(ctx, query, visited, paths)
-	if err != nil {
-		return nil, err
-	}
-
+	// compiled all collcted resources and extract its urns
 	resourceURNs := []string{}
-	for _, r := range bigquery.ResourceURNWithUpstreamsList(resources).FlattenUnique() {
+	for _, r := range bigquery.ResourceURNWithUpstreamsList(resourcesAccumulation).FlattenUnique() {
 		resourceURNs = append(resourceURNs, r.ResourceURN.URN())
 	}
 	return resourceURNs, nil
@@ -84,7 +91,7 @@ func (g BQUpstreamGenerator) generateResources(ctx context.Context, query string
 	return resources, me.ToErr()
 }
 
-func NewBQUpstreamGenerator(logger log.Logger, parserFunc ParserFunc, bqExtractorFunc BQExtractorFunc, evaluatorFunc EvalAssetFunc) (*BQUpstreamGenerator, error) {
+func NewBQUpstreamGenerator(logger log.Logger, parserFunc ParserFunc, bqExtractorFunc BQExtractorFunc, evaluatorFuncs ...EvalAssetFunc) (*BQUpstreamGenerator, error) {
 	me := errors.NewMultiError("create bq upstream generator errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
@@ -95,18 +102,24 @@ func NewBQUpstreamGenerator(logger log.Logger, parserFunc ParserFunc, bqExtracto
 	if bqExtractorFunc == nil {
 		me.Append(fmt.Errorf("bqExtractorFunc is nil"))
 	}
-	if evaluatorFunc == nil {
-		me.Append(fmt.Errorf("evaluatorFunc is nil"))
+	if len(evaluatorFuncs) == 0 {
+		me.Append(fmt.Errorf("evaluatorFuncs is needed"))
+	}
+	for _, evaluatorFunc := range evaluatorFuncs {
+		if evaluatorFunc == nil {
+			me.Append(fmt.Errorf("evaluatorFunc is nil"))
+			break
+		}
 	}
 	if me.ToErr() != nil {
 		return nil, me.ToErr()
 	}
 
 	return &BQUpstreamGenerator{
-		logger:        logger,
-		parserFunc:    parserFunc,
-		extractorFunc: bqExtractorDecorator(logger, bqExtractorFunc),
-		evaluatorFunc: evaluatorFunc,
+		logger:         logger,
+		parserFunc:     parserFunc,
+		extractorFunc:  bqExtractorDecorator(logger, bqExtractorFunc),
+		evaluatorFuncs: evaluatorFuncs,
 	}, nil
 }
 

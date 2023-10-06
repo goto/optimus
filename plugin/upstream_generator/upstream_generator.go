@@ -27,7 +27,7 @@ type UpstreamGenerator interface {
 	GenerateResources(ctx context.Context, assets map[string]string) ([]string, error)
 }
 
-func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluator evaluator.Evaluator, svcAcc string) (UpstreamGenerator, error) {
+func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (UpstreamGenerator, error) {
 	client, err := bigquery.NewClient(ctx, svcAcc)
 	if err != nil {
 		return nil, err
@@ -36,8 +36,12 @@ func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, e
 	if err != nil {
 		return nil, err
 	}
+	evaluatorFuncs := []EvalAssetFunc{}
+	for _, evaluator := range evaluators {
+		evaluatorFuncs = append(evaluatorFuncs, evaluator.Evaluate)
+	}
 
-	return NewBQUpstreamGenerator(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluator.Evaluate)
+	return NewBQUpstreamGenerator(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluatorFuncs...)
 }
 
 func NewUpstreamGeneratorFactory(logger log.Logger) (*UpstreamGeneratorFactory, error) {

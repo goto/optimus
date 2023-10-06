@@ -159,6 +159,11 @@ func TestIdentifyUpstreams(t *testing.T) {
 	pluginTest := &p.Plugin{
 		YamlMod: pluginYamlTest,
 	}
+	pluginYamlTestWithEvaluator, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_evaluator.yaml")
+	assert.NoError(t, err)
+	pluginTestWithEvaluator := &p.Plugin{
+		YamlMod: pluginYamlTestWithEvaluator,
+	}
 
 	t.Run("return error when plugin is not exist on pluginGetter", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
@@ -203,7 +208,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, resourceURNs, 0)
 	})
-	t.Run("return error when evaluator couldn't return file evaluator", func(t *testing.T) {
+	t.Run("return error when evaluator factory couldn't return file evaluator", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
 		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
@@ -218,6 +223,24 @@ func TestIdentifyUpstreams(t *testing.T) {
 		assert.NotNil(t, pluginService)
 
 		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
+		assert.Error(t, err)
+		assert.Nil(t, resourceURNs)
+	})
+	t.Run("return error when evaluator factory couldn't return specilized evaluator", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
+		defer upstreamGeneratorFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithEvaluator, nil)
+		evaluatorFactory.On("GetYamlpathEvaluator", mock.Anything, "$.query").Return(nil, errors.New("some error"))
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, config, assets)
 		assert.Error(t, err)
 		assert.Nil(t, resourceURNs)
 	})
@@ -254,7 +277,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
-		upstreamGeneratorFactory.On("GetBQUpstreamGenerator", ctx, evaluator, mock.Anything).Return(nil, errors.New("some error"))
+		upstreamGeneratorFactory.On("GetBQUpstreamGenerator", ctx, mock.Anything, evaluator).Return(nil, errors.New("some error"))
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -277,7 +300,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
-		upstreamGeneratorFactory.On("GetBQUpstreamGenerator", ctx, evaluator, mock.Anything).Return(upstreamGenerator, nil)
+		upstreamGeneratorFactory.On("GetBQUpstreamGenerator", ctx, mock.Anything, evaluator).Return(upstreamGenerator, nil)
 		upstreamGenerator.On("GenerateResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl"}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
 		assert.NoError(t, err)
@@ -440,25 +463,32 @@ type UpstreamGeneratorFactory struct {
 	mock.Mock
 }
 
-// GetBQUpstreamGenerator provides a mock function with given fields: ctx, evaluator, svcAcc
-func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, evaluatorFunc evaluator.Evaluator, svcAcc string) (upstreamgenerator.UpstreamGenerator, error) {
-	ret := _m.Called(ctx, evaluatorFunc, svcAcc)
+// GetBQUpstreamGenerator provides a mock function with given fields: ctx, svcAcc, evaluators
+func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamgenerator.UpstreamGenerator, error) {
+	_va := make([]interface{}, len(evaluators))
+	for _i := range evaluators {
+		_va[_i] = evaluators[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, svcAcc)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	var r0 upstreamgenerator.UpstreamGenerator
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) (upstreamgenerator.UpstreamGenerator, error)); ok {
-		return rf(ctx, evaluatorFunc, svcAcc)
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) (upstreamgenerator.UpstreamGenerator, error)); ok {
+		return rf(ctx, svcAcc, evaluators...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, evaluator.Evaluator, string) upstreamgenerator.UpstreamGenerator); ok {
-		r0 = rf(ctx, evaluatorFunc, svcAcc)
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) upstreamgenerator.UpstreamGenerator); ok {
+		r0 = rf(ctx, svcAcc, evaluators...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(upstreamgenerator.UpstreamGenerator)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, evaluator.Evaluator, string) error); ok {
-		r1 = rf(ctx, evaluatorFunc, svcAcc)
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...evaluator.Evaluator) error); ok {
+		r1 = rf(ctx, svcAcc, evaluators...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -490,6 +520,32 @@ func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (evaluator.Evaluat
 
 	if rf, ok := ret.Get(1).(func(string) error); ok {
 		r1 = rf(filepath)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetYamlpathEvaluator provides a mock function with given fields: filepath, selector
+func (_m *EvaluatorFactory) GetYamlpathEvaluator(filepath string, selector string) (evaluator.Evaluator, error) {
+	ret := _m.Called(filepath, selector)
+
+	var r0 evaluator.Evaluator
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string) (evaluator.Evaluator, error)); ok {
+		return rf(filepath, selector)
+	}
+	if rf, ok := ret.Get(0).(func(string, string) evaluator.Evaluator); ok {
+		r0 = rf(filepath, selector)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(evaluator.Evaluator)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(filepath, selector)
 	} else {
 		r1 = ret.Error(1)
 	}

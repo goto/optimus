@@ -1,0 +1,1 @@
+ALTER TABLE JOB_UPSTREAM DROP CONSTRAINT unique_constraint_job_upstream;

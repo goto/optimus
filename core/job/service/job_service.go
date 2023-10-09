@@ -578,9 +578,9 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	// assumption, all job specs from input are also the job within same project
 	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, unmodifiedSpecs)
 	identifierToJobsMap := getIdentifierToJobsMap(jobsToValidateMap)
-	for _, jobEntity := range jobsToValidateMap {
-		if _, err := j.validateCyclic(jobEntity.Job().Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
-			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Job().Spec().Name(), err)
+	for _, jobEntity := range incomingJobs {
+		if _, err := j.validateCyclic(jobEntity.Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
+			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Spec().Name(), err)
 			me.Append(err)
 			break
 		}

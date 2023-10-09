@@ -567,6 +567,10 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
+	if len(toAdd)+len(toUpdate)+len(toDelete) == 0 {
+		return me.ToErr()
+	}
+
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, toUpdate...), logWriter)
 	me.Append(err)
 

@@ -75,7 +75,7 @@ func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, e
 	return taskPlugin.Info(), nil
 }
 
-func (s PluginService) GenerateUpstreams(ctx context.Context, taskName string, config, assets map[string]string) ([]string, error) {
+func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, config, assets map[string]string) ([]string, error) {
 	plugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return nil, err

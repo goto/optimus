@@ -72,7 +72,7 @@ type Engine interface {
 
 type PluginService interface {
 	Info(ctx context.Context, taskName string) (*plugin.Info, error)
-	GenerateUpstreams(ctx context.Context, taskName string, config, assets map[string]string) (resourceURNs []string, err error)
+	IdentifyUpstreams(ctx context.Context, taskName string, config, assets map[string]string) (resourceURNs []string, err error)
 	ConstructDestinationURN(ctx context.Context, taskName string, config map[string]string) (destinationURN string, err error)
 }
 
@@ -1133,7 +1133,7 @@ func (j *JobService) generateUpstreamResourceURNs(ctx context.Context, spec *job
 	taskConfig := spec.Task().Config()
 	assets := spec.Asset()
 
-	resourceURNs, err := j.pluginService.GenerateUpstreams(ctx, taskName, taskConfig, assets)
+	resourceURNs, err := j.pluginService.IdentifyUpstreams(ctx, taskName, taskConfig, assets)
 	if err != nil {
 		return nil, err
 	}

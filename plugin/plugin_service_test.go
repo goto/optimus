@@ -144,7 +144,7 @@ func TestInfo(t *testing.T) {
 	})
 }
 
-func TestGenerateUpstreams(t *testing.T) {
+func TestIdentifyUpstreams(t *testing.T) {
 	logger := log.NewNoop()
 	ctx := context.Background()
 	taskName := "bq2bqtest"
@@ -173,7 +173,7 @@ func TestGenerateUpstreams(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, config, assets)
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
 		assert.Error(t, err)
 		assert.Nil(t, resourceURNs)
 	})
@@ -199,7 +199,7 @@ func TestGenerateUpstreams(t *testing.T) {
 		assert.NotNil(t, pluginService)
 
 		configEmpty := map[string]string{}
-		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, configEmpty, assets)
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, configEmpty, assets)
 		assert.NoError(t, err)
 		assert.Len(t, resourceURNs, 0)
 	})
@@ -217,7 +217,7 @@ func TestGenerateUpstreams(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, config, assets)
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
 		assert.Error(t, err)
 		assert.Nil(t, resourceURNs)
 	})
@@ -238,7 +238,7 @@ func TestGenerateUpstreams(t *testing.T) {
 		assert.NotNil(t, pluginService)
 
 		configEmpty := map[string]string{}
-		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, configEmpty, assets)
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, configEmpty, assets)
 		assert.ErrorContains(t, err, "secret BQ_SERVICE_ACCOUNT required to generate upstream is not found")
 		assert.Nil(t, resourceURNs)
 	})
@@ -259,7 +259,7 @@ func TestGenerateUpstreams(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, config, assets)
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
 		assert.Error(t, err)
 		assert.Nil(t, resourceURNs)
 	})
@@ -283,7 +283,7 @@ func TestGenerateUpstreams(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, config, assets)
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)
 		assert.Len(t, resourceURNs, 1)

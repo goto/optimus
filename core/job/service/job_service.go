@@ -26,6 +26,10 @@ import (
 const (
 	ConcurrentTicketPerSec = 50
 	ConcurrentLimit        = 100
+
+	// projectConfigPrefix will be used to prefix all the config variables of
+	// a project, i.e. registered entities
+	projectConfigPrefix = "GLOBAL__"
 )
 
 type JobService struct {
@@ -917,7 +921,6 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 }
 
 func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails) map[string]string {
-	const projectConfigPrefix = "GLOBAL__"
 	tmplCtx := compiler.PrepareContext(
 		compiler.From(tnnt.GetConfigs()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
 		compiler.From(tnnt.SecretsMap()).WithName("secret"),

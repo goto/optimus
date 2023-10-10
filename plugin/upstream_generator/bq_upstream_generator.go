@@ -102,14 +102,14 @@ func NewBQUpstreamGenerator(logger log.Logger, parserFunc ParserFunc, bqExtracto
 	if bqExtractorFunc == nil {
 		me.Append(fmt.Errorf("bqExtractorFunc is nil"))
 	}
-	if len(evaluatorFuncs) == 0 {
-		me.Append(fmt.Errorf("evaluatorFuncs is needed"))
-	}
+	sanitizedEvaluatorFuncs := []EvalAssetFunc{}
 	for _, evaluatorFunc := range evaluatorFuncs {
-		if evaluatorFunc == nil {
-			me.Append(fmt.Errorf("evaluatorFunc is nil"))
-			break
+		if evaluatorFunc != nil {
+			sanitizedEvaluatorFuncs = append(sanitizedEvaluatorFuncs, evaluatorFunc)
 		}
+	}
+	if len(sanitizedEvaluatorFuncs) == 0 {
+		me.Append(fmt.Errorf("non-nil evaluatorFuncs is needed"))
 	}
 	if me.ToErr() != nil {
 		return nil, me.ToErr()
@@ -119,7 +119,7 @@ func NewBQUpstreamGenerator(logger log.Logger, parserFunc ParserFunc, bqExtracto
 		logger:         logger,
 		parserFunc:     parserFunc,
 		extractorFunc:  bqExtractorDecorator(logger, bqExtractorFunc),
-		evaluatorFuncs: evaluatorFuncs,
+		evaluatorFuncs: sanitizedEvaluatorFuncs,
 	}, nil
 }
 

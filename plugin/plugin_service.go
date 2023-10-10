@@ -24,7 +24,7 @@ type PluginGetter interface {
 
 type EvaluatorFactory interface {
 	GetFileEvaluator(filepath string) (evaluator.Evaluator, error)
-	GetYamlpathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
+	GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
 }
 
 type UpstreamGeneratorFactory interface {
@@ -102,7 +102,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	for evaluatorType, selector := range assetParser.Evaluator {
 		// for now we only support yamlpath as specialized evaluator
 		if evaluatorType == plugin.YamlEvaluator {
-			yamlpathEvaluator, err := s.evaluatorFactory.GetYamlpathEvaluator(assetParser.FilePath, selector)
+			yamlpathEvaluator, err := s.evaluatorFactory.GetYamlPathEvaluator(assetParser.FilePath, selector)
 			if err != nil {
 				s.l.Error("yamlpath evaluator couldn't instantiated: %s", err.Error())
 				return nil, err

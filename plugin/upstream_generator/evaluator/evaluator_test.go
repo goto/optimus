@@ -60,27 +60,27 @@ func TestGetFileEvaluator(t *testing.T) {
 	})
 }
 
-func TestGetYamlpathEvaluator(t *testing.T) {
+func TestGetYamlPathEvaluator(t *testing.T) {
 	logger := log.NewNoop()
 	e, err := evaluator.NewEvaluatorFactory(logger)
 	assert.NoError(t, err)
 	assert.NotNil(t, e)
 	t.Run("should return error when filepath is empty", func(t *testing.T) {
 		selector := "$.query"
-		yamlpathEvaluator, err := e.GetYamlpathEvaluator("", selector)
+		yamlpathEvaluator, err := e.GetYamlPathEvaluator("", selector)
 		assert.Error(t, err)
 		assert.Nil(t, yamlpathEvaluator)
 	})
 	t.Run("should return error when filepath is empty", func(t *testing.T) {
 		filepath := "./config.yaml"
-		yamlpathEvaluator, err := e.GetYamlpathEvaluator(filepath, "")
+		yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, "")
 		assert.Error(t, err)
 		assert.Nil(t, yamlpathEvaluator)
 	})
 	t.Run("should return error when selector is not valid", func(t *testing.T) {
 		filepath := "./config.yaml"
 		selector := "$.[quer"
-		yamlpathEvaluator, err := e.GetYamlpathEvaluator(filepath, selector)
+		yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "instantiate yamlpath error")
 		assert.Nil(t, yamlpathEvaluator)
@@ -94,7 +94,7 @@ func TestGetYamlpathEvaluator(t *testing.T) {
 		t.Run("should return empty when asset doesn't have targeted filepath", func(t *testing.T) {
 			filepath := "./config.yaml"
 			selector := "$.query"
-			yamlpathEvaluator, err := e.GetYamlpathEvaluator(filepath, selector)
+			yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
@@ -107,7 +107,7 @@ func TestGetYamlpathEvaluator(t *testing.T) {
 		t.Run("should return empty when yaml content is malformed", func(t *testing.T) {
 			filepath := "./config.yaml"
 			selector := "$.query"
-			yamlpathEvaluator, err := e.GetYamlpathEvaluator(filepath, selector)
+			yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
@@ -120,7 +120,7 @@ func TestGetYamlpathEvaluator(t *testing.T) {
 		t.Run("should return empty when couldn't find targeted value", func(t *testing.T) {
 			filepath := "./config.yaml"
 			selector := "$.not_target_query"
-			yamlpathEvaluator, err := e.GetYamlpathEvaluator(filepath, selector)
+			yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
@@ -130,7 +130,7 @@ func TestGetYamlpathEvaluator(t *testing.T) {
 		t.Run("should return correct content when could find targeted value", func(t *testing.T) {
 			filepath := "./config.yaml"
 			selector := "$.query"
-			yamlpathEvaluator, err := e.GetYamlpathEvaluator(filepath, selector)
+			yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
@@ -141,7 +141,7 @@ func TestGetYamlpathEvaluator(t *testing.T) {
 		t.Run("should return correct content when could find targeted value for nested selector", func(t *testing.T) {
 			filepath := "./config.yaml"
 			selector := "$.nested.query"
-			yamlpathEvaluator, err := e.GetYamlpathEvaluator(filepath, selector)
+			yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 

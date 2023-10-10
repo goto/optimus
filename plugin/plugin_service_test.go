@@ -235,7 +235,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithEvaluator, nil)
-		evaluatorFactory.On("GetYamlpathEvaluator", mock.Anything, "$.query").Return(nil, errors.New("some error"))
+		evaluatorFactory.On("GetYamlPathEvaluator", mock.Anything, "$.query").Return(nil, errors.New("some error"))
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -527,8 +527,8 @@ func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (evaluator.Evaluat
 	return r0, r1
 }
 
-// GetYamlpathEvaluator provides a mock function with given fields: filepath, selector
-func (_m *EvaluatorFactory) GetYamlpathEvaluator(filepath, selector string) (evaluator.Evaluator, error) {
+// GetYamlPathEvaluator provides a mock function with given fields: filepath, selector
+func (_m *EvaluatorFactory) GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error) {
 	ret := _m.Called(filepath, selector)
 
 	var r0 evaluator.Evaluator

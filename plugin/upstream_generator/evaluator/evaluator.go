@@ -18,7 +18,7 @@ func (e EvaluatorFactory) GetFileEvaluator(filepath string) (Evaluator, error) {
 	return newFileEvaluator(e.logger, filepath)
 }
 
-func (e EvaluatorFactory) GetYamlpathEvaluator(filepath, selector string) (Evaluator, error) {
+func (e EvaluatorFactory) GetYamlPathEvaluator(filepath, selector string) (Evaluator, error) {
 	return newYamlpathEvaluator(e.logger, filepath, selector)
 }
 

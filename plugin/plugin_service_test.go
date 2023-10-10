@@ -240,7 +240,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		resourceURNs, err := pluginService.GenerateUpstreams(ctx, taskName, config, assets)
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
 		assert.Error(t, err)
 		assert.Nil(t, resourceURNs)
 	})

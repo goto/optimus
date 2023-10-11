@@ -104,7 +104,6 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				ExpectedResourceURNs: []string{
 					newBQResourceURN("project", "fire", "fly"),
 					newBQResourceURN("project", "maximum", "overdrive"),
-					newBQResourceURN("project", "maximum", "overdrive"), // the result should be unique(?))
 				},
 			},
 			{
@@ -284,9 +283,6 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			},
 		}
 		for _, test := range testCases {
-			if test.Name != "`with` clause + simple query" {
-				continue
-			}
 			t.Run(test.Name, func(t *testing.T) {
 				actualResourceURNs := parser.ParseTopLevelUpstreamsFromQuery(test.InputQuery)
 				assert.ElementsMatch(t, test.ExpectedResourceURNs, actualResourceURNs)

@@ -28,6 +28,9 @@ var (
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
 			"(?i)(?:INSERT)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
 			"|" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
+			"(?i)(?:DELETE)\\s*(?:FROM)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
+			"|" +
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
 			"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
 			"|" +
@@ -64,10 +67,12 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 17, 18, 19, 20
 		case "insert":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 21, 22, 23, 24
-		case "create":
+		case "delete":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 25, 26, 27, 28
-		default:
+		case "create":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 29, 30, 31, 32
+		default:
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 33, 34, 35, 36
 		}
 
 		project := match[projectIdx]
@@ -82,7 +87,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			continue
 		}
 
-		if clause == "view" || clause == "create" || clause == "merge" || clause == "insert" {
+		if clause == "view" || clause == "create" || clause == "merge" || clause == "insert" || clause == "delete" {
 			continue
 		}
 

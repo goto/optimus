@@ -287,6 +287,11 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				ExpectedResourceURNs: []bigquery.ResourceURN{},
 			},
 			{
+				Name:                 "ignore delete + insert query",
+				InputQuery:           "delete from `data-engineering.testing.table_b`; create or replace table `data-engineering.testing.table_b`",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
+			{
 				Name:                 "ignore create or replace query",
 				InputQuery:           "create or replace table `data-engineering.testing.table_b`",
 				ExpectedResourceURNs: []bigquery.ResourceURN{},

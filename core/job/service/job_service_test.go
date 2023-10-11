@@ -294,6 +294,8 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("Add", ctx, mock.Anything).Return(jobs, nil)
 
+			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return("", nil)
+			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return([]string{}, nil)
 			jobWithUpstream := job.NewWithUpstream(jobA, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
 
@@ -735,6 +737,8 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
 
+			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return("", nil)
+			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return([]string{}, nil)
 			jobWithUpstream := job.NewWithUpstream(jobA, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
 
@@ -3181,8 +3185,10 @@ func TestJobService(t *testing.T) {
 
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(job.ResourceURN("bigquery://project:dataset.tableA").String(), nil)
 			pluginService.On("ConstructDestinationURN", ctx, specB.Task().Name().String(), mock.Anything).Return(job.ResourceURN("bigquery://project:dataset.tableB").String(), nil)
+			pluginService.On("ConstructDestinationURN", ctx, specC.Task().Name().String(), mock.Anything).Return("", nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString([]job.ResourceURN{"bigquery://project:dataset.tableZ"}), nil)
 			pluginService.On("IdentifyUpstreams", ctx, specBUpdated.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString([]job.ResourceURN{"bigquery://project:dataset.tableA"}), nil)
+			pluginService.On("IdentifyUpstreams", ctx, specC.Task().Name().String(), mock.Anything, mock.Anything).Return([]string{}, nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
@@ -3226,6 +3232,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{}, nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+
+			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return("", nil)
+			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return([]string{}, nil)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine())
 			err := jobService.Validate(ctx, sampleTenant, specs, jobNamesWithInvalidSpec, logWriter)

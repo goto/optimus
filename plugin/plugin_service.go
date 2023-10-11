@@ -76,7 +76,7 @@ func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, e
 	return taskPlugin.Info(), nil
 }
 
-func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, config, assets map[string]string) ([]string, error) {
+func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]string, error) {
 	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	}
 
 	// for now upstream generator is only scoped for bigquery
-	svcAcc, ok := config["BQ_SERVICE_ACCOUNT"]
+	svcAcc, ok := compiledConfig["BQ_SERVICE_ACCOUNT"]
 	if !ok {
 		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate upstream is not found")
 	}
@@ -124,7 +124,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	return upstreamGenerator.GenerateResources(ctx, assets)
 }
 
-func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, config map[string]string) (string, error) {
+func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {
 	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return "", err
@@ -144,7 +144,7 @@ func (s PluginService) ConstructDestinationURN(_ context.Context, taskName strin
 		return "", err
 	}
 
-	return generateResourceURNFromTemplate(tmpl, config)
+	return generateResourceURNFromTemplate(tmpl, compiledConfig)
 }
 
 // convertToGoTemplate transforms plugin destination urn template format to go template format

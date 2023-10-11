@@ -44,10 +44,9 @@ func NewDeleteCommand() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:     "delete",
+		Use:     "delete <job_name>",
 		Short:   "Delete an existing job in the server",
-		Example: "optimus job delete",
-		Args:    cobra.ExactArgs(1),
+		Example: "optimus job delete daily_scheduled_job",
 		RunE:    deleteCmd.RunE,
 		PreRunE: deleteCmd.PreRunE,
 	}

@@ -276,6 +276,21 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					newBQResourceURN("data-engineering", "testing", "table_d"),
 				},
 			},
+			{
+				Name:                 "ignore merge into query",
+				InputQuery:           "merge into `data-engineering.testing.table_a` as target",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
+			{
+				Name:                 "ignore insert into query",
+				InputQuery:           "insert into `data-engineering.testing.table_a`(id,name)",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
+			{
+				Name:                 "ignore create or replace query",
+				InputQuery:           "create or replace table `data-engineering.testing.table_b`",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
 		}
 		for _, test := range testCases {
 			t.Run(test.Name, func(t *testing.T) {

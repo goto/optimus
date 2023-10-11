@@ -20,7 +20,16 @@ var (
 			"|" +
 			"(?i)(?:WITH)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?\\s+(?:AS)" +
 			"|" +
-			"(?i)(?:VIEW)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" +
+			"(?i)(?:VIEW)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // can remove(?) already handled by CREATE clause below
+			"|" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
+			"(?i)(?:MERGE)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
+			"|" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+			"(?i)(?:INSERT)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
+			"|" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
+			"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
 			"|" +
 			"(?i)(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`\\s*(?:AS)?")
 
@@ -51,8 +60,14 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 9, 10, 11, 12
 		case "view":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 13, 14, 15, 16
-		default:
+		case "merge":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 17, 18, 19, 20
+		case "insert":
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 21, 22, 23, 24
+		case "create":
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 25, 26, 27, 28
+		default:
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 29, 30, 31, 32
 		}
 
 		project := match[projectIdx]
@@ -67,7 +82,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			continue
 		}
 
-		if clause == "view" {
+		if clause == "view" || clause == "create" || clause == "merge" || clause == "insert" {
 			continue
 		}
 

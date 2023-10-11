@@ -22,7 +22,7 @@ type BQUpstreamGenerator struct {
 	evaluatorFuncs []EvalAssetFunc
 }
 
-func (g BQUpstreamGenerator) GenerateResources(ctx context.Context, assets map[string]string) ([]string, error) {
+func (g BQUpstreamGenerator) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
 	resourcesAccumulation := []*bigquery.ResourceURNWithUpstreams{}
 
 	// generate resource urn with upstream from each evaluator
@@ -34,7 +34,7 @@ func (g BQUpstreamGenerator) GenerateResources(ctx context.Context, assets map[s
 
 		visited := map[string][]*bigquery.ResourceURNWithUpstreams{}
 		paths := map[string]bool{}
-		resources, err := g.generateResources(ctx, query, visited, paths)
+		resources, err := g.identifyResources(ctx, query, visited, paths)
 		if err != nil {
 			return nil, err
 		}
@@ -49,8 +49,8 @@ func (g BQUpstreamGenerator) GenerateResources(ctx context.Context, assets map[s
 	return resourceURNs, nil
 }
 
-func (g BQUpstreamGenerator) generateResources(ctx context.Context, query string, visited map[string][]*bigquery.ResourceURNWithUpstreams, paths map[string]bool) ([]*bigquery.ResourceURNWithUpstreams, error) {
-	me := errors.NewMultiError("generate resources errors")
+func (g BQUpstreamGenerator) identifyResources(ctx context.Context, query string, visited map[string][]*bigquery.ResourceURNWithUpstreams, paths map[string]bool) ([]*bigquery.ResourceURNWithUpstreams, error) {
+	me := errors.NewMultiError("identify resources errors")
 	resourceURNs := g.parserFunc(query)
 	resources := []*bigquery.ResourceURNWithUpstreams{}
 	if len(resourceURNs) == 0 {
@@ -79,7 +79,7 @@ func (g BQUpstreamGenerator) generateResources(ctx context.Context, query string
 		if _, ok := visited[resourceURN]; !ok {
 			query := urnToQuery[resourceURN]
 			paths[resourceURN] = true
-			upstreamResources, err := g.generateResources(ctx, query, visited, paths)
+			upstreamResources, err := g.identifyResources(ctx, query, visited, paths)
 			visited[resourceURN] = upstreamResources
 			me.Append(err)
 			delete(paths, resourceURN)

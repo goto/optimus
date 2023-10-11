@@ -121,7 +121,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 		return nil, err
 	}
 
-	return upstreamGenerator.GenerateResources(ctx, assets)
+	return upstreamGenerator.IdentifyResources(ctx, assets)
 }
 
 func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {

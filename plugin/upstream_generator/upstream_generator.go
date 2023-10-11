@@ -24,7 +24,7 @@ type UpstreamGeneratorFactory struct {
 }
 
 type UpstreamGenerator interface {
-	GenerateResources(ctx context.Context, assets map[string]string) ([]string, error)
+	IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error)
 }
 
 func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (UpstreamGenerator, error) {

@@ -52,7 +52,7 @@ func TestNewBQUpstreamGenerator(t *testing.T) {
 	})
 }
 
-func TestGenerateResources(t *testing.T) {
+func TestIdentifyResources(t *testing.T) {
 	ctx := context.Background()
 	logger := log.NewNoop()
 	assets := map[string]string{
@@ -71,7 +71,7 @@ func TestGenerateResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamGenerator.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
@@ -91,7 +91,7 @@ func TestGenerateResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamGenerator.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
@@ -112,7 +112,7 @@ func TestGenerateResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamGenerator.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
@@ -149,7 +149,7 @@ func TestGenerateResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamGenerator)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamGenerator.IdentifyResources(ctx, assets)
 		assert.ErrorContains(t, err, "circular reference is detected")
 		assert.Empty(t, resourceURNs)
 	})
@@ -187,7 +187,7 @@ func TestGenerateResources(t *testing.T) {
 		assert.NotNil(t, bqUpstreamGenerator)
 
 		expectedResourceURNs := []string{"bigquery://project1:dataset1.name1", "bigquery://project1:dataset1.name2", "bigquery://project1:dataset1.name3"}
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamGenerator.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)
 		assert.ElementsMatch(t, resourceURNs, expectedResourceURNs)

@@ -301,7 +301,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamGeneratorFactory.On("GetBQUpstreamGenerator", ctx, mock.Anything, evaluator).Return(upstreamGenerator, nil)
-		upstreamGenerator.On("GenerateResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl"}, nil)
+		upstreamGenerator.On("IdentifyResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl"}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -577,8 +577,8 @@ type UpstreamGenerator struct {
 	mock.Mock
 }
 
-// GenerateResources provides a mock function with given fields: ctx, assets
-func (_m *UpstreamGenerator) GenerateResources(ctx context.Context, assets map[string]string) ([]string, error) {
+// IdentifyResources provides a mock function with given fields: ctx, assets
+func (_m *UpstreamGenerator) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
 	ret := _m.Called(ctx, assets)
 
 	var r0 []string

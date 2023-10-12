@@ -42,7 +42,7 @@ func (e yamlpathEvaluator) Evaluate(assets map[string]string) string {
 	return results[0].Value
 }
 
-func newYamlpathEvaluator(logger log.Logger, filepath, selector string) (*yamlpathEvaluator, error) {
+func newYamlPathEvaluator(logger log.Logger, filepath, selector string) (*yamlpathEvaluator, error) {
 	me := errors.NewMultiError("create jsonpath evaluator errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))

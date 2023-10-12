@@ -43,7 +43,7 @@ import (
 	"github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/plugin"
-	upstreamgenerator "github.com/goto/optimus/plugin/upstream_generator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_generator"
 	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	oHandler "github.com/goto/optimus/server/handler/v1beta1"
@@ -317,9 +317,9 @@ func (s *OptimusServer) setupHandlers() error {
 	)
 
 	// Plugin
-	upstreamGeneratorFactory, _ := upstreamgenerator.NewUpstreamGeneratorFactory(s.logger)
+	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
-	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamGeneratorFactory, evaluatorFactory)
+	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)

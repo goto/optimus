@@ -19,7 +19,7 @@ func (e EvaluatorFactory) GetFileEvaluator(filepath string) (Evaluator, error) {
 }
 
 func (e EvaluatorFactory) GetYamlPathEvaluator(filepath, selector string) (Evaluator, error) {
-	return newYamlpathEvaluator(e.logger, filepath, selector)
+	return newYamlPathEvaluator(e.logger, filepath, selector)
 }
 
 func NewEvaluatorFactory(logger log.Logger) (*EvaluatorFactory, error) {

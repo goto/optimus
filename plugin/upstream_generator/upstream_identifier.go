@@ -1,4 +1,4 @@
-package upstreamgenerator
+package upstreamidentifier
 
 import (
 	"context"
@@ -19,15 +19,15 @@ type (
 	EvalAssetFunc func(assets map[string]string) (rawResource string)
 )
 
-type UpstreamGeneratorFactory struct {
+type UpstreamIdentifierFactory struct {
 	l log.Logger
 }
 
-type UpstreamGenerator interface {
+type UpstreamIdentifier interface {
 	IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error)
 }
 
-func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (UpstreamGenerator, error) {
+func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {
 	client, err := bigquery.NewClient(ctx, svcAcc)
 	if err != nil {
 		return nil, err
@@ -41,12 +41,12 @@ func (u *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, s
 		evaluatorFuncs = append(evaluatorFuncs, evaluator.Evaluate)
 	}
 
-	return NewBQUpstreamGenerator(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluatorFuncs...)
+	return NewBQUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluatorFuncs...)
 }
 
-func NewUpstreamGeneratorFactory(logger log.Logger) (*UpstreamGeneratorFactory, error) {
+func NewUpstreamIdentifierFactory(logger log.Logger) (*UpstreamIdentifierFactory, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger is nil")
 	}
-	return &UpstreamGeneratorFactory{l: logger}, nil
+	return &UpstreamIdentifierFactory{l: logger}, nil
 }

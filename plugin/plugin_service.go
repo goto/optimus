@@ -27,19 +27,19 @@ type EvaluatorFactory interface {
 	GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
 }
 
-type UpstreamGeneratorFactory interface {
-	GetBQUpstreamGenerator(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (ug.UpstreamGenerator, error)
+type UpstreamIdentifierFactory interface {
+	GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (ug.UpstreamIdentifier, error)
 }
 
 type PluginService struct {
 	l            log.Logger
 	pluginGetter PluginGetter
 
-	upstreamGeneratorFactory UpstreamGeneratorFactory
-	evaluatorFactory         EvaluatorFactory
+	upstreamIdentifierFactory UpstreamIdentifierFactory
+	evaluatorFactory          EvaluatorFactory
 }
 
-func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamGeneratorFactory UpstreamGeneratorFactory, evaluatorFactory EvaluatorFactory) (*PluginService, error) {
+func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamIdentifierFactory UpstreamIdentifierFactory, evaluatorFactory EvaluatorFactory) (*PluginService, error) {
 	me := errors.NewMultiError("construct plugin service errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
@@ -47,18 +47,18 @@ func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamGene
 	if pluginGetter == nil {
 		me.Append(fmt.Errorf("pluginGetter is nil"))
 	}
-	if upstreamGeneratorFactory == nil {
-		me.Append(fmt.Errorf("upstreamGeneratorFactory is nil"))
+	if upstreamIdentifierFactory == nil {
+		me.Append(fmt.Errorf("upstreamIdentifierFactory is nil"))
 	}
 	if evaluatorFactory == nil {
 		me.Append(fmt.Errorf("evaluatorFactory is nil"))
 	}
 
 	return &PluginService{
-		l:                        logger,
-		pluginGetter:             pluginGetter,
-		upstreamGeneratorFactory: upstreamGeneratorFactory,
-		evaluatorFactory:         evaluatorFactory,
+		l:                         logger,
+		pluginGetter:              pluginGetter,
+		upstreamIdentifierFactory: upstreamIdentifierFactory,
+		evaluatorFactory:          evaluatorFactory,
 	}, me.ToErr()
 }
 
@@ -116,12 +116,12 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	if !ok {
 		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate upstream is not found")
 	}
-	upstreamGenerator, err := s.upstreamGeneratorFactory.GetBQUpstreamGenerator(ctx, svcAcc, evaluators...)
+	upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
 	if err != nil {
 		return nil, err
 	}
 
-	return upstreamGenerator.IdentifyResources(ctx, assets)
+	return upstreamIdentifier.IdentifyResources(ctx, assets)
 }
 
 func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {

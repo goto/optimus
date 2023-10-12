@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/plugin"
-	upstreamgenerator "github.com/goto/optimus/plugin/upstream_generator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_generator"
 	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
 	"github.com/goto/optimus/plugin/yaml"
 	p "github.com/goto/optimus/sdk/plugin"
@@ -22,57 +22,57 @@ func TestNewPluginService(t *testing.T) {
 		var logger log.Logger = nil
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.ErrorContains(t, err, "logger is nil")
 	})
 	t.Run("should return error when pluginGetter is nil", func(t *testing.T) {
 		logger := log.NewNoop()
 		var pluginGetter plugin.PluginGetter = nil
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.ErrorContains(t, err, "pluginGetter is nil")
 	})
-	t.Run("should return error when upstreamGeneratorFactory is nil", func(t *testing.T) {
+	t.Run("should return error when upstreamIdentifierFactory is nil", func(t *testing.T) {
 		logger := log.NewNoop()
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		var upstreamGeneratorFactory plugin.UpstreamGeneratorFactory = nil
+		var upstreamIdentifierFactory plugin.UpstreamIdentifierFactory = nil
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
-		assert.ErrorContains(t, err, "upstreamGeneratorFactory is nil")
+		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
+		assert.ErrorContains(t, err, "upstreamIdentifierFactory is nil")
 	})
 	t.Run("should return error when evaluatorFactory is nil", func(t *testing.T) {
 		logger := log.NewNoop()
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		var evaluatorFactory plugin.EvaluatorFactory = nil
 
-		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.ErrorContains(t, err, "evaluatorFactory is nil")
 	})
 	t.Run("should return plugin service", func(t *testing.T) {
 		logger := log.NewNoop()
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 	})
@@ -90,13 +90,13 @@ func TestInfo(t *testing.T) {
 	t.Run("returns error when no plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(nil, fmt.Errorf("some error"))
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -108,14 +108,14 @@ func TestInfo(t *testing.T) {
 	t.Run("returns error when yaml mod not supported", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginWithoutYaml := &p.Plugin{}
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginWithoutYaml, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -127,13 +127,13 @@ func TestInfo(t *testing.T) {
 	t.Run("returns plugin info", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -168,13 +168,13 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when plugin is not exist on pluginGetter", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(nil, fmt.Errorf("some error"))
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -185,8 +185,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return empty resource urn if plugin doesn't have parser", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
@@ -199,7 +199,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		}
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginWithoutParserTest, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -211,14 +211,14 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when evaluator factory couldn't return file evaluator", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(nil, errors.New("some error"))
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -229,14 +229,14 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when evaluator factory couldn't return specilized evaluator", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithEvaluator, nil)
 		evaluatorFactory.On("GetYamlPathEvaluator", mock.Anything, "$.query").Return(nil, errors.New("some error"))
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -247,8 +247,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when bq2bq service account config is not provided", func(t *testing.T) { // will remove once all plugin is supported
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
@@ -256,7 +256,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -268,8 +268,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when upstream generator can't be created", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
@@ -277,8 +277,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
-		upstreamGeneratorFactory.On("GetBQUpstreamGenerator", ctx, mock.Anything, evaluator).Return(nil, errors.New("some error"))
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(nil, errors.New("some error"))
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -289,20 +289,20 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("should success when no error encountered", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
 		defer evaluator.AssertExpectations(t)
-		upstreamGenerator := new(UpstreamGenerator)
-		defer upstreamGenerator.AssertExpectations(t)
+		upstreamIdentifier := new(UpstreamIdentifier)
+		defer upstreamIdentifier.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
-		upstreamGeneratorFactory.On("GetBQUpstreamGenerator", ctx, mock.Anything, evaluator).Return(upstreamGenerator, nil)
-		upstreamGenerator.On("IdentifyResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl"}, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl"}, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -331,13 +331,13 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("returns error if unable to find the plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(nil, fmt.Errorf("some error"))
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -348,8 +348,8 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("should return empty destination if the plugin doesn't contain destination template", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -359,7 +359,7 @@ func TestConstructDestinationURN(t *testing.T) {
 			YamlMod: pluginYamlTest,
 		}
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithoutDestinationTemplate, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -370,8 +370,8 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("returns error if template is not proper", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_unproper_destination_template.yaml")
@@ -380,7 +380,7 @@ func TestConstructDestinationURN(t *testing.T) {
 			YamlMod: pluginYamlTest,
 		}
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestUnproperTemplate, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -391,13 +391,13 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("should properly generate a destination provided correct config inputs", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamGeneratorFactory := new(UpstreamGeneratorFactory)
-		defer upstreamGeneratorFactory.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamGeneratorFactory, evaluatorFactory)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
@@ -458,13 +458,13 @@ func (_m *YamlMod) PluginInfo() *p.Info {
 	return r0
 }
 
-// UpstreamGeneratorFactory is an autogenerated mock type for the UpstreamGeneratorFactory type
-type UpstreamGeneratorFactory struct {
+// UpstreamIdentifierFactory is an autogenerated mock type for the UpstreamIdentifierFactory type
+type UpstreamIdentifierFactory struct {
 	mock.Mock
 }
 
-// GetBQUpstreamGenerator provides a mock function with given fields: ctx, svcAcc, evaluators
-func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamgenerator.UpstreamGenerator, error) {
+// GetBQUpstreamIdentifier provides a mock function with given fields: ctx, svcAcc, evaluators
+func (_m *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error) {
 	_va := make([]interface{}, len(evaluators))
 	for _i := range evaluators {
 		_va[_i] = evaluators[_i]
@@ -474,16 +474,16 @@ func (_m *UpstreamGeneratorFactory) GetBQUpstreamGenerator(ctx context.Context, 
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 upstreamgenerator.UpstreamGenerator
+	var r0 upstreamidentifier.UpstreamIdentifier
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) (upstreamgenerator.UpstreamGenerator, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)); ok {
 		return rf(ctx, svcAcc, evaluators...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) upstreamgenerator.UpstreamGenerator); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) upstreamidentifier.UpstreamIdentifier); ok {
 		r0 = rf(ctx, svcAcc, evaluators...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(upstreamgenerator.UpstreamGenerator)
+			r0 = ret.Get(0).(upstreamidentifier.UpstreamIdentifier)
 		}
 	}
 
@@ -572,13 +572,13 @@ func (_m *Evaluator) Evaluate(assets map[string]string) string {
 	return r0
 }
 
-// UpstreamGenerator is an autogenerated mock type for the UpstreamGenerator type
-type UpstreamGenerator struct {
+// UpstreamIdentifier is an autogenerated mock type for the UpstreamIdentifier type
+type UpstreamIdentifier struct {
 	mock.Mock
 }
 
 // IdentifyResources provides a mock function with given fields: ctx, assets
-func (_m *UpstreamGenerator) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
+func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
 	ret := _m.Called(ctx, assets)
 
 	var r0 []string

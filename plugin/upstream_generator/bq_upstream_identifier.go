@@ -1,4 +1,4 @@
-package upstreamgenerator
+package upstreamidentifier
 
 import (
 	"context"
@@ -15,14 +15,14 @@ type (
 	extractorFunc   func(ctx context.Context, resourceURNs []string) (map[string]string, error)
 )
 
-type BQUpstreamGenerator struct {
+type BQUpstreamIdentifier struct {
 	logger         log.Logger
 	parserFunc     ParserFunc
 	extractorFunc  extractorFunc
 	evaluatorFuncs []EvalAssetFunc
 }
 
-func (g BQUpstreamGenerator) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
+func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
 	resourcesAccumulation := []*bigquery.ResourceURNWithUpstreams{}
 
 	// generate resource urn with upstream from each evaluator
@@ -49,7 +49,7 @@ func (g BQUpstreamGenerator) IdentifyResources(ctx context.Context, assets map[s
 	return resourceURNs, nil
 }
 
-func (g BQUpstreamGenerator) identifyResources(ctx context.Context, query string, visited map[string][]*bigquery.ResourceURNWithUpstreams, paths map[string]bool) ([]*bigquery.ResourceURNWithUpstreams, error) {
+func (g BQUpstreamIdentifier) identifyResources(ctx context.Context, query string, visited map[string][]*bigquery.ResourceURNWithUpstreams, paths map[string]bool) ([]*bigquery.ResourceURNWithUpstreams, error) {
 	me := errors.NewMultiError("identify resources errors")
 	resourceURNs := g.parserFunc(query)
 	resources := []*bigquery.ResourceURNWithUpstreams{}
@@ -91,7 +91,7 @@ func (g BQUpstreamGenerator) identifyResources(ctx context.Context, query string
 	return resources, me.ToErr()
 }
 
-func NewBQUpstreamGenerator(logger log.Logger, parserFunc ParserFunc, bqExtractorFunc BQExtractorFunc, evaluatorFuncs ...EvalAssetFunc) (*BQUpstreamGenerator, error) {
+func NewBQUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, bqExtractorFunc BQExtractorFunc, evaluatorFuncs ...EvalAssetFunc) (*BQUpstreamIdentifier, error) {
 	me := errors.NewMultiError("create bq upstream generator errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
@@ -115,7 +115,7 @@ func NewBQUpstreamGenerator(logger log.Logger, parserFunc ParserFunc, bqExtracto
 		return nil, me.ToErr()
 	}
 
-	return &BQUpstreamGenerator{
+	return &BQUpstreamIdentifier{
 		logger:         logger,
 		parserFunc:     parserFunc,
 		extractorFunc:  bqExtractorDecorator(logger, bqExtractorFunc),

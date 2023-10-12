@@ -14,6 +14,10 @@ import (
 	"github.com/goto/optimus/sdk/plugin"
 )
 
+const (
+	bqSvcAccKey = "BQ_SERVICE_ACCOUNT"
+)
+
 type (
 	Assets map[string]string
 )
@@ -112,9 +116,9 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	}
 
 	// for now upstream generator is only scoped for bigquery
-	svcAcc, ok := compiledConfig["BQ_SERVICE_ACCOUNT"]
+	svcAcc, ok := compiledConfig[bqSvcAccKey]
 	if !ok {
-		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate upstream is not found")
+		return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
 	}
 	upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
 	if err != nil {

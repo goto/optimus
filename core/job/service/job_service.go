@@ -563,6 +563,10 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
+	if len(toAdd)+len(toUpdate)+len(toDelete) == 0 {
+		return me.ToErr()
+	}
+
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, toUpdate...), logWriter)
 	me.Append(err)
 
@@ -573,9 +577,9 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	// assumption, all job specs from input are also the job within same project
 	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, unmodifiedSpecs)
 	identifierToJobsMap := getIdentifierToJobsMap(jobsToValidateMap)
-	for _, jobEntity := range jobsToValidateMap {
-		if _, err := j.validateCyclic(jobEntity.Job().Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
-			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Job().Spec().Name(), err)
+	for _, jobEntity := range incomingJobs {
+		if _, err := j.validateCyclic(jobEntity.Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
+			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Spec().Name(), err)
 			me.Append(err)
 			break
 		}

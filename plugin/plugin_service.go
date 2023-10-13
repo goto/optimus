@@ -9,8 +9,8 @@ import (
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/internal/errors"
-	ug "github.com/goto/optimus/plugin/upstream_generator"
-	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
+	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -32,7 +32,7 @@ type EvaluatorFactory interface {
 }
 
 type UpstreamIdentifierFactory interface {
-	GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (ug.UpstreamIdentifier, error)
+	GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
 }
 
 type PluginService struct {

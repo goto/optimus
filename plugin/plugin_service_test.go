@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/plugin"
-	upstreamidentifier "github.com/goto/optimus/plugin/upstream_generator"
-	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
+	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
 	"github.com/goto/optimus/plugin/yaml"
 	p "github.com/goto/optimus/sdk/plugin"
 )

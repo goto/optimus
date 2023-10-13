@@ -6,7 +6,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 
-	upstreamidentifier "github.com/goto/optimus/plugin/upstream_generator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 )
 
 func TestNewUpstreamIdentifierFactory(t *testing.T) {

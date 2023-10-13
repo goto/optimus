@@ -8,8 +8,8 @@ import (
 
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
-	"github.com/goto/optimus/plugin/upstream_generator/parser"
+	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
+	"github.com/goto/optimus/plugin/upstream_identifier/parser"
 )
 
 type (

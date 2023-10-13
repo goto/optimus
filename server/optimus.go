@@ -43,8 +43,8 @@ import (
 	"github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/plugin"
-	upstreamidentifier "github.com/goto/optimus/plugin/upstream_generator"
-	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
+	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	oHandler "github.com/goto/optimus/server/handler/v1beta1"
 )

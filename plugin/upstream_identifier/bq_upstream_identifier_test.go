@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/ext/store/bigquery"
-	upstreamidentifier "github.com/goto/optimus/plugin/upstream_generator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 )
 
 func TestNewBQUpstreamIdentifier(t *testing.T) {

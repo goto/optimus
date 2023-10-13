@@ -950,7 +950,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	if err != nil {
 		return nil, err
 	}
-	sources, err := j.identifyUpstreamResourceURNs(ctx, tenantWithDetails, spec)
+	sources, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -1131,7 +1131,7 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	}).Add(float64(metricValue))
 }
 
-func (j *JobService) identifyUpstreamResourceURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]job.ResourceURN, error) {
+func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]job.ResourceURN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
 	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)

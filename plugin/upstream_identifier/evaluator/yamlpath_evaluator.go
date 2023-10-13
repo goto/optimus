@@ -54,6 +54,7 @@ func (e yamlPathEvaluator) extractValue(value string, assets map[string]string) 
 		if raw, ok := assets[cleanedFilePath]; ok {
 			return raw
 		}
+		e.logger.Warn("value of the selector is not detected as a file, use direct value instead")
 	}
 	return value
 }

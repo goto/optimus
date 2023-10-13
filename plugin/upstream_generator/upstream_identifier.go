@@ -36,9 +36,9 @@ func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	evaluatorFuncs := []EvalAssetFunc{}
-	for _, evaluator := range evaluators {
-		evaluatorFuncs = append(evaluatorFuncs, evaluator.Evaluate)
+	evaluatorFuncs := make([]EvalAssetFunc, len(evaluators))
+	for i, evaluator := range evaluators {
+		evaluatorFuncs[i] = evaluator.Evaluate
 	}
 
 	return NewBQUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluatorFuncs...)

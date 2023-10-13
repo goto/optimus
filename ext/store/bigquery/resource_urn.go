@@ -73,13 +73,14 @@ type ResourceURNWithUpstreamsList []*ResourceURNWithUpstreams
 
 func (rs ResourceURNWithUpstreamsList) FlattenUnique() []*ResourceURNWithUpstreams {
 	var output []*ResourceURNWithUpstreams
-	for _, u := range rs {
-		if u == nil {
+	for _, r := range rs {
+		if r == nil {
 			continue
 		}
-		nested := ResourceURNWithUpstreamsList(u.Upstreams).FlattenUnique()
-		u.Upstreams = nil
-		output = append(output, u)
+		newResource := *r
+		newResource.Upstreams = nil
+		nested := ResourceURNWithUpstreamsList(r.Upstreams).FlattenUnique()
+		output = append(output, &newResource)
 		output = append(output, nested...)
 	}
 
@@ -88,13 +89,15 @@ func (rs ResourceURNWithUpstreamsList) FlattenUnique() []*ResourceURNWithUpstrea
 
 func (rs ResourceURNWithUpstreamsList) unique() ResourceURNWithUpstreamsList {
 	mapUnique := map[ResourceURN]*ResourceURNWithUpstreams{}
-	for _, u := range rs {
-		mapUnique[u.ResourceURN] = u
+	for _, r := range rs {
+		mapUnique[r.ResourceURN] = r
 	}
 
-	var output []*ResourceURNWithUpstreams
+	output := make([]*ResourceURNWithUpstreams, len(mapUnique))
+	i := 0
 	for _, u := range mapUnique {
-		output = append(output, u)
+		output[i] = u
+		i++
 	}
 	return output
 }

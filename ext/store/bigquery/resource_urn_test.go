@@ -39,3 +39,52 @@ func TestURN(t *testing.T) {
 		assert.Equal(t, "bigquery://project:dataset.table", resourceURN.URN())
 	})
 }
+
+func TestFlattenUnique(t *testing.T) {
+	t.Run("should return flattened upstream in the form of resource", func(t *testing.T) {
+		resources := []*bigquery.ResourceURNWithUpstreams{
+			{
+				ResourceURN: newResourceURN("project_test_1", "dataset_test_1", "name_test_1"),
+			},
+			{
+				ResourceURN: newResourceURN("project_test_2", "dataset_test_2", "name_test_2"),
+				Upstreams: []*bigquery.ResourceURNWithUpstreams{
+					{
+						ResourceURN: newResourceURN("project_test_3", "dataset_test_3", "name_test_3"),
+					},
+					{
+						ResourceURN: newResourceURN("project_test_4", "dataset_test_4", "name_test_4"),
+					},
+					{
+						ResourceURN: newResourceURN("project_test_1", "dataset_test_1", "name_test_1"),
+					},
+					nil,
+				},
+			},
+		}
+
+		expectedResources := []*bigquery.ResourceURNWithUpstreams{
+			{
+				ResourceURN: newResourceURN("project_test_1", "dataset_test_1", "name_test_1"),
+			},
+			{
+				ResourceURN: newResourceURN("project_test_2", "dataset_test_2", "name_test_2"),
+			},
+			{
+				ResourceURN: newResourceURN("project_test_3", "dataset_test_3", "name_test_3"),
+			},
+			{
+				ResourceURN: newResourceURN("project_test_4", "dataset_test_4", "name_test_4"),
+			},
+		}
+
+		actualResources := bigquery.ResourceURNWithUpstreamsList(resources).FlattenUnique()
+
+		assert.ElementsMatch(t, expectedResources, actualResources)
+	})
+}
+
+func newResourceURN(project, dataset, name string) bigquery.ResourceURN {
+	resourceURN, _ := bigquery.NewResourceURN(project, dataset, name)
+	return resourceURN
+}

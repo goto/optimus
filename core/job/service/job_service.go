@@ -76,8 +76,8 @@ type Engine interface {
 
 type PluginService interface {
 	Info(ctx context.Context, taskName string) (*plugin.Info, error)
-	IdentifyUpstreams(ctx context.Context, taskName string, config, assets map[string]string) (resourceURNs []string, err error)
-	ConstructDestinationURN(ctx context.Context, taskName string, config map[string]string) (destinationURN string, err error)
+	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []string, err error)
+	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN string, err error)
 }
 
 type TenantDetailsGetter interface {
@@ -946,15 +946,11 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	if spec.Task().Name() != "bq2bq" {
-		return job.NewJob(tenantWithDetails.ToTenant(), spec, job.ResourceURN(""), nil), nil
-	}
-
 	destination, err := j.generateDestinationURN(ctx, tenantWithDetails, spec)
 	if err != nil {
 		return nil, err
 	}
-	sources, err := j.generateUpstreamResourceURNs(ctx, spec)
+	sources, err := j.identifyUpstreamResourceURNs(ctx, tenantWithDetails, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -1135,12 +1131,13 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	}).Add(float64(metricValue))
 }
 
-func (j *JobService) generateUpstreamResourceURNs(ctx context.Context, spec *job.Spec) ([]job.ResourceURN, error) {
+func (j *JobService) identifyUpstreamResourceURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]job.ResourceURN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
+	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
 	assets := spec.Asset()
 
-	resourceURNs, err := j.pluginService.IdentifyUpstreams(ctx, taskName, taskConfig, assets)
+	resourceURNs, err := j.pluginService.IdentifyUpstreams(ctx, taskName, compileConfigs, assets)
 	if err != nil {
 		return nil, err
 	}

@@ -51,7 +51,7 @@ type (
 
 const (
 	BQParser              ParserType              = "bq"
-	JsonEvaluator         EvaluatorType           = "jsonpath"
+	YamlEvaluator         EvaluatorType           = "yamlpath"
 	BQDestinationTemplate DestinationTemplateType = "bq"
 )
 

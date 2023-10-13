@@ -9,9 +9,13 @@ import (
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/internal/errors"
-	ug "github.com/goto/optimus/plugin/upstream_generator"
-	"github.com/goto/optimus/plugin/upstream_generator/evaluator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
+	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
 	"github.com/goto/optimus/sdk/plugin"
+)
+
+const (
+	bqSvcAccKey = "BQ_SERVICE_ACCOUNT"
 )
 
 type (
@@ -24,21 +28,22 @@ type PluginGetter interface {
 
 type EvaluatorFactory interface {
 	GetFileEvaluator(filepath string) (evaluator.Evaluator, error)
+	GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
 }
 
-type UpstreamGeneratorFactory interface {
-	GetBQUpstreamGenerator(ctx context.Context, evaluator evaluator.Evaluator, svcAcc string) (ug.UpstreamGenerator, error)
+type UpstreamIdentifierFactory interface {
+	GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
 }
 
 type PluginService struct {
 	l            log.Logger
 	pluginGetter PluginGetter
 
-	upstreamGeneratorFactory UpstreamGeneratorFactory
-	evaluatorFactory         EvaluatorFactory
+	upstreamIdentifierFactory UpstreamIdentifierFactory
+	evaluatorFactory          EvaluatorFactory
 }
 
-func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamGeneratorFactory UpstreamGeneratorFactory, evaluatorFactory EvaluatorFactory) (*PluginService, error) {
+func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamIdentifierFactory UpstreamIdentifierFactory, evaluatorFactory EvaluatorFactory) (*PluginService, error) {
 	me := errors.NewMultiError("construct plugin service errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
@@ -46,18 +51,18 @@ func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamGene
 	if pluginGetter == nil {
 		me.Append(fmt.Errorf("pluginGetter is nil"))
 	}
-	if upstreamGeneratorFactory == nil {
-		me.Append(fmt.Errorf("upstreamGeneratorFactory is nil"))
+	if upstreamIdentifierFactory == nil {
+		me.Append(fmt.Errorf("upstreamIdentifierFactory is nil"))
 	}
 	if evaluatorFactory == nil {
 		me.Append(fmt.Errorf("evaluatorFactory is nil"))
 	}
 
 	return &PluginService{
-		l:                        logger,
-		pluginGetter:             pluginGetter,
-		upstreamGeneratorFactory: upstreamGeneratorFactory,
-		evaluatorFactory:         evaluatorFactory,
+		l:                         logger,
+		pluginGetter:              pluginGetter,
+		upstreamIdentifierFactory: upstreamIdentifierFactory,
+		evaluatorFactory:          evaluatorFactory,
 	}, me.ToErr()
 }
 
@@ -75,59 +80,75 @@ func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, e
 	return taskPlugin.Info(), nil
 }
 
-func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, config, assets map[string]string) ([]string, error) {
-	plugin, err := s.pluginGetter.GetByName(taskName)
+func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]string, error) {
+	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return nil, err
 	}
 
-	assetParser := plugin.Info().AssetParser
+	assetParser := taskPlugin.Info().AssetParser
 	if assetParser == nil {
 		// if plugin doesn't contain parser, then it doesn't support auto upstream generation
-		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", plugin.Info().Name)
+		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", taskPlugin.Info().Name)
 		return []string{}, nil
 	}
 
-	// for now the evaluator is only scoped for file evaluator
-	evaluator, err := s.evaluatorFactory.GetFileEvaluator(assetParser.FilePath)
-	if err != nil {
-		return nil, err
+	// instantiate evaluators
+	evaluators := []evaluator.Evaluator{}
+	if len(assetParser.Evaluator) == 0 {
+		// use file evaluator if there's no specialized evaluator defined
+		fileEvaluator, err := s.evaluatorFactory.GetFileEvaluator(assetParser.FilePath)
+		if err != nil {
+			return nil, err
+		}
+		evaluators = append(evaluators, fileEvaluator)
+	}
+	for evaluatorType, selector := range assetParser.Evaluator {
+		// for now we only support yamlpath as specialized evaluator
+		if evaluatorType == plugin.YamlEvaluator {
+			yamlpathEvaluator, err := s.evaluatorFactory.GetYamlPathEvaluator(assetParser.FilePath, selector)
+			if err != nil {
+				s.l.Error("yamlpath evaluator couldn't instantiated: %s", err.Error())
+				return nil, err
+			}
+			evaluators = append(evaluators, yamlpathEvaluator)
+		}
 	}
 
 	// for now upstream generator is only scoped for bigquery
-	svcAcc, ok := config["BQ_SERVICE_ACCOUNT"]
+	svcAcc, ok := compiledConfig[bqSvcAccKey]
 	if !ok {
-		return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate upstream is not found")
+		return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
 	}
-	upstreamGenerator, err := s.upstreamGeneratorFactory.GetBQUpstreamGenerator(ctx, evaluator, svcAcc)
+	upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
 	if err != nil {
 		return nil, err
 	}
 
-	return upstreamGenerator.GenerateResources(ctx, assets)
+	return upstreamIdentifier.IdentifyResources(ctx, assets)
 }
 
-func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, config map[string]string) (string, error) {
-	plugin, err := s.pluginGetter.GetByName(taskName)
+func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {
+	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return "", err
 	}
 
 	// for now only support single template
-	destinationURNTemplate := plugin.Info().DestinationURNTemplate
+	destinationURNTemplate := taskPlugin.Info().DestinationURNTemplate
 	if destinationURNTemplate == "" {
 		// if plugin doesn't contain destination template, then it doesn't support auto destination generation
-		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", plugin.Info().Name)
+		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", taskPlugin.Info().Name)
 		return "", nil
 	}
 
 	convertedURNTemplate := convertToGoTemplate(destinationURNTemplate)
-	tmpl, err := template.New("destination_urn_" + plugin.Info().Name).Parse(convertedURNTemplate)
+	tmpl, err := template.New("destination_urn_" + taskPlugin.Info().Name).Parse(convertedURNTemplate)
 	if err != nil {
 		return "", err
 	}
 
-	return generateResourceURNFromTemplate(tmpl, config)
+	return generateResourceURNFromTemplate(tmpl, compiledConfig)
 }
 
 // convertToGoTemplate transforms plugin destination urn template format to go template format

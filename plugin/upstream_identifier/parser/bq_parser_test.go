@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/optimus/plugin/upstream_generator/parser"
+	"github.com/goto/optimus/plugin/upstream_identifier/parser"
 )
 
 func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {

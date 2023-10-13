@@ -18,6 +18,10 @@ func (e EvaluatorFactory) GetFileEvaluator(filepath string) (Evaluator, error) {
 	return newFileEvaluator(e.logger, filepath)
 }
 
+func (e EvaluatorFactory) GetYamlPathEvaluator(filepath, selector string) (Evaluator, error) {
+	return newYamlPathEvaluator(e.logger, filepath, selector)
+}
+
 func NewEvaluatorFactory(logger log.Logger) (*EvaluatorFactory, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger is nil")

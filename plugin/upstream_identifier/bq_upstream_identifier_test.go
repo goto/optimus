@@ -1,4 +1,4 @@
-package upstreamgenerator_test
+package upstreamidentifier_test
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/ext/store/bigquery"
-	upstreamgenerator "github.com/goto/optimus/plugin/upstream_generator"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 )
 
-func TestNewBQUpstreamGenerator(t *testing.T) {
+func TestNewBQUpstreamIdentifier(t *testing.T) {
 	logger := log.NewNoop()
 	parserFunc := func(string) []string { return nil }
 	bqExtractorFunc := func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
@@ -21,33 +21,38 @@ func TestNewBQUpstreamGenerator(t *testing.T) {
 	}
 	evaluatorFunc := func(map[string]string) string { return "" }
 	t.Run("should return error when logger is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(nil, parserFunc, bqExtractorFunc, evaluatorFunc)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(nil, parserFunc, bqExtractorFunc, evaluatorFunc)
 		assert.ErrorContains(t, err, "logger is nil")
-		assert.Nil(t, bqUpstreamGenerator)
+		assert.Nil(t, bqUpstreamIdentifier)
 	})
 	t.Run("should return error when parser is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, nil, bqExtractorFunc, evaluatorFunc)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, nil, bqExtractorFunc, evaluatorFunc)
 		assert.ErrorContains(t, err, "parserFunc is nil")
-		assert.Nil(t, bqUpstreamGenerator)
+		assert.Nil(t, bqUpstreamIdentifier)
 	})
 	t.Run("should return error when extractor is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, nil, evaluatorFunc)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc, nil, evaluatorFunc)
 		assert.ErrorContains(t, err, "bqExtractorFunc is nil")
-		assert.Nil(t, bqUpstreamGenerator)
+		assert.Nil(t, bqUpstreamIdentifier)
 	})
-	t.Run("should return error when evaluator is nil", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc, nil)
-		assert.ErrorContains(t, err, "evaluatorFunc is nil")
-		assert.Nil(t, bqUpstreamGenerator)
+	t.Run("should return error when no evaluators", func(t *testing.T) {
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc, bqExtractorFunc)
+		assert.ErrorContains(t, err, "evaluatorFuncs is needed")
+		assert.Nil(t, bqUpstreamIdentifier)
+	})
+	t.Run("should return error when one of evaluator is nil", func(t *testing.T) {
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc, bqExtractorFunc, nil)
+		assert.ErrorContains(t, err, "non-nil evaluatorFuncs is needed")
+		assert.Nil(t, bqUpstreamIdentifier)
 	})
 	t.Run("should return success", func(t *testing.T) {
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc, bqExtractorFunc, evaluatorFunc)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc, bqExtractorFunc, evaluatorFunc)
 		assert.NoError(t, err)
-		assert.NotNil(t, bqUpstreamGenerator)
+		assert.NotNil(t, bqUpstreamIdentifier)
 	})
 }
 
-func TestGenerateResources(t *testing.T) {
+func TestIdentifyResources(t *testing.T) {
 	ctx := context.Background()
 	logger := log.NewNoop()
 	assets := map[string]string{
@@ -62,11 +67,11 @@ func TestGenerateResources(t *testing.T) {
 		defer bqExtractorFunc.AssertExpectations(t)
 
 		evaluatorFunc.On("Execute", assets).Return("")
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
-		assert.NotNil(t, bqUpstreamGenerator)
+		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
@@ -82,11 +87,11 @@ func TestGenerateResources(t *testing.T) {
 		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"bigquery://project1:dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, mock.Anything).Return(nil, errors.New("some error"))
 
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
-		assert.NotNil(t, bqUpstreamGenerator)
+		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
@@ -103,11 +108,11 @@ func TestGenerateResources(t *testing.T) {
 		// bq extractor should receives empty resource urn, since the urn construction is fail
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{}).Return(map[bigquery.ResourceURN]string{}, nil)
 
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
-		assert.NotNil(t, bqUpstreamGenerator)
+		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
@@ -140,11 +145,11 @@ func TestGenerateResources(t *testing.T) {
 
 		parserFunc.On("Execute", "").Return([]string{})
 
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
-		assert.NotNil(t, bqUpstreamGenerator)
+		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
 		assert.ErrorContains(t, err, "circular reference is detected")
 		assert.Empty(t, resourceURNs)
 	})
@@ -177,12 +182,12 @@ func TestGenerateResources(t *testing.T) {
 
 		parserFunc.On("Execute", "").Return([]string{})
 
-		bqUpstreamGenerator, err := upstreamgenerator.NewBQUpstreamGenerator(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
+		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
-		assert.NotNil(t, bqUpstreamGenerator)
+		assert.NotNil(t, bqUpstreamIdentifier)
 
 		expectedResourceURNs := []string{"bigquery://project1:dataset1.name1", "bigquery://project1:dataset1.name2", "bigquery://project1:dataset1.name3"}
-		resourceURNs, err := bqUpstreamGenerator.GenerateResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)
 		assert.ElementsMatch(t, resourceURNs, expectedResourceURNs)

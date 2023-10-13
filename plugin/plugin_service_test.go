@@ -159,10 +159,10 @@ func TestIdentifyUpstreams(t *testing.T) {
 	pluginTest := &p.Plugin{
 		YamlMod: pluginYamlTest,
 	}
-	pluginYamlTestWithEvaluator, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_evaluator.yaml")
+	pluginYamlTestWithSelector, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_yamlpath_selector.yaml")
 	assert.NoError(t, err)
-	pluginTestWithEvaluator := &p.Plugin{
-		YamlMod: pluginYamlTestWithEvaluator,
+	pluginTestWithSelector := &p.Plugin{
+		YamlMod: pluginYamlTestWithSelector,
 	}
 
 	t.Run("return error when plugin is not exist on pluginGetter", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithEvaluator, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithSelector, nil)
 		evaluatorFactory.On("GetYamlPathEvaluator", mock.Anything, "$.query").Return(nil, errors.New("some error"))
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
@@ -242,6 +242,26 @@ func TestIdentifyUpstreams(t *testing.T) {
 
 		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
 		assert.Error(t, err)
+		assert.Nil(t, resourceURNs)
+	})
+	t.Run("return error when evaluator factory couldn't return evaluator due to invalid filepath type", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+
+		pluginTestWithWrongFilePath := *pluginTestWithSelector // copy by value
+		pluginTestWithWrongFilePath.Info().AssetParsers[p.BQParser][0].FilePath = "wrong_extension.yyx"
+		pluginGetter.On("GetByName", mock.Anything).Return(&pluginTestWithWrongFilePath, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, config, assets)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "evaluator for filepath wrong_extension.yyx is not supported")
 		assert.Nil(t, resourceURNs)
 	})
 	t.Run("return error when bq2bq service account config is not provided", func(t *testing.T) { // will remove once all plugin is supported

@@ -42,23 +42,16 @@ type Entrypoint struct {
 }
 
 type (
-	ParserType              string
-	EvaluatorType           string
-	DestinationTemplateType string
-
-	Evaluator map[EvaluatorType]string
+	ParserType string
 )
 
 const (
-	BQParser              ParserType              = "bq"
-	YamlEvaluator         EvaluatorType           = "yamlpath"
-	BQDestinationTemplate DestinationTemplateType = "bq"
+	BQParser ParserType = "bq"
 )
 
-type AssetParser struct {
-	Type      ParserType
-	FilePath  string
-	Evaluator Evaluator `yaml:",omitempty"`
+type Evaluator struct {
+	FilePath string `yaml:"filepath"`
+	Selector string `yaml:"selector,omitempty"`
 }
 
 type Info struct {
@@ -69,8 +62,8 @@ type Info struct {
 	PluginType  Type  `yaml:",omitempty"`
 	PluginMods  []Mod `yaml:",omitempty"`
 
-	AssetParser            *AssetParser `yaml:"asset_parser,omitempty"`
-	DestinationURNTemplate string       `yaml:"destination_urn_template,omitempty"`
+	AssetParsers           map[ParserType][]Evaluator `yaml:"asset_parsers,omitempty"`
+	DestinationURNTemplate string                     `yaml:"destination_urn_template,omitempty"`
 
 	PluginVersion string   `yaml:",omitempty"`
 	APIVersion    []string `yaml:",omitempty"`

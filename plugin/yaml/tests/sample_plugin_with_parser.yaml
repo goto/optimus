@@ -2,9 +2,9 @@ name: bq2bqtest
 description: Testing
 plugintype: task
 pluginversion: latest
-asset_parser:
-  type: "bq"
-  filepath: "./query.sql"
+asset_parsers:
+  bq:
+  - filepath: "./query.sql"
 image: docker.io/goto/optimus-task-bq2bq-executor:latest
 entrypoint:
   shell: "/bin/bash"

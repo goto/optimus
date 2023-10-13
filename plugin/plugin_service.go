@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"path/filepath"
 	"strings"
 
 	"github.com/goto/salt/log"
@@ -86,46 +87,54 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 		return nil, err
 	}
 
-	assetParser := taskPlugin.Info().AssetParser
-	if assetParser == nil {
+	assetParsers := taskPlugin.Info().AssetParsers
+	if assetParsers == nil {
 		// if plugin doesn't contain parser, then it doesn't support auto upstream generation
 		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", taskPlugin.Info().Name)
 		return []string{}, nil
 	}
 
-	// instantiate evaluators
-	evaluators := []evaluator.Evaluator{}
-	if len(assetParser.Evaluator) == 0 {
-		// use file evaluator if there's no specialized evaluator defined
-		fileEvaluator, err := s.evaluatorFactory.GetFileEvaluator(assetParser.FilePath)
+	// construct all possible identifier from given parser
+	upstreamIdentifiers := []upstreamidentifier.UpstreamIdentifier{}
+	for parserType, evaluatorSpecs := range assetParsers {
+		// instantiate evaluators
+		evaluators := []evaluator.Evaluator{}
+		for _, evaluatorSpec := range evaluatorSpecs {
+			evaluator, err := s.getEvaluator(evaluatorSpec)
+			if err != nil {
+				return nil, err
+			}
+			evaluators = append(evaluators, evaluator)
+		}
+
+		if parserType != plugin.BQParser {
+			s.l.Warn("parserType %s is not supported", parserType)
+			continue
+		}
+		// for now parser type is only scoped for bigquery, so that it uses bigquery as upstream identifier
+		svcAcc, ok := compiledConfig[bqSvcAccKey]
+		if !ok {
+			return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
+		}
+		upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
 		if err != nil {
 			return nil, err
 		}
-		evaluators = append(evaluators, fileEvaluator)
+		upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
 	}
-	for evaluatorType, selector := range assetParser.Evaluator {
-		// for now we only support yamlpath as specialized evaluator
-		if evaluatorType == plugin.YamlEvaluator {
-			yamlpathEvaluator, err := s.evaluatorFactory.GetYamlPathEvaluator(assetParser.FilePath, selector)
-			if err != nil {
-				s.l.Error("yamlpath evaluator couldn't instantiated: %s", err.Error())
-				return nil, err
-			}
-			evaluators = append(evaluators, yamlpathEvaluator)
+
+	// identify all upstream resource urns by all identifier from given asset
+	resourceURNs := []string{}
+	for _, upstreamIdentifier := range upstreamIdentifiers {
+		currentResourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, assets)
+		if err != nil {
+			s.l.Error("error when identify upstream")
+			continue
 		}
+		resourceURNs = append(resourceURNs, currentResourceURNs...)
 	}
 
-	// for now upstream generator is only scoped for bigquery
-	svcAcc, ok := compiledConfig[bqSvcAccKey]
-	if !ok {
-		return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
-	}
-	upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
-	if err != nil {
-		return nil, err
-	}
-
-	return upstreamIdentifier.IdentifyResources(ctx, assets)
+	return resourceURNs, nil
 }
 
 func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {
@@ -167,4 +176,17 @@ func generateResourceURNFromTemplate(tmpl *template.Template, config map[string]
 		return "", err
 	}
 	return s.String(), nil
+}
+
+func (s PluginService) getEvaluator(evaluator plugin.Evaluator) (evaluator.Evaluator, error) {
+	if evaluator.Selector == "" {
+		return s.evaluatorFactory.GetFileEvaluator(evaluator.FilePath)
+	}
+
+	fileExension := filepath.Ext(evaluator.FilePath)
+	if fileExension == ".yaml" || fileExension == ".yml" {
+		return s.evaluatorFactory.GetYamlPathEvaluator(evaluator.FilePath, evaluator.Selector)
+	}
+
+	return nil, fmt.Errorf("evaluator for filepath %s is not supported", evaluator.FilePath)
 }

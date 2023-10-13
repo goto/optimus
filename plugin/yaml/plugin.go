@@ -33,7 +33,7 @@ func (p *PluginSpec) PluginInfo() *plugin.Info {
 		Description:            p.Description,
 		Image:                  p.Image,
 		Entrypoint:             p.Entrypoint,
-		AssetParser:            p.AssetParser,
+		AssetParsers:           p.AssetParsers,
 		DestinationURNTemplate: p.DestinationURNTemplate,
 		PluginType:             p.PluginType,
 		PluginMods:             []plugin.Mod{plugin.ModTypeCLI},

@@ -12,7 +12,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-type yamlpathEvaluator struct {
+type yamlPathEvaluator struct {
 	logger       log.Logger
 	filepath     string
 	pathSelector *yamlpath.Path
@@ -21,7 +21,7 @@ type yamlpathEvaluator struct {
 // Evaluator returns the rawResource eg. query string given assets
 // it returns whatever inside the defined filepath and its selector
 // valid selector is defined from this BNF https://github.com/vmware-labs/yaml-jsonpath#syntax
-func (e yamlpathEvaluator) Evaluate(assets map[string]string) string {
+func (e yamlPathEvaluator) Evaluate(assets map[string]string) string {
 	cleanedFilePath := filepath.Base(e.filepath)
 	raw, ok := assets[cleanedFilePath]
 	if !ok {
@@ -47,7 +47,7 @@ func (e yamlpathEvaluator) Evaluate(assets map[string]string) string {
 	return strings.Join(values, "\n")
 }
 
-func (e yamlpathEvaluator) extractValue(value string, assets map[string]string) string {
+func (e yamlPathEvaluator) extractValue(value string, assets map[string]string) string {
 	// heuristically value can potentially be a filepath if there's no spaces
 	if !strings.Contains(value, " ") {
 		cleanedFilePath := filepath.Base(value)
@@ -58,7 +58,7 @@ func (e yamlpathEvaluator) extractValue(value string, assets map[string]string) 
 	return value
 }
 
-func newYamlPathEvaluator(logger log.Logger, filepath, selector string) (*yamlpathEvaluator, error) {
+func newYamlPathEvaluator(logger log.Logger, filepath, selector string) (*yamlPathEvaluator, error) {
 	me := errors.NewMultiError("create jsonpath evaluator errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
@@ -77,7 +77,7 @@ func newYamlPathEvaluator(logger log.Logger, filepath, selector string) (*yamlpa
 		return nil, me.ToErr()
 	}
 
-	return &yamlpathEvaluator{
+	return &yamlPathEvaluator{
 		logger:       logger,
 		filepath:     filepath,
 		pathSelector: pathSelector,

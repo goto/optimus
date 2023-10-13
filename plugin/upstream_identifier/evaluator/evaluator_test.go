@@ -88,8 +88,14 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 	t.Run("Evaluate", func(t *testing.T) {
 		raw, err := os.ReadFile("./tests/yaml_asset.yaml")
 		assert.NoError(t, err)
+		rawQuery1, err := os.ReadFile("./tests/query1.sql")
+		assert.NoError(t, err)
+		rawQuery2, err := os.ReadFile("./tests/query2.sql")
+		assert.NoError(t, err)
 		assets := map[string]string{
 			"config.yaml": string(raw),
+			"query1.sql":  string(rawQuery1),
+			"query2.sql":  string(rawQuery2),
 		}
 		t.Run("should return empty when asset doesn't have targeted filepath", func(t *testing.T) {
 			filepath := "./config.yaml"
@@ -148,6 +154,28 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			rawResource := yamlpathEvaluator.Evaluate(assets)
 			assert.NotEmpty(t, rawResource)
 			assert.Equal(t, "SELECT * FROM `project2.dataset2.table2`", rawResource)
+		})
+		t.Run("should return correct multiple content when could find targeted value for multiple nested selector", func(t *testing.T) {
+			filepath := "./config.yaml"
+			selector := "$.multiple[*].query"
+			yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
+			assert.NoError(t, err)
+			assert.NotNil(t, yamlpathEvaluator)
+
+			rawResource := yamlpathEvaluator.Evaluate(assets)
+			assert.NotEmpty(t, rawResource)
+			assert.Equal(t, "SELECT * FROM `project3.dataset3.table3`\nSELECT * FROM `project4.dataset4.table4`", rawResource)
+		})
+		t.Run("should return correct content when the value is filepath", func(t *testing.T) {
+			filepath := "./config.yaml"
+			selector := "$.multiple_files[*].sql_path"
+			yamlpathEvaluator, err := e.GetYamlPathEvaluator(filepath, selector)
+			assert.NoError(t, err)
+			assert.NotNil(t, yamlpathEvaluator)
+
+			rawResource := yamlpathEvaluator.Evaluate(assets)
+			assert.NotEmpty(t, rawResource)
+			assert.Equal(t, "SELECT * FROM `project5.dataset5.table5`\nSELECT * FROM `project6.dataset6.table6`", rawResource)
 		})
 	})
 }

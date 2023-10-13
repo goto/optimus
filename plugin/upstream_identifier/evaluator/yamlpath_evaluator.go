@@ -3,6 +3,7 @@ package evaluator
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/goto/salt/log"
 	"github.com/vmware-labs/yaml-jsonpath/pkg/yamlpath"
@@ -35,11 +36,26 @@ func (e yamlpathEvaluator) Evaluate(assets map[string]string) string {
 
 	results, _ := e.pathSelector.Find(&content)
 	if len(results) < 1 {
-		e.logger.Error("couln't find evaluator yaml result")
+		e.logger.Error("couldn't find the result of the yaml evaluator")
 		return ""
 	}
+	values := make([]string, len(results))
+	for i, result := range results {
+		values[i] = e.extractValue(result.Value, assets)
+	}
 
-	return results[0].Value
+	return strings.Join(values, "\n")
+}
+
+func (e yamlpathEvaluator) extractValue(value string, assets map[string]string) string {
+	// heuristically value can potentially be a filepath if there's no spaces
+	if !strings.Contains(value, " ") {
+		cleanedFilePath := filepath.Base(value)
+		if raw, ok := assets[cleanedFilePath]; ok {
+			return raw
+		}
+	}
+	return value
 }
 
 func newYamlPathEvaluator(logger log.Logger, filepath, selector string) (*yamlpathEvaluator, error) {

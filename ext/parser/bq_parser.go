@@ -20,8 +20,6 @@ var (
 			"|" +
 			"(?i)(?:WITH)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?\\s+(?:AS)" +
 			"|" +
-			"(?i)(?:VIEW)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // can remove(?) already handled by CREATE clause below
-			"|" +
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
 			"(?i)(?:MERGE)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
 			"|" +
@@ -61,18 +59,16 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 5, 6, 7, 8
 		case "with":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 9, 10, 11, 12
-		case "view":
-			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 13, 14, 15, 16
 		case "merge":
-			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 17, 18, 19, 20
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 13, 14, 15, 16
 		case "insert":
-			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 21, 22, 23, 24
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 17, 18, 19, 20
 		case "delete":
-			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 25, 26, 27, 28
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 21, 22, 23, 24
 		case "create":
-			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 29, 30, 31, 32
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 25, 26, 27, 28
 		default:
-			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 33, 34, 35, 36
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 29, 30, 31, 32
 		}
 
 		project := match[projectIdx]
@@ -87,7 +83,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			continue
 		}
 
-		if clause == "view" || clause == "create" || clause == "merge" || clause == "insert" || clause == "delete" {
+		if clause == "create" || clause == "merge" || clause == "insert" || clause == "delete" {
 			continue
 		}
 

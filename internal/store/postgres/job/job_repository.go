@@ -171,11 +171,12 @@ func changeJobNamespace(ctx context.Context, tx pgx.Tx, jobName job.Name, tenant
 	changeJobNamespaceQuery := `
 UPDATE job SET
 	namespace_name = $1,
-	updated_at = NOW(), deleted_at = null
+	updated_at = NOW()
 WHERE
 	name = $2 AND
 	project_name = $3 AND
-	namespace_name = $4
+	namespace_name = $4 AND
+	deleted_at is null
 ;`
 	tag, err := tx.Exec(ctx, changeJobNamespaceQuery, newTenant.NamespaceName(), jobName,
 		tenant.ProjectName(), tenant.NamespaceName())

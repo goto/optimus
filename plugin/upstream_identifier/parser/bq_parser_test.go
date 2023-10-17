@@ -284,22 +284,22 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 			{
 				Name:                 "ignore merge into query",
 				InputQuery:           "merge into `data-engineering.testing.table_a` as target",
-				ExpectedResourceURNs: []bigquery.ResourceURN{},
+				ExpectedResourceURNs: []string{},
 			},
 			{
 				Name:                 "ignore insert into query",
 				InputQuery:           "insert into `data-engineering.testing.table_a`(id,name)",
-				ExpectedResourceURNs: []bigquery.ResourceURN{},
+				ExpectedResourceURNs: []string{},
 			},
 			{
 				Name:                 "ignore delete + insert query",
 				InputQuery:           "delete from `data-engineering.testing.table_b`; create or replace table `data-engineering.testing.table_b`",
-				ExpectedResourceURNs: []bigquery.ResourceURN{},
+				ExpectedResourceURNs: []string{},
 			},
 			{
 				Name:                 "ignore create or replace query",
 				InputQuery:           "create or replace table `data-engineering.testing.table_b`",
-				ExpectedResourceURNs: []bigquery.ResourceURN{},
+				ExpectedResourceURNs: []string{},
 			},
 		}
 		for _, test := range testCases {

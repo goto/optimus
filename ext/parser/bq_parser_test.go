@@ -99,7 +99,6 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				ExpectedResourceURNs: []bigquery.ResourceURN{
 					newBQResourceURN("project", "fire", "fly"),
 					newBQResourceURN("project", "maximum", "overdrive"),
-					newBQResourceURN("project", "maximum", "overdrive"), // the result should be unique(?))
 				},
 			},
 			{
@@ -277,11 +276,28 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					newBQResourceURN("data-engineering", "testing", "table_d"),
 				},
 			},
+			{
+				Name:                 "ignore merge into query",
+				InputQuery:           "merge into `data-engineering.testing.table_a` as target",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
+			{
+				Name:                 "ignore insert into query",
+				InputQuery:           "insert into `data-engineering.testing.table_a`(id,name)",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
+			{
+				Name:                 "ignore delete + insert query",
+				InputQuery:           "delete from `data-engineering.testing.table_b`; create or replace table `data-engineering.testing.table_b`",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
+			{
+				Name:                 "ignore create or replace query",
+				InputQuery:           "create or replace table `data-engineering.testing.table_b`",
+				ExpectedResourceURNs: []bigquery.ResourceURN{},
+			},
 		}
 		for _, test := range testCases {
-			if test.Name != "`with` clause + simple query" {
-				continue
-			}
 			t.Run(test.Name, func(t *testing.T) {
 				actualResourceURNs := parser.ParseTopLevelUpstreamsFromQuery(test.InputQuery)
 				assert.ElementsMatch(t, test.ExpectedResourceURNs, actualResourceURNs)

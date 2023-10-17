@@ -48,6 +48,9 @@ def lookup_non_standard_cron_expression(expr: str) -> str:
     except KeyError:
         return expr
 
+def get_scheduled_at(context):
+    job_cron_iter = croniter(context.get("dag").schedule_interval, context.get('execution_date'))
+    return job_cron_iter.get_next(datetime)
 
 class SuperKubernetesPodOperator(KubernetesPodOperator):
     def __init__(self, *args, **kwargs):
@@ -61,9 +64,10 @@ class SuperKubernetesPodOperator(KubernetesPodOperator):
         self.config_file = kwargs.get('config_file')
 
     def render_init_containers(self, context):
-        for ic in self.init_containers:
+        for index, ic in enumerate(self.init_containers):
             env = getattr(ic, 'env')
             if env:
+                self.init_containers[index].env.append(k8s.V1EnvVar(name="SCHEDULED_AT", value=get_scheduled_at(context)))
                 self.render_template(env, context)
 
     def execute(self, context):
@@ -209,8 +213,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self._upstream_optimus_client = OptimusAPIClient(upstream_optimus_hostname)
 
     def poke(self, context):
-        job_cron_iter = croniter(context.get("dag").schedule_interval, context.get('execution_date'))
-        schedule_time = job_cron_iter.get_next(datetime)
+        schedule_time = get_scheduled_at(context)
 
         try:
             upstream_schedule = self.get_schedule_interval(schedule_time)
@@ -284,8 +287,7 @@ def optimus_notify(context, event_meta):
 
     current_dag_id = context.get('task_instance').dag_id
     current_execution_date = context.get('execution_date')
-    job_cron_iter = croniter(context.get("dag").schedule_interval, current_execution_date)
-    current_schedule_date = job_cron_iter.get_next(datetime)
+    current_schedule_date = get_scheduled_at(context)
 
     # failure message pushed by failed tasks
     failure_messages = []

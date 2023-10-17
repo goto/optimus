@@ -41,10 +41,11 @@ func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[
 		resourcesAccumulation = append(resourcesAccumulation, resources...)
 	}
 
-	// compiled all collcted resources and extract its urns
-	resourceURNs := []string{}
-	for _, r := range bigquery.ResourceURNWithUpstreamsList(resourcesAccumulation).FlattenUnique() {
-		resourceURNs = append(resourceURNs, r.ResourceURN.URN())
+	// compiled all collected resources and extract its urns
+	flattenedResources := bigquery.ResourceURNWithUpstreamsList(resourcesAccumulation).FlattenUnique()
+	resourceURNs := make([]string, len(flattenedResources))
+	for i, r := range flattenedResources {
+		resourceURNs[i] = r.ResourceURN.URN()
 	}
 	return resourceURNs, nil
 }

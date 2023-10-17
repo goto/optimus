@@ -11,12 +11,6 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-type (
-	// BQExtractorFunc extracts the rawSources from given list of resource
-	BQExtractorFunc           func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error)
-	DefaultBQExtractorFactory struct{}
-)
-
 type DDLViewGetter interface {
 	BulkGetDDLView(ctx context.Context, dataset bigquery.ProjectDataset, names []string) (map[bigquery.ResourceURN]string, error)
 }

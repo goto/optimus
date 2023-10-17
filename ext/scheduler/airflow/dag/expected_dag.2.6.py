@@ -102,7 +102,6 @@ init_env_vars = [
     k8s.V1EnvVar(name="JOB_NAME", value='infra.billing.weekly-status-reports'),
     k8s.V1EnvVar(name="OPTIMUS_HOST", value='http://optimus.example.com'),
     k8s.V1EnvVar(name="PROJECT", value='example-proj'),
-    k8s.V1EnvVar(name="SCHEDULED_AT", value='{{ data_interval_end }}'),
 ]
 
 init_container = k8s.V1Container(

@@ -121,9 +121,12 @@ func (p JobPluginService) GenerateDependencies(ctx context.Context, taskName job
 		return nil, err
 	}
 
-	// flatten
 	resourceURNs := []job.ResourceURN{}
 	for _, r := range job.ResourceURNWithUpstreamsList(resources).Flatten() {
+		if r.URN == destinationURN {
+			p.logger.Warn("ignore destination resource %s", r.URN)
+			continue
+		}
 		resourceURNs = append(resourceURNs, r.URN)
 	}
 	return resourceURNs, nil

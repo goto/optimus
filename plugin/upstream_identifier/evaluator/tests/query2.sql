@@ -1,0 +1,1 @@
+SELECT * FROM `project6.dataset6.table6`

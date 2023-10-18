@@ -17,11 +17,11 @@ type ResourceURN struct {
 
 func NewResourceURNFromString(urn string) (ResourceURN, error) {
 	const lengthMatchedString = 3
-	matchedString := bqResourceURNRegex.FindStringSubmatch(urn)[1:]
-	if len(matchedString) != lengthMatchedString {
+	matchedString := bqResourceURNRegex.FindStringSubmatch(urn)
+	if len(matchedString) != lengthMatchedString+1 {
 		return ResourceURN{}, fmt.Errorf("urn %s can't be parsed to bigquery urn format", urn)
 	}
-	project, dataset, table := matchedString[0], matchedString[1], matchedString[2]
+	project, dataset, table := matchedString[1], matchedString[2], matchedString[3]
 	return ResourceURN{project: project, dataset: dataset, name: table}, nil
 }
 
@@ -62,6 +62,44 @@ func (n ResourceURN) Dataset() string {
 
 func (n ResourceURN) Name() string {
 	return n.name
+}
+
+type ResourceURNWithUpstreams struct {
+	ResourceURN ResourceURN
+	Upstreams   []*ResourceURNWithUpstreams
+}
+
+type ResourceURNWithUpstreamsList []*ResourceURNWithUpstreams
+
+func (rs ResourceURNWithUpstreamsList) FlattenUnique() []*ResourceURNWithUpstreams {
+	var output []*ResourceURNWithUpstreams
+	for _, r := range rs {
+		if r == nil {
+			continue
+		}
+		newResource := *r
+		newResource.Upstreams = nil
+		nested := ResourceURNWithUpstreamsList(r.Upstreams).FlattenUnique()
+		output = append(output, &newResource)
+		output = append(output, nested...)
+	}
+
+	return ResourceURNWithUpstreamsList(output).unique()
+}
+
+func (rs ResourceURNWithUpstreamsList) unique() ResourceURNWithUpstreamsList {
+	mapUnique := map[ResourceURN]*ResourceURNWithUpstreams{}
+	for _, r := range rs {
+		mapUnique[r.ResourceURN] = r
+	}
+
+	output := make([]*ResourceURNWithUpstreams, len(mapUnique))
+	i := 0
+	for _, u := range mapUnique {
+		output[i] = u
+		i++
+	}
+	return output
 }
 
 type ProjectDataset struct {

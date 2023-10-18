@@ -1,0 +1,14 @@
+query: SELECT * FROM `project1.dataset1.table1`
+foo: "bar"
+any_other_field:
+  - "lorem ipsum"
+  - "dolor"
+  - "sit amet"
+nested:
+  query: SELECT * FROM `project2.dataset2.table2`
+multiple:
+  - query: SELECT * FROM `project3.dataset3.table3`
+  - query: SELECT * FROM `project4.dataset4.table4`
+multiple_files:
+  - sql_path: ./query1.sql
+  - sql_path: ./query2.sql

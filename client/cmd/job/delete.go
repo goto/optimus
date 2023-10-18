@@ -53,7 +53,7 @@ func NewDeleteCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&deleteCmd.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
 	cmd.Flags().BoolVar(&deleteCmd.force, "force", false, "Whether to force delete regardless of downstream or not")
-	cmd.Flags().BoolVar(&deleteCmd.cleanHistory, "clean-history", false, "Whether to clean hostory or not")
+	cmd.Flags().BoolVar(&deleteCmd.cleanHistory, "clean-history", false, "Whether to clean history or not")
 
 	return cmd
 }

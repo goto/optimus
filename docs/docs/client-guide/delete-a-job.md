@@ -14,6 +14,6 @@ Flag | Required | Description | Example
 --- | --- | --- | ---
 -c, --config | `true` if client config is not found, `false` otherwise | File path for client configuration | ./optimus.yaml
 --force | `false` | Whether to force delete regardless of downstream or not | true
---clean-history | `false` | Whether to clean hostory or not | true
+--clean-history | `false` | Whether to clean history or not | true
 
 _Note: confirmations will be prompted when this command is triggered_

@@ -49,7 +49,8 @@ default_args = {
 }
 
 """
-This job collects the billing information related to infrastructure
+This job collects the billing information related to infrastructure.
+This job will run in a weekly basis.
 """
 dag = DAG(
     dag_id="infra.billing.weekly-status-reports",

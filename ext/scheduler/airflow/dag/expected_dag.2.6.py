@@ -48,7 +48,9 @@ default_args = {
     "on_failure_callback": operator_failure_event,
 }
 
-# This job collects the billing information related to infrastructure
+"""
+This job collects the billing information related to infrastructure
+"""
 dag = DAG(
     dag_id="infra.billing.weekly-status-reports",
     default_args=default_args,

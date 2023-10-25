@@ -45,7 +45,7 @@ func NewDeleteCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "delete <job_name>",
-		Short:   "Delete an existing job in the server",
+		Short:   "Delete an existing job in the SERVER",
 		Example: "optimus job delete daily_scheduled_job",
 		RunE:    deleteCmd.RunE,
 		PreRunE: deleteCmd.PreRunE,
@@ -95,10 +95,20 @@ func (d *deleteCommand) RunE(_ *cobra.Command, args []string) error {
 }
 
 func (d *deleteCommand) confirm(jobName string) (bool, error) {
-	if d.force {
-		return d.deleteSurvey.AskToConfirmForceDeletion(jobName)
+	confirmed, err := d.deleteSurvey.AskToConfirm(jobName)
+	if err != nil {
+		return false, err
 	}
-	return d.deleteSurvey.AskToConfirmDeletion(jobName)
+
+	if confirmed && d.cleanHistory {
+		confirmed, err = d.deleteSurvey.AskToConfirmCleanHistory(jobName)
+	}
+
+	if confirmed && d.force {
+		confirmed, err = d.deleteSurvey.AskToConfirmForce(jobName)
+	}
+
+	return confirmed, err
 }
 
 func (d *deleteCommand) delete(namespaceName, jobName string) error {

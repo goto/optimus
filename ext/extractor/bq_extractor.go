@@ -11,26 +11,8 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-type (
-	// BQExtractorFunc extracts the rawSources from given list of resource
-	BQExtractorFunc           func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error)
-	DefaultBQExtractorFactory struct{}
-)
-
 type DDLViewGetter interface {
 	BulkGetDDLView(ctx context.Context, dataset bigquery.ProjectDataset, names []string) (map[bigquery.ResourceURN]string, error)
-}
-
-func (DefaultBQExtractorFactory) New(ctx context.Context, svcAcc string, l log.Logger) (BQExtractorFunc, error) {
-	client, err := bigquery.NewClient(ctx, svcAcc)
-	if err != nil {
-		return nil, err
-	}
-	bqExtractor, err := NewBQExtractor(client, l)
-	if err != nil {
-		return nil, err
-	}
-	return bqExtractor.Extract, nil
 }
 
 type BQExtractor struct {
@@ -56,6 +38,8 @@ func NewBQExtractor(client DDLViewGetter, l log.Logger) (*BQExtractor, error) {
 	}, nil
 }
 
+// Extract returns map of urns and its query string given list of urns
+// It extract the corresponding query only if the urn is considered as a view
 func (e BQExtractor) Extract(ctx context.Context, resourceURNs []bigquery.ResourceURN) (urnToDDL map[bigquery.ResourceURN]string, err error) {
 	// grouping
 	dsToNames := bigquery.ResourceURNs(resourceURNs).GroupByProjectDataset()

@@ -48,7 +48,10 @@ default_args = {
     "on_failure_callback": operator_failure_event,
 }
 
-# This job collects the billing information related to infrastructure
+"""
+This job collects the billing information related to infrastructure.
+This job will run in a weekly basis.
+"""
 dag = DAG(
     dag_id="infra.billing.weekly-status-reports",
     default_args=default_args,
@@ -102,7 +105,6 @@ init_env_vars = [
     k8s.V1EnvVar(name="JOB_NAME", value='infra.billing.weekly-status-reports'),
     k8s.V1EnvVar(name="OPTIMUS_HOST", value='http://optimus.example.com'),
     k8s.V1EnvVar(name="PROJECT", value='example-proj'),
-    k8s.V1EnvVar(name="SCHEDULED_AT", value='{{ data_interval_end }}'),
 ]
 
 init_container = k8s.V1Container(

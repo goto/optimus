@@ -32,6 +32,7 @@ TIMESTAMP_MS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 SCHEDULER_ERR_MSG = "scheduler_error"
 STARTUP_TIMEOUT_IN_SECS = int(Variable.get("startup_timeout_in_secs", default_var=2 * 60))
+OPTIMUS_REQUEST_TIMEOUT_IN_SECS = int(Variable.get("optimus_request_timeout_in_secs", default_var=5 * 60))
 
 def lookup_non_standard_cron_expression(expr: str) -> str:
     expr_mapping = {
@@ -48,6 +49,9 @@ def lookup_non_standard_cron_expression(expr: str) -> str:
     except KeyError:
         return expr
 
+def get_scheduled_at(context):
+    job_cron_iter = croniter(context.get("dag").schedule_interval, context.get('execution_date'))
+    return job_cron_iter.get_next(datetime)
 
 class SuperKubernetesPodOperator(KubernetesPodOperator):
     def __init__(self, *args, **kwargs):
@@ -61,9 +65,10 @@ class SuperKubernetesPodOperator(KubernetesPodOperator):
         self.config_file = kwargs.get('config_file')
 
     def render_init_containers(self, context):
-        for ic in self.init_containers:
+        for index, ic in enumerate(self.init_containers):
             env = getattr(ic, 'env')
             if env:
+                self.init_containers[index].env.append(k8s.V1EnvVar(name="SCHEDULED_AT", value=get_scheduled_at(context)))
                 self.render_template(env, context)
 
     def execute(self, context):
@@ -92,7 +97,7 @@ class OptimusAPIClient:
             'end_date': end_date,
             'downstream_project_name': downstream_project_name,
             'downstream_job_name': downstream_job_name
-        })
+        }, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         return response.json()
 
@@ -103,7 +108,7 @@ class OptimusAPIClient:
             job_name=job_name,
             reference_time=scheduled_at,
         )
-        response = requests.get(url)
+        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         return response.json()
 
@@ -112,7 +117,7 @@ class OptimusAPIClient:
         response = requests.post(url="{}/api/v1beta1/project/{}/job/{}/run_input".format(self.host, project_name, job_name),
                       json={'scheduled_at': execution_date,
                             'instance_name': instance_name,
-                            'instance_type': "TYPE_" + job_type.upper()})
+                            'instance_type': "TYPE_" + job_type.upper()}, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
 
         self._raise_error_if_request_failed(response)
         return response.json()
@@ -123,7 +128,7 @@ class OptimusAPIClient:
             namespace_name=namespace,
             project_name=project,
             job_name=job)
-        response = requests.get(url)
+        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         return response.json()
 
@@ -137,7 +142,7 @@ class OptimusAPIClient:
         request_data = {
             "event": event
         }
-        response = requests.post(url, data=json.dumps(request_data))
+        response = requests.post(url, data=json.dumps(request_data), timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         return response.json()
 
@@ -209,8 +214,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self._upstream_optimus_client = OptimusAPIClient(upstream_optimus_hostname)
 
     def poke(self, context):
-        job_cron_iter = croniter(context.get("dag").schedule_interval, context.get('execution_date'))
-        schedule_time = job_cron_iter.get_next(datetime)
+        schedule_time = get_scheduled_at(context)
 
         try:
             upstream_schedule = self.get_schedule_interval(schedule_time)
@@ -284,8 +288,7 @@ def optimus_notify(context, event_meta):
 
     current_dag_id = context.get('task_instance').dag_id
     current_execution_date = context.get('execution_date')
-    job_cron_iter = croniter(context.get("dag").schedule_interval, current_execution_date)
-    current_schedule_date = job_cron_iter.get_next(datetime)
+    current_schedule_date = get_scheduled_at(context)
 
     # failure message pushed by failed tasks
     failure_messages = []
@@ -644,7 +647,7 @@ class ExternalHttpSensor(BaseSensorOperator):
 
     def poke(self, context: 'Context') -> bool:
         self.log.info('Poking: %s', self.endpoint)
-        r = requests.get(url=self.endpoint, headers=self.headers, params=self.request_params)
+        r = requests.get(url=self.endpoint, headers=self.headers, params=self.request_params, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         if (r.status_code >= 200 and r.status_code <= 300):
             return True
         return False

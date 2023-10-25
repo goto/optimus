@@ -26,6 +26,10 @@ import (
 const (
 	ConcurrentTicketPerSec = 50
 	ConcurrentLimit        = 100
+
+	// projectConfigPrefix will be used to prefix all the config variables of
+	// a project, i.e. registered entities
+	projectConfigPrefix = "GLOBAL__"
 )
 
 type JobService struct {
@@ -71,9 +75,9 @@ type Engine interface {
 }
 
 type PluginService interface {
-	Info(context.Context, job.TaskName) (*plugin.Info, error)
-	GenerateDestination(ctx context.Context, taskName job.TaskName, configs map[string]string) (job.ResourceURN, error)
-	GenerateDependencies(ctx context.Context, taskName job.TaskName, svcAcc, query string, destinationURN job.ResourceURN) ([]job.ResourceURN, error)
+	Info(ctx context.Context, taskName string) (*plugin.Info, error)
+	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []string, err error)
+	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN string, err error)
 }
 
 type TenantDetailsGetter interface {
@@ -307,7 +311,7 @@ func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName j
 }
 
 func (j *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error) {
-	return j.pluginService.Info(ctx, task.Name())
+	return j.pluginService.Info(ctx, task.Name().String())
 }
 
 func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOpt) ([]*job.Job, error) {
@@ -567,6 +571,10 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	me.Append(err)
 
+	if len(toAdd)+len(toUpdate)+len(toDelete) == 0 {
+		return me.ToErr()
+	}
+
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, toUpdate...), logWriter)
 	me.Append(err)
 
@@ -578,9 +586,9 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	// assumption, all job specs from input are also the job within same project
 	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, unmodifiedSpecs)
 	identifierToJobsMap := getIdentifierToJobsMap(jobsToValidateMap)
-	for _, jobEntity := range jobsToValidateMap {
-		if _, err := j.validateCyclic(jobEntity.Job().Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
-			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Job().Spec().Name(), err)
+	for _, jobEntity := range incomingJobs {
+		if _, err := j.validateCyclic(jobEntity.Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
+			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Spec().Name(), err)
 			me.Append(err)
 			break
 		}
@@ -931,10 +939,6 @@ func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails
 }
 
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
-	var destination job.ResourceURN = ""
-	var sources []job.ResourceURN = nil
-	var err error = nil
-
 	if windowConfig := spec.WindowConfig(); windowConfig.Type() == window.Preset {
 		if _, err := tenantWithDetails.Project().GetPreset(windowConfig.Preset); err != nil {
 			errorMsg := fmt.Sprintf("error getting preset for job [%s]: %s", spec.Name(), err)
@@ -942,37 +946,13 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		}
 	}
 
-	// TODO(generic deps resolution): move plugin check inside pluginService methods
-	const bq2bq = "bq2bq"
-	if spec.Task().Name() == bq2bq { // for now, only work for bq2bq plugin
-		compileConfigs := j.compileConfigs(spec.Task().Config(), tenantWithDetails)
-
-		// generate destination
-		destination, err = j.pluginService.GenerateDestination(ctx, spec.Task().Name(), compileConfigs)
-		if err != nil {
-			j.logger.Error("error generating destination for [%s]: %s", spec.Name(), err)
-			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
-		}
-
-		// generate upstream dependencies
-		svcAcc, ok := compileConfigs["BQ_SERVICE_ACCOUNT"]
-		if !ok || len(svcAcc) == 0 {
-			j.logger.Error("Required secret BQ_SERVICE_ACCOUNT not found in config")
-			return nil, fmt.Errorf("secret BQ_SERVICE_ACCOUNT required to generate dependencies not found")
-		}
-
-		query, ok := spec.Asset()["query.sql"]
-		if !ok {
-			return nil, fmt.Errorf("empty sql file")
-		}
-
-		sources, err = j.pluginService.GenerateDependencies(ctx, spec.Task().Name(), svcAcc, query, destination)
-		if err != nil {
-			j.logger.Error("error generating upstream for [%s]: %s", spec.Name(), err)
-			errorMsg := fmt.Sprintf("unable to add %s: %s", spec.Name().String(), err.Error())
-			return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
-		}
+	destination, err := j.generateDestinationURN(ctx, tenantWithDetails, spec)
+	if err != nil {
+		return nil, err
+	}
+	sources, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, spec)
+	if err != nil {
+		return nil, err
 	}
 
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
@@ -1149,4 +1129,36 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 		"namespace": jobTenant.NamespaceName().String(),
 		"status":    state,
 	}).Add(float64(metricValue))
+}
+
+func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]job.ResourceURN, error) {
+	taskName := spec.Task().Name().String()
+	taskConfig := spec.Task().Config()
+	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
+	assets := spec.Asset()
+
+	resourceURNs, err := j.pluginService.IdentifyUpstreams(ctx, taskName, compileConfigs, assets)
+	if err != nil {
+		return nil, err
+	}
+
+	jobResourceURNs := make([]job.ResourceURN, len(resourceURNs))
+	for i, resourceURN := range resourceURNs {
+		jobResourceURNs[i] = job.ResourceURN(resourceURN)
+	}
+
+	return jobResourceURNs, nil
+}
+
+func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (job.ResourceURN, error) {
+	taskName := spec.Task().Name().String()
+	taskConfig := spec.Task().Config()
+	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
+
+	destinationURN, err := j.pluginService.ConstructDestinationURN(ctx, taskName, compileConfigs)
+	if err != nil {
+		return "", err
+	}
+
+	return job.ResourceURN(destinationURN), nil
 }

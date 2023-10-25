@@ -57,7 +57,9 @@ default_args = {
 }
 
 {{ if ne .JobDetails.JobMetadata.Description "" -}}
-# {{.JobDetails.JobMetadata.Description}}
+"""
+{{.JobDetails.JobMetadata.Description}}
+"""
 {{- end }}
 dag = DAG(
     dag_id={{.JobDetails.Name.String | quote}},
@@ -132,7 +134,6 @@ init_env_vars = [
     k8s.V1EnvVar(name="JOB_NAME", value='{{$.JobDetails.Name}}'),
     k8s.V1EnvVar(name="OPTIMUS_HOST", value='{{$.Hostname}}'),
     k8s.V1EnvVar(name="PROJECT", value='{{$.Tenant.ProjectName.String}}'),
-    k8s.V1EnvVar(name="SCHEDULED_AT", value='{{ "{{ data_interval_end }}" }}'),
 ]
 
 init_container = k8s.V1Container(

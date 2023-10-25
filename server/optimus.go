@@ -29,7 +29,6 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
-	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
@@ -44,6 +43,8 @@ import (
 	"github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/plugin"
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
+	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	oHandler "github.com/goto/optimus/server/handler/v1beta1"
 )
@@ -315,14 +316,17 @@ func (s *OptimusServer) setupHandlers() error {
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
 	)
 
+	// Plugin
+	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
+	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
+	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
+
 	// Job Bounded Context Setup
-	jExtractorFactory := extractor.DefaultBQExtractorFactory{}
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
-	jPluginService := jService.NewJobPluginService(s.pluginRepo, jExtractorFactory, s.logger)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
-	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, jPluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
+	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, pluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
 
 	// Resource Bounded Context
 	resourceRepository := resource.NewRepository(s.dbPool)

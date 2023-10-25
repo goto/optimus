@@ -29,16 +29,18 @@ type PluginSpec struct {
 
 func (p *PluginSpec) PluginInfo() *plugin.Info {
 	return &plugin.Info{
-		Name:          p.Name,
-		Description:   p.Description,
-		Image:         p.Image,
-		Entrypoint:    p.Entrypoint,
-		PluginType:    p.PluginType,
-		PluginMods:    []plugin.Mod{plugin.ModTypeCLI},
-		PluginVersion: p.PluginVersion,
-		HookType:      p.HookType,
-		DependsOn:     p.DependsOn,
-		APIVersion:    p.APIVersion,
+		Name:                   p.Name,
+		Description:            p.Description,
+		Image:                  p.Image,
+		Entrypoint:             p.Entrypoint,
+		AssetParsers:           p.AssetParsers,
+		DestinationURNTemplate: p.DestinationURNTemplate,
+		PluginType:             p.PluginType,
+		PluginMods:             []plugin.Mod{plugin.ModTypeCLI},
+		PluginVersion:          p.PluginVersion,
+		HookType:               p.HookType,
+		DependsOn:              p.DependsOn,
+		APIVersion:             p.APIVersion,
 	}
 }
 

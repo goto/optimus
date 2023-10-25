@@ -7,11 +7,6 @@ import (
 	"github.com/goto/optimus/ext/store/bigquery"
 )
 
-type (
-	// ParserFunc parses rawResource to list of resource urn
-	ParserFunc func(rawResource string) []bigquery.ResourceURN
-)
-
 var (
 	topLevelUpstreamsPattern = regexp.MustCompile(
 		"(?i)(?:FROM)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-\\*?]+)`?" + //nolint:gocritic
@@ -20,7 +15,17 @@ var (
 			"|" +
 			"(?i)(?:WITH)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?\\s+(?:AS)" +
 			"|" +
-			"(?i)(?:VIEW)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
+			"(?i)(?:MERGE)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
+			"|" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+			"(?i)(?:INSERT)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
+			"|" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
+			"(?i)(?:DELETE)\\s*(?:FROM)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
+			"|" +
+			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
+			"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`?" + // to ignore
 			"|" +
 			"(?i)(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`([\\w-]+)\\.([\\w-]+)\\.([\\w-]+)`\\s*(?:AS)?")
 
@@ -29,7 +34,7 @@ var (
 	specialCommentPattern     = regexp.MustCompile(`(\/\*\s*(@[a-zA-Z0-9_-]+)\s*\*\/)`)
 )
 
-func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
+func ParseTopLevelUpstreamsFromQuery(query string) []string {
 	cleanedQuery := cleanQueryFromComment(query)
 
 	resourcesFound := make(map[bigquery.ResourceURN]bool)
@@ -49,10 +54,16 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 5, 6, 7, 8
 		case "with":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 9, 10, 11, 12
-		case "view":
+		case "merge":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 13, 14, 15, 16
-		default:
+		case "insert":
 			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 17, 18, 19, 20
+		case "delete":
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 21, 22, 23, 24
+		case "create":
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 25, 26, 27, 28
+		default:
+			ignoreUpstreamIdx, projectIdx, datasetIdx, nameIdx = 29, 30, 31, 32
 		}
 
 		project := match[projectIdx]
@@ -67,7 +78,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 			continue
 		}
 
-		if clause == "view" {
+		if clause == "create" || clause == "merge" || clause == "insert" || clause == "delete" {
 			continue
 		}
 
@@ -80,13 +91,13 @@ func ParseTopLevelUpstreamsFromQuery(query string) []bigquery.ResourceURN {
 		}
 	}
 
-	output := []bigquery.ResourceURN{}
+	output := []string{}
 
 	for resourceURN := range resourcesFound {
 		if pseudoResources[resourceURN] {
 			continue
 		}
-		output = append(output, resourceURN)
+		output = append(output, resourceURN.URN())
 	}
 
 	return output

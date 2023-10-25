@@ -102,6 +102,7 @@ func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUp
 func (s *JobRunService) resolveAndDeployJobs(ctx context.Context, tnnt tenant.Tenant, toUpdate []string) error {
 	allJobsWithDetails, err := s.jobRepo.GetJobs(ctx, tnnt.ProjectName(), toUpdate)
 	if err != nil || allJobsWithDetails == nil {
+		// mark failed jobs as dirty and upload the remaining
 		return err
 	}
 

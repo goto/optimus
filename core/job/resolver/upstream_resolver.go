@@ -45,6 +45,8 @@ type JobRepository interface {
 func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) ([]*job.WithUpstream, error) {
 	me := errors.NewMultiError("bulk resolve jobs errors")
 
+	// todo: jobs to have a new feild in db called STATE, if error happens in some important steps of a job then mark the state as Failed,
+	// and later in the code, update in DB all the jobs that had state marked as failed
 	jobsWithUnresolvedUpstream, err := job.Jobs(jobs).GetJobsWithUnresolvedUpstreams()
 	if err != nil {
 		errorMsg := fmt.Sprintf("[%s] %s", jobs[0].Tenant().NamespaceName().String(), err.Error())
@@ -57,6 +59,7 @@ func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.Pr
 		errorMsg := fmt.Sprintf("unable to resolve upstream: %s", err.Error())
 		logWriter.Write(writer.LogLevelError, errorMsg)
 		me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg))
+		//don't early return, let the jobs be marked dirty and process the rest of them
 		return nil, me.ToErr()
 	}
 

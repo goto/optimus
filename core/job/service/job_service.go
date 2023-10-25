@@ -413,15 +413,17 @@ func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOp
 	return nil, fmt.Errorf("no filter matched")
 }
 
-func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("replace all specs errors")
+func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, incomingSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
+	me := errors.NewMultiError("replace all incomingSpecs errors")
 
 	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
+	// should do an early return here
 	me.Append(err)
 
-	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, specs, jobNamesWithInvalidSpec)
-	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
-	me.Append(err)
+	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, incomingSpecs, jobNamesWithInvalidSpec)
+
+	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job incomingSpecs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
+	//me.Append(err)
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
@@ -431,6 +433,8 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	}
 
 	addedJobs, err := j.bulkAdd(ctx, tenantWithDetails, toAdd, logWriter)
+	// determine downstream jobs here and then consider them also for update,
+	// create a metric how many jobs got updated like this
 	me.Append(err)
 	failedToAdd := len(toAdd) - len(addedJobs)
 
@@ -800,6 +804,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 		fullName := job.FullNameFrom(jobTenant.ProjectName(), spec.Name())
 		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), map[job.FullName]bool{})
 		if err != nil {
+			// mark job as dirty
 			j.logger.Error("error getting downstreams for job [%s]: %s", spec.Name(), err)
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), spec.Name().String(), err.Error()))
 			me.Append(err)
@@ -859,9 +864,9 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	return deletedJobNames, me.ToErr()
 }
 
-func (*JobService) differentiateSpecs(existingJobs []*job.Job, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified []*job.Spec, err error) {
+func (*JobService) differentiateSpecs(existingJobs []*job.Job, incomingSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified []*job.Spec, err error) {
 	// TODO: consider checking multi-error if it is required here
-	me := errors.NewMultiError("differentiate specs errors")
+	me := errors.NewMultiError("differentiate incomingSpecs errors")
 
 	var addedSpecs, modifiedSpecs, unmodifiedSpecs, deletedSpecs []*job.Spec
 
@@ -870,7 +875,7 @@ func (*JobService) differentiateSpecs(existingJobs []*job.Job, specs []*job.Spec
 		delete(existingSpecsMap, jobNameToSkip)
 	}
 
-	for _, incomingSpec := range specs {
+	for _, incomingSpec := range incomingSpecs {
 		if spec, ok := existingSpecsMap[incomingSpec.Name()]; !ok {
 			addedSpecs = append(addedSpecs, incomingSpec)
 		} else if !reflect.DeepEqual(spec, incomingSpec) {
@@ -880,12 +885,13 @@ func (*JobService) differentiateSpecs(existingJobs []*job.Job, specs []*job.Spec
 		}
 	}
 
-	incomingSpecsMap := job.Specs(specs).ToNameAndSpecMap()
+	incomingSpecsMap := job.Specs(incomingSpecs).ToNameAndSpecMap()
 	for existingJobName, existingJobSpec := range existingSpecsMap {
 		if _, ok := incomingSpecsMap[existingJobName]; !ok {
 			deletedSpecs = append(deletedSpecs, existingJobSpec)
 		}
 	}
+	//TODO: remove error
 	return addedSpecs, modifiedSpecs, deletedSpecs, unmodifiedSpecs, me.ToErr()
 }
 

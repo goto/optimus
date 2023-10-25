@@ -393,10 +393,10 @@ func (j JobRepository) toJobNameWithUpstreams(storeJobsWithUpstreams []*JobWithU
 		jobNameWithUpstreams[name] = upstreams
 	}
 
-	if err := me.ToErr(); err != nil {
-		return nil, err
-	}
-	return jobNameWithUpstreams, nil
+	// if err := me.ToErr(); err != nil {
+	// 	return nil, err
+	// }
+	return jobNameWithUpstreams, me.ToErr()
 }
 
 func groupUpstreamsPerJobFullName(upstreams []*JobWithUpstream) map[string][]*JobWithUpstream {

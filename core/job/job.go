@@ -37,6 +37,7 @@ type Job struct {
 
 	destination ResourceURN
 	sources     []ResourceURN
+	dirty       bool
 }
 
 func (j *Job) Tenant() tenant.Tenant {
@@ -58,6 +59,7 @@ func (j *Job) FullName() string {
 func (j *Job) GetJobWithUnresolvedUpstream() (*WithUpstream, error) {
 	unresolvedStaticUpstreams, err := j.getStaticUpstreamsToResolve()
 	if err != nil {
+		j.dirty = true
 		err = errors.InvalidArgument(EntityJob, fmt.Sprintf("failed to get static upstreams to resolve for job %s", j.GetName()))
 	}
 	unresolvedInferredUpstreams := j.getInferredUpstreamsToResolve()

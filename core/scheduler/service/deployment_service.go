@@ -103,6 +103,8 @@ func (s *JobRunService) resolveAndDeployJobs(ctx context.Context, tnnt tenant.Te
 	allJobsWithDetails, err := s.jobRepo.GetJobs(ctx, tnnt.ProjectName(), toUpdate)
 	if err != nil || allJobsWithDetails == nil {
 		// mark failed jobs as dirty and upload the remaining
+		//  scenario : GetJobs returns partial jobs with errors,
+		// impact : its important to deploy the jobs that are fetched else they wont show up in the next replace all
 		return err
 	}
 
@@ -112,4 +114,5 @@ func (s *JobRunService) resolveAndDeployJobs(ctx context.Context, tnnt tenant.Te
 	}
 
 	return s.scheduler.DeployJobs(ctx, tnnt, allJobsWithDetails)
+	//  similarly is there are errors in deploy jobs for certain dags, then they need to marked as dirty in Optimus DB too
 }

@@ -417,10 +417,15 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, in
 	me := errors.NewMultiError("replace all incomingSpecs errors")
 
 	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
-	// should do an early return here
+	// TODO: do an early return here
+	// Scenario: If we are not able to get all jobs for any reason , then there is no point running differentiateSpecs
+	// Impact: improper calculation on differentiateSpecs
 	me.Append(err)
 
+	// Donot return ant error from differentiateSpecs as this function does not have any error case
 	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, incomingSpecs, jobNamesWithInvalidSpec)
+	// to also return jobs marked as not synced or dirty in the DB
+	//  Log these jobs on Console/info log as well, as its difficult to go through the pipeline logs at the time of debugging
 
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job incomingSpecs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	//me.Append(err)
@@ -435,6 +440,9 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, in
 	addedJobs, err := j.bulkAdd(ctx, tenantWithDetails, toAdd, logWriter)
 	// determine downstream jobs here and then consider them also for update,
 	// create a metric how many jobs got updated like this
+	// scenario: Job B reads on table 'a' and optimus does not have any job that writes on table 'a' , in this scenario it will be a failed infered upstream , which is a not erronios scenario
+	//  			later a user creates a job A that writes to table 'a', since there is no change on Job B there will not be any dependency resolution here , and this will result in a missing sensor
+
 	me.Append(err)
 	failedToAdd := len(toAdd) - len(addedJobs)
 
@@ -804,7 +812,6 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 		fullName := job.FullNameFrom(jobTenant.ProjectName(), spec.Name())
 		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), map[job.FullName]bool{})
 		if err != nil {
-			// mark job as dirty
 			j.logger.Error("error getting downstreams for job [%s]: %s", spec.Name(), err)
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), spec.Name().String(), err.Error()))
 			me.Append(err)

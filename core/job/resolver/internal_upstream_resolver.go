@@ -59,7 +59,10 @@ func (i internalUpstreamResolver) BulkResolve(ctx context.Context, projectName t
 	// jobs that dont have resolved upstream mark them dirty
 	if err != nil {
 		errorMsg := fmt.Sprintf("unable to resolve upstream: %s", err.Error())
+
 		// dont return here, get a filtered list of jobs that are not dirty, and process them for further steps
+		// scenario	:	error in upstream resolution of some jobs will result in not updating any jobs upstreams
+		// impact 	:	jobs will continue to have stale upstreams deployed
 		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
 	}
 

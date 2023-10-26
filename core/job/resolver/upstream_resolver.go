@@ -60,6 +60,7 @@ func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.Pr
 		logWriter.Write(writer.LogLevelError, errorMsg)
 		me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg))
 		//don't early return, let the jobs be marked dirty and process the rest of them
+		// impact : upstream resolution for external upstreams will not happen for any other jobs as well ,
 		return nil, me.ToErr()
 	}
 

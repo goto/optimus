@@ -162,7 +162,8 @@ func (j *jobRunInputCommand) writeJobResponseSecretToFile(
 		if strings.Contains(val, unsubstitutedValue) {
 			j.keysWithUnsubstitutedValue = append(j.keysWithUnsubstitutedValue, key)
 		}
-		secretsFileContent += fmt.Sprintf("%s='%s'\n", key, val)
+		escapedVal := strings.ReplaceAll(val, "'", "'\\''")
+		secretsFileContent += fmt.Sprintf("%s='%s'\n", key, escapedVal)
 	}
 
 	filePath := filepath.Join(dirPath, typeSecretFileName)
@@ -179,7 +180,8 @@ func (j *jobRunInputCommand) writeJobResponseEnvToFile(jobResponse *pb.JobRunInp
 		if strings.Contains(val, unsubstitutedValue) {
 			j.keysWithUnsubstitutedValue = append(j.keysWithUnsubstitutedValue, key)
 		}
-		envFileBlob += fmt.Sprintf("%s='%s'\n", key, val)
+		escapedVal := strings.ReplaceAll(val, "'", "'\\''")
+		envFileBlob += fmt.Sprintf("%s='%s'\n", key, escapedVal)
 	}
 
 	filePath := filepath.Join(dirPath, typeEnvFileName)

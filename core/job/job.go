@@ -59,6 +59,7 @@ func (j *Job) FullName() string {
 func (j *Job) GetJobWithUnresolvedUpstream() (*WithUpstream, error) {
 	unresolvedStaticUpstreams, err := j.getStaticUpstreamsToResolve()
 	if err != nil {
+		// this job is dirty
 		j.dirty = true
 		err = errors.InvalidArgument(EntityJob, fmt.Sprintf("failed to get static upstreams to resolve for job %s", j.GetName()))
 	}

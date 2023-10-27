@@ -417,10 +417,9 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, in
 	me := errors.NewMultiError("replace all incomingSpecs errors")
 
 	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
-	// TODO: do an early return here
-	// Scenario: If we are not able to get all jobs for any reason , then there is no point running differentiateSpecs
-	// Impact: improper calculation on differentiateSpecs
-	me.Append(err)
+	if err != nil {
+		return err
+	}
 
 	// Donot return ant error from differentiateSpecs as this function does not have any error case
 	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, incomingSpecs, jobNamesWithInvalidSpec)
@@ -457,7 +456,10 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, in
 	me.Append(err)
 
 	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, deletedJobNames)
+	// mark the jobs that failed compilation and uploading, as dirty in DB
 	me.Append(err)
+
+	//commit to DB the dirty states
 
 	raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventStateUpsertFailed, failedToAdd+failedToUpdate)
 

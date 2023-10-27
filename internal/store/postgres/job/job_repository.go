@@ -20,7 +20,7 @@ const (
 	jobColumnsToStore = `name, version, owner, description, labels, schedule, alert, static_upstreams, http_upstreams, 
 	task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 
-	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at`
+	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at, is_dirty`
 )
 
 type JobRepository struct {

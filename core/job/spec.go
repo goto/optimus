@@ -30,6 +30,7 @@ type Spec struct {
 	asset        Asset
 	alertSpecs   []*AlertSpec
 	upstreamSpec *UpstreamSpec
+	isDirty      bool
 }
 
 func (s *Spec) Version() int {
@@ -82,6 +83,14 @@ func (s *Spec) Asset() Asset {
 
 func (s *Spec) Metadata() *Metadata {
 	return s.metadata
+}
+
+func (s *Spec) IsDirty() bool {
+	return s.isDirty
+}
+
+func (s *Spec) SetDirty(val bool) {
+	s.isDirty = val
 }
 
 type SpecBuilder struct {
@@ -143,6 +152,11 @@ func (s *SpecBuilder) WithLabels(labels map[string]string) *SpecBuilder {
 
 func (s *SpecBuilder) WithDescription(description string) *SpecBuilder {
 	s.spec.description = description
+	return s
+}
+
+func (s *SpecBuilder) IsDirty(dirty bool) *SpecBuilder {
+	s.spec.isDirty = dirty
 	return s
 }
 

@@ -56,7 +56,8 @@ func (i internalUpstreamResolver) BulkResolve(ctx context.Context, projectName t
 	jobNames := job.WithUpstreams(jobsWithUnresolvedUpstream).GetSubjectJobNames()
 
 	allInternalUpstreamMap, err := i.jobRepository.ResolveUpstreams(ctx, projectName, jobNames)
-	if err != nil {
+	// need to know the jobs names that have failed , to mark them dirty, and then a partial error needs to be returned
+	if err != nil { //  this needs to go away
 		errorMsg := fmt.Sprintf("unable to resolve upstream: %s", err.Error())
 		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg)
 	}

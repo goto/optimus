@@ -58,6 +58,7 @@ func (j *Job) FullName() string {
 func (j *Job) GetJobWithUnresolvedUpstream() (*WithUpstream, error) {
 	unresolvedStaticUpstreams, err := j.getStaticUpstreamsToResolve()
 	if err != nil {
+		j.Spec().SetDirty(true)
 		err = errors.InvalidArgument(EntityJob, fmt.Sprintf("failed to get static upstreams to resolve for job %s", j.GetName()))
 	}
 	unresolvedInferredUpstreams := j.getInferredUpstreamsToResolve()
@@ -201,7 +202,10 @@ func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
 	var jobsWithUnresolvedUpstream []*WithUpstream
 	for _, subjectJob := range j {
 		jobWithUnresolvedUpstream, err := subjectJob.GetJobWithUnresolvedUpstream()
-		me.Append(err)
+		if err != nil {
+			subjectJob.Spec().SetDirty(true)
+			me.Append(err)
+		}
 		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, jobWithUnresolvedUpstream)
 	}
 

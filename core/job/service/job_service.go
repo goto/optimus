@@ -901,7 +901,6 @@ func (j *JobService) differentiateSpecs(existingJobs []*job.Job, incomingSpecs [
 		}
 
 		if wasDirty {
-			spec.SetDirty(true)
 			unmodifiedDirtySpecs = append(unmodifiedDirtySpecs, spec)
 		}
 		unmodifiedSpecs = append(unmodifiedSpecs, incomingSpec)

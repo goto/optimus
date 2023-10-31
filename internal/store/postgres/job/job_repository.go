@@ -295,7 +295,7 @@ func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, 
 	return spec, err
 }
 
-func (j JobRepository) ResolveUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name) (map[job.Name][]*job.Upstream, error) {
+func (j JobRepository) ResolveUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name) (map[job.Name][]*job.Upstream, map[job.Name]error) {
 	query := `
 WITH static_upstreams AS (
 	SELECT j.name, j.project_name, d.static_upstream
@@ -367,36 +367,34 @@ WHERE j.deleted_at IS NULL;`
 		}
 		storeJobsWithUpstreams = append(storeJobsWithUpstreams, &jwu)
 	}
-
-	return j.toJobNameWithUpstreams(storeJobsWithUpstreams)
+	jobNameWithUpstreams, errMap := j.toJobNameWithUpstreams(storeJobsWithUpstreams)
+	return jobNameWithUpstreams, err
 }
 
-func (j JobRepository) toJobNameWithUpstreams(storeJobsWithUpstreams []*JobWithUpstream) (map[job.Name][]*job.Upstream, error) {
-	me := errors.NewMultiError("to job name with upstreams errors")
+func (j JobRepository) toJobNameWithUpstreams(storeJobsWithUpstreams []*JobWithUpstream) (map[job.Name][]*job.Upstream, map[job.Name]error) {
 	upstreamsPerJobName := groupUpstreamsPerJobFullName(storeJobsWithUpstreams)
 
 	jobNameWithUpstreams := make(map[job.Name][]*job.Upstream)
-	for _, storeUpstreams := range upstreamsPerJobName {
+	jobFullNameErrorMap := make(map[job.Name]error)
+	for jobFullName, storeUpstreams := range upstreamsPerJobName {
 		if len(storeUpstreams) == 0 {
-			continue
-		}
-		upstreams, err := j.toUpstreams(storeUpstreams)
-		if err != nil {
-			me.Append(err)
 			continue
 		}
 		name, err := job.NameFrom(storeUpstreams[0].JobName)
 		if err != nil {
-			me.Append(err)
+			jobFullNameErrorMap[job.Name(jobFullName)] = err
 			continue
 		}
+		upstreams, err := j.toUpstreams(storeUpstreams)
+		if err != nil {
+			jobFullNameErrorMap[name] = err
+			continue
+		}
+
 		jobNameWithUpstreams[name] = upstreams
 	}
 
-	if err := me.ToErr(); err != nil {
-		return nil, err
-	}
-	return jobNameWithUpstreams, nil
+	return jobNameWithUpstreams, jobFullNameErrorMap
 }
 
 func groupUpstreamsPerJobFullName(upstreams []*JobWithUpstream) map[string][]*JobWithUpstream {
@@ -458,6 +456,7 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 
 		upstreamType, err := job.UpstreamTypeFrom(storeUpstream.UpstreamType)
 		if err != nil {
+			me.Append(errors.Wrap(job.EntityJob, fmt.Sprintf("failed to get upstream type for upstream %s of job %s", storeUpstream.UpstreamJobName.String, storeUpstream.JobName), err))
 			continue
 		}
 
@@ -474,10 +473,7 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 		upstream := job.NewUpstreamResolved(upstreamName, upstreamHost, resourceURN, upstreamTenant, upstreamType, taskName, upstreamExternal)
 		upstreams = append(upstreams, upstream)
 	}
-	if err := me.ToErr(); err != nil {
-		return nil, err
-	}
-	return job.Upstreams(upstreams).Deduplicate(), nil
+	return job.Upstreams(upstreams).Deduplicate(), me.ToErr()
 }
 
 func (j JobRepository) GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {

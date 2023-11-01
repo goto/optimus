@@ -3,8 +3,9 @@ package job_test
 import (
 	"testing"
 
-	"github.com/goto/optimus/client/cmd/job"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/client/cmd/job"
 )
 
 func TestConstructConfigEnvSourcingContent(t *testing.T) {

@@ -156,15 +156,8 @@ func (j *jobRunInputCommand) writeInstanceResponse(jobResponse *pb.JobRunInputRe
 func (j *jobRunInputCommand) writeJobResponseSecretToFile(
 	jobResponse *pb.JobRunInputResponse, dirPath string,
 ) error {
-	// write all secrets into a file
-	secretsFileContent := ""
-	for key, val := range jobResponse.Secrets {
-		if strings.Contains(val, unsubstitutedValue) {
-			j.keysWithUnsubstitutedValue = append(j.keysWithUnsubstitutedValue, key)
-		}
-		escapedVal := strings.ReplaceAll(val, "'", "'\\''")
-		secretsFileContent += fmt.Sprintf("%s='%s'\n", key, escapedVal)
-	}
+	secretsFileContent, keysWithUnsubstitutedValue := ConstructConfigEnvSourcingContent(jobResponse.Envs)
+	j.keysWithUnsubstitutedValue = append(j.keysWithUnsubstitutedValue, keysWithUnsubstitutedValue...)
 
 	filePath := filepath.Join(dirPath, typeSecretFileName)
 	writeToFileFn := utils.WriteStringToFileIndexed()
@@ -175,14 +168,8 @@ func (j *jobRunInputCommand) writeJobResponseSecretToFile(
 }
 
 func (j *jobRunInputCommand) writeJobResponseEnvToFile(jobResponse *pb.JobRunInputResponse, dirPath string) error {
-	envFileBlob := ""
-	for key, val := range jobResponse.Envs {
-		if strings.Contains(val, unsubstitutedValue) {
-			j.keysWithUnsubstitutedValue = append(j.keysWithUnsubstitutedValue, key)
-		}
-		escapedVal := strings.ReplaceAll(val, "'", "'\\''")
-		envFileBlob += fmt.Sprintf("%s='%s'\n", key, escapedVal)
-	}
+	envFileBlob, keysWithUnsubstitutedValue := ConstructConfigEnvSourcingContent(jobResponse.Envs)
+	j.keysWithUnsubstitutedValue = append(j.keysWithUnsubstitutedValue, keysWithUnsubstitutedValue...)
 
 	filePath := filepath.Join(dirPath, typeEnvFileName)
 	writeToFileFn := utils.WriteStringToFileIndexed()
@@ -190,6 +177,17 @@ func (j *jobRunInputCommand) writeJobResponseEnvToFile(jobResponse *pb.JobRunInp
 		return fmt.Errorf("failed to write asset file at %s: %w", filePath, err)
 	}
 	return nil
+}
+
+func ConstructConfigEnvSourcingContent(config map[string]string) (content string, keysWithUnsubstitutedValue []string) {
+	for key, val := range config {
+		if strings.Contains(val, unsubstitutedValue) {
+			keysWithUnsubstitutedValue = append(keysWithUnsubstitutedValue, key)
+		}
+		escapedVal := strings.ReplaceAll(val, "'", "'\\''")
+		content += fmt.Sprintf("%s='%s'\n", key, escapedVal)
+	}
+	return content, keysWithUnsubstitutedValue
 }
 
 func (j *jobRunInputCommand) writeJobAssetsToFiles(

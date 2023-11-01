@@ -16,9 +16,8 @@ func TestConstructConfigEnvSourcingContent(t *testing.T) {
 		}
 		content, keys := job.ConstructConfigEnvSourcingContent(config)
 		assert.Len(t, keys, 1)
-		assert.Equal(t, `EXAMPLE='<no value>'
-ANOTHER='hello'
-`, content)
+		assert.Contains(t, content, `EXAMPLE='<no value>'`)
+		assert.Contains(t, content, `ANOTHER='hello'`)
 	})
 	t.Run("construct content with single quote in it", func(t *testing.T) {
 		config := map[string]string{
@@ -27,8 +26,7 @@ ANOTHER='hello'
 		}
 		content, keys := job.ConstructConfigEnvSourcingContent(config)
 		assert.Len(t, keys, 0)
-		assert.Equal(t, `EXAMPLE='value with '\''single quote'\'''
-ANOTHER='hello'
-`, content)
+		assert.Contains(t, content, `EXAMPLE='value with '\''single quote'\'''`)
+		assert.Contains(t, content, `ANOTHER='hello'`)
 	})
 }

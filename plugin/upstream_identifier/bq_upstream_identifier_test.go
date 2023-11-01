@@ -75,7 +75,7 @@ func TestIdentifyResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
-	t.Run("should return empty resource and no error when extractor fail to extract", func(t *testing.T) {
+	t.Run("should return empty resource and error when extractor fail to extract", func(t *testing.T) {
 		evaluatorFunc := new(EvalAssetFunc)
 		defer evaluatorFunc.AssertExpectations(t)
 		parserFunc := new(ParserFunc)
@@ -92,7 +92,7 @@ func TestIdentifyResources(t *testing.T) {
 		assert.NotNil(t, bqUpstreamIdentifier)
 
 		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
-		assert.NoError(t, err)
+		assert.Error(t, err)
 		assert.Empty(t, resourceURNs)
 	})
 	t.Run("should skip the urn if parser passed with wrong urn formt", func(t *testing.T) {

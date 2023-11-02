@@ -331,6 +331,41 @@ func TestIdentifyUpstreams(t *testing.T) {
 		assert.NotEmpty(t, resourceURNs)
 		assert.Len(t, resourceURNs, 1)
 	})
+	t.Run("should generate clean dependencies without destination in it", func(t *testing.T) {
+		pluginGetter := new(PluginGetter)
+		defer pluginGetter.AssertExpectations(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
+		evaluatorFactory := new(EvaluatorFactory)
+		defer evaluatorFactory.AssertExpectations(t)
+		evaluator := new(Evaluator)
+		defer evaluator.AssertExpectations(t)
+		upstreamIdentifier := new(UpstreamIdentifier)
+		defer upstreamIdentifier.AssertExpectations(t)
+
+		pluginYamlTestWithDestinationTemplate, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_destination_template.yaml")
+		assert.NoError(t, err)
+		pluginTestWithDestinationTemplate := &p.Plugin{
+			YamlMod: pluginYamlTestWithDestinationTemplate,
+		}
+		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithDestinationTemplate, nil)
+		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
+		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl", "bigquery://projectA:datasetB.tableC"}, nil)
+		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
+		assert.NoError(t, err)
+		assert.NotNil(t, pluginService)
+
+		configTask := map[string]string{}
+		configTask["BQ_SERVICE_ACCOUNT"] = "service_account_value"
+		configTask["PROJECT"] = "projectA"
+		configTask["DATASET"] = "datasetB"
+		configTask["TABLE"] = "tableC"
+		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, configTask, assets)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, resourceURNs)
+		assert.Len(t, resourceURNs, 1)
+	})
 }
 
 func TestConstructDestinationURN(t *testing.T) {

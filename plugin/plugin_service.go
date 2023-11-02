@@ -136,7 +136,21 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 		resourceURNs = append(resourceURNs, currentResourceURNs...)
 	}
 
-	return resourceURNs, me.ToErr()
+	// ignore destination urns
+	destinationURN, err := s.ConstructDestinationURN(ctx, taskName, compiledConfig)
+	if err != nil {
+		return nil, err
+	}
+	filteredResourceURNs := []string{}
+	for _, resourceURN := range resourceURNs {
+		if resourceURN == destinationURN {
+			s.l.Warn("ignore destination resource %s", resourceURN)
+			continue
+		}
+		filteredResourceURNs = append(filteredResourceURNs, resourceURN)
+	}
+
+	return filteredResourceURNs, me.ToErr()
 }
 
 func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {

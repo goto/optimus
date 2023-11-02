@@ -40,30 +40,37 @@ func NewBQExtractor(client DDLViewGetter, l log.Logger) (*BQExtractor, error) {
 
 // Extract returns map of urns and its query string given list of urns
 // It extract the corresponding query only if the urn is considered as a view
-func (e BQExtractor) Extract(ctx context.Context, resourceURNs []bigquery.ResourceURN) (urnToDDL map[bigquery.ResourceURN]string, err error) {
+func (e BQExtractor) Extract(ctx context.Context, resourceURNs []bigquery.ResourceURN) (urnToDDLAll map[bigquery.ResourceURN]string, err error) {
 	// grouping
 	dsToNames := bigquery.ResourceURNs(resourceURNs).GroupByProjectDataset()
 
 	// fetch ddl for each resourceURN
-	urnToDDL = make(map[bigquery.ResourceURN]string, len(resourceURNs))
+	me := errors.NewMultiError("extract resourceURN to ddl errors")
+	urnToDDLAll = make(map[bigquery.ResourceURN]string)
 	const maxRetry = 3
 	for ds, names := range dsToNames {
-		urnToDDLView, err := bulkGetDDLViewWithRetry(e.client, e.l, maxRetry)(ctx, ds, names)
+		urnToDDL, err := bulkGetDDLViewWithRetry(e.client, e.l, maxRetry)(ctx, ds, names)
 		if err != nil {
-			return nil, err
+			if isIgnorableError(err) {
+				e.l.Error(err.Error())
+			} else {
+				me.Append(err)
+			}
 		}
-		for urn, ddl := range urnToDDLView {
-			urnToDDL[urn] = ddl
+		for urn, ddl := range urnToDDL {
+			urnToDDLAll[urn] = ddl
 		}
 	}
 
-	return urnToDDL, nil
+	return urnToDDLAll, me.ToErr()
 }
 
 func bulkGetDDLViewWithRetry(c DDLViewGetter, l log.Logger, retry int) func(context.Context, bigquery.ProjectDataset, []string) (map[bigquery.ResourceURN]string, error) {
 	return func(ctx context.Context, dataset bigquery.ProjectDataset, names []string) (map[bigquery.ResourceURN]string, error) {
+		var urnToDDL map[bigquery.ResourceURN]string
+		var err error
 		for try := 1; try <= retry; try++ {
-			urnToDDL, err := c.BulkGetDDLView(ctx, dataset, names)
+			urnToDDL, err = c.BulkGetDDLView(ctx, dataset, names)
 			if err != nil {
 				if strings.Contains(err.Error(), "net/http: TLS handshake timeout") ||
 					strings.Contains(err.Error(), "unexpected EOF") ||
@@ -74,10 +81,16 @@ func bulkGetDDLViewWithRetry(c DDLViewGetter, l log.Logger, retry int) func(cont
 				}
 
 				l.Error("error extracting upstreams", err)
+				return urnToDDL, err
 			}
 
 			return urnToDDL, nil
 		}
-		return nil, fmt.Errorf("bigquery api retries exhausted")
+		return urnToDDL, fmt.Errorf("bigquery api retries exhausted")
 	}
+}
+
+func isIgnorableError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "access denied") || strings.Contains(msg, "user does not have permission")
 }

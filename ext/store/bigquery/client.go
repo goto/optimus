@@ -57,15 +57,24 @@ func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHand
 }
 
 func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names []string) (map[ResourceURN]string, error) {
+	me := errors.NewMultiError("bulk get ddl view errors")
+	urnToDDL := make(map[ResourceURN]string, len(names))
+	for _, name := range names {
+		resourceURN, err := NewResourceURN(pd.Project, pd.Dataset, name)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		urnToDDL[resourceURN] = ""
+	}
+
 	queryContent := buildGetDDLQuery(pd.Project, pd.Dataset, names...)
 	queryStatement := c.Client.Query(queryContent)
 	rowIterator, err := queryStatement.Read(ctx)
 	if err != nil {
-		return nil, err
+		return urnToDDL, err
 	}
 
-	urnToDDL := map[ResourceURN]string{}
-	me := errors.NewMultiError("bulk get ddl view errors")
 	for {
 		var values []bigquery.Value
 		if err := rowIterator.Next(&values); err != nil {

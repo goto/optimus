@@ -29,7 +29,20 @@ func TestBQExtractor(t *testing.T) {
 		assert.ErrorContains(t, err, "logger is nil")
 		assert.Nil(t, bqExtractor)
 	})
-	t.Run("should return no error if get ddl is fail", func(t *testing.T) {
+	t.Run("should return no error if get ddl is fail because of access denied", func(t *testing.T) {
+		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "name")
+		resourceURNs := []bigquery.ResourceURN{resourceURNTable}
+
+		client := new(Client)
+		defer client.AssertExpectations(t)
+
+		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("access denied"))
+		bqExtractor, _ := extractor.NewBQExtractor(client, l)
+		urnToDDL, err := bqExtractor.Extract(ctx, resourceURNs)
+		assert.NoError(t, err)
+		assert.Empty(t, urnToDDL)
+	})
+	t.Run("should return error if get ddl is fail due to an error other than access related error", func(t *testing.T) {
 		resourceURNTable, _ := bigquery.NewResourceURN("project", "dataset", "name")
 		resourceURNs := []bigquery.ResourceURN{resourceURNTable}
 
@@ -39,7 +52,7 @@ func TestBQExtractor(t *testing.T) {
 		client.On("BulkGetDDLView", ctx, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("some error"))
 		bqExtractor, _ := extractor.NewBQExtractor(client, l)
 		urnToDDL, err := bqExtractor.Extract(ctx, resourceURNs)
-		assert.NoError(t, err)
+		assert.Error(t, err)
 		assert.Empty(t, urnToDDL)
 	})
 	t.Run("should return ddl given corresponding resourceURN", func(t *testing.T) {

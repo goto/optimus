@@ -472,14 +472,10 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		for _, dirtyJob := range unmodifiedDirtySpecs {
 			dirtyJobsName = append(dirtyJobsName, dirtyJob.Name().String())
 		}
+		raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventFoundDirty, len(dirtyJobsName))
 		errorMsg := fmt.Sprintf("Found %d unmodified-dirty jobs for tenant: %s/%s, Jobs: %s", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), strings.Join(dirtyJobsName, ", "))
 		j.logger.Error(errorMsg)
 		logWriter.Write(writer.LogLevelInfo, errorMsg)
-	}
-
-	err = j.bulkJobCleanup(ctx, jobTenant, toDelete, logWriter)
-	if err != nil {
-		return err
 	}
 
 	me := errors.NewMultiError("persist job error")
@@ -489,6 +485,11 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	me.Append(err)
 	if me.ToErr() != nil {
 		return errors.Wrap(job.EntityJob, "error in persisting jobs to DB", me.ToErr())
+	}
+
+	err = j.bulkJobCleanup(ctx, jobTenant, toDelete, logWriter)
+	if err != nil {
+		return err
 	}
 
 	unmodifiedDirtyJobs, err := j.generateJobs(ctx, tenantWithDetails, unmodifiedDirtySpecs, logWriter)

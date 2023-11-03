@@ -26,6 +26,7 @@ const (
 	MetricJobEventStateValidationFailed = "validation_failed"
 	MetricJobEventEnabled               = "enabled"
 	MetricJobEventDisabled              = "disabled"
+	MetricJobEventFoundDirty            = "found_dirty"
 
 	MetricJobRefreshResourceDownstream = "refresh_resource_downstream_total"
 )

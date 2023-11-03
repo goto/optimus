@@ -447,8 +447,6 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 		jobSpecBuilder = jobSpecBuilder.WithAsset(asset)
 	}
 
-	jobSpecBuilder.IsDirty(jobSpec.IsDirty)
-
 	return jobSpecBuilder.Build()
 }
 

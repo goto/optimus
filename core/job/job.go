@@ -37,6 +37,8 @@ type Job struct {
 
 	destination ResourceURN
 	sources     []ResourceURN
+
+	isDirty bool
 }
 
 func (j *Job) Tenant() tenant.Tenant {
@@ -55,10 +57,17 @@ func (j *Job) FullName() string {
 	return j.ProjectName().String() + "/" + j.spec.name.String()
 }
 
+func (j *Job) IsDirty() bool {
+	return j.isDirty
+}
+
+func (j *Job) SetDirty(val bool) {
+	j.isDirty = val
+}
+
 func (j *Job) GetJobWithUnresolvedUpstream() (*WithUpstream, error) {
 	unresolvedStaticUpstreams, err := j.getStaticUpstreamsToResolve()
 	if err != nil {
-		j.Spec().SetDirty(true)
 		err = errors.InvalidArgument(EntityJob, fmt.Sprintf("failed to get static upstreams to resolve for job %s", j.GetName()))
 	}
 	unresolvedInferredUpstreams := j.getInferredUpstreamsToResolve()
@@ -164,12 +173,12 @@ func (j Jobs) GetJobNames() []Name {
 	return jobNames
 }
 
-func (j Jobs) GetNameAndSpecMap() map[Name]*Spec {
-	nameAndSpecMap := make(map[Name]*Spec, len(j))
+func (j Jobs) GetNameMap() map[Name]*Job {
+	jobNameMap := make(map[Name]*Job, len(j))
 	for _, job := range j {
-		nameAndSpecMap[job.spec.Name()] = job.spec
+		jobNameMap[job.spec.Name()] = job
 	}
-	return nameAndSpecMap
+	return jobNameMap
 }
 
 func (j Jobs) GetNameAndJobMap() map[Name]*Job {
@@ -203,7 +212,6 @@ func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
 	for _, subjectJob := range j {
 		jobWithUnresolvedUpstream, err := subjectJob.GetJobWithUnresolvedUpstream()
 		if err != nil {
-			subjectJob.Spec().SetDirty(true)
 			me.Append(err)
 		}
 		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, jobWithUnresolvedUpstream)

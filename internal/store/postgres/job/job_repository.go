@@ -295,7 +295,28 @@ func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, 
 	return spec, err
 }
 
-func (j JobRepository) ResolveUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name) (map[job.Name][]*job.Upstream, map[job.Name]error) {
+func (j JobRepository) SetDirty(ctx context.Context, jobsTenant tenant.Tenant, jobNames []job.Name, isDirty bool) error {
+	query := `
+UPDATE job SET
+	is_dirty = $1,
+	updated_at = NOW()
+WHERE
+	project_name = $2 and
+    name = any ($3)
+;`
+	tag, err := j.db.Exec(ctx, query, isDirty, jobsTenant.ProjectName(), jobNames)
+	if err != nil {
+		return errors.Wrap(job.EntityJob, err.Error(), err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return errors.NotFound(job.EntityJob, "job not found with the given namespace: "+jobsTenant.NamespaceName().String())
+	}
+	return nil
+
+}
+
+func (j JobRepository) ResolveUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name) (map[job.Name][]*job.Upstream, error) {
 	query := `
 WITH static_upstreams AS (
 	SELECT j.name, j.project_name, d.static_upstream
@@ -367,34 +388,33 @@ WHERE j.deleted_at IS NULL;`
 		}
 		storeJobsWithUpstreams = append(storeJobsWithUpstreams, &jwu)
 	}
-	jobNameWithUpstreams, errMap := j.toJobNameWithUpstreams(storeJobsWithUpstreams)
-	return jobNameWithUpstreams, err
+	return j.toJobNameWithUpstreams(storeJobsWithUpstreams)
 }
 
-func (j JobRepository) toJobNameWithUpstreams(storeJobsWithUpstreams []*JobWithUpstream) (map[job.Name][]*job.Upstream, map[job.Name]error) {
+func (j JobRepository) toJobNameWithUpstreams(storeJobsWithUpstreams []*JobWithUpstream) (map[job.Name][]*job.Upstream, error) {
+	me := errors.NewMultiError("to job name with upstreams errors")
 	upstreamsPerJobName := groupUpstreamsPerJobFullName(storeJobsWithUpstreams)
 
 	jobNameWithUpstreams := make(map[job.Name][]*job.Upstream)
-	jobFullNameErrorMap := make(map[job.Name]error)
-	for jobFullName, storeUpstreams := range upstreamsPerJobName {
+	for _, storeUpstreams := range upstreamsPerJobName {
 		if len(storeUpstreams) == 0 {
 			continue
 		}
 		name, err := job.NameFrom(storeUpstreams[0].JobName)
 		if err != nil {
-			jobFullNameErrorMap[job.Name(jobFullName)] = err
+			me.Append(err)
 			continue
 		}
 		upstreams, err := j.toUpstreams(storeUpstreams)
 		if err != nil {
-			jobFullNameErrorMap[name] = err
+			me.Append(err)
 			continue
 		}
 
 		jobNameWithUpstreams[name] = upstreams
 	}
 
-	return jobNameWithUpstreams, jobFullNameErrorMap
+	return jobNameWithUpstreams, me.ToErr()
 }
 
 func groupUpstreamsPerJobFullName(upstreams []*JobWithUpstream) map[string][]*JobWithUpstream {

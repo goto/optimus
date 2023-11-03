@@ -51,15 +51,15 @@ func TestEntityJob(t *testing.T) {
 			assert.EqualValues(t, expectedJobNames, jobNames)
 		})
 	})
-	t.Run("GetNameAndSpecMap", func(t *testing.T) {
+	t.Run("GetNameMap", func(t *testing.T) {
 		t.Run("should return map with name as key and spec as value", func(t *testing.T) {
-			expectedMap := map[job.Name]*job.Spec{
-				specA.Name(): jobA.Spec(),
-				specB.Name(): jobB.Spec(),
+			expectedMap := map[job.Name]*job.Job{
+				specA.Name(): jobA,
+				specB.Name(): jobB,
 			}
 
 			jobs := job.Jobs([]*job.Job{jobA, jobB})
-			resultMap := jobs.GetNameAndSpecMap()
+			resultMap := jobs.GetNameMap()
 
 			assert.EqualValues(t, expectedMap, resultMap)
 		})

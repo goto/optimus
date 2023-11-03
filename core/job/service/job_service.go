@@ -444,12 +444,12 @@ func (j *JobService) markJobsAsDirty(ctx context.Context, jobTenant tenant.Tenan
 	for _, jobObj := range append(addedJobs, updatedJobs...) {
 		jobsNamesToMarkDirty = append(jobsNamesToMarkDirty, jobObj.Spec().Name())
 	}
-	if len(jobsNamesToMarkDirty) > 0 {
-		err := j.jobRepo.SetDirty(ctx, jobTenant, jobsNamesToMarkDirty, true)
-		if err != nil {
-			return nil, err
-		}
+
+	err := j.jobRepo.SetDirty(ctx, jobTenant, jobsNamesToMarkDirty, true)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "critical, failed to mark incoming jobs as dirty, this can not be fixed on retry", err)
 	}
+
 	return jobsNamesToMarkDirty, nil
 }
 
@@ -459,7 +459,6 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		j.logger.Error("error getting tenant details: %s", err)
 		return err
 	}
-
 	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting all jobs for tenant: %s/%s, details: %s", jobTenant.ProjectName(), jobTenant.NamespaceName(), err)
@@ -468,27 +467,27 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 	toAdd, toUpdate, toDelete, _, unmodifiedDirtySpecs := j.differentiateSpecs(existingJobs, specs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
-
 	if len(unmodifiedDirtySpecs) > 0 {
 		var dirtyJobsName []string
-		for _, job := range unmodifiedDirtySpecs {
-			dirtyJobsName = append(dirtyJobsName, job.Name().String())
+		for _, dirtyJob := range unmodifiedDirtySpecs {
+			dirtyJobsName = append(dirtyJobsName, dirtyJob.Name().String())
 		}
 		errorMsg := fmt.Sprintf("Found %d unmodified-dirty jobs for tenant: %s/%s, Jobs: %s", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), strings.Join(dirtyJobsName, ", "))
 		j.logger.Error(errorMsg)
 		logWriter.Write(writer.LogLevelInfo, errorMsg)
 	}
 
-	me := errors.NewMultiError("replace all specs errors")
-
 	err = j.bulkJobCleanup(ctx, jobTenant, toDelete, logWriter)
-	me.Append(err)
+	if err != nil {
+		return err
+	}
 
+	me := errors.NewMultiError("persist job error")
 	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, toAdd, toUpdate, logWriter)
-
+	me.Append(err)
 	jobsMarkedDirty, err := j.markJobsAsDirty(ctx, jobTenant, addedJobs, updatedJobs)
-
-	if len(me.Errors) > 0 {
+	me.Append(err)
+	if me.ToErr() != nil {
 		return errors.Wrap(job.EntityJob, "error in persisting jobs to DB", me.ToErr())
 	}
 
@@ -503,12 +502,16 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	}
 
 	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil)
-	if err == nil {
-		err = j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false)
+	if err != nil {
+		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", me.ToErr())
 	}
-	me.Append(err)
 
-	return me.ToErr()
+	err = j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false)
+	if err != nil {
+		return errors.Wrap(job.EntityJob, "failed to mark jobs as cleaned, these jobs will be reprocessed in next attempt", me.ToErr())
+	}
+
+	return nil
 }
 
 func (j *JobService) uploadJobs(ctx context.Context, jobTenant tenant.Tenant, addedJobs, updatedJobs []*job.Job, deletedJobNames []job.Name) error {
@@ -641,8 +644,10 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		return me.ToErr()
 	}
 
-	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, toUpdate...), logWriter)
+	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
 	me.Append(err)
+
+	//checking for static dependencies
 
 	// TODO: resolve job dependencies before check cyclic
 	err = j.validateDeleteJobs(ctx, jobTenant, toDelete, logWriter)

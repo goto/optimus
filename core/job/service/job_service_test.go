@@ -1248,6 +1248,8 @@ func TestJobService(t *testing.T) {
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString(jobAUpstreamName), nil)
 
 			jobRepo.On("Add", ctx, mock.Anything).Return([]*job.Job{jobA}, nil)
+			jobRepo.On("SetDirty", ctx, sampleTenant, []job.Name{jobA.Spec().Name()}, true).Return(nil)
+			jobRepo.On("SetDirty", ctx, sampleTenant, []job.Name{jobA.Spec().Name()}, false).Return(nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", "bigquery://project:dataset.tableB", sampleTenant, "static", taskName, false)
 
@@ -1309,12 +1311,14 @@ func TestJobService(t *testing.T) {
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName)
 			existingSpecs := []*job.Job{existingJobA}
 
-			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(existingSpecs, nil)
-
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(jobADestination.String(), nil).Once()
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString(jobAUpstreamName), nil)
 
+			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(existingSpecs, nil)
 			jobRepo.On("Update", ctx, mock.Anything).Return([]*job.Job{jobA}, nil)
+			jobRepo.On("SetDirty", ctx, sampleTenant, []job.Name{jobA.Spec().Name()}, true).Return(nil)
+			jobRepo.On("SetDirty", ctx, sampleTenant, []job.Name{jobA.Spec().Name()}, false).Return(nil)
+
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			upstream := job.NewUpstreamResolved("job-B", "", "bigquery://project:dataset.tableB", sampleTenant, "static", taskName, false)
@@ -1376,6 +1380,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(existingSpecs, nil)
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specB.Name()).Return(nil, nil)
+			jobRepo.On("Delete", ctx, project.Name(), specB.Name(), false).Return(nil)
+			jobRepo.On("SetDirty", ctx, sampleTenant, []job.Name{}, true).Return(nil)
+			jobRepo.On("SetDirty", ctx, sampleTenant, []job.Name{}, true).Return(nil)
 			jobRepo.On("Delete", ctx, project.Name(), specB.Name(), false).Return(nil)
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
@@ -3817,6 +3824,12 @@ func (_m *JobRepository) Delete(ctx context.Context, projectName tenant.ProjectN
 // ChangeJobNamespace provides a mock function with given fields: ctx, jobName, jobTenant, jobNewTenant
 func (_m *JobRepository) ChangeJobNamespace(ctx context.Context, jobName job.Name, jobTenant, jobNewTenant tenant.Tenant) error {
 	ret := _m.Called(ctx, jobName, jobTenant, jobNewTenant)
+	return ret.Error(0)
+}
+
+// SetDirty provides a mock function with given fields: ctx, jobTenant, jobNames
+func (_m *JobRepository) SetDirty(ctx context.Context, jobsTenant tenant.Tenant, jobNames []job.Name, isDirty bool) error {
+	ret := _m.Called(ctx, jobsTenant, jobNames, isDirty)
 	return ret.Error(0)
 }
 

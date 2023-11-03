@@ -296,6 +296,9 @@ func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, 
 }
 
 func (j JobRepository) SetDirty(ctx context.Context, jobsTenant tenant.Tenant, jobNames []job.Name, isDirty bool) error {
+	if len(jobNames) < 1 {
+		return nil
+	}
 	query := `
 UPDATE job SET
 	is_dirty = $1,

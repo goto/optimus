@@ -638,7 +638,7 @@ class ExternalHttpSensor(BaseSensorOperator):
 
     def poke(self, context: 'Context') -> bool:
         self.log.info('Poking: %s', self.endpoint)
-        r = requests.get(url=self.endpoint, headers=self.headers, params=self.request_params, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS))
+        r = requests.get(url=self.endpoint, headers=self.headers, params=self.request_params, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         if (r.status_code >= 200 and r.status_code <= 300):
             return True
         return False

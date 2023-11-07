@@ -122,6 +122,7 @@ type EventHandler interface {
 }
 
 type UpstreamResolver interface {
+	CheckStaticResolvable(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) error
 	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
 }
@@ -445,6 +446,9 @@ func (j *JobService) markJobsAsDirty(ctx context.Context, jobTenant tenant.Tenan
 		jobsNamesToMarkDirty = append(jobsNamesToMarkDirty, jobObj.Spec().Name())
 	}
 
+	if len(jobsNamesToMarkDirty) == 0 {
+		return jobsNamesToMarkDirty, nil
+	}
 	err := j.jobRepo.SetDirty(ctx, jobTenant, jobsNamesToMarkDirty, true)
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "critical, failed to mark incoming jobs as dirty, this can not be fixed on retry", err)
@@ -507,9 +511,11 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", me.ToErr())
 	}
 
-	err = j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false)
-	if err != nil {
-		return errors.Wrap(job.EntityJob, "failed to mark jobs as cleaned, these jobs will be reprocessed in next attempt", me.ToErr())
+	if len(jobsMarkedDirty) != 0 {
+		err = j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false)
+		if err != nil {
+			return errors.Wrap(job.EntityJob, "failed to mark jobs as cleaned, these jobs will be reprocessed in next attempt", me.ToErr())
+		}
 	}
 
 	return nil
@@ -624,11 +630,15 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	}
 
 	err = job.Specs(jobSpecs).Validate()
-	me.Append(err)
-	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
+	if err != nil {
+		return err
+	}
 
+	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
 	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
-	me.Append(err)
+	if err != nil {
+		return err
+	}
 
 	toAdd, toUpdate, toDelete, unmodifiedSpecs, unmodifiedDirtySpecs := j.differentiateSpecs(existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, %d deleted and %d dirty job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete), len(unmodifiedDirtySpecs)))
@@ -641,14 +651,15 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		j.logger.Error(errorMsg)
 		logWriter.Write(writer.LogLevelInfo, errorMsg)
 	}
-	if len(toAdd)+len(toUpdate)+len(toDelete) == 0 {
+	if len(toAdd)+len(toUpdate)+len(toDelete)+len(unmodifiedDirtySpecs) == 0 {
 		return me.ToErr()
 	}
 
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
 	me.Append(err)
 
-	//checking for static dependencies
+	err = j.upstreamResolver.CheckStaticResolvable(ctx, jobTenant.ProjectName(), incomingJobs, logWriter)
+	me.Append(err)
 
 	// TODO: resolve job dependencies before check cyclic
 	err = j.validateDeleteJobs(ctx, jobTenant, toDelete, logWriter)

@@ -42,6 +42,40 @@ type JobRepository interface {
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 }
 
+func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, projectName tenant.ProjectName, incomingJobs []*job.Job, logWriter writer.LogWriter) error {
+	me := errors.NewMultiError("check static resolvable incomingJobs errors")
+	var incomingJobNameMap map[job.Name]*job.Job
+	for _, incomingJob := range incomingJobs {
+		incomingJobNameMap[incomingJob.Spec().Name()] = incomingJob
+	}
+	var jobsWithUnresolvedStaticUpstream []*job.WithUpstream
+	for _, jobObj := range incomingJobs {
+		withUpstream, err := jobObj.GetStaticUpstreamsToResolve()
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		jobsWithUnresolvedStaticUpstream = append(jobsWithUnresolvedStaticUpstream, job.NewWithUpstream(jobObj, withUpstream))
+	}
+	jobsWithResolvedStaticInternalUpstreams, err := u.internalUpstreamResolver.BulkResolve(ctx, projectName, jobsWithUnresolvedStaticUpstream)
+	me.Append(err)
+	jobsWithResolvedStaticExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedStaticInternalUpstreams, logWriter)
+	me.Append(err)
+	for _, jobObj := range jobsWithResolvedStaticExternalUpstreams {
+		for _, staticUpstream := range jobObj.Upstreams() {
+			if staticUpstream.State() == job.UpstreamStateUnresolved {
+				if _, ok := incomingJobNameMap[staticUpstream.Name()]; ok {
+					logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("static dependency %s is part of the incoming jobs itself", staticUpstream.Name()))
+					continue
+				}
+				me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, "could not resolve for static upstream: "+staticUpstream.FullName()))
+			}
+		}
+	}
+
+	return me.ToErr()
+}
+
 func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) ([]*job.WithUpstream, error) {
 	me := errors.NewMultiError("bulk resolve jobs errors")
 

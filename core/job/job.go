@@ -67,7 +67,7 @@ func (j *Job) SetDirty(val bool) {
 }
 
 func (j *Job) GetJobWithUnresolvedUpstream() (*WithUpstream, error) {
-	unresolvedStaticUpstreams, err := j.getStaticUpstreamsToResolve()
+	unresolvedStaticUpstreams, err := j.GetStaticUpstreamsToResolve()
 	if err != nil {
 		err = errors.InvalidArgument(EntityJob, fmt.Sprintf("failed to get static upstreams to resolve for job %s", j.GetName()))
 	}
@@ -86,7 +86,7 @@ func (j *Job) getInferredUpstreamsToResolve() []*Upstream {
 	return unresolvedInferredUpstreams
 }
 
-func (j *Job) getStaticUpstreamsToResolve() ([]*Upstream, error) {
+func (j *Job) GetStaticUpstreamsToResolve() ([]*Upstream, error) {
 	var unresolvedStaticUpstreams []*Upstream
 	me := errors.NewMultiError("get static upstream to resolve errors")
 

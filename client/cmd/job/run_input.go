@@ -158,7 +158,7 @@ func (j *jobRunInputCommand) writeJobResponseSecretToFile(
 ) error {
 	// write all secrets into a file
 	secretsFileContent := ""
-	secretsFileContent, keysWithUnsubstitutedValue := ConstructConfigEnvSourcingContent(jobResponse.Envs)
+	secretsFileContent, keysWithUnsubstitutedValue := ConstructConfigEnvSourcingContent(jobResponse.Secrets)
 	j.keysWithUnsubstitutedValue = append(j.keysWithUnsubstitutedValue, keysWithUnsubstitutedValue...)
 
 	filePath := filepath.Join(dirPath, typeSecretFileName)

@@ -44,7 +44,7 @@ type JobRepository interface {
 
 func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, projectName tenant.ProjectName, incomingJobs []*job.Job, logWriter writer.LogWriter) error {
 	me := errors.NewMultiError("check static resolvable incomingJobs errors")
-	var incomingJobNameMap map[job.Name]*job.Job
+	incomingJobNameMap := make(map[job.Name]*job.Job)
 	for _, incomingJob := range incomingJobs {
 		incomingJobNameMap[incomingJob.Spec().Name()] = incomingJob
 	}

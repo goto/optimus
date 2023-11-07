@@ -316,7 +316,6 @@ WHERE
 		return errors.NotFound(job.EntityJob, "job not found with the given namespace: "+jobsTenant.NamespaceName().String())
 	}
 	return nil
-
 }
 
 func (j JobRepository) ResolveUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name) (map[job.Name][]*job.Upstream, error) {

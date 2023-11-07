@@ -123,6 +123,7 @@ func (w ReplayWorker) processNewReplayRequest(ctx context.Context, replayReq *sc
 		return err
 	}
 
+	w.l.Info("replay with id %s has updated %d runs", replayReq.Replay.ID().String(), len(updatedRuns))
 	if err := w.replayRepo.UpdateReplay(ctx, replayReq.Replay.ID(), state, updatedRuns, ""); err != nil {
 		w.l.Error("unable to update replay state for replay_id [%s]: %s", replayReq.Replay.ID().String(), err)
 		return err
@@ -196,6 +197,7 @@ func (w ReplayWorker) processPartialReplayedRequest(ctx context.Context, replayR
 		replayState = scheduler.ReplayStateReplayed
 	}
 
+	w.l.Info("replay with id %s has updated %d runs", replayReq.Replay.ID().String(), len(updatedRuns))
 	if err := w.replayRepo.UpdateReplay(ctx, replayReq.Replay.ID(), replayState, updatedRuns, ""); err != nil {
 		w.l.Error("unable to update replay state for replay_id [%s]: %s", replayReq.Replay.ID().String(), err)
 		return err
@@ -248,6 +250,7 @@ func (w ReplayWorker) processReplayedRequest(ctx context.Context, replayReq *sch
 		w.l.Info("marking replay %s as failed", replayReq.Replay.ID().String())
 	}
 
+	w.l.Info("replay with id %s has updated %d runs", replayReq.Replay.ID().String(), len(updatedRuns))
 	if err := w.replayRepo.UpdateReplay(ctx, replayReq.Replay.ID(), state, updatedRuns, message); err != nil {
 		w.l.Error("unable to update replay with replay_id [%s]: %s", replayReq.Replay.ID().String(), err)
 		return err

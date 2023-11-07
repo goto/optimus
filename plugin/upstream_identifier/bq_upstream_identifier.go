@@ -26,17 +26,19 @@ func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[
 	resourcesAccumulation := []*bigquery.ResourceURNWithUpstreams{}
 
 	// generate resource urn with upstream from each evaluator
+	me := errors.NewMultiError("identify resource errors")
 	for _, evaluatorFunc := range g.evaluatorFuncs {
 		query := evaluatorFunc(assets)
 		if query == "" {
-			return []string{}, nil
+			continue
 		}
 
 		visited := map[string][]*bigquery.ResourceURNWithUpstreams{}
 		paths := map[string]bool{}
 		resources, err := g.identifyResources(ctx, query, visited, paths)
 		if err != nil {
-			return nil, err
+			me.Append(err)
+			continue
 		}
 		resourcesAccumulation = append(resourcesAccumulation, resources...)
 	}
@@ -47,7 +49,7 @@ func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[
 	for i, r := range flattenedResources {
 		resourceURNs[i] = r.ResourceURN.URN()
 	}
-	return resourceURNs, nil
+	return resourceURNs, me.ToErr()
 }
 
 func (g BQUpstreamIdentifier) identifyResources(ctx context.Context, query string, visited map[string][]*bigquery.ResourceURNWithUpstreams, paths map[string]bool) ([]*bigquery.ResourceURNWithUpstreams, error) {
@@ -61,7 +63,7 @@ func (g BQUpstreamIdentifier) identifyResources(ctx context.Context, query strin
 	urnToQuery, err := g.extractorFunc(ctx, resourceURNs)
 	if err != nil {
 		g.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
-		return resources, nil
+		return nil, err
 	}
 
 	for _, resourceURN := range resourceURNs {

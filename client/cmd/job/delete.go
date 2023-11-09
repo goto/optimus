@@ -118,6 +118,14 @@ func (d *deleteCommand) confirm(jobName string) (bool, error) {
 }
 
 func (d *deleteCommand) delete(namespaceName, jobName string) error {
+	if err := d.deleteFromServer(namespaceName, jobName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *deleteCommand) deleteFromServer(namespaceName, jobName string) error {
 	conn, err := d.connection.Create(d.clientConfig.Host)
 	if err != nil {
 		return err

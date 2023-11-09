@@ -593,7 +593,7 @@ func specToJob(spec *Spec) (*job.Job, error) {
 		sources = append(sources, resourceURN)
 	}
 
-	return job.NewJob(tenantName, jobSpec, destination, sources), nil
+	return job.NewJob(tenantName, jobSpec, destination, sources, spec.IsDirty), nil
 }
 
 type JobWithUpstream struct {

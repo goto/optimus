@@ -160,8 +160,8 @@ func (j *Job) ProjectName() tenant.ProjectName {
 	return j.Tenant().ProjectName()
 }
 
-func NewJob(tenant tenant.Tenant, spec *Spec, destination ResourceURN, sources []ResourceURN) *Job {
-	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources}
+func NewJob(tenant tenant.Tenant, spec *Spec, destination ResourceURN, sources []ResourceURN, isDirty bool) *Job {
+	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty}
 }
 
 type Jobs []*Job

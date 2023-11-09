@@ -477,12 +477,15 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 			dirtyJobsName = append(dirtyJobsName, dirtyJob.Name().String())
 		}
 		raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventFoundDirty, len(dirtyJobsName))
-		errorMsg := fmt.Sprintf("Found %d unmodified-dirty jobs for tenant: %s/%s, Jobs: %s", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), strings.Join(dirtyJobsName, ", "))
+		errorMsg := fmt.Sprintf("Found %d unprocessed jobs for tenant: %s/%s, Jobs: %s, these will be processed now", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), strings.Join(dirtyJobsName, ", "))
 		j.logger.Error(errorMsg)
 		logWriter.Write(writer.LogLevelInfo, errorMsg)
 	}
 
 	me := errors.NewMultiError("persist job error")
+
+	toUpdate = append(toUpdate, unmodifiedDirtySpecs...)
+
 	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, toAdd, toUpdate, logWriter)
 	me.Append(err)
 	jobsMarkedDirty, err := j.markJobsAsDirty(ctx, jobTenant, addedJobs, updatedJobs)
@@ -496,12 +499,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		return err
 	}
 
-	unmodifiedDirtyJobs, err := j.generateJobs(ctx, tenantWithDetails, unmodifiedDirtySpecs, logWriter)
-	if err != nil {
-		return errors.Wrap(job.EntityJob, "error in generating sources and destination of Dirty marked jobs", me.ToErr())
-	}
-
-	err = j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, append(updatedJobs, unmodifiedDirtyJobs...))
+	err = j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs)
 	if err != nil {
 		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", me.ToErr())
 	}
@@ -647,7 +645,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		for _, job := range unmodifiedDirtySpecs {
 			dirtyJobsName = append(dirtyJobsName, job.Name().String())
 		}
-		errorMsg := fmt.Sprintf("Found %d dirty jobs for tenant: %s/%s, Jobs: %s", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), dirtyJobsName)
+		errorMsg := fmt.Sprintf("Found %d unprocessed jobs for tenant: %s/%s, Jobs: %s, these will be reprocessed as part of replace_all", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), dirtyJobsName)
 		j.logger.Error(errorMsg)
 		logWriter.Write(writer.LogLevelInfo, errorMsg)
 	}
@@ -655,6 +653,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		return me.ToErr()
 	}
 
+	//TODO: add dry_run check because, generate jobs does not go a Dry Run , and Invalid SQL schemas could not be detected without that.
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
 	me.Append(err)
 
@@ -1044,7 +1043,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		return nil, err
 	}
 
-	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
+	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false), nil
 }
 
 func (j *JobService) validateCyclic(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) ([]string, error) {

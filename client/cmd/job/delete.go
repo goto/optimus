@@ -105,7 +105,13 @@ func (d *deleteCommand) RunE(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	return d.delete(namespace.Name, jobName)
+	if err := d.delete(namespace.Name, jobName); err != nil {
+		return err
+	}
+
+	d.logger.Info("job deletion finished successfully")
+
+	return nil
 }
 
 func (d *deleteCommand) confirm(jobName string) (bool, error) {
@@ -132,12 +138,14 @@ func (d *deleteCommand) confirm(jobName string) (bool, error) {
 }
 
 func (d *deleteCommand) delete(namespaceName, jobName string) error {
+	d.logger.Info("deleting job [%s] under namespace [%s] from server", jobName, namespaceName)
 	if err := d.deleteFromServer(namespaceName, jobName); err != nil {
 		return err
 	}
 
+	d.logger.Info("deleting job [%s] under namespace [%s] from local", jobName, namespaceName)
 	if err := d.deleteFromLocal(namespaceName, jobName); err != nil {
-		d.logger.Warn("local deletion attempt met error: %v", err)
+		d.logger.Warn("attempt to delete job from local encountered error: %v", err)
 	}
 
 	return nil
@@ -183,12 +191,10 @@ func (d *deleteCommand) deleteFromServer(namespaceName, jobName string) error {
 		Force:         d.force,
 	})
 	if err != nil {
-		d.logger.Error("error deleting job [%s]", jobName)
 		return err
 	}
 
 	if response.GetSuccess() {
-		d.logger.Info("successfully deleted job [%s]", jobName)
 		if d.force {
 			d.logger.Warn(response.GetMessage())
 		}

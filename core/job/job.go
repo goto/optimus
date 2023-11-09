@@ -212,9 +212,7 @@ func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
 	var jobsWithUnresolvedUpstream []*WithUpstream
 	for _, subjectJob := range j {
 		jobWithUnresolvedUpstream, err := subjectJob.GetJobWithUnresolvedUpstream()
-		if err != nil {
-			me.Append(err)
-		}
+		me.Append(err)
 		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, jobWithUnresolvedUpstream)
 	}
 

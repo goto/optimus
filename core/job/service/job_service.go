@@ -440,15 +440,15 @@ func (j *JobService) bulkJobPersist(ctx context.Context, tenantWithDetails *tena
 	return addedJobs, updatedJobs, me.ToErr()
 }
 
-func (j *JobService) markJobsAsDirty(ctx context.Context, jobTenant tenant.Tenant, addedJobs, updatedJobs []*job.Job) ([]job.Name, error) {
-	var jobsNamesToMarkDirty []job.Name
-	for _, jobObj := range append(addedJobs, updatedJobs...) {
-		jobsNamesToMarkDirty = append(jobsNamesToMarkDirty, jobObj.Spec().Name())
+func (j *JobService) markJobsAsDirty(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Job) ([]job.Name, error) {
+	if len(jobs) == 0 {
+		return []job.Name{}, nil
+	}
+	jobsNamesToMarkDirty := make([]job.Name, len(jobs))
+	for i, jobObj := range jobs {
+		jobsNamesToMarkDirty[i] = jobObj.Spec().Name()
 	}
 
-	if len(jobsNamesToMarkDirty) == 0 {
-		return jobsNamesToMarkDirty, nil
-	}
 	err := j.jobRepo.SetDirty(ctx, jobTenant, jobsNamesToMarkDirty, true)
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "critical, failed to mark incoming jobs as dirty, this can not be fixed on retry", err)
@@ -488,7 +488,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, toAdd, toUpdate, logWriter)
 	me.Append(err)
-	jobsMarkedDirty, err := j.markJobsAsDirty(ctx, jobTenant, addedJobs, updatedJobs)
+	jobsMarkedDirty, err := j.markJobsAsDirty(ctx, jobTenant, append(addedJobs, updatedJobs...))
 	me.Append(err)
 	if me.ToErr() != nil {
 		return errors.Wrap(job.EntityJob, "error in persisting jobs to DB", me.ToErr())
@@ -501,18 +501,18 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 
 	err = j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs)
 	if err != nil {
-		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", me.ToErr())
+		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", err)
 	}
 
 	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil)
 	if err != nil {
-		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", me.ToErr())
+		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", err)
 	}
 
 	if len(jobsMarkedDirty) != 0 {
 		err = j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false)
 		if err != nil {
-			return errors.Wrap(job.EntityJob, "failed to mark jobs as cleaned, these jobs will be reprocessed in next attempt", me.ToErr())
+			return errors.Wrap(job.EntityJob, "failed to mark jobs as cleaned, these jobs will be reprocessed in next attempt", err)
 		}
 	}
 
@@ -619,16 +619,13 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 }
 
 func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("validate specs errors")
-
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
 		return err
 	}
 
-	err = job.Specs(jobSpecs).Validate()
-	if err != nil {
+	if err := job.Specs(jobSpecs).Validate(); err != nil {
 		return err
 	}
 
@@ -650,9 +647,10 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		logWriter.Write(writer.LogLevelInfo, errorMsg)
 	}
 	if len(toAdd)+len(toUpdate)+len(toDelete)+len(unmodifiedDirtySpecs) == 0 {
-		return me.ToErr()
+		return nil
 	}
 
+	me := errors.NewMultiError("validate specs errors")
 	// TODO: add dry_run check because, generate jobs does not go a Dry Run , and Invalid SQL schemas could not be detected without that.
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
 	me.Append(err)

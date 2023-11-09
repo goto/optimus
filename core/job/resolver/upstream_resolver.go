@@ -63,13 +63,14 @@ func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, projectName
 	me.Append(err)
 	for _, jobObj := range jobsWithResolvedStaticExternalUpstreams {
 		for _, staticUpstream := range jobObj.Upstreams() {
-			if staticUpstream.State() == job.UpstreamStateUnresolved {
-				if _, ok := incomingJobNameMap[staticUpstream.Name()]; ok {
-					logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("static dependency: %s, for job: %s,  is part of the incoming jobs themselves", staticUpstream.Name(), jobObj.GetName()))
-					continue
-				}
-				me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, fmt.Sprintf("could not resolve for static upstream: %s, for job: %s", staticUpstream.FullName(), jobObj.GetName())))
+			if staticUpstream.State() == job.UpstreamStateResolved {
+				continue
 			}
+			if _, ok := incomingJobNameMap[staticUpstream.Name()]; ok {
+				logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("static dependency: %s, for job: %s,  is part of the incoming jobs themselves", staticUpstream.Name(), jobObj.GetName()))
+				continue
+			}
+			me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, fmt.Sprintf("could not resolve for static upstream: %s, for job: %s", staticUpstream.FullName(), jobObj.GetName())))
 		}
 	}
 

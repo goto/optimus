@@ -653,7 +653,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		return me.ToErr()
 	}
 
-	//TODO: add dry_run check because, generate jobs does not go a Dry Run , and Invalid SQL schemas could not be detected without that.
+	// TODO: add dry_run check because, generate jobs does not go a Dry Run , and Invalid SQL schemas could not be detected without that.
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
 	me.Append(err)
 

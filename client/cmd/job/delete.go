@@ -102,13 +102,19 @@ func (d *deleteCommand) confirm(jobName string) (bool, error) {
 
 	if confirmed && d.cleanHistory {
 		confirmed, err = d.deleteSurvey.AskToConfirmCleanHistory(jobName)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	if confirmed && d.force {
 		confirmed, err = d.deleteSurvey.AskToConfirmForce(jobName)
+		if err != nil {
+			return false, err
+		}
 	}
 
-	return confirmed, err
+	return confirmed, nil
 }
 
 func (d *deleteCommand) delete(namespaceName, jobName string) error {

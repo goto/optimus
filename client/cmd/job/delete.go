@@ -7,11 +7,15 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/survey"
+	"github.com/goto/optimus/client/local"
+	"github.com/goto/optimus/client/local/model"
+	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -32,6 +36,8 @@ type deleteCommand struct {
 	cleanHistory   bool
 
 	clientConfig *config.ClientConfig
+	fs           afero.Fs
+	reader       local.SpecReader[*model.JobSpec]
 }
 
 // NewDeleteCommand initializes job delete command
@@ -64,8 +70,16 @@ func (d *deleteCommand) PreRunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	fs := afero.NewOsFs()
+	readWriter, err := specio.NewJobSpecReadWriter(fs)
+	if err != nil {
+		return err
+	}
+
 	d.clientConfig = conf
 	d.connection = connection.New(d.logger, d.clientConfig)
+	d.fs = fs
+	d.reader = readWriter
 
 	return nil
 }
@@ -122,7 +136,31 @@ func (d *deleteCommand) delete(namespaceName, jobName string) error {
 		return err
 	}
 
+	if err := d.deleteFromLocal(namespaceName, jobName); err != nil {
+		d.logger.Warn("local deletion attempt met error: %v", err)
+	}
+
 	return nil
+}
+
+func (d *deleteCommand) deleteFromLocal(namespaceName, jobName string) error {
+	namespace, err := d.clientConfig.GetNamespaceByName(namespaceName)
+	if err != nil {
+		return err
+	}
+
+	jobSpecs, err := d.reader.ReadAll(namespace.Job.Path)
+	if err != nil {
+		return err
+	}
+
+	for _, j := range jobSpecs {
+		if j.Name == jobName {
+			return d.fs.RemoveAll(j.Path)
+		}
+	}
+
+	return fmt.Errorf("job [%s] with namespace [%s] is not found in local", jobName, namespaceName)
 }
 
 func (d *deleteCommand) deleteFromServer(namespaceName, jobName string) error {

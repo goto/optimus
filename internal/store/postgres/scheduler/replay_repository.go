@@ -328,13 +328,19 @@ func (r ReplayRepository) updateReplayRequest(ctx context.Context, id uuid.UUID,
 }
 
 func (r ReplayRepository) updateReplayRuns(ctx context.Context, id uuid.UUID, runs []*scheduler.JobRunStatus) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
 	query := `UPDATE replay_run SET status=$1, updated_at=NOW() WHERE replay_id=$2 AND scheduled_at=$3 AND status<>$1`
 	for _, run := range runs {
-		_, err := r.db.Exec(ctx, query, run.State, id, run.ScheduledAt)
+		_, err := tx.Exec(ctx, query, run.State, id, run.ScheduledAt)
 		if err != nil {
+			tx.Rollback(ctx)
 			return errors.Wrap(scheduler.EntityJobRun, "unable to update replay runs", err)
 		}
 	}
+	tx.Commit(ctx)
 	return nil
 }
 

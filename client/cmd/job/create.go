@@ -35,7 +35,7 @@ func NewCreateCommand() *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use:     "create",
-		Short:   "Create a new Job",
+		Short:   "Create a new job specification in local",
 		Example: "optimus job create",
 		RunE:    create.RunE,
 		PreRunE: create.PreRunE,

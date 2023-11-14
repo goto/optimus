@@ -153,13 +153,7 @@ func (r ReplayRepository) GetReplayToExecute(ctx context.Context) (*scheduler.Re
 	if replayRuns == nil {
 		return nil, errors.NotFound(scheduler.EntityJobRun, "no executable replay request found")
 	}
-
-	storedReplay, err := toReplay(replayRuns)
-	if err != nil {
-		return nil, err
-	}
-
-	return storedReplay, nil
+	return toReplay(replayRuns)
 }
 
 func (r ReplayRepository) GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error) {

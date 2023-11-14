@@ -7,7 +7,59 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/label"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Run("Validate", func(t *testing.T) {
+		t.Run("should return error if metadata is nil", func(t *testing.T) {
+			var meta *resource.Metadata
+
+			actualError := meta.Validate()
+
+			assert.ErrorContains(t, actualError, "metadata is nil")
+		})
+
+		t.Run("should return error if labels is invalid", func(t *testing.T) {
+			meta := &resource.Metadata{
+				Version:     1,
+				Description: "Description for testing",
+				Labels: label.Labels{
+					"test_key": "",
+				},
+			}
+
+			actualError := meta.Validate()
+
+			assert.ErrorContains(t, actualError, "labels is invalid")
+		})
+
+		t.Run("should return nil if labels is not specified", func(t *testing.T) {
+			meta := &resource.Metadata{
+				Version:     1,
+				Description: "Description for testing",
+			}
+
+			actualError := meta.Validate()
+
+			assert.NoError(t, actualError)
+		})
+
+		t.Run("should return nil if metadata is valid", func(t *testing.T) {
+			meta := &resource.Metadata{
+				Version:     1,
+				Description: "Description for testing",
+				Labels: label.Labels{
+					"test_key": "test_value",
+				},
+			}
+
+			actualError := meta.Validate()
+
+			assert.NoError(t, actualError)
+		})
+	})
+}
 
 func TestName(t *testing.T) {
 	t.Run("NameFrom", func(t *testing.T) {
@@ -45,7 +97,7 @@ func TestNewResource(t *testing.T) {
 			spec := map[string]any{"a": "b"}
 			_, err := resource.NewResource("proj.set.res_name", "table", resource.Bigquery, tnnt, nil, spec)
 			assert.NotNil(t, err)
-			assert.EqualError(t, err, "invalid argument for entity resource: empty resource metadata for proj.set.res_name")
+			assert.ErrorContains(t, err, "metadata for proj.set.res_name is invalid")
 		})
 		t.Run("returns error when invalid resource metadata", func(t *testing.T) {
 			meta := resource.Metadata{

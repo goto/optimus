@@ -1,11 +1,13 @@
 package resource
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/label"
 )
 
 const (
@@ -16,7 +18,24 @@ const (
 type Metadata struct {
 	Version     int32
 	Description string
-	Labels      map[string]string
+	Labels      label.Labels
+}
+
+func (m *Metadata) Validate() error {
+	if m == nil {
+		return errors.InvalidArgument(EntityResource, "metadata is nil")
+	}
+
+	if m.Labels == nil {
+		return nil
+	}
+
+	if err := m.Labels.Validate(); err != nil {
+		msg := fmt.Sprintf("labels is invalid: %v", err)
+		return errors.InvalidArgument(EntityResource, msg)
+	}
+
+	return nil
 }
 
 type Name string
@@ -58,8 +77,9 @@ func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *M
 		return nil, errors.InvalidArgument(EntityResource, "empty resource spec for "+fullName)
 	}
 
-	if meta == nil {
-		return nil, errors.InvalidArgument(EntityResource, "empty resource metadata for "+fullName)
+	if err := meta.Validate(); err != nil {
+		msg := fmt.Sprintf("metadata for %s is invalid: %v", fullName, err)
+		return nil, errors.InvalidArgument(EntityResource, msg)
 	}
 
 	return &Resource{

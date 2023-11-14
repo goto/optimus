@@ -314,8 +314,8 @@ WHERE
 
 	if tag.RowsAffected() == 0 {
 		jobNamesString := make([]string, len(jobNames))
-		for _, jobName := range jobNames {
-			jobNamesString = append(jobNamesString, jobName.String())
+		for i, jobName := range jobNames {
+			jobNamesString[i] = jobName.String()
 		}
 		return errors.NotFound(job.EntityJob, fmt.Sprintf("jobs: [%s], not found with the given namespace: %s", strings.Join(jobNamesString, ", "), jobsTenant.NamespaceName().String()))
 	}

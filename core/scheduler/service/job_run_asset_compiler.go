@@ -8,7 +8,7 @@ import (
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/scheduler"
-	"github.com/goto/optimus/internal/lib/window"
+	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
@@ -33,7 +33,7 @@ func NewJobAssetsCompiler(engine FilesCompiler, logger log.Logger) *JobRunAssets
 	}
 }
 
-func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
+func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval interval.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
 	inputFiles := job.Assets
 	method, ok1 := job.Task.Config["LOAD_METHOD"]
 	query, ok2 := job.Assets["query.sql"]
@@ -41,7 +41,7 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *sched
 	const bq2bq = "bq2bq"
 	if ok1 && ok2 && method == "REPLACE" && job.Task.Name == bq2bq {
 		// check if task needs to override the compilation behaviour
-		compiledQuery, err := c.CompileQuery(interval.Start, interval.End, query, systemEnvVars)
+		compiledQuery, err := c.CompileQuery(interval.Start(), interval.End(), query, systemEnvVars)
 		if err != nil {
 			c.logger.Error("error compiling assets: %s", err.Error())
 			return nil, err

@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
+	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils"
 )
@@ -57,7 +58,7 @@ type TemplateCompiler interface {
 }
 
 type AssetCompiler interface {
-	CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error)
+	CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval interval.Interval, contextForTask map[string]interface{}) (map[string]string, error)
 }
 
 type InputCompiler struct {
@@ -193,10 +194,10 @@ func (i InputCompiler) compileConfigs(configs map[string]string, templateCtx map
 	return conf, secretsConfig, nil
 }
 
-func getSystemDefinedConfigs(job *scheduler.Job, interval window.Interval, executedAt time.Time) map[string]string {
+func getSystemDefinedConfigs(job *scheduler.Job, interval interval.Interval, executedAt time.Time) map[string]string {
 	return map[string]string{
-		configDstart:        interval.Start.Format(TimeISOFormat),
-		configDend:          interval.End.Format(TimeISOFormat),
+		configDstart:        interval.Start().Format(TimeISOFormat),
+		configDend:          interval.End().Format(TimeISOFormat),
 		configExecutionTime: executedAt.Format(TimeISOFormat),
 		configDestination:   job.Destination,
 	}

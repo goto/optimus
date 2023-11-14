@@ -10,6 +10,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/window"
 )
 
 type PresetRepository struct {
@@ -45,14 +46,14 @@ type Preset struct {
 
 func (p PresetRepository) Create(ctx context.Context, projectName tenant.ProjectName, preset tenant.Preset) error {
 	insertStatement := `INSERT INTO preset
-	(project_name, name, description, window_truncate_to, window_offset, window_size, created_at, updated_at)
+	(project_name, name, description, window_size, window_delay, window_location, window_truncate_to, created_at, updated_at)
 VALUES
-	($1, $2, $3, $4, $5, $6, NOW(), NOW())
+	($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 `
 
 	_, err := p.db.Exec(ctx, insertStatement, projectName,
 		preset.Name(), preset.Description(),
-		preset.Config().TruncateTo, preset.Config().Delay, preset.Config().Size, preset.Config().Location,
+		preset.Config().Size, preset.Config().Delay, preset.Config().Location, preset.Config().TruncateTo,
 	)
 
 	return errors.WrapIfErr(tenant.EntityProject, "error inserting preset", err)
@@ -72,10 +73,13 @@ func (p PresetRepository) Read(ctx context.Context, projectName tenant.ProjectNa
 
 	output := make([]tenant.Preset, len(existings))
 	for i, existing := range existings {
-		preset, err := tenant.NewPreset(existing.Name, existing.Description, existing.Size, existing.Delay, existing.Location, existing.TruncateTo)
-		if err != nil {
-			return nil, err
+		conf := window.SimpleConfig{
+			Size:       existing.Size,
+			Delay:      existing.Delay,
+			Location:   existing.Location,
+			TruncateTo: existing.TruncateTo,
 		}
+		preset := tenant.NewPresetWithConfig(existing.Name, existing.Description, conf)
 
 		output[i] = preset
 	}

@@ -102,8 +102,10 @@ func NewSimpleConfig(size, delay, location, truncateTo string) (SimpleConfig, er
 	_, err = time.LoadLocation(location)
 	validationErr.Append(err)
 
-	_, err = duration.UnitFrom(truncateTo)
-	validationErr.Append(err)
+	if truncateTo != "" {
+		_, err = duration.UnitFrom(truncateTo)
+		validationErr.Append(err)
+	}
 
 	if len(validationErr.Errors) > 0 {
 		return SimpleConfig{}, validationErr.ToErr()

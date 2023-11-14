@@ -54,8 +54,8 @@ func TestJobAssetsCompiler(t *testing.T) {
 
 	executedAt := currentTime.Add(time.Hour)
 	systemEnvVars := map[string]string{
-		"DSTART":          interval.Start.Format(time.RFC3339),
-		"DEND":            interval.End.Format(time.RFC3339),
+		"DSTART":          interval.Start().Format(time.RFC3339),
+		"DEND":            interval.End().Format(time.RFC3339),
 		"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 		"JOB_DESTINATION": job.Destination,
 	}

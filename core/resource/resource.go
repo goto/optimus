@@ -26,13 +26,11 @@ func (m *Metadata) Validate() error {
 		return errors.InvalidArgument(EntityResource, "metadata is nil")
 	}
 
-	if m.Labels == nil {
-		return nil
-	}
-
-	if err := m.Labels.Validate(); err != nil {
-		msg := fmt.Sprintf("labels is invalid: %v", err)
-		return errors.InvalidArgument(EntityResource, msg)
+	if m.Labels != nil {
+		if err := m.Labels.Validate(); err != nil {
+			msg := fmt.Sprintf("labels is invalid: %v", err)
+			return errors.InvalidArgument(EntityResource, msg)
+		}
 	}
 
 	return nil

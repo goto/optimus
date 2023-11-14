@@ -61,6 +61,7 @@ func fromJobProtos(protoJobSpecs []*pb.JobSpecification) ([]*job.Spec, []job.Nam
 	return jobSpecs, jobNameWithValidationErrors, me.ToErr()
 }
 
+// TODO: change job spec to include window config, and the new one.
 func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	version := int(js.Version)
 
@@ -200,6 +201,10 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 	}
 
 	if js.WindowSize != "" {
+		if js.Version == 3 {
+			return window.NewConfig("", "", "", "")
+		}
+
 		w, err := models.NewWindow(int(js.Version), js.WindowTruncateTo, js.WindowOffset, js.WindowSize)
 		if err != nil {
 			return window.Config{}, err

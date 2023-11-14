@@ -17,7 +17,7 @@ type PresetRepository struct {
 }
 
 const (
-	presetColumns           = `id, project_name, name, description, window_truncate_to, window_offset, window_size, created_at, updated_at`
+	presetColumns           = `id, project_name, name, description, window_truncate_to, window_delay, window_size, window_location, created_at, updated_at`
 	getPresetsByProjectName = `select ` + presetColumns + ` from preset where project_name = $1`
 )
 
@@ -35,8 +35,9 @@ type Preset struct {
 	Description string
 
 	TruncateTo string
-	Offset     string
+	Delay      string
 	Size       string
+	Location   string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -51,7 +52,7 @@ VALUES
 
 	_, err := p.db.Exec(ctx, insertStatement, projectName,
 		preset.Name(), preset.Description(),
-		preset.Window().GetTruncateTo(), preset.Window().GetOffset(), preset.Window().GetSize(),
+		preset.Config().TruncateTo, preset.Config().Delay, preset.Config().Size, preset.Config().Location,
 	)
 
 	return errors.WrapIfErr(tenant.EntityProject, "error inserting preset", err)
@@ -71,7 +72,7 @@ func (p PresetRepository) Read(ctx context.Context, projectName tenant.ProjectNa
 
 	output := make([]tenant.Preset, len(existings))
 	for i, existing := range existings {
-		preset, err := tenant.NewPreset(existing.Name, existing.Description, existing.TruncateTo, existing.Offset, existing.Size)
+		preset, err := tenant.NewPreset(existing.Name, existing.Description, existing.Size, existing.Delay, existing.Location, existing.TruncateTo)
 		if err != nil {
 			return nil, err
 		}
@@ -87,16 +88,17 @@ func (p PresetRepository) Update(ctx context.Context, projectName tenant.Project
 SET
 	description = $1,
 	window_truncate_to = $2,
-	window_offset = $3,
+	window_delay = $3,
 	window_size = $4,
+	window_location = $5,
 	updated_at = NOW()
 WHERE
-	project_name = $5
-	AND name = $6
+	project_name = $6
+	AND name = $7
 `
 
 	result, err := p.db.Exec(ctx, updateStatement,
-		preset.Description(), preset.Window().GetTruncateTo(), preset.Window().GetOffset(), preset.Window().GetSize(),
+		preset.Description(), preset.Config().TruncateTo, preset.Config().Delay, preset.Config().Size, preset.Config().Location,
 		projectName, preset.Name(),
 	)
 	if err != nil {
@@ -126,8 +128,9 @@ func (PresetRepository) scanRows(rows pgx.Rows) ([]*Preset, error) {
 			&preset.Name,
 			&preset.Description,
 			&preset.TruncateTo,
-			&preset.Offset,
+			&preset.Delay,
 			&preset.Size,
+			&preset.Location,
 			&preset.CreatedAt,
 			&preset.UpdatedAt,
 		)

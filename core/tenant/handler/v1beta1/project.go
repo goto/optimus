@@ -94,7 +94,7 @@ func fromProjectProto(conf *pb.ProjectSpecification) (*tenant.Project, error) {
 	presets := make(map[string]tenant.Preset, len(conf.GetPresets()))
 	for name, preset := range conf.GetPresets() {
 		lowerName := strings.ToLower(name)
-		newPreset, err := tenant.NewPreset(lowerName, preset.Description, preset.GetTruncateTo(), preset.GetOffset(), preset.GetSize())
+		newPreset, err := tenant.NewPreset(lowerName, preset.Description, preset.GetSize(), preset.GetOffset(), "location", preset.GetTruncateTo())
 		if err != nil {
 			return nil, err
 		}
@@ -124,9 +124,9 @@ func toProjectPresets(presets map[string]tenant.Preset) map[string]*pb.ProjectSp
 		presetPb[name] = &pb.ProjectSpecification_ProjectPreset{
 			Name:        preset.Name(),
 			Description: preset.Description(),
-			TruncateTo:  preset.Window().GetTruncateTo(),
-			Offset:      preset.Window().GetOffset(),
-			Size:        preset.Window().GetSize(),
+			TruncateTo:  preset.Config().TruncateTo,
+			Offset:      preset.Config().Delay,
+			Size:        preset.Config().Size,
 		}
 	}
 	return presetPb

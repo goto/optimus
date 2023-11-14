@@ -60,7 +60,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 	})
 
 	t.Run("UpdateReplay", func(t *testing.T) {
-		t.Run("updates replay request and reinsert the runs", func(t *testing.T) {
+		t.Run("updates replay request and update the runs", func(t *testing.T) {
 			db := dbSetup()
 			replayRepo := postgres.NewReplayRepository(db)
 

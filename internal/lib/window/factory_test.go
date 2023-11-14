@@ -30,8 +30,8 @@ func TestWindowFactory(t *testing.T) {
 			sept1 := time.Date(2023, 9, 1, 1, 0, 0, 0, time.UTC)
 			interval, err := w.GetInterval(sept1)
 			assert.NoError(t, err)
-			assert.Equal(t, "2023-09-01T00:00:00Z", interval.Start.Format(time.RFC3339))
-			assert.Equal(t, "2023-10-01T00:00:00Z", interval.End.Format(time.RFC3339))
+			assert.Equal(t, "2023-09-01T00:00:00Z", interval.Start().Format(time.RFC3339))
+			assert.Equal(t, "2023-10-01T00:00:00Z", interval.End().Format(time.RFC3339))
 		})
 		t.Run("returns error with invalid preset", func(t *testing.T) {
 			config, err := window.NewPresetConfig("yesterday")
@@ -58,8 +58,8 @@ func TestWindowFactory(t *testing.T) {
 			sept1 := time.Date(2023, 9, 1, 1, 0, 0, 0, time.UTC)
 			interval, err := w.GetInterval(sept1)
 			assert.NoError(t, err)
-			assert.Equal(t, "2023-08-31T00:00:00Z", interval.Start.Format(time.RFC3339))
-			assert.Equal(t, "2023-09-01T00:00:00Z", interval.End.Format(time.RFC3339))
+			assert.Equal(t, "2023-08-31T00:00:00Z", interval.Start().Format(time.RFC3339))
+			assert.Equal(t, "2023-09-01T00:00:00Z", interval.End().Format(time.RFC3339))
 		})
 		t.Run("creates window from base window", func(t *testing.T) {
 			w1, err := models.NewWindow(2, "d", "0", "24h")
@@ -71,8 +71,8 @@ func TestWindowFactory(t *testing.T) {
 			sept1 := time.Date(2023, 9, 1, 1, 0, 0, 0, time.UTC)
 			interval, err := w.GetInterval(sept1)
 			assert.NoError(t, err)
-			assert.Equal(t, "2023-08-31T00:00:00Z", interval.Start.Format(time.RFC3339))
-			assert.Equal(t, "2023-09-01T00:00:00Z", interval.End.Format(time.RFC3339))
+			assert.Equal(t, "2023-08-31T00:00:00Z", interval.Start().Format(time.RFC3339))
+			assert.Equal(t, "2023-09-01T00:00:00Z", interval.End().Format(time.RFC3339))
 		})
 	})
 }

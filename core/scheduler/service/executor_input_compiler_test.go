@@ -111,6 +111,10 @@ func TestExecutorCompiler(t *testing.T) {
 				Tenant:       tnnt,
 				WindowConfig: cw,
 				Assets:       nil,
+				Task: &scheduler.Task{
+					Name:   "bq2bq",
+					Config: map[string]string{},
+				},
 			}
 			details := scheduler.JobWithDetails{
 				Job: &job,
@@ -142,11 +146,14 @@ func TestExecutorCompiler(t *testing.T) {
 			}
 			taskContext := mock.Anything
 
+			templateCompiler := new(mockTemplateCompiler)
+			templateCompiler.On("Compile", mock.Anything, taskContext).Return(map[string]string{}, nil)
+			defer templateCompiler.AssertExpectations(t)
 			assetCompiler := new(mockAssetCompiler)
 			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(nil, fmt.Errorf("CompileJobRunAssets error"))
 			defer assetCompiler.AssertExpectations(t)
 
-			inputCompiler := service.NewJobInputCompiler(tenantService, nil, assetCompiler, logger)
+			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
 
 			assert.NotNil(t, err)
@@ -212,7 +219,6 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(nil, fmt.Errorf("some.config compilation error"))
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
@@ -229,7 +235,6 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(nil, fmt.Errorf("secret.config compilation error"))
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)

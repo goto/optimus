@@ -112,16 +112,21 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		compiler.From(systemDefinedVars).WithName(contextSystemDefined).AddToContext(),
 	)
 
-	// Compile asset files
-	fileMap, err := i.assetCompiler.CompileJobRunAssets(ctx, job.Job, systemDefinedVars, interval, taskContext)
-	if err != nil {
-		i.logger.Error("error compiling job run assets: %s", err)
-		return nil, err
-	}
-
 	confs, secretConfs, err := i.compileConfigs(job.Job.Task.Config, taskContext)
 	if err != nil {
 		i.logger.Error("error compiling task config: %s", err)
+		return nil, err
+	}
+
+	// Compile asset files
+	allTaskConfigs := compiler.PrepareContext(
+		compiler.From(confs, secretConfs).WithName(contextTask).WithKeyPrefix(taskConfigPrefix),
+	)
+
+	mergedContext := utils.MergeAnyMaps(taskContext, allTaskConfigs)
+	fileMap, err := i.assetCompiler.CompileJobRunAssets(ctx, job.Job, systemDefinedVars, interval, mergedContext)
+	if err != nil {
+		i.logger.Error("error compiling job run assets: %s", err)
 		return nil, err
 	}
 
@@ -149,13 +154,6 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 			Files:   fileMap,
 		}, nil
 	}
-
-	// If request for hook, add task configs to templateContext
-	hookContext := compiler.PrepareContext(
-		compiler.From(confs, secretConfs).WithName(contextTask).WithKeyPrefix(taskConfigPrefix),
-	)
-
-	mergedContext := utils.MergeAnyMaps(taskContext, hookContext)
 
 	hook, err := job.Job.GetHook(config.Executor.Name)
 	if err != nil {

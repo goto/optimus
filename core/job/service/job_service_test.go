@@ -2913,7 +2913,7 @@ func TestJobService(t *testing.T) {
 
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return("", errors.New("some error on generate destination"))
 
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine())
 
@@ -2972,7 +2972,7 @@ func TestJobService(t *testing.T) {
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(job.ResourceURN("bigquery://project:dataset.tableA").String(), nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString([]job.ResourceURN{"bigquery://project:dataset.tableZ"}), nil)
 
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			jobCDownstream := []*job.Downstream{
 				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
@@ -3036,7 +3036,7 @@ func TestJobService(t *testing.T) {
 
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(job.ResourceURN("bigquery://project:dataset.tableA").String(), nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString([]job.ResourceURN{"bigquery://project:dataset.tableZ"}), nil)
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			jobCDownstream := []*job.Downstream{
 				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
@@ -3086,7 +3086,7 @@ func TestJobService(t *testing.T) {
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return("bigquery://project:dataset.tableA", nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString([]job.ResourceURN{"bigquery://project:dataset.tableC"}), nil)
 
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
@@ -3136,7 +3136,7 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB, jobC}, nil)
 
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(job.ResourceURN("bigquery://project:dataset.tableA").String(), nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString([]job.ResourceURN{"bigquery://project:dataset.tableC", "bigquery://project:dataset.tableZ"}), nil)
@@ -3190,7 +3190,7 @@ func TestJobService(t *testing.T) {
 			jobA := job.NewJob(sampleTenant, specA, "bigquery://project:dataset.tableA", []job.ResourceURN{"bigquery://project:dataset.tableZ"}, false)
 			jobB := job.NewJob(sampleTenant, specB, "bigquery://project:dataset.tableB", []job.ResourceURN{"bigquery://project:dataset.tableA"}, false)
 
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
 
@@ -3244,7 +3244,7 @@ func TestJobService(t *testing.T) {
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return("", nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return([]string{}, nil)
@@ -3299,7 +3299,7 @@ func TestJobService(t *testing.T) {
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(job.ResourceURN("bigquery://project:dataset.tableA").String(), nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString([]job.ResourceURN{"bigquery://project:dataset.tableZ"}), nil)
 
-			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.Project().Name(), mock.Anything, mock.Anything).Return(nil)
+			upstreamResolver.On("CheckStaticResolvable", ctx, detailedTenant.ToTenant(), mock.Anything, mock.Anything).Return(nil)
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specC.Name()).Return([]*job.Downstream{}, nil)
 
@@ -4191,8 +4191,8 @@ type UpstreamResolver struct {
 	mock.Mock
 }
 
-func (_m *UpstreamResolver) CheckStaticResolvable(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) error {
-	args := _m.Called(ctx, projectName, jobs, logWriter)
+func (_m *UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant.Tenant, jobs []*job.Job, logWriter writer.LogWriter) error {
+	args := _m.Called(ctx, tnnt, jobs, logWriter)
 	return args.Error(0)
 }
 

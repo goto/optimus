@@ -122,7 +122,7 @@ type EventHandler interface {
 }
 
 type UpstreamResolver interface {
-	CheckStaticResolvable(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) error
+	CheckStaticResolvable(ctx context.Context, tnnt tenant.Tenant, jobs []*job.Job, logWriter writer.LogWriter) error
 	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
 }
@@ -457,6 +457,17 @@ func (j *JobService) markJobsAsDirty(ctx context.Context, jobTenant tenant.Tenan
 	return jobsNamesToMarkDirty, nil
 }
 
+func (j *JobService) logFoundDirtySpecs(tnnt tenant.Tenant, unmodifiedDirtySpecs []*job.Spec, logWriter writer.LogWriter) {
+	var dirtyJobsName []string
+	for _, dirtyJob := range unmodifiedDirtySpecs {
+		dirtyJobsName = append(dirtyJobsName, dirtyJob.Name().String())
+	}
+	raiseJobEventMetric(tnnt, job.MetricJobEventFoundDirty, len(dirtyJobsName))
+	infoMsg := fmt.Sprintf("[%s] Found %d unprocessed Jobs: %s, these will be processed in ReplaceAll", tnnt.NamespaceName(), len(unmodifiedDirtySpecs), strings.Join(dirtyJobsName, ", "))
+	j.logger.Info(infoMsg)
+	logWriter.Write(writer.LogLevelInfo, infoMsg)
+}
+
 func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
@@ -472,14 +483,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	toAdd, toUpdate, toDelete, _, unmodifiedDirtySpecs := j.differentiateSpecs(existingJobs, specs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	if len(unmodifiedDirtySpecs) > 0 {
-		var dirtyJobsName []string
-		for _, dirtyJob := range unmodifiedDirtySpecs {
-			dirtyJobsName = append(dirtyJobsName, dirtyJob.Name().String())
-		}
-		raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventFoundDirty, len(dirtyJobsName))
-		errorMsg := fmt.Sprintf("Found %d unprocessed jobs for tenant: %s/%s, Jobs: %s, these will be processed now", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), strings.Join(dirtyJobsName, ", "))
-		j.logger.Error(errorMsg)
-		logWriter.Write(writer.LogLevelInfo, errorMsg)
+		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
 	}
 
 	me := errors.NewMultiError("persist job error")
@@ -494,24 +498,20 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		return errors.Wrap(job.EntityJob, "error in persisting jobs to DB", me.ToErr())
 	}
 
-	err = j.bulkJobCleanup(ctx, jobTenant, toDelete, logWriter)
-	if err != nil {
+	if err := j.bulkJobCleanup(ctx, jobTenant, toDelete, logWriter); err != nil {
 		return err
 	}
 
-	err = j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs)
-	if err != nil {
+	if err := j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs); err != nil {
 		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", err)
 	}
 
-	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil)
-	if err != nil {
+	if err := j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil); err != nil {
 		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", err)
 	}
 
 	if len(jobsMarkedDirty) != 0 {
-		err = j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false)
-		if err != nil {
+		if err := j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false); err != nil {
 			return errors.Wrap(job.EntityJob, "failed to mark jobs as cleaned, these jobs will be reprocessed in next attempt", err)
 		}
 	}
@@ -636,15 +636,9 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	}
 
 	toAdd, toUpdate, toDelete, unmodifiedSpecs, unmodifiedDirtySpecs := j.differentiateSpecs(existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
-	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, %d deleted and %d dirty job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete), len(unmodifiedDirtySpecs)))
+	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, %d deleted specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	if len(unmodifiedDirtySpecs) > 0 {
-		var dirtyJobsName []string
-		for _, job := range unmodifiedDirtySpecs {
-			dirtyJobsName = append(dirtyJobsName, job.Name().String())
-		}
-		errorMsg := fmt.Sprintf("Found %d unprocessed jobs for tenant: %s/%s, Jobs: %s, these will be reprocessed as part of replace_all", len(unmodifiedDirtySpecs), jobTenant.ProjectName(), jobTenant.NamespaceName(), dirtyJobsName)
-		j.logger.Error(errorMsg)
-		logWriter.Write(writer.LogLevelInfo, errorMsg)
+		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
 	}
 	if len(toAdd)+len(toUpdate)+len(toDelete)+len(unmodifiedDirtySpecs) == 0 {
 		return nil
@@ -655,7 +649,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
 	me.Append(err)
 
-	err = j.upstreamResolver.CheckStaticResolvable(ctx, jobTenant.ProjectName(), incomingJobs, logWriter)
+	err = j.upstreamResolver.CheckStaticResolvable(ctx, jobTenant, incomingJobs, logWriter)
 	me.Append(err)
 
 	// TODO: resolve job dependencies before check cyclic

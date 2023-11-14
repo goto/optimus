@@ -313,7 +313,11 @@ WHERE
 	}
 
 	if tag.RowsAffected() == 0 {
-		return errors.NotFound(job.EntityJob, "job not found with the given namespace: "+jobsTenant.NamespaceName().String())
+		jobNamesString := make([]string, len(jobNames))
+		for _, jobName := range jobNames {
+			jobNamesString = append(jobNamesString, jobName.String())
+		}
+		return errors.NotFound(job.EntityJob, fmt.Sprintf("jobs: [%s], not found with the given namespace: %s", strings.Join(jobNamesString, ", "), jobsTenant.NamespaceName().String()))
 	}
 	return nil
 }

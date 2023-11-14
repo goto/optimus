@@ -219,6 +219,19 @@ func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
 	return jobsWithUnresolvedUpstream, me.ToErr()
 }
 
+func (j Jobs) GetJobsWithUnresolvedStaticUpstreams() ([]*WithUpstream, error) {
+	me := errors.NewMultiError("get unresolved upstreams errors")
+
+	var jobsWithUnresolvedUpstream []*WithUpstream
+	for _, subjectJob := range j {
+		jobWithUnresolvedUpstream, err := subjectJob.GetStaticUpstreamsToResolve()
+		me.Append(err)
+		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, NewWithUpstream(subjectJob, jobWithUnresolvedUpstream))
+	}
+
+	return jobsWithUnresolvedUpstream, me.ToErr()
+}
+
 type WithUpstream struct {
 	job       *Job
 	upstreams []*Upstream

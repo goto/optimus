@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/label"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -27,7 +28,7 @@ func TestEntitySpec(t *testing.T) {
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	jobTask := job.NewTask("bq2bq", jobTaskConfig)
 	description := "sample description"
-	labels := map[string]string{"key": "value"}
+	labels, _ := label.FromMap(map[string]string{"key": "value"})
 	hook, _ := job.NewHook("sample-hook", jobTaskConfig)
 	jobAlertConfig, _ := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 
@@ -114,6 +115,24 @@ func TestEntitySpec(t *testing.T) {
 			assert.Equal(t, jobMetadata.Resource().Limit().Memory(), specA.Metadata().Resource().Limit().Memory())
 			assert.Equal(t, jobMetadata.Scheduler(), specA.Metadata().Scheduler())
 			assert.Equal(t, jobMetadata.Scheduler(), specA.Metadata().Scheduler())
+		})
+
+		t.Run("should return nil and error if labels is invalid", func(t *testing.T) {
+			labels, actualError := label.FromMap(map[string]string{
+				"test_key": "",
+			})
+			assert.NoError(t, actualError)
+
+			actualSpec, actualError := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).
+				WithDescription(description).
+				WithLabels(labels).WithHooks([]*job.Hook{hook}).WithAlerts([]*job.AlertSpec{alert}).
+				WithSpecUpstream(specUpstream).
+				WithAsset(asset).
+				WithMetadata(jobMetadata).
+				Build()
+
+			assert.Nil(t, actualSpec)
+			assert.ErrorContains(t, actualError, "labels is invalid")
 		})
 	})
 
@@ -302,14 +321,6 @@ func TestEntitySpec(t *testing.T) {
 			jobConfig, err := job.ConfigFrom(map[string]string{"": ""})
 			assert.Error(t, err)
 			assert.Empty(t, jobConfig)
-		})
-	})
-
-	t.Run("NewLabels", func(t *testing.T) {
-		t.Run("should return error if the labels map is invalid", func(t *testing.T) {
-			jobLabels, err := job.NewLabels(map[string]string{"": ""})
-			assert.Error(t, err)
-			assert.Empty(t, jobLabels)
 		})
 	})
 }

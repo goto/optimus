@@ -7,7 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib/label"
+	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
@@ -129,7 +129,7 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	jobSpecBuilder := job.NewSpecBuilder(version, name, owner, schedule, window, task).WithDescription(js.Description)
 
 	if js.Labels != nil {
-		labels, err := label.FromMap(js.Labels)
+		labels, err := labels.FromMap(js.Labels)
 		if err != nil {
 			return nil, err
 		}

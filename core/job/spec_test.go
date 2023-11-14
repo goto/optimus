@@ -7,7 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib/label"
+	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -28,7 +28,7 @@ func TestEntitySpec(t *testing.T) {
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	jobTask := job.NewTask("bq2bq", jobTaskConfig)
 	description := "sample description"
-	labels, _ := label.FromMap(map[string]string{"key": "value"})
+	lbl, _ := labels.FromMap(map[string]string{"key": "value"})
 	hook, _ := job.NewHook("sample-hook", jobTaskConfig)
 	jobAlertConfig, _ := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 
@@ -51,7 +51,7 @@ func TestEntitySpec(t *testing.T) {
 		t.Run("should return values as inserted", func(t *testing.T) {
 			specA, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).
 				WithDescription(description).
-				WithLabels(labels).WithHooks([]*job.Hook{hook}).WithAlerts([]*job.AlertSpec{alert}).
+				WithLabels(lbl).WithHooks([]*job.Hook{hook}).WithAlerts([]*job.AlertSpec{alert}).
 				WithSpecUpstream(specUpstream).
 				WithAsset(asset).
 				WithMetadata(jobMetadata).
@@ -82,7 +82,7 @@ func TestEntitySpec(t *testing.T) {
 			assert.Equal(t, jobTask.Config(), specA.Task().Config())
 
 			assert.Equal(t, description, specA.Description())
-			assert.Equal(t, labels, specA.Labels())
+			assert.Equal(t, lbl, specA.Labels())
 
 			assert.Equal(t, []*job.Hook{hook}, specA.Hooks())
 			assert.Equal(t, hook.Name(), specA.Hooks()[0].Name())
@@ -118,14 +118,14 @@ func TestEntitySpec(t *testing.T) {
 		})
 
 		t.Run("should return nil and error if labels is invalid", func(t *testing.T) {
-			labels, actualError := label.FromMap(map[string]string{
+			lbl, actualError := labels.FromMap(map[string]string{
 				"test_key": "",
 			})
 			assert.NoError(t, actualError)
 
 			actualSpec, actualError := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).
 				WithDescription(description).
-				WithLabels(labels).WithHooks([]*job.Hook{hook}).WithAlerts([]*job.AlertSpec{alert}).
+				WithLabels(lbl).WithHooks([]*job.Hook{hook}).WithAlerts([]*job.AlertSpec{alert}).
 				WithSpecUpstream(specUpstream).
 				WithAsset(asset).
 				WithMetadata(jobMetadata).

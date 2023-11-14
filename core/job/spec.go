@@ -7,7 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib/label"
+	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
 )
 
@@ -25,7 +25,7 @@ type Spec struct {
 	task         Task
 
 	description  string
-	labels       label.Labels
+	labels       labels.Labels
 	metadata     *Metadata
 	hooks        []*Hook
 	asset        Asset
@@ -61,7 +61,7 @@ func (s *Spec) Description() string {
 	return s.description
 }
 
-func (s *Spec) Labels() label.Labels {
+func (s *Spec) Labels() labels.Labels {
 	return s.labels
 }
 
@@ -146,7 +146,7 @@ func (s *SpecBuilder) WithMetadata(metadata *Metadata) *SpecBuilder {
 	return s
 }
 
-func (s *SpecBuilder) WithLabels(labels label.Labels) *SpecBuilder {
+func (s *SpecBuilder) WithLabels(labels labels.Labels) *SpecBuilder {
 	s.spec.labels = labels
 	return s
 }

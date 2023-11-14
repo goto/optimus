@@ -7,7 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib/label"
+	"github.com/goto/optimus/internal/lib/labels"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 type Metadata struct {
 	Version     int32
 	Description string
-	Labels      label.Labels
+	Labels      labels.Labels
 }
 
 func (m *Metadata) Validate() error {

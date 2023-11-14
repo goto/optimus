@@ -7,7 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib/label"
+	"github.com/goto/optimus/internal/lib/labels"
 )
 
 func TestMetadata(t *testing.T) {
@@ -24,7 +24,7 @@ func TestMetadata(t *testing.T) {
 			meta := &resource.Metadata{
 				Version:     1,
 				Description: "Description for testing",
-				Labels: label.Labels{
+				Labels: labels.Labels{
 					"test_key": "",
 				},
 			}
@@ -49,7 +49,7 @@ func TestMetadata(t *testing.T) {
 			meta := &resource.Metadata{
 				Version:     1,
 				Description: "Description for testing",
-				Labels: label.Labels{
+				Labels: labels.Labels{
 					"test_key": "test_value",
 				},
 			}

@@ -46,6 +46,9 @@ func (c Config) GetSize() string {
 
 func (c Config) GetOffset() string {
 	if c.Window == nil {
+		if c.simple.Delay == "" {
+			return ""
+		}
 		if strings.HasPrefix(c.simple.Delay, "-") {
 			return c.simple.Delay[1:]
 		}
@@ -69,6 +72,10 @@ func (c Config) GetVersion() int {
 	}
 
 	return c.Window.GetVersion()
+}
+
+func (c Config) GetSimpleConfig() SimpleConfig {
+	return c.simple
 }
 
 func NewPresetConfig(preset string) (Config, error) {

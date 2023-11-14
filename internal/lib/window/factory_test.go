@@ -13,11 +13,11 @@ import (
 
 type Preset struct {
 	Name   string
-	window models.Window
+	config window.SimpleConfig
 }
 
-func (p Preset) Window() models.Window {
-	return p.window
+func (p Preset) Config() window.SimpleConfig {
+	return p.config
 }
 
 func TestWindowFactory(t *testing.T) {
@@ -47,10 +47,33 @@ func TestWindowFactory(t *testing.T) {
 			assert.NoError(t, err)
 
 			w, err := window.From[Preset](config, "", func(name string) (Preset, error) {
-				w, _ := models.NewWindow(2, "d", "0", "24h")
+				conf := window.SimpleConfig{
+					Size:       "1d",
+					Delay:      "",
+					TruncateTo: "",
+					Location:   "",
+				}
 				return Preset{
 					Name:   "yesterday",
-					window: w,
+					config: conf,
+				}, nil
+			})
+			assert.NoError(t, err)
+
+			sept1 := time.Date(2023, 9, 1, 1, 0, 0, 0, time.UTC)
+			interval, err := w.GetInterval(sept1)
+			assert.NoError(t, err)
+			assert.Equal(t, "2023-08-31T00:00:00Z", interval.Start().Format(time.RFC3339))
+			assert.Equal(t, "2023-09-01T00:00:00Z", interval.End().Format(time.RFC3339))
+		})
+		t.Run("creates window from config", func(t *testing.T) {
+			config, err := window.NewConfig("1d", "", "", "")
+			assert.NoError(t, err)
+
+			w, err := window.From[Preset](config, "", func(name string) (Preset, error) {
+				return Preset{
+					Name:   "yesterday",
+					config: config.GetSimpleConfig(),
 				}, nil
 			})
 			assert.NoError(t, err)

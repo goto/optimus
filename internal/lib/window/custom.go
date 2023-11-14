@@ -43,16 +43,17 @@ func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
 		}
 	}
 
+	timeWithZone := ref.In(w.timezone)
 	if unit == duration.None {
-		return ref.In(w.timezone), nil
+		return timeWithZone, nil
 	}
 
-	year, month, day := ref.Date()
+	year, month, day := timeWithZone.Date()
 	hour, minute, sec, nsec := 0, 0, 0, 0
 
 	switch unit {
 	case duration.Hour:
-		hour = ref.In(w.timezone).Hour()
+		hour = timeWithZone.Hour()
 
 	case duration.Week:
 		weekday := ref.Weekday()

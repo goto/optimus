@@ -42,18 +42,21 @@ type JobRepository interface {
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 }
 
-func checkForUnresolvedUpstreams(tnnt tenant.Tenant, incomingJobNameMap map[job.Name]*job.Job, jobs []*job.WithUpstream, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("check for unresolved upstreams errors")
+func checkForUnresolvedStaticUpstreams(tnnt tenant.Tenant, incomingJobNameMap map[job.Name]*job.Job, jobs []*job.WithUpstream, logWriter writer.LogWriter) error {
+	me := errors.NewMultiError("check for unresolved static upstreams errors")
 	for _, jobObj := range jobs {
-		for _, staticUpstream := range jobObj.Upstreams() {
-			if staticUpstream.State() == job.UpstreamStateResolved {
+		for _, upstream := range jobObj.Upstreams() {
+			if upstream.Type() == job.UpstreamTypeInferred {
 				continue
 			}
-			if _, ok := incomingJobNameMap[staticUpstream.Name()]; ok {
-				logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] static dependency: %s, for job: %s,  is part of the incoming jobs themselves", tnnt.NamespaceName(), staticUpstream.Name(), jobObj.GetName()))
+			if upstream.State() == job.UpstreamStateResolved {
 				continue
 			}
-			me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, fmt.Sprintf("could not resolve for static upstream: %s, for job: %s", staticUpstream.FullName(), jobObj.GetName())))
+			if _, ok := incomingJobNameMap[upstream.Name()]; ok {
+				logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] %s dependency: %s, for job: %s,  is part of the incoming jobs themselves", tnnt.NamespaceName(), upstream.Type(), upstream.Name(), jobObj.GetName()))
+				continue
+			}
+			me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, fmt.Sprintf("could not resolve for %s upstream: %s, for job: %s", upstream.Type(), upstream.FullName(), jobObj.GetName())))
 		}
 	}
 	return me.ToErr()
@@ -74,7 +77,7 @@ func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant
 	jobsWithResolvedStaticExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedStaticInternalUpstreams, logWriter)
 	me.Append(err)
 
-	me.Append(checkForUnresolvedUpstreams(tnnt, incomingJobNameMap, jobsWithResolvedStaticExternalUpstreams, logWriter))
+	me.Append(checkForUnresolvedStaticUpstreams(tnnt, incomingJobNameMap, jobsWithResolvedStaticExternalUpstreams, logWriter))
 
 	return me.ToErr()
 }

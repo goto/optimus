@@ -44,6 +44,167 @@ func TestUpstreamResolver(t *testing.T) {
 	jobTask := job.NewTask(taskName, jobTaskConfig)
 	sampleOwner := "sample-owner"
 
+	t.Run("CheckStaticResolvable", func(t *testing.T) {
+		specA, err := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
+		assert.NoError(t, err)
+
+		upstreamAName := job.SpecUpstreamName("job-A")
+		upstreamASpec, err := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{upstreamAName}).Build()
+		assert.NoError(t, err)
+		specB, err := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamASpec).Build()
+		assert.NoError(t, err)
+
+		t.Run("ignore unresolved inferred upstream", func(t *testing.T) {
+			externalUpstreamResolver := new(ExternalUpstreamResolver)
+			internalUpstreamResolver := new(InternalUpstreamResolver)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobBDestination := job.ResourceURN("resource-B")
+			jobBUpstreams := []job.ResourceURN{"resource-G"} // unresolved inferred dependency
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
+
+			jobs := []*job.Job{jobB}
+
+			upstreamB1 := job.NewUpstreamUnresolvedInferred(jobBUpstreams[0])
+			upstreamsB := []*job.Upstream{upstreamB1}
+			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
+
+			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil)
+
+			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil, nil)
+
+			upstreamResolver := resolver.NewUpstreamResolver(nil, externalUpstreamResolver, internalUpstreamResolver)
+			err = upstreamResolver.CheckStaticResolvable(ctx, sampleTenant, jobs, logWriter)
+			assert.NoError(t, err)
+		})
+		t.Run("raise error if unresolved static upstream", func(t *testing.T) {
+			externalUpstreamResolver := new(ExternalUpstreamResolver)
+			internalUpstreamResolver := new(InternalUpstreamResolver)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobBDestination := job.ResourceURN("resource-B")
+			jobBUpstreams := []job.ResourceURN{"resource-G"} // unresolved inferred dependency
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
+
+			jobs := []*job.Job{jobB}
+
+			upstreamB0 := job.NewUpstreamUnresolvedStatic(specA.Name(), sampleTenant.ProjectName())
+			upstreamB1 := job.NewUpstreamUnresolvedInferred(jobBUpstreams[0])
+			upstreamsB := []*job.Upstream{upstreamB0, upstreamB1}
+			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
+
+			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil)
+
+			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil, nil)
+
+			upstreamResolver := resolver.NewUpstreamResolver(nil, externalUpstreamResolver, internalUpstreamResolver)
+			err = upstreamResolver.CheckStaticResolvable(ctx, sampleTenant, jobs, logWriter)
+			assert.ErrorContains(t, err, "invalid state for entity job: could not resolve for static upstream: test-proj/job-A, for job: job-B")
+		})
+		t.Run("report no error if all upstreams are resolved", func(t *testing.T) {
+			externalUpstreamResolver := new(ExternalUpstreamResolver)
+			internalUpstreamResolver := new(InternalUpstreamResolver)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobBDestination := job.ResourceURN("resource-B")
+			jobBUpstreams := []job.ResourceURN{"resource-G"} // unresolved inferred dependency
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
+
+			jobs := []*job.Job{jobB}
+
+			upstreamB0 := job.NewUpstreamResolved(specA.Name(), "", "resource-B", sampleTenant, job.UpstreamTypeStatic, taskName, false)
+			upstreamsB := []*job.Upstream{upstreamB0}
+			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
+
+			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil)
+
+			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil, nil)
+
+			upstreamResolver := resolver.NewUpstreamResolver(nil, externalUpstreamResolver, internalUpstreamResolver)
+			err = upstreamResolver.CheckStaticResolvable(ctx, sampleTenant, jobs, logWriter)
+			assert.NoError(t, err)
+		})
+		t.Run("handle incoming static upstream if static upstream does not already exist in DB, but is incoming in specs", func(t *testing.T) {
+			externalUpstreamResolver := new(ExternalUpstreamResolver)
+			internalUpstreamResolver := new(InternalUpstreamResolver)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobADestination := job.ResourceURN("resource-A")
+			jobAUpstreams := []job.ResourceURN{"resource-F"} // unresolved inferred dependency
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
+
+			jobBDestination := job.ResourceURN("resource-B")
+			jobBUpstreams := []job.ResourceURN{"resource-G"} // unresolved inferred dependency
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
+
+			jobs := []*job.Job{jobA, jobB}
+
+			upstreamA := job.NewUpstreamUnresolvedInferred(jobAUpstreams[0])
+			upstreams := []*job.Upstream{upstreamA}
+			jobAWithUpstream := job.NewWithUpstream(jobA, upstreams)
+
+			upstreamB0 := job.NewUpstreamUnresolvedStatic(jobA.Spec().Name(), sampleTenant.ProjectName())
+			upstreamB1 := job.NewUpstreamUnresolvedInferred(jobBUpstreams[0])
+			upstreamsB := []*job.Upstream{upstreamB0, upstreamB1}
+			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
+
+			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
+
+			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil, nil)
+
+			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+
+			upstreamResolver := resolver.NewUpstreamResolver(nil, externalUpstreamResolver, internalUpstreamResolver)
+			err = upstreamResolver.CheckStaticResolvable(ctx, sampleTenant, jobs, logWriter)
+			assert.NoError(t, err)
+		})
+		t.Run("return errors coming from internal and external Bulk resolve", func(t *testing.T) {
+			externalUpstreamResolver := new(ExternalUpstreamResolver)
+			internalUpstreamResolver := new(InternalUpstreamResolver)
+
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			jobADestination := job.ResourceURN("resource-A")
+			jobAUpstreams := []job.ResourceURN{"resource-F"} // unresolved inferred dependency
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
+
+			jobBDestination := job.ResourceURN("resource-B")
+			jobBUpstreams := []job.ResourceURN{"resource-G"} // unresolved inferred dependency
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
+
+			jobs := []*job.Job{jobA, jobB}
+
+			upstreamA := job.NewUpstreamUnresolvedInferred(jobAUpstreams[0])
+			upstreams := []*job.Upstream{upstreamA}
+			jobAWithUpstream := job.NewWithUpstream(jobA, upstreams)
+
+			upstreamB0 := job.NewUpstreamUnresolvedStatic(jobA.Spec().Name(), sampleTenant.ProjectName())
+			upstreamB1 := job.NewUpstreamUnresolvedInferred(jobBUpstreams[0])
+			upstreamsB := []*job.Upstream{upstreamB0, upstreamB1}
+			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
+
+			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, errors.New("error in Internal bulkResolve"))
+
+			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, errors.New("error in External bulkResolve"))
+
+			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
+
+			upstreamResolver := resolver.NewUpstreamResolver(nil, externalUpstreamResolver, internalUpstreamResolver)
+			err = upstreamResolver.CheckStaticResolvable(ctx, sampleTenant, jobs, logWriter)
+			assert.ErrorContains(t, err, "error in Internal bulkResolve")
+			assert.ErrorContains(t, err, "error in External bulkResolve")
+		})
+	})
+
 	t.Run("BulkResolve", func(t *testing.T) {
 		t.Run("resolve upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)

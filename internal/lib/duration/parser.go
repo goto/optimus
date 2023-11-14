@@ -8,10 +8,10 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-var validationRegex = regexp.MustCompile("^None$|^-?\\d+[hdwMy]$")
+var validationRegex = regexp.MustCompile("^$|^None$|^-?\\d+[hdwMy]$")
 
 func From(str string) (Duration, error) {
-	if strings.EqualFold(str, "None") {
+	if str == "" || strings.EqualFold(str, "None") {
 		return Duration{
 			unit:  None,
 			count: 0,

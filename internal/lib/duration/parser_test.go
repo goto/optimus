@@ -40,6 +40,11 @@ func TestParser(t *testing.T) {
 				value: duration.NewDuration(0, duration.None),
 			},
 			{
+				name:  "returns None unit when empty",
+				input: "",
+				value: duration.NewDuration(0, duration.None),
+			},
+			{
 				name:  "returns hourly duration",
 				input: "5h",
 				value: duration.NewDuration(5, duration.Hour),

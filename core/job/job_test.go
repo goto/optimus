@@ -412,7 +412,7 @@ func TestEntityJob(t *testing.T) {
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			jobWithUpstream, err := jobA.GetJobWithUnresolvedUpstream()
-			assert.ErrorContains(t, err, "invalid argument for entity job: failed to get static upstreams to resolve")
+			assert.ErrorContains(t, err, "failed to get static upstreams to resolve")
 			assert.Len(t, jobWithUpstream.Upstreams(), 1)
 		})
 		t.Run("should contains error when get static upstream failed because of project name empty", func(t *testing.T) {
@@ -422,7 +422,7 @@ func TestEntityJob(t *testing.T) {
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			jobWithUpstream, err := jobA.GetJobWithUnresolvedUpstream()
-			assert.ErrorContains(t, err, "invalid argument for entity job: failed to get static upstreams to resolve")
+			assert.ErrorContains(t, err, "failed to get static upstreams to resolve")
 			assert.Len(t, jobWithUpstream.Upstreams(), 1)
 		})
 		t.Run("should get unresolved upstream", func(t *testing.T) {

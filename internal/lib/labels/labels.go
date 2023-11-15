@@ -40,7 +40,7 @@ func (l Labels) Validate() error {
 		}
 
 		if err := l.validateKV(value, valueType); err != nil {
-			return fmt.Errorf("error validating value [%s]: %w", value, err)
+			return fmt.Errorf("error validating value [%s] for key [%s]: %w", value, key, err)
 		}
 	}
 

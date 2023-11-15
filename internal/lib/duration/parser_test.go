@@ -19,13 +19,13 @@ func TestParser(t *testing.T) {
 			{
 				name:   "returns error when invalid",
 				input:  "5s",
-				errStr: "unknown value for unit s",
+				errStr: "invalid value for unit s, accepted values are [h,d,w,M,y]",
 				value:  duration.Duration{},
 			},
 			{
 				name:   "returns error when invalid unit",
 				input:  "5g",
-				errStr: "unknown value for unit g",
+				errStr: "invalid value for unit g, accepted values are [h,d,w,M,y]",
 				value:  duration.Duration{},
 			},
 			{
@@ -112,7 +112,7 @@ func TestParser(t *testing.T) {
 		t.Run("returns error when invalid unit", func(t *testing.T) {
 			_, err := duration.UnitFrom("invalid")
 			assert.Error(t, err)
-			assert.ErrorContains(t, err, "unknown value for unit invalid")
+			assert.ErrorContains(t, err, "invalid value for unit invalid, accepted values are [h,d,w,M,y]")
 		})
 		t.Run("returns valid unit when correct input", func(t *testing.T) {
 			values := []string{"None", "h", "d", "w", "M", "y"}

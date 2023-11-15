@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -622,7 +623,7 @@ func TestJobRunHandler(t *testing.T) {
 				ReferenceTime: referenceTime,
 			}
 
-			service.On("GetInterval", ctx, mock.Anything, mock.Anything, referenceTime.AsTime()).Return(window.Interval{}, errors.New("unexpected error"))
+			service.On("GetInterval", ctx, mock.Anything, mock.Anything, referenceTime.AsTime()).Return(interval.Interval{}, errors.New("unexpected error"))
 
 			actualResponse, actualError := handler.GetInterval(ctx, request)
 
@@ -645,9 +646,13 @@ func TestJobRunHandler(t *testing.T) {
 			assert.NotNil(t, project)
 			assert.NoError(t, err)
 
-			preset, err := tenant.NewPreset("yesterday", "preset for test", "d", "-24h", "24h")
+			preset := tenant.NewPresetWithConfig("yesterday", "preset for test", window.SimpleConfig{
+				Size:       "1d",
+				Delay:      "-1d",
+				Location:   "",
+				TruncateTo: "",
+			})
 			assert.NotZero(t, preset)
-			assert.NoError(t, err)
 
 			presets := map[string]tenant.Preset{
 				"yesterday": preset,
@@ -713,12 +718,12 @@ func (m *mockJobRunService) GetJobRuns(ctx context.Context, projectName tenant.P
 	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
 }
 
-func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
+func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error) {
 	args := m.Called(ctx, projectName, jobName, referenceTime)
 	if args.Get(0) == nil {
-		return window.Interval{}, args.Error(1)
+		return interval.Interval{}, args.Error(1)
 	}
-	return args.Get(0).(window.Interval), args.Error(1)
+	return args.Get(0).(interval.Interval), args.Error(1)
 }
 
 type mockNotifier struct {

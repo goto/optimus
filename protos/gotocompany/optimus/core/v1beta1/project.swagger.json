@@ -125,6 +125,12 @@
         },
         "size": {
           "type": "string"
+        },
+        "delay": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
         }
       }
     },

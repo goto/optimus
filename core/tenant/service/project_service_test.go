@@ -21,7 +21,7 @@ func TestProjectService(t *testing.T) {
 	}
 	savedProject, _ := tenant.NewProject("savedProj", conf)
 
-	preset, err := tenant.NewPreset("test_preset", "preset for testing", "d", "-1h", "24h")
+	preset, err := tenant.NewPreset("test_preset", "preset for testing", "1d", "1h", "", "")
 	assert.NoError(t, err)
 
 	presetsMap := map[string]tenant.Preset{

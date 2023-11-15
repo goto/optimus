@@ -58,7 +58,7 @@ func UnitFrom(u string) (Unit, error) {
 	case string(Year):
 		return Year, nil
 	default:
-		return "", errors.InvalidArgument("window", "unknown value for unit "+u)
+		return "", errors.InvalidArgument("window", "invalid value for unit "+u+", accepted values are [h,d,w,M,y]")
 	}
 }
 

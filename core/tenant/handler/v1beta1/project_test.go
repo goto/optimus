@@ -11,6 +11,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/core/tenant/handler/v1beta1"
+	"github.com/goto/optimus/internal/lib/window"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -90,9 +91,7 @@ func TestProjectHandler(t *testing.T) {
 					"yesterday": {
 						Name:        "yesterday",
 						Description: "window configuration for yesterday data",
-						TruncateTo:  "d",
-						Offset:      "0",
-						Size:        "24h",
+						Size:        "1d",
 					},
 				},
 			}}
@@ -155,8 +154,12 @@ func TestProjectHandler(t *testing.T) {
 		})
 		t.Run("returns the project successfully", func(t *testing.T) {
 			savedProj, _ := tenant.NewProject("savedProj", conf)
-			pres, err := tenant.NewPreset("yesterday", "description", "d", "0", "24h")
-			assert.NoError(t, err)
+			pres := tenant.NewPresetWithConfig("yesterday", "description", window.SimpleConfig{
+				Size:       "1d",
+				Delay:      "",
+				Location:   "",
+				TruncateTo: "",
+			})
 			savedProj.SetPresets(map[string]tenant.Preset{"yesterday": pres})
 
 			projectService := new(projectService)

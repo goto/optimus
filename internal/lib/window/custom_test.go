@@ -32,7 +32,7 @@ func TestCustomWindow(t *testing.T) {
 
 			_, err := w.GetInterval(refTimeUTC)
 			assert.Error(t, err)
-			assert.ErrorContains(t, err, "unknown value for unit g")
+			assert.ErrorContains(t, err, "invalid value for unit g, accepted values are [h,d,w,M,y]")
 		})
 
 		type values struct {

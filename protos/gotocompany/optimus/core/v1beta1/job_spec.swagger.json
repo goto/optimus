@@ -833,6 +833,26 @@
         }
       }
     },
+    "JobSpecificationWindow": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string"
+        },
+        "delay": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "truncateTo": {
+          "type": "string"
+        }
+      }
+    },
     "JobTaskDependency": {
       "type": "object",
       "properties": {
@@ -1281,6 +1301,9 @@
         },
         "windowPreset": {
           "type": "string"
+        },
+        "window": {
+          "$ref": "#/definitions/JobSpecificationWindow"
         },
         "dependencies": {
           "type": "array",

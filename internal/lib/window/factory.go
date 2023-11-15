@@ -28,7 +28,7 @@ func From[T WithConfig](config Config, schedule string, getter func(string) (T, 
 	}
 
 	if config.Window == nil {
-		return FromCustomConfig(config.simple)
+		return FromCustomConfig(config.GetSimpleConfig())
 	}
 
 	return FromBaseWindow(config.Window), nil

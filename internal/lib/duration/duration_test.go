@@ -55,7 +55,8 @@ func TestDuration(t *testing.T) {
 				name: "returns weeks after when negative duration",
 				dur:  duration.NewDuration(-1, duration.Week),
 				want: time.Date(2023, 11, 17, 10, 20, 50, 0, time.UTC),
-			}, {
+			},
+			{
 				name: "returns months before when positive",
 				dur:  duration.NewDuration(2, duration.Month),
 				want: time.Date(2023, 9, 10, 10, 20, 50, 0, time.UTC),
@@ -63,8 +64,9 @@ func TestDuration(t *testing.T) {
 			{
 				name: "returns month after when negative duration",
 				dur:  duration.NewDuration(-2, duration.Month),
-				want: time.Date(2024, 01, 10, 10, 20, 50, 0, time.UTC),
-			}, {
+				want: time.Date(2024, 0o1, 10, 10, 20, 50, 0, time.UTC),
+			},
+			{
 				name: "returns year before when positive",
 				dur:  duration.NewDuration(1, duration.Year),
 				want: time.Date(2022, 11, 10, 10, 20, 50, 0, time.UTC),

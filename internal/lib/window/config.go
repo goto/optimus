@@ -9,6 +9,8 @@ import (
 	"github.com/goto/optimus/internal/models"
 )
 
+const NewWindowVersion = 3
+
 const (
 	Incremental Type = "incremental"
 	Preset      Type = "preset"
@@ -36,7 +38,7 @@ type Config struct {
 
 // Following functions are for backward compatibility
 
-func (c Config) GetSize() string {
+func (c Config) GetSize() string { // nolint: gocritic
 	if c.Window == nil {
 		return c.simple.Size
 	}
@@ -44,7 +46,7 @@ func (c Config) GetSize() string {
 	return c.Window.GetSize()
 }
 
-func (c Config) GetOffset() string {
+func (c Config) GetOffset() string { // nolint: gocritic
 	if c.Window == nil {
 		if c.simple.Delay == "" {
 			return ""
@@ -58,7 +60,7 @@ func (c Config) GetOffset() string {
 	return c.Window.GetOffset()
 }
 
-func (c Config) GetTruncateTo() string {
+func (c Config) GetTruncateTo() string { // nolint: gocritic
 	if c.Window == nil {
 		return c.simple.TruncateTo
 	}
@@ -68,7 +70,7 @@ func (c Config) GetTruncateTo() string {
 
 func (c Config) GetVersion() int {
 	if c.Window == nil {
-		return 3
+		return NewWindowVersion
 	}
 
 	return c.Window.GetVersion()
@@ -136,6 +138,13 @@ func NewConfig(size, delay, location, truncateTo string) (Config, error) {
 		windowType: Custom,
 		simple:     simpleConfig,
 	}, nil
+}
+
+func NewCustomConfigWithTimezone(c SimpleConfig) Config {
+	return Config{
+		windowType: Custom,
+		simple:     c,
+	}
 }
 
 func NewIncrementalConfig() Config {

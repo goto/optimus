@@ -15,42 +15,44 @@ import (
 
 func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 	spec := jobEntity.Spec()
-	var w *pb.JobSpecification_Window = nil
-	if spec.Version() > 2 {
-		w = &pb.JobSpecification_Window{
+
+	j := &pb.JobSpecification{
+		Version:       int32(spec.Version()),
+		Name:          spec.Name().String(),
+		Owner:         spec.Owner(),
+		StartDate:     spec.Schedule().StartDate().String(),
+		EndDate:       spec.Schedule().EndDate().String(),
+		Interval:      spec.Schedule().Interval(),
+		DependsOnPast: spec.Schedule().DependsOnPast(),
+		TaskName:      spec.Task().Name().String(),
+		Config:        fromConfig(spec.Task().Config()),
+		Dependencies:  fromSpecUpstreams(spec.UpstreamSpec()),
+		Assets:        fromAsset(spec.Asset()),
+		Hooks:         fromHooks(spec.Hooks()),
+		Description:   spec.Description(),
+		Labels:        spec.Labels(),
+		Behavior:      fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
+		Metadata:      fromMetadata(spec.Metadata()),
+		Destination:   jobEntity.Destination().String(),
+		Sources:       fromResourceURNs(jobEntity.Sources()),
+	}
+
+	if spec.Version() == window.NewWindowVersion {
+		j.Window = &pb.JobSpecification_Window{
 			Preset:     spec.WindowConfig().Preset,
 			Size:       spec.WindowConfig().GetSimpleConfig().Size,
 			Delay:      spec.WindowConfig().GetSimpleConfig().Delay,
 			Location:   spec.WindowConfig().GetSimpleConfig().Location,
 			TruncateTo: spec.WindowConfig().GetSimpleConfig().TruncateTo,
 		}
+	} else {
+		j.WindowPreset = spec.WindowConfig().Preset
+		j.WindowSize = spec.WindowConfig().GetSize()
+		j.WindowOffset = spec.WindowConfig().GetOffset()
+		j.WindowTruncateTo = spec.WindowConfig().GetTruncateTo()
 	}
 
-	return &pb.JobSpecification{
-		Version:          int32(spec.Version()),
-		Name:             spec.Name().String(),
-		Owner:            spec.Owner(),
-		StartDate:        spec.Schedule().StartDate().String(),
-		EndDate:          spec.Schedule().EndDate().String(),
-		Interval:         spec.Schedule().Interval(),
-		DependsOnPast:    spec.Schedule().DependsOnPast(),
-		TaskName:         spec.Task().Name().String(),
-		Config:           fromConfig(spec.Task().Config()),
-		WindowPreset:     spec.WindowConfig().Preset,
-		WindowSize:       spec.WindowConfig().GetSize(),
-		WindowOffset:     spec.WindowConfig().GetOffset(),
-		WindowTruncateTo: spec.WindowConfig().GetTruncateTo(),
-		Window:           w,
-		Dependencies:     fromSpecUpstreams(spec.UpstreamSpec()),
-		Assets:           fromAsset(spec.Asset()),
-		Hooks:            fromHooks(spec.Hooks()),
-		Description:      spec.Description(),
-		Labels:           spec.Labels(),
-		Behavior:         fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
-		Metadata:         fromMetadata(spec.Metadata()),
-		Destination:      jobEntity.Destination().String(),
-		Sources:          fromResourceURNs(jobEntity.Sources()),
-	}
+	return j
 }
 
 func fromJobProtos(protoJobSpecs []*pb.JobSpecification) ([]*job.Spec, []job.Name, error) {
@@ -214,7 +216,7 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 		if w.Preset != "" {
 			return window.NewPresetConfig(w.Preset)
 		}
-		if js.Version == 3 {
+		if js.Version == window.NewWindowVersion {
 			return window.NewConfig(w.Size, w.Delay, w.Location, w.TruncateTo)
 		}
 	}
@@ -223,7 +225,7 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 		return window.NewPresetConfig(js.WindowPreset)
 	}
 
-	if js.Version < 3 {
+	if js.Version < window.NewWindowVersion {
 		w, err := models.NewWindow(int(js.Version), js.WindowTruncateTo, js.WindowOffset, js.WindowSize)
 		if err != nil {
 			return window.Config{}, err

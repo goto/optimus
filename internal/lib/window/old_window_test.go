@@ -35,10 +35,10 @@ func TestOldWindow(t *testing.T) {
 			baseWindow := window.FromBaseWindow(w1)
 
 			sept1 := time.Date(2023, 9, 1, 1, 0, 0, 0, time.UTC)
-			_, err := baseWindow.GetInterval(sept1)
+			interval, err := baseWindow.GetInterval(sept1)
 			assert.NoError(t, err)
-			//assert.Equal(t, "2023-08-31T00:00:00Z", interval.Start.Format(time.RFC3339))
-			//assert.Equal(t, "2023-09-01T00:00:00Z", interval.End.Format(time.RFC3339))
+			assert.Equal(t, "2023-08-31T00:00:00Z", interval.Start().Format(time.RFC3339))
+			assert.Equal(t, "2023-09-01T00:00:00Z", interval.End().Format(time.RFC3339))
 		})
 		t.Run("should return zero and error if error parsing schedule", func(t *testing.T) {
 			schedule := "-1 * * * *"
@@ -58,5 +58,4 @@ func TestOldWindow(t *testing.T) {
 			assert.NoError(t, actualError)
 		})
 	})
-
 }

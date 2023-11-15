@@ -9,6 +9,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+const NewWindowVersion = 3
+
 type JobSpec struct {
 	Version      int                 `yaml:"version,omitempty"`
 	Name         string              `yaml:"name"`
@@ -123,7 +125,12 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 		Metadata:      j.getProtoJobMetadata(),
 	}
 
-	if js.Version > 2 {
+	if js.Version < NewWindowVersion {
+		js.WindowSize = j.Task.Window.Size
+		js.WindowOffset = j.Task.Window.Offset
+		js.WindowTruncateTo = j.Task.Window.TruncateTo
+		js.WindowPreset = j.Task.Window.Preset
+	} else {
 		js.Window = &pb.JobSpecification_Window{
 			Preset:     j.Task.Window.Preset,
 			Size:       j.Task.Window.Size,
@@ -131,11 +138,6 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 			Location:   j.Task.Window.Location,
 			TruncateTo: j.Task.Window.TruncateTo,
 		}
-	} else {
-		js.WindowSize = j.Task.Window.Size
-		js.WindowOffset = j.Task.Window.Offset
-		js.WindowTruncateTo = j.Task.Window.TruncateTo
-		js.WindowPreset = j.Task.Window.Preset
 	}
 
 	return js
@@ -437,7 +439,14 @@ func getValue[V int | string | bool | time.Duration](reference, other V) V {
 
 func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 	var w JobSpecTaskWindow
-	if protoSpec.Version > 2 {
+	if protoSpec.Version < NewWindowVersion {
+		w = JobSpecTaskWindow{
+			Size:       protoSpec.WindowSize,
+			Offset:     protoSpec.WindowOffset,
+			TruncateTo: protoSpec.WindowTruncateTo,
+			Preset:     protoSpec.WindowPreset,
+		}
+	} else {
 		wc := protoSpec.Window
 		w = JobSpecTaskWindow{
 			Size:       wc.Size,
@@ -445,13 +454,6 @@ func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 			TruncateTo: wc.TruncateTo,
 			Location:   wc.Location,
 			Preset:     wc.Preset,
-		}
-	} else {
-		w = JobSpecTaskWindow{
-			Size:       protoSpec.WindowSize,
-			Offset:     protoSpec.WindowOffset,
-			TruncateTo: protoSpec.WindowTruncateTo,
-			Preset:     protoSpec.WindowPreset,
 		}
 	}
 	return &JobSpec{

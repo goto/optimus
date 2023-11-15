@@ -63,8 +63,10 @@ type Schedule struct {
 
 type Window struct {
 	WindowSize       string `json:",omitempty"`
-	WindowOffset     string `json:",omitempty"`
+	WindowDelay      string `json:",omitempty"`
 	WindowTruncateTo string `json:",omitempty"`
+	WindowLocation   string `json:",omitempty"`
+	WindowOffset     string `json:",omitempty"`
 	Preset           string `json:",omitempty"`
 	Type             string
 }
@@ -195,20 +197,23 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 }
 
 func toStorageWindow(windowSpec window.Config) ([]byte, error) {
-	var size, offset, truncateTo string
-	if windowSpec.Window != nil {
-		size = windowSpec.Window.GetSize()
-		offset = windowSpec.Window.GetOffset()
-		truncateTo = windowSpec.Window.GetTruncateTo()
+	w := Window{
+		Type:   string(windowSpec.Type()),
+		Preset: windowSpec.Preset,
 	}
 
-	w := Window{
-		Type:             string(windowSpec.Type()),
-		Preset:           windowSpec.Preset,
-		WindowSize:       size,
-		WindowOffset:     offset,
-		WindowTruncateTo: truncateTo,
+	if windowSpec.GetVersion() == window.NewWindowVersion {
+		sc := windowSpec.GetSimpleConfig()
+		w.WindowSize = sc.Size
+		w.WindowDelay = sc.Delay
+		w.WindowLocation = sc.Location
+		w.WindowTruncateTo = sc.TruncateTo
+	} else if windowSpec.Window != nil {
+		w.WindowSize = windowSpec.Window.GetSize()
+		w.WindowOffset = windowSpec.Window.GetOffset()
+		w.WindowTruncateTo = windowSpec.Window.GetTruncateTo()
 	}
+
 	windowJSON, err := json.Marshal(w)
 	if err != nil {
 		return nil, err
@@ -460,6 +465,16 @@ func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 
 	if storageWindow.Type == string(window.Incremental) {
 		return window.NewIncrementalConfig(), nil
+	}
+
+	if jobVersion == window.NewWindowVersion {
+		sc := window.SimpleConfig{
+			Size:       storageWindow.WindowSize,
+			Delay:      storageWindow.WindowDelay,
+			Location:   storageWindow.WindowLocation,
+			TruncateTo: storageWindow.WindowTruncateTo,
+		}
+		return window.NewCustomConfigWithTimezone(sc), nil
 	}
 
 	w, err := models.NewWindow(

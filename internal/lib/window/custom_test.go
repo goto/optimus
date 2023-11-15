@@ -249,7 +249,6 @@ func TestCustomWindow(t *testing.T) {
 				}
 			})
 		}
-
 	})
 	t.Run("GetEnd without delay", func(t *testing.T) {
 		tests := []struct {

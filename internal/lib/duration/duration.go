@@ -15,6 +15,8 @@ const (
 	Year  Unit = "y"
 )
 
+const NumberOfDaysInWeek = 7
+
 type Duration struct {
 	count int
 	unit  Unit
@@ -31,7 +33,7 @@ func (d Duration) SubtractFrom(t time.Time) time.Time {
 	case Day:
 		return t.AddDate(0, 0, count)
 	case Week:
-		return t.AddDate(0, 0, count*7)
+		return t.AddDate(0, 0, count*NumberOfDaysInWeek)
 	case Month:
 		return t.AddDate(0, count, 0)
 	case Year:

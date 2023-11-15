@@ -34,7 +34,7 @@ func (w CustomWindow) GetEnd(ref time.Time) (time.Time, error) {
 }
 
 func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
-	var unit = w.size.GetUnit()
+	unit := w.size.GetUnit()
 	if w.truncateTo != "" {
 		var err error
 		unit, err = duration.UnitFrom(w.truncateTo)
@@ -60,7 +60,7 @@ func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
 		if weekday == 0 {
 			weekday = 7 // moving sunday to end of week, monday as start of week
 		}
-		day = day - int(weekday-time.Monday)
+		day -= int(weekday - time.Monday)
 
 	case duration.Year:
 		month = 1

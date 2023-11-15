@@ -10,12 +10,6 @@ import (
 	"github.com/goto/optimus/internal/lib/window"
 )
 
-type values struct {
-	ref   time.Time
-	start time.Time
-	end   time.Time
-}
-
 func TestCustomWindow(t *testing.T) {
 	istLoc, locErr := time.LoadLocation("Asia/Kolkata")
 	assert.NoError(t, locErr)
@@ -40,6 +34,12 @@ func TestCustomWindow(t *testing.T) {
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "unknown value for unit g")
 		})
+
+		type values struct {
+			ref   time.Time
+			start time.Time
+			end   time.Time
+		}
 
 		tests := []struct {
 			name   string

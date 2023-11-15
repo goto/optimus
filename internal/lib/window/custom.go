@@ -56,7 +56,7 @@ func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
 		hour = timeWithZone.Hour()
 
 	case duration.Week:
-		weekday := ref.Weekday()
+		weekday := timeWithZone.Weekday()
 		if weekday == 0 {
 			weekday = 7 // moving sunday to end of week, monday as start of week
 		}

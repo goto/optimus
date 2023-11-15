@@ -317,7 +317,7 @@ WHERE
 		for i, jobName := range jobNames {
 			jobNamesString[i] = jobName.String()
 		}
-		return errors.NotFound(job.EntityJob, fmt.Sprintf("jobs: [%s], not found with the given namespace: %s", strings.Join(jobNamesString, ", "), jobsTenant.NamespaceName().String()))
+		return errors.NotFound(job.EntityJob, fmt.Sprintf("jobs: [%s], not found in the given project: %s", strings.Join(jobNamesString, ", "), jobsTenant.ProjectName()))
 	}
 	return nil
 }

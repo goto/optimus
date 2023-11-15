@@ -222,11 +222,11 @@ func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
 func (j Jobs) GetJobsWithUnresolvedStaticUpstreams() ([]*WithUpstream, error) {
 	me := errors.NewMultiError("get unresolved upstreams errors")
 
-	var jobsWithUnresolvedUpstream []*WithUpstream
-	for _, subjectJob := range j {
+	jobsWithUnresolvedUpstream := make([]*WithUpstream, len(j))
+	for i, subjectJob := range j {
 		jobWithUnresolvedUpstream, err := subjectJob.GetStaticUpstreamsToResolve()
 		me.Append(err)
-		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, NewWithUpstream(subjectJob, jobWithUnresolvedUpstream))
+		jobsWithUnresolvedUpstream[i] = NewWithUpstream(subjectJob, jobWithUnresolvedUpstream)
 	}
 
 	return jobsWithUnresolvedUpstream, me.ToErr()

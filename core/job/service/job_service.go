@@ -458,9 +458,9 @@ func (j *JobService) markJobsAsDirty(ctx context.Context, jobTenant tenant.Tenan
 }
 
 func (j *JobService) logFoundDirtySpecs(tnnt tenant.Tenant, unmodifiedDirtySpecs []*job.Spec, logWriter writer.LogWriter) {
-	var dirtyJobsName []string
-	for _, dirtyJob := range unmodifiedDirtySpecs {
-		dirtyJobsName = append(dirtyJobsName, dirtyJob.Name().String())
+	dirtyJobsName := make([]string, len(unmodifiedDirtySpecs))
+	for i, dirtyJob := range unmodifiedDirtySpecs {
+		dirtyJobsName[i] = dirtyJob.Name().String()
 	}
 	raiseJobEventMetric(tnnt, job.MetricJobEventFoundDirty, len(dirtyJobsName))
 	infoMsg := fmt.Sprintf("[%s] Found %d unprocessed Jobs: %s, these will be processed in ReplaceAll", tnnt.NamespaceName(), len(unmodifiedDirtySpecs), strings.Join(dirtyJobsName, ", "))

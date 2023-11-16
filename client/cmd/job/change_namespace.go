@@ -36,7 +36,7 @@ type changeNamespaceCommand struct {
 	configFilePath string
 	clientConfig   *config.ClientConfig
 
-	project          string
+	projectName      string
 	oldNamespaceName string
 	newNamespaceName string
 	host             string
@@ -57,25 +57,26 @@ func NewChangeNamespaceCommand() *cobra.Command {
 		RunE:     changeNamespace.RunE,
 		PostRunE: changeNamespace.PostRunE,
 	}
-	// Config filepath flag
-	cmd.Flags().StringVarP(&changeNamespace.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
-	internal.MarkFlagsRequired(cmd, []string{"old-namespace", "new-namespace"})
 	changeNamespace.injectFlags(cmd)
+	internal.MarkFlagsRequired(cmd, []string{"old-namespace", "new-namespace"})
 
 	return cmd
 }
 
 func (c *changeNamespaceCommand) injectFlags(cmd *cobra.Command) {
+	// Config filepath flag
+	cmd.Flags().StringVarP(&c.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
+
 	// Mandatory flags
 	cmd.Flags().StringVarP(&c.oldNamespaceName, "old-namespace", "o", "", "current namespace of the job")
 	cmd.Flags().StringVarP(&c.newNamespaceName, "new-namespace", "n", "", "namespace to which the job needs to be moved to")
 
 	// Mandatory flags if config is not set
-	cmd.Flags().StringVarP(&c.project, "project-name", "p", "", "Name of the optimus project")
+	cmd.Flags().StringVarP(&c.projectName, "project-name", "p", "", "Name of the optimus project")
 	cmd.Flags().StringVar(&c.host, "host", "", "Optimus service endpoint url")
 }
 
-func (c *changeNamespaceCommand) PreRunE(_ *cobra.Command, _ []string) error {
+func (c *changeNamespaceCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 	readWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs())
 	if err != nil {
 		c.logger.Error(err.Error())
@@ -83,15 +84,27 @@ func (c *changeNamespaceCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	c.writer = readWriter
 
 	// Load mandatory config
-	conf, err := config.LoadClientConfig(c.configFilePath)
+	conf, err := internal.LoadOptionalConfig(c.configFilePath)
 	if err != nil {
 		return err
+	}
+
+	if conf == nil {
+		internal.MarkFlagsRequired(cmd, []string{"project-name", "host"})
+		return nil
+	}
+
+	if c.projectName == "" {
+		c.projectName = conf.Project.Name
+	}
+	if c.host == "" {
+		c.host = conf.Host
 	}
 
 	c.clientConfig = conf
 	c.connection = connection.New(c.logger, conf)
 
-	return err
+	return nil
 }
 
 func (c *changeNamespaceCommand) RunE(_ *cobra.Command, args []string) error {
@@ -114,7 +127,7 @@ func (c *changeNamespaceCommand) sendChangeNamespaceRequest(jobName string) erro
 	// fetch Instance by calling the optimus API
 	jobRunServiceClient := pb.NewJobSpecificationServiceClient(conn)
 	request := &pb.ChangeJobNamespaceRequest{
-		ProjectName:      c.project,
+		ProjectName:      c.projectName,
 		NamespaceName:    c.oldNamespaceName,
 		NewNamespaceName: c.newNamespaceName,
 		JobName:          jobName,
@@ -140,7 +153,7 @@ func (c *changeNamespaceCommand) downloadJobSpecFile(fs afero.Fs, jobName, newJo
 	defer cancelFunc()
 
 	response, err := jobSpecificationServiceClient.GetJobSpecifications(ctx, &pb.GetJobSpecificationsRequest{
-		ProjectName:   c.project,
+		ProjectName:   c.projectName,
 		NamespaceName: c.newNamespaceName,
 		JobName:       jobName,
 	})
@@ -208,7 +221,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 	}
 	if err != nil || newNamespaceConfig.Job.Path == "" {
 		c.logger.Warn("[info] register the new namespace and run \n\t`optimus job export -p %s -n %s -r %s `, to fetch the newly moved job.",
-			c.project, c.newNamespaceName, jobName)
+			c.projectName, c.newNamespaceName, jobName)
 		return err
 	}
 
@@ -223,7 +236,7 @@ func (c *changeNamespaceCommand) PostRunE(_ *cobra.Command, args []string) error
 	if err != nil {
 		c.logger.Error(fmt.Sprintf("[error] unable to download job spec to new namespace directory, err: %s", err.Error()))
 		c.logger.Warn("[info] manually run \n\t`optimus job export -p %s -n %s -r %s `, to fetch the newly moved job.",
-			c.project, c.newNamespaceName, jobName)
+			c.projectName, c.newNamespaceName, jobName)
 	}
 	c.logger.Info("[OK] Job moved successfully")
 	return nil

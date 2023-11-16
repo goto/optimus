@@ -213,6 +213,53 @@ func TestJob(t *testing.T) {
 		labels := jobWithDetails.GetUniqueLabelValues()
 		assert.ElementsMatch(t, labels, []string{"someVale", "another"})
 	})
+	t.Run("GetSafeLabels", func(t *testing.T) {
+		t.Run("should return empty if job with details is nil", func(t *testing.T) {
+			var jobWithDetails *scheduler.JobWithDetails
+
+			actualLabels := jobWithDetails.GetSafeLabels()
+			assert.NotNil(t, actualLabels)
+			assert.Empty(t, actualLabels)
+		})
+		t.Run("should return empty if job metadata is nil", func(t *testing.T) {
+			jobWithDetails := scheduler.JobWithDetails{
+				Name:        "jobName",
+				JobMetadata: nil,
+			}
+
+			actualLabels := jobWithDetails.GetSafeLabels()
+			assert.NotNil(t, actualLabels)
+			assert.Empty(t, actualLabels)
+		})
+		t.Run("should return empty if job metadata label is nil", func(t *testing.T) {
+			jobWithDetails := scheduler.JobWithDetails{
+				Name: "jobName",
+				JobMetadata: &scheduler.JobMetadata{
+					Labels: nil,
+				},
+			}
+
+			actualLabels := jobWithDetails.GetSafeLabels()
+			assert.NotNil(t, actualLabels)
+			assert.Empty(t, actualLabels)
+		})
+		t.Run("should return labels if job metadata label is not nil", func(t *testing.T) {
+			labels := map[string]string{
+				"label1": "someVale",
+				"label2": "someVale",
+				"label3": "another",
+			}
+
+			jobWithDetails := scheduler.JobWithDetails{
+				Name:        "jobName",
+				JobMetadata: &scheduler.JobMetadata{Labels: labels},
+			}
+
+			actualLabels := jobWithDetails.GetSafeLabels()
+			assert.NotNil(t, actualLabels)
+			assert.Equal(t, labels, actualLabels)
+		})
+	})
 	t.Run("GroupJobsByTenant", func(t *testing.T) {
 		t1, _ := tenant.NewTenant("proj", "ns1")
 		t2, _ := tenant.NewTenant("proj", "ns1")

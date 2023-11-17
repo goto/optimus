@@ -154,6 +154,23 @@ func (j *JobWithDetails) GetUniqueLabelValues() []string {
 	return labelValues
 }
 
+func (j *JobWithDetails) GetSafeLabels() map[string]string {
+	emptyOutput := make(map[string]string)
+	if j == nil {
+		return emptyOutput
+	}
+
+	if j.JobMetadata == nil {
+		return emptyOutput
+	}
+
+	if j.JobMetadata.Labels == nil {
+		return emptyOutput
+	}
+
+	return j.JobMetadata.Labels
+}
+
 type Retry struct {
 	ExponentialBackoff bool
 	Count              int

@@ -129,10 +129,7 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	jobSpecBuilder := job.NewSpecBuilder(version, name, owner, schedule, window, task).WithDescription(js.Description)
 
 	if js.Labels != nil {
-		labels, err := labels.FromMap(js.Labels)
-		if err != nil {
-			return nil, err
-		}
+		labels := labels.FromMap(js.Labels)
 		jobSpecBuilder = jobSpecBuilder.WithLabels(labels)
 	}
 

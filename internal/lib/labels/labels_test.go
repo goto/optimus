@@ -11,13 +11,13 @@ import (
 )
 
 func TestFromMap(t *testing.T) {
-	t.Run("should return nil and error if incoming labels are nil", func(t *testing.T) {
+	t.Run("should return empty if incoming labels are nil", func(t *testing.T) {
 		var incoming map[string]string
 
-		actualLabels, actualError := labels.FromMap(incoming)
+		actualLabels := labels.FromMap(incoming)
 
-		assert.Nil(t, actualLabels)
-		assert.ErrorContains(t, actualError, "labels is nil")
+		assert.NotNil(t, actualLabels)
+		assert.Empty(t, actualLabels)
 	})
 
 	t.Run("should return labels and nil if no error is encountered", func(t *testing.T) {
@@ -25,10 +25,9 @@ func TestFromMap(t *testing.T) {
 			"key1": "value1",
 		}
 
-		actualLabels, actualError := labels.FromMap(incoming)
+		actualLabels := labels.FromMap(incoming)
 
 		assert.NotEmpty(t, actualLabels)
-		assert.NoError(t, actualError)
 	})
 }
 
@@ -48,9 +47,7 @@ func TestLabels(t *testing.T) {
 			value := fmt.Sprintf("value-%d", i)
 			l[key] = value
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -61,9 +58,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"": "test_value",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -74,9 +69,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			strings.Repeat("a", 64): "test_value",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -87,9 +80,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"invalid_key_with_!": "test_value",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -100,9 +91,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"invalid_key_with_A": "test_value",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -113,9 +102,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"-invalid_key": "test_value",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -126,9 +113,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"invalid_key-": "test_value",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -139,9 +124,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"test_key": "",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -152,9 +135,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"test_key": strings.Repeat("a", 64),
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -165,9 +146,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"test_key": "invalid_value_with_!",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -178,9 +157,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"test_key": "invalid_value_with_A",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -191,9 +168,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"test_key": "-invalid_value",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -204,9 +179,7 @@ func TestLabels(t *testing.T) {
 		l := map[string]string{
 			"test_key": "invalid_value-",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 
@@ -220,9 +193,7 @@ func TestLabels(t *testing.T) {
 			"resource-name": "1_resource_test",
 			"job-name":      "job_test_1",
 		}
-
-		incoming, err := labels.FromMap(l)
-		assert.NoError(t, err)
+		incoming := labels.FromMap(l)
 
 		actualError := incoming.Validate()
 

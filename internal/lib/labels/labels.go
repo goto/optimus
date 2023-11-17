@@ -90,10 +90,10 @@ func (Labels) kvContainsInvalidChar(s string) bool {
 	return kvInvalidChar.MatchString(s)
 }
 
-func FromMap(incoming map[string]string) (Labels, error) {
+func FromMap(incoming map[string]string) Labels {
 	if incoming == nil {
-		return nil, errNilLabels
+		return make(map[string]string)
 	}
 
-	return Labels(incoming), nil
+	return Labels(incoming)
 }

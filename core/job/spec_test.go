@@ -28,7 +28,7 @@ func TestEntitySpec(t *testing.T) {
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	jobTask := job.NewTask("bq2bq", jobTaskConfig)
 	description := "sample description"
-	lbl, _ := labels.FromMap(map[string]string{"key": "value"})
+	lbl := labels.FromMap(map[string]string{"key": "value"})
 	hook, _ := job.NewHook("sample-hook", jobTaskConfig)
 	jobAlertConfig, _ := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 
@@ -118,10 +118,9 @@ func TestEntitySpec(t *testing.T) {
 		})
 
 		t.Run("should return nil and error if labels is invalid", func(t *testing.T) {
-			lbl, actualError := labels.FromMap(map[string]string{
+			lbl := labels.FromMap(map[string]string{
 				"test_key": "",
 			})
-			assert.NoError(t, actualError)
 
 			actualSpec, actualError := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).
 				WithDescription(description).

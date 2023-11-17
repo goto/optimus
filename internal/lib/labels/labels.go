@@ -11,11 +11,6 @@ const (
 	maxLabelsKVLength = 63
 )
 
-const (
-	keyType   = "key"
-	valueType = "value"
-)
-
 var errNilLabels = errors.New("labels is nil")
 
 var (
@@ -35,33 +30,53 @@ func (l Labels) Validate() error {
 	}
 
 	for key, value := range l {
-		if err := l.validateKV(key, keyType); err != nil {
-			return fmt.Errorf("error validating key [%s]: %w", key, err)
+		if err := l.validateKey(key); err != nil {
+			return err
 		}
 
-		if err := l.validateKV(value, valueType); err != nil {
-			return fmt.Errorf("error validating value [%s] for key [%s]: %w", value, key, err)
+		if err := l.validateValue(value); err != nil {
+			return fmt.Errorf("error validating value for key [%s]: %w", key, err)
 		}
 	}
 
 	return nil
 }
 
-func (l Labels) validateKV(s, _type string) error {
-	if s == "" {
-		return fmt.Errorf("%s is empty", _type)
+func (l Labels) validateValue(value string) error {
+	if value == "" {
+		return errors.New("value is empty")
 	}
 
-	if len(s) > maxLabelsKVLength {
-		return fmt.Errorf("%s length is more than [%d]", _type, maxLabelsKVLength)
+	if len(value) > maxLabelsKVLength {
+		return fmt.Errorf("value length is more than [%d]", maxLabelsKVLength)
 	}
 
-	if l.kvContainsInvalidChar(s) {
-		return fmt.Errorf("%s should only be combination of lower case letters, numerics, underscores, and/or dashes", _type)
+	if l.kvContainsInvalidChar(value) {
+		return errors.New("value should only be combination of lower case letters, numerics, underscores, and/or dashes")
 	}
 
-	if !l.kvContainsValidStartAndEndChar(s) {
-		return fmt.Errorf("%s should start and end with alphanumerics only", _type)
+	if !l.kvContainsValidStartAndEndChar(value) {
+		return errors.New("value should start and end with alphanumerics only")
+	}
+
+	return nil
+}
+
+func (l Labels) validateKey(key string) error {
+	if key == "" {
+		return errors.New("key is empty")
+	}
+
+	if len(key) > maxLabelsKVLength {
+		return fmt.Errorf("key length is more than [%d]", maxLabelsKVLength)
+	}
+
+	if l.kvContainsInvalidChar(key) {
+		return errors.New("key should only be combination of lower case letters, numerics, underscores, and/or dashes")
+	}
+
+	if !l.kvContainsValidStartAndEndChar(key) {
+		return errors.New("key should start and end with alphanumerics only")
 	}
 
 	return nil

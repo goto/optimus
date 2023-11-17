@@ -266,7 +266,11 @@ func (jh *JobHandler) ListJobSpecification(ctx context.Context, req *pb.ListJobS
 
 	jobSpecificationProtos := make([]*pb.JobSpecification, len(jobSpecs))
 	for i, jobSpec := range jobSpecs {
-		jobSpecificationProtos[i] = ToJobProto(jobSpec)
+		jobSpecProto := ToJobProto(jobSpec)
+		if req.IgnoreAssets {
+			jobSpecProto.Assets = map[string]string{}
+		}
+		jobSpecificationProtos[i] = jobSpecProto
 	}
 
 	// TODO: make a stream response

@@ -37,8 +37,12 @@ const (
 
 	// Configuration for system defined variables
 	configDstart        = "DSTART"
+	configStartDate     = "START_DATE"
 	configDend          = "DEND"
+	configEndDate       = "END_DATE"
 	configExecutionTime = "EXECUTION_TIME"
+	configScheduleTime  = "SCHEDULE_TIME"
+	configScheduleDate  = "SCHEDULE_DATE"
 	configDestination   = "JOB_DESTINATION"
 
 	JobAttributionLabelsKey = "JOB_LABELS"
@@ -104,7 +108,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		return nil, err
 	}
 
-	systemDefinedVars := getSystemDefinedConfigs(job.Job, interval, executedAt)
+	systemDefinedVars := getSystemDefinedConfigs(job.Job, interval, executedAt, config.ScheduledAt)
 
 	// Prepare template context and compile task config
 	taskContext := compiler.PrepareContext(
@@ -194,13 +198,23 @@ func (i InputCompiler) compileConfigs(configs map[string]string, templateCtx map
 	return conf, secretsConfig, nil
 }
 
-func getSystemDefinedConfigs(job *scheduler.Job, interval interval.Interval, executedAt time.Time) map[string]string {
-	return map[string]string{
+func getSystemDefinedConfigs(job *scheduler.Job, interval interval.Interval, executedAt, scheduledAt time.Time) map[string]string {
+	vars := map[string]string{
 		configDstart:        interval.Start().Format(TimeISOFormat),
 		configDend:          interval.End().Format(TimeISOFormat),
 		configExecutionTime: executedAt.Format(TimeISOFormat),
 		configDestination:   job.Destination,
 	}
+	// TODO: remove this condition after v1/v2 removal, add to map directly
+	if job.WindowConfig.GetVersion() == window.NewWindowVersion {
+		vars[configStartDate] = interval.Start().Format(time.DateOnly)
+		vars[configEndDate] = interval.End().Format(time.DateOnly)
+		vars[configExecutionTime] = scheduledAt.Format(TimeISOFormat)
+		vars[configScheduleTime] = scheduledAt.Format(TimeISOFormat)
+		vars[configScheduleDate] = scheduledAt.Format(time.DateOnly)
+	}
+
+	return vars
 }
 
 func splitConfigWithSecrets(conf map[string]string) (map[string]string, map[string]string) {

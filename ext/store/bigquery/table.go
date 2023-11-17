@@ -71,6 +71,10 @@ func (t TableHandle) Update(ctx context.Context, res *resource.Resource) error {
 		}
 	}
 
+	if table.Cluster != nil {
+		metadataToUpdate.Clustering = toBQClustering(table.Cluster)
+	}
+
 	_, err = t.bqTable.Update(ctx, metadataToUpdate, "")
 	if err != nil {
 		var metaErr *googleapi.Error

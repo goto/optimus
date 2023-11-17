@@ -245,6 +245,9 @@ func TestTableHandle(t *testing.T) {
 						"type": "INTEGER",
 					},
 				},
+				"cluster": map[string]any{
+					"using": []string{"session"},
+				},
 				"partition": map[string]any{
 					"field": "product_day",
 					"type":  "DAY",

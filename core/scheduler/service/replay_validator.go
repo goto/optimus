@@ -52,6 +52,10 @@ func (v Validator) validateDateRange(ctx context.Context, replayRequest *schedul
 		jobEndDate = jobSpec.Schedule.EndDate.UTC()
 	}
 
+	if replayEndDate.Before(replayStartDate) {
+		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay end date (%s) is not allowed to be set before replay start date (%s)", replayEndDate.String(), replayStartDate.String()))
+	}
+
 	if replayStartDate.Before(jobStartDate) {
 		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay start date (%s) is not allowed to be set before job start date (%s)", replayStartDate.String(), jobStartDate.String()))
 	}

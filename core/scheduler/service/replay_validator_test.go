@@ -76,6 +76,32 @@ func TestReplayValidator(t *testing.T) {
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.NoError(t, err)
 		})
+		t.Run("should return error if end date of replay is before the start date of replay", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			sch := new(mockReplayScheduler)
+			defer sch.AssertExpectations(t)
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+
+			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
+				Schedule: &scheduler.Schedule{
+					StartDate: startTime.Add(1 * time.Second), // start date 1 second ahead of replay
+					EndDate:   &endTime,
+				},
+			}, nil)
+
+			startTimeNew := endTime
+			endTimeNew := startTime
+			replayConfig := scheduler.NewReplayConfig(startTimeNew, endTimeNew, parallel, replayJobConfig, description)
+			replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfig, scheduler.ReplayStateCreated)
+
+			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			err := validator.Validate(ctx, replayReq, jobCron)
+			assert.ErrorContains(t, err, "not allowed to be set before replay start date")
+		})
 		t.Run("should return error if start date of replay is before the start date of the job", func(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)

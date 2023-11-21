@@ -480,7 +480,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		return err
 	}
 
-	toAdd, toUpdate, toDelete, _, unmodifiedDirtySpecs := j.differentiateSpecs(existingJobs, specs, jobNamesWithInvalidSpec)
+	toAdd, toUpdate, toDelete, _, unmodifiedDirtySpecs := j.differentiateSpecs(jobTenant, existingJobs, specs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	if len(unmodifiedDirtySpecs) > 0 {
 		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
@@ -635,7 +635,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 		return err
 	}
 
-	toAdd, toUpdate, toDelete, unmodifiedSpecs, unmodifiedDirtySpecs := j.differentiateSpecs(existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
+	toAdd, toUpdate, toDelete, unmodifiedSpecs, unmodifiedDirtySpecs := j.differentiateSpecs(jobTenant, existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, %d deleted specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
 	if len(unmodifiedDirtySpecs) > 0 {
 		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
@@ -933,12 +933,12 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	return deletedJobNames, me.ToErr()
 }
 
-func (j *JobService) differentiateSpecs(existingJobs []*job.Job, incomingSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified, dirty []*job.Spec) {
+func (j *JobService) differentiateSpecs(jobTenant tenant.Tenant, existingJobs []*job.Job, incomingSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified, dirty []*job.Spec) {
 	var addedSpecs, modifiedSpecs, unmodifiedSpecs, deletedSpecs, unmodifiedDirtySpecs []*job.Spec
 
 	existingJobsMap := job.Jobs(existingJobs).GetNameMap()
 	for _, jobNameToSkip := range jobNamesWithInvalidSpec {
-		j.logger.Error("received invalid spec for %s", jobNameToSkip)
+		j.logger.Error("[%s] received invalid spec for %s", jobTenant.NamespaceName().String(), jobNameToSkip)
 		delete(existingJobsMap, jobNameToSkip)
 	}
 

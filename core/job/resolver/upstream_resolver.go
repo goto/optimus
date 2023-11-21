@@ -128,7 +128,7 @@ func checkForUnresolvedStaticUpstreams(tnnt tenant.Tenant, incomingJobNameMap ma
 				continue
 			}
 			if _, ok := incomingJobNameMap[upstream.Name()]; ok {
-				logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] %s dependency: %s, for job: %s,  is part of the incoming jobs themselves", tnnt.NamespaceName(), upstream.Type(), upstream.Name(), jobObj.GetName()))
+				logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] %s dependency: %s, for job: %s, is part of the incoming jobs themselves", tnnt.NamespaceName(), upstream.Type(), upstream.Name(), jobObj.GetName()))
 				continue
 			}
 			me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, fmt.Sprintf("could not resolve for %s upstream: %s, for job: %s", upstream.Type(), upstream.FullName(), jobObj.GetName())))

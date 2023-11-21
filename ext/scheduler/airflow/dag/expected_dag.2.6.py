@@ -46,6 +46,9 @@ default_args = {
     "on_success_callback": operator_success_event,
     "on_retry_callback"  : operator_retry_event,
     "on_failure_callback": operator_failure_event,
+    "labels": {
+        "orchestrator": "optimus",
+    },
 }
 
 """

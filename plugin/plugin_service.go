@@ -125,16 +125,32 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 
 	// identify all upstream resource urns by all identifier from given asset
 	resourceURNs := []string{}
+	me := errors.NewMultiError("identify upstream errors")
 	for _, upstreamIdentifier := range upstreamIdentifiers {
 		currentResourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, assets)
 		if err != nil {
 			s.l.Error("error when identify upstream")
+			me.Append(err)
 			continue
 		}
 		resourceURNs = append(resourceURNs, currentResourceURNs...)
 	}
 
-	return resourceURNs, nil
+	// ignore destination urns
+	destinationURN, err := s.ConstructDestinationURN(ctx, taskName, compiledConfig)
+	if err != nil {
+		return nil, err
+	}
+	filteredResourceURNs := []string{}
+	for _, resourceURN := range resourceURNs {
+		if resourceURN == destinationURN {
+			s.l.Warn("ignore destination resource %s", resourceURN)
+			continue
+		}
+		filteredResourceURNs = append(filteredResourceURNs, resourceURN)
+	}
+
+	return filteredResourceURNs, me.ToErr()
 }
 
 func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {

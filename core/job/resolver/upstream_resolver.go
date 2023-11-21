@@ -42,26 +42,6 @@ type JobRepository interface {
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 }
 
-func checkForUnresolvedStaticUpstreams(tnnt tenant.Tenant, incomingJobNameMap map[job.Name]*job.Job, jobs []*job.WithUpstream, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("check for unresolved static upstreams errors")
-	for _, jobObj := range jobs {
-		for _, upstream := range jobObj.Upstreams() {
-			if upstream.Type() == job.UpstreamTypeInferred {
-				continue
-			}
-			if upstream.State() == job.UpstreamStateResolved {
-				continue
-			}
-			if _, ok := incomingJobNameMap[upstream.Name()]; ok {
-				logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] %s dependency: %s, for job: %s,  is part of the incoming jobs themselves", tnnt.NamespaceName(), upstream.Type(), upstream.Name(), jobObj.GetName()))
-				continue
-			}
-			me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, fmt.Sprintf("could not resolve for %s upstream: %s, for job: %s", upstream.Type(), upstream.FullName(), jobObj.GetName())))
-		}
-	}
-	return me.ToErr()
-}
-
 func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant.Tenant, incomingJobs []*job.Job, logWriter writer.LogWriter) error {
 	me := errors.NewMultiError("check static resolvable incomingJobs errors")
 	incomingJobNameMap := make(map[job.Name]*job.Job)
@@ -132,6 +112,26 @@ func (UpstreamResolver) getUnresolvedUpstreamsErrors(jobsWithUpstreams []*job.Wi
 				logWriter.Write(writer.LogLevelError, errMsg)
 				me.Append(errors.NewError(errors.ErrNotFound, job.EntityJob, errMsg))
 			}
+		}
+	}
+	return me.ToErr()
+}
+
+func checkForUnresolvedStaticUpstreams(tnnt tenant.Tenant, incomingJobNameMap map[job.Name]*job.Job, jobs []*job.WithUpstream, logWriter writer.LogWriter) error {
+	me := errors.NewMultiError("check for unresolved static upstreams errors")
+	for _, jobObj := range jobs {
+		for _, upstream := range jobObj.Upstreams() {
+			if upstream.Type() == job.UpstreamTypeInferred {
+				continue
+			}
+			if upstream.State() == job.UpstreamStateResolved {
+				continue
+			}
+			if _, ok := incomingJobNameMap[upstream.Name()]; ok {
+				logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] %s dependency: %s, for job: %s,  is part of the incoming jobs themselves", tnnt.NamespaceName(), upstream.Type(), upstream.Name(), jobObj.GetName()))
+				continue
+			}
+			me.Append(errors.NewError(errors.ErrInvalidState, job.EntityJob, fmt.Sprintf("could not resolve for %s upstream: %s, for job: %s", upstream.Type(), upstream.FullName(), jobObj.GetName())))
 		}
 	}
 	return me.ToErr()

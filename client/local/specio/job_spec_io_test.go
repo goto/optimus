@@ -281,6 +281,7 @@ schedule:
   interval: ""
 behavior:
   depends_on_past: false
+  catch_up: false
 task:
   name: ""
 hooks: []
@@ -303,6 +304,7 @@ schedule:
   interval: 0 22 * * * 
 behavior:
   depends_on_past: true
+  catch_up: false
   notify:
     - on: test
       channel:

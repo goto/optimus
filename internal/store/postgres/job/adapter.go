@@ -58,6 +58,7 @@ type Schedule struct {
 	EndDate       *time.Time `json:",omitempty"`
 	Interval      string
 	DependsOnPast bool
+	CatchUp       bool
 	Retry         *Retry
 }
 
@@ -277,6 +278,7 @@ func toStorageSchedule(scheduleSpec *job.Schedule) ([]byte, error) {
 		StartDate:     startDate,
 		Interval:      scheduleSpec.Interval(),
 		DependsOnPast: scheduleSpec.DependsOnPast(),
+		CatchUp:       scheduleSpec.CatchUp(),
 		Retry:         retry,
 	}
 	if scheduleSpec.EndDate() != "" {
@@ -485,6 +487,7 @@ func fromStorageSchedule(raw []byte) (*job.Schedule, error) {
 		return nil, err
 	}
 	scheduleBuilder := job.NewScheduleBuilder(startDate).
+		WithCatchUp(storageSchedule.CatchUp).
 		WithDependsOnPast(storageSchedule.DependsOnPast).
 		WithInterval(storageSchedule.Interval)
 

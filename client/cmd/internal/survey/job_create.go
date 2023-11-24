@@ -221,6 +221,7 @@ func (*JobCreateSurvey) askBaseQuestions(questions []*survey.Question) (model.Jo
 		},
 		Asset: map[string]string{},
 		Behavior: model.JobSpecBehavior{
+			Catchup:       false,
 			DependsOnPast: false,
 		},
 		Dependencies: []model.JobSpecDependency{},

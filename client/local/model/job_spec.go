@@ -33,7 +33,7 @@ type JobSpecSchedule struct {
 
 type JobSpecBehavior struct {
 	DependsOnPast bool                      `yaml:"depends_on_past"`
-	Catchup       bool                      `yaml:"catch_up"`
+	Catchup       bool                      `yaml:"catch_up,omitempty"`
 	Retry         *JobSpecBehaviorRetry     `yaml:"retry,omitempty"`
 	Notify        []JobSpecBehaviorNotifier `yaml:"notify,omitempty"`
 }

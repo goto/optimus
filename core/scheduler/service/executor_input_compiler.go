@@ -136,6 +136,15 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		"job_name":  job.Job.Name.String(),
 		"job_id":    job.Job.ID.String(),
 	}
+
+	if job.JobMetadata != nil {
+		for key, value := range job.JobMetadata.Labels {
+			if _, ok := jobLabelsToAdd[key]; !ok {
+				jobLabelsToAdd[key] = value
+			}
+		}
+	}
+
 	jobAttributionLabels := getJobLabelsString(jobLabelsToAdd)
 	if jobLabels, ok := confs[JobAttributionLabelsKey]; ok {
 		if len(jobLabels) == 0 {

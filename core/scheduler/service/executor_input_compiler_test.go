@@ -183,6 +183,12 @@ func TestExecutorCompiler(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					Interval: "0 * * * *",
 				},
+				JobMetadata: &scheduler.JobMetadata{
+					Labels: map[string]string{
+						"user-specified-label-key1": "user-specified-label-value-for-test-1",
+						"user-specified-label-key2": "user-specified-label-value-for-test-2",
+					},
+				},
 			}
 			config := scheduler.RunConfig{
 				Executor: scheduler.Executor{
@@ -272,7 +278,9 @@ func TestExecutorCompiler(t *testing.T) {
 					"project=proj1": true,
 					"namespace=ns1": true,
 					"job_name=job1": true,
-					"job_id=00000000-0000-0000-0000-000000000000": true,
+					"job_id=00000000-0000-0000-0000-000000000000":                     true,
+					"user-specified-label-key1=user-specified-label-value-for-test-1": true,
+					"user-specified-label-key2=user-specified-label-value-for-test-2": true,
 				}
 
 				for _, v := range strings.Split(inputExecutorResp.Configs["JOB_LABELS"], ",") {

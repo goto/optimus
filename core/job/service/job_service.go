@@ -151,8 +151,11 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	err = j.uploadJobs(ctx, jobTenant, addedJobs, nil, nil)
 	me.Append(err)
 
-	for _, job := range addedJobs {
-		j.raiseCreateEvent(job)
+	for _, addedJob := range addedJobs {
+		j.raiseCreateEvent(addedJob)
+		if addedJob.Spec().Schedule().CatchUp() {
+			j.logger.Warn("catchup for job %s is enabled, starting from %s", addedJob.GetName(), addedJob.Spec().Schedule().StartDate().String())
+		}
 	}
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
 
@@ -755,6 +758,12 @@ func (j *JobService) bulkAdd(ctx context.Context, tenantWithDetails *tenant.With
 			j.raiseCreateEvent(job)
 		}
 		raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventStateAdded, len(addedJobs))
+	}
+
+	for _, addedJob := range addedJobs {
+		if addedJob.Spec().Schedule().CatchUp() {
+			j.logger.Warn("catchup for job %s is enabled, starting from %s", addedJob.GetName(), addedJob.Spec().Schedule().StartDate().String())
+		}
 	}
 
 	return addedJobs, me.ToErr()

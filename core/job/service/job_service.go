@@ -463,7 +463,7 @@ func (j *JobService) logFoundDirtySpecs(tnnt tenant.Tenant, unmodifiedDirtySpecs
 		dirtyJobsName[i] = dirtyJob.Name().String()
 	}
 	raiseJobEventMetric(tnnt, job.MetricJobEventFoundDirty, len(dirtyJobsName))
-	infoMsg := fmt.Sprintf("[%s] Found %d unprocessed Jobs: %s, these will be processed in ReplaceAll", tnnt.NamespaceName(), len(unmodifiedDirtySpecs), strings.Join(dirtyJobsName, ", "))
+	infoMsg := fmt.Sprintf("[%s] Found %d unprocessed Jobs: %s, reprocessing them.", tnnt.NamespaceName(), len(unmodifiedDirtySpecs), strings.Join(dirtyJobsName, ", "))
 	j.logger.Info(infoMsg)
 	logWriter.Write(writer.LogLevelInfo, infoMsg)
 }

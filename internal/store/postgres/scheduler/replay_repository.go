@@ -390,20 +390,21 @@ func (r ReplayRepository) getReplayRuns(ctx context.Context, replayID uuid.UUID)
 
 func (r ReplayRepository) getExecutableReplayRuns(ctx context.Context) ([]*replayRun, error) {
 	query := `
-		UPDATE replay_request 
+	WITH updated as (
+    UPDATE replay_request 
 		SET status = $1, message = $2, updated_at = NOW() 
-		FROM 
-			replay_run AS run 
-			JOIN replay_request AS r 
-			ON (replay_id = r.id)
-		WHERE r.id = (
-			SELECT id FROM replay_request 
+		WHERE id = (
+      SELECT id FROM replay_request 
 			WHERE status IN ('created', 'partial replayed', 'replayed') 
 			ORDER BY updated_at DESC 
 			FOR UPDATE SKIP LOCKED 
 			LIMIT 1
-		)
-		RETURNING	` + replayRunDetailColumns + `;`
+    )
+    RETURNING ` + replayColumns + `
+	)
+	SELECT ` + replayRunDetailColumns + `
+	FROM updated r
+	JOIN replay_run run on (r.id = run.replay_id);`
 
 	rows, err := r.db.Query(ctx, query, scheduler.ReplayStateInProgress, "")
 	if err != nil {

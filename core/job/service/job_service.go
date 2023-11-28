@@ -94,7 +94,7 @@ type JobRepository interface {
 	Add(context.Context, []*job.Job) (addedJobs []*job.Job, err error)
 	Update(context.Context, []*job.Job) (updatedJobs []*job.Job, err error)
 	Delete(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, cleanHistory bool) error
-
+	SetDirty(ctx context.Context, jobsTenant tenant.Tenant, jobNames []job.Name, isDirty bool) error
 	ChangeJobNamespace(ctx context.Context, jobName job.Name, tenant, newTenant tenant.Tenant) error
 
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
@@ -122,6 +122,7 @@ type EventHandler interface {
 }
 
 type UpstreamResolver interface {
+	CheckStaticResolvable(ctx context.Context, tnnt tenant.Tenant, jobs []*job.Job, logWriter writer.LogWriter) error
 	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
 }
@@ -413,23 +414,20 @@ func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOp
 	return nil, fmt.Errorf("no filter matched")
 }
 
-func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("replace all specs errors")
-
-	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
+func (j *JobService) bulkJobCleanup(ctx context.Context, jobTenant tenant.Tenant, toDelete []*job.Spec, logWriter writer.LogWriter) error {
+	me := errors.NewMultiError("bulk Job Cleanup errors")
+	deletedJobNames, err := j.bulkDelete(ctx, jobTenant, toDelete, logWriter)
 	me.Append(err)
-
-	toAdd, toUpdate, toDelete, _, err := j.differentiateSpecs(existingJobs, specs, jobNamesWithInvalidSpec)
-	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
-	me.Append(err)
-
-	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
+	err = j.uploadJobs(ctx, jobTenant, nil, nil, deletedJobNames)
 	if err != nil {
-		j.logger.Error("error getting tenant details: %s", err)
 		me.Append(err)
-		return me.ToErr()
+		return errors.Wrap(job.EntityJob, "critical error deleting DAGS from scheduler storage, consider deleting the dags manually and report this incident to administrators, this wont fix on a retry", me.ToErr())
 	}
+	return me.ToErr()
+}
 
+func (j *JobService) bulkJobPersist(ctx context.Context, tenantWithDetails *tenant.WithDetails, toAdd, toUpdate []*job.Spec, logWriter writer.LogWriter) ([]*job.Job, []*job.Job, error) {
+	me := errors.NewMultiError("replace all specs errors")
 	addedJobs, err := j.bulkAdd(ctx, tenantWithDetails, toAdd, logWriter)
 	me.Append(err)
 	failedToAdd := len(toAdd) - len(addedJobs)
@@ -438,18 +436,87 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	me.Append(err)
 	failedToUpdate := len(toUpdate) - len(updatedJobs)
 
-	deletedJobNames, err := j.bulkDelete(ctx, jobTenant, toDelete, logWriter)
-	me.Append(err)
-
-	err = j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs)
-	me.Append(err)
-
-	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, deletedJobNames)
-	me.Append(err)
-
 	raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventStateUpsertFailed, failedToAdd+failedToUpdate)
+	return addedJobs, updatedJobs, me.ToErr()
+}
 
-	return me.ToErr()
+func (j *JobService) markJobsAsDirty(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Job) ([]job.Name, error) {
+	if len(jobs) == 0 {
+		return []job.Name{}, nil
+	}
+	jobsNamesToMarkDirty := make([]job.Name, len(jobs))
+	for i, jobObj := range jobs {
+		jobsNamesToMarkDirty[i] = jobObj.Spec().Name()
+	}
+
+	err := j.jobRepo.SetDirty(ctx, jobTenant, jobsNamesToMarkDirty, true)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "critical, failed to mark incoming jobs as dirty, this can not be fixed on retry", err)
+	}
+
+	return jobsNamesToMarkDirty, nil
+}
+
+func (j *JobService) logFoundDirtySpecs(tnnt tenant.Tenant, unmodifiedDirtySpecs []*job.Spec, logWriter writer.LogWriter) {
+	dirtyJobsName := make([]string, len(unmodifiedDirtySpecs))
+	for i, dirtyJob := range unmodifiedDirtySpecs {
+		dirtyJobsName[i] = dirtyJob.Name().String()
+	}
+	raiseJobEventMetric(tnnt, job.MetricJobEventFoundDirty, len(dirtyJobsName))
+	infoMsg := fmt.Sprintf("[%s] Found %d unprocessed Jobs: %s, reprocessing them.", tnnt.NamespaceName(), len(unmodifiedDirtySpecs), strings.Join(dirtyJobsName, ", "))
+	j.logger.Info(infoMsg)
+	logWriter.Write(writer.LogLevelInfo, infoMsg)
+}
+
+func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
+	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
+	if err != nil {
+		j.logger.Error("error getting tenant details: %s", err)
+		return err
+	}
+	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
+	if err != nil {
+		j.logger.Error("error getting all jobs for tenant: %s/%s, details: %s", jobTenant.ProjectName(), jobTenant.NamespaceName(), err)
+		return err
+	}
+
+	toAdd, toUpdate, toDelete, _, unmodifiedDirtySpecs := j.differentiateSpecs(jobTenant, existingJobs, specs, jobNamesWithInvalidSpec)
+	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
+	if len(unmodifiedDirtySpecs) > 0 {
+		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
+	}
+
+	me := errors.NewMultiError("persist job error")
+
+	toUpdate = append(toUpdate, unmodifiedDirtySpecs...)
+
+	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, toAdd, toUpdate, logWriter)
+	me.Append(err)
+	jobsMarkedDirty, err := j.markJobsAsDirty(ctx, jobTenant, append(addedJobs, updatedJobs...))
+	me.Append(err)
+	if me.ToErr() != nil {
+		return errors.Wrap(job.EntityJob, "error in persisting jobs to DB", me.ToErr())
+	}
+
+	if err := j.bulkJobCleanup(ctx, jobTenant, toDelete, logWriter); err != nil {
+		return err
+	}
+
+	if err := j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs); err != nil {
+		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", err)
+	}
+
+	if err := j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil); err != nil {
+		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", err)
+	}
+
+	if len(jobsMarkedDirty) != 0 {
+		if err := j.jobRepo.SetDirty(ctx, jobTenant, jobsMarkedDirty, false); err != nil {
+			return errors.Wrap(job.EntityJob, "failed to mark jobs as cleaned, these jobs will be reprocessed in next attempt", err)
+		}
+	}
+
+	return nil
 }
 
 func (j *JobService) uploadJobs(ctx context.Context, jobTenant tenant.Tenant, addedJobs, updatedJobs []*job.Job, deletedJobNames []job.Name) error {
@@ -552,30 +619,37 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 }
 
 func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("validate specs errors")
-
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
 		return err
 	}
 
-	err = job.Specs(jobSpecs).Validate()
-	me.Append(err)
-	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
-
-	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
-	me.Append(err)
-
-	toAdd, toUpdate, toDelete, unmodifiedSpecs, err := j.differentiateSpecs(existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
-	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
-	me.Append(err)
-
-	if len(toAdd)+len(toUpdate)+len(toDelete) == 0 {
-		return me.ToErr()
+	if err := job.Specs(jobSpecs).Validate(); err != nil {
+		return err
 	}
 
-	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, toUpdate...), logWriter)
+	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
+	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
+	if err != nil {
+		return err
+	}
+
+	toAdd, toUpdate, toDelete, unmodifiedSpecs, unmodifiedDirtySpecs := j.differentiateSpecs(jobTenant, existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
+	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, %d deleted specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
+	if len(unmodifiedDirtySpecs) > 0 {
+		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
+	}
+	if len(toAdd)+len(toUpdate)+len(toDelete)+len(unmodifiedDirtySpecs) == 0 {
+		return nil
+	}
+
+	me := errors.NewMultiError("validate specs errors")
+	// TODO: add dry_run check because, generate jobs does not go a Dry Run , and Invalid SQL schemas could not be detected without that.
+	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
+	me.Append(err)
+
+	err = j.upstreamResolver.CheckStaticResolvable(ctx, jobTenant, incomingJobs, logWriter)
 	me.Append(err)
 
 	// TODO: resolve job dependencies before check cyclic
@@ -584,7 +658,7 @@ func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobS
 
 	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
 	// assumption, all job specs from input are also the job within same project
-	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, unmodifiedSpecs)
+	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, append(unmodifiedSpecs, unmodifiedDirtySpecs...))
 	identifierToJobsMap := getIdentifierToJobsMap(jobsToValidateMap)
 	for _, jobEntity := range incomingJobs {
 		if _, err := j.validateCyclic(jobEntity.Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
@@ -859,34 +933,40 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	return deletedJobNames, me.ToErr()
 }
 
-func (*JobService) differentiateSpecs(existingJobs []*job.Job, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified []*job.Spec, err error) {
-	// TODO: consider checking multi-error if it is required here
-	me := errors.NewMultiError("differentiate specs errors")
+func (j *JobService) differentiateSpecs(jobTenant tenant.Tenant, existingJobs []*job.Job, incomingSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name) (added, modified, deleted, unmodified, dirty []*job.Spec) {
+	var addedSpecs, modifiedSpecs, unmodifiedSpecs, deletedSpecs, unmodifiedDirtySpecs []*job.Spec
 
-	var addedSpecs, modifiedSpecs, unmodifiedSpecs, deletedSpecs []*job.Spec
-
-	existingSpecsMap := job.Jobs(existingJobs).GetNameAndSpecMap()
+	existingJobsMap := job.Jobs(existingJobs).GetNameMap()
 	for _, jobNameToSkip := range jobNamesWithInvalidSpec {
-		delete(existingSpecsMap, jobNameToSkip)
+		j.logger.Error("[%s] received invalid spec for %s", jobTenant.NamespaceName().String(), jobNameToSkip)
+		delete(existingJobsMap, jobNameToSkip)
 	}
 
-	for _, incomingSpec := range specs {
-		if spec, ok := existingSpecsMap[incomingSpec.Name()]; !ok {
+	for _, incomingSpec := range incomingSpecs {
+		jobObj, ok := existingJobsMap[incomingSpec.Name()]
+		if !ok {
 			addedSpecs = append(addedSpecs, incomingSpec)
-		} else if !reflect.DeepEqual(spec, incomingSpec) {
-			modifiedSpecs = append(modifiedSpecs, incomingSpec)
-		} else {
-			unmodifiedSpecs = append(unmodifiedSpecs, incomingSpec)
+			continue
 		}
+
+		if !reflect.DeepEqual(jobObj.Spec(), incomingSpec) {
+			modifiedSpecs = append(modifiedSpecs, incomingSpec) // if a spec is modified then do not consider its dirty past
+			continue
+		}
+
+		if existingJobsMap[incomingSpec.Name()].IsDirty() {
+			unmodifiedDirtySpecs = append(unmodifiedDirtySpecs, jobObj.Spec())
+		}
+		unmodifiedSpecs = append(unmodifiedSpecs, incomingSpec)
 	}
 
-	incomingSpecsMap := job.Specs(specs).ToNameAndSpecMap()
-	for existingJobName, existingJobSpec := range existingSpecsMap {
+	incomingSpecsMap := job.Specs(incomingSpecs).ToNameAndSpecMap()
+	for existingJobName, existingJob := range existingJobsMap {
 		if _, ok := incomingSpecsMap[existingJobName]; !ok {
-			deletedSpecs = append(deletedSpecs, existingJobSpec)
+			deletedSpecs = append(deletedSpecs, existingJob.Spec())
 		}
 	}
-	return addedSpecs, modifiedSpecs, deletedSpecs, unmodifiedSpecs, me.ToErr()
+	return addedSpecs, modifiedSpecs, deletedSpecs, unmodifiedSpecs, unmodifiedDirtySpecs
 }
 
 func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant.WithDetails, specs []*job.Spec, logWriter writer.LogWriter) ([]*job.Job, error) {
@@ -955,7 +1035,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		return nil, err
 	}
 
-	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources), nil
+	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false), nil
 }
 
 func (j *JobService) validateCyclic(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) ([]string, error) {

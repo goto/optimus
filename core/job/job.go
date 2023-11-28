@@ -26,6 +26,7 @@ const (
 	MetricJobEventStateValidationFailed = "validation_failed"
 	MetricJobEventEnabled               = "enabled"
 	MetricJobEventDisabled              = "disabled"
+	MetricJobEventFoundDirty            = "found_dirty"
 
 	MetricJobRefreshResourceDownstream = "refresh_resource_downstream_total"
 )
@@ -37,6 +38,8 @@ type Job struct {
 
 	destination ResourceURN
 	sources     []ResourceURN
+
+	isDirty bool
 }
 
 func (j *Job) Tenant() tenant.Tenant {
@@ -55,10 +58,18 @@ func (j *Job) FullName() string {
 	return j.ProjectName().String() + "/" + j.spec.name.String()
 }
 
+func (j *Job) IsDirty() bool {
+	return j.isDirty
+}
+
+func (j *Job) SetDirty(val bool) {
+	j.isDirty = val
+}
+
 func (j *Job) GetJobWithUnresolvedUpstream() (*WithUpstream, error) {
-	unresolvedStaticUpstreams, err := j.getStaticUpstreamsToResolve()
+	unresolvedStaticUpstreams, err := j.GetStaticUpstreamsToResolve()
 	if err != nil {
-		err = errors.InvalidArgument(EntityJob, fmt.Sprintf("failed to get static upstreams to resolve for job %s", j.GetName()))
+		err = errors.InvalidArgument(EntityJob, fmt.Sprintf("failed to get static upstreams to resolve for job %s, Err:%s", j.GetName(), err.Error()))
 	}
 	unresolvedInferredUpstreams := j.getInferredUpstreamsToResolve()
 	allUpstreams := unresolvedStaticUpstreams
@@ -75,7 +86,7 @@ func (j *Job) getInferredUpstreamsToResolve() []*Upstream {
 	return unresolvedInferredUpstreams
 }
 
-func (j *Job) getStaticUpstreamsToResolve() ([]*Upstream, error) {
+func (j *Job) GetStaticUpstreamsToResolve() ([]*Upstream, error) {
 	var unresolvedStaticUpstreams []*Upstream
 	me := errors.NewMultiError("get static upstream to resolve errors")
 
@@ -149,8 +160,8 @@ func (j *Job) ProjectName() tenant.ProjectName {
 	return j.Tenant().ProjectName()
 }
 
-func NewJob(tenant tenant.Tenant, spec *Spec, destination ResourceURN, sources []ResourceURN) *Job {
-	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources}
+func NewJob(tenant tenant.Tenant, spec *Spec, destination ResourceURN, sources []ResourceURN, isDirty bool) *Job {
+	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty}
 }
 
 type Jobs []*Job
@@ -163,12 +174,12 @@ func (j Jobs) GetJobNames() []Name {
 	return jobNames
 }
 
-func (j Jobs) GetNameAndSpecMap() map[Name]*Spec {
-	nameAndSpecMap := make(map[Name]*Spec, len(j))
+func (j Jobs) GetNameMap() map[Name]*Job {
+	jobNameMap := make(map[Name]*Job, len(j))
 	for _, job := range j {
-		nameAndSpecMap[job.spec.Name()] = job.spec
+		jobNameMap[job.spec.Name()] = job
 	}
-	return nameAndSpecMap
+	return jobNameMap
 }
 
 func (j Jobs) GetNameAndJobMap() map[Name]*Job {
@@ -203,6 +214,19 @@ func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
 		jobWithUnresolvedUpstream, err := subjectJob.GetJobWithUnresolvedUpstream()
 		me.Append(err)
 		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, jobWithUnresolvedUpstream)
+	}
+
+	return jobsWithUnresolvedUpstream, me.ToErr()
+}
+
+func (j Jobs) GetJobsWithUnresolvedStaticUpstreams() ([]*WithUpstream, error) {
+	me := errors.NewMultiError("get unresolved upstreams errors")
+
+	jobsWithUnresolvedUpstream := make([]*WithUpstream, len(j))
+	for i, subjectJob := range j {
+		jobWithUnresolvedUpstream, err := subjectJob.GetStaticUpstreamsToResolve()
+		me.Append(err)
+		jobsWithUnresolvedUpstream[i] = NewWithUpstream(subjectJob, jobWithUnresolvedUpstream)
 	}
 
 	return jobsWithUnresolvedUpstream, me.ToErr()

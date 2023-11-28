@@ -226,7 +226,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	sampleTenant, err := tenant.NewTenant(proj.Name().String(), namespace.Name().String())
 	assert.NoError(t, err)
-	jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"resource-3"})
+	jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"resource-3"}, false)
 
 	jobSpecB, err := job.NewSpecBuilder(jobVersion, jobBName, jobOwner, jobSchedule, customConfig, jobTask).
 		WithDescription(jobDescription).
@@ -237,7 +237,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 		WithMetadata(jobMetadata).
 		Build()
 	assert.NoError(t, err)
-	jobB := job.NewJob(sampleTenant, jobSpecB, "dev.resource.sample_b", nil)
+	jobB := job.NewJob(sampleTenant, jobSpecB, "dev.resource.sample_b", nil, false)
 
 	jobs := []*job.Job{jobA, jobB}
 

@@ -146,19 +146,11 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 	}
 
 	jobAttributionLabels := getJobLabelsString(jobLabelsToAdd)
-	if jobLabels, ok := confs[JobAttributionLabelsKey]; ok {
-		if len(jobLabels) == 0 {
-			confs[JobAttributionLabelsKey] = jobAttributionLabels
-		} else {
-			confs[JobAttributionLabelsKey] = jobLabels + "," + jobAttributionLabels
-		}
-	} else {
-		confs[JobAttributionLabelsKey] = jobAttributionLabels
-	}
 
 	if config.Executor.Type == scheduler.ExecutorTask {
+		enriched := i.getEnrichedWithJobLabelsValue(confs, jobAttributionLabels)
 		return &scheduler.ExecutorInput{
-			Configs: utils.MergeMaps(confs, systemDefinedVars),
+			Configs: utils.MergeMaps(enriched, systemDefinedVars),
 			Secrets: secretConfs,
 			Files:   fileMap,
 		}, nil
@@ -176,11 +168,31 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		return nil, err
 	}
 
+	enriched := i.getEnrichedWithJobLabelsValue(hookConfs, jobAttributionLabels)
 	return &scheduler.ExecutorInput{
-		Configs: utils.MergeMaps(hookConfs, systemDefinedVars),
+		Configs: utils.MergeMaps(enriched, systemDefinedVars),
 		Secrets: hookSecrets,
 		Files:   fileMap,
 	}, nil
+}
+
+func (InputCompiler) getEnrichedWithJobLabelsValue(config map[string]string, incomingValue string) map[string]string {
+	output := make(map[string]string)
+	for key, value := range config {
+		output[key] = value
+	}
+
+	if existingValue, ok := output[JobAttributionLabelsKey]; ok {
+		if len(existingValue) == 0 {
+			output[JobAttributionLabelsKey] = incomingValue
+		} else {
+			output[JobAttributionLabelsKey] = existingValue + "," + incomingValue
+		}
+	} else {
+		output[JobAttributionLabelsKey] = incomingValue
+	}
+
+	return output
 }
 
 func (i InputCompiler) compileConfigs(configs map[string]string, templateCtx map[string]any) (map[string]string, map[string]string, error) {

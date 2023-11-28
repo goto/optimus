@@ -1259,6 +1259,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 	})
 	t.Run("GetJobSpecifications", func(t *testing.T) {
+		asset := map[string]string{
+			"query.sql": "select * from something",
+		}
 		t.Run("return error when service get by filter is failed", func(t *testing.T) {
 			jobService := new(JobService)
 			defer jobService.AssertExpectations(t)
@@ -1278,10 +1281,33 @@ func TestNewJobHandler(t *testing.T) {
 
 			request := pb.GetJobSpecificationsRequest{}
 
-			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
 			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
-			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
 			jobB := job.NewJob(sampleTenant, specB, "table-B", []job.ResourceURN{"table-C"}, false)
+
+			jobService.On("GetByFxilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
+			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			resp, err := jobHandler.GetJobSpecifications(ctx, &request)
+			assert.NoError(t, err)
+			assert.NotNil(t, resp)
+			assert.NotEmpty(t, resp.JobSpecificationResponses)
+			assert.Len(t, resp.JobSpecificationResponses, 2)
+			assert.NotEmpty(t, resp.JobSpecificationResponses[0].Job.Assets)
+			assert.NotEmpty(t, resp.JobSpecificationResponses[1].Job.Assets)
+		})
+		t.Run("return success without asset", func(t *testing.T) {
+			jobService := new(JobService)
+			defer jobService.AssertExpectations(t)
+
+			request := pb.GetJobSpecificationsRequest{
+				IgnoreAssets: true,
+			}
+
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
+			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"})
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
+			jobB := job.NewJob(sampleTenant, specB, "table-B", []job.ResourceURN{"table-C"})
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1290,6 +1316,8 @@ func TestNewJobHandler(t *testing.T) {
 			assert.NotNil(t, resp)
 			assert.NotEmpty(t, resp.JobSpecificationResponses)
 			assert.Len(t, resp.JobSpecificationResponses, 2)
+			assert.Empty(t, resp.JobSpecificationResponses[0].Job.Assets)
+			assert.Empty(t, resp.JobSpecificationResponses[1].Job.Assets)
 		})
 	})
 	t.Run("ListJobSpecification", func(t *testing.T) {

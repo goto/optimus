@@ -245,10 +245,15 @@ func (jh *JobHandler) GetJobSpecifications(ctx context.Context, req *pb.GetJobSp
 
 	jobSpecResponseProtos := []*pb.JobSpecificationResponse{}
 	for _, jobSpec := range jobSpecs {
+		jobSpecProto := ToJobProto(jobSpec)
+		if req.IgnoreAssets {
+			jobSpecProto.Assets = map[string]string{}
+		}
+
 		jobSpecResponseProtos = append(jobSpecResponseProtos, &pb.JobSpecificationResponse{
 			ProjectName:   jobSpec.Tenant().ProjectName().String(),
 			NamespaceName: jobSpec.Tenant().NamespaceName().String(),
-			Job:           ToJobProto(jobSpec),
+			Job:           jobSpecProto,
 		})
 	}
 

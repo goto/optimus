@@ -80,18 +80,29 @@ type JobSpecDependencyHTTP struct {
 }
 
 type JobSpecMetadata struct {
-	Resource *JobSpecMetadataResource `yaml:"resource,omitempty"`
-	Airflow  *JobSpecMetadataAirflow  `yaml:"airflow,omitempty"`
+	Resource     *JobSpecMetadataResource     `yaml:"resource,omitempty"`
+	Airflow      *JobSpecMetadataAirflow      `yaml:"airflow,omitempty"`
+	NodeSelector *JobSpecMetadataNodeSelector `yaml:"node_selectors,omitempty"`
+	Tolerations  *JobSpecMetadataTolerations  `yaml:"tolerations,omitempty"`
 }
 
 type JobSpecMetadataResource struct {
 	Request *JobSpecMetadataResourceConfig `yaml:"request,omitempty"`
 	Limit   *JobSpecMetadataResourceConfig `yaml:"limit,omitempty"`
 }
-
 type JobSpecMetadataResourceConfig struct {
 	Memory string `yaml:"memory,omitempty"`
 	CPU    string `yaml:"cpu,omitempty"`
+}
+
+type JobSpecMetadataNodeSelector struct {
+	NodeSelector map[string]string `yaml:"node_selectors,omitempty"`
+}
+
+type JobSpecMetadataTolerations struct {
+	TolerationsKey   string `yaml:"key"`
+	TolerationsOp    string `yaml:"op"`
+	TolerationsValue string `yaml:"value"`
 }
 
 type JobSpecMetadataAirflow struct {
@@ -142,9 +153,16 @@ func (j *JobSpec) getProtoJobMetadata() *pb.JobMetadata {
 			Queue: j.Metadata.Airflow.Queue,
 		}
 	}
+	var NodeSelector *pb.JobSpecMetadataNodeSelector
+	if j.Metadata.NodeSelector != nil {
+		NodeSelector = &pb.JobSpecMetadataNodeSelector{
+			NodeSelector: j.Metadata.NodeSelector.NodeSelector,
+		}
+	}
 	return &pb.JobMetadata{
-		Resource: resource,
-		Airflow:  airflow,
+		Resource:     resource,
+		Airflow:      airflow,
+		NodeSelector: NodeSelector,
 	}
 }
 

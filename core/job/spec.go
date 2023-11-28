@@ -395,16 +395,19 @@ type MetadataResourceConfig struct {
 	memory string
 }
 
+func NewMetadataResourceConfig(cpu, memory string) *MetadataResourceConfig {
+	return &MetadataResourceConfig{
+		cpu:    cpu,
+		memory: memory,
+	}
+}
+
 func (m MetadataResourceConfig) CPU() string {
 	return m.cpu
 }
 
 func (m MetadataResourceConfig) Memory() string {
 	return m.memory
-}
-
-func NewMetadataResourceConfig(cpu, memory string) *MetadataResourceConfig {
-	return &MetadataResourceConfig{cpu: cpu, memory: memory}
 }
 
 type MetadataResource struct {
@@ -425,8 +428,9 @@ func NewResourceMetadata(request, limit *MetadataResourceConfig) *MetadataResour
 }
 
 type Metadata struct {
-	resource  *MetadataResource
-	scheduler map[string]string
+	resource      *MetadataResource
+	scheduler     map[string]string
+	NodeSelectors map[string]string
 }
 
 func (m Metadata) Resource() *MetadataResource {
@@ -435,6 +439,10 @@ func (m Metadata) Resource() *MetadataResource {
 
 func (m Metadata) Scheduler() map[string]string {
 	return m.scheduler
+}
+
+func (m Metadata) NodeSelector() map[string]string {
+	return m.NodeSelectors
 }
 
 func (m Metadata) validate() error {
@@ -465,6 +473,11 @@ func (m *MetadataBuilder) WithResource(resource *MetadataResource) *MetadataBuil
 
 func (m *MetadataBuilder) WithScheduler(scheduler map[string]string) *MetadataBuilder {
 	m.metadata.scheduler = scheduler
+	return m
+}
+
+func (m *MetadataBuilder) WithNodeSelector(node_selectors map[string]string) *MetadataBuilder {
+	m.metadata.NodeSelectors = node_selectors
 	return m
 }
 

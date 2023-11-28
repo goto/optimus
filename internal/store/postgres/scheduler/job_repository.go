@@ -139,8 +139,9 @@ func fromStorageWindow(raw []byte, jobVersion int) (models.Window, error) {
 }
 
 type Metadata struct {
-	Resource  *MetadataResource
-	Scheduler map[string]string
+	Resource      *MetadataResource
+	Scheduler     map[string]string
+	NodeSelectors map[string]string
 }
 
 type MetadataResource struct {
@@ -185,6 +186,11 @@ func fromStorageMetadata(metadata json.RawMessage) (scheduler.RuntimeConfig, err
 	if storeMetadata.Scheduler != nil {
 		runtimeConfig.Scheduler = storeMetadata.Scheduler
 	}
+
+	if storeMetadata.NodeSelectors != nil {
+		runtimeConfig.NodeSelectors = storeMetadata.NodeSelectors
+	}
+
 	return runtimeConfig, nil
 }
 

@@ -166,6 +166,17 @@ func (*JobSpecTestSuite) getCompleteJobSpec() model.JobSpec {
 					Memory: "128Mi",
 				},
 			},
+
+			NodeSelector: &model.JobSpecMetadataNodeSelector{
+				NodeSelector: map[string]string{"optimus-jobs": "enabled"},
+			},
+
+			Tolerations: &model.JobSpecMetadataTolerations{
+				TolerationsKey:   "optimus-jobs",
+				TolerationsOp:    "equals",
+				TolerationsValue: "enabled",
+			},
+
 			Airflow: &model.JobSpecMetadataAirflow{
 				Pool:  "poolA",
 				Queue: "queueA",

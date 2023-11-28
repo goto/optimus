@@ -131,6 +131,7 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 				Memory: "2G",
 			},
 		},
+		NodeSelectors: map[string]string{"test": "enabled"},
 	}
 
 	tnnt1, _ := tenant.NewTenant("project", "namespace")

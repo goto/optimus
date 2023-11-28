@@ -166,8 +166,9 @@ type Alert struct {
 }
 
 type RuntimeConfig struct {
-	Resource  *Resource
-	Scheduler map[string]string
+	Resource      *Resource
+	Scheduler     map[string]string
+	NodeSelectors map[string]string
 }
 
 type Resource struct {

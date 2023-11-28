@@ -139,6 +139,7 @@ transformation_bq__dash__bq = SuperKubernetesPodOperator(
     do_xcom_push=False,
     env_vars=executor_env_vars,
     resources=resources,
+    node_selectors={"test":"enabled"},
     reattach_on_restart=True,
     volume_mounts=asset_volume_mounts,
     volumes=[volume],

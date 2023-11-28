@@ -33,6 +33,7 @@ type DummyJobBuilder struct {
 	resourceRequestConfig *job.MetadataResourceConfig
 	resourceLimitConfig   *job.MetadataResourceConfig
 	scheduler             map[string]string
+	node_selectors        map[string]string
 
 	name job.Name
 
@@ -121,6 +122,7 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 		resourceRequestConfig: job.NewMetadataResourceConfig("128m", "128Mi"),
 		resourceLimitConfig:   job.NewMetadataResourceConfig("128m", "128Mi"),
 		scheduler:             map[string]string{"scheduler_config_key": "value"},
+		node_selectors:        map[string]string{"test": "enabled"},
 		name:                  name,
 		destinationURN:        job.ResourceURN("sample_job_destination"),
 		sourceURNs:            []job.ResourceURN{"source_of_sample_job"},
@@ -237,6 +239,12 @@ func (d *DummyJobBuilder) OverrideScheduler(scheduler map[string]string) *DummyJ
 	return &output
 }
 
+func (d *DummyJobBuilder) OverrideNodeSelectors(node_selectors map[string]string) *DummyJobBuilder {
+	output := *d
+	output.node_selectors = node_selectors
+	return &output
+}
+
 func (d *DummyJobBuilder) OverrideName(name job.Name) *DummyJobBuilder {
 	output := *d
 	output.name = name
@@ -290,6 +298,7 @@ func (d *DummyJobBuilder) Build(tnnt tenant.Tenant) *job.Job {
 	metadata, err := job.NewMetadataBuilder().
 		WithResource(resourceMetadata).
 		WithScheduler(d.scheduler).
+		WithNodeSelector(d.node_selectors).
 		Build()
 	if err != nil {
 		panic(err)

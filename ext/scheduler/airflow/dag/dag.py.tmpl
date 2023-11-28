@@ -171,6 +171,9 @@ init_container = k8s.V1Container(
     {{- if .RuntimeConfig.Resource }}
     resources=resources,
     {{- end }}
+    {{ if .RuntimeConfig.NodeSelectors -}}
+    node_selectors={{.RuntimeConfig.NodeSelectors}},
+    {{- end }}
     reattach_on_restart=True,
     volume_mounts=asset_volume_mounts,
     volumes=[volume],

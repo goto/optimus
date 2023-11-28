@@ -89,8 +89,9 @@ type Hook struct {
 }
 
 type Metadata struct {
-	Resource  *MetadataResource
-	Scheduler map[string]string
+	Resource      *MetadataResource
+	Scheduler     map[string]string
+	NodeSelectors map[string]string
 }
 
 type MetadataResource struct {
@@ -305,8 +306,9 @@ func toStorageMetadata(metadataSpec *job.Metadata) ([]byte, error) {
 	}
 
 	metadata := Metadata{
-		Resource:  metadataResource,
-		Scheduler: metadataSpec.Scheduler(),
+		Resource:      metadataResource,
+		Scheduler:     metadataSpec.Scheduler(),
+		NodeSelectors: metadataSpec.NodeSelector(),
 	}
 	return json.Marshal(metadata)
 }
@@ -417,6 +419,9 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 		}
 		if storeMetadata.Scheduler != nil {
 			metadataBuilder = metadataBuilder.WithScheduler(storeMetadata.Scheduler)
+		}
+		if storeMetadata.NodeSelectors != nil {
+			metadataBuilder = metadataBuilder.WithNodeSelector(storeMetadata.NodeSelectors)
 		}
 		metadata, err := metadataBuilder.Build()
 		if err != nil {

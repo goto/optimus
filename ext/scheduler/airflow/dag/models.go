@@ -111,8 +111,9 @@ func PrepareHooksForJob(job *scheduler.Job, pluginRepo PluginRepo) (Hooks, error
 }
 
 type RuntimeConfig struct {
-	Resource *Resource
-	Airflow  AirflowConfig
+	Resource      *Resource
+	Airflow       AirflowConfig
+	NodeSelectors *NodeSelectorsConfig
 }
 
 func SetupRuntimeConfig(jobDetails *scheduler.JobWithDetails) RuntimeConfig {
@@ -121,6 +122,9 @@ func SetupRuntimeConfig(jobDetails *scheduler.JobWithDetails) RuntimeConfig {
 	}
 	if resource := ToResource(jobDetails.RuntimeConfig.Resource); resource != nil {
 		runtimeConf.Resource = resource
+	}
+	if node_selectors := ToNodeSelectors(jobDetails.RuntimeConfig.NodeSelectors); node_selectors != nil {
+		runtimeConf.NodeSelectors = node_selectors
 	}
 	return runtimeConf
 }
@@ -181,6 +185,16 @@ func ToAirflowConfig(schedulerConf map[string]string) AirflowConfig {
 		conf.Queue = queue
 	}
 	return conf
+}
+
+type NodeSelectorsConfig struct {
+	NodeSelectors map[string]string
+}
+
+func ToNodeSelectors(NodeSelectorsConf map[string]string) *NodeSelectorsConfig {
+	return &NodeSelectorsConfig{
+		NodeSelectors: NodeSelectorsConf,
+	}
 }
 
 func SLAMissDuration(job *scheduler.JobWithDetails) (int64, error) {

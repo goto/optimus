@@ -35,8 +35,9 @@ type jobSpecification struct {
 }
 
 type jobMetadata struct {
-	Resource jobSpecMetadataResource `json:"resource"`
-	Airflow  jobSpecMetadataAirflow  `json:"airflow"`
+	Resource      jobSpecMetadataResource      `json:"resource"`
+	Airflow       jobSpecMetadataAirflow       `json:"airflow"`
+	NodeSelectors JobSpecMetadataNodeSelectors `json:"node_selectors"`
 }
 
 type jobSpecMetadataAirflow struct {
@@ -52,6 +53,10 @@ type jobSpecMetadataResource struct {
 type jobSpecMetadataResourceConfig struct {
 	CPU    string `json:"cpu"`
 	Memory string `json:"memory"`
+}
+
+type JobSpecMetadataNodeSelectors struct {
+	NodeSelectors map[string]string `json:"node_selectors"`
 }
 
 type jobSpecificationBehavior struct {

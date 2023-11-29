@@ -12,10 +12,6 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-const (
-	syncInterval = "@every 1m"
-)
-
 type ReplayManager struct {
 	l log.Logger
 

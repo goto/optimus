@@ -158,7 +158,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	jobRetry := job.NewRetry(5, 0, true)
 	startDate, err := job.ScheduleDateFrom("2022-10-01")
 	assert.NoError(t, err)
-	jobSchedule, err := job.NewScheduleBuilder(startDate).WithRetry(jobRetry).WithDependsOnPast(true).Build()
+	jobSchedule, err := job.NewScheduleBuilder(startDate).WithRetry(jobRetry).WithCatchUp(true).WithDependsOnPast(true).Build()
 	assert.NoError(t, err)
 	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
 	customConfig := window.NewCustomConfig(jobWindow)
@@ -273,6 +273,7 @@ func compareEqualJobWithDetails(j *job.Job, s *scheduler.JobWithDetails) bool {
 		j.Spec().Owner() == s.JobMetadata.Owner &&
 		j.Spec().Schedule().Interval() == s.Schedule.Interval &&
 		j.Spec().Schedule().DependsOnPast() == s.Schedule.DependsOnPast &&
+		j.Spec().Schedule().CatchUp() == s.Schedule.CatchUp &&
 		j.Spec().Schedule().Retry().ExponentialBackoff() == s.Retry.ExponentialBackoff &&
 		reflect.DeepEqual(j.Spec().Metadata().Scheduler(), s.RuntimeConfig.Scheduler)
 }

@@ -152,8 +152,13 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	err = j.uploadJobs(ctx, jobTenant, addedJobs, nil, nil)
 	me.Append(err)
 
-	for _, job := range addedJobs {
-		j.raiseCreateEvent(job)
+	for _, addedJob := range addedJobs {
+		j.raiseCreateEvent(addedJob)
+		if addedJob.Spec().Schedule().CatchUp() {
+			msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
+			j.logger.Warn(msg)
+			logWriter.Write(writer.LogLevelWarning, msg)
+		}
 	}
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
 
@@ -831,6 +836,14 @@ func (j *JobService) bulkAdd(ctx context.Context, tenantWithDetails *tenant.With
 		raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventStateAdded, len(addedJobs))
 	}
 
+	for _, addedJob := range addedJobs {
+		if addedJob.Spec().Schedule().CatchUp() {
+			msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
+			j.logger.Warn(msg)
+			logWriter.Write(writer.LogLevelWarning, msg)
+		}
+	}
+
 	return addedJobs, me.ToErr()
 }
 
@@ -1117,6 +1130,10 @@ func (j *JobService) GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tenan
 	if len(subjectJob.Sources()) == 0 {
 		j.logger.Warn("no job sources detected")
 		logger.Write(writer.LogLevelInfo, "no job sources detected")
+	}
+
+	if subjectJob.Spec().Schedule().CatchUp() {
+		logger.Write(writer.LogLevelWarning, "catchup is enabled")
 	}
 
 	if dupDestJobNames, err := j.getJobNamesWithSameDestination(ctx, subjectJob); err != nil {

@@ -39,6 +39,7 @@ type Schedule struct {
 	EndDate       *time.Time
 	Interval      string
 	DependsOnPast bool
+	CatchUp       bool
 	Retry         *Retry
 }
 type Retry struct {
@@ -266,6 +267,7 @@ func (j *Job) toJobWithDetails() (*scheduler.JobWithDetails, error) {
 		},
 		Schedule: &scheduler.Schedule{
 			DependsOnPast: storageSchedule.DependsOnPast,
+			CatchUp:       storageSchedule.CatchUp,
 			StartDate:     storageSchedule.StartDate,
 			Interval:      storageSchedule.Interval,
 		},

@@ -154,7 +154,9 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	for _, addedJob := range addedJobs {
 		j.raiseCreateEvent(addedJob)
 		if addedJob.Spec().Schedule().CatchUp() {
-			j.logger.Warn("catchup for job %s is enabled, starting from %s", addedJob.GetName(), addedJob.Spec().Schedule().StartDate().String())
+			msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
+			j.logger.Warn(msg)
+			logWriter.Write(writer.LogLevelWarning, msg)
 		}
 	}
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
@@ -762,7 +764,9 @@ func (j *JobService) bulkAdd(ctx context.Context, tenantWithDetails *tenant.With
 
 	for _, addedJob := range addedJobs {
 		if addedJob.Spec().Schedule().CatchUp() {
-			j.logger.Warn("catchup for job %s is enabled, starting from %s", addedJob.GetName(), addedJob.Spec().Schedule().StartDate().String())
+			msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
+			j.logger.Warn(msg)
+			logWriter.Write(writer.LogLevelWarning, msg)
 		}
 	}
 

@@ -398,7 +398,7 @@ func (r ReplayRepository) getExecutableReplayRuns(ctx context.Context) ([]*repla
 			ON (replay_id = r.id)
 		WHERE r.id = (
 			SELECT id FROM replay_request 
-			WHERE status IN ('created', 'partial replayed', 'replayed') 
+			WHERE status IN ('created', 'partial replayed') 
 			ORDER BY updated_at DESC 
 			FOR UPDATE SKIP LOCKED 
 			LIMIT 1

@@ -129,6 +129,7 @@ type JobMetadata struct {
 
 type Schedule struct {
 	DependsOnPast bool
+	CatchUp       bool
 	StartDate     time.Time
 	EndDate       *time.Time
 	Interval      string

@@ -18,6 +18,7 @@ type jobSpecification struct {
 	EndDate          string                   `json:"endDate"`
 	Interval         string                   `json:"interval"`
 	DependsOnPast    bool                     `json:"dependsOnPast"`
+	CatchUp          bool                     `json:"catchUp"`
 	TaskName         string                   `json:"taskName"`
 	Config           []jobConfigItem          `json:"config"`
 	WindowSize       string                   `json:"windowSize"`

@@ -158,7 +158,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	jobRetry := job.NewRetry(5, 0, true)
 	startDate, err := job.ScheduleDateFrom("2022-10-01")
 	assert.NoError(t, err)
-	jobSchedule, err := job.NewScheduleBuilder(startDate).WithRetry(jobRetry).WithDependsOnPast(true).Build()
+	jobSchedule, err := job.NewScheduleBuilder(startDate).WithRetry(jobRetry).WithCatchUp(true).WithDependsOnPast(true).Build()
 	assert.NoError(t, err)
 	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
 	customConfig := window.NewCustomConfig(jobWindow)
@@ -226,7 +226,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	sampleTenant, err := tenant.NewTenant(proj.Name().String(), namespace.Name().String())
 	assert.NoError(t, err)
-	jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"resource-3"})
+	jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"resource-3"}, false)
 
 	jobSpecB, err := job.NewSpecBuilder(jobVersion, jobBName, jobOwner, jobSchedule, customConfig, jobTask).
 		WithDescription(jobDescription).
@@ -237,7 +237,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 		WithMetadata(jobMetadata).
 		Build()
 	assert.NoError(t, err)
-	jobB := job.NewJob(sampleTenant, jobSpecB, "dev.resource.sample_b", nil)
+	jobB := job.NewJob(sampleTenant, jobSpecB, "dev.resource.sample_b", nil, false)
 
 	jobs := []*job.Job{jobA, jobB}
 
@@ -273,6 +273,7 @@ func compareEqualJobWithDetails(j *job.Job, s *scheduler.JobWithDetails) bool {
 		j.Spec().Owner() == s.JobMetadata.Owner &&
 		j.Spec().Schedule().Interval() == s.Schedule.Interval &&
 		j.Spec().Schedule().DependsOnPast() == s.Schedule.DependsOnPast &&
+		j.Spec().Schedule().CatchUp() == s.Schedule.CatchUp &&
 		j.Spec().Schedule().Retry().ExponentialBackoff() == s.Retry.ExponentialBackoff &&
 		reflect.DeepEqual(j.Spec().Metadata().Scheduler(), s.RuntimeConfig.Scheduler)
 }

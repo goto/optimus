@@ -35,6 +35,7 @@ type JobSpecSchedule struct {
 
 type JobSpecBehavior struct {
 	DependsOnPast bool                      `yaml:"depends_on_past"`
+	Catchup       bool                      `yaml:"catch_up,omitempty"`
 	Retry         *JobSpecBehaviorRetry     `yaml:"retry,omitempty"`
 	Notify        []JobSpecBehaviorNotifier `yaml:"notify,omitempty"`
 }
@@ -114,6 +115,7 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 		EndDate:       j.Schedule.EndDate,
 		Interval:      j.Schedule.Interval,
 		DependsOnPast: j.Behavior.DependsOnPast,
+		CatchUp:       j.Behavior.Catchup,
 		TaskName:      j.Task.Name,
 		Config:        j.getProtoJobConfigItems(),
 		Dependencies:  j.getProtoJobDependencies(),
@@ -278,6 +280,7 @@ func (j *JobSpec) MergeFrom(anotherJobSpec *JobSpec) {
 	j.Behavior.Retry.Delay = getValue(j.Behavior.Retry.Delay, anotherJobSpec.Behavior.Retry.Delay)
 	j.Behavior.Retry.Count = getValue(j.Behavior.Retry.Count, anotherJobSpec.Behavior.Retry.Count)
 	j.Behavior.DependsOnPast = getValue(j.Behavior.DependsOnPast, anotherJobSpec.Behavior.DependsOnPast)
+	j.Behavior.Catchup = getValue(j.Behavior.Catchup, anotherJobSpec.Behavior.Catchup)
 
 	for _, pNotify := range anotherJobSpec.Behavior.Notify {
 		childNotifyIdx := -1
@@ -466,7 +469,7 @@ func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 			EndDate:   protoSpec.EndDate,
 			Interval:  protoSpec.Interval,
 		},
-		Behavior: toJobSpecBehavior(protoSpec.Behavior, protoSpec.DependsOnPast),
+		Behavior: toJobSpecBehavior(protoSpec.Behavior, protoSpec.DependsOnPast, protoSpec.CatchUp),
 		Task: JobSpecTask{
 			Name:   protoSpec.TaskName,
 			Config: configProtoToMap(protoSpec.Config),
@@ -554,7 +557,7 @@ func toJobSpecHooks(protoHooks []*pb.JobSpecHook) []JobSpecHook {
 	return hookSpecs
 }
 
-func toJobSpecBehavior(protoBehavior *pb.JobSpecification_Behavior, dependsOnPast bool) JobSpecBehavior {
+func toJobSpecBehavior(protoBehavior *pb.JobSpecification_Behavior, dependsOnPast, catchUp bool) JobSpecBehavior {
 	var retry *JobSpecBehaviorRetry
 	var notifiers []JobSpecBehaviorNotifier
 	if protoBehavior != nil {
@@ -578,6 +581,7 @@ func toJobSpecBehavior(protoBehavior *pb.JobSpecification_Behavior, dependsOnPas
 	}
 	return JobSpecBehavior{
 		DependsOnPast: dependsOnPast,
+		Catchup:       catchUp,
 		Retry:         retry,
 		Notify:        notifiers,
 	}

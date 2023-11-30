@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
@@ -24,6 +25,7 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		EndDate:       spec.Schedule().EndDate().String(),
 		Interval:      spec.Schedule().Interval(),
 		DependsOnPast: spec.Schedule().DependsOnPast(),
+		CatchUp:       jobEntity.Spec().Schedule().CatchUp(),
 		TaskName:      spec.Task().Name().String(),
 		Config:        fromConfig(spec.Task().Config()),
 		Dependencies:  fromSpecUpstreams(spec.UpstreamSpec()),
@@ -92,6 +94,7 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	}
 
 	scheduleBuilder := job.NewScheduleBuilder(startDate).
+		WithCatchUp(js.CatchUp).
 		WithDependsOnPast(js.DependsOnPast).
 		WithInterval(js.Interval)
 
@@ -143,10 +146,7 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	jobSpecBuilder := job.NewSpecBuilder(version, name, owner, schedule, window, task).WithDescription(js.Description)
 
 	if js.Labels != nil {
-		labels, err := job.NewLabels(js.Labels)
-		if err != nil {
-			return nil, err
-		}
+		labels := labels.FromMap(js.Labels)
 		jobSpecBuilder = jobSpecBuilder.WithLabels(labels)
 	}
 

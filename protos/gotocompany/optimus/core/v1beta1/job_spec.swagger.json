@@ -63,6 +63,12 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "ignoreAssets",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -181,6 +187,12 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "ignoreAssets",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [

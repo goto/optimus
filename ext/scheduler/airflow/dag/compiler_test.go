@@ -129,6 +129,7 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 		EndDate:       &end,
 		Interval:      "0 2 * * 0",
 		DependsOnPast: true,
+		CatchUp:       true,
 	}
 
 	retry := scheduler.Retry{

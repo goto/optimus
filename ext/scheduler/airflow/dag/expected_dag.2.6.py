@@ -46,6 +46,9 @@ default_args = {
     "on_success_callback": operator_success_event,
     "on_retry_callback"  : operator_retry_event,
     "on_failure_callback": operator_failure_event,
+    "labels": {
+        "orchestrator": "optimus",
+    },
 }
 
 """
@@ -56,7 +59,7 @@ dag = DAG(
     dag_id="infra.billing.weekly-status-reports",
     default_args=default_args,
     schedule_interval="0 2 * * 0",
-    catchup=False,
+    catchup=True,
     dagrun_timeout=timedelta(seconds=DAGRUN_TIMEOUT_IN_SECS),
     tags=[
         "optimus",

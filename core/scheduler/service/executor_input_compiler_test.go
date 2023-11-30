@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +113,10 @@ func TestExecutorCompiler(t *testing.T) {
 				Tenant:       tnnt,
 				WindowConfig: cw,
 				Assets:       nil,
+				Task: &scheduler.Task{
+					Name:   "bq2bq",
+					Config: map[string]string{},
+				},
 			}
 			details := scheduler.JobWithDetails{
 				Job: &job,
@@ -143,11 +148,14 @@ func TestExecutorCompiler(t *testing.T) {
 			}
 			taskContext := mock.Anything
 
+			templateCompiler := new(mockTemplateCompiler)
+			templateCompiler.On("Compile", mock.Anything, taskContext).Return(map[string]string{}, nil)
+			defer templateCompiler.AssertExpectations(t)
 			assetCompiler := new(mockAssetCompiler)
 			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(nil, fmt.Errorf("CompileJobRunAssets error"))
 			defer assetCompiler.AssertExpectations(t)
 
-			inputCompiler := service.NewJobInputCompiler(tenantService, nil, assetCompiler, logger)
+			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
 
 			assert.NotNil(t, err)
@@ -176,6 +184,12 @@ func TestExecutorCompiler(t *testing.T) {
 				Job: &job,
 				Schedule: &scheduler.Schedule{
 					Interval: "0 * * * *",
+				},
+				JobMetadata: &scheduler.JobMetadata{
+					Labels: map[string]string{
+						"user-specified-label-key1": "user-specified-label-value-for-test-1",
+						"user-specified-label-key2": "user-specified-label-value-for-test-2",
+					},
 				},
 			}
 			config := scheduler.RunConfig{
@@ -213,7 +227,6 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(nil, fmt.Errorf("some.config compilation error"))
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
@@ -230,7 +243,6 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(nil, fmt.Errorf("secret.config compilation error"))
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
@@ -268,7 +280,9 @@ func TestExecutorCompiler(t *testing.T) {
 					"project=proj1": true,
 					"namespace=ns1": true,
 					"job_name=job1": true,
-					"job_id=00000000-0000-0000-0000-000000000000": true,
+					"job_id=00000000-0000-0000-0000-000000000000":                     true,
+					"user-specified-label-key1=user-specified-label-value-for-test-1": true,
+					"user-specified-label-key2=user-specified-label-value-for-test-2": true,
 				}
 
 				for _, v := range strings.Split(inputExecutorResp.Configs["JOB_LABELS"], ",") {
@@ -415,9 +429,17 @@ func TestExecutorCompiler(t *testing.T) {
 					"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 					"JOB_DESTINATION": job.Destination,
 					"hook.compiled":   "hook.val.compiled",
+					"JOB_LABELS":      "job_id=00000000-0000-0000-0000-000000000000,job_name=job1,namespace=ns1,project=proj1",
 				},
 				Secrets: map[string]string{"secret.hook.compiled": "hook.s.val.compiled"},
 				Files:   compiledFile,
+			}
+
+			assert.NotNil(t, inputExecutorResp)
+			if value, ok := inputExecutorResp.Configs["JOB_LABELS"]; ok {
+				splitValues := strings.Split(value, ",")
+				sort.Strings(splitValues)
+				inputExecutorResp.Configs["JOB_LABELS"] = strings.Join(splitValues, ",")
 			}
 			assert.Equal(t, expectedInputExecutor, inputExecutorResp)
 		})

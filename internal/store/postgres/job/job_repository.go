@@ -20,7 +20,7 @@ const (
 	jobColumnsToStore = `name, version, owner, description, labels, schedule, alert, static_upstreams, http_upstreams, 
 	task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 
-	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at`
+	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at, is_dirty`
 )
 
 type JobRepository struct {
@@ -295,6 +295,33 @@ func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, 
 	return spec, err
 }
 
+func (j JobRepository) SetDirty(ctx context.Context, jobsTenant tenant.Tenant, jobNames []job.Name, isDirty bool) error {
+	if len(jobNames) < 1 {
+		return nil
+	}
+	query := `
+UPDATE job SET
+	is_dirty = $1,
+	updated_at = NOW()
+WHERE
+	project_name = $2 and
+    name = any ($3)
+;`
+	tag, err := j.db.Exec(ctx, query, isDirty, jobsTenant.ProjectName(), jobNames)
+	if err != nil {
+		return errors.Wrap(job.EntityJob, err.Error(), err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		jobNamesString := make([]string, len(jobNames))
+		for i, jobName := range jobNames {
+			jobNamesString[i] = jobName.String()
+		}
+		return errors.NotFound(job.EntityJob, fmt.Sprintf("jobs: [%s], not found in the given project: %s", strings.Join(jobNamesString, ", "), jobsTenant.ProjectName()))
+	}
+	return nil
+}
+
 func (j JobRepository) ResolveUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name) (map[job.Name][]*job.Upstream, error) {
 	query := `
 WITH static_upstreams AS (
@@ -367,7 +394,6 @@ WHERE j.deleted_at IS NULL;`
 		}
 		storeJobsWithUpstreams = append(storeJobsWithUpstreams, &jwu)
 	}
-
 	return j.toJobNameWithUpstreams(storeJobsWithUpstreams)
 }
 
@@ -380,23 +406,21 @@ func (j JobRepository) toJobNameWithUpstreams(storeJobsWithUpstreams []*JobWithU
 		if len(storeUpstreams) == 0 {
 			continue
 		}
-		upstreams, err := j.toUpstreams(storeUpstreams)
-		if err != nil {
-			me.Append(err)
-			continue
-		}
 		name, err := job.NameFrom(storeUpstreams[0].JobName)
 		if err != nil {
 			me.Append(err)
 			continue
 		}
+		upstreams, err := j.toUpstreams(storeUpstreams)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
 		jobNameWithUpstreams[name] = upstreams
 	}
 
-	if err := me.ToErr(); err != nil {
-		return nil, err
-	}
-	return jobNameWithUpstreams, nil
+	return jobNameWithUpstreams, me.ToErr()
 }
 
 func groupUpstreamsPerJobFullName(upstreams []*JobWithUpstream) map[string][]*JobWithUpstream {
@@ -458,6 +482,7 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 
 		upstreamType, err := job.UpstreamTypeFrom(storeUpstream.UpstreamType)
 		if err != nil {
+			me.Append(errors.Wrap(job.EntityJob, fmt.Sprintf("failed to get upstream type for upstream %s of job %s", storeUpstream.UpstreamJobName.String, storeUpstream.JobName), err))
 			continue
 		}
 
@@ -474,10 +499,7 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 		upstream := job.NewUpstreamResolved(upstreamName, upstreamHost, resourceURN, upstreamTenant, upstreamType, taskName, upstreamExternal)
 		upstreams = append(upstreams, upstream)
 	}
-	if err := me.ToErr(); err != nil {
-		return nil, err
-	}
-	return job.Upstreams(upstreams).Deduplicate(), nil
+	return job.Upstreams(upstreams).Deduplicate(), me.ToErr()
 }
 
 func (j JobRepository) GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {
@@ -575,7 +597,7 @@ func specToJob(spec *Spec) (*job.Job, error) {
 		sources = append(sources, resourceURN)
 	}
 
-	return job.NewJob(tenantName, jobSpec, destination, sources), nil
+	return job.NewJob(tenantName, jobSpec, destination, sources, spec.IsDirty), nil
 }
 
 type JobWithUpstream struct {

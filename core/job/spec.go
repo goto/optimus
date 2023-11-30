@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
 )
 
@@ -24,7 +25,7 @@ type Spec struct {
 	task         Task
 
 	description  string
-	labels       map[string]string
+	labels       labels.Labels
 	metadata     *Metadata
 	hooks        []*Hook
 	asset        Asset
@@ -60,7 +61,7 @@ func (s *Spec) Description() string {
 	return s.description
 }
 
-func (s *Spec) Labels() map[string]string {
+func (s *Spec) Labels() labels.Labels {
 	return s.labels
 }
 
@@ -105,9 +106,18 @@ func (s *SpecBuilder) Build() (*Spec, error) {
 	if s.spec.version <= 0 {
 		return nil, errors.InvalidArgument(EntityJob, "version is less than or equal to zero")
 	}
+
 	if s.spec.owner == "" {
 		return nil, errors.InvalidArgument(EntityJob, "owner is empty")
 	}
+
+	if s.spec.labels != nil {
+		if err := s.spec.labels.Validate(); err != nil {
+			msg := fmt.Sprintf("labels is invalid: %v", err)
+			return nil, errors.InvalidArgument(EntityJob, msg)
+		}
+	}
+
 	return s.spec, nil
 }
 
@@ -136,7 +146,7 @@ func (s *SpecBuilder) WithMetadata(metadata *Metadata) *SpecBuilder {
 	return s
 }
 
-func (s *SpecBuilder) WithLabels(labels map[string]string) *SpecBuilder {
+func (s *SpecBuilder) WithLabels(labels labels.Labels) *SpecBuilder {
 	s.spec.labels = labels
 	return s
 }
@@ -284,6 +294,7 @@ type Schedule struct {
 	endDate       ScheduleDate
 	interval      string
 	dependsOnPast bool
+	catchUp       bool
 	retry         *Retry
 }
 
@@ -301,6 +312,10 @@ func (s Schedule) Interval() string {
 
 func (s Schedule) DependsOnPast() bool {
 	return s.dependsOnPast
+}
+
+func (s Schedule) CatchUp() bool {
+	return s.catchUp
 }
 
 func (s Schedule) Retry() *Retry {
@@ -339,6 +354,11 @@ func (s *ScheduleBuilder) WithEndDate(endDate ScheduleDate) *ScheduleBuilder {
 
 func (s *ScheduleBuilder) WithDependsOnPast(dependsOnPast bool) *ScheduleBuilder {
 	s.schedule.dependsOnPast = dependsOnPast
+	return s
+}
+
+func (s *ScheduleBuilder) WithCatchUp(catchUp bool) *ScheduleBuilder {
+	s.schedule.catchUp = catchUp
 	return s
 }
 
@@ -673,13 +693,6 @@ func (s *SpecUpstreamBuilder) WithUpstreamNames(names []SpecUpstreamName) *SpecU
 func (s *SpecUpstreamBuilder) WithSpecHTTPUpstream(httpUpstreams []*SpecHTTPUpstream) *SpecUpstreamBuilder {
 	s.upstream.httpUpstreams = httpUpstreams
 	return s
-}
-
-func NewLabels(labels map[string]string) (map[string]string, error) {
-	if err := validateMap(labels); err != nil {
-		return nil, err
-	}
-	return labels, nil
 }
 
 // TODO: check whether this is supposed to be here or in utils

@@ -34,7 +34,7 @@ func TestExternalUpstreamResolver(t *testing.T) {
 	jobTask := job.NewTask(taskName, jobTaskConfig)
 	upstreamSpec, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"external-project/job-B"}).Build()
 	specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
-	jobA := job.NewJob(sampleTenant, specA, "", []job.ResourceURN{"resource-C"})
+	jobA := job.NewJob(sampleTenant, specA, "", []job.ResourceURN{"resource-C"}, false)
 
 	t.Run("BulkResolve", func(t *testing.T) {
 		t.Run("resolves upstream externally", func(t *testing.T) {

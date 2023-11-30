@@ -51,6 +51,8 @@ type Spec struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt sql.NullTime
+
+	IsDirty bool
 }
 
 type Schedule struct {
@@ -58,6 +60,7 @@ type Schedule struct {
 	EndDate       *time.Time `json:",omitempty"`
 	Interval      string
 	DependsOnPast bool
+	CatchUp       bool
 	Retry         *Retry
 }
 
@@ -282,6 +285,7 @@ func toStorageSchedule(scheduleSpec *job.Schedule) ([]byte, error) {
 		StartDate:     startDate,
 		Interval:      scheduleSpec.Interval(),
 		DependsOnPast: scheduleSpec.DependsOnPast(),
+		CatchUp:       scheduleSpec.CatchUp(),
 		Retry:         retry,
 	}
 	if scheduleSpec.EndDate() != "" {
@@ -500,6 +504,7 @@ func fromStorageSchedule(raw []byte) (*job.Schedule, error) {
 		return nil, err
 	}
 	scheduleBuilder := job.NewScheduleBuilder(startDate).
+		WithCatchUp(storageSchedule.CatchUp).
 		WithDependsOnPast(storageSchedule.DependsOnPast).
 		WithInterval(storageSchedule.Interval)
 
@@ -581,7 +586,7 @@ func FromRow(row pgx.Row) (*Spec, error) {
 	err := row.Scan(&js.ID, &js.Name, &js.Version, &js.Owner, &js.Description,
 		&js.Labels, &js.Schedule, &js.Alert, &js.StaticUpstreams, &js.HTTPUpstreams,
 		&js.TaskName, &js.TaskConfig, &js.WindowSpec, &js.Assets, &js.Hooks, &js.Metadata, &js.Destination, &js.Sources,
-		&js.ProjectName, &js.NamespaceName, &js.CreatedAt, &js.UpdatedAt, &js.DeletedAt)
+		&js.ProjectName, &js.NamespaceName, &js.CreatedAt, &js.UpdatedAt, &js.DeletedAt, &js.IsDirty)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(job.EntityJob, "job not found")

@@ -317,5 +317,5 @@ func (d *DummyJobBuilder) Build(tnnt tenant.Tenant) *job.Job {
 	if err != nil {
 		panic(err)
 	}
-	return job.NewJob(tnnt, spec, d.destinationURN, d.sourceURNs)
+	return job.NewJob(tnnt, spec, d.destinationURN, d.sourceURNs, false)
 }

@@ -245,10 +245,15 @@ func (jh *JobHandler) GetJobSpecifications(ctx context.Context, req *pb.GetJobSp
 
 	jobSpecResponseProtos := []*pb.JobSpecificationResponse{}
 	for _, jobSpec := range jobSpecs {
+		jobSpecProto := ToJobProto(jobSpec)
+		if req.IgnoreAssets {
+			jobSpecProto.Assets = map[string]string{}
+		}
+
 		jobSpecResponseProtos = append(jobSpecResponseProtos, &pb.JobSpecificationResponse{
 			ProjectName:   jobSpec.Tenant().ProjectName().String(),
 			NamespaceName: jobSpec.Tenant().NamespaceName().String(),
-			Job:           ToJobProto(jobSpec),
+			Job:           jobSpecProto,
 		})
 	}
 
@@ -266,7 +271,11 @@ func (jh *JobHandler) ListJobSpecification(ctx context.Context, req *pb.ListJobS
 
 	jobSpecificationProtos := make([]*pb.JobSpecification, len(jobSpecs))
 	for i, jobSpec := range jobSpecs {
-		jobSpecificationProtos[i] = ToJobProto(jobSpec)
+		jobSpecProto := ToJobProto(jobSpec)
+		if req.IgnoreAssets {
+			jobSpecProto.Assets = map[string]string{}
+		}
+		jobSpecificationProtos[i] = jobSpecProto
 	}
 
 	// TODO: make a stream response
@@ -355,7 +364,7 @@ func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationServ
 		}
 
 		if err := jh.jobService.ReplaceAll(stream.Context(), jobTenant, jobSpecs, jobNamesWithInvalidSpec, responseWriter); err != nil {
-			errMsg := fmt.Sprintf("[%s] replace all job specifications failure: %s", request.NamespaceName, err.Error())
+			errMsg := fmt.Sprintf("[%s] replace all job specifications failure: %s, if incoming jobs have been persisted, these are marked dirty and will be retried in next attempt", request.NamespaceName, err.Error())
 			jh.l.Error(errMsg)
 			responseWriter.Write(writer.LogLevelError, errMsg)
 			errNamespaces = append(errNamespaces, request.NamespaceName)

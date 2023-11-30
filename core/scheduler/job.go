@@ -129,6 +129,7 @@ type JobMetadata struct {
 
 type Schedule struct {
 	DependsOnPast bool
+	CatchUp       bool
 	StartDate     time.Time
 	EndDate       *time.Time
 	Interval      string
@@ -152,6 +153,23 @@ func (j *JobWithDetails) GetUniqueLabelValues() []string {
 		m[v] = true
 	}
 	return labelValues
+}
+
+func (j *JobWithDetails) GetSafeLabels() map[string]string {
+	emptyOutput := make(map[string]string)
+	if j == nil {
+		return emptyOutput
+	}
+
+	if j.JobMetadata == nil {
+		return emptyOutput
+	}
+
+	if j.JobMetadata.Labels == nil {
+		return emptyOutput
+	}
+
+	return j.JobMetadata.Labels
 }
 
 type Retry struct {

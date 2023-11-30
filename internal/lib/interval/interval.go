@@ -23,7 +23,3 @@ func NewInterval(start, end time.Time) Interval {
 		end:   end,
 	}
 }
-
-func (i Interval) Contains(other Interval) bool {
-	return !i.start.After(other.start) && !i.end.Before(other.end)
-}

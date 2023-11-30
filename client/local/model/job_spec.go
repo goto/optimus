@@ -60,7 +60,7 @@ type JobSpecTask struct {
 
 type JobSpecTaskWindow struct {
 	Size string `yaml:"size,omitempty"`
-	// deprecated
+	// deprecated, replaced by Delay
 	Offset     string `yaml:"offset,omitempty"`
 	TruncateTo string `yaml:"truncate_to,omitempty"`
 	Preset     string `yaml:"preset,omitempty"`

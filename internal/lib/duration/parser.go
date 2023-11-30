@@ -30,10 +30,7 @@ func From(str string) (Duration, error) {
 		return Duration{}, err
 	}
 
-	return Duration{
-		count: count,
-		unit:  unit,
-	}, nil
+	return NewDuration(count, unit), nil
 }
 
 func Validate(str string) error {

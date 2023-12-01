@@ -92,7 +92,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour)).Return(nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateReplayed, updatedRuns, "").Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to process new sequential replay request with multiple run", func(t *testing.T) {
@@ -134,7 +134,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour)).Return(nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStatePartialReplayed, updatedRuns, "").Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to process new parallel replay request", func(t *testing.T) {
@@ -166,7 +166,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, executionTime1, executionTime2).Return(nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateReplayed, mock.Anything, "").Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to process new replay request with creating non existing runs", func(t *testing.T) {
@@ -208,7 +208,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("CreateRun", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), "replayed").Return(nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStatePartialReplayed, updatedRunsAfterRunCreate, "").Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 
@@ -239,7 +239,7 @@ func TestReplayWorker(t *testing.T) {
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(nil, internalErr)
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything).Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to update replay state as failed if unable to do clear batch of runs", func(t *testing.T) {
@@ -270,7 +270,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, executionTime1, executionTime2).Return(internalErr)
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything).Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to update replay state as failed if unable to do clear run", func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour)).Return(internalErr)
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything).Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 
@@ -369,7 +369,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour)).Return(nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStatePartialReplayed, updatedRuns2, "").Return(nil).Once()
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to process partial replayed request with the recent run status is failed", func(t *testing.T) {
@@ -439,7 +439,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour)).Return(nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStatePartialReplayed, updatedRuns2, "").Return(nil).Once()
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to update replay state as failed if unable to fetch job runs", func(t *testing.T) {
@@ -474,7 +474,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, runsCriteriaJobA, jobCron).Return(nil, internalErr).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything).Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to update replay state as failed if unable to clear run when processing partial replayed request", func(t *testing.T) {
@@ -522,7 +522,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("Clear", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour)).Return(internalErr)
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything).Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 
@@ -564,7 +564,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, runsCriteriaJobA, jobCron).Return(updatedRuns, nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, updatedRuns, "").Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to process replayed request if some of the runs are in failed state", func(t *testing.T) {
@@ -627,7 +627,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, runsCriteriaJobA, jobCron).Return(runsFromScheduler, nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateReplayed, updatedRuns, "").Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to update replay state as failed if unable to fetch runs when processing replayed request", func(t *testing.T) {
@@ -658,7 +658,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, runsCriteriaJobA, jobCron).Return(nil, internalErr)
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything).Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 		t.Run("should able to update replay state as failed if all runs finished and failure found", func(t *testing.T) {
@@ -699,7 +699,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, runsCriteriaJobA, jobCron).Return(updatedRuns, nil)
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, updatedRuns, "found 1 failed runs.").Return(nil)
 
-			replayWorker := service.NewReplayWorker(logger, replayRepository, sch, jobRepository, replayServerConfig)
+			replayWorker := service.NewReplayWorkerTemp(logger, replayRepository, sch, jobRepository, replayServerConfig)
 			replayWorker.Process(replayReq)
 		})
 	})

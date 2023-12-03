@@ -282,6 +282,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 	s.expectedServerConfig.Plugin = config.PluginConfig{}
 
 	s.expectedServerConfig.Replay.ReplayTimeout = time.Hour * 3
+	s.expectedServerConfig.Replay.ExecutionInterval = time.Minute
 
 	s.expectedServerConfig.Publisher = &config.Publisher{
 		Type:   "kafka",

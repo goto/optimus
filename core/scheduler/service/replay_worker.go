@@ -71,7 +71,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *sc
 		}
 
 		// artificial delay
-		time.Sleep(executionInterval)
+		time.Sleep(w.config.ReplayTimeout)
 
 		// sync run first
 		if storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayWithRun.Replay.ID()); err != nil {
@@ -111,7 +111,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *sc
 			w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns...)
 			updatedRuns = scheduler.JobRunStatusList(toBeReplayedRuns).OverrideWithStatus(scheduler.StateInProgress)
 		} else { // sequential should work when there's no in_progress state on existing runs
-			inProgressRuns := scheduler.JobRunStatusList(existingRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
+			inProgressRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
 			if len(inProgressRuns) > 0 {
 				w.logger.Debug("[ReplayID: %s] skip sequential iteration", replayWithRun.Replay.ID())
 				continue

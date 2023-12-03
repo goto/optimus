@@ -43,18 +43,24 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 }
 
 func (w *ReplayWorker) Execute(ctx context.Context, replayReq *scheduler.ReplayWithRun) {
-	w.logger.Debug("[ReplayID: %s] Starting to execute replay", replayReq.Replay.ID())
+	w.logger.Debug("[ReplayID: %s] starting to execute replay", replayReq.Replay.ID())
 
 	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, replayReq.Replay.Tenant(), replayReq.Replay.JobName())
 	w.logger.Debug("[ReplayID: %s] get job cron", replayReq.Replay.ID())
 	if err != nil {
-		w.logger.Error("unable to get cron value for job [%s] replay id [%s]: %s", replayReq.Replay.JobName().String(), replayReq.Replay.ID().String(), err)
+		w.logger.Error("[ReplayID: %s] unable to get cron value for job [%s]: %s", replayReq.Replay.ID().String(), replayReq.Replay.JobName().String(), err)
+		if err := w.replayRepo.UpdateReplayStatus(ctx, replayReq.Replay.ID(), scheduler.ReplayStateFailed, err.Error()); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayReq.Replay.ID(), err.Error())
+		}
 		raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), scheduler.ReplayStateFailed)
 		return
 	}
 
 	if err := w.startExecutionLoop(ctx, replayReq, jobCron); err != nil {
-		w.logger.Error("unable to execute replay for job [%s] replay id [%s]: %s", replayReq.Replay.JobName().String(), replayReq.Replay.ID().String(), err)
+		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayReq.Replay.ID().String(), replayReq.Replay.JobName().String(), err)
+		if err := w.replayRepo.UpdateReplayStatus(ctx, replayReq.Replay.ID(), scheduler.ReplayStateFailed, err.Error()); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayReq.Replay.ID(), err.Error())
+		}
 		raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), scheduler.ReplayStateFailed)
 	}
 }

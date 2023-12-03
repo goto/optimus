@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"github.com/google/uuid"
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
@@ -394,7 +395,36 @@ func TestReplayWorker(t *testing.T) {
 			worker.Execute(ctx, replayReq)
 		})
 
-		t.Run("should able to update replay state as failed if unable to get job details", func(t *testing.T) {})
+		t.Run("should able to update replay state as failed if unable to get job details", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			sch := new(mockReplayScheduler)
+			defer sch.AssertExpectations(t)
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+
+			runsPhase1 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StatePending},
+				{ScheduledAt: scheduledTime2, State: scheduler.StatePending},
+			}
+			replayID := uuid.New()
+			replayReq := &scheduler.ReplayWithRun{
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Runs:   runsPhase1,
+			}
+
+			// loop 1
+			errorMsg := "internal error"
+			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(nil, errors.New(errorMsg)).Once()
+			errorMsgToStore := "internal error for entity replay: unable to get job details for jobName: job-a, project: proj: internal error"
+			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsgToStore).Return(nil).Once()
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			worker.Execute(ctx, replayReq)
+		})
+		t.Run("should able to update replay state as failed if unable to get replay id", func(t *testing.T) {})
 		t.Run("should able to update replay state as failed if unable to do clear batch of runs", func(t *testing.T) {})
 		t.Run("should able to update replay state as failed if unable to do clear run", func(t *testing.T) {})
 		t.Run("should able to update replay state as failed if unable to fetch job runs", func(t *testing.T) {})

@@ -55,6 +55,7 @@ func TestReplayWorker(t *testing.T) {
 	replayJobConfig := map[string]string{"EXECUTION_PROJECT": "example_project"}
 	replayDescription := "sample backfill"
 	replayConfig := scheduler.NewReplayConfig(startTime, endTime, false, replayJobConfig, replayDescription)
+	replayConfigParallel := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, replayDescription)
 
 	t.Run("Execute", func(t *testing.T) {
 		t.Run("should able to process sequential replay request with single run", func(t *testing.T) {
@@ -174,7 +175,78 @@ func TestReplayWorker(t *testing.T) {
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(ctx, replayReq)
 		})
-		t.Run("should able to process new parallel replay request", func(t *testing.T) {})
+		t.Run("should able to process parallel replay request", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			sch := new(mockReplayScheduler)
+			defer sch.AssertExpectations(t)
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+
+			runsPhase1 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StatePending},
+				{ScheduledAt: scheduledTime2, State: scheduler.StatePending},
+			}
+			runsPhase2 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StateInProgress},
+				{ScheduledAt: scheduledTime2, State: scheduler.StateInProgress},
+			}
+			runsPhase3 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StateSuccess},
+				{ScheduledAt: scheduledTime2, State: scheduler.StateInProgress},
+			}
+
+			replayID := uuid.New()
+			replayReq := &scheduler.ReplayWithRun{
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Runs:   runsPhase1,
+			}
+			replayPhase2 := &scheduler.ReplayWithRun{
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
+				Runs:   runsPhase2,
+			}
+			replayPhase3 := &scheduler.ReplayWithRun{
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
+				Runs:   runsPhase3,
+			}
+
+			schedulerRunsPhase1 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StateFailed},
+				{ScheduledAt: scheduledTime2, State: scheduler.StateFailed},
+			}
+			schedulerRunsPhase2 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StateSuccess},
+				{ScheduledAt: scheduledTime2, State: scheduler.StateRunning},
+			}
+			schedulerRunsPhase3 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StateSuccess},
+				{ScheduledAt: scheduledTime2, State: scheduler.StateSuccess},
+			}
+
+			// loop 1
+			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil).Once()
+			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayReq, nil).Once()
+			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase1, nil).Once()
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
+			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
+
+			// loop 2
+			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase2, nil).Once()
+			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase2, nil).Once()
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
+
+			// loop 3
+			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
+			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, "").Return(nil).Once()
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			worker.Execute(ctx, replayReq)
+		})
 		t.Run("should able to process new replay request with creating non existing runs", func(t *testing.T) {})
 
 		t.Run("should able to update replay state as failed if unable to get job details", func(t *testing.T) {})

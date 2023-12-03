@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -43,10 +44,7 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 
 func (w *ReplayWorker) Execute(ctx context.Context, replayReq *scheduler.ReplayWithRun) {
 	w.logger.Debug("[ReplayID: %s] Starting to execute replay", replayReq.Replay.ID())
-	go w.execute(ctx, replayReq)
-}
 
-func (w *ReplayWorker) execute(ctx context.Context, replayReq *scheduler.ReplayWithRun) {
 	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, replayReq.Replay.Tenant(), replayReq.Replay.JobName())
 	w.logger.Debug("[ReplayID: %s] get job cron", replayReq.Replay.ID())
 	if err != nil {
@@ -61,13 +59,13 @@ func (w *ReplayWorker) execute(ctx context.Context, replayReq *scheduler.ReplayW
 	}
 }
 
-func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cronInternal.ScheduleSpec) error {
+func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cronInternal.ScheduleSpec) error {
 	for {
-		w.logger.Debug("[ReplayID: %s] execute replay proceed...", replayReq.Replay.ID())
+		w.logger.Debug("[ReplayID: %s] execute replay proceed...", replayWithRun.Replay.ID())
 		// if replay timed out
 		select {
 		case <-ctx.Done():
-			w.logger.Debug("[ReplayID: %s] deadline encountered...", replayReq.Replay.ID())
+			w.logger.Debug("[ReplayID: %s] deadline encountered...", replayWithRun.Replay.ID())
 			return ctx.Err()
 		default:
 		}
@@ -76,69 +74,73 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayReq *schedu
 		time.Sleep(executionInterval)
 
 		// sync run first
-		if replayReqNew, err := w.replayRepo.GetReplayByID(ctx, replayReq.Replay.ID()); err != nil {
-			w.logger.Error("unable to get existing runs for replay [%s]: %s", replayReq.Replay.ID().String(), err)
+		if storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayWithRun.Replay.ID()); err != nil {
+			w.logger.Error("unable to get existing runs for replay [%s]: %s", replayWithRun.Replay.ID().String(), err)
 		} else {
-			replayReq = replayReqNew
+			replayWithRun = storedReplayWithRun
 		}
-		incomingRuns, err := w.fetchRuns(ctx, replayReq, jobCron)
+		incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
 		if err != nil {
-			w.logger.Error("unable to get incoming runs for replay [%s]: %s", replayReq.Replay.ID().String(), err)
+			w.logger.Error("unable to get incoming runs for replay [%s]: %s", replayWithRun.Replay.ID().String(), err)
 		}
-		existingRuns := replayReq.Runs
+		existingRuns := replayWithRun.Runs
 		syncedRunStatus := syncStatus(existingRuns, incomingRuns)
-		if err := w.replayRepo.UpdateReplay(ctx, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, syncedRunStatus, ""); err != nil {
-			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayReq.Replay.ID(), err)
+		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, syncedRunStatus, ""); err != nil {
+			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
 			continue
 		}
-		w.logger.Debug("[ReplayID: %s] sync replay satus %s", replayReq.Replay.ID(), toString(syncedRunStatus))
+		w.logger.Debug("[ReplayID: %s] sync replay status %s", replayWithRun.Replay.ID(), toString(syncedRunStatus))
 
 		// check if replay request is on termination state
 		if isAllRunStatusTerminated(syncedRunStatus) {
-			w.logger.Debug("[ReplayID: %s] end of replay", replayReq.Replay.ID())
-			replayState := scheduler.ReplayStateSuccess
-			msg := ""
-			if isAnyFailure(syncedRunStatus) {
-				replayState = scheduler.ReplayStateFailed
-				msg = "replay is failed due to some of runs are in failed statue" // TODO: find out how to pass the meaningful failed message here
-			}
-
-			if err := w.replayRepo.UpdateReplay(ctx, replayReq.Replay.ID(), replayState, syncedRunStatus, msg); err != nil {
-				w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayReq.Replay.ID(), err)
-				return err
-			}
-			return nil
+			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus)
 		}
 
 		// pick runs to be triggered
 		statesForReplay := []scheduler.State{scheduler.StatePending, scheduler.StateMissing}
 		toBeReplayedRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates(statesForReplay)
-		w.logger.Debug("[ReplayID: %s] run to be replayed %s", replayReq.Replay.ID(), toString(toBeReplayedRuns))
+		w.logger.Debug("[ReplayID: %s] run to be replayed %s", replayWithRun.Replay.ID(), toString(toBeReplayedRuns))
 		if len(toBeReplayedRuns) == 0 {
 			continue
 		}
 
 		// execute replay run on scheduler
 		var updatedRuns []*scheduler.JobRunStatus
-		w.logger.Debug("[ReplayID: %s] execute on scheduler!", replayReq.Replay.ID())
-		if replayReq.Replay.Config().Parallel {
-			w.replayRunOnScheduler(ctx, jobCron, replayReq.Replay, toBeReplayedRuns...)
+		w.logger.Debug("[ReplayID: %s] execute on scheduler", replayWithRun.Replay.ID())
+		if replayWithRun.Replay.Config().Parallel {
+			w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns...)
 			updatedRuns = scheduler.JobRunStatusList(toBeReplayedRuns).OverrideWithStatus(scheduler.StateInProgress)
 		} else { // sequential should work when there's no in_progress state on existing runs
 			inProgressRuns := scheduler.JobRunStatusList(existingRuns).GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
 			if len(inProgressRuns) > 0 {
-				w.logger.Debug("[ReplayID: %s] skip sequential iteration", replayReq.Replay.ID())
+				w.logger.Debug("[ReplayID: %s] skip sequential iteration", replayWithRun.Replay.ID())
 				continue
 			}
-			w.replayRunOnScheduler(ctx, jobCron, replayReq.Replay, toBeReplayedRuns[0])
+			w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns[0])
 			updatedRuns = scheduler.JobRunStatusList(toBeReplayedRuns[:1]).OverrideWithStatus(scheduler.StateInProgress)
 		}
 
 		// update runs status
-		if err := w.replayRepo.UpdateReplay(ctx, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, updatedRuns, ""); err != nil {
-			w.logger.Error("unable to update replay runs for replay_id [%s]: %s", replayReq.Replay.ID(), err)
+		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, updatedRuns, ""); err != nil {
+			w.logger.Error("unable to update replay runs for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
 		}
 	}
+}
+
+func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus []*scheduler.JobRunStatus) error {
+	w.logger.Debug("[ReplayID: %s] end of replay", replayID)
+	replayState := scheduler.ReplayStateSuccess
+	msg := ""
+	if isAnyFailure(syncedRunStatus) {
+		replayState = scheduler.ReplayStateFailed
+		msg = "replay is failed due to some of runs are in failed statue" // TODO: find out how to pass the meaningful failed message here
+	}
+
+	if err := w.replayRepo.UpdateReplay(ctx, replayID, replayState, syncedRunStatus, msg); err != nil {
+		w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayID, err)
+		return err
+	}
+	return nil
 }
 
 func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cronInternal.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {

@@ -17,7 +17,7 @@ import (
 	"github.com/goto/optimus/internal/lib/cron"
 )
 
-func TestReplayWorker(t *testing.T) {
+func TestReplayWorkerTemp(t *testing.T) {
 	logger := log.NewNoop()
 	jobAName, _ := scheduler.JobNameFrom("job-a")
 	projName := tenant.ProjectName("proj")

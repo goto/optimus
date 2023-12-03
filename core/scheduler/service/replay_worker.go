@@ -147,7 +147,7 @@ func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syn
 	msg := ""
 	if isAnyFailure(syncedRunStatus) {
 		replayState = scheduler.ReplayStateFailed
-		msg = "replay is failed due to some of runs are in failed statue" // TODO: find out how to pass the meaningful failed message here
+		msg = "replay is failed due to some of runs are in failed state" // TODO: find out how to pass the meaningful failed message here
 	}
 
 	if err := w.replayRepo.UpdateReplay(ctx, replayID, replayState, syncedRunStatus, msg); err != nil {

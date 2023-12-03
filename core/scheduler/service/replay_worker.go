@@ -80,20 +80,23 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *sc
 		time.Sleep(w.config.ReplayTimeout)
 
 		// sync run first
-		if storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayWithRun.Replay.ID()); err != nil {
+		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayWithRun.Replay.ID())
+		if err != nil {
 			w.logger.Error("unable to get existing runs for replay [%s]: %s", replayWithRun.Replay.ID().String(), err)
-		} else {
-			replayWithRun = storedReplayWithRun
+			return err
 		}
+		replayWithRun = storedReplayWithRun
+
 		incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
 		if err != nil {
 			w.logger.Error("unable to get incoming runs for replay [%s]: %s", replayWithRun.Replay.ID().String(), err)
+			return err
 		}
 		existingRuns := replayWithRun.Runs
 		syncedRunStatus := syncStatus(existingRuns, incomingRuns)
 		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, syncedRunStatus, ""); err != nil {
 			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
-			continue
+			return err
 		}
 		w.logger.Debug("[ReplayID: %s] sync replay status %s", replayWithRun.Replay.ID(), toString(syncedRunStatus))
 
@@ -114,7 +117,9 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *sc
 		var updatedRuns []*scheduler.JobRunStatus
 		w.logger.Debug("[ReplayID: %s] execute on scheduler", replayWithRun.Replay.ID())
 		if replayWithRun.Replay.Config().Parallel {
-			w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns...)
+			if err := w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns...); err != nil {
+				return err
+			}
 			updatedRuns = scheduler.JobRunStatusList(toBeReplayedRuns).OverrideWithStatus(scheduler.StateInProgress)
 		} else { // sequential should work when there's no in_progress state on existing runs
 			inProgressRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
@@ -122,13 +127,16 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *sc
 				w.logger.Debug("[ReplayID: %s] skip sequential iteration", replayWithRun.Replay.ID())
 				continue
 			}
-			w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns[0])
+			if err := w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns[0]); err != nil {
+				return err
+			}
 			updatedRuns = scheduler.JobRunStatusList(toBeReplayedRuns[:1]).OverrideWithStatus(scheduler.StateInProgress)
 		}
 
 		// update runs status
 		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, updatedRuns, ""); err != nil {
 			w.logger.Error("unable to update replay runs for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
+			return err
 		}
 	}
 }
@@ -176,6 +184,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cronIn
 	me := errors.NewMultiError("create runs")
 	for _, run := range missingRuns {
 		if err := w.scheduler.CreateRun(ctx, replayReq.Tenant(), replayReq.JobName(), run.GetLogicalTime(jobCron), prefixReplayed); err != nil {
+			w.logger.Error("unable to create job run for replay with replay_id [%s]: %s", replayReq.ID(), err)
 			me.Append(err)
 		}
 	}

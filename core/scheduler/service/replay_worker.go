@@ -15,11 +15,6 @@ import (
 	cronInternal "github.com/goto/optimus/internal/lib/cron"
 )
 
-const (
-	syncInterval      = "@every 10s"
-	executionInterval = 5 * time.Second
-)
-
 type ReplayWorker struct {
 	logger     log.Logger
 	replayRepo ReplayRepository
@@ -42,7 +37,10 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 	}
 }
 
-func (w *ReplayWorker) Execute(ctx context.Context, replayReq *scheduler.ReplayWithRun) {
+func (w *ReplayWorker) Execute(replayReq *scheduler.ReplayWithRun) {
+	ctx, cancelFn := context.WithTimeout(context.Background(), w.config.ReplayTimeout)
+	defer cancelFn()
+
 	w.logger.Debug("[ReplayID: %s] starting to execute replay", replayReq.Replay.ID())
 
 	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, replayReq.Replay.Tenant(), replayReq.Replay.JobName())
@@ -77,7 +75,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *sc
 		}
 
 		// artificial delay
-		time.Sleep(w.config.ReplayTimeout)
+		time.Sleep(w.config.ExecutionInterval)
 
 		// sync run first
 		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayWithRun.Replay.ID())

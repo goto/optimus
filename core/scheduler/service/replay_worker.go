@@ -3,16 +3,21 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goto/salt/log"
-	"github.com/robfig/cron/v3"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	cronInternal "github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/telemetry"
+)
+
+const (
+	prefixReplayed = "replayed"
 )
 
 type ReplayWorker struct {
@@ -20,8 +25,15 @@ type ReplayWorker struct {
 	replayRepo ReplayRepository
 	jobRepo    JobRepository
 	scheduler  ReplayScheduler
-	schedule   *cron.Cron
 	config     config.ReplayConfig
+}
+
+type ReplayScheduler interface {
+	Clear(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error
+	ClearBatch(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, startTime, endTime time.Time) error
+
+	CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error
+	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 }
 
 func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig) *ReplayWorker {
@@ -31,9 +43,6 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 		replayRepo: replayRepository,
 		config:     cfg,
 		scheduler:  scheduler,
-		schedule: cron.New(cron.WithChain(
-			cron.SkipIfStillRunning(cron.DefaultLogger),
-		)),
 	}
 }
 
@@ -63,7 +72,7 @@ func (w *ReplayWorker) Execute(replayReq *scheduler.ReplayWithRun) {
 	}
 }
 
-func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cronInternal.ScheduleSpec) error {
+func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) error {
 	for {
 		w.logger.Debug("[ReplayID: %s] execute replay proceed...", replayWithRun.Replay.ID())
 		// if replay timed out
@@ -155,7 +164,7 @@ func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syn
 	return nil
 }
 
-func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cronInternal.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
 	jobRunCriteria := &scheduler.JobRunsCriteria{
 		Name:      replayReq.Replay.JobName().String(),
 		StartDate: replayReq.Replay.Config().StartTime,
@@ -164,7 +173,7 @@ func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.Repla
 	return w.scheduler.GetJobRuns(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
 }
 
-func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cronInternal.ScheduleSpec, replayReq *scheduler.Replay, runs ...*scheduler.JobRunStatus) error {
+func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.ScheduleSpec, replayReq *scheduler.Replay, runs ...*scheduler.JobRunStatus) error {
 	// clear runs
 	pendingRuns := scheduler.JobRunStatusList(runs).GetSortedRunsByStates([]scheduler.State{scheduler.StatePending})
 	if l := len(pendingRuns); l > 0 {
@@ -255,4 +264,13 @@ func toString(runs []*scheduler.JobRunStatus) string {
 		s += fmt.Sprintf("[%s] %s\n", run.ScheduledAt, run.State.String())
 	}
 	return s
+}
+
+func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state scheduler.ReplayState) {
+	telemetry.NewCounter(metricJobReplay, map[string]string{
+		"project":   t.ProjectName().String(),
+		"namespace": t.NamespaceName().String(),
+		"job":       jobName.String(),
+		"status":    state.String(),
+	}).Inc()
 }

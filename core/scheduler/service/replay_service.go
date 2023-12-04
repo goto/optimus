@@ -151,3 +151,14 @@ func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt t
 	}
 	return jobCron, nil
 }
+
+func getMissingRuns(expectedRuns, existingRuns []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {
+	var runsToBeCreated []*scheduler.JobRunStatus
+	existedRunsMap := scheduler.JobRunStatusList(existingRuns).ToRunStatusMap()
+	for _, run := range expectedRuns {
+		if _, ok := existedRunsMap[run.ScheduledAt]; !ok {
+			runsToBeCreated = append(runsToBeCreated, run)
+		}
+	}
+	return runsToBeCreated
+}

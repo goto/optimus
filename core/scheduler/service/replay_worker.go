@@ -116,9 +116,10 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		// pick runs to be triggered
 		statesForReplay := []scheduler.State{scheduler.StatePending, scheduler.StateMissing}
 		toBeReplayedRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates(statesForReplay)
-		w.logger.Info("[ReplayID: %s] found %d runs to be replayed", replayWithRun.Replay.ID(), len(toBeReplayedRuns))
 		if len(toBeReplayedRuns) == 0 {
 			continue
+		} else {
+			w.logger.Info("[ReplayID: %s] found %d runs to be replayed", replayWithRun.Replay.ID(), len(toBeReplayedRuns))
 		}
 
 		// execute replay run on scheduler

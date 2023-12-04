@@ -36,7 +36,7 @@ generate-proto: ## regenerate protos
 	@echo " > protobuf compilation finished"
 
 unit-test-ci:
-	go test -count 5 -race -coverprofile coverage.txt -covermode=atomic -timeout 2m -tags=unit_test ./...
+	go test -count 5 -race -coverprofile coverage.txt -covermode=atomic -timeout 1m -tags=unit_test ./...
 
 integration-test:
 	go test -p 1 -count 1 -cover -race -timeout 1m ./internal/store/postgres/... -run TestPostgres
@@ -45,7 +45,7 @@ vet: ## run go vet
 	go vet ./...
 
 test:
-	go test -race -cover -timeout 2m -tags=unit_test ./...
+	go test -race -cover -timeout 1m -tags=unit_test ./...
 
 bench:
 	@go test -bench=. ./tests/bench/... -benchmem -timeout 20m

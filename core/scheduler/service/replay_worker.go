@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,9 +74,6 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
 	executionLoopCount := 0
 	for {
-		executionLoopCount++
-		w.logger.Debug("[ReplayID: %s] executing replay...", replayID)
-		// if replay timed out
 		select {
 		case <-ctx.Done():
 			w.logger.Debug("[ReplayID: %s] deadline encountered...", replayID)
@@ -86,9 +82,12 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		}
 
 		// delay if not the first loop
-		if executionLoopCount > 0 {
+		executionLoopCount++
+		if executionLoopCount > 1 {
 			time.Sleep(time.Duration(w.config.ExecutionIntervalInSeconds) * time.Second)
 		}
+
+		w.logger.Debug("[ReplayID: %s] executing replay...", replayID)
 
 		// sync run first
 		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
@@ -109,7 +108,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
-		w.logger.Debug("[ReplayID: %s] sync replay status %s", replayWithRun.Replay.ID(), toString(syncedRunStatus))
+		w.logger.Debug("[ReplayID: %s] sync replay status", replayWithRun.Replay.ID())
 
 		// check if replay request is on termination state
 		if isAllRunStatusTerminated(syncedRunStatus) {
@@ -119,14 +118,13 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		// pick runs to be triggered
 		statesForReplay := []scheduler.State{scheduler.StatePending, scheduler.StateMissing}
 		toBeReplayedRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates(statesForReplay)
-		w.logger.Debug("[ReplayID: %s] run to be replayed %s", replayWithRun.Replay.ID(), toString(toBeReplayedRuns))
+		w.logger.Debug("[ReplayID: %s] found %d runs to be replayed", replayWithRun.Replay.ID(), len(toBeReplayedRuns))
 		if len(toBeReplayedRuns) == 0 {
 			continue
 		}
 
 		// execute replay run on scheduler
 		var updatedRuns []*scheduler.JobRunStatus
-		w.logger.Debug("[ReplayID: %s] execute on scheduler", replayWithRun.Replay.ID())
 		if replayWithRun.Replay.Config().Parallel {
 			if err := w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns...); err != nil {
 				return err
@@ -183,7 +181,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 	if l := len(pendingRuns); l > 0 {
 		startLogicalTime := pendingRuns[0].GetLogicalTime(jobCron)
 		endLogicalTime := pendingRuns[l-1].GetLogicalTime(jobCron)
-		w.logger.Debug("[ReplayID: %s] startLogicalTime: %s, endLogicalTime: %s", replayReq.ID(), startLogicalTime, endLogicalTime)
+		w.logger.Debug("[ReplayID: %s] clearing runs with startLogicalTime: %s, endLogicalTime: %s", replayReq.ID(), startLogicalTime, endLogicalTime)
 		if err := w.scheduler.ClearBatch(ctx, replayReq.Tenant(), replayReq.JobName(), startLogicalTime, endLogicalTime); err != nil {
 			w.logger.Error("unable to clear job run for replay with replay_id [%s]: %s", replayReq.ID(), err)
 			return err
@@ -194,7 +192,9 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 	missingRuns := scheduler.JobRunStatusList(runs).GetSortedRunsByStates([]scheduler.State{scheduler.StateMissing})
 	me := errors.NewMultiError("create runs")
 	for _, run := range missingRuns {
-		if err := w.scheduler.CreateRun(ctx, replayReq.Tenant(), replayReq.JobName(), run.GetLogicalTime(jobCron), prefixReplayed); err != nil {
+		logicalTime := run.GetLogicalTime(jobCron)
+		w.logger.Debug("[ReplayID: %s] creating a new run with logical time: %s", replayReq.ID(), logicalTime)
+		if err := w.scheduler.CreateRun(ctx, replayReq.Tenant(), replayReq.JobName(), logicalTime, prefixReplayed); err != nil {
 			w.logger.Error("unable to create job run for replay with replay_id [%s]: %s", replayReq.ID(), err)
 			me.Append(err)
 		}
@@ -260,14 +260,6 @@ func isAnyFailure(runs []*scheduler.JobRunStatus) bool {
 		}
 	}
 	return false
-}
-
-func toString(runs []*scheduler.JobRunStatus) string {
-	s := "\n"
-	for _, run := range runs {
-		s += fmt.Sprintf("[%s] %s\n", run.ScheduledAt, run.State.String())
-	}
-	return s
 }
 
 func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state scheduler.ReplayState) {

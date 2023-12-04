@@ -8,15 +8,14 @@ transformation will consume the data.
 For example, assume there is a job that querying from a table using below statement:
 ```sql
 SELECT * FROM table WHERE
-created_at >= DATE('{{.DSTART}}') AND
-created_at < DATE('{{.DEND}}')
+created_at >= '{{.START_DATE}}' AND created_at < '{{.END_DATE}}'
 ```
 
-**_DSTART_** and **_DEND_** could be replaced at the time of compilation with based on its window configuration. 
+**START_DATE** and **END_DATE** could be replaced at the time of compilation with based on its window configuration. 
 Without the provided filter, we will have to consume all the records which are created till date inside the table 
 even though the previous rows might already been processed.
 
-These _DSTART_ and _DEND_ values of the input window could vary depending on the ETL job requirement.
+The _DSTART_ and _DEND_ values of the input window could vary depending on the ETL job requirement.
 - For a simple transformation job executing daily, it would need to consume full day work of yesterday’s data.
 - A job might be consuming data for a week/month for an aggregation job, but the data boundaries should be complete, 
   not consuming any partial data of a day.
@@ -26,8 +25,31 @@ These _DSTART_ and _DEND_ values of the input window could vary depending on the
 Optimus allows user to define the amount of data window to consume through window configurations. The configurations 
 act on the schedule_time of the job and applied in order to compute _DSTART_ and _DEND_.
 
-The following is the list of available confiugration the user can setup a window:
+The following is the list of available configuration the user can setup a window:
 
+- **Size**: size enables the user to define the duration for which the data needs to be consumed by job. Size can be defined in
+   in units like "1h", "1d", "1w", "1M" to define the respective size of data to consume.
+- **Delay**: optional configuration to allow delaying the processing of some data interval, e.g., a configuration with size 1d, with
+   delay 1d, means that it will consume data of 1 day, the day before yesterday.
+- **Truncate_to**: optional configuration to override the time unit for the window interval, e.g., a config with size 1d, with 
+   truncate_to "h", will mean data for last 24 hours, to the end of previous hour.
+- **Location**: optional configuration to define the time zone to be used for this window configuration, if not defined the
+   default value of location will be UTC.
+
+```yaml
+window:
+  size: 1d
+  delay: 1d
+  truncate_to: "h"
+  location: "Asia/Jakarta"
+```
+Will provide output for reference time `2023-12-01T03:00:00Z` (2023-12-01T10:00:00+07:00)
+ - DEND:'2023-11-30T10:00:00+07:00'
+ - END_DATE: '2023-11-30'
+ - START_DATE='2023-11-29'
+ - DSTART: '2023-11-29T10:00:00+07:00'
+
+### Window configuration version 1 and 2 
 - **Truncate_to**: The data window on most of the scenarios needs to be aligned to a well-defined time window
   like month start to month end, or week start to weekend with week start being monday, or a complete day.
   Inorder to achieve that the truncate_to option is provided which can be configured with either of these values
@@ -80,7 +102,7 @@ Through this option, the user can directly configure the window that meets their
 The following is an example of its usage:
 
 ```yaml
-version: 1 # decides window version
+version: 3 # decides window version
 name: sample-project.playground.table1
 owner: sample_owner
 schedule:
@@ -92,9 +114,7 @@ task:
   config:
     ...
   window:
-    size: 24h
-    offset: "0"
-    truncate_to: d
+    size: 1d
 labels:
   ...
 hooks: []
@@ -102,8 +122,8 @@ dependencies: []
 ```
 
 Notice the window configuration is specified under field `task.window`. **Important** note, the `version` field decides which
-version of window capability to be used. Currently available is window `version: 1` and window `version: 2`. Version 2 is recommended
-to be used as verion 1 will soon be deprecated. To know the difference between the two version, run the `playground` feature for window:
+version of window capability to be used. Currently available window version are `version: 1`, `version: 2` and `version: 3`. Version 3 is recommended
+to be used as version 1 will soon be deprecated. To know the difference between the two version, run the `playground` feature for window:
 
 ```bash
 optimus playground window
@@ -118,7 +138,7 @@ window preset always use window `version: 2`. The main components of window pres
 * **Window Preset File**
 
 Presets configuration is put in a dedicated YAML file. The way to configure it still uses the same window configuration
-like `truncate_to`, `offset`, and `size`. Though, there are some additions, like the name of the preset and the description to explain this preset.
+like `truncate_to`, `delay`, `location` and `size`. Though, there are some additions, like the name of the preset and the description to explain this preset.
 The following is an example of how to define a preset under `presets.yaml` file (note that the file name does not have to be this one).
 
 ```yaml
@@ -126,15 +146,11 @@ presets:
   yesterday:
     description: defines yesterday window
     window:
-      truncate_to: d
-      offset: -24h
-      size: 24h
+      size: 1d
   last_month:
     description: defines last 30 days window
     window:
-      truncate_to: M
-      offset: -30d
-      size: 30d
+      size: 1M
 ```
 
 In the above example, the file `presets.yaml` defines two presets, named `yesterday` and `last_month`. The name of preset **SHOULD** be
@@ -168,7 +184,7 @@ it is ready to be used. And the way to use it is by referencing which preset to 
 of its usage:
 
 ```yaml
-version: 1 # preset always use window version 2
+version: 1 # preset always use window version 3
 name: sample-project.playground.table1
 owner: sample_owner
 schedule:

@@ -49,10 +49,9 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Minute*time.Duration(w.config.ReplayTimeoutInMinutes))
 	defer cancelFn()
 
-	w.logger.Debug("[ReplayID: %s] starting to execute replay", replayID)
+	w.logger.Info("[ReplayID: %s] starting to execute replay", replayID)
 
 	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, jobTenant, jobName)
-	w.logger.Debug("[ReplayID: %s] get job cron", replayID.String())
 	if err != nil {
 		w.logger.Error("[ReplayID: %s] unable to get cron value for job [%s]: %s", replayID.String(), jobName.String(), err)
 		if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
@@ -76,7 +75,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 	for {
 		select {
 		case <-ctx.Done():
-			w.logger.Debug("[ReplayID: %s] deadline encountered...", replayID)
+			w.logger.Error("[ReplayID: %s] deadline encountered...", replayID)
 			return ctx.Err()
 		default:
 		}
@@ -87,7 +86,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			time.Sleep(time.Duration(w.config.ExecutionIntervalInSeconds) * time.Second)
 		}
 
-		w.logger.Debug("[ReplayID: %s] executing replay...", replayID)
+		w.logger.Info("[ReplayID: %s] executing replay...", replayID)
 
 		// sync run first
 		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
@@ -108,7 +107,6 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
-		w.logger.Debug("[ReplayID: %s] sync replay status", replayWithRun.Replay.ID())
 
 		// check if replay request is on termination state
 		if isAllRunStatusTerminated(syncedRunStatus) {
@@ -118,7 +116,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		// pick runs to be triggered
 		statesForReplay := []scheduler.State{scheduler.StatePending, scheduler.StateMissing}
 		toBeReplayedRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates(statesForReplay)
-		w.logger.Debug("[ReplayID: %s] found %d runs to be replayed", replayWithRun.Replay.ID(), len(toBeReplayedRuns))
+		w.logger.Info("[ReplayID: %s] found %d runs to be replayed", replayWithRun.Replay.ID(), len(toBeReplayedRuns))
 		if len(toBeReplayedRuns) == 0 {
 			continue
 		}
@@ -133,7 +131,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		} else { // sequential should work when there's no in_progress state on existing runs
 			inProgressRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
 			if len(inProgressRuns) > 0 {
-				w.logger.Debug("[ReplayID: %s] skip sequential iteration", replayWithRun.Replay.ID())
+				w.logger.Info("[ReplayID: %s] %d run is in progress, skip sequential iteration", len(inProgressRuns), replayWithRun.Replay.ID())
 				continue
 			}
 			if err := w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns[0]); err != nil {
@@ -157,7 +155,7 @@ func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syn
 		replayState = scheduler.ReplayStateFailed
 		msg = "replay is failed due to some of runs are in failed state" // TODO: find out how to pass the meaningful failed message here
 	}
-	w.logger.Debug("[ReplayID: %s] replay finished with status %s", replayID, replayState)
+	w.logger.Info("[ReplayID: %s] replay finished with status %s", replayID, replayState)
 
 	if err := w.replayRepo.UpdateReplay(ctx, replayID, replayState, syncedRunStatus, msg); err != nil {
 		w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayID, err)
@@ -181,7 +179,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 	if l := len(pendingRuns); l > 0 {
 		startLogicalTime := pendingRuns[0].GetLogicalTime(jobCron)
 		endLogicalTime := pendingRuns[l-1].GetLogicalTime(jobCron)
-		w.logger.Debug("[ReplayID: %s] clearing runs with startLogicalTime: %s, endLogicalTime: %s", replayReq.ID(), startLogicalTime, endLogicalTime)
+		w.logger.Info("[ReplayID: %s] clearing runs with startLogicalTime: %s, endLogicalTime: %s", replayReq.ID(), startLogicalTime, endLogicalTime)
 		if err := w.scheduler.ClearBatch(ctx, replayReq.Tenant(), replayReq.JobName(), startLogicalTime, endLogicalTime); err != nil {
 			w.logger.Error("unable to clear job run for replay with replay_id [%s]: %s", replayReq.ID(), err)
 			return err
@@ -193,7 +191,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 	me := errors.NewMultiError("create runs")
 	for _, run := range missingRuns {
 		logicalTime := run.GetLogicalTime(jobCron)
-		w.logger.Debug("[ReplayID: %s] creating a new run with logical time: %s", replayReq.ID(), logicalTime)
+		w.logger.Info("[ReplayID: %s] creating a new run with logical time: %s", replayReq.ID(), logicalTime)
 		if err := w.scheduler.CreateRun(ctx, replayReq.Tenant(), replayReq.JobName(), logicalTime, prefixReplayed); err != nil {
 			w.logger.Error("unable to create job run for replay with replay_id [%s]: %s", replayReq.ID(), err)
 			me.Append(err)

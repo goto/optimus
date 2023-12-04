@@ -13,7 +13,6 @@ import (
 
 var replayStatusToValidate = []scheduler.ReplayState{
 	scheduler.ReplayStateCreated, scheduler.ReplayStateInProgress,
-	scheduler.ReplayStatePartialReplayed, scheduler.ReplayStateReplayed,
 }
 
 type Validator struct {

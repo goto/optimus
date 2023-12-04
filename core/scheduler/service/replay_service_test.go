@@ -383,29 +383,6 @@ func (_m *ReplayRepository) GetReplayRequestsByStatus(ctx context.Context, statu
 	return r0, r1
 }
 
-// GetReplayToExecute provides a mock function with given fields: _a0
-func (_m *ReplayRepository) GetReplayToExecute(_a0 context.Context) (*scheduler.ReplayWithRun, error) {
-	ret := _m.Called(_a0)
-
-	var r0 *scheduler.ReplayWithRun
-	if rf, ok := ret.Get(0).(func(context.Context) *scheduler.ReplayWithRun); ok {
-		r0 = rf(_a0)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*scheduler.ReplayWithRun)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = rf(_a0)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // RegisterReplay provides a mock function with given fields: ctx, replay, runs
 func (_m *ReplayRepository) RegisterReplay(ctx context.Context, replay *scheduler.Replay, runs []*scheduler.JobRunStatus) (uuid.UUID, error) {
 	ret := _m.Called(ctx, replay, runs)

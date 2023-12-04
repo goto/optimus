@@ -103,20 +103,16 @@ func TestReplay(t *testing.T) {
 
 	t.Run("ReplayStateFromString", func(t *testing.T) {
 		expectationsMap := map[string]scheduler.ReplayState{
-			"created":          scheduler.ReplayStateCreated,
-			"CREATED":          scheduler.ReplayStateCreated,
-			"in progress":      scheduler.ReplayStateInProgress,
-			"IN PROGRESS":      scheduler.ReplayStateInProgress,
-			"invalid":          scheduler.ReplayStateInvalid,
-			"INVALID":          scheduler.ReplayStateInvalid,
-			"partial replayed": scheduler.ReplayStatePartialReplayed,
-			"PARTIAL REPLAYED": scheduler.ReplayStatePartialReplayed,
-			"replayed":         scheduler.ReplayStateReplayed,
-			"REPLAYED":         scheduler.ReplayStateReplayed,
-			"success":          scheduler.ReplayStateSuccess,
-			"SUCCESS":          scheduler.ReplayStateSuccess,
-			"failed":           scheduler.ReplayStateFailed,
-			"FAILED":           scheduler.ReplayStateFailed,
+			"created":     scheduler.ReplayStateCreated,
+			"CREATED":     scheduler.ReplayStateCreated,
+			"in progress": scheduler.ReplayStateInProgress,
+			"IN PROGRESS": scheduler.ReplayStateInProgress,
+			"invalid":     scheduler.ReplayStateInvalid,
+			"INVALID":     scheduler.ReplayStateInvalid,
+			"success":     scheduler.ReplayStateSuccess,
+			"SUCCESS":     scheduler.ReplayStateSuccess,
+			"failed":      scheduler.ReplayStateFailed,
+			"FAILED":      scheduler.ReplayStateFailed,
 		}
 		for input, expectedState := range expectationsMap {
 			respState, err := scheduler.ReplayStateFromString(input)

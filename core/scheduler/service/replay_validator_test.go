@@ -36,7 +36,6 @@ func TestReplayValidator(t *testing.T) {
 	scheduledTime1, _ := time.Parse(scheduler.ISODateFormat, scheduledTimeStr1)
 	replayStatusToValidate := []scheduler.ReplayState{
 		scheduler.ReplayStateCreated, scheduler.ReplayStateInProgress,
-		scheduler.ReplayStatePartialReplayed, scheduler.ReplayStateReplayed,
 	}
 	replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfig, scheduler.ReplayStateCreated)
 

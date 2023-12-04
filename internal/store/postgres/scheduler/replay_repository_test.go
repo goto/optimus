@@ -71,46 +71,8 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			assert.Nil(t, err)
 			assert.NotNil(t, replayID)
 
-			err = replayRepo.UpdateReplay(ctx, replayID, scheduler.ReplayStateReplayed, jobRunsAllQueued, "")
+			err = replayRepo.UpdateReplay(ctx, replayID, scheduler.ReplayStateInProgress, jobRunsAllQueued, "")
 			assert.NoError(t, err)
-		})
-	})
-
-	t.Run("GetReplayToExecute", func(t *testing.T) {
-		t.Run("return executable replay", func(t *testing.T) {
-			db := dbSetup()
-			replayRepo := postgres.NewReplayRepository(db)
-
-			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description)
-			replayReq1 := scheduler.NewReplayRequest(jobAName, tnnt, replayConfig, scheduler.ReplayStateSuccess)
-			replayReq2 := scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateCreated)
-
-			replayID1, err := replayRepo.RegisterReplay(ctx, replayReq1, jobRunsAllPending)
-			assert.Nil(t, err)
-			assert.NotNil(t, replayID1)
-
-			replayID2, err := replayRepo.RegisterReplay(ctx, replayReq2, jobRunsAllPending)
-			assert.Nil(t, err)
-			assert.NotNil(t, replayID2)
-
-			replayToExecute, err := replayRepo.GetReplayToExecute(ctx)
-			assert.Nil(t, err)
-			assert.Equal(t, jobBName, replayToExecute.Replay.JobName().String())
-		})
-		t.Run("return error not found if no executable replay found", func(t *testing.T) {
-			db := dbSetup()
-			replayRepo := postgres.NewReplayRepository(db)
-
-			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
-			replayReq1 := scheduler.NewReplayRequest(jobAName, tnnt, replayConfig, scheduler.ReplayStateSuccess)
-
-			replayID1, err := replayRepo.RegisterReplay(ctx, replayReq1, jobRunsAllPending)
-			assert.Nil(t, err)
-			assert.NotNil(t, replayID1)
-
-			replayToExecute, err := replayRepo.GetReplayToExecute(ctx)
-			assert.ErrorContains(t, err, "no executable replay request found")
-			assert.Nil(t, replayToExecute)
 		})
 	})
 

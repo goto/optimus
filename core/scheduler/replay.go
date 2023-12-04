@@ -15,9 +15,7 @@ const (
 	ReplayStateCreated ReplayState = "created"
 
 	// running state
-	ReplayStateInProgress      ReplayState = "in progress"
-	ReplayStatePartialReplayed ReplayState = "partial replayed"
-	ReplayStateReplayed        ReplayState = "replayed"
+	ReplayStateInProgress ReplayState = "in progress"
 
 	// terminal state
 	ReplayStateInvalid ReplayState = "invalid"
@@ -47,10 +45,6 @@ func ReplayStateFromString(state string) (ReplayState, error) {
 		return ReplayStateInProgress, nil
 	case string(ReplayStateInvalid):
 		return ReplayStateInvalid, nil
-	case string(ReplayStatePartialReplayed):
-		return ReplayStatePartialReplayed, nil
-	case string(ReplayStateReplayed):
-		return ReplayStateReplayed, nil
 	case string(ReplayStateSuccess):
 		return ReplayStateSuccess, nil
 	case string(ReplayStateFailed):
@@ -105,7 +99,7 @@ func (r *Replay) UserState() ReplayUserState {
 	switch r.state {
 	case ReplayStateCreated:
 		return ReplayUserStateCreated
-	case ReplayStateInProgress, ReplayStatePartialReplayed, ReplayStateReplayed:
+	case ReplayStateInProgress:
 		return ReplayUserStateInProgress
 	case ReplayStateInvalid:
 		return ReplayUserStateInvalid

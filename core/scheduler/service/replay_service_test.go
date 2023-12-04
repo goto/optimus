@@ -78,7 +78,7 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", ctx, replayWithRuns).Return()
+			replayWorker.On("Execute", ctx, replayWithRuns).Return().Maybe()
 
 			replayService := service.NewReplayService(replayRepository, jobRepository, replayValidator, replayWorker, nil, logger)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfig)

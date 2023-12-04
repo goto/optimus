@@ -81,7 +81,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 	}).Inc()
 
 	replayWithRuns := &scheduler.ReplayWithRun{Replay: replayReq, Runs: runs}
-	r.worker.Execute(ctx, replayWithRuns)
+	go r.worker.Execute(ctx, replayWithRuns)
 
 	return replayID, nil
 }

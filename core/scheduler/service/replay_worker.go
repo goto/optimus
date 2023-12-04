@@ -167,8 +167,8 @@ func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syn
 func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
 	jobRunCriteria := &scheduler.JobRunsCriteria{
 		Name:      replayReq.Replay.JobName().String(),
-		StartDate: replayReq.Replay.Config().StartTime,
-		EndDate:   replayReq.Replay.Config().EndTime,
+		StartDate: replayReq.Replay.Config().StartTime.UTC(),
+		EndDate:   replayReq.Replay.Config().EndTime.UTC(),
 	}
 	return w.scheduler.GetJobRuns(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
 }

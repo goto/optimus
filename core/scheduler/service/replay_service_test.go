@@ -73,12 +73,11 @@ func TestReplayService(t *testing.T) {
 				{ScheduledAt: scheduledTime2, State: scheduler.StatePending},
 			}
 			replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfig, scheduler.ReplayStateCreated)
-			replayWithRuns := &scheduler.ReplayWithRun{Replay: replayReq, Runs: replayRuns}
 
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", replayWithRuns).Return().Maybe()
+			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
 
 			replayService := service.NewReplayService(replayRepository, jobRepository, replayValidator, replayWorker, nil, logger)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfig)
@@ -508,6 +507,6 @@ type ReplayExecutor struct {
 }
 
 // Execute provides a mock function with given fields: ctx, replayRequest
-func (_m *ReplayExecutor) Execute(replayRequest *scheduler.ReplayWithRun) {
-	_m.Called(replayRequest)
+func (_m *ReplayExecutor) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
+	_m.Called(replayID, jobTenant, jobName)
 }

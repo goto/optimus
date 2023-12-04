@@ -40,7 +40,7 @@ type ReplayValidator interface {
 }
 
 type ReplayExecutor interface {
-	Execute(replayRequest *scheduler.ReplayWithRun)
+	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
 }
 
 type ReplayService struct {
@@ -80,8 +80,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		"status":    replayReq.State().String(),
 	}).Inc()
 
-	replayWithRuns := &scheduler.ReplayWithRun{Replay: replayReq, Runs: runs}
-	go r.worker.Execute(replayWithRuns)
+	go r.worker.Execute(replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
 }

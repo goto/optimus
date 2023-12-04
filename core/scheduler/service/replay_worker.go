@@ -46,39 +46,39 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 	}
 }
 
-func (w *ReplayWorker) Execute(replayReq *scheduler.ReplayWithRun) {
+func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), w.config.ReplayTimeout)
 	defer cancelFn()
 
-	w.logger.Debug("[ReplayID: %s] starting to execute replay", replayReq.Replay.ID())
+	w.logger.Debug("[ReplayID: %s] starting to execute replay", replayID)
 
-	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, replayReq.Replay.Tenant(), replayReq.Replay.JobName())
-	w.logger.Debug("[ReplayID: %s] get job cron", replayReq.Replay.ID())
+	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, jobTenant, jobName)
+	w.logger.Debug("[ReplayID: %s] get job cron", replayID.String())
 	if err != nil {
-		w.logger.Error("[ReplayID: %s] unable to get cron value for job [%s]: %s", replayReq.Replay.ID().String(), replayReq.Replay.JobName().String(), err)
-		if err := w.replayRepo.UpdateReplayStatus(ctx, replayReq.Replay.ID(), scheduler.ReplayStateFailed, err.Error()); err != nil {
-			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayReq.Replay.ID(), err.Error())
+		w.logger.Error("[ReplayID: %s] unable to get cron value for job [%s]: %s", replayID.String(), jobName.String(), err)
+		if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayID, err.Error())
 		}
-		raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), scheduler.ReplayStateFailed)
+		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)
 		return
 	}
 
-	if err := w.startExecutionLoop(ctx, replayReq, jobCron); err != nil {
-		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayReq.Replay.ID().String(), replayReq.Replay.JobName().String(), err)
-		if err := w.replayRepo.UpdateReplayStatus(ctx, replayReq.Replay.ID(), scheduler.ReplayStateFailed, err.Error()); err != nil {
-			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayReq.Replay.ID(), err.Error())
+	if err := w.startExecutionLoop(ctx, replayID, jobCron); err != nil {
+		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayID.String(), jobName.String(), err)
+		if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayID, err.Error())
 		}
-		raiseReplayMetric(replayReq.Replay.Tenant(), replayReq.Replay.JobName(), scheduler.ReplayStateFailed)
+		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)
 	}
 }
 
-func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) error {
+func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
 	for {
-		w.logger.Debug("[ReplayID: %s] execute replay proceed...", replayWithRun.Replay.ID())
+		w.logger.Debug("[ReplayID: %s] execute replay proceed...", replayID)
 		// if replay timed out
 		select {
 		case <-ctx.Done():
-			w.logger.Debug("[ReplayID: %s] deadline encountered...", replayWithRun.Replay.ID())
+			w.logger.Debug("[ReplayID: %s] deadline encountered...", replayID)
 			return ctx.Err()
 		default:
 		}
@@ -87,12 +87,12 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayWithRun *sc
 		time.Sleep(w.config.ExecutionInterval)
 
 		// sync run first
-		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayWithRun.Replay.ID())
+		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
 		if err != nil {
-			w.logger.Error("unable to get existing runs for replay [%s]: %s", replayWithRun.Replay.ID().String(), err)
+			w.logger.Error("unable to get existing runs for replay [%s]: %s", replayID.String(), err)
 			return err
 		}
-		replayWithRun = storedReplayWithRun
+		replayWithRun := storedReplayWithRun
 
 		incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
 		if err != nil {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -107,6 +108,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
+		w.logger.Info("[ReplayID: %s] synced %d replay runs with status: %s", replayID, len(syncedRunStatus), generateRunStatusSummary(syncedRunStatus))
 
 		// check if replay request is on termination state
 		if isAllRunStatusTerminated(syncedRunStatus) {
@@ -119,7 +121,6 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		if len(toBeReplayedRuns) == 0 {
 			continue
 		}
-		w.logger.Info("[ReplayID: %s] found %d runs to be replayed", replayWithRun.Replay.ID(), len(toBeReplayedRuns))
 
 		// execute replay run on scheduler
 		var updatedRuns []*scheduler.JobRunStatus
@@ -267,4 +268,18 @@ func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state schedul
 		"job":       jobName.String(),
 		"status":    state.String(),
 	}).Inc()
+}
+
+func generateRunStatusSummary(syncedRunStatus []*scheduler.JobRunStatus) string {
+	runStatusSummaryMap := scheduler.JobRunStatusList(syncedRunStatus).GetJobRunStatusSummaryMap()
+	var statusSummary string
+	for state, countRun := range runStatusSummaryMap {
+		currentState := fmt.Sprintf("%s(%d)", state.String(), countRun)
+		if statusSummary == "" {
+			statusSummary = currentState
+		} else {
+			statusSummary = fmt.Sprintf("%s, %s", statusSummary, currentState)
+		}
+	}
+	return statusSummary
 }

@@ -140,6 +140,14 @@ func (j JobRunStatusList) OverrideWithStatus(status State) []*JobRunStatus {
 	return overridedRuns
 }
 
+func (j JobRunStatusList) GetJobRunStatusSummaryMap() map[State]int {
+	stateMap := make(map[State]int)
+	for _, run := range j {
+		stateMap[run.State]++
+	}
+	return stateMap
+}
+
 // JobRunsCriteria represents the filter condition to get run status from scheduler
 type JobRunsCriteria struct {
 	Name        string

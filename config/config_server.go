@@ -1,7 +1,5 @@
 package config
 
-import "time"
-
 type ServerConfig struct {
 	Version          Version           `mapstructure:"version"`
 	Log              LogConfig         `mapstructure:"log"`
@@ -47,10 +45,9 @@ type PluginConfig struct {
 	Artifacts []string `mapstructure:"artifacts"`
 }
 
-// TODO: add worker interval
 type ReplayConfig struct {
-	ReplayTimeout     time.Duration `mapstructure:"replay_timeout" default:"3h"`
-	ExecutionInterval time.Duration `mapstructure:"execution_interval" default:"1m"`
+	ReplayTimeoutInMinutes     int `mapstructure:"replay_timeout_in_minutes" default:"180"`
+	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"120"`
 }
 
 type Publisher struct {

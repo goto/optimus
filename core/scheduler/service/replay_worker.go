@@ -47,7 +47,7 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 }
 
 func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
-	ctx, cancelFn := context.WithTimeout(context.Background(), w.config.ReplayTimeout)
+	ctx, cancelFn := context.WithTimeout(context.Background(), time.Minute*time.Duration(w.config.ReplayTimeoutInMinutes))
 	defer cancelFn()
 
 	w.logger.Debug("[ReplayID: %s] starting to execute replay", replayID)
@@ -73,8 +73,10 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 }
 
 func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
+	executionLoopCount := 0
 	for {
-		w.logger.Debug("[ReplayID: %s] execute replay proceed...", replayID)
+		executionLoopCount++
+		w.logger.Debug("[ReplayID: %s] executing replay...", replayID)
 		// if replay timed out
 		select {
 		case <-ctx.Done():
@@ -83,8 +85,10 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		default:
 		}
 
-		// artificial delay
-		time.Sleep(w.config.ExecutionInterval)
+		// delay if not the first loop
+		if executionLoopCount > 0 {
+			time.Sleep(time.Duration(w.config.ExecutionIntervalInSeconds) * time.Second)
+		}
 
 		// sync run first
 		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
@@ -149,13 +153,13 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 }
 
 func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus []*scheduler.JobRunStatus) error {
-	w.logger.Debug("[ReplayID: %s] end of replay", replayID)
 	replayState := scheduler.ReplayStateSuccess
 	msg := ""
 	if isAnyFailure(syncedRunStatus) {
 		replayState = scheduler.ReplayStateFailed
 		msg = "replay is failed due to some of runs are in failed state" // TODO: find out how to pass the meaningful failed message here
 	}
+	w.logger.Debug("[ReplayID: %s] replay finished with status %s", replayID, replayState)
 
 	if err := w.replayRepo.UpdateReplay(ctx, replayID, replayState, syncedRunStatus, msg); err != nil {
 		w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayID, err)

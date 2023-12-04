@@ -19,7 +19,10 @@ import (
 
 func TestReplayWorker(t *testing.T) {
 	logger := log.NewNoop()
-	replayServerConfig := config.ReplayConfig{ExecutionInterval: time.Millisecond, ReplayTimeout: time.Hour}
+	replayServerConfig := config.ReplayConfig{
+		ExecutionIntervalInSeconds: 1,
+		ReplayTimeoutInMinutes:     5,
+	}
 
 	projName := tenant.ProjectName("proj")
 	namespaceName := tenant.ProjectName("ns1")

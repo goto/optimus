@@ -48,7 +48,7 @@ type ReplayService struct {
 	runGetter  SchedulerRunGetter
 
 	validator ReplayValidator
-	worker    ReplayExecutor
+	executor  ReplayExecutor
 
 	logger log.Logger
 }
@@ -79,7 +79,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		"status":    replayReq.State().String(),
 	}).Inc()
 
-	go r.worker.Execute(replayID, replayReq.Tenant(), jobName)
+	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
 }
@@ -122,7 +122,7 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 }
 
 func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
-	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, worker: worker, runGetter: runGetter, logger: logger}
+	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, executor: worker, runGetter: runGetter, logger: logger}
 }
 
 func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt tenant.Tenant, jobName scheduler.JobName) (*cron.ScheduleSpec, error) {

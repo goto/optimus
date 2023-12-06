@@ -100,7 +100,8 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhaseTwo, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(runsPhaseThree, nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, runsPhaseThree, "").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, runsPhaseThree, "").Return(nil).Once()
+			summaryMsg := "replay is finished with run status: success(1)"
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, runsPhaseThree, summaryMsg).Return(nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -174,7 +175,8 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, "").Return(nil).Once()
+			summaryMsg := "replay is finished with run status: success(2)"
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -246,7 +248,8 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, "").Return(nil).Once()
+			summaryMsg := "replay is finished with run status: success(2)"
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -320,7 +323,8 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, "").Return(nil).Once()
+			summaryMsg := "replay is finished with run status: success(2)"
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -392,7 +396,8 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, "").Return(nil).Once()
+			summaryMsg := "replay is finished with run status: success(2)"
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -669,7 +674,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything, "replay is failed due to some of runs are in failed state").Return(nil).Once()
+			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything, mock.Anything).Return(nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)

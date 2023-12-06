@@ -108,11 +108,13 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
-		w.logger.Info("[ReplayID: %s] synced %d replay runs with status: %s", replayID, len(syncedRunStatus), w.generateRunStatusSummary(syncedRunStatus))
+
+		runStatusSummary := w.generateRunStatusSummary(syncedRunStatus)
+		w.logger.Info("[ReplayID: %s] synced %d replay runs with status: %s", replayID, len(syncedRunStatus), runStatusSummary)
 
 		// check if replay request is on termination state
 		if syncedRunStatus.IsAllTerminated() {
-			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus)
+			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus, runStatusSummary)
 		}
 
 		// pick runs to be triggered
@@ -149,13 +151,12 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 	}
 }
 
-func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus scheduler.JobRunStatusList) error {
+func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus scheduler.JobRunStatusList, runStatusSummary string) error {
 	replayState := scheduler.ReplayStateSuccess
-	msg := ""
 	if syncedRunStatus.IsAnyFailure() {
 		replayState = scheduler.ReplayStateFailed
-		msg = "replay is failed due to some of runs are in failed state"
 	}
+	msg := fmt.Sprintf("replay is finished with run status: %s", runStatusSummary)
 	w.logger.Info("[ReplayID: %s] replay finished with status %s", replayID, replayState)
 
 	if err := w.replayRepo.UpdateReplay(ctx, replayID, replayState, syncedRunStatus, msg); err != nil {
@@ -242,8 +243,8 @@ func (*ReplayWorker) syncStatus(existingJobRuns, incomingJobRuns []*scheduler.Jo
 	return updatedJobRuns
 }
 
-func (*ReplayWorker) generateRunStatusSummary(syncedRunStatus []*scheduler.JobRunStatus) string {
-	runStatusSummaryMap := scheduler.JobRunStatusList(syncedRunStatus).GetJobRunStatusSummaryMap()
+func (*ReplayWorker) generateRunStatusSummary(syncedRunStatus scheduler.JobRunStatusList) string {
+	runStatusSummaryMap := syncedRunStatus.GetJobRunStatusSummaryMap()
 	var statusSummary string
 	for state, countRun := range runStatusSummaryMap {
 		currentState := fmt.Sprintf("%s(%d)", state.String(), countRun)

@@ -242,7 +242,7 @@ func (*ReplayWorker) syncStatus(existingJobRuns, incomingJobRuns []*scheduler.Jo
 	return updatedJobRuns
 }
 
-func (w *ReplayWorker) generateRunStatusSummary(syncedRunStatus []*scheduler.JobRunStatus) string {
+func (*ReplayWorker) generateRunStatusSummary(syncedRunStatus []*scheduler.JobRunStatus) string {
 	runStatusSummaryMap := scheduler.JobRunStatusList(syncedRunStatus).GetJobRunStatusSummaryMap()
 	var statusSummary string
 	for state, countRun := range runStatusSummaryMap {

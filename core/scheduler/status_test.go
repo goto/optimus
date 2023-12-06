@@ -290,4 +290,120 @@ func TestStatus(t *testing.T) {
 		assert.Equal(t, scheduler.StateMissing, runs[1].State)
 		assert.Equal(t, scheduler.StateMissing, runs[2].State)
 	})
+
+	t.Run("GetJobRunStatusSummaryMap", func(t *testing.T) {
+		time1 := time.Date(2023, 0o1, 1, 0, 0, 0, 0, time.UTC)
+		time2 := time.Date(2023, 0o1, 2, 0, 0, 0, 0, time.UTC)
+		time3 := time.Date(2023, 0o1, 3, 0, 0, 0, 0, time.UTC)
+
+		jobRunStatusList := scheduler.JobRunStatusList([]*scheduler.JobRunStatus{
+			{
+				ScheduledAt: time1,
+				State:       scheduler.StatePending,
+			},
+			{
+				ScheduledAt: time2,
+				State:       scheduler.StateRunning,
+			},
+			{
+				ScheduledAt: time3,
+				State:       scheduler.StateRunning,
+			},
+		})
+
+		expectedRunStatusSummaryMap := map[scheduler.State]int{
+			scheduler.StatePending: 1,
+			scheduler.StateRunning: 2,
+		}
+
+		runStatusSummaryMap := jobRunStatusList.GetJobRunStatusSummaryMap()
+		assert.EqualValues(t, expectedRunStatusSummaryMap, runStatusSummaryMap)
+	})
+
+	t.Run("IsAllTerminated", func(t *testing.T) {
+		time1 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+		time2 := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
+		time3 := time.Date(2023, 1, 3, 0, 0, 0, 0, time.UTC)
+		t.Run("should return true if all status are in terminated state", func(t *testing.T) {
+			jobRunStatusList := scheduler.JobRunStatusList([]*scheduler.JobRunStatus{
+				{
+					ScheduledAt: time1,
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time2,
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time3,
+					State:       scheduler.StateFailed,
+				},
+			})
+
+			isAllTerminated := jobRunStatusList.IsAllTerminated()
+			assert.True(t, isAllTerminated)
+		})
+		t.Run("should return false if not all status are in terminated state", func(t *testing.T) {
+			jobRunStatusList := scheduler.JobRunStatusList([]*scheduler.JobRunStatus{
+				{
+					ScheduledAt: time1,
+					State:       scheduler.StatePending,
+				},
+				{
+					ScheduledAt: time2,
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time3,
+					State:       scheduler.StateFailed,
+				},
+			})
+
+			isAllTerminated := jobRunStatusList.IsAllTerminated()
+			assert.False(t, isAllTerminated)
+		})
+	})
+	t.Run("IsAnyFailure", func(t *testing.T) {
+		time1 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+		time2 := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
+		time3 := time.Date(2023, 1, 3, 0, 0, 0, 0, time.UTC)
+		t.Run("should return true if there is a failure", func(t *testing.T) {
+			jobRunStatusList := scheduler.JobRunStatusList([]*scheduler.JobRunStatus{
+				{
+					ScheduledAt: time1,
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time2,
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time3,
+					State:       scheduler.StateFailed,
+				},
+			})
+
+			isAnyFailure := jobRunStatusList.IsAnyFailure()
+			assert.True(t, isAnyFailure)
+		})
+		t.Run("should return false if there is no failure", func(t *testing.T) {
+			jobRunStatusList := scheduler.JobRunStatusList([]*scheduler.JobRunStatus{
+				{
+					ScheduledAt: time1,
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time2,
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time3,
+					State:       scheduler.StateSuccess,
+				},
+			})
+
+			isAnyFailure := jobRunStatusList.IsAnyFailure()
+			assert.False(t, isAnyFailure)
+		})
+	})
 }

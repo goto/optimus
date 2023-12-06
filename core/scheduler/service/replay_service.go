@@ -29,7 +29,6 @@ type ReplayRepository interface {
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
 
-	GetReplayToExecute(context.Context) (*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
@@ -39,12 +38,17 @@ type ReplayValidator interface {
 	Validate(ctx context.Context, replayRequest *scheduler.Replay, jobCron *cron.ScheduleSpec) error
 }
 
+type ReplayExecutor interface {
+	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+}
+
 type ReplayService struct {
 	replayRepo ReplayRepository
 	jobRepo    JobRepository
 	runGetter  SchedulerRunGetter
 
 	validator ReplayValidator
+	executor  ReplayExecutor
 
 	logger log.Logger
 }
@@ -74,6 +78,9 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		"job":       jobName.String(),
 		"status":    replayReq.State().String(),
 	}).Inc()
+
+	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
+
 	return replayID, nil
 }
 
@@ -114,8 +121,8 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 	return runs, nil
 }
 
-func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
-	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, runGetter: runGetter, logger: logger}
+func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
+	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, executor: worker, runGetter: runGetter, logger: logger}
 }
 
 func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt tenant.Tenant, jobName scheduler.JobName) (*cron.ScheduleSpec, error) {
@@ -141,4 +148,15 @@ func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt t
 		return nil, errors.InternalError(scheduler.EntityReplay, "unable to parse job cron interval", err)
 	}
 	return jobCron, nil
+}
+
+func getMissingRuns(expectedRuns, existingRuns []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {
+	var runsToBeCreated []*scheduler.JobRunStatus
+	existedRunsMap := scheduler.JobRunStatusList(existingRuns).ToRunStatusMap()
+	for _, run := range expectedRuns {
+		if _, ok := existedRunsMap[run.ScheduledAt]; !ok {
+			runsToBeCreated = append(runsToBeCreated, run)
+		}
+	}
+	return runsToBeCreated
 }

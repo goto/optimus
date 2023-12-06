@@ -303,13 +303,9 @@ func (s *OptimusServer) setupHandlers() error {
 	}
 
 	replayRepository := schedulerRepo.NewReplayRepository(s.dbPool)
-	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, newScheduler, jobProviderRepo, s.conf.Replay)
-	replayManager := schedulerService.NewReplayManager(s.logger, replayRepository, replayWorker, func() time.Time {
-		return time.Now().UTC()
-	}, s.conf.Replay)
-
+	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay)
 	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
-	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, newScheduler, s.logger)
+	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, replayWorker, newScheduler, s.logger)
 
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
@@ -360,7 +356,6 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterJobSpecificationServiceServer(s.grpcServer, jHandler.NewJobHandler(jJobService, s.logger))
 
 	pb.RegisterReplayServiceServer(s.grpcServer, schedulerHandler.NewReplayHandler(s.logger, replayService))
-	replayManager.Initialize()
 
 	s.cleanupFn = append(s.cleanupFn, func() {
 		err = notificationService.Close()

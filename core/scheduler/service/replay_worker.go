@@ -103,21 +103,21 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			return err
 		}
 		existingRuns := replayWithRun.Runs
-		syncedRunStatus := syncStatus(existingRuns, incomingRuns)
+		syncedRunStatus := w.syncStatus(existingRuns, incomingRuns)
 		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, syncedRunStatus, ""); err != nil {
 			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
-		w.logger.Info("[ReplayID: %s] synced %d replay runs with status: %s", replayID, len(syncedRunStatus), generateRunStatusSummary(syncedRunStatus))
+		w.logger.Info("[ReplayID: %s] synced %d replay runs with status: %s", replayID, len(syncedRunStatus), w.generateRunStatusSummary(syncedRunStatus))
 
 		// check if replay request is on termination state
-		if isAllRunStatusTerminated(syncedRunStatus) {
+		if syncedRunStatus.IsAllTerminated() {
 			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus)
 		}
 
 		// pick runs to be triggered
 		statesForReplay := []scheduler.State{scheduler.StatePending, scheduler.StateMissing}
-		toBeReplayedRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates(statesForReplay)
+		toBeReplayedRuns := syncedRunStatus.GetSortedRunsByStates(statesForReplay)
 		if len(toBeReplayedRuns) == 0 {
 			continue
 		}
@@ -130,7 +130,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			}
 			updatedRuns = scheduler.JobRunStatusList(toBeReplayedRuns).OverrideWithStatus(scheduler.StateInProgress)
 		} else { // sequential should work when there's no in_progress state on existing runs
-			inProgressRuns := scheduler.JobRunStatusList(syncedRunStatus).GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
+			inProgressRuns := syncedRunStatus.GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
 			if len(inProgressRuns) > 0 {
 				w.logger.Info("[ReplayID: %s] %d run is in progress, skip sequential iteration", replayWithRun.Replay.ID(), len(inProgressRuns))
 				continue
@@ -149,12 +149,12 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 	}
 }
 
-func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus []*scheduler.JobRunStatus) error {
+func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus scheduler.JobRunStatusList) error {
 	replayState := scheduler.ReplayStateSuccess
 	msg := ""
-	if isAnyFailure(syncedRunStatus) {
+	if syncedRunStatus.IsAnyFailure() {
 		replayState = scheduler.ReplayStateFailed
-		msg = "replay is failed due to some of runs are in failed state" // TODO: find out how to pass the meaningful failed message here
+		msg = "replay is failed due to some of runs are in failed state"
 	}
 	w.logger.Info("[ReplayID: %s] replay finished with status %s", replayID, replayState)
 
@@ -205,7 +205,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 // syncStatus syncs existing and incoming runs
 // replay status: created -> in_progress -> [success, failed]
 // replay runs: [missing, pending] -> in_progress -> [success, failed]
-func syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {
+func (*ReplayWorker) syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) scheduler.JobRunStatusList {
 	incomingRunStatusMap := scheduler.JobRunStatusList(incomingJobRuns).ToRunStatusMap()
 	existingRunStatusMap := scheduler.JobRunStatusList(existingJobRuns).ToRunStatusMap()
 
@@ -231,7 +231,7 @@ func syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) []*s
 		}
 	}
 
-	updatedJobRuns := []*scheduler.JobRunStatus{}
+	var updatedJobRuns []*scheduler.JobRunStatus
 	for scheduledAt, state := range updatedRunStatusMap {
 		updatedJobRuns = append(updatedJobRuns, &scheduler.JobRunStatus{
 			ScheduledAt: scheduledAt,
@@ -242,35 +242,7 @@ func syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) []*s
 	return updatedJobRuns
 }
 
-func isAllRunStatusTerminated(runs []*scheduler.JobRunStatus) bool {
-	for _, run := range runs {
-		if run.State == scheduler.StateSuccess || run.State == scheduler.StateFailed {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func isAnyFailure(runs []*scheduler.JobRunStatus) bool {
-	for _, run := range runs {
-		if run.State == scheduler.StateFailed {
-			return true
-		}
-	}
-	return false
-}
-
-func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state scheduler.ReplayState) {
-	telemetry.NewCounter(metricJobReplay, map[string]string{
-		"project":   t.ProjectName().String(),
-		"namespace": t.NamespaceName().String(),
-		"job":       jobName.String(),
-		"status":    state.String(),
-	}).Inc()
-}
-
-func generateRunStatusSummary(syncedRunStatus []*scheduler.JobRunStatus) string {
+func (w *ReplayWorker) generateRunStatusSummary(syncedRunStatus []*scheduler.JobRunStatus) string {
 	runStatusSummaryMap := scheduler.JobRunStatusList(syncedRunStatus).GetJobRunStatusSummaryMap()
 	var statusSummary string
 	for state, countRun := range runStatusSummaryMap {
@@ -282,4 +254,13 @@ func generateRunStatusSummary(syncedRunStatus []*scheduler.JobRunStatus) string 
 		}
 	}
 	return statusSummary
+}
+
+func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state scheduler.ReplayState) {
+	telemetry.NewCounter(metricJobReplay, map[string]string{
+		"project":   t.ProjectName().String(),
+		"namespace": t.NamespaceName().String(),
+		"job":       jobName.String(),
+		"status":    state.String(),
+	}).Inc()
 }

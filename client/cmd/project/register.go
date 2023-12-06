@@ -124,8 +124,9 @@ func toPresetProto(presetMap model.PresetsMap) map[string]*pb.ProjectSpecificati
 			Name:        name,
 			Description: p.Description,
 			TruncateTo:  p.Window.TruncateTo,
-			Offset:      p.Window.Offset,
+			Delay:       p.Window.Delay,
 			Size:        p.Window.Size,
+			Location:    p.Window.Location,
 		}
 	}
 	return presets

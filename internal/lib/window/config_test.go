@@ -23,7 +23,7 @@ func TestWindowConfig(t *testing.T) {
 			assert.Equal(t, "", config.GetSize())
 			assert.Equal(t, "", config.GetOffset())
 			assert.Equal(t, "", config.GetTruncateTo())
-			assert.Equal(t, 0, config.GetVersion())
+			assert.Equal(t, 3, config.GetVersion())
 			assert.Equal(t, "preset", string(config.Type()))
 		})
 	})
@@ -39,6 +39,17 @@ func TestWindowConfig(t *testing.T) {
 			assert.Equal(t, 2, config.GetVersion())
 			assert.Equal(t, "custom", string(config.Type()))
 		})
+		t.Run("creates a custom window config version 3", func(t *testing.T) {
+			config, err := window.NewConfig("1d", "1h", "", "")
+
+			assert.NoError(t, err)
+			assert.Equal(t, "", config.Preset)
+			assert.Equal(t, "1d", config.GetSize())
+			assert.Equal(t, "-1h", config.GetOffset())
+			assert.Equal(t, "", config.GetTruncateTo())
+			assert.Equal(t, 3, config.GetVersion())
+			assert.Equal(t, "custom", string(config.Type()))
+		})
 	})
 	t.Run("Incremental Window config", func(t *testing.T) {
 		t.Run("creates a incremental window config", func(t *testing.T) {
@@ -47,7 +58,7 @@ func TestWindowConfig(t *testing.T) {
 			assert.Equal(t, "", config.GetSize())
 			assert.Equal(t, "", config.GetOffset())
 			assert.Equal(t, "", config.GetTruncateTo())
-			assert.Equal(t, 0, config.GetVersion())
+			assert.Equal(t, 3, config.GetVersion())
 			assert.Equal(t, "incremental", string(config.Type()))
 		})
 	})

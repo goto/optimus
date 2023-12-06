@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -140,8 +141,8 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start.Format(time.RFC3339),
-				"DEND":            interval.End.Format(time.RFC3339),
+				"DSTART":          interval.Start().Format(time.RFC3339),
+				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 				"JOB_DESTINATION": job.Destination,
 			}
@@ -209,8 +210,8 @@ func TestExecutorCompiler(t *testing.T) {
 
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start.Format(time.RFC3339),
-				"DEND":            interval.End.Format(time.RFC3339),
+				"DSTART":          interval.Start().Format(time.RFC3339),
+				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 				"JOB_DESTINATION": job.Destination,
 			}
@@ -266,8 +267,8 @@ func TestExecutorCompiler(t *testing.T) {
 				assert.Nil(t, err)
 				expectedInputExecutor := &scheduler.ExecutorInput{
 					Configs: map[string]string{
-						"DSTART":               interval.Start.Format(time.RFC3339),
-						"DEND":                 interval.End.Format(time.RFC3339),
+						"DSTART":               interval.Start().Format(time.RFC3339),
+						"DEND":                 interval.End().Format(time.RFC3339),
 						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
 						"JOB_DESTINATION":      job.Destination,
 						"some.config.compiled": "val.compiled",
@@ -318,8 +319,8 @@ func TestExecutorCompiler(t *testing.T) {
 
 				expectedInputExecutor := &scheduler.ExecutorInput{
 					Configs: map[string]string{
-						"DSTART":               interval.Start.Format(time.RFC3339),
-						"DEND":                 interval.End.Format(time.RFC3339),
+						"DSTART":               interval.Start().Format(time.RFC3339),
+						"DEND":                 interval.End().Format(time.RFC3339),
 						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
 						"JOB_DESTINATION":      job.Destination,
 						"some.config.compiled": "val.compiled",
@@ -392,8 +393,8 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start.Format(time.RFC3339),
-				"DEND":            interval.End.Format(time.RFC3339),
+				"DSTART":          interval.Start().Format(time.RFC3339),
+				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 				"JOB_DESTINATION": job.Destination,
 			}
@@ -423,8 +424,8 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.Nil(t, err)
 			expectedInputExecutor := &scheduler.ExecutorInput{
 				Configs: map[string]string{
-					"DSTART":          interval.Start.Format(time.RFC3339),
-					"DEND":            interval.End.Format(time.RFC3339),
+					"DSTART":          interval.Start().Format(time.RFC3339),
+					"DEND":            interval.End().Format(time.RFC3339),
 					"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 					"JOB_DESTINATION": job.Destination,
 					"hook.compiled":   "hook.val.compiled",
@@ -491,8 +492,8 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start.Format(time.RFC3339),
-				"DEND":            interval.End.Format(time.RFC3339),
+				"DSTART":          interval.Start().Format(time.RFC3339),
+				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 				"JOB_DESTINATION": job.Destination,
 			}
@@ -563,8 +564,8 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start.Format(time.RFC3339),
-				"DEND":            interval.End.Format(time.RFC3339),
+				"DSTART":          interval.Start().Format(time.RFC3339),
+				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
 				"JOB_DESTINATION": job.Destination,
 			}
@@ -618,7 +619,7 @@ type mockAssetCompiler struct {
 	mock.Mock
 }
 
-func (m *mockAssetCompiler) CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval window.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
+func (m *mockAssetCompiler) CompileJobRunAssets(ctx context.Context, job *scheduler.Job, systemEnvVars map[string]string, interval interval.Interval, contextForTask map[string]interface{}) (map[string]string, error) {
 	args := m.Called(ctx, job, systemEnvVars, interval, contextForTask)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

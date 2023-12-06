@@ -9,6 +9,8 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+const NewWindowVersion = 3
+
 type JobSpec struct {
 	Version      int                 `yaml:"version,omitempty"`
 	Name         string              `yaml:"name"`
@@ -57,10 +59,13 @@ type JobSpecTask struct {
 }
 
 type JobSpecTaskWindow struct {
-	Size       string `yaml:"size,omitempty"`
+	Size string `yaml:"size,omitempty"`
+	// deprecated, replaced by Delay
 	Offset     string `yaml:"offset,omitempty"`
 	TruncateTo string `yaml:"truncate_to,omitempty"`
 	Preset     string `yaml:"preset,omitempty"`
+	Delay      string `yaml:"delay,omitempty"`
+	Location   string `yaml:"location,omitempty"`
 }
 
 type JobSpecHook struct {
@@ -102,29 +107,42 @@ type JobSpecMetadataAirflow struct {
 }
 
 func (j *JobSpec) ToProto() *pb.JobSpecification {
-	return &pb.JobSpecification{
-		Version:          int32(j.Version),
-		Name:             j.Name,
-		Owner:            j.Owner,
-		StartDate:        j.Schedule.StartDate,
-		EndDate:          j.Schedule.EndDate,
-		Interval:         j.Schedule.Interval,
-		DependsOnPast:    j.Behavior.DependsOnPast,
-		CatchUp:          j.Behavior.Catchup,
-		TaskName:         j.Task.Name,
-		Config:           j.getProtoJobConfigItems(),
-		WindowSize:       j.Task.Window.Size,
-		WindowOffset:     j.Task.Window.Offset,
-		WindowTruncateTo: j.Task.Window.TruncateTo,
-		WindowPreset:     j.Task.Window.Preset,
-		Dependencies:     j.getProtoJobDependencies(),
-		Assets:           j.Asset,
-		Hooks:            j.getProtoJobSpecHooks(),
-		Description:      j.Description,
-		Labels:           j.Labels,
-		Behavior:         j.getProtoJobSpecBehavior(),
-		Metadata:         j.getProtoJobMetadata(),
+	js := &pb.JobSpecification{
+		Version:       int32(j.Version),
+		Name:          j.Name,
+		Owner:         j.Owner,
+		StartDate:     j.Schedule.StartDate,
+		EndDate:       j.Schedule.EndDate,
+		Interval:      j.Schedule.Interval,
+		DependsOnPast: j.Behavior.DependsOnPast,
+		CatchUp:       j.Behavior.Catchup,
+		TaskName:      j.Task.Name,
+		Config:        j.getProtoJobConfigItems(),
+		Dependencies:  j.getProtoJobDependencies(),
+		Assets:        j.Asset,
+		Hooks:         j.getProtoJobSpecHooks(),
+		Description:   j.Description,
+		Labels:        j.Labels,
+		Behavior:      j.getProtoJobSpecBehavior(),
+		Metadata:      j.getProtoJobMetadata(),
 	}
+
+	if js.Version < NewWindowVersion {
+		js.WindowSize = j.Task.Window.Size
+		js.WindowOffset = j.Task.Window.Offset
+		js.WindowTruncateTo = j.Task.Window.TruncateTo
+		js.WindowPreset = j.Task.Window.Preset
+	} else {
+		js.Window = &pb.JobSpecification_Window{
+			Preset:     j.Task.Window.Preset,
+			Size:       j.Task.Window.Size,
+			Delay:      j.Task.Window.Delay,
+			Location:   j.Task.Window.Location,
+			TruncateTo: j.Task.Window.TruncateTo,
+		}
+	}
+
+	return js
 }
 
 func (j *JobSpec) getProtoJobMetadata() *pb.JobMetadata {
@@ -423,6 +441,24 @@ func getValue[V int | string | bool | time.Duration](reference, other V) V {
 }
 
 func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
+	var w JobSpecTaskWindow
+	if protoSpec.Version < NewWindowVersion {
+		w = JobSpecTaskWindow{
+			Size:       protoSpec.WindowSize,
+			Offset:     protoSpec.WindowOffset,
+			TruncateTo: protoSpec.WindowTruncateTo,
+			Preset:     protoSpec.WindowPreset,
+		}
+	} else {
+		wc := protoSpec.Window
+		w = JobSpecTaskWindow{
+			Size:       wc.Size,
+			Delay:      wc.Delay,
+			TruncateTo: wc.TruncateTo,
+			Location:   wc.Location,
+			Preset:     wc.Preset,
+		}
+	}
 	return &JobSpec{
 		Version:     int(protoSpec.Version),
 		Name:        protoSpec.Name,
@@ -437,12 +473,7 @@ func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 		Task: JobSpecTask{
 			Name:   protoSpec.TaskName,
 			Config: configProtoToMap(protoSpec.Config),
-			Window: JobSpecTaskWindow{
-				Size:       protoSpec.WindowSize,
-				Offset:     protoSpec.WindowOffset,
-				TruncateTo: protoSpec.WindowTruncateTo,
-				Preset:     protoSpec.WindowPreset,
-			},
+			Window: w,
 		},
 		Asset:        protoSpec.Assets,
 		Labels:       protoSpec.Labels,

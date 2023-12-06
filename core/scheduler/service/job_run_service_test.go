@@ -1356,7 +1356,7 @@ func TestJobRunService(t *testing.T) {
 		assert.NotNil(t, project)
 		assert.NoError(t, err)
 
-		preset, err := tenant.NewPreset("yesterday", "preset for test", "d", "-24h", "24h")
+		preset, err := tenant.NewPreset("yesterday", "preset for test", "1d", "1d", "", "")
 		assert.NotZero(t, preset)
 		assert.NoError(t, err)
 

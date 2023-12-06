@@ -131,6 +131,7 @@ linters-settings:
     disabled-checks:
       - ifElseChain
       - singleCaseSwitch
+      - hugeParam
     enabled-tags:
       - diagnostic
 #      - style

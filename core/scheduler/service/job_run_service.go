@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/telemetry"
@@ -178,71 +179,70 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	return result, nil
 }
 
-func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error) {
+func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error) {
 	project, err := s.projectGetter.Get(ctx, projectName)
 	if err != nil {
 		s.l.Error("error getting project [%s]: %s", projectName, err)
-		return window.Interval{}, err
+		return interval.Interval{}, err
 	}
 
 	job, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
 		s.l.Error("error getting job detail [%s] under project [%s]: %s", jobName, projectName, err)
-		return window.Interval{}, err
+		return interval.Interval{}, err
 	}
 
 	return s.getInterval(project, job, referenceTime)
 }
 
 // TODO: this method is only for backward compatibility, it will be deprecated soon
-func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobWithDetails, referenceTime time.Time) (window.Interval, error) {
+func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobWithDetails, referenceTime time.Time) (interval.Interval, error) {
 	if job.Job.WindowConfig.Type() == window.Incremental {
 		w, err := window.FromSchedule(job.Schedule.Interval)
 		if err != nil {
 			s.l.Error("error getting window with type incremental: %v", err)
-			return window.Interval{}, err
+			return interval.Interval{}, err
 		}
 
 		return w.GetInterval(referenceTime)
 	}
 
-	var baseWindow models.Window
 	if job.Job.WindowConfig.Type() == window.Preset {
 		preset, err := project.GetPreset(job.Job.WindowConfig.Preset)
 		if err != nil {
 			s.l.Error("error getting preset [%s] for project [%s]: %v", job.Job.WindowConfig.Preset, project.Name(), err)
-			return window.Interval{}, err
+			return interval.Interval{}, err
 		}
-		baseWindow = preset.Window()
-	} else {
-		baseWindow = job.Job.WindowConfig.Window
+		cw, err := window.FromCustomConfig(preset.Config())
+		if err != nil {
+			return interval.Interval{}, err
+		}
+		return cw.GetInterval(referenceTime)
 	}
 
+	baseWindow := job.Job.WindowConfig.Window
 	w, err := models.NewWindow(baseWindow.GetVersion(), "", "0", baseWindow.GetSize())
 	if err != nil {
 		s.l.Error("error initializing window: %v", err)
-		return window.Interval{}, err
+		return interval.Interval{}, err
 	}
 
 	if err := w.Validate(); err != nil {
 		s.l.Error("error validating window: %v", err)
-		return window.Interval{}, err
+		return interval.Interval{}, err
 	}
 
 	startTime, err := w.GetStartTime(referenceTime)
 	if err != nil {
-		return window.Interval{}, err
+		return interval.Interval{}, err
 	}
 
 	endTime, err := w.GetEndTime(referenceTime)
 	if err != nil {
-		return window.Interval{}, err
+		return interval.Interval{}, err
 	}
 
-	return window.Interval{
-		Start: startTime,
-		End:   endTime,
-	}, nil
+	return interval.NewInterval(startTime, endTime), nil
 }
 
 func getExpectedRuns(spec *cron.ScheduleSpec, startTime, endTime time.Time) []*scheduler.JobRunStatus {

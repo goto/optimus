@@ -122,8 +122,10 @@ type Job struct {
 }
 type Window struct {
 	WindowSize       string `json:",omitempty"`
-	WindowOffset     string `json:",omitempty"`
+	WindowDelay      string `json:",omitempty"`
 	WindowTruncateTo string `json:",omitempty"`
+	WindowLocation   string `json:",omitempty"`
+	WindowOffset     string `json:",omitempty"`
 	Preset           string `json:",omitempty"`
 	Type             string
 }
@@ -140,6 +142,16 @@ func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 
 	if storageWindow.Type == string(window.Incremental) {
 		return window.NewIncrementalConfig(), nil
+	}
+
+	if jobVersion == window.NewWindowVersion {
+		sc := window.SimpleConfig{
+			Size:       storageWindow.WindowSize,
+			Delay:      storageWindow.WindowDelay,
+			Location:   storageWindow.WindowLocation,
+			TruncateTo: storageWindow.WindowTruncateTo,
+		}
+		return window.NewCustomConfigWithTimezone(sc), nil
 	}
 
 	w, err := models.NewWindow(

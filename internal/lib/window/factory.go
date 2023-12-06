@@ -1,22 +1,34 @@
 package window
 
-import "github.com/goto/optimus/internal/models"
+import (
+	"time"
 
-type WithWindow interface {
-	Window() models.Window
+	"github.com/goto/optimus/internal/lib/interval"
+)
+
+type WithConfig interface {
+	Config() SimpleConfig
 }
 
-func From[T WithWindow](config Config, schedule string, getter func(string) (T, error)) (Window, error) {
+type Window interface {
+	GetInterval(referenceTime time.Time) (interval.Interval, error)
+}
+
+func From[T WithConfig](config Config, schedule string, getter func(string) (T, error)) (Window, error) {
 	if config.Type() == Incremental {
 		return FromSchedule(schedule)
 	}
 
 	if config.Type() == Preset {
-		baseWindow, err := getter(config.Preset)
+		preset, err := getter(config.Preset)
 		if err != nil {
-			return Window{}, err
+			return CustomWindow{}, err
 		}
-		return FromBaseWindow(baseWindow.Window()), nil
+		return FromCustomConfig(preset.Config())
+	}
+
+	if config.Window == nil {
+		return FromCustomConfig(config.GetSimpleConfig())
 	}
 
 	return FromBaseWindow(config.Window), nil

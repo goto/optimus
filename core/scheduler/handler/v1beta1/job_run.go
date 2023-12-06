@@ -10,7 +10,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib/window"
+	"github.com/goto/optimus/internal/lib/interval"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -19,7 +19,7 @@ type JobRunService interface {
 	UpdateJobState(context.Context, *scheduler.Event) error
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
-	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (window.Interval, error)
+	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
 }
 
 type Notifier interface {
@@ -212,8 +212,8 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}
 
 	return &pb.GetIntervalResponse{
-		StartTime: timestamppb.New(interval.Start),
-		EndTime:   timestamppb.New(interval.End),
+		StartTime: timestamppb.New(interval.Start()),
+		EndTime:   timestamppb.New(interval.End()),
 	}, nil
 }
 

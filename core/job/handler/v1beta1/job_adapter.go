@@ -15,31 +15,46 @@ import (
 )
 
 func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
-	return &pb.JobSpecification{
-		Version:          int32(jobEntity.Spec().Version()),
-		Name:             jobEntity.Spec().Name().String(),
-		Owner:            jobEntity.Spec().Owner(),
-		StartDate:        jobEntity.Spec().Schedule().StartDate().String(),
-		EndDate:          jobEntity.Spec().Schedule().EndDate().String(),
-		Interval:         jobEntity.Spec().Schedule().Interval(),
-		DependsOnPast:    jobEntity.Spec().Schedule().DependsOnPast(),
-		CatchUp:          jobEntity.Spec().Schedule().CatchUp(),
-		TaskName:         jobEntity.Spec().Task().Name().String(),
-		Config:           fromConfig(jobEntity.Spec().Task().Config()),
-		WindowPreset:     jobEntity.Spec().WindowConfig().Preset,
-		WindowSize:       jobEntity.Spec().WindowConfig().GetSize(),
-		WindowOffset:     jobEntity.Spec().WindowConfig().GetOffset(),
-		WindowTruncateTo: jobEntity.Spec().WindowConfig().GetTruncateTo(),
-		Dependencies:     fromSpecUpstreams(jobEntity.Spec().UpstreamSpec()),
-		Assets:           fromAsset(jobEntity.Spec().Asset()),
-		Hooks:            fromHooks(jobEntity.Spec().Hooks()),
-		Description:      jobEntity.Spec().Description(),
-		Labels:           jobEntity.Spec().Labels(),
-		Behavior:         fromRetryAndAlerts(jobEntity.Spec().Schedule().Retry(), jobEntity.Spec().AlertSpecs()),
-		Metadata:         fromMetadata(jobEntity.Spec().Metadata()),
-		Destination:      jobEntity.Destination().String(),
-		Sources:          fromResourceURNs(jobEntity.Sources()),
+	spec := jobEntity.Spec()
+
+	j := &pb.JobSpecification{
+		Version:       int32(spec.Version()),
+		Name:          spec.Name().String(),
+		Owner:         spec.Owner(),
+		StartDate:     spec.Schedule().StartDate().String(),
+		EndDate:       spec.Schedule().EndDate().String(),
+		Interval:      spec.Schedule().Interval(),
+		DependsOnPast: spec.Schedule().DependsOnPast(),
+		CatchUp:       jobEntity.Spec().Schedule().CatchUp(),
+		TaskName:      spec.Task().Name().String(),
+		Config:        fromConfig(spec.Task().Config()),
+		Dependencies:  fromSpecUpstreams(spec.UpstreamSpec()),
+		Assets:        fromAsset(spec.Asset()),
+		Hooks:         fromHooks(spec.Hooks()),
+		Description:   spec.Description(),
+		Labels:        spec.Labels(),
+		Behavior:      fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
+		Metadata:      fromMetadata(spec.Metadata()),
+		Destination:   jobEntity.Destination().String(),
+		Sources:       fromResourceURNs(jobEntity.Sources()),
 	}
+
+	if spec.Version() == window.NewWindowVersion {
+		j.Window = &pb.JobSpecification_Window{
+			Preset:     spec.WindowConfig().Preset,
+			Size:       spec.WindowConfig().GetSimpleConfig().Size,
+			Delay:      spec.WindowConfig().GetSimpleConfig().Delay,
+			Location:   spec.WindowConfig().GetSimpleConfig().Location,
+			TruncateTo: spec.WindowConfig().GetSimpleConfig().TruncateTo,
+		}
+	} else {
+		j.WindowPreset = spec.WindowConfig().Preset
+		j.WindowSize = spec.WindowConfig().GetSize()
+		j.WindowOffset = spec.WindowConfig().GetOffset()
+		j.WindowTruncateTo = spec.WindowConfig().GetTruncateTo()
+	}
+
+	return j
 }
 
 func fromJobProtos(protoJobSpecs []*pb.JobSpecification) ([]*job.Spec, []job.Name, error) {
@@ -195,11 +210,22 @@ func fromRetryAndAlerts(jobRetry *job.Retry, alerts []*job.AlertSpec) *pb.JobSpe
 }
 
 func toWindow(js *pb.JobSpecification) (window.Config, error) {
+	if js.Window != nil {
+		w := js.Window
+
+		if w.Preset != "" {
+			return window.NewPresetConfig(w.Preset)
+		}
+		if js.Version == window.NewWindowVersion {
+			return window.NewConfig(w.Size, w.Delay, w.Location, w.TruncateTo)
+		}
+	}
+
 	if js.WindowPreset != "" {
 		return window.NewPresetConfig(js.WindowPreset)
 	}
 
-	if js.WindowSize != "" {
+	if js.Version < window.NewWindowVersion {
 		w, err := models.NewWindow(int(js.Version), js.WindowTruncateTo, js.WindowOffset, js.WindowSize)
 		if err != nil {
 			return window.Config{}, err

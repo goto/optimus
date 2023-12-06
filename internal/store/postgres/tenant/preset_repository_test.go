@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/window"
 	postgres "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
 )
@@ -37,10 +38,14 @@ func TestPostgresPresetRepository(t *testing.T) {
 		return dbPool
 	}
 
-	preset1, err := tenant.NewPreset("yesterday_v1", "preset for testing v1", "d", "-1h", "24h")
-	assert.NoError(t, err)
-	preset2, err := tenant.NewPreset("yesterday_v2", "preset for testing v2", "d", "-1h", "24h")
-	assert.NoError(t, err)
+	conf1 := window.SimpleConfig{
+		Size:       "1d",
+		Delay:      "1h",
+		Location:   "",
+		TruncateTo: "",
+	}
+	preset1 := tenant.NewPresetWithConfig("yesterday_v1", "preset for testing v1", conf1)
+	preset2 := tenant.NewPresetWithConfig("yesterday_v2", "preset for testing v2", conf1)
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("should store presets with the given project name", func(t *testing.T) {
@@ -108,11 +113,7 @@ func TestPostgresPresetRepository(t *testing.T) {
 			assert.Nil(t, actualError)
 
 			updatedDescription := "updated description"
-			incomingPreset, err := tenant.NewPreset(
-				preset1.Name(), updatedDescription,
-				preset1.Window().GetTruncateTo(), preset1.Window().GetOffset(), preset1.Window().GetSize(),
-			)
-			assert.NoError(t, err)
+			incomingPreset := tenant.NewPresetWithConfig(preset1.Name(), updatedDescription, preset1.Config())
 
 			actualError = repo.Update(ctx, proj.Name(), incomingPreset)
 			assert.NoError(t, actualError)

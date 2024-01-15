@@ -20,6 +20,8 @@ var (
 	TelegrafHost string
 )
 
+const telegrafJob = "optimus_push"
+
 func getKey(metric string, labels map[string]string) string {
 	eventMetricKey := metric
 	keys := make([]string, 0, len(labels))
@@ -57,7 +59,7 @@ func SetGaugeViaPush(name string, labels map[string]string, val float64) error {
 	})
 	completionTime.Set(val)
 
-	return push.New(TelegrafHost, "db_backup").
+	return push.New(TelegrafHost, telegrafJob).
 		Format(expfmt.FmtText).
 		Collector(completionTime).
 		Push()

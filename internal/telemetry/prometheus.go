@@ -6,6 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/prometheus/common/expfmt"
 )
 
 var (
@@ -14,6 +16,8 @@ var (
 
 	gaugeMetricMap   = map[string]prometheus.Gauge{}
 	gaugeMetricMutex = sync.Mutex{}
+
+	TelegrafHost string
 )
 
 func getKey(metric string, labels map[string]string) string {
@@ -41,6 +45,22 @@ func NewCounter(metric string, labels map[string]string) prometheus.Counter {
 	newMetric := promauto.NewCounter(prometheus.CounterOpts{Name: metric, ConstLabels: labels})
 	counterMetricMap[metricKey] = newMetric
 	return newMetric
+}
+
+func SetGaugeViaPush(name string, labels map[string]string, val float64) error {
+	if TelegrafHost == "" {
+		return nil
+	}
+	completionTime := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name:        name,
+		ConstLabels: labels,
+	})
+	completionTime.Set(val)
+
+	return push.New(TelegrafHost, "db_backup").
+		Format(expfmt.FmtText).
+		Collector(completionTime).
+		Push()
 }
 
 func NewGauge(metric string, labels map[string]string) prometheus.Gauge {

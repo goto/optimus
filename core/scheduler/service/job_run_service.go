@@ -476,7 +476,9 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 		"status":    jobRun.State.String(),
 	}, 1)
 	if err != nil {
-		s.l.Error("failed metric push", err)
+		if !strings.Contains(err.Error(), "status code 204") {
+			s.l.Error("failed metric push", err)
+		}
 	}
 }
 

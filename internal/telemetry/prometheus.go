@@ -17,10 +17,10 @@ var (
 	gaugeMetricMap   = map[string]prometheus.Gauge{}
 	gaugeMetricMutex = sync.Mutex{}
 
-	TelegrafHost string
+	MetricServer string
 )
 
-const telegrafJob = "optimus_push"
+const metricsPushJob = "optimus_push"
 
 func getKey(metric string, labels map[string]string) string {
 	eventMetricKey := metric
@@ -50,7 +50,7 @@ func NewCounter(metric string, labels map[string]string) prometheus.Counter {
 }
 
 func SetGaugeViaPush(name string, labels map[string]string, val float64) error {
-	if TelegrafHost == "" {
+	if MetricServer == "" {
 		return nil
 	}
 	completionTime := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -59,7 +59,7 @@ func SetGaugeViaPush(name string, labels map[string]string, val float64) error {
 	})
 	completionTime.Set(val)
 
-	return push.New(TelegrafHost, telegrafJob).
+	return push.New(MetricServer, metricsPushJob).
 		Format(expfmt.FmtText).
 		Collector(completionTime).
 		Push()

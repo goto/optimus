@@ -25,9 +25,9 @@ type DBConfig struct {
 }
 
 type TelemetryConfig struct {
-	ProfileAddr  string `mapstructure:"profile_addr"`
-	JaegerAddr   string `mapstructure:"jaeger_addr"`
-	TelegrafAddr string `mapstructure:"telegraf_addr"`
+	ProfileAddr      string `mapstructure:"profile_addr"`
+	JaegerAddr       string `mapstructure:"jaeger_addr"`
+	MetricServerAddr string `mapstructure:"telegraf_addr"`
 }
 
 type ResourceManager struct {

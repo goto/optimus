@@ -53,15 +53,15 @@ func SetGaugeViaPush(name string, labels map[string]string, val float64) error {
 	if MetricServer == "" {
 		return nil
 	}
-	completionTime := prometheus.NewGauge(prometheus.GaugeOpts{
+	metric := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name:        name,
 		ConstLabels: labels,
 	})
-	completionTime.Set(val)
+	metric.Set(val)
 
 	return push.New(MetricServer, metricsPushJob).
 		Format(expfmt.FmtText).
-		Collector(completionTime).
+		Collector(metric).
 		Push()
 }
 

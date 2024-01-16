@@ -6,6 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/prometheus/common/expfmt"
 )
 
 var (
@@ -14,7 +16,11 @@ var (
 
 	gaugeMetricMap   = map[string]prometheus.Gauge{}
 	gaugeMetricMutex = sync.Mutex{}
+
+	MetricServer string
 )
+
+const metricsPushJob = "optimus_push"
 
 func getKey(metric string, labels map[string]string) string {
 	eventMetricKey := metric
@@ -41,6 +47,22 @@ func NewCounter(metric string, labels map[string]string) prometheus.Counter {
 	newMetric := promauto.NewCounter(prometheus.CounterOpts{Name: metric, ConstLabels: labels})
 	counterMetricMap[metricKey] = newMetric
 	return newMetric
+}
+
+func SetGaugeViaPush(name string, labels map[string]string, val float64) error {
+	if MetricServer == "" {
+		return nil
+	}
+	metric := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name:        name,
+		ConstLabels: labels,
+	})
+	metric.Set(val)
+
+	return push.New(MetricServer, metricsPushJob).
+		Format(expfmt.FmtText).
+		Collector(metric).
+		Push()
 }
 
 func NewGauge(metric string, labels map[string]string) prometheus.Gauge {

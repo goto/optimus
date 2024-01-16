@@ -423,12 +423,15 @@ func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Ev
 		s.l.Error("error updating job run sla status", err)
 		return err
 	}
-	telemetry.NewCounter(metricJobRunEvents, map[string]string{
+	err = telemetry.SetGaugeViaPush(metricJobRunEvents, map[string]string{
 		"project":   event.Tenant.ProjectName().String(),
 		"namespace": event.Tenant.NamespaceName().String(),
 		"name":      event.JobName.String(),
 		"status":    scheduler.SLAMissEvent.String(),
-	}).Inc()
+	}, 1)
+	if err != nil {
+		s.l.Error("failed metric push", err)
+	}
 	return nil
 }
 
@@ -466,12 +469,15 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 		return
 	}
 	s.eventHandler.HandleEvent(schedulerEvent)
-	telemetry.NewCounter(metricJobRunEvents, map[string]string{
+	err = telemetry.SetGaugeViaPush(metricJobRunEvents, map[string]string{
 		"project":   jobRun.Tenant.ProjectName().String(),
 		"namespace": jobRun.Tenant.NamespaceName().String(),
 		"name":      jobRun.JobName.String(),
 		"status":    jobRun.State.String(),
-	}).Inc()
+	}, 1)
+	if err != nil {
+		s.l.Error("failed metric push", err)
+	}
 }
 
 func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {

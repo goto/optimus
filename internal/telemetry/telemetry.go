@@ -47,6 +47,8 @@ func Init(l log.Logger, conf config.TelemetryConfig) (func(), error) {
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	}
 
+	MetricServer = conf.MetricServerAddr
+
 	var metricServer *http.Server
 	if conf.ProfileAddr != "" {
 		l.Debug("enabling profile metrics", "addr", conf.ProfileAddr)

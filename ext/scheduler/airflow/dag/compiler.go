@@ -19,6 +19,7 @@ type PluginRepo interface {
 
 type Compiler struct {
 	hostname   string
+	grpcHost   string
 	log        log.Logger
 	templates  templates
 	pluginRepo PluginRepo
@@ -50,6 +51,7 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 		Version:         config.BuildVersion,
 		SLAMissDuration: slaDuration,
 		Hostname:        c.hostname,
+		GRPCHostName:    c.grpcHost,
 		ExecutorTask:    scheduler.ExecutorTask.String(),
 		ExecutorHook:    scheduler.ExecutorHook.String(),
 		Task:            task,
@@ -75,7 +77,7 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 	return buf.Bytes(), nil
 }
 
-func NewDagCompiler(l log.Logger, hostname string, repo PluginRepo) (*Compiler, error) {
+func NewDagCompiler(l log.Logger, hostname string, grpcHost string, repo PluginRepo) (*Compiler, error) {
 	templates, err := NewTemplates()
 	if err != nil {
 		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate templates", err)
@@ -84,6 +86,7 @@ func NewDagCompiler(l log.Logger, hostname string, repo PluginRepo) (*Compiler, 
 	return &Compiler{
 		log:        l,
 		hostname:   hostname,
+		grpcHost:   grpcHost,
 		templates:  templates,
 		pluginRepo: repo,
 	}, nil

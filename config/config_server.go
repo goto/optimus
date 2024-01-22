@@ -12,10 +12,12 @@ type ServerConfig struct {
 }
 
 type Serve struct {
-	Port        int      `mapstructure:"port" default:"9100"` // port to listen on
-	IngressHost string   `mapstructure:"ingress_host"`        // service ingress host for jobs to communicate back to optimus
-	AppKey      string   `mapstructure:"app_key"`             // random 32 character hash used for encrypting secrets
-	DB          DBConfig `mapstructure:"db"`
+	Port            int      `mapstructure:"port" default:"9100"` // port to listen on
+	IngressHost     string   `mapstructure:"ingress_host"`        // service ingress host for jobs to communicate back to optimus
+	PortGRPC        int      `mapstructure:"port_grpc"`
+	IngressHostGRPC string   `mapstructure:"ingress_host_grpc"`
+	AppKey          string   `mapstructure:"app_key"` // random 32 character hash used for encrypting secrets
+	DB              DBConfig `mapstructure:"db"`
 }
 
 type DBConfig struct {

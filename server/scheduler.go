@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/config"
@@ -14,7 +16,9 @@ func NewScheduler(l log.Logger, conf *config.ServerConfig, pluginRepo dag.Plugin
 ) (*airflow.Scheduler, error) {
 	bucketFactory := bucket.NewFactory(projecGetter, secretGetter)
 
-	dagCompiler, err := dag.NewDagCompiler(l, conf.Serve.IngressHost, pluginRepo)
+	grpcHost := fmt.Sprintf("%s:%d", conf.Serve.IngressHostGRPC, conf.Serve.PortGRPC)
+
+	dagCompiler, err := dag.NewDagCompiler(l, conf.Serve.IngressHost, grpcHost, pluginRepo)
 	if err != nil {
 		return nil, err
 	}

@@ -106,7 +106,7 @@ executor_env_vars = [
 init_env_vars = [
     k8s.V1EnvVar(name="JOB_DIR", value=JOB_DIR),
     k8s.V1EnvVar(name="JOB_NAME", value='infra.billing.weekly-status-reports'),
-    k8s.V1EnvVar(name="OPTIMUS_HOST", value='http://optimus.example.com'),
+    k8s.V1EnvVar(name="OPTIMUS_HOST", value='http://grpc.optimus.example.com:8081'),
     k8s.V1EnvVar(name="PROJECT", value='example-proj'),
 ]
 

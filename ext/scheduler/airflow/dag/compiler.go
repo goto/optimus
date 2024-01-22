@@ -77,7 +77,7 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 	return buf.Bytes(), nil
 }
 
-func NewDagCompiler(l log.Logger, hostname string, grpcHost string, repo PluginRepo) (*Compiler, error) {
+func NewDagCompiler(l log.Logger, hostname, grpcHost string, repo PluginRepo) (*Compiler, error) {
 	templates, err := NewTemplates()
 	if err != nil {
 		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate templates", err)

@@ -9,7 +9,7 @@ log:
   # debug, info, warning, error, fatal - default 'info'
   level: info
 
-# used to connect optimus service
+# used to connect optimus service, use ingress_host_grpc
 host: localhost:9100
 
 # for configuring optimus project

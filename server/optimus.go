@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 
@@ -60,7 +61,8 @@ type OptimusServer struct {
 	dbPool *pgxpool.Pool
 	key    *[keyLength]byte
 
-	serverAddr string
+	grpcAddr   string
+	httpAddr   string
 	grpcServer *grpc.Server
 	httpServer *http.Server
 
@@ -71,11 +73,13 @@ type OptimusServer struct {
 }
 
 func New(conf *config.ServerConfig) (*OptimusServer, error) {
-	addr := fmt.Sprintf(":%d", conf.Serve.Port)
+	addr := fmt.Sprintf(":%d", conf.Serve.PortGRPC)
+	httpAddr := fmt.Sprintf(":%d", conf.Serve.Port)
 	server := &OptimusServer{
-		conf:       conf,
-		serverAddr: addr,
-		logger:     NewLogger(conf.Log.Level.String()),
+		conf:     conf,
+		grpcAddr: addr,
+		httpAddr: httpAddr,
+		logger:   NewLogger(conf.Log.Level.String()),
 	}
 
 	if err := checkRequiredConfigs(conf.Serve); err != nil {
@@ -209,7 +213,7 @@ func (s *OptimusServer) setupMonitoring() error {
 }
 
 func (s *OptimusServer) setupHTTPProxy() error {
-	srv, cleanup, err := prepareHTTPProxy(s.serverAddr, s.grpcServer)
+	srv, cleanup, err := prepareHTTPProxy(s.httpAddr, s.grpcAddr)
 	s.httpServer = srv
 	s.cleanupFn = append(s.cleanupFn, cleanup)
 	return err
@@ -218,9 +222,20 @@ func (s *OptimusServer) setupHTTPProxy() error {
 func (s *OptimusServer) startListening() {
 	// run our server in a goroutine so that it doesn't block to wait for termination requests
 	go func() {
-		s.logger.Info("Listening at", "address", s.serverAddr)
+		s.logger.Info("Listening for GRPC at", "address", s.grpcAddr)
+		lis, err := net.Listen("tcp", s.grpcAddr)
+		if err != nil {
+			s.logger.Fatal("failed to listen: %v", err)
+		}
+
+		if err = s.grpcServer.Serve(lis); err != nil {
+			s.logger.Fatal("failed to serve: %v", err)
+		}
+	}()
+	go func() {
+		s.logger.Info("Listening at", "address", s.httpAddr)
 		if err := s.httpServer.ListenAndServe(); err != nil {
-			if err != http.ErrServerClosed {
+			if !errors.Is(err, http.ErrServerClosed) {
 				s.logger.Fatal("server error", "error", err)
 			}
 		}

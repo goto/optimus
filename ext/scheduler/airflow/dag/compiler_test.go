@@ -29,13 +29,14 @@ var compiledTemplate26 []byte
 
 func TestDagCompiler(t *testing.T) {
 	t.Run("Compile", func(t *testing.T) {
+		grpcHost := "http://grpc.optimus.example.com:8081"
 		repo := setupPluginRepo()
 		tnnt, err := tenant.NewTenant("example-proj", "billing")
 		assert.NoError(t, err)
 
 		t.Run("returns error when cannot find task", func(t *testing.T) {
 			emptyRepo := mockPluginRepo{plugins: []*plugin.Plugin{}}
-			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", emptyRepo)
+			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, emptyRepo)
 			assert.NoError(t, err)
 
 			job := setupJobDetails(tnnt)
@@ -45,7 +46,7 @@ func TestDagCompiler(t *testing.T) {
 			assert.ErrorContains(t, err, "plugin not found for bq-bq")
 		})
 		t.Run("returns error when cannot find hook", func(t *testing.T) {
-			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
+			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, repo)
 			assert.NoError(t, err)
 
 			job := setupJobDetails(tnnt)
@@ -57,7 +58,7 @@ func TestDagCompiler(t *testing.T) {
 		})
 
 		t.Run("returns error when sla duration is invalid", func(t *testing.T) {
-			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
+			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, repo)
 			assert.NoError(t, err)
 
 			job := setupJobDetails(tnnt)
@@ -75,7 +76,7 @@ func TestDagCompiler(t *testing.T) {
 
 		t.Run("compiles basic template without any error", func(t *testing.T) {
 			t.Run("with airflow version 2.1.4", func(t *testing.T) {
-				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
+				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, repo)
 				assert.NoError(t, err)
 
 				job := setupJobDetails(tnnt)
@@ -85,7 +86,7 @@ func TestDagCompiler(t *testing.T) {
 				assert.Equal(t, string(compiledTemplate21), string(compiledDag))
 			})
 			t.Run("with airflow version 2.4.3", func(t *testing.T) {
-				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
+				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, repo)
 				assert.NoError(t, err)
 
 				job := setupJobDetails(tnnt)
@@ -95,7 +96,7 @@ func TestDagCompiler(t *testing.T) {
 				assert.Equal(t, string(compiledTemplate24), string(compiledDag))
 			})
 			t.Run("with airflow version 2.6.3", func(t *testing.T) {
-				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", repo)
+				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, repo)
 				assert.NoError(t, err)
 
 				job := setupJobDetails(tnnt)

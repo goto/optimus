@@ -97,6 +97,11 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		}
 		replayWithRun := storedReplayWithRun
 
+		if storedReplayWithRun.Replay.IsTerminated() {
+			w.logger.Info("replay [%s] is externally terminated with status [%s]", replayWithRun.Replay.ID().String(), storedReplayWithRun.Replay.State().String())
+			return nil
+		}
+
 		incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
 		if err != nil {
 			w.logger.Error("unable to get incoming runs for replay [%s]: %s", replayWithRun.Replay.ID().String(), err)

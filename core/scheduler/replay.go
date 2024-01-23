@@ -18,9 +18,10 @@ const (
 	ReplayStateInProgress ReplayState = "in progress"
 
 	// terminal state
-	ReplayStateInvalid ReplayState = "invalid"
-	ReplayStateSuccess ReplayState = "success"
-	ReplayStateFailed  ReplayState = "failed"
+	ReplayStateInvalid   ReplayState = "invalid"
+	ReplayStateSuccess   ReplayState = "success"
+	ReplayStateFailed    ReplayState = "failed"
+	ReplayStateCancelled ReplayState = "cancelled"
 
 	// state on presentation layer
 	ReplayUserStateCreated    ReplayUserState = "created"
@@ -28,6 +29,7 @@ const (
 	ReplayUserStateInvalid    ReplayUserState = "invalid"
 	ReplayUserStateSuccess    ReplayUserState = "success"
 	ReplayUserStateFailed     ReplayUserState = "failed"
+	ReplayUserStateCancelled  ReplayUserState = "cancelled"
 
 	EntityReplay = "replay"
 )
@@ -49,6 +51,8 @@ func ReplayStateFromString(state string) (ReplayState, error) {
 		return ReplayStateSuccess, nil
 	case string(ReplayStateFailed):
 		return ReplayStateFailed, nil
+	case string(ReplayStateCancelled):
+		return ReplayStateCancelled, nil
 	default:
 		return "", errors.InvalidArgument(EntityJobRun, "invalid state for replay "+state)
 	}
@@ -107,6 +111,8 @@ func (r *Replay) UserState() ReplayUserState {
 		return ReplayUserStateSuccess
 	case ReplayStateFailed:
 		return ReplayUserStateFailed
+	case ReplayStateCancelled:
+		return ReplayUserStateCancelled
 	default:
 		return ""
 	}
@@ -118,6 +124,14 @@ func (r *Replay) Message() string {
 
 func (r *Replay) CreatedAt() time.Time {
 	return r.createdAt
+}
+
+func (r *Replay) IsTerminated() bool {
+	switch r.state {
+	case ReplayStateInvalid, ReplayStateCancelled, ReplayStateFailed, ReplayStateSuccess:
+		return true
+	}
+	return false
 }
 
 func NewReplayRequest(jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState) *Replay {

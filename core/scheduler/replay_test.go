@@ -125,4 +125,39 @@ func TestReplay(t *testing.T) {
 		assert.EqualError(t, err, "invalid argument for entity jobRun: invalid state for replay unregisteredState")
 		assert.Equal(t, scheduler.ReplayState(""), respState)
 	})
+
+	t.Run("Replay", func(t *testing.T) {
+		t.Run("IsTerminated", func(t *testing.T) {
+			t.Run("should return true if it is in termination state", func(t *testing.T) {
+				createdTime := time.Now()
+
+				replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCancelled, createdTime)
+				result := replay.IsTerminated()
+				assert.True(t, result)
+
+				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateFailed, createdTime)
+				result = replay.IsTerminated()
+				assert.True(t, result)
+
+				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateInvalid, createdTime)
+				result = replay.IsTerminated()
+				assert.True(t, result)
+
+				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateSuccess, createdTime)
+				result = replay.IsTerminated()
+				assert.True(t, result)
+			})
+			t.Run("should return false if replay is not in termination state", func(t *testing.T) {
+				createdTime := time.Now()
+
+				replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, createdTime)
+				result := replay.IsTerminated()
+				assert.False(t, result)
+
+				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateInProgress, createdTime)
+				result = replay.IsTerminated()
+				assert.False(t, result)
+			})
+		})
+	})
 }

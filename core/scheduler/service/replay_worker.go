@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	prefixReplayed = "replayed"
+	prefixReplayed       = "replayed"
+	replayCleanupTimeout = time.Minute
 )
 
 type ReplayWorker struct {
@@ -63,8 +64,11 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 	}
 
 	if err := w.startExecutionLoop(ctx, replayID, jobCron); err != nil {
+		cleanupCtx, cleanupCancelFn := context.WithTimeout(context.Background(), replayCleanupTimeout)
+		defer cleanupCancelFn()
+
 		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayID.String(), jobName.String(), err)
-		if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
+		if err := w.replayRepo.UpdateReplayStatus(cleanupCtx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayID, err.Error())
 		}
 		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)

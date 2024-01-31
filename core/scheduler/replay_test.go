@@ -108,8 +108,6 @@ func TestReplay(t *testing.T) {
 			"CREATED":     scheduler.ReplayStateCreated,
 			"in progress": scheduler.ReplayStateInProgress,
 			"IN PROGRESS": scheduler.ReplayStateInProgress,
-			"invalid":     scheduler.ReplayStateInvalid,
-			"INVALID":     scheduler.ReplayStateInvalid,
 			"success":     scheduler.ReplayStateSuccess,
 			"SUCCESS":     scheduler.ReplayStateSuccess,
 			"failed":      scheduler.ReplayStateFailed,
@@ -137,10 +135,6 @@ func TestReplay(t *testing.T) {
 				assert.True(t, result)
 
 				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateFailed, createdTime, message)
-				result = replay.IsTerminated()
-				assert.True(t, result)
-
-				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateInvalid, createdTime, message)
 				result = replay.IsTerminated()
 				assert.True(t, result)
 

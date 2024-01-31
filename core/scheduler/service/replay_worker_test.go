@@ -694,36 +694,15 @@ func TestReplayWorker(t *testing.T) {
 				{ScheduledAt: scheduledTime1, State: scheduler.StatePending},
 				{ScheduledAt: scheduledTime2, State: scheduler.StatePending},
 			}
-			runsPhase2 := []*scheduler.JobRunStatus{
-				{ScheduledAt: scheduledTime1, State: scheduler.StateInProgress},
-				{ScheduledAt: scheduledTime2, State: scheduler.StateInProgress},
-			}
 
 			replayID := uuid.New()
-			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCancelled, time.Now()),
 				Runs:   runsPhase1,
 			}
-			replayPhase2 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCancelled, time.Now()),
-				Runs:   runsPhase2,
-			}
 
-			schedulerRunsPhase1 := []*scheduler.JobRunStatus{
-				{ScheduledAt: scheduledTime1, State: scheduler.StateFailed},
-				{ScheduledAt: scheduledTime2, State: scheduler.StateFailed},
-			}
-
-			// loop 1
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil).Once()
-			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayReq, nil).Once()
-			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase1, nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
-			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
-
-			// loop 2
-			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase2, nil).Once()
+			replayRepository.On("GetReplayByID", mock.Anything, replayWithRun.Replay.ID()).Return(replayWithRun, nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)

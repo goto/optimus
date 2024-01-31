@@ -34,7 +34,10 @@ const (
 	EntityReplay = "replay"
 )
 
-var ReplayTerminalStates = []ReplayState{ReplayStateInvalid, ReplayStateSuccess, ReplayStateFailed, ReplayStateCancelled}
+var (
+	ReplayTerminalStates    = []ReplayState{ReplayStateInvalid, ReplayStateSuccess, ReplayStateFailed, ReplayStateCancelled}
+	ReplayNonTerminalStates = []ReplayState{ReplayStateCreated, ReplayStateInProgress}
+)
 
 type (
 	ReplayState     string // contract status for business layer

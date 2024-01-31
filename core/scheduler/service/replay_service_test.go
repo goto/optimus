@@ -48,6 +48,7 @@ func TestReplayService(t *testing.T) {
 	}
 	jobCronStr := "0 12 * * *"
 	jobCron, _ := cron.ParseCronSchedule(jobCronStr)
+	message := "sample message"
 
 	logger := log.NewLogrus()
 
@@ -209,7 +210,7 @@ func TestReplayService(t *testing.T) {
 			defer replayRepository.AssertExpectations(t)
 
 			replayID := uuid.New()
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
 			replayRepository.On("GetReplayByID", ctx, replayID).Return(&scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -233,7 +234,7 @@ func TestReplayService(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateSuccess, startTime)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateSuccess, startTime, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -252,7 +253,7 @@ func TestReplayService(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -274,7 +275,7 @@ func TestReplayService(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{

@@ -313,6 +313,9 @@
           "items": {
             "$ref": "#/definitions/v1beta1ReplayRun"
           }
+        },
+        "message": {
+          "type": "string"
         }
       }
     },

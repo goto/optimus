@@ -144,8 +144,8 @@ func NewReplayRequest(jobName JobName, tenant tenant.Tenant, config *ReplayConfi
 	return &Replay{jobName: jobName, tenant: tenant, config: config, state: state}
 }
 
-func NewReplay(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState, createdAt time.Time) *Replay {
-	return &Replay{id: id, jobName: jobName, tenant: tenant, config: config, state: state, createdAt: createdAt}
+func NewReplay(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState, createdAt time.Time, message string) *Replay {
+	return &Replay{id: id, jobName: jobName, tenant: tenant, config: config, state: state, createdAt: createdAt, message: message}
 }
 
 type ReplayWithRun struct {

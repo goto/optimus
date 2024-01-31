@@ -67,8 +67,13 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 		cleanupCtx, cleanupCancelFn := context.WithTimeout(context.Background(), replayCleanupTimeout)
 		defer cleanupCancelFn()
 
-		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayID.String(), jobName.String(), err)
-		if err := w.replayRepo.UpdateReplayStatus(cleanupCtx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
+		errMessage := err.Error()
+		if errors.Is(err, context.DeadlineExceeded) {
+			errMessage = "replay execution timed out"
+		}
+		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayID.String(), jobName.String(), errMessage)
+
+		if err := w.replayRepo.UpdateReplayStatus(cleanupCtx, replayID, scheduler.ReplayStateFailed, errMessage); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayID, err.Error())
 		}
 		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)

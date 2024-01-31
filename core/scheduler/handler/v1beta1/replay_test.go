@@ -32,6 +32,7 @@ func TestReplayHandler(t *testing.T) {
 	jobConfig := map[string]string{"EXECUTION_PROJECT": "example_project", "ANOTHER_CONFIG": "example_value"}
 	description := "sample backfill"
 	replayID := uuid.New()
+	message := "sample-message"
 
 	t.Run("ReplayDryRun", func(t *testing.T) {
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
@@ -454,7 +455,7 @@ func TestReplayHandler(t *testing.T) {
 			startTime, _ := time.Parse(scheduler.ISODateFormat, startTimeStr)
 			endTime := startTime.Add(48 * time.Hour)
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
-			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime)
+			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
 			service.On("GetReplayByID", ctx, replayID).Return(&scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -533,7 +534,7 @@ func TestReplayHandler(t *testing.T) {
 			startTime, _ := time.Parse(scheduler.ISODateFormat, startTimeStr)
 			endTime := startTime.Add(48 * time.Hour)
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
-			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime)
+			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{

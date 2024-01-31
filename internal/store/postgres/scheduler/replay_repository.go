@@ -61,7 +61,7 @@ func (r *replayRequest) toSchedulerReplayRequest() (*scheduler.Replay, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scheduler.NewReplay(r.ID, jobName, tnnt, conf, replayStatus, r.CreatedAt), nil
+	return scheduler.NewReplay(r.ID, jobName, tnnt, conf, replayStatus, r.CreatedAt, r.Message), nil
 }
 
 type replayRun struct {
@@ -187,7 +187,7 @@ func (r ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUID)
 		Parallel:    rr.Parallel,
 		Description: rr.Description,
 	}
-	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt)
+	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.Message)
 	replayRuns := make([]*scheduler.JobRunStatus, len(runs))
 	for i := range runs {
 		replayRun := &scheduler.JobRunStatus{

@@ -34,6 +34,8 @@ const (
 	EntityReplay = "replay"
 )
 
+var ReplayTerminalStates = []ReplayState{ReplayStateInvalid, ReplayStateSuccess, ReplayStateFailed, ReplayStateCancelled}
+
 type (
 	ReplayState     string // contract status for business layer
 	ReplayUserState string // contract status for presentation layer
@@ -127,9 +129,10 @@ func (r *Replay) CreatedAt() time.Time {
 }
 
 func (r *Replay) IsTerminated() bool {
-	switch r.state {
-	case ReplayStateInvalid, ReplayStateCancelled, ReplayStateFailed, ReplayStateSuccess:
-		return true
+	for _, terminalState := range ReplayTerminalStates {
+		if r.State() == terminalState {
+			return true
+		}
 	}
 	return false
 }

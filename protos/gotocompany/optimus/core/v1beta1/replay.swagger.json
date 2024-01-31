@@ -210,6 +210,42 @@
           "ReplayService"
         ]
       }
+    },
+    "/v1beta1/project/{projectName}/replay/{replayId}/cancel": {
+      "put": {
+        "operationId": "ReplayService_CancelReplay",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1CancelReplayResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "replayId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ReplayService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -239,6 +275,20 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1beta1CancelReplayResponse": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "replayRuns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1ReplayRun"
           }
         }
       }

@@ -11,10 +11,6 @@ import (
 	"github.com/goto/optimus/internal/lib/cron"
 )
 
-var replayStatusToValidate = []scheduler.ReplayState{
-	scheduler.ReplayStateCreated, scheduler.ReplayStateInProgress,
-}
-
 type Validator struct {
 	replayRepository ReplayRepository
 	scheduler        ReplayScheduler
@@ -63,7 +59,7 @@ func (v Validator) validateDateRange(ctx context.Context, replayRequest *schedul
 }
 
 func (v Validator) validateConflictedReplay(ctx context.Context, replayRequest *scheduler.Replay) error {
-	onGoingReplays, err := v.replayRepository.GetReplayRequestsByStatus(ctx, replayStatusToValidate)
+	onGoingReplays, err := v.replayRepository.GetReplayRequestsByStatus(ctx, scheduler.ReplayTerminalStates)
 	if err != nil {
 		return err
 	}

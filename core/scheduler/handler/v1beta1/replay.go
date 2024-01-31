@@ -19,6 +19,7 @@ type ReplayService interface {
 	GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (replay *scheduler.ReplayWithRun, err error)
 	GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (runs []*scheduler.JobRunStatus, err error)
+	CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error
 }
 
 type replayRequest interface {
@@ -116,6 +117,32 @@ func (h ReplayHandler) GetReplay(ctx context.Context, req *pb.GetReplayRequest) 
 	replayProto.ReplayRuns = replayRunsToProto(replay.Runs)
 
 	return replayProto, nil
+}
+
+func (h ReplayHandler) CancelReplay(ctx context.Context, req *pb.CancelReplayRequest) (*pb.CancelReplayResponse, error) {
+	id, err := uuid.Parse(req.GetReplayId())
+	if err != nil {
+		h.l.Error("error parsing replay id [%s]: %s", req.GetReplayId(), err)
+		err = errors.InvalidArgument(scheduler.EntityReplay, err.Error())
+		return nil, errors.GRPCErr(err, "unable to cancel replay "+req.GetReplayId())
+	}
+
+	replay, err := h.service.GetReplayByID(ctx, id)
+	if err != nil {
+		h.l.Error("error getting replay with id [%s]: %s", id.String(), err)
+		return nil, errors.GRPCErr(err, "unable to cancel replay "+req.GetReplayId())
+	}
+
+	err = h.service.CancelReplay(ctx, replay)
+	if err != nil {
+		h.l.Error("error cancelling replay [%s]: %s", id.String(), err)
+		return nil, errors.GRPCErr(err, "unable to cancel replay "+req.GetReplayId())
+	}
+
+	return &pb.CancelReplayResponse{
+		JobName:    replay.Replay.JobName().String(),
+		ReplayRuns: replayRunsToProto(replay.Runs),
+	}, nil
 }
 
 func replayRunsToProto(runs []*scheduler.JobRunStatus) []*pb.ReplayRun {

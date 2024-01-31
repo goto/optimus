@@ -114,7 +114,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			return err
 		}
 
-		runStatusSummary := w.generateRunStatusSummary(syncedRunStatus)
+		runStatusSummary := syncedRunStatus.GetJobRunStatusSummary()
 		w.logger.Info("[ReplayID: %s] synced %d replay runs with status: %s", replayID, len(syncedRunStatus), runStatusSummary)
 
 		// check if replay request is on termination state
@@ -246,20 +246,6 @@ func (*ReplayWorker) syncStatus(existingJobRuns, incomingJobRuns []*scheduler.Jo
 	}
 
 	return updatedJobRuns
-}
-
-func (*ReplayWorker) generateRunStatusSummary(syncedRunStatus scheduler.JobRunStatusList) string {
-	runStatusSummaryMap := syncedRunStatus.GetJobRunStatusSummaryMap()
-	var statusSummary string
-	for state, countRun := range runStatusSummaryMap {
-		currentState := fmt.Sprintf("%s(%d)", state.String(), countRun)
-		if statusSummary == "" {
-			statusSummary = currentState
-		} else {
-			statusSummary = fmt.Sprintf("%s, %s", statusSummary, currentState)
-		}
-	}
-	return statusSummary
 }
 
 func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state scheduler.ReplayState) {

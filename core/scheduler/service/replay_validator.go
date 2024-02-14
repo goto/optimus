@@ -71,7 +71,7 @@ func (v Validator) validateConflictedReplay(ctx context.Context, replayRequest *
 		// Check any intersection of date range
 		if (onGoingReplay.Config().StartTime.Equal(replayRequest.Config().EndTime) || onGoingReplay.Config().StartTime.Before(replayRequest.Config().EndTime)) &&
 			(onGoingReplay.Config().EndTime.Equal(replayRequest.Config().StartTime) || onGoingReplay.Config().EndTime.After(replayRequest.Config().StartTime)) {
-			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, fmt.Sprintf("request is conflicted with on going replay with ID %s", onGoingReplay.ID().String()))
+			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, fmt.Sprintf("request is conflicted with an on going replay with ID %s", onGoingReplay.ID().String()))
 		}
 	}
 	return nil

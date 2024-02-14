@@ -101,25 +101,25 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		// sync run first
 		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
 		if err != nil {
-			w.logger.Error("unable to get existing runs for replay [%s]: %s", replayID.String(), err)
+			w.logger.Error("[ReplayID: %s] unable to get existing runs: %s", replayID.String(), err)
 			return err
 		}
 		replayWithRun := storedReplayWithRun
 
 		if storedReplayWithRun.Replay.IsTerminated() {
-			w.logger.Info("replay [%s] is externally terminated with status [%s]", replayWithRun.Replay.ID().String(), storedReplayWithRun.Replay.State().String())
+			w.logger.Info("[ReplayID: %s] replay is externally terminated with status [%s]", replayWithRun.Replay.ID().String(), storedReplayWithRun.Replay.State().String())
 			return nil
 		}
 
 		incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
 		if err != nil {
-			w.logger.Error("unable to get incoming runs for replay [%s]: %s", replayWithRun.Replay.ID().String(), err)
+			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayWithRun.Replay.ID().String(), err)
 			return err
 		}
 		existingRuns := replayWithRun.Runs
 		syncedRunStatus := w.syncStatus(existingRuns, incomingRuns)
 		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, syncedRunStatus, ""); err != nil {
-			w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
+			w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
 
@@ -159,7 +159,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		// update runs status
 		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, updatedRuns, ""); err != nil {
-			w.logger.Error("unable to update replay runs for replay_id [%s]: %s", replayWithRun.Replay.ID(), err)
+			w.logger.Error("[ReplayID: %s] unable to update replay runs: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
 	}
@@ -174,7 +174,7 @@ func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syn
 	w.logger.Info("[ReplayID: %s] replay finished with status %s", replayID, replayState)
 
 	if err := w.replayRepo.UpdateReplay(ctx, replayID, replayState, syncedRunStatus, msg); err != nil {
-		w.logger.Error("unable to update replay state to failed for replay_id [%s]: %s", replayID, err)
+		w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayID, err)
 		return err
 	}
 	return nil
@@ -197,7 +197,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 		endLogicalTime := pendingRuns[l-1].GetLogicalTime(jobCron)
 		w.logger.Info("[ReplayID: %s] clearing runs with startLogicalTime: %s, endLogicalTime: %s", replayReq.ID(), startLogicalTime, endLogicalTime)
 		if err := w.scheduler.ClearBatch(ctx, replayReq.Tenant(), replayReq.JobName(), startLogicalTime, endLogicalTime); err != nil {
-			w.logger.Error("unable to clear job run for replay with replay_id [%s]: %s", replayReq.ID(), err)
+			w.logger.Error("[ReplayID: %s] unable to clear job run: %s", replayReq.ID(), err)
 			return err
 		}
 	}
@@ -209,7 +209,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 		logicalTime := run.GetLogicalTime(jobCron)
 		w.logger.Info("[ReplayID: %s] creating a new run with logical time: %s", replayReq.ID(), logicalTime)
 		if err := w.scheduler.CreateRun(ctx, replayReq.Tenant(), replayReq.JobName(), logicalTime, prefixReplayed); err != nil {
-			w.logger.Error("unable to create job run for replay with replay_id [%s]: %s", replayReq.ID(), err)
+			w.logger.Error("[ReplayID: %s] unable to create job run: %s", replayReq.ID(), err)
 			me.Append(err)
 		}
 	}

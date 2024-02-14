@@ -89,7 +89,7 @@ func (v Validator) validateConflictedRun(ctx context.Context, replayRequest *sch
 	}
 	for _, run := range runs {
 		if run.State == scheduler.StateQueued || run.State == scheduler.StateRunning {
-			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, fmt.Sprintf("conflicted job run found. job run %s is already in queued/running state", run.ScheduledAt.Format(time.DateTime)))
+			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, fmt.Sprintf("conflicted job run found. job run %s is already in %s state", run.ScheduledAt.Format(time.DateTime), run.State.String()))
 		}
 	}
 	return nil

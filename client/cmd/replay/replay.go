@@ -18,6 +18,7 @@ func NewReplayCommand() *cobra.Command {
 		CreateCommand(),
 		ListCommand(),
 		StatusCommand(),
+		CancelCommand(),
 	)
 	return cmd
 }

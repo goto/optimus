@@ -48,6 +48,7 @@ func TestReplayService(t *testing.T) {
 	}
 	jobCronStr := "0 12 * * *"
 	jobCron, _ := cron.ParseCronSchedule(jobCronStr)
+	message := "sample message"
 
 	logger := log.NewLogrus()
 
@@ -209,7 +210,7 @@ func TestReplayService(t *testing.T) {
 			defer replayRepository.AssertExpectations(t)
 
 			replayID := uuid.New()
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
 			replayRepository.On("GetReplayByID", ctx, replayID).Return(&scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -225,6 +226,71 @@ func TestReplayService(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
 			assert.NotEmpty(t, result)
+		})
+	})
+
+	t.Run("CancelReplay", func(t *testing.T) {
+		t.Run("returns error if replay is already terminated", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateSuccess, startTime, message)
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: replay,
+				Runs: []*scheduler.JobRunStatus{
+					{
+						ScheduledAt: startTime,
+						State:       scheduler.StatePending,
+					},
+				},
+			}
+
+			replayService := service.NewReplayService(replayRepository, nil, nil, nil, nil, logger)
+			err := replayService.CancelReplay(ctx, replayWithRun)
+			assert.ErrorContains(t, err, "replay has already been terminated with status success")
+		})
+		t.Run("returns err if unable to update replay as cancelled", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: replay,
+				Runs: []*scheduler.JobRunStatus{
+					{
+						ScheduledAt: startTime,
+						State:       scheduler.StatePending,
+					},
+				},
+			}
+
+			errorMsg := "internal error"
+			replayRepository.On("UpdateReplayStatus", mock.Anything, replay.ID(), scheduler.ReplayStateCancelled, mock.Anything).Return(errors.New(errorMsg)).Once()
+
+			replayService := service.NewReplayService(replayRepository, nil, nil, nil, nil, logger)
+			err := replayService.CancelReplay(ctx, replayWithRun)
+			assert.ErrorContains(t, err, errorMsg)
+		})
+		t.Run("returns no error if replay has been successfully cancelled", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: replay,
+				Runs: []*scheduler.JobRunStatus{
+					{
+						ScheduledAt: startTime,
+						State:       scheduler.StatePending,
+					},
+				},
+			}
+
+			replayRepository.On("UpdateReplayStatus", mock.Anything, replay.ID(), scheduler.ReplayStateCancelled, mock.Anything).Return(nil).Once()
+
+			replayService := service.NewReplayService(replayRepository, nil, nil, nil, nil, logger)
+			err := replayService.CancelReplay(ctx, replayWithRun)
+			assert.NoError(t, err)
 		})
 	})
 

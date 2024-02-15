@@ -11,10 +11,6 @@ import (
 	"github.com/goto/optimus/internal/lib/cron"
 )
 
-var replayStatusToValidate = []scheduler.ReplayState{
-	scheduler.ReplayStateCreated, scheduler.ReplayStateInProgress,
-}
-
 type Validator struct {
 	replayRepository ReplayRepository
 	scheduler        ReplayScheduler
@@ -63,7 +59,7 @@ func (v Validator) validateDateRange(ctx context.Context, replayRequest *schedul
 }
 
 func (v Validator) validateConflictedReplay(ctx context.Context, replayRequest *scheduler.Replay) error {
-	onGoingReplays, err := v.replayRepository.GetReplayRequestsByStatus(ctx, replayStatusToValidate)
+	onGoingReplays, err := v.replayRepository.GetReplayRequestsByStatus(ctx, scheduler.ReplayNonTerminalStates)
 	if err != nil {
 		return err
 	}
@@ -75,7 +71,7 @@ func (v Validator) validateConflictedReplay(ctx context.Context, replayRequest *
 		// Check any intersection of date range
 		if (onGoingReplay.Config().StartTime.Equal(replayRequest.Config().EndTime) || onGoingReplay.Config().StartTime.Before(replayRequest.Config().EndTime)) &&
 			(onGoingReplay.Config().EndTime.Equal(replayRequest.Config().StartTime) || onGoingReplay.Config().EndTime.After(replayRequest.Config().StartTime)) {
-			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, "conflicted replay found")
+			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, fmt.Sprintf("request is conflicted with an on going replay with ID %s", onGoingReplay.ID().String()))
 		}
 	}
 	return nil
@@ -93,7 +89,7 @@ func (v Validator) validateConflictedRun(ctx context.Context, replayRequest *sch
 	}
 	for _, run := range runs {
 		if run.State == scheduler.StateQueued || run.State == scheduler.StateRunning {
-			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, "conflicted job run found")
+			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, fmt.Sprintf("conflicted job run found. job run %s is already in %s state", run.ScheduledAt.Format(time.DateTime), run.State.String()))
 		}
 	}
 	return nil

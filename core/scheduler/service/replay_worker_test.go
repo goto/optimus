@@ -55,6 +55,7 @@ func TestReplayWorker(t *testing.T) {
 			Interval:  jobCronStr,
 		},
 	}
+	message := "sample message"
 
 	replayJobConfig := map[string]string{"EXECUTION_PROJECT": "example_project"}
 	replayDescription := "sample backfill"
@@ -80,11 +81,11 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhaseOne,
 			}
 			replayPhaseTwo := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhaseTwo,
 			}
 
@@ -131,15 +132,15 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 			replayPhase2 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase2,
 			}
 			replayPhase3 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase3,
 			}
 
@@ -206,15 +207,15 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 			replayPhase2 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase2,
 			}
 			replayPhase3 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase3,
 			}
 
@@ -280,15 +281,15 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 			replayPhase2 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase2,
 			}
 			replayPhase3 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase3,
 			}
 
@@ -354,15 +355,15 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 			replayPhase2 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase2,
 			}
 			replayPhase3 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase3,
 			}
 
@@ -419,7 +420,7 @@ func TestReplayWorker(t *testing.T) {
 			}
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 
@@ -449,7 +450,7 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 
@@ -478,7 +479,7 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 
@@ -509,7 +510,7 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 
@@ -545,7 +546,7 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 
@@ -582,7 +583,7 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 
@@ -630,15 +631,15 @@ func TestReplayWorker(t *testing.T) {
 
 			replayID := uuid.New()
 			replayReq := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), message),
 				Runs:   runsPhase1,
 			}
 			replayPhase2 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase2,
 			}
 			replayPhase3 := &scheduler.ReplayWithRun{
-				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now()),
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress, time.Now(), message),
 				Runs:   runsPhase3,
 			}
 
@@ -675,6 +676,34 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything, mock.Anything).Return(nil).Once()
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			worker.Execute(replayID, tnnt, jobAName)
+		})
+
+		t.Run("should able to stop replay process if it is being terminated externally", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			sch := new(mockReplayScheduler)
+			defer sch.AssertExpectations(t)
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+
+			runsPhase1 := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StatePending},
+				{ScheduledAt: scheduledTime2, State: scheduler.StatePending},
+			}
+
+			replayID := uuid.New()
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: scheduler.NewReplay(replayID, jobAName, tnnt, replayConfigParallel, scheduler.ReplayStateCancelled, time.Now(), message),
+				Runs:   runsPhase1,
+			}
+
+			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil).Once()
+			replayRepository.On("GetReplayByID", mock.Anything, replayWithRun.Replay.ID()).Return(replayWithRun, nil).Once()
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
 			worker.Execute(replayID, tnnt, jobAName)

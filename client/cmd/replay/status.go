@@ -122,12 +122,16 @@ func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	if resp.GetReplayConfig().GetParallel() {
 		mode = "parallel"
 	}
+	var message string
+	if resp.Message != "" {
+		message = fmt.Sprintf(" (%s)", resp.Message)
+	}
 	buff.WriteString(fmt.Sprintf("Job Name      : %s\n", resp.GetJobName()))
 	buff.WriteString(fmt.Sprintf("Replay Mode   : %s\n", mode))
 	buff.WriteString(fmt.Sprintf("Description   : %s\n", resp.ReplayConfig.GetDescription()))
 	buff.WriteString(fmt.Sprintf("Start Date    : %s\n", resp.ReplayConfig.GetStartTime().AsTime().Format(time.RFC3339)))
 	buff.WriteString(fmt.Sprintf("End Date      : %s\n", resp.ReplayConfig.GetEndTime().AsTime().Format(time.RFC3339)))
-	buff.WriteString(fmt.Sprintf("Replay Status : %s\n", resp.GetStatus()))
+	buff.WriteString(fmt.Sprintf("Replay Status : %s%s\n", resp.GetStatus(), message))
 	buff.WriteString(fmt.Sprintf("Total Runs    : %d\n\n", len(resp.GetReplayRuns())))
 
 	if len(resp.ReplayConfig.GetJobConfig()) > 0 {
@@ -136,7 +140,7 @@ func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	}
 
 	if len(resp.GetReplayRuns()) > 0 {
-		header := []string{"scheduled at", "current status"}
+		header := []string{"scheduled at", "current run status"}
 		stringifyReplayRuns(buff, header, resp.GetReplayRuns())
 	}
 

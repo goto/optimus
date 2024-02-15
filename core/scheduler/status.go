@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -140,7 +141,21 @@ func (j JobRunStatusList) OverrideWithStatus(status State) []*JobRunStatus {
 	return overridedRuns
 }
 
-func (j JobRunStatusList) GetJobRunStatusSummaryMap() map[State]int {
+func (j JobRunStatusList) GetJobRunStatusSummary() string {
+	runStatusSummaryMap := j.getJobRunStatusSummaryMap()
+	var statusSummary string
+	for state, countRun := range runStatusSummaryMap {
+		currentState := fmt.Sprintf("%s(%d)", state.String(), countRun)
+		if statusSummary == "" {
+			statusSummary = currentState
+		} else {
+			statusSummary = fmt.Sprintf("%s, %s", statusSummary, currentState)
+		}
+	}
+	return statusSummary
+}
+
+func (j JobRunStatusList) getJobRunStatusSummaryMap() map[State]int {
 	stateMap := make(map[State]int)
 	for _, run := range j {
 		stateMap[run.State]++

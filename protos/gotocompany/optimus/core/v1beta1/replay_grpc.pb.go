@@ -26,6 +26,7 @@ type ReplayServiceClient interface {
 	ReplayDryRun(ctx context.Context, in *ReplayDryRunRequest, opts ...grpc.CallOption) (*ReplayDryRunResponse, error)
 	ListReplay(ctx context.Context, in *ListReplayRequest, opts ...grpc.CallOption) (*ListReplayResponse, error)
 	GetReplay(ctx context.Context, in *GetReplayRequest, opts ...grpc.CallOption) (*GetReplayResponse, error)
+	CancelReplay(ctx context.Context, in *CancelReplayRequest, opts ...grpc.CallOption) (*CancelReplayResponse, error)
 }
 
 type replayServiceClient struct {
@@ -72,6 +73,15 @@ func (c *replayServiceClient) GetReplay(ctx context.Context, in *GetReplayReques
 	return out, nil
 }
 
+func (c *replayServiceClient) CancelReplay(ctx context.Context, in *CancelReplayRequest, opts ...grpc.CallOption) (*CancelReplayResponse, error) {
+	out := new(CancelReplayResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ReplayService/CancelReplay", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReplayServiceServer is the server API for ReplayService service.
 // All implementations must embed UnimplementedReplayServiceServer
 // for forward compatibility
@@ -80,6 +90,7 @@ type ReplayServiceServer interface {
 	ReplayDryRun(context.Context, *ReplayDryRunRequest) (*ReplayDryRunResponse, error)
 	ListReplay(context.Context, *ListReplayRequest) (*ListReplayResponse, error)
 	GetReplay(context.Context, *GetReplayRequest) (*GetReplayResponse, error)
+	CancelReplay(context.Context, *CancelReplayRequest) (*CancelReplayResponse, error)
 	mustEmbedUnimplementedReplayServiceServer()
 }
 
@@ -98,6 +109,9 @@ func (UnimplementedReplayServiceServer) ListReplay(context.Context, *ListReplayR
 }
 func (UnimplementedReplayServiceServer) GetReplay(context.Context, *GetReplayRequest) (*GetReplayResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReplay not implemented")
+}
+func (UnimplementedReplayServiceServer) CancelReplay(context.Context, *CancelReplayRequest) (*CancelReplayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelReplay not implemented")
 }
 func (UnimplementedReplayServiceServer) mustEmbedUnimplementedReplayServiceServer() {}
 
@@ -184,6 +198,24 @@ func _ReplayService_GetReplay_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReplayService_CancelReplay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelReplayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplayServiceServer).CancelReplay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.ReplayService/CancelReplay",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplayServiceServer).CancelReplay(ctx, req.(*CancelReplayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReplayService_ServiceDesc is the grpc.ServiceDesc for ReplayService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,6 +238,10 @@ var ReplayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetReplay",
 			Handler:    _ReplayService_GetReplay_Handler,
+		},
+		{
+			MethodName: "CancelReplay",
+			Handler:    _ReplayService_CancelReplay_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

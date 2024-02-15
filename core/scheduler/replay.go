@@ -11,25 +11,27 @@ import (
 )
 
 const (
-	// initial state
+	// ReplayStateCreated is an initial state which indicates the replay has been created but not picked up yet
 	ReplayStateCreated ReplayState = "created"
 
-	// running state
+	// ReplayStateInProgress indicates the replay is being executed
 	ReplayStateInProgress ReplayState = "in progress"
 
-	// terminal state
-	ReplayStateInvalid ReplayState = "invalid"
+	// ReplayStateSuccess is a terminal state which occurs when the replay execution finished with successful job runs
 	ReplayStateSuccess ReplayState = "success"
-	ReplayStateFailed  ReplayState = "failed"
 
-	// state on presentation layer
-	ReplayUserStateCreated    ReplayUserState = "created"
-	ReplayUserStateInProgress ReplayUserState = "in progress"
-	ReplayUserStateInvalid    ReplayUserState = "invalid"
-	ReplayUserStateSuccess    ReplayUserState = "success"
-	ReplayUserStateFailed     ReplayUserState = "failed"
+	// ReplayStateFailed is a terminal state which occurs when the replay execution failed, timed out, or finished with one of the run fails
+	ReplayStateFailed ReplayState = "failed"
+
+	// ReplayStateCancelled is a terminal state which occurs when the replay is cancelled by user
+	ReplayStateCancelled ReplayState = "cancelled"
 
 	EntityReplay = "replay"
+)
+
+var (
+	ReplayTerminalStates    = []ReplayState{ReplayStateSuccess, ReplayStateFailed, ReplayStateCancelled}
+	ReplayNonTerminalStates = []ReplayState{ReplayStateCreated, ReplayStateInProgress}
 )
 
 type (
@@ -43,12 +45,12 @@ func ReplayStateFromString(state string) (ReplayState, error) {
 		return ReplayStateCreated, nil
 	case string(ReplayStateInProgress):
 		return ReplayStateInProgress, nil
-	case string(ReplayStateInvalid):
-		return ReplayStateInvalid, nil
 	case string(ReplayStateSuccess):
 		return ReplayStateSuccess, nil
 	case string(ReplayStateFailed):
 		return ReplayStateFailed, nil
+	case string(ReplayStateCancelled):
+		return ReplayStateCancelled, nil
 	default:
 		return "", errors.InvalidArgument(EntityJobRun, "invalid state for replay "+state)
 	}
@@ -95,23 +97,6 @@ func (r *Replay) State() ReplayState {
 	return r.state
 }
 
-func (r *Replay) UserState() ReplayUserState {
-	switch r.state {
-	case ReplayStateCreated:
-		return ReplayUserStateCreated
-	case ReplayStateInProgress:
-		return ReplayUserStateInProgress
-	case ReplayStateInvalid:
-		return ReplayUserStateInvalid
-	case ReplayStateSuccess:
-		return ReplayUserStateSuccess
-	case ReplayStateFailed:
-		return ReplayUserStateFailed
-	default:
-		return ""
-	}
-}
-
 func (r *Replay) Message() string {
 	return r.message
 }
@@ -120,12 +105,21 @@ func (r *Replay) CreatedAt() time.Time {
 	return r.createdAt
 }
 
+func (r *Replay) IsTerminated() bool {
+	for _, terminalState := range ReplayTerminalStates {
+		if r.State() == terminalState {
+			return true
+		}
+	}
+	return false
+}
+
 func NewReplayRequest(jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState) *Replay {
 	return &Replay{jobName: jobName, tenant: tenant, config: config, state: state}
 }
 
-func NewReplay(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState, createdAt time.Time) *Replay {
-	return &Replay{id: id, jobName: jobName, tenant: tenant, config: config, state: state, createdAt: createdAt}
+func NewReplay(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState, createdAt time.Time, message string) *Replay {
+	return &Replay{id: id, jobName: jobName, tenant: tenant, config: config, state: state, createdAt: createdAt, message: message}
 }
 
 type ReplayWithRun struct {

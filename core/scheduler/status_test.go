@@ -291,7 +291,7 @@ func TestStatus(t *testing.T) {
 		assert.Equal(t, scheduler.StateMissing, runs[2].State)
 	})
 
-	t.Run("GetJobRunStatusSummaryMap", func(t *testing.T) {
+	t.Run("GetJobRunStatusSummary", func(t *testing.T) {
 		time1 := time.Date(2023, 0o1, 1, 0, 0, 0, 0, time.UTC)
 		time2 := time.Date(2023, 0o1, 2, 0, 0, 0, 0, time.UTC)
 		time3 := time.Date(2023, 0o1, 3, 0, 0, 0, 0, time.UTC)
@@ -311,13 +311,16 @@ func TestStatus(t *testing.T) {
 			},
 		})
 
-		expectedRunStatusSummaryMap := map[scheduler.State]int{
-			scheduler.StatePending: 1,
-			scheduler.StateRunning: 2,
+		expectedSummaryItems := []string{
+			"pending(1)",
+			"running(2)",
 		}
 
-		runStatusSummaryMap := jobRunStatusList.GetJobRunStatusSummaryMap()
-		assert.EqualValues(t, expectedRunStatusSummaryMap, runStatusSummaryMap)
+		result := jobRunStatusList.GetJobRunStatusSummary()
+
+		for _, summaryItem := range expectedSummaryItems {
+			assert.Contains(t, result, summaryItem)
+		}
 	})
 
 	t.Run("IsAllTerminated", func(t *testing.T) {

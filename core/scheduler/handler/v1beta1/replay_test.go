@@ -32,6 +32,7 @@ func TestReplayHandler(t *testing.T) {
 	jobConfig := map[string]string{"EXECUTION_PROJECT": "example_project", "ANOTHER_CONFIG": "example_value"}
 	description := "sample backfill"
 	replayID := uuid.New()
+	message := "sample-message"
 
 	t.Run("ReplayDryRun", func(t *testing.T) {
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
@@ -454,7 +455,7 @@ func TestReplayHandler(t *testing.T) {
 			startTime, _ := time.Parse(scheduler.ISODateFormat, startTimeStr)
 			endTime := startTime.Add(48 * time.Hour)
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
-			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime)
+			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
 			service.On("GetReplayByID", ctx, replayID).Return(&scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -472,6 +473,88 @@ func TestReplayHandler(t *testing.T) {
 				ReplayId:    replayID.String(),
 			}
 			result, err := replayHandler.GetReplay(ctx, req)
+			assert.NoError(t, err)
+			assert.NotEmpty(t, result)
+		})
+	})
+
+	t.Run("CancelReplay", func(t *testing.T) {
+		t.Run("returns error when uuid is not valid", func(t *testing.T) {
+			replayHandler := v1beta1.NewReplayHandler(logger, nil)
+
+			req := &pb.CancelReplayRequest{
+				ProjectName: projectName,
+				ReplayId:    "invalid-id",
+			}
+			result, err := replayHandler.CancelReplay(ctx, req)
+			assert.ErrorContains(t, err, "invalid UUID")
+			assert.Nil(t, result)
+		})
+		t.Run("returns error when service get replay by id is failed", func(t *testing.T) {
+			service := new(mockReplayService)
+			defer service.AssertExpectations(t)
+
+			replayID := uuid.New()
+			service.On("GetReplayByID", ctx, replayID).Return(nil, errors.New("internal error"))
+
+			replayHandler := v1beta1.NewReplayHandler(logger, service)
+
+			req := &pb.CancelReplayRequest{
+				ProjectName: projectName,
+				ReplayId:    replayID.String(),
+			}
+			result, err := replayHandler.CancelReplay(ctx, req)
+			assert.ErrorContains(t, err, "internal error")
+			assert.Nil(t, result)
+		})
+		t.Run("returns error if replay not exist", func(t *testing.T) {
+			service := new(mockReplayService)
+			defer service.AssertExpectations(t)
+
+			replayID := uuid.New()
+			service.On("GetReplayByID", ctx, replayID).Return(nil, errs.NotFound("entity", "not found"))
+
+			replayHandler := v1beta1.NewReplayHandler(logger, service)
+
+			req := &pb.CancelReplayRequest{
+				ProjectName: projectName,
+				ReplayId:    replayID.String(),
+			}
+			result, err := replayHandler.CancelReplay(ctx, req)
+			assert.ErrorContains(t, err, "not found")
+			assert.Empty(t, result)
+		})
+		t.Run("returns no error if replay successfully cancelled", func(t *testing.T) {
+			service := new(mockReplayService)
+			defer service.AssertExpectations(t)
+
+			replayID := uuid.New()
+			tnnt, _ := tenant.NewTenant("project-test", "ns-1")
+			startTimeStr := "2023-01-02T15:00:00Z"
+			startTime, _ := time.Parse(scheduler.ISODateFormat, startTimeStr)
+			endTime := startTime.Add(48 * time.Hour)
+			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
+			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: replay,
+				Runs: []*scheduler.JobRunStatus{
+					{
+						ScheduledAt: startTime,
+						State:       scheduler.StatePending,
+					},
+				},
+			}
+
+			service.On("GetReplayByID", ctx, replayID).Return(replayWithRun, nil)
+			service.On("CancelReplay", ctx, replayWithRun).Return(nil)
+
+			replayHandler := v1beta1.NewReplayHandler(logger, service)
+
+			req := &pb.CancelReplayRequest{
+				ProjectName: projectName,
+				ReplayId:    replayID.String(),
+			}
+			result, err := replayHandler.CancelReplay(ctx, req)
 			assert.NoError(t, err)
 			assert.NotEmpty(t, result)
 		})
@@ -582,4 +665,18 @@ func (_m *mockReplayService) GetRunsStatus(ctx context.Context, _a1 tenant.Tenan
 	}
 
 	return r0, r1
+}
+
+// CancelReplay provides a mock function with given fields: ctx, replayWithRun
+func (_m *mockReplayService) CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
+	ret := _m.Called(ctx, replayWithRun)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.ReplayWithRun) error); ok {
+		r0 = rf(ctx, replayWithRun)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }

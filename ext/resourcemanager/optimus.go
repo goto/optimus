@@ -2,6 +2,8 @@ package resourcemanager
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,14 +35,41 @@ func NewOptimusResourceManager(resourceManagerConfig config.ResourceManager) (*O
 	if err := mapstructure.Decode(resourceManagerConfig.Config, &conf); err != nil {
 		return nil, fmt.Errorf("error decoding resource manger config: %w", err)
 	}
+
 	if conf.Host == "" {
 		return nil, errors.New("optimus resource manager host is empty")
 	}
+
+	httpClient, err := newHTTPClient(conf.Host)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing http client: %w", err)
+	}
+
 	return &OptimusResourceManager{
 		name:       resourceManagerConfig.Name,
 		config:     conf,
-		httpClient: http.DefaultClient,
+		httpClient: httpClient,
 	}, nil
+}
+
+func newHTTPClient(host string) (*http.Client, error) {
+	httpClient := new(http.Client)
+
+	if strings.HasPrefix(host, "https") {
+		certPool, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("error reading system certificate: %w", err)
+		}
+
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:            certPool,
+				InsecureSkipVerify: true,
+			},
+		}
+	}
+
+	return httpClient, nil
 }
 
 func (o *OptimusResourceManager) GetOptimusUpstreams(ctx context.Context, unresolvedDependency *job.Upstream) ([]*job.Upstream, error) {

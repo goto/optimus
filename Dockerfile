@@ -7,7 +7,7 @@ WORKDIR /app
 RUN adduser -D $USER 
 RUN chown -R $USER:$USER /app
 
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata curl
 
 # use this part on airflow task to fetch and compile assets by optimus client
 COPY ./entrypoint_init_container.sh /opt/entrypoint_init_container.sh

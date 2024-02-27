@@ -63,8 +63,7 @@ func newHTTPClient(host string) (*http.Client, error) {
 
 		httpClient.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
-				RootCAs:            certPool,
-				InsecureSkipVerify: true,
+				RootCAs: certPool,
 			},
 		}
 	}

@@ -916,6 +916,23 @@ func TestNewJobHandler(t *testing.T) {
 					WindowSize:       jobWindow.GetSize(),
 					WindowOffset:     jobWindow.GetOffset(),
 					WindowTruncateTo: jobWindow.GetTruncateTo(),
+					Config:           []*pb.JobConfigItem{},
+					Window:           &pb.JobSpecification_Window{},
+					Dependencies:     []*pb.JobDependency{},
+					Assets:           map[string]string{},
+					Hooks:            []*pb.JobSpecHook{},
+					Description:      "",
+					Labels:           map[string]string{},
+					Behavior:         &pb.JobSpecification_Behavior{Notify: []*pb.JobSpecification_Behavior_Notifiers{}},
+					Metadata: &pb.JobMetadata{
+						Resource: &pb.JobSpecMetadataResource{
+							Request: nil,
+							Limit:   nil,
+						},
+						Airflow: &pb.JobSpecMetadataAirflow{},
+					},
+					Destination: "",
+					Sources:     []string{},
 				},
 				{
 					Version:          int32(jobVersion),

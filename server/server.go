@@ -88,6 +88,7 @@ func setupGRPCServer(l log.Logger) (*grpc.Server, error) {
 		),
 		grpc_middleware.WithStreamServerChain(
 			otelgrpc.StreamServerInterceptor(),
+			grpc_logrus.StreamServerInterceptor(grpcLogrusEntry, opts...),
 			grpc_prometheus.StreamServerInterceptor,
 			grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandler(recoverPanic)),
 		),

@@ -372,8 +372,14 @@ func toMetadata(jobMetadata *pb.JobMetadata) (*job.Metadata, error) {
 
 	if jobMetadata.Resource != nil {
 		metadataResourceProto := jobMetadata.Resource
-		request := job.NewMetadataResourceConfig(metadataResourceProto.Request.Cpu, metadataResourceProto.Request.Memory)
-		limit := job.NewMetadataResourceConfig(metadataResourceProto.Limit.Cpu, metadataResourceProto.Limit.Memory)
+		var request *job.MetadataResourceConfig
+		if metadataResourceProto.Request != nil {
+			request = job.NewMetadataResourceConfig(metadataResourceProto.Request.Cpu, metadataResourceProto.Request.Memory)
+		}
+		var limit *job.MetadataResourceConfig
+		if metadataResourceProto.Limit != nil {
+			limit = job.NewMetadataResourceConfig(metadataResourceProto.Limit.Cpu, metadataResourceProto.Limit.Memory)
+		}
 		resourceMetadata := job.NewResourceMetadata(request, limit)
 		metadataBuilder = metadataBuilder.WithResource(resourceMetadata)
 	}

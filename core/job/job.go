@@ -462,6 +462,52 @@ func (u Upstreams) Deduplicate() []*Upstream {
 	return mapsToUpstreams(resolvedUpstreamMap, unresolvedInferredUpstreamMap, unresolvedStaticUpstreamMap)
 }
 
+func (u Upstreams) DeduplicateWithSkipped() ([]*Upstream, []*Upstream) {
+	resolvedUpstreamMap := make(map[string]*Upstream)
+	unresolvedStaticUpstreamMap := make(map[string]*Upstream)
+	unresolvedInferredUpstreamMap := make(map[string]*Upstream)
+	skippedUpstream := make([]*Upstream, 0)
+
+	for _, upstream := range u {
+		if upstream.state == UpstreamStateUnresolved && upstream._type == UpstreamTypeStatic {
+			unresolvedStaticUpstreamMap[upstream.FullName()] = upstream
+			continue
+		}
+
+		if upstream.state == UpstreamStateUnresolved && upstream._type == UpstreamTypeInferred {
+			unresolvedInferredUpstreamMap[upstream.resource.String()] = upstream
+			continue
+		}
+
+		if upstreamInMap, ok := resolvedUpstreamMap[upstream.FullName()]; ok {
+			skippedUpstream = append(skippedUpstream, upstreamInMap)
+
+			// keep static upstreams in the map if exists
+			if upstreamInMap._type == UpstreamTypeStatic {
+				continue
+			}
+		}
+		resolvedUpstreamMap[upstream.FullName()] = upstream
+	}
+
+	return mapsToUpstreams(resolvedUpstreamMap, unresolvedInferredUpstreamMap, unresolvedStaticUpstreamMap), skippedUpstream
+}
+
+func (u Upstreams) String() string {
+	upstreamStrings := make([]string, 0, len(u))
+	for i := range u {
+		if u[i] == nil {
+			upstreamStrings = append(upstreamStrings, "null")
+			continue
+		}
+
+		upstreamString := fmt.Sprintf("{projectName: %s, namespaceName: %s, name: %s, state: %s, type: %s, external: %t}",
+			u[i].projectName.String(), u[i].namespaceName.String(), u[i].name.String(), u[i].state, u[i]._type, u[i].external)
+		upstreamStrings = append(upstreamStrings, upstreamString)
+	}
+	return "[" + strings.Join(upstreamStrings, ",") + "]"
+}
+
 func mapsToUpstreams(upstreamsMaps ...map[string]*Upstream) []*Upstream {
 	var result []*Upstream
 	for _, upstreamsMap := range upstreamsMaps {

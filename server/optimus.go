@@ -16,6 +16,8 @@ import (
 	slackapi "github.com/slack-go/slack"
 	"google.golang.org/grpc"
 
+	"github.com/goto/optimus/ext/notify/webhook"
+
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/event/moderator"
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
@@ -218,7 +220,7 @@ func (s *OptimusServer) setupHTTPProxy() error {
 func (s *OptimusServer) startListening() {
 	// run our server in a goroutine so that it doesn't block to wait for termination requests
 	go func() {
-		s.logger.Info("Listening at", "address", s.serverAddr)
+		s.logger.Info("Listening at address: " + s.serverAddr)
 		if err := s.httpServer.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
 				s.logger.Fatal("server error", "error", err)
@@ -279,6 +281,13 @@ func (s *OptimusServer) setupHandlers() error {
 			slack.DefaultEventBatchInterval,
 			func(err error) {
 				s.logger.Error("slack error accumulator", "error", err)
+			},
+		),
+		schedulerService.NotificationSchemeWebHook: webhook.NewNotifier(
+			notificationContext,
+			slack.DefaultEventBatchInterval,
+			func(err error) {
+				s.logger.Error("webhook error accumulator : " + err.Error())
 			},
 		),
 		"pagerduty": pagerduty.NewNotifier(

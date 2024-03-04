@@ -17,6 +17,7 @@ import (
 const (
 	NotificationSchemeSlack     = "slack"
 	NotificationSchemePagerDuty = "pagerduty"
+	NotificationSchemeWebHook   = "http"
 )
 
 type Notifier interface {
@@ -48,6 +49,8 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				scheme := chanParts[0]
 				route := chanParts[1]
 
+				// check if scheme is webhook or https and handle the same
+
 				n.l.Debug("notification event for job: %s , event: %+v", event.JobName, event)
 				if plainTextSecretsList == nil {
 					plainTextSecretsList, err = n.tenantService.GetSecrets(ctx, event.Tenant)
@@ -67,19 +70,32 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				case NotificationSchemePagerDuty:
 					secretName = strings.ReplaceAll(route, "#", "notify_")
 				}
-				secret, err := secretMap.Get(secretName)
-				if err != nil {
-					return err
+				var secret string
+				if len(secretName) > 0 {
+					secret, err = secretMap.Get(secretName)
+					if err != nil {
+						return err
+					}
 				}
 
 				if notifyChannel, ok := n.notifyChannels[scheme]; ok {
-					if currErr := notifyChannel.Notify(ctx,
-						scheduler.NotifyAttrs{
-							Owner:    jobDetails.JobMetadata.Owner,
-							JobEvent: event,
-							Secret:   secret,
-							Route:    route,
-						}); currErr != nil {
+					notifyAttr := scheduler.NotifyAttrs{
+						Owner:    jobDetails.JobMetadata.Owner,
+						JobEvent: event,
+						Secret:   secret,
+						Route:    scheme + "://" + route,
+					}
+					if scheme == NotificationSchemeWebHook {
+						jobWithDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), jobDetails.Name)
+						if err != nil {
+							return err
+						}
+						notifyAttr.Meta = &scheduler.JobRunMeta{
+							Labels:         jobWithDetails.JobMetadata.Labels,
+							DestinationURN: jobWithDetails.Job.Destination,
+						}
+					}
+					if currErr := notifyChannel.Notify(ctx, notifyAttr); currErr != nil {
 						n.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
 					}

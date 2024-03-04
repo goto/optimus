@@ -47,6 +47,11 @@ type JobRun struct {
 	Monitoring map[string]any
 }
 
+type JobRunMeta struct {
+	Labels         map[string]string
+	DestinationURN string
+}
+
 func (j *JobRun) HasSLABreached() bool {
 	if j.EndTime != nil {
 		return j.EndTime.After(j.StartTime.Add(time.Second * time.Duration(j.SLADefinition)))
@@ -67,6 +72,7 @@ type OperatorRun struct {
 type NotifyAttrs struct {
 	Owner    string
 	JobEvent *Event
+	Meta     *JobRunMeta
 	Route    string
 	Secret   string
 }

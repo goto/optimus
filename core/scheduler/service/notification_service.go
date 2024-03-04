@@ -79,20 +79,28 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				}
 
 				if notifyChannel, ok := n.notifyChannels[scheme]; ok {
-					notifyAttr := scheduler.NotifyAttrs{
-						Owner:    jobDetails.JobMetadata.Owner,
-						JobEvent: event,
-						Secret:   secret,
-						Route:    scheme + "://" + route,
-					}
+					var notifyAttr scheduler.NotifyAttrs
 					if scheme == NotificationSchemeWebHook {
 						jobWithDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), jobDetails.Name)
 						if err != nil {
 							return err
 						}
-						notifyAttr.Meta = &scheduler.JobRunMeta{
-							Labels:         jobWithDetails.JobMetadata.Labels,
-							DestinationURN: jobWithDetails.Job.Destination,
+						notifyAttr = scheduler.NotifyAttrs{
+							Owner:    jobDetails.JobMetadata.Owner,
+							JobEvent: event,
+							Secret:   secret,
+							Route:    scheme + "://" + route,
+							Meta: &scheduler.JobRunMeta{
+								Labels:         jobWithDetails.JobMetadata.Labels,
+								DestinationURN: jobWithDetails.Job.Destination,
+							},
+						}
+					} else {
+						notifyAttr = scheduler.NotifyAttrs{
+							Owner:    jobDetails.JobMetadata.Owner,
+							JobEvent: event,
+							Secret:   secret,
+							Route:    route,
 						}
 					}
 					if currErr := notifyChannel.Notify(ctx, notifyAttr); currErr != nil {

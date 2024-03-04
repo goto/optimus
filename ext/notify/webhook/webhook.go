@@ -39,7 +39,6 @@ type Notifier struct {
 
 	eventChan     chan event
 	wg            sync.WaitGroup
-	mu            sync.Mutex
 	workerErrChan chan error
 
 	eventBatchInterval time.Duration
@@ -60,7 +59,7 @@ type webhookPayload struct {
 	JobLabel       map[string]string `json:"job_label"`
 }
 
-func (s *Notifier) Notify(ctx context.Context, attr scheduler.NotifyAttrs) error { //nolint: gocritic
+func (s *Notifier) Notify(_ context.Context, attr scheduler.NotifyAttrs) error { //nolint: gocritic
 	go func() {
 		s.eventChan <- event{url: attr.Route, meta: attr.JobEvent, jobMeta: attr.Meta}
 	}()
@@ -69,7 +68,7 @@ func (s *Notifier) Notify(ctx context.Context, attr scheduler.NotifyAttrs) error
 	return nil
 }
 
-func (s *Notifier) Worker(ctx context.Context) {
+func (s *Notifier) Worker(_ context.Context) {
 	defer s.wg.Done()
 	for {
 		select {

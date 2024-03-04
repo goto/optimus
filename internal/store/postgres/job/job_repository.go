@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/store/postgres"
 )
 
 const (
@@ -699,14 +700,14 @@ VALUES (
 				upstream.UpstreamType, upstream.UpstreamState)
 		}
 
-		if errors.IsPgErrorCode(err, errors.ErrPgCodeUniqueConstraints) {
-			errMsg := fmt.Sprintf("duplicate constraints found in job_name %s with upstream job_name %s", upstream.JobName, upstream.UpstreamJobName.String)
-			wrappedErr := errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errMsg)
-			wrappedErr.WrappedErr = err
-			return err
-		}
-
 		if err != nil {
+			if postgres.ErrorCodeEqual(err, postgres.ErrPgCodeUniqueConstraints) {
+				errMsg := fmt.Sprintf("duplicate constraints found in job_name %s with upstream job_name %s", upstream.JobName, upstream.UpstreamJobName.String)
+				wrappedErr := errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errMsg)
+				wrappedErr.WrappedErr = err
+				return wrappedErr
+			}
+
 			return errors.InternalError(job.EntityJob, "unable to save job upstream", err)
 		}
 

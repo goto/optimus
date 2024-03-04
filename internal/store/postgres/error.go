@@ -1,4 +1,4 @@
-package errors
+package postgres
 
 import (
 	"errors"
@@ -7,7 +7,6 @@ import (
 )
 
 // ErrPgCode refers to https://www.postgresql.org/docs/current/errcodes-appendix.html
-
 type ErrPgCode string
 
 func (e ErrPgCode) String() string         { return string(e) }
@@ -17,7 +16,7 @@ const (
 	ErrPgCodeUniqueConstraints ErrPgCode = "23505"
 )
 
-func IsPgErrorCode(err error, code ErrPgCode) bool {
+func ErrorCodeEqual(err error, code ErrPgCode) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && code.Equal(pgErr.Code) {
 		return true

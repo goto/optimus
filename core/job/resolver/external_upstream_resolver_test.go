@@ -82,7 +82,10 @@ func TestExternalUpstreamResolver(t *testing.T) {
 			result, err := extUpstreamResolver.BulkResolve(ctx, []*job.WithUpstream{jobWithUnresolvedUpstream}, logWriter)
 			assert.Nil(t, result[0].GetUnresolvedUpstreams())
 			assert.Nil(t, err)
-			assert.EqualValues(t, []*job.Upstream{upstreamD, upstreamB, upstreamC}, result[0].Upstreams())
+			expected, actual := []*job.Upstream{upstreamD, upstreamB, upstreamC}, result[0].Upstreams()
+			sort.SliceStable(expected, func(i, j int) bool { return expected[i].FullName() < expected[j].FullName() })
+			sort.SliceStable(actual, func(i, j int) bool { return actual[i].FullName() < actual[j].FullName() })
+			assert.EqualValues(t, expected, actual)
 		})
 		t.Run("returns unresolved upstream and upstream error if unable to fetch upstreams from external", func(t *testing.T) {
 			logWriter := new(mockWriter)

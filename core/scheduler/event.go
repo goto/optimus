@@ -25,6 +25,7 @@ const (
 
 	EventCategorySLAMiss    JobEventCategory = "sla_miss"
 	EventCategoryJobFailure JobEventCategory = "failure"
+	EventCategoryJobSuccess JobEventCategory = "job_success"
 
 	SLAMissEvent    JobEventType = "sla_miss"
 	JobFailureEvent JobEventType = "failure"
@@ -109,6 +110,10 @@ func (event JobEventType) IsOfType(category JobEventCategory) bool {
 	switch category {
 	case EventCategoryJobFailure:
 		if event == JobFailureEvent {
+			return true
+		}
+	case EventCategoryJobSuccess:
+		if event == JobSuccessEvent {
 			return true
 		}
 	case EventCategorySLAMiss:

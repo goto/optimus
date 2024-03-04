@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -22,14 +21,19 @@ const (
 )
 
 var (
-	notifierType     = "webhook"
-	httpQueueCounter = promauto.NewCounter(prometheus.CounterOpts{
+	notifierType        = "webhook"
+	webhookQueueCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name:        scheduler.MetricNotificationQueue,
 		ConstLabels: map[string]string{"type": notifierType},
 	})
 
-	httpWorkerSendErrCounter = promauto.NewCounter(prometheus.CounterOpts{
+	webhookWorkerSendErrCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name:        scheduler.MetricNotificationWorkerSendErr,
+		ConstLabels: map[string]string{"type": notifierType},
+	})
+
+	webhookWorkerSendCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name:        scheduler.MetricNotificationSend,
 		ConstLabels: map[string]string{"type": notifierType},
 	})
 )
@@ -64,7 +68,7 @@ func (s *Notifier) Notify(_ context.Context, attr scheduler.NotifyAttrs) error {
 		s.eventChan <- event{url: attr.Route, meta: attr.JobEvent, jobMeta: attr.Meta}
 	}()
 
-	httpQueueCounter.Inc()
+	webhookQueueCounter.Inc()
 	return nil
 }
 
@@ -100,12 +104,7 @@ func (s *Notifier) Worker(ctx context.Context) {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
-
-			_, err = ioutil.ReadAll(res.Body)
-			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
-				continue
-			}
+			webhookWorkerSendCounter.Inc()
 
 			err = res.Body.Close()
 			if err != nil {
@@ -137,7 +136,7 @@ func NewNotifier(ctx context.Context, eventBatchInterval time.Duration, errHandl
 	go func() {
 		for err := range this.workerErrChan {
 			errHandler(err)
-			httpWorkerSendErrCounter.Inc()
+			webhookWorkerSendErrCounter.Inc()
 		}
 		this.wg.Done()
 	}()

@@ -16,8 +16,6 @@ import (
 	slackapi "github.com/slack-go/slack"
 	"google.golang.org/grpc"
 
-	"github.com/goto/optimus/ext/notify/webhook"
-
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/event/moderator"
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
@@ -33,6 +31,7 @@ import (
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
+	"github.com/goto/optimus/ext/notify/webhook"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"

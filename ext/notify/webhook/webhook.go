@@ -59,7 +59,7 @@ type webhookPayload struct {
 	JobLabel       map[string]string `json:"job_label"`
 }
 
-func (s *Notifier) Notify(_ context.Context, attr scheduler.NotifyAttrs) error { //nolint: gocritic
+func (s *Notifier) Notify(_ context.Context, attr scheduler.NotifyAttrs) error { //nolint:gocritic,unparam
 	go func() {
 		s.eventChan <- event{url: attr.Route, meta: attr.JobEvent, jobMeta: attr.Meta}
 	}()
@@ -68,7 +68,7 @@ func (s *Notifier) Notify(_ context.Context, attr scheduler.NotifyAttrs) error {
 	return nil
 }
 
-func (s *Notifier) Worker(_ context.Context) {
+func (s *Notifier) Worker(ctx context.Context) {
 	defer s.wg.Done()
 	for {
 		select {
@@ -82,34 +82,34 @@ func (s *Notifier) Worker(_ context.Context) {
 				Status:         event.meta.Status.String(),
 				JobLabel:       event.jobMeta.Labels,
 			}
-			payloadJson, err := json.Marshal(payload)
+			payloadJSON, err := json.Marshal(payload)
 			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w\n", err)
+				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
 
-			req, err := http.NewRequest(http.MethodPost, event.url, bytes.NewBuffer(payloadJson))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
 			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w\n", err)
+				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
 			req.Header.Add("Content-Type", "application/json")
 
 			res, err := client.Do(req)
 			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w\n", err)
+				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
 
 			_, err = ioutil.ReadAll(res.Body)
 			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w\n", err)
+				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
 
 			err = res.Body.Close()
 			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w\n", err)
+				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
 		default:

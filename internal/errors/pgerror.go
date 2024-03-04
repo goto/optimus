@@ -8,13 +8,18 @@ import (
 
 // ErrPgCode refers to https://www.postgresql.org/docs/current/errcodes-appendix.html
 
+type ErrPgCode string
+
+func (e ErrPgCode) String() string         { return string(e) }
+func (e ErrPgCode) Equal(code string) bool { return e.String() == code }
+
 const (
-	ErrPgCodeUniqueConstraints = "23505"
+	ErrPgCodeUniqueConstraints ErrPgCode = "23505"
 )
 
-func IsPgErrorCode(err error, code string) bool {
+func IsPgErrorCode(err error, code ErrPgCode) bool {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == code {
+	if errors.As(err, &pgErr) && code.Equal(pgErr.Code) {
 		return true
 	}
 	return false

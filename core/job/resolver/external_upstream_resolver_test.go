@@ -3,6 +3,7 @@ package resolver_test
 import (
 	"context"
 	"errors"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,7 +57,10 @@ func TestExternalUpstreamResolver(t *testing.T) {
 			result, err := extUpstreamResolver.BulkResolve(ctx, []*job.WithUpstream{jobWithUnresolvedUpstream}, logWriter)
 			assert.Nil(t, result[0].GetUnresolvedUpstreams())
 			assert.Nil(t, err)
-			assert.EqualValues(t, []*job.Upstream{upstreamB, upstreamC}, result[0].Upstreams())
+			expected, actual := []*job.Upstream{upstreamB, upstreamC}, result[0].Upstreams()
+			sort.SliceStable(expected, func(i, j int) bool { return expected[i].FullName() < expected[j].FullName() })
+			sort.SliceStable(actual, func(i, j int) bool { return actual[i].FullName() < actual[j].FullName() })
+			assert.EqualValues(t, expected, actual)
 		})
 		t.Run("returns the merged of previous resolved and external resolved upstreams", func(t *testing.T) {
 			logWriter := new(mockWriter)
@@ -95,7 +99,10 @@ func TestExternalUpstreamResolver(t *testing.T) {
 
 			extUpstreamResolver := resolver.NewTestExternalUpstreamResolver(optimusResourceManagers)
 			result, err := extUpstreamResolver.BulkResolve(ctx, []*job.WithUpstream{jobWithUnresolvedUpstream}, logWriter)
-			assert.EqualValues(t, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC}, result[0].Upstreams())
+			expected, actual := []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC}, result[0].Upstreams()
+			sort.SliceStable(expected, func(i, j int) bool { return expected[i].FullName() < expected[j].FullName() })
+			sort.SliceStable(actual, func(i, j int) bool { return actual[i].FullName() < actual[j].FullName() })
+			assert.EqualValues(t, expected, actual)
 			assert.NotNil(t, err)
 		})
 		t.Run("skips resolves upstream externally if no external resource manager found", func(t *testing.T) {

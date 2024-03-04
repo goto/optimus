@@ -435,11 +435,15 @@ func (u Upstreams) ToResourceDestinationAndUpstreamMap() map[string]*Upstream {
 }
 
 func (u Upstreams) Deduplicate() []*Upstream {
-	distinctUpstream, _ := u.DeduplicateWithSkipped()
+	distinctUpstream, _ := u.deduplicate()
 	return distinctUpstream
 }
 
 func (u Upstreams) DeduplicateWithSkipped() ([]*Upstream, []*Upstream) {
+	return u.deduplicate()
+}
+
+func (u Upstreams) deduplicate() ([]*Upstream, []*Upstream) {
 	resolvedUpstreamMap := make(map[string]*Upstream)
 	unresolvedStaticUpstreamMap := make(map[string]*Upstream)
 	unresolvedInferredUpstreamMap := make(map[string]*Upstream)
@@ -457,12 +461,12 @@ func (u Upstreams) DeduplicateWithSkipped() ([]*Upstream, []*Upstream) {
 		}
 
 		if upstreamInMap, ok := resolvedUpstreamMap[upstream.FullName()]; ok {
-			skippedUpstream = append(skippedUpstream, upstreamInMap)
-
 			// keep static upstreams in the map if exists
 			if upstreamInMap._type == UpstreamTypeStatic {
+				skippedUpstream = append(skippedUpstream, upstream)
 				continue
 			}
+			skippedUpstream = append(skippedUpstream, upstreamInMap)
 		}
 		resolvedUpstreamMap[upstream.FullName()] = upstream
 	}

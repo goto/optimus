@@ -62,7 +62,8 @@ func (e *extUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	if resolvedExternally {
 		lw.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] resolved job %s upstream from external", jobWithUpstream.Job().Tenant().NamespaceName().String(), jobWithUpstream.Name().String()))
 	}
-	return job.NewWithUpstream(jobWithUpstream.Job(), mergedUpstreams), me.ToErr()
+	distinctUpstream := job.Upstreams(mergedUpstreams).Deduplicate()
+	return job.NewWithUpstream(jobWithUpstream.Job(), distinctUpstream), me.ToErr()
 }
 
 func (e *extUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstream []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error) {

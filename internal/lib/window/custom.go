@@ -91,7 +91,7 @@ func FromCustomConfig(c SimpleConfig) (CustomWindow, error) {
 	}
 
 	if size.GetCount() < 0 {
-		return CustomWindow{}, errors.InvalidArgument("window", "size can not be empty")
+		return CustomWindow{}, errors.InvalidArgument("window", "size can not be negative")
 	}
 
 	delay, err := duration.From(c.Delay)

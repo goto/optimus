@@ -462,21 +462,6 @@ func (u Upstreams) Deduplicate() []*Upstream {
 	return mapsToUpstreams(resolvedUpstreamMap, unresolvedInferredUpstreamMap, unresolvedStaticUpstreamMap)
 }
 
-func (u Upstreams) String() string {
-	upstreamStrings := make([]string, 0, len(u))
-	for i := range u {
-		if u[i] == nil {
-			upstreamStrings = append(upstreamStrings, "null")
-			continue
-		}
-
-		upstreamString := fmt.Sprintf("{projectName: %s, namespaceName: %s, name: %s, state: %s, type: %s, external: %t}",
-			u[i].projectName.String(), u[i].namespaceName.String(), u[i].name.String(), u[i].state, u[i]._type, u[i].external)
-		upstreamStrings = append(upstreamStrings, upstreamString)
-	}
-	return "[" + strings.Join(upstreamStrings, ",") + "]"
-}
-
 func mapsToUpstreams(upstreamsMaps ...map[string]*Upstream) []*Upstream {
 	var result []*Upstream
 	for _, upstreamsMap := range upstreamsMaps {

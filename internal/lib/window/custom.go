@@ -3,6 +3,7 @@ package window
 import (
 	"time"
 
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/duration"
 	"github.com/goto/optimus/internal/lib/interval"
 )
@@ -86,6 +87,10 @@ func FromCustomConfig(c SimpleConfig) (CustomWindow, error) {
 	size, err := duration.From(c.Size)
 	if err != nil {
 		return CustomWindow{}, err
+	}
+
+	if size.GetCount() < 0 {
+		return CustomWindow{}, errors.InvalidArgument("window", "size can not be empty")
 	}
 
 	delay, err := duration.From(c.Delay)

@@ -8,6 +8,8 @@ import (
 	"github.com/goto/optimus/internal/lib/interval"
 )
 
+var errNegativeSize = errors.InvalidArgument("window", "size can not be negative")
+
 type CustomWindow struct {
 	size  duration.Duration
 	delay duration.Duration
@@ -91,7 +93,7 @@ func FromCustomConfig(c SimpleConfig) (CustomWindow, error) {
 	}
 
 	if size.GetCount() < 0 {
-		return CustomWindow{}, errors.InvalidArgument("window", "size can not be negative")
+		return CustomWindow{}, errNegativeSize
 	}
 
 	delay, err := duration.From(c.Delay)

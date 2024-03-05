@@ -106,7 +106,7 @@ func NewSimpleConfig(size, delay, location, truncateTo string) (SimpleConfig, er
 	validationErr.Append(err)
 
 	if strings.HasPrefix(size, "-") {
-		validationErr.Append(errors.InvalidArgument("window", "size can not be negative"))
+		validationErr.Append(errNegativeSize)
 	}
 
 	err = duration.Validate(delay)

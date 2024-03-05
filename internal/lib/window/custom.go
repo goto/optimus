@@ -74,6 +74,7 @@ func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
 	return time.Date(year, month, day, hour, minute, sec, nsec, w.timezone), nil
 }
 
+// TODO: this function is not used anywhere at the moment, consider removing it
 func NewCustomWindow(size, delay duration.Duration, location *time.Location, truncateTo string) CustomWindow {
 	return CustomWindow{
 		size:       size,

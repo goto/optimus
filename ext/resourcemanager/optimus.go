@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/goto/optimus/config"
@@ -26,7 +27,7 @@ type OptimusResourceManager struct {
 	name   string
 	config config.ResourceManagerConfigOptimus
 
-	httpClient *http.Client
+	httpClient *resty.Client
 }
 
 // NewOptimusResourceManager initializes job spec repository for Optimus neighbor
@@ -52,8 +53,8 @@ func NewOptimusResourceManager(resourceManagerConfig config.ResourceManager) (*O
 	}, nil
 }
 
-func newHTTPClient(host string) (*http.Client, error) {
-	httpClient := new(http.Client)
+func newHTTPClient(host string) (*resty.Client, error) {
+	client := resty.New()
 
 	if strings.HasPrefix(host, "https") {
 		certPool, err := x509.SystemCertPool()
@@ -61,46 +62,56 @@ func newHTTPClient(host string) (*http.Client, error) {
 			return nil, fmt.Errorf("error reading system certificate: %w", err)
 		}
 
-		httpClient.Transport = &http.Transport{
+		transport := &http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:    certPool,
 				MinVersion: tls.VersionTLS12,
 			},
 		}
+
+		client.SetTransport(transport)
 	}
 
-	return httpClient, nil
+	return client, nil
 }
 
 func (o *OptimusResourceManager) GetOptimusUpstreams(ctx context.Context, unresolvedDependency *job.Upstream) ([]*job.Upstream, error) {
 	if ctx == nil {
 		return nil, errors.New("context is nil")
 	}
-	request, err := o.constructGetJobSpecificationsRequest(ctx, unresolvedDependency)
-	if err != nil {
-		return nil, fmt.Errorf("error encountered when constructing request: %w", err)
-	}
 
-	response, err := o.httpClient.Do(request)
+	request := o.constructRequest(ctx)
+	url := o.constructURL(unresolvedDependency)
+
+	response, err := request.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error encountered when sending request: %w", err)
 	}
-	defer response.Body.Close()
 
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status response: %s", response.Status)
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status response [%s] with body: %s", response.Status(), response.String())
 	}
 
 	var jobSpecResponse getJobSpecificationsResponse
-	decoder := json.NewDecoder(response.Body)
-	if err := decoder.Decode(&jobSpecResponse); err != nil {
+	if err := json.Unmarshal(response.Body(), &jobSpecResponse); err != nil {
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
 
 	return o.toOptimusDependencies(jobSpecResponse.JobSpecificationResponses, unresolvedDependency)
 }
 
-func (o *OptimusResourceManager) constructGetJobSpecificationsRequest(ctx context.Context, unresolvedDependency *job.Upstream) (*http.Request, error) {
+func (o *OptimusResourceManager) constructRequest(ctx context.Context) *resty.Request {
+	request := o.httpClient.NewRequest().SetContext(ctx)
+
+	request.SetHeader("Accept", "application/json")
+	for key, value := range o.config.Headers {
+		request.SetHeader(key, value)
+	}
+
+	return request
+}
+
+func (o *OptimusResourceManager) constructURL(unresolvedDependency *job.Upstream) string {
 	var filters []string
 	if unresolvedDependency.Name() != "" {
 		filters = append(filters, fmt.Sprintf("job_name=%s", unresolvedDependency.Name().String()))
@@ -114,17 +125,7 @@ func (o *OptimusResourceManager) constructGetJobSpecificationsRequest(ctx contex
 
 	path := "/api/v1beta1/jobs"
 	url := o.config.Host + path + "?" + strings.Join(filters, "&")
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return nil, err
-	}
-
-	request.Header.Set("Accept", "application/json")
-	for key, value := range o.config.Headers {
-		request.Header.Set(key, value)
-	}
-	return request, nil
+	return url
 }
 
 func (o *OptimusResourceManager) toOptimusDependencies(responses []*jobSpecificationResponse, unresolvedDependency *job.Upstream) ([]*job.Upstream, error) {

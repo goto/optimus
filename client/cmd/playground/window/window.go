@@ -70,7 +70,8 @@ func (j *command) runV1V2() error {
     \  /\  /|  __/| || (__| (_) || | | | | ||  __/
      \/  \/  \___||_| \___|\___/ |_| |_| |_| \___|
                                                   
-                                                  
+    🚨THIS VERSION IS SOON TO BE DEPRECATED🚨
+
 Hi, this is an interactive CLI to play around with window configuration for v1 and v2.
 You can navigate around the available configurations with the following keys:
    ______________________________

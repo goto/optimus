@@ -38,7 +38,7 @@ func (w CustomWindow) GetEnd(ref time.Time) (time.Time, error) {
 
 func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
 	unit := w.size.GetUnit()
-	if w.truncateTo != "" { // TODO: add `None` as the check
+	if w.truncateTo != "" {
 		var err error
 		unit, err = duration.UnitFrom(w.truncateTo)
 		if err != nil {

@@ -84,7 +84,7 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 					// compile header
 					compiledHeaders, err := n.compiler.Compile(endpoint.Headers, headerContext)
 					if err != nil {
-						multierror.Append(fmt.Errorf("error compiling template with config: %s", err))
+						multierror.Append(fmt.Errorf("error compiling template with config: %w", err))
 						continue
 					}
 					webhookAttr.Headers = compiledHeaders

@@ -81,7 +81,7 @@ func (s *Notifier) Notify(_ context.Context, attr scheduler.WebhookAttrs) error 
 	return nil
 }
 
-func (s *Notifier) Worker(ctx context.Context) { //nolint:gocritic,contextcheck
+func (s *Notifier) Worker(ctx context.Context) { //nolint
 	defer s.wg.Done()
 	for {
 		select {

@@ -231,7 +231,6 @@ func (j *JobSpec) getProtoJobSpecBehavior() *pb.JobSpecification_Behavior {
 					Headers: endpoint.Headers,
 				}
 			}
-
 		}
 	}
 	return &pb.JobSpecification_Behavior{

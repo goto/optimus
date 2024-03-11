@@ -81,7 +81,7 @@ func (s *Notifier) Notify(_ context.Context, attr scheduler.WebhookAttrs) error 
 	return nil
 }
 
-func (s *Notifier) Worker(ctx context.Context) { //nolint
+func (s *Notifier) Worker(ctx context.Context) {
 	defer s.wg.Done()
 	for {
 		select {
@@ -101,11 +101,10 @@ func (s *Notifier) Worker(ctx context.Context) { //nolint
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
-			ctc, cancel := context.WithTimeout(context.Background(), webhookTimeout)
-			req, err := http.NewRequestWithContext(ctc, http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
-				cancel()
 				continue
 			}
 			req.Header.Add("Content-Type", "application/json")
@@ -114,7 +113,6 @@ func (s *Notifier) Worker(ctx context.Context) { //nolint
 			}
 
 			res, err := client.Do(req)
-			cancel()
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue

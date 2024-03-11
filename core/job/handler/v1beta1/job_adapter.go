@@ -332,7 +332,7 @@ func toWebhook(webhookNotifiers []*pb.JobSpecification_Behavior_Webhook) ([]*job
 				return nil, err
 			}
 			webhookConfig.Endpoints[i2] = job.WebhookEndPoint{
-				Url:     endpoint.Url,
+				URL:     endpoint.Url,
 				Headers: headers,
 			}
 		}

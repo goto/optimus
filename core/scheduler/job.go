@@ -186,7 +186,7 @@ type Alert struct {
 }
 
 type WebhookEndPoint struct {
-	Url     string
+	URL     string
 	Headers map[string]string
 }
 

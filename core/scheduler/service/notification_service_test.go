@@ -33,7 +33,7 @@ func TestNotificationService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(nil, fmt.Errorf("some error"))
 			defer jobRepo.AssertExpectations(t)
 
-			notifyService := service.NewNotifyService(logger, jobRepo, nil, nil)
+			notifyService := service.NewNotifyService(logger, jobRepo, nil, nil, nil, nil)
 
 			event := &scheduler.Event{
 				JobName: jobName,
@@ -102,7 +102,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels)
+			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 			assert.Nil(t, err)
@@ -164,7 +164,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels)
+			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 			assert.Nil(t, err)
@@ -226,12 +226,12 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels)
+			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 
 			assert.NotNil(t, err)
-			assert.EqualError(t, err, "ErrorsInNotifypush:\n notifyChannel.Notify: pagerduty://#chanel-name: error in pagerduty push")
+			assert.EqualError(t, err, "ErrorsInNotifyPush:\n notifyChannel.Notify: pagerduty://#chanel-name: error in pagerduty push")
 		})
 	})
 }

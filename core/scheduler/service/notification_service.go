@@ -78,7 +78,7 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 						Labels:         jobWithDetails.JobMetadata.Labels,
 						DestinationURN: jobWithDetails.Job.Destination,
 					},
-					Route: endpoint.Url,
+					Route: endpoint.URL,
 				}
 				if len(endpoint.Headers) > 0 {
 					// compile header

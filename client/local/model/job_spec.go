@@ -93,7 +93,7 @@ type JobSpecDependency struct {
 type JobSpecDependencyHTTP struct {
 	Name          string            `yaml:"name"`
 	RequestParams map[string]string `yaml:"params,omitempty"`
-	URL           string            `yaml:"Url"`
+	URL           string            `yaml:"URL"`
 	Headers       map[string]string `yaml:"Headers,omitempty"`
 }
 

@@ -140,6 +140,7 @@ func (s *SpecBuilder) WithWebhooks(webhook []*WebhookSpec) *SpecBuilder {
 	s.spec.webhook = webhook
 	return s
 }
+
 func (s *SpecBuilder) WithSpecUpstream(specUpstream *UpstreamSpec) *SpecBuilder {
 	s.spec.upstreamSpec = specUpstream
 	return s
@@ -543,7 +544,7 @@ type AlertSpec struct {
 }
 
 type WebhookEndPoint struct {
-	Url     string
+	URL     string
 	Headers map[string]string
 }
 

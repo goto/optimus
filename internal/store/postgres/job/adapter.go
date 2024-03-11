@@ -88,7 +88,7 @@ type Alert struct {
 }
 
 type WebhookEndpoint struct {
-	Url     string
+	URL     string
 	Headers map[string]string
 }
 
@@ -291,7 +291,7 @@ func toStorageWebhooks(webhookSpecs []*job.WebhookSpec) ([]byte, error) {
 		}
 		for i, endpoint := range webhookSpec.Endpoints {
 			wh.Endpoints[i] = WebhookEndpoint{
-				Url:     endpoint.Url,
+				URL:     endpoint.URL,
 				Headers: endpoint.Headers,
 			}
 		}
@@ -432,11 +432,11 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 	}
 
 	if jobSpec.Webhook != nil {
-		Webhook, err := fromStorageWebhook(jobSpec.Webhook)
+		webhook, err := fromStorageWebhook(jobSpec.Webhook)
 		if err != nil {
 			return nil, err
 		}
-		jobSpecBuilder = jobSpecBuilder.WithWebhooks(Webhook)
+		jobSpecBuilder = jobSpecBuilder.WithWebhooks(webhook)
 	}
 
 	upstreamSpecBuilder := job.NewSpecUpstreamBuilder()
@@ -643,7 +643,7 @@ func fromStorageWebhook(raw []byte) ([]*job.WebhookSpec, error) {
 		}
 		for i2, endpoint := range webhook.Endpoints {
 			webhookSpecs[i].Endpoints[i2] = job.WebhookEndPoint{
-				Url:     endpoint.Url,
+				URL:     endpoint.URL,
 				Headers: endpoint.Headers,
 			}
 		}

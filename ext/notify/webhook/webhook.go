@@ -19,7 +19,6 @@ import (
 const (
 	httpChannelBuffer         = 100
 	DefaultEventBatchInterval = time.Second * 10
-	webhookTimeout            = time.Second * 10
 )
 
 var (

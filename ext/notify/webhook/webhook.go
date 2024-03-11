@@ -81,7 +81,7 @@ func (s *Notifier) Notify(_ context.Context, attr scheduler.WebhookAttrs) error 
 	return nil
 }
 
-func (s *Notifier) Worker(ctx context.Context) {
+func (s *Notifier) Worker(ctx context.Context) { //nolint:gocritic
 	defer s.wg.Done()
 	for {
 		select {
@@ -101,7 +101,7 @@ func (s *Notifier) Worker(ctx context.Context) {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
-			ctc, cancel := context.WithTimeout(context.Background(), webhookTimeout) // nolint
+			ctc, cancel := context.WithTimeout(context.Background(), webhookTimeout)
 			req, err := http.NewRequestWithContext(ctc, http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)

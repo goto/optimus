@@ -28,7 +28,8 @@ type Spec struct {
 	Schedule   json.RawMessage
 	WindowSpec json.RawMessage
 
-	Alert json.RawMessage
+	Alert   json.RawMessage
+	Webhook json.RawMessage
 
 	StaticUpstreams pq.StringArray
 	HTTPUpstreams   json.RawMessage
@@ -86,6 +87,16 @@ type Alert struct {
 	Channels []string
 }
 
+type WebhookEndpoint struct {
+	Url     string
+	Headers map[string]string
+}
+
+type Webhook struct {
+	On        string
+	Endpoints []WebhookEndpoint
+}
+
 type Asset struct {
 	Name  string
 	Value string
@@ -121,6 +132,11 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 	jobSpec := jobEntity.Spec()
 
 	alertsBytes, err := toStorageAlerts(jobSpec.AlertSpecs())
+	if err != nil {
+		return nil, err
+	}
+
+	webhookBytes, err := toStorageWebhooks(jobSpec.WebhookSpecs())
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +197,8 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 		Schedule:   schedule,
 		WindowSpec: windowBytes,
 
-		Alert: alertsBytes,
+		Alert:   alertsBytes,
+		Webhook: webhookBytes,
 
 		TaskName:   jobSpec.Task().Name().String(),
 		TaskConfig: jobSpec.Task().Config(),
@@ -258,6 +275,27 @@ func toStorageAlerts(alertSpecs []*job.AlertSpec) ([]byte, error) {
 			Config:   alertSpec.Config(),
 			Channels: alertSpec.Channels(),
 		})
+	}
+	return json.Marshal(alerts)
+}
+
+func toStorageWebhooks(webhookSpecs []*job.WebhookSpec) ([]byte, error) {
+	if webhookSpecs == nil {
+		return nil, nil
+	}
+	var alerts []Webhook
+	for _, webhookSpec := range webhookSpecs {
+		wh := Webhook{
+			On:        webhookSpec.On,
+			Endpoints: make([]WebhookEndpoint, len(webhookSpec.Endpoints)),
+		}
+		for i, endpoint := range webhookSpec.Endpoints {
+			wh.Endpoints[i] = WebhookEndpoint{
+				Url:     endpoint.Url,
+				Headers: endpoint.Headers,
+			}
+		}
+		alerts = append(alerts, wh)
 	}
 	return json.Marshal(alerts)
 }
@@ -391,6 +429,14 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 			return nil, err
 		}
 		jobSpecBuilder = jobSpecBuilder.WithAlerts(alerts)
+	}
+
+	if jobSpec.Webhook != nil {
+		Webhook, err := fromStorageWebhook(jobSpec.Webhook)
+		if err != nil {
+			return nil, err
+		}
+		jobSpecBuilder = jobSpecBuilder.WithWebhooks(Webhook)
 	}
 
 	upstreamSpecBuilder := job.NewSpecUpstreamBuilder()
@@ -576,15 +622,41 @@ func fromStorageAlerts(raw []byte) ([]*job.AlertSpec, error) {
 		}
 		jobAlerts = append(jobAlerts, jobAlert)
 	}
-
 	return jobAlerts, nil
+}
+
+func fromStorageWebhook(raw []byte) ([]*job.WebhookSpec, error) {
+	if raw == nil {
+		return nil, nil
+	}
+
+	var webhooks []Webhook
+	if err := json.Unmarshal(raw, &webhooks); err != nil {
+		return nil, err
+	}
+
+	webhookSpecs := make([]*job.WebhookSpec, len(webhooks))
+	for i, webhook := range webhooks {
+		webhookSpecs[i] = &job.WebhookSpec{
+			On:        webhook.On,
+			Endpoints: make([]job.WebhookEndPoint, len(webhook.Endpoints)),
+		}
+		for i2, endpoint := range webhook.Endpoints {
+			webhookSpecs[i].Endpoints[i2] = job.WebhookEndPoint{
+				Url:     endpoint.Url,
+				Headers: endpoint.Headers,
+			}
+		}
+	}
+
+	return webhookSpecs, nil
 }
 
 func FromRow(row pgx.Row) (*Spec, error) {
 	var js Spec
 
 	err := row.Scan(&js.ID, &js.Name, &js.Version, &js.Owner, &js.Description,
-		&js.Labels, &js.Schedule, &js.Alert, &js.StaticUpstreams, &js.HTTPUpstreams,
+		&js.Labels, &js.Schedule, &js.Alert, &js.Webhook, &js.StaticUpstreams, &js.HTTPUpstreams,
 		&js.TaskName, &js.TaskConfig, &js.WindowSpec, &js.Assets, &js.Hooks, &js.Metadata, &js.Destination, &js.Sources,
 		&js.ProjectName, &js.NamespaceName, &js.CreatedAt, &js.UpdatedAt, &js.DeletedAt, &js.IsDirty)
 	if err != nil {

@@ -282,13 +282,6 @@ func (s *OptimusServer) setupHandlers() error {
 				s.logger.Error("slack error accumulator", "error", err)
 			},
 		),
-		schedulerService.NotificationSchemeWebHook: webhook.NewNotifier(
-			notificationContext,
-			slack.DefaultEventBatchInterval,
-			func(err error) {
-				s.logger.Error("webhook error accumulator : " + err.Error())
-			},
-		),
 		"pagerduty": pagerduty.NewNotifier(
 			notificationContext,
 			pagerduty.DefaultEventBatchInterval,
@@ -298,13 +291,20 @@ func (s *OptimusServer) setupHandlers() error {
 			new(pagerduty.PagerDutyServiceImpl),
 		),
 	}
+	webhookNotifier := webhook.NewNotifier(
+		notificationContext,
+		webhook.DefaultEventBatchInterval,
+		func(err error) {
+			s.logger.Error("webhook error accumulator : " + err.Error())
+		},
+	)
 
 	newEngine := compiler.NewEngine()
 
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
-	notificationService := schedulerService.NewNotifyService(s.logger, jobProviderRepo, tenantService, notifierChanels)
+	notificationService := schedulerService.NewNotifyService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
 	if err != nil {
 		return err

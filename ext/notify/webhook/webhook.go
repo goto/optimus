@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	httpChannelBuffer = 100
+	httpChannelBuffer         = 100
+	DefaultEventBatchInterval = time.Second * 10
 )
 
 var (
@@ -50,22 +51,29 @@ type Notifier struct {
 
 type event struct {
 	url     string
+	headers map[string]string
 	meta    *scheduler.Event
 	jobMeta *scheduler.JobRunMeta
 }
 
 type webhookPayload struct {
-	JobName        string            `json:"job_name"`
-	Tenant         string            `json:"tenant"`
-	DestinationURN string            `json:"destination_URN"`
-	ScheduledAt    string            `json:"scheduled_at"`
-	Status         string            `json:"status"`
-	JobLabel       map[string]string `json:"job_label"`
+	JobName     string            `json:"job_name"`
+	Project     string            `json:"project"`
+	Namespace   string            `json:"namespace"`
+	Destination string            `json:"destination"`
+	ScheduledAt string            `json:"scheduled_at"`
+	Status      string            `json:"status"`
+	JobLabel    map[string]string `json:"job_label,omitempty"`
 }
 
-func (s *Notifier) Notify(_ context.Context, attr scheduler.NotifyAttrs) error { //nolint:gocritic,unparam
+func (s *Notifier) Notify(_ context.Context, attr scheduler.WebhookAttrs) error { //nolint:gocritic,unparam
 	go func() {
-		s.eventChan <- event{url: attr.Route, meta: attr.JobEvent, jobMeta: attr.Meta}
+		s.eventChan <- event{
+			url:     attr.Route,
+			meta:    attr.JobEvent,
+			jobMeta: attr.Meta,
+			headers: attr.Headers,
+		}
 	}()
 
 	webhookQueueCounter.Inc()
@@ -79,12 +87,13 @@ func (s *Notifier) Worker(ctx context.Context) {
 		case event := <-s.eventChan:
 			client := &http.Client{}
 			payload := webhookPayload{
-				JobName:        event.meta.JobName.String(),
-				Tenant:         event.meta.Tenant.ProjectName().String() + ":" + event.meta.Tenant.NamespaceName().String(),
-				DestinationURN: event.jobMeta.DestinationURN,
-				ScheduledAt:    event.meta.JobScheduledAt.String(),
-				Status:         event.meta.Status.String(),
-				JobLabel:       event.jobMeta.Labels,
+				JobName:     event.meta.JobName.String(),
+				Project:     event.meta.Tenant.ProjectName().String(),
+				Namespace:   event.meta.Tenant.NamespaceName().String(),
+				Destination: event.jobMeta.DestinationURN,
+				ScheduledAt: event.meta.JobScheduledAt.String(),
+				Status:      event.meta.Status.String(),
+				JobLabel:    event.jobMeta.Labels,
 			}
 			payloadJSON, err := json.Marshal(payload)
 			if err != nil {
@@ -98,6 +107,9 @@ func (s *Notifier) Worker(ctx context.Context) {
 				continue
 			}
 			req.Header.Add("Content-Type", "application/json")
+			for name, value := range event.headers {
+				req.Header.Add(name, value)
+			}
 
 			res, err := client.Do(req)
 			if err != nil {
@@ -112,7 +124,7 @@ func (s *Notifier) Worker(ctx context.Context) {
 				continue
 			}
 		default:
-			// send messages in batches of 5 secs
+			// send messages in batches of 10 secs
 			time.Sleep(s.eventBatchInterval)
 		}
 	}

@@ -38,6 +38,7 @@ type JobSpecBehavior struct {
 	Catchup       bool                      `yaml:"catch_up,omitempty"`
 	Retry         *JobSpecBehaviorRetry     `yaml:"retry,omitempty"`
 	Notify        []JobSpecBehaviorNotifier `yaml:"notify,omitempty"`
+	Webhook       []JobSpecBehaviorWebhook  `yaml:"webhook,omitempty"`
 }
 
 type JobSpecBehaviorRetry struct {
@@ -50,6 +51,16 @@ type JobSpecBehaviorNotifier struct {
 	On       string            `yaml:"on"`
 	Config   map[string]string `yaml:"config"`
 	Channels []string          `yaml:"channels"`
+}
+
+type WebhookEndpoint struct {
+	Url     string            `yaml:"url"`
+	Headers map[string]string `yaml:"headers,omitempty"`
+}
+
+type JobSpecBehaviorWebhook struct {
+	On        string            `yaml:"on"`
+	Endpoints []WebhookEndpoint `yaml:"endpoints"`
 }
 
 type JobSpecTask struct {
@@ -82,8 +93,8 @@ type JobSpecDependency struct {
 type JobSpecDependencyHTTP struct {
 	Name          string            `yaml:"name"`
 	RequestParams map[string]string `yaml:"params,omitempty"`
-	URL           string            `yaml:"url"`
-	Headers       map[string]string `yaml:"headers,omitempty"`
+	URL           string            `yaml:"Url"`
+	Headers       map[string]string `yaml:"Headers,omitempty"`
 }
 
 type JobSpecMetadata struct {
@@ -196,6 +207,7 @@ func (j *JobSpec) getProtoJobSpecBehavior() *pb.JobSpecification_Behavior {
 		}
 	}
 	var notifies []*pb.JobSpecification_Behavior_Notifiers
+	var webhooks []*pb.JobSpecification_Behavior_Webhook
 	if len(j.Behavior.Notify) > 0 {
 		notifies = make([]*pb.JobSpecification_Behavior_Notifiers, len(j.Behavior.Notify))
 		for i, notify := range j.Behavior.Notify {
@@ -206,9 +218,26 @@ func (j *JobSpec) getProtoJobSpecBehavior() *pb.JobSpecification_Behavior {
 			}
 		}
 	}
+	if len(j.Behavior.Webhook) > 0 {
+		webhooks = make([]*pb.JobSpecification_Behavior_Webhook, len(j.Behavior.Webhook))
+		for i, hook := range j.Behavior.Webhook {
+			webhooks[i] = &pb.JobSpecification_Behavior_Webhook{
+				On: pb.JobEvent_Type(pb.JobEvent_Type_value[utils.ToEnumProto(hook.On, "type")]),
+			}
+			webhooks[i].Endpoints = make([]*pb.JobSpecification_Behavior_Webhook_WebhookEndpoint, len(hook.Endpoints))
+			for i2, endpoint := range hook.Endpoints {
+				webhooks[i].Endpoints[i2] = &pb.JobSpecification_Behavior_Webhook_WebhookEndpoint{
+					Url:     endpoint.Url,
+					Headers: endpoint.Headers,
+				}
+			}
+
+		}
+	}
 	return &pb.JobSpecification_Behavior{
-		Retry:  retry,
-		Notify: notifies,
+		Retry:   retry,
+		Notify:  notifies,
+		Webhook: webhooks,
 	}
 }
 

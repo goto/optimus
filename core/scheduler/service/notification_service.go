@@ -10,6 +10,7 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/telemetry"
 )
@@ -25,8 +26,15 @@ type Notifier interface {
 	Notify(ctx context.Context, attr scheduler.NotifyAttrs) error
 }
 
+type Webhook interface {
+	io.Closer
+	Notify(ctx context.Context, attr scheduler.WebhookAttrs) error
+}
+
 type NotifyService struct {
 	notifyChannels map[string]Notifier
+	webhookChannel Webhook
+	compiler       TemplateCompiler
 	jobRepo        JobRepository
 	tenantService  TenantService
 	l              log.Logger
@@ -39,17 +47,59 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 		return err
 	}
 	notificationConfig := jobDetails.Alerts
-	multierror := errors.NewMultiError("ErrorsInNotifypush")
+	multierror := errors.NewMultiError("ErrorsInNotifyPush")
 	var secretMap tenant.SecretMap
 	var plainTextSecretsList []*tenant.PlainTextSecret
+
+	for _, webhook := range jobDetails.Webhook {
+		if event.Type.IsOfType(webhook.On) {
+			if plainTextSecretsList == nil {
+				plainTextSecretsList, err = n.tenantService.GetSecrets(ctx, event.Tenant)
+				if err != nil {
+					n.l.Error("error getting secrets for project [%s] namespace [%s]: %s",
+						event.Tenant.ProjectName().String(), event.Tenant.NamespaceName().String(), err)
+					multierror.Append(err)
+					continue
+				}
+				secretMap = tenant.PlainTextSecrets(plainTextSecretsList).ToSecretMap()
+			}
+
+			jobWithDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), jobDetails.Name)
+			if err != nil {
+				return err
+			}
+			headerContext := compiler.PrepareContext(compiler.From(secretMap).WithName(contextSecret))
+
+			for _, endpoint := range webhook.Endpoints {
+				webhookAttr := scheduler.WebhookAttrs{
+					Owner:    jobDetails.JobMetadata.Owner,
+					JobEvent: event,
+					Meta: &scheduler.JobRunMeta{
+						Labels:         jobWithDetails.JobMetadata.Labels,
+						DestinationURN: jobWithDetails.Job.Destination,
+					},
+					Route: endpoint.Url,
+				}
+				if len(endpoint.Headers) > 0 {
+					// compile header
+					compiledHeaders, err := n.compiler.Compile(endpoint.Headers, headerContext)
+					if err != nil {
+						multierror.Append(fmt.Errorf("error compiling template with config: %s", err))
+						continue
+					}
+					webhookAttr.Headers = compiledHeaders
+				}
+				_ = n.webhookChannel.Notify(ctx, webhookAttr)
+			}
+
+		}
+	}
 	for _, notify := range notificationConfig {
 		if event.Type.IsOfType(notify.On) {
 			for _, channel := range notify.Channels {
 				chanParts := strings.Split(channel, "://")
 				scheme := chanParts[0]
 				route := chanParts[1]
-
-				// check if scheme is webhook or https and handle the same
 
 				n.l.Debug("notification event for job: %s , event: %+v", event.JobName, event)
 				if plainTextSecretsList == nil {
@@ -70,39 +120,20 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				case NotificationSchemePagerDuty:
 					secretName = strings.ReplaceAll(route, "#", "notify_")
 				}
-				var secret string
-				if len(secretName) > 0 {
-					secret, err = secretMap.Get(secretName)
-					if err != nil {
-						return err
-					}
+
+				secret, err := secretMap.Get(secretName)
+				if err != nil {
+					return err
 				}
 
 				if notifyChannel, ok := n.notifyChannels[scheme]; ok {
-					var notifyAttr scheduler.NotifyAttrs
-					if scheme == NotificationSchemeWebHook {
-						jobWithDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), jobDetails.Name)
-						if err != nil {
-							return err
-						}
-						notifyAttr = scheduler.NotifyAttrs{
-							Owner:    jobDetails.JobMetadata.Owner,
-							JobEvent: event,
-							Secret:   secret,
-							Route:    scheme + "://" + route,
-							Meta: &scheduler.JobRunMeta{
-								Labels:         jobWithDetails.JobMetadata.Labels,
-								DestinationURN: jobWithDetails.Job.Destination,
-							},
-						}
-					} else {
-						notifyAttr = scheduler.NotifyAttrs{
-							Owner:    jobDetails.JobMetadata.Owner,
-							JobEvent: event,
-							Secret:   secret,
-							Route:    route,
-						}
+					notifyAttr := scheduler.NotifyAttrs{
+						Owner:    jobDetails.JobMetadata.Owner,
+						JobEvent: event,
+						Secret:   secret,
+						Route:    route,
 					}
+
 					if currErr := notifyChannel.Notify(ctx, notifyAttr); currErr != nil {
 						n.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
@@ -130,11 +161,13 @@ func (n *NotifyService) Close() error {
 	return me.ToErr()
 }
 
-func NewNotifyService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier) *NotifyService {
+func NewNotifyService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler) *NotifyService {
 	return &NotifyService{
 		l:              l,
 		jobRepo:        jobRepo,
 		tenantService:  tenantService,
 		notifyChannels: notifyChan,
+		webhookChannel: webhookNotifier,
+		compiler:       compiler,
 	}
 }

@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	jobColumns = `id, name, version, owner, description, labels, schedule, alert, static_upstreams, http_upstreams,
+	jobColumns = `id, name, version, owner, description, labels, schedule, alert, webhook, static_upstreams, http_upstreams,
 				  task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 	upstreamColumns = `
     job_name, project_name, upstream_job_name, upstream_project_name, upstream_host,
@@ -96,7 +96,8 @@ type Job struct {
 	Schedule   json.RawMessage
 	WindowSpec json.RawMessage
 
-	Alert json.RawMessage
+	Alert   json.RawMessage
+	Webhook json.RawMessage
 
 	StaticUpstreams pq.StringArray
 	HTTPUpstreams   json.RawMessage
@@ -304,6 +305,13 @@ func (j *Job) toJobWithDetails() (*scheduler.JobWithDetails, error) {
 		}
 		schedulerJobWithDetails.Alerts = alerts
 	}
+	if j.Webhook != nil {
+		var webhook []scheduler.Webhook
+		if err := json.Unmarshal(j.Webhook, &webhook); err != nil {
+			return nil, err
+		}
+		schedulerJobWithDetails.Webhook = webhook
+	}
 
 	return schedulerJobWithDetails, nil
 }
@@ -312,7 +320,7 @@ func FromRow(row pgx.Row) (*Job, error) {
 	var js Job
 
 	err := row.Scan(&js.ID, &js.Name, &js.Version, &js.Owner, &js.Description,
-		&js.Labels, &js.Schedule, &js.Alert, &js.StaticUpstreams, &js.HTTPUpstreams,
+		&js.Labels, &js.Schedule, &js.Alert, &js.Webhook, &js.StaticUpstreams, &js.HTTPUpstreams,
 		&js.TaskName, &js.TaskConfig, &js.WindowSpec, &js.Assets, &js.Hooks, &js.Metadata, &js.Destination, &js.Sources,
 		&js.ProjectName, &js.NamespaceName, &js.CreatedAt, &js.UpdatedAt)
 	if err != nil {

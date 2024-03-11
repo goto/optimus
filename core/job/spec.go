@@ -30,6 +30,7 @@ type Spec struct {
 	hooks        []*Hook
 	asset        Asset
 	alertSpecs   []*AlertSpec
+	webhook      []*WebhookSpec
 	upstreamSpec *UpstreamSpec
 }
 
@@ -71,6 +72,10 @@ func (s *Spec) Hooks() []*Hook {
 
 func (s *Spec) AlertSpecs() []*AlertSpec {
 	return s.alertSpecs
+}
+
+func (s *Spec) WebhookSpecs() []*WebhookSpec {
+	return s.webhook
 }
 
 func (s *Spec) UpstreamSpec() *UpstreamSpec {
@@ -131,6 +136,10 @@ func (s *SpecBuilder) WithAlerts(alerts []*AlertSpec) *SpecBuilder {
 	return s
 }
 
+func (s *SpecBuilder) WithWebhooks(webhook []*WebhookSpec) *SpecBuilder {
+	s.spec.webhook = webhook
+	return s
+}
 func (s *SpecBuilder) WithSpecUpstream(specUpstream *UpstreamSpec) *SpecBuilder {
 	s.spec.upstreamSpec = specUpstream
 	return s
@@ -531,6 +540,16 @@ type AlertSpec struct {
 
 	channels []string
 	config   Config
+}
+
+type WebhookEndPoint struct {
+	Url     string
+	Headers map[string]string
+}
+
+type WebhookSpec struct {
+	On        string
+	Endpoints []WebhookEndPoint
 }
 
 func NewAlertSpec(on string, channels []string, config Config) (*AlertSpec, error) {

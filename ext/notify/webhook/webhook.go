@@ -19,6 +19,7 @@ import (
 const (
 	httpChannelBuffer         = 100
 	DefaultEventBatchInterval = time.Second * 10
+	webhookTimeout            = time.Second * 10
 )
 
 var (
@@ -100,8 +101,8 @@ func (s *Notifier) Worker(ctx context.Context) {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
-
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
+			ctc, _ := context.WithTimeout(context.Background(), webhookTimeout)
+			req, err := http.NewRequestWithContext(ctc, http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue

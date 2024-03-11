@@ -39,13 +39,12 @@ type NotifyService struct {
 	l              log.Logger
 }
 
-func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error {
+func (n *NotifyService) Webhook(ctx context.Context, event *scheduler.Event) error {
 	jobDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
 	if err != nil {
 		n.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
 		return err
 	}
-	notificationConfig := jobDetails.Alerts
 	multierror := errors.NewMultiError("ErrorsInNotifyPush")
 	var secretMap tenant.SecretMap
 	var plainTextSecretsList []*tenant.PlainTextSecret
@@ -92,6 +91,20 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 			}
 		}
 	}
+	return multierror.ToErr()
+}
+
+func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error {
+	jobDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
+	if err != nil {
+		n.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
+		return err
+	}
+	notificationConfig := jobDetails.Alerts
+	multierror := errors.NewMultiError("ErrorsInNotifyPush")
+	var secretMap tenant.SecretMap
+	var plainTextSecretsList []*tenant.PlainTextSecret
+
 	for _, notify := range notificationConfig {
 		if event.Type.IsOfType(notify.On) {
 			for _, channel := range notify.Channels {
@@ -118,21 +131,18 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				case NotificationSchemePagerDuty:
 					secretName = strings.ReplaceAll(route, "#", "notify_")
 				}
-
 				secret, err := secretMap.Get(secretName)
 				if err != nil {
 					return err
 				}
 
 				if notifyChannel, ok := n.notifyChannels[scheme]; ok {
-					notifyAttr := scheduler.NotifyAttrs{
+					if currErr := notifyChannel.Notify(ctx, scheduler.NotifyAttrs{
 						Owner:    jobDetails.JobMetadata.Owner,
 						JobEvent: event,
 						Secret:   secret,
 						Route:    route,
-					}
-
-					if currErr := notifyChannel.Notify(ctx, notifyAttr); currErr != nil {
+					}); currErr != nil {
 						n.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
 					}

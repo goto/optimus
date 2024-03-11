@@ -101,7 +101,7 @@ func (s *Notifier) Worker(ctx context.Context) {
 				continue
 			}
 
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
@@ -123,6 +123,9 @@ func (s *Notifier) Worker(ctx context.Context) {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 				continue
 			}
+		case <-ctx.Done():
+			close(s.workerErrChan)
+			return
 		default:
 			// send messages in batches of 10 secs
 			time.Sleep(s.eventBatchInterval)
@@ -131,7 +134,6 @@ func (s *Notifier) Worker(ctx context.Context) {
 }
 
 func (s *Notifier) Close() error { // nolint: unparam
-	close(s.workerErrChan)
 	s.wg.Wait()
 	return nil
 }

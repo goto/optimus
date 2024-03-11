@@ -18,7 +18,6 @@ import (
 const (
 	NotificationSchemeSlack     = "slack"
 	NotificationSchemePagerDuty = "pagerduty"
-	NotificationSchemeWebHook   = "http"
 )
 
 type Notifier interface {
@@ -91,7 +90,6 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				}
 				_ = n.webhookChannel.Notify(ctx, webhookAttr)
 			}
-
 		}
 	}
 	for _, notify := range notificationConfig {

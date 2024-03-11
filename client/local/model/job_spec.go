@@ -54,7 +54,7 @@ type JobSpecBehaviorNotifier struct {
 }
 
 type WebhookEndpoint struct {
-	Url     string            `yaml:"url"`
+	URL     string            `yaml:"url"`
 	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
@@ -93,8 +93,8 @@ type JobSpecDependency struct {
 type JobSpecDependencyHTTP struct {
 	Name          string            `yaml:"name"`
 	RequestParams map[string]string `yaml:"params,omitempty"`
-	URL           string            `yaml:"URL"`
-	Headers       map[string]string `yaml:"Headers,omitempty"`
+	URL           string            `yaml:"url"`
+	Headers       map[string]string `yaml:"headers,omitempty"`
 }
 
 type JobSpecMetadata struct {
@@ -227,7 +227,7 @@ func (j *JobSpec) getProtoJobSpecBehavior() *pb.JobSpecification_Behavior {
 			webhooks[i].Endpoints = make([]*pb.JobSpecification_Behavior_Webhook_WebhookEndpoint, len(hook.Endpoints))
 			for i2, endpoint := range hook.Endpoints {
 				webhooks[i].Endpoints[i2] = &pb.JobSpecification_Behavior_Webhook_WebhookEndpoint{
-					Url:     endpoint.Url,
+					Url:     endpoint.URL,
 					Headers: endpoint.Headers,
 				}
 			}

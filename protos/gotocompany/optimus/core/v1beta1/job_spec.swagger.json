@@ -756,6 +756,20 @@
       },
       "title": "retry behaviour if job failed to execute for the first time"
     },
+    "BehaviorWebhook": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "$ref": "#/definitions/v1beta1JobEventType"
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WebhookWebhookEndpoint"
+          }
+        }
+      }
+    },
     "JobInspectResponseBasicInfoSection": {
       "type": "object",
       "properties": {
@@ -842,6 +856,12 @@
           "items": {
             "$ref": "#/definitions/BehaviorNotifiers"
           }
+        },
+        "webhook": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BehaviorWebhook"
+          }
         }
       }
     },
@@ -906,6 +926,20 @@
         },
         "resourceDestination": {
           "type": "string"
+        }
+      }
+    },
+    "WebhookWebhookEndpoint": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -1140,6 +1174,7 @@
         "TYPE_SLA_MISS",
         "TYPE_JOB_SUCCESS",
         "TYPE_FAILURE",
+        "TYPE_SUCCESS",
         "TYPE_TASK_RETRY",
         "TYPE_TASK_SUCCESS",
         "TYPE_TASK_START",

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	jobColumnsToStore = `name, version, owner, description, labels, schedule, alert, static_upstreams, http_upstreams, 
+	jobColumnsToStore = `name, version, owner, description, labels, schedule, alert, webhook, static_upstreams, http_upstreams, 
 	task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 
 	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at, is_dirty`
@@ -71,11 +71,11 @@ func (j JobRepository) triggerInsert(ctx context.Context, jobEntity *job.Job) er
 
 	insertJobQuery := `INSERT INTO job (` + jobColumnsToStore + `)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-	$17, $18, $19, NOW(), NOW());`
+	$17, $18, $19, $20, NOW(), NOW());`
 
 	tag, err := j.db.Exec(ctx, insertJobQuery,
 		storageJob.Name, storageJob.Version, storageJob.Owner, storageJob.Description, storageJob.Labels,
-		storageJob.Schedule, storageJob.Alert, storageJob.StaticUpstreams, storageJob.HTTPUpstreams,
+		storageJob.Schedule, storageJob.Alert, storageJob.Webhook, storageJob.StaticUpstreams, storageJob.HTTPUpstreams,
 		storageJob.TaskName, storageJob.TaskConfig, storageJob.WindowSpec, storageJob.Assets,
 		storageJob.Hooks, storageJob.Metadata, storageJob.Destination, storageJob.Sources,
 		storageJob.ProjectName, storageJob.NamespaceName)
@@ -258,7 +258,7 @@ func (j JobRepository) triggerUpdate(ctx context.Context, jobEntity *job.Job) er
 UPDATE job SET
 	version = $1, owner = $2, description = $3, labels = $4, schedule = $5, alert = $6,
 	static_upstreams = $7, http_upstreams = $8, task_name = $9, task_config = $10,
-	window_spec = $11, assets = $12, hooks = $13, metadata = $14, destination = $15, sources = $16,
+	window_spec = $11, assets = $12, hooks = $13, metadata = $14, destination = $15, sources = $16, webhook = $19,
 	updated_at = NOW(), deleted_at = null
 WHERE
 	name = $17 AND
@@ -270,7 +270,7 @@ WHERE
 		storageJob.StaticUpstreams, storageJob.HTTPUpstreams, storageJob.TaskName, storageJob.TaskConfig,
 		storageJob.WindowSpec, storageJob.Assets, storageJob.Hooks, storageJob.Metadata,
 		storageJob.Destination, storageJob.Sources,
-		storageJob.Name, storageJob.ProjectName)
+		storageJob.Name, storageJob.ProjectName, storageJob.Webhook)
 	if err != nil {
 		return errors.Wrap(job.EntityJob, "unable to update job spec", err)
 	}

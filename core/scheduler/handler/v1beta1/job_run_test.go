@@ -501,6 +501,8 @@ func TestJobRunHandler(t *testing.T) {
 			notifier := new(mockNotifier)
 			notifier.On("Push", ctx, event).
 				Return(nil)
+			notifier.On("Webhook", ctx, event).
+				Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
 			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier)
@@ -545,6 +547,8 @@ func TestJobRunHandler(t *testing.T) {
 			notifier := new(mockNotifier)
 			notifier.On("Push", ctx, event).
 				Return(fmt.Errorf("some error"))
+			notifier.On("Webhook", ctx, event).
+				Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
 			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier)
@@ -731,6 +735,11 @@ type mockNotifier struct {
 }
 
 func (m *mockNotifier) Push(ctx context.Context, event *scheduler.Event) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *mockNotifier) Webhook(ctx context.Context, event *scheduler.Event) error {
 	args := m.Called(ctx, event)
 	return args.Error(0)
 }

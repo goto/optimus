@@ -123,7 +123,7 @@ func (s *Notifier) Worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-s.eventChan:
-			err := fireWebhook(e) // noLint:contextcheck
+			err := fireWebhook(e) // nolint:contextcheck
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 			}

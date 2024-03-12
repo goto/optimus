@@ -32,6 +32,7 @@ import (
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
+	"github.com/goto/optimus/ext/notify/webhook"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
@@ -233,7 +234,7 @@ func (s *OptimusServer) startListening() {
 		}
 	}()
 	go func() {
-		s.logger.Info("Listening at", "address", s.httpAddr)
+		s.logger.Info("Listening at address: " + s.httpAddr)
 		if err := s.httpServer.ListenAndServe(); err != nil {
 			if !errors.Is(err, http.ErrServerClosed) {
 				s.logger.Fatal("server error", "error", err)
@@ -305,13 +306,20 @@ func (s *OptimusServer) setupHandlers() error {
 			new(pagerduty.PagerDutyServiceImpl),
 		),
 	}
+	webhookNotifier := webhook.NewNotifier(
+		notificationContext,
+		webhook.DefaultEventBatchInterval,
+		func(err error) {
+			s.logger.Error("webhook error accumulator : " + err.Error())
+		},
+	)
 
 	newEngine := compiler.NewEngine()
 
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
-	notificationService := schedulerService.NewNotifyService(s.logger, jobProviderRepo, tenantService, notifierChanels)
+	notificationService := schedulerService.NewNotifyService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
 	if err != nil {
 		return err

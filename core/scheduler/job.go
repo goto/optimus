@@ -85,6 +85,7 @@ type JobWithDetails struct {
 	Schedule      *Schedule
 	Retry         Retry
 	Alerts        []Alert
+	Webhook       []Webhook
 	RuntimeConfig RuntimeConfig
 	Priority      int
 	Upstreams     Upstreams
@@ -182,6 +183,16 @@ type Alert struct {
 	On       JobEventCategory
 	Channels []string
 	Config   map[string]string
+}
+
+type WebhookEndPoint struct {
+	URL     string
+	Headers map[string]string
+}
+
+type Webhook struct {
+	On        JobEventCategory
+	Endpoints []WebhookEndPoint
 }
 
 type RuntimeConfig struct {

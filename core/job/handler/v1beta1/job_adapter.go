@@ -107,6 +107,7 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	}
 
 	var alerts []*job.AlertSpec
+	var webhook []*job.WebhookSpec
 	if js.Behavior != nil {
 		if js.Behavior.Retry != nil {
 			retry := toRetry(js.Behavior.Retry)
@@ -114,6 +115,12 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 		}
 		if js.Behavior.Notify != nil {
 			alerts, err = toAlerts(js.Behavior.Notify)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if js.Behavior.Webhook != nil {
+			webhook, err = toWebhook(js.Behavior.Webhook)
 			if err != nil {
 				return nil, err
 			}
@@ -160,6 +167,9 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 
 	if alerts != nil {
 		jobSpecBuilder = jobSpecBuilder.WithAlerts(alerts)
+	}
+	if webhook != nil {
+		jobSpecBuilder = jobSpecBuilder.WithWebhooks(webhook)
 	}
 
 	if js.Dependencies != nil {
@@ -306,6 +316,30 @@ func toAlerts(notifiers []*pb.JobSpecification_Behavior_Notifiers) ([]*job.Alert
 		alerts[i] = alertConfig
 	}
 	return alerts, nil
+}
+
+func toWebhook(webhookNotifiers []*pb.JobSpecification_Behavior_Webhook) ([]*job.WebhookSpec, error) {
+	webhooks := make([]*job.WebhookSpec, len(webhookNotifiers))
+	for i, webhook := range webhookNotifiers {
+		webhookConfig := &job.WebhookSpec{
+			On:        utils.FromEnumProto(webhook.On.String(), "type"),
+			Endpoints: make([]job.WebhookEndPoint, len(webhook.Endpoints)),
+		}
+
+		for i2, endpoint := range webhook.Endpoints {
+			headers, err := job.ConfigFrom(endpoint.Headers)
+			if err != nil {
+				return nil, err
+			}
+			webhookConfig.Endpoints[i2] = job.WebhookEndPoint{
+				URL:     endpoint.Url,
+				Headers: headers,
+			}
+		}
+
+		webhooks[i] = webhookConfig
+	}
+	return webhooks, nil
 }
 
 func fromAlerts(jobAlerts []*job.AlertSpec) []*pb.JobSpecification_Behavior_Notifiers {

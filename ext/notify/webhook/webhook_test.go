@@ -1,4 +1,4 @@
-package webhook // nolint: testpackage
+package webhook_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/notify/webhook"
 )
 
 func TestWebhook(t *testing.T) {
@@ -38,7 +39,7 @@ func TestWebhook(t *testing.T) {
 
 		var sendErrors []error
 		ctx, cancel := context.WithCancel(context.Background())
-		client := NewNotifier(
+		client := webhook.NewNotifier(
 			ctx,
 			time.Millisecond*500,
 			func(err error) {
@@ -46,7 +47,7 @@ func TestWebhook(t *testing.T) {
 			},
 		)
 
-		err := client.Notify(context.Background(), scheduler.WebhookAttrs{
+		client.Trigger(scheduler.WebhookAttrs{
 			Owner: "",
 			JobEvent: &scheduler.Event{
 				JobName:        jobName,
@@ -72,10 +73,9 @@ func TestWebhook(t *testing.T) {
 			},
 		})
 
-		assert.Nil(t, err)
 		assert.Nil(t, sendErrors)
 		cancel()
-		err = client.Close()
+		err := client.Close()
 		assert.Nil(t, err)
 	})
 	t.Run("should log wehook failure errors", func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestWebhook(t *testing.T) {
 
 		var sendErrors []error
 		ctx, cancel := context.WithCancel(context.Background())
-		client := NewNotifier(
+		client := webhook.NewNotifier(
 			ctx,
 			time.Millisecond*500,
 			func(err error) {
@@ -103,7 +103,7 @@ func TestWebhook(t *testing.T) {
 			},
 		)
 
-		err := client.Notify(context.Background(), scheduler.WebhookAttrs{
+		client.Trigger(scheduler.WebhookAttrs{
 			Owner: "",
 			JobEvent: &scheduler.Event{
 				JobName:        jobName,
@@ -129,9 +129,8 @@ func TestWebhook(t *testing.T) {
 			},
 		})
 
-		assert.Nil(t, err)
 		cancel()
-		err = client.Close()
+		err := client.Close()
 		assert.Nil(t, err)
 	})
 }

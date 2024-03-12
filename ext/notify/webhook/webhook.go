@@ -19,6 +19,7 @@ import (
 const (
 	httpChannelBuffer         = 100
 	DefaultEventBatchInterval = time.Second * 10
+	httpWebhookTimeout        = time.Second * 10
 )
 
 var (
@@ -66,7 +67,7 @@ type webhookPayload struct {
 	JobLabel    map[string]string `json:"job_label,omitempty"`
 }
 
-func (s *Notifier) Notify(_ context.Context, attr scheduler.WebhookAttrs) error { //nolint:gocritic,unparam
+func (s *Notifier) Trigger(attr scheduler.WebhookAttrs) {
 	go func() {
 		s.eventChan <- event{
 			url:     attr.Route,
@@ -74,54 +75,57 @@ func (s *Notifier) Notify(_ context.Context, attr scheduler.WebhookAttrs) error 
 			jobMeta: attr.Meta,
 			headers: attr.Headers,
 		}
+		webhookQueueCounter.Inc()
 	}()
+}
 
-	webhookQueueCounter.Inc()
-	return nil
+func (s *Notifier) fireWebhook(e event) error {
+	client := &http.Client{}
+	payload := webhookPayload{
+		JobName:     e.meta.JobName.String(),
+		Project:     e.meta.Tenant.ProjectName().String(),
+		Namespace:   e.meta.Tenant.NamespaceName().String(),
+		Destination: e.jobMeta.DestinationURN,
+		ScheduledAt: e.meta.JobScheduledAt.String(),
+		Status:      e.meta.Status.String(),
+		JobLabel:    e.jobMeta.Labels,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), httpWebhookTimeout) // nolint:contextcheck
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.url, bytes.NewBuffer(payloadJSON))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Content-Type", "application/json")
+	for name, value := range e.headers {
+		req.Header.Add(name, value)
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	if res.StatusCode != 200 {
+		return fmt.Errorf("non 200 status code recieved from endpoint:'%s', response status: %s", e.url, res.Status)
+	}
+	webhookWorkerSendCounter.Inc()
+
+	return res.Body.Close()
 }
 
 func (s *Notifier) Worker(ctx context.Context) {
 	defer s.wg.Done()
 	for {
 		select {
-		case event := <-s.eventChan:
-			client := &http.Client{}
-			payload := webhookPayload{
-				JobName:     event.meta.JobName.String(),
-				Project:     event.meta.Tenant.ProjectName().String(),
-				Namespace:   event.meta.Tenant.NamespaceName().String(),
-				Destination: event.jobMeta.DestinationURN,
-				ScheduledAt: event.meta.JobScheduledAt.String(),
-				Status:      event.meta.Status.String(),
-				JobLabel:    event.jobMeta.Labels,
-			}
-			payloadJSON, err := json.Marshal(payload)
+		case e := <-s.eventChan:
+			err := s.fireWebhook(e)
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
-				continue
-			}
-
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, event.url, bytes.NewBuffer(payloadJSON))
-			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
-				continue
-			}
-			req.Header.Add("Content-Type", "application/json")
-			for name, value := range event.headers {
-				req.Header.Add(name, value)
-			}
-
-			res, err := client.Do(req)
-			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
-				continue
-			}
-			webhookWorkerSendCounter.Inc()
-
-			err = res.Body.Close()
-			if err != nil {
-				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
-				continue
 			}
 		case <-ctx.Done():
 			close(s.workerErrChan)

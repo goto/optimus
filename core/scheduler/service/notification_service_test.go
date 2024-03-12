@@ -49,12 +49,28 @@ func TestNotificationService(t *testing.T) {
 			job := scheduler.Job{
 				Name:   jobName,
 				Tenant: tnnt,
+				Task: &scheduler.Task{
+					Name: "bq2bq",
+				},
 			}
 			jobWithDetails := scheduler.JobWithDetails{
 				Job: &job,
 				JobMetadata: &scheduler.JobMetadata{
 					Version: 1,
 					Owner:   "jobOwnerName",
+				},
+				Webhook: []scheduler.Webhook{
+					{
+						On: scheduler.EventCategorySLAMiss,
+						Endpoints: []scheduler.WebhookEndPoint{
+							{
+								URL: "http://someDomain.com/endpoint",
+								Headers: map[string]string{
+									"header": "headerValue",
+								},
+							},
+						},
+					},
 				},
 				Alerts: []scheduler.Alert{
 					{
@@ -76,36 +92,73 @@ func TestNotificationService(t *testing.T) {
 				Values:  map[string]any{},
 			}
 
-			jobRepo := new(JobRepository)
-			jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
-			defer jobRepo.AssertExpectations(t)
+			t.Run("should send  webhook notification", func(t *testing.T) {
+				jobRepo := new(JobRepository)
+				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
+				defer jobRepo.AssertExpectations(t)
 
-			plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
-			plainSecrets := []*tenant.PlainTextSecret{plainSecret}
-			tenantService := new(mockTenantService)
-			tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
-			defer tenantService.AssertExpectations(t)
+				plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
+				plainSecrets := []*tenant.PlainTextSecret{plainSecret}
+				tenantService := new(mockTenantService)
+				tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
+				defer tenantService.AssertExpectations(t)
 
-			notifyChanelSlack := new(mockNotificationChanel)
-			notifyChanelSlack.On("Notify", ctx, scheduler.NotifyAttrs{
-				Owner:    "jobOwnerName",
-				JobEvent: event,
-				Route:    "#chanel-name",
-				Secret:   "secretValue",
-			}).Return(nil)
-			defer notifyChanelSlack.AssertExpectations(t)
-			notifyChanelPager := new(mockNotificationChanel)
-			defer notifyChanelPager.AssertExpectations(t)
+				webhookChannel := new(mockWebhookChanel)
+				webhookChannel.On("Trigger", scheduler.WebhookAttrs{
+					Owner:    "jobOwnerName",
+					JobEvent: event,
+					Meta: &scheduler.JobRunMeta{
+						Labels:         nil,
+						DestinationURN: "",
+					},
+					Route: "http://someDomain.com/endpoint",
+					Headers: map[string]string{
+						"header": "headerValue",
+					},
+				})
 
-			notifierChannels := map[string]service.Notifier{
-				"slack":     notifyChanelSlack,
-				"pagerduty": notifyChanelPager,
-			}
+				templateCompiler := new(mockTemplateCompiler)
+				secretContext := mock.Anything
+				templateCompiler.On("Compile", mock.Anything, secretContext).Return(map[string]string{"header": "headerValue"}, nil)
+				defer templateCompiler.AssertExpectations(t)
 
-			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
+				notifyService := service.NewNotifyService(logger, jobRepo, tenantService, nil, webhookChannel, templateCompiler)
 
-			err := notifyService.Push(ctx, event)
-			assert.Nil(t, err)
+				err := notifyService.Webhook(ctx, event)
+				assert.Nil(t, err)
+			})
+			t.Run("should send slack notification", func(t *testing.T) {
+				jobRepo := new(JobRepository)
+				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
+				defer jobRepo.AssertExpectations(t)
+
+				plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
+				plainSecrets := []*tenant.PlainTextSecret{plainSecret}
+				tenantService := new(mockTenantService)
+				tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
+				defer tenantService.AssertExpectations(t)
+
+				notifyChanelSlack := new(mockNotificationChanel)
+				notifyChanelSlack.On("Notify", ctx, scheduler.NotifyAttrs{
+					Owner:    "jobOwnerName",
+					JobEvent: event,
+					Route:    "#chanel-name",
+					Secret:   "secretValue",
+				}).Return(nil)
+				defer notifyChanelSlack.AssertExpectations(t)
+				notifyChanelPager := new(mockNotificationChanel)
+				defer notifyChanelPager.AssertExpectations(t)
+
+				notifierChannels := map[string]service.Notifier{
+					"slack":     notifyChanelSlack,
+					"pagerduty": notifyChanelPager,
+				}
+
+				notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
+
+				err := notifyService.Push(ctx, event)
+				assert.Nil(t, err)
+			})
 		})
 		t.Run("should send notification to the appropriate channel for job fail", func(t *testing.T) {
 			job := scheduler.Job{
@@ -247,6 +300,20 @@ func (m *mockNotificationChanel) Notify(ctx context.Context, attr scheduler.Noti
 }
 
 func (m *mockNotificationChanel) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+type mockWebhookChanel struct {
+	io.Closer
+	mock.Mock
+}
+
+func (m *mockWebhookChanel) Trigger(attr scheduler.WebhookAttrs) {
+	m.Called(attr)
+}
+
+func (m *mockWebhookChanel) Close() error {
 	args := m.Called()
 	return args.Error(0)
 }

@@ -27,7 +27,7 @@ type Notifier interface {
 
 type Webhook interface {
 	io.Closer
-	Notify(ctx context.Context, attr scheduler.WebhookAttrs) error
+	Trigger(attr scheduler.WebhookAttrs)
 }
 
 type NotifyService struct {
@@ -61,11 +61,6 @@ func (n *NotifyService) Webhook(ctx context.Context, event *scheduler.Event) err
 				}
 				secretMap = tenant.PlainTextSecrets(plainTextSecretsList).ToSecretMap()
 			}
-
-			jobWithDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), jobDetails.Name)
-			if err != nil {
-				return err
-			}
 			headerContext := compiler.PrepareContext(compiler.From(secretMap).WithName(contextSecret))
 
 			for _, endpoint := range webhook.Endpoints {
@@ -73,13 +68,12 @@ func (n *NotifyService) Webhook(ctx context.Context, event *scheduler.Event) err
 					Owner:    jobDetails.JobMetadata.Owner,
 					JobEvent: event,
 					Meta: &scheduler.JobRunMeta{
-						Labels:         jobWithDetails.JobMetadata.Labels,
-						DestinationURN: jobWithDetails.Job.Destination,
+						Labels:         jobDetails.JobMetadata.Labels,
+						DestinationURN: jobDetails.Job.Destination,
 					},
 					Route: endpoint.URL,
 				}
 				if len(endpoint.Headers) > 0 {
-					// compile header
 					compiledHeaders, err := n.compiler.Compile(endpoint.Headers, headerContext)
 					if err != nil {
 						multierror.Append(fmt.Errorf("error compiling template with config: %w", err))
@@ -87,7 +81,7 @@ func (n *NotifyService) Webhook(ctx context.Context, event *scheduler.Event) err
 					}
 					webhookAttr.Headers = compiledHeaders
 				}
-				_ = n.webhookChannel.Notify(ctx, webhookAttr)
+				n.webhookChannel.Trigger(webhookAttr)
 			}
 		}
 	}

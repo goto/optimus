@@ -79,7 +79,7 @@ func (s *Notifier) Trigger(attr scheduler.WebhookAttrs) {
 	}()
 }
 
-func (s *Notifier) fireWebhook(e event) error {
+func fireWebhook(e event) error {
 	client := &http.Client{}
 	payload := webhookPayload{
 		JobName:     e.meta.JobName.String(),
@@ -110,8 +110,8 @@ func (s *Notifier) fireWebhook(e event) error {
 	if err != nil {
 		return err
 	}
-	if res.StatusCode != 200 {
-		return fmt.Errorf("non 200 status code recieved from endpoint:'%s', response status: %s", e.url, res.Status)
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("non 200 status code received from endpoint:'%s', response status: %s", e.url, res.Status)
 	}
 	webhookWorkerSendCounter.Inc()
 
@@ -123,7 +123,7 @@ func (s *Notifier) Worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-s.eventChan:
-			err := s.fireWebhook(e)
+			err := fireWebhook(e) // noLint:contextcheck
 			if err != nil {
 				s.workerErrChan <- fmt.Errorf("webhook worker: %w", err)
 			}

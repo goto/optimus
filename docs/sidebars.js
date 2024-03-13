@@ -40,6 +40,7 @@ module.exports = {
         "concepts/secret",
         "concepts/plugin",
         "concepts/replay-and-backup",
+        "concepts/webhook",
       ],
     },
     {

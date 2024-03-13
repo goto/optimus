@@ -167,7 +167,8 @@ press (shift+down) or (shift+s) to decrement value
 `
 	case pointToTruncateToUnit:
 		hint = `valid values are:
-- None or <empty>: truncation happens based on the unit if size
+- <empty>: truncation happens based on the size unit
+- None: enforce no trancation
 - h: hour
 - d: day
 - w: week

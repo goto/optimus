@@ -1398,6 +1398,42 @@ func TestJobRunService(t *testing.T) {
 			assert.ErrorContains(t, actualError, "unexpected error")
 		})
 
+		t.Run("returns interval and nil if custom window v3 is used", func(t *testing.T) {
+			projectGetter := new(mockProjectGetter)
+			defer projectGetter.AssertExpectations(t)
+
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			projectGetter.On("Get", ctx, projName).Return(project, nil)
+
+			windowConfig, err := window.NewConfig(preset.Config().Size, preset.Config().Delay, preset.Config().Location, preset.Config().TruncateTo)
+			assert.NotNil(t, windowConfig)
+			assert.NoError(t, err)
+
+			job := &scheduler.JobWithDetails{
+				Name: jobName,
+				Schedule: &scheduler.Schedule{
+					Interval: "0 * * * *",
+				},
+				Job: &scheduler.Job{
+					WindowConfig: windowConfig,
+				},
+				JobMetadata: &scheduler.JobMetadata{
+					Version: window.NewWindowVersion,
+				},
+			}
+
+			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(job, nil)
+
+			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter)
+
+			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
+
+			assert.NotZero(t, actualInterval)
+			assert.NoError(t, actualError)
+		})
+
 		t.Run("returns interval and nil if no error is encountered", func(t *testing.T) {
 			projectGetter := new(mockProjectGetter)
 			defer projectGetter.AssertExpectations(t)

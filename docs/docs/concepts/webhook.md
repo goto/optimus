@@ -47,7 +47,7 @@ Only HTTP/HTTPS webhooks are supported.
 ### Retry Strategy
 - None
 
-## Job Specification to Take into Account WebHook URLs
+## Add WebHooks in Job Specification
 ```yaml
 version: 1
 name: <JOB_NAME>

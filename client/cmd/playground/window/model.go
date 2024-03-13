@@ -239,7 +239,7 @@ func (m *model) generateWindowInputView() string {
 	})
 	table.Append([]string{
 		"job schedule",
-		m.generateSechduleTimeView(),
+		m.generateScheduleTimeView(),
 	})
 	table.Render()
 	return buff.String()
@@ -331,7 +331,7 @@ func (m *model) generateLocationView() string {
 	return m.generateValueWithCursorPointerView(pointToLocationInput, m.locationInput.Value())
 }
 
-func (m *model) generateSechduleTimeView() string {
+func (m *model) generateScheduleTimeView() string {
 	year := m.generateValueWithCursorPointerView(pointToYear, strconv.Itoa(m.scheduleTime.Year()))
 	month := m.generateValueWithCursorPointerView(pointToMonth, m.scheduleTime.Month().String())
 	day := m.generateValueWithCursorPointerView(pointToDay, strconv.Itoa(m.scheduleTime.Day()))

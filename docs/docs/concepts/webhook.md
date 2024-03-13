@@ -80,5 +80,5 @@ task:
   name: <task_name>
   config:
     labels:
-      lavel_name: <some_label>
+      label_name: <some_label>
 dependencies: []

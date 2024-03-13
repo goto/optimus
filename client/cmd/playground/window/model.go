@@ -499,10 +499,12 @@ func (m *model) handleLeft() {
 
 func (m *model) handleDown() {
 	switch m.currentCursor {
-	case pointToSizeInput, pointToSizeUnit:
+	case pointToSizeInput:
 		m.sizeInput.Blur()
 		m.delayInput.Focus()
 		m.currentCursor = pointToDelayInput
+	case pointToSizeUnit:
+		m.currentCursor = pointToDelayUnit
 	case pointToDelayInput, pointToDelayUnit:
 		m.delayInput.Blur()
 		m.currentCursor = pointToTruncateToUnit
@@ -523,10 +525,12 @@ func (m *model) handleUp() {
 	case pointToSizeInput, pointToSizeUnit:
 		m.sizeInput.Blur()
 		m.currentCursor = pointToYear
-	case pointToDelayInput, pointToDelayUnit:
+	case pointToDelayInput:
 		m.delayInput.Blur()
 		m.sizeInput.Focus()
 		m.currentCursor = pointToSizeInput
+	case pointToDelayUnit:
+		m.currentCursor = pointToSizeUnit
 	case pointToTruncateToUnit:
 		m.delayInput.Focus()
 		m.currentCursor = pointToDelayInput

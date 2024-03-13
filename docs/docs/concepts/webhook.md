@@ -44,8 +44,6 @@ Only HTTP/HTTPS webhooks are supported.
 ### On Error
 - Log it in Optimus Server
 
-### Retry Strategy
-- None
 
 ## Add WebHooks in Job Specification
 ```yaml

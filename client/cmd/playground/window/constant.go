@@ -9,16 +9,10 @@ const (
 	pointToHour   cursorPointer = "hour"
 	pointToMinute cursorPointer = "minute"
 
-	pointToTruncateTo cursorPointer = "truncate_to"
-	pointToOffset     cursorPointer = "offset"
-	pointToSize       cursorPointer = "size"
-)
-
-type truncateTo string
-
-const (
-	truncateToMonth truncateTo = "M"
-	truncateToWeek  truncateTo = "w"
-	truncateToDay   truncateTo = "d"
-	truncateToHour  truncateTo = "h"
+	pointToSizeInput      cursorPointer = "size_input"
+	pointToSizeUnit       cursorPointer = "size_unit"
+	pointToDelayInput     cursorPointer = "delay_input"
+	pointToDelayUnit      cursorPointer = "delay_unit"
+	pointToTruncateToUnit cursorPointer = "truncate_to_unit"
+	pointToLocationInput  cursorPointer = "location_input"
 )

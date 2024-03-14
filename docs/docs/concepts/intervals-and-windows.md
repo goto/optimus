@@ -123,10 +123,14 @@ dependencies: []
 
 Notice the window configuration is specified under field `task.window`. **Important** note, the `version` field decides which
 version of window capability to be used. Currently available window version are `version: 1`, `version: 2` and `version: 3`. Version 3 is recommended
-to be used as version 1 will soon be deprecated. To know the difference between the two version, run the `playground` feature for window:
+to be used as version 1 and version 2 will soon be deprecated. To play around with window configuration, try `playground` feature for window:
 
 ```bash
+# executes playground for v3
 optimus playground window
+
+# executes playground for v1 and v2
+optimus playground window --v1-v2
 ```
 
 ### Window Preset (since v0.10.0)

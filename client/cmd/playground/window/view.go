@@ -101,7 +101,7 @@ func (v *view) getInputHint() string {
 	var hint string
 	switch v.currentCursor {
 	case pointToSizeInput:
-		hint = "empty or positive numeric value only"
+		hint = "empty or positive numeric value"
 	case pointToSizeUnit:
 		hint = `valid values are:
 - <empty> or None
@@ -117,8 +117,8 @@ func (v *view) getInputHint() string {
 (shift+down) or (shift+s) to decrement
 `
 	case pointToDelayInput:
-		hint = `empty or numeric value only
-negative is allowed`
+		hint = `empty or numeric value
+(and negative is allowed)`
 	case pointToDelayUnit:
 		hint = `valid values are:
 - <empty> or None

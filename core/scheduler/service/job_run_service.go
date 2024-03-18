@@ -192,23 +192,35 @@ func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.Proj
 		return interval.Interval{}, err
 	}
 
-	windowConfig := job.Job.WindowConfig
-	schedule := job.Schedule.Interval
-
-	if windowConfig.Window != nil && windowConfig.GetVersion() != window.NewWindowVersion {
-		return s.getIntervalForV1V2(windowConfig.Window, referenceTime)
-	}
-
-	window, err := window.From(windowConfig, schedule, project.GetPreset)
-	if err != nil {
-		return interval.Interval{}, err
-	}
-
-	return window.GetInterval(referenceTime)
+	return s.getInterval(project, job, referenceTime)
 }
 
 // TODO: this method is only for backward compatibility, it will be deprecated soon
-func (s *JobRunService) getIntervalForV1V2(baseWindow models.Window, referenceTime time.Time) (interval.Interval, error) {
+func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobWithDetails, referenceTime time.Time) (interval.Interval, error) {
+	if job.Job.WindowConfig.Type() == window.Incremental {
+		w, err := window.FromSchedule(job.Schedule.Interval)
+		if err != nil {
+			s.l.Error("error getting window with type incremental: %v", err)
+			return interval.Interval{}, err
+		}
+
+		return w.GetInterval(referenceTime)
+	}
+
+	if job.Job.WindowConfig.Type() == window.Preset {
+		preset, err := project.GetPreset(job.Job.WindowConfig.Preset)
+		if err != nil {
+			s.l.Error("error getting preset [%s] for project [%s]: %v", job.Job.WindowConfig.Preset, project.Name(), err)
+			return interval.Interval{}, err
+		}
+		cw, err := window.FromCustomConfig(preset.Config())
+		if err != nil {
+			return interval.Interval{}, err
+		}
+		return cw.GetInterval(referenceTime)
+	}
+
+	baseWindow := job.Job.WindowConfig.Window
 	w, err := models.NewWindow(baseWindow.GetVersion(), "", "0", baseWindow.GetSize())
 	if err != nil {
 		s.l.Error("error initializing window: %v", err)

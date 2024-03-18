@@ -105,6 +105,10 @@ func NewSimpleConfig(size, delay, location, truncateTo string) (SimpleConfig, er
 	err := duration.Validate(size)
 	validationErr.Append(err)
 
+	if strings.HasPrefix(size, "-") {
+		validationErr.Append(errNegativeSize)
+	}
+
 	err = duration.Validate(delay)
 	validationErr.Append(err)
 

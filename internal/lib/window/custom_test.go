@@ -340,6 +340,15 @@ func TestCustomWindow(t *testing.T) {
 			})
 			assert.Error(t, err)
 		})
+		t.Run("returns error when size count is negative", func(t *testing.T) {
+			_, err := window.FromCustomConfig(window.SimpleConfig{
+				Size:       "-3h",
+				Delay:      "",
+				Location:   "",
+				TruncateTo: "",
+			})
+			assert.Error(t, err)
+		})
 		t.Run("returns error when delay is invalid", func(t *testing.T) {
 			_, err := window.FromCustomConfig(window.SimpleConfig{
 				Size:       "1d",

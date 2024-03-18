@@ -3,9 +3,12 @@ package window
 import (
 	"time"
 
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/duration"
 	"github.com/goto/optimus/internal/lib/interval"
 )
+
+var errNegativeSize = errors.InvalidArgument("window", "size can not be negative")
 
 type CustomWindow struct {
 	size  duration.Duration
@@ -73,6 +76,7 @@ func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
 	return time.Date(year, month, day, hour, minute, sec, nsec, w.timezone), nil
 }
 
+// TODO: this function is not used anywhere at the moment, consider removing it
 func NewCustomWindow(size, delay duration.Duration, location *time.Location, truncateTo string) CustomWindow {
 	return CustomWindow{
 		size:       size,
@@ -86,6 +90,10 @@ func FromCustomConfig(c SimpleConfig) (CustomWindow, error) {
 	size, err := duration.From(c.Size)
 	if err != nil {
 		return CustomWindow{}, err
+	}
+
+	if size.GetCount() < 0 {
+		return CustomWindow{}, errNegativeSize
 	}
 
 	delay, err := duration.From(c.Delay)

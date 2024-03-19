@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/lib/duration"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
@@ -197,7 +198,9 @@ func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.Proj
 
 // TODO: this method is only for backward compatibility, it will be deprecated soon
 func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobWithDetails, referenceTime time.Time) (interval.Interval, error) {
-	if job.Job.WindowConfig.Type() == window.Incremental {
+	windowConfig := job.Job.WindowConfig
+
+	if windowConfig.Type() == window.Incremental {
 		w, err := window.FromSchedule(job.Schedule.Interval)
 		if err != nil {
 			s.l.Error("error getting window with type incremental: %v", err)
@@ -207,21 +210,31 @@ func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobW
 		return w.GetInterval(referenceTime)
 	}
 
-	if job.Job.WindowConfig.Type() == window.Preset {
-		preset, err := project.GetPreset(job.Job.WindowConfig.Preset)
-		if err != nil {
-			s.l.Error("error getting preset [%s] for project [%s]: %v", job.Job.WindowConfig.Preset, project.Name(), err)
-			return interval.Interval{}, err
+	if windowConfig.Type() == window.Preset || windowConfig.GetVersion() == window.NewWindowVersion {
+		var config window.SimpleConfig
+		if windowConfig.Type() == window.Preset {
+			preset, err := project.GetPreset(windowConfig.Preset)
+			if err != nil {
+				s.l.Error("error getting preset [%s] for project [%s]: %v", windowConfig.Preset, project.Name(), err)
+				return interval.Interval{}, err
+			}
+
+			config = preset.Config()
+		} else {
+			config = windowConfig.GetSimpleConfig()
 		}
-		cw, err := window.FromCustomConfig(preset.Config())
+
+		config.Delay = ""
+		config.TruncateTo = string(duration.None)
+
+		cw, err := window.FromCustomConfig(config)
 		if err != nil {
 			return interval.Interval{}, err
 		}
 		return cw.GetInterval(referenceTime)
 	}
 
-	baseWindow := job.Job.WindowConfig.Window
-	w, err := models.NewWindow(baseWindow.GetVersion(), "", "0", baseWindow.GetSize())
+	w, err := models.NewWindow(windowConfig.GetVersion(), "", "0", windowConfig.GetSize())
 	if err != nil {
 		s.l.Error("error initializing window: %v", err)
 		return interval.Interval{}, err

@@ -13,6 +13,7 @@ log:
 #serve:
 #  # port to listen on
 #  port: 9100
+#  port_grpc: 9101
 #
 #  # host to listen on
 #  host: localhost
@@ -20,6 +21,7 @@ log:
 #  # this gets injected in compiled dags to reach back out to optimus service
 #  # when they run
 #  ingress_host: optimus.example.io:80
+#  ingress_host_grpc: optimus-grpc.example.io:80
 #
 #  # 32 char hash used for encrypting secrets
 #  # note: use a different one in production please

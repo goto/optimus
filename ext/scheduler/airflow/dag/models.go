@@ -20,6 +20,7 @@ type TemplateContext struct {
 	Version         string
 	SLAMissDuration int64
 	Hostname        string
+	GRPCHostName    string
 	ExecutorTask    string
 	ExecutorHook    string
 

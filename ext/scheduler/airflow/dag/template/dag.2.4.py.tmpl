@@ -137,7 +137,7 @@ executor_env_vars = [
 init_env_vars = [
     k8s.V1EnvVar(name="JOB_DIR", value=JOB_DIR),
     k8s.V1EnvVar(name="JOB_NAME", value='{{$.JobDetails.Name}}'),
-    k8s.V1EnvVar(name="OPTIMUS_HOST", value='{{$.Hostname}}'),
+    k8s.V1EnvVar(name="OPTIMUS_HOST", value='{{$.GRPCHostName}}'),
     k8s.V1EnvVar(name="PROJECT", value='{{$.Tenant.ProjectName.String}}'),
 ]
 

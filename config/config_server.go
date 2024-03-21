@@ -1,15 +1,16 @@
 package config
 
 type ServerConfig struct {
-	Version          Version             `mapstructure:"version"`
-	Log              LogConfig           `mapstructure:"log"`
-	Serve            Serve               `mapstructure:"serve"`
-	Telemetry        TelemetryConfig     `mapstructure:"telemetry"`
-	Observability    ObservabilityConfig `mapstructure:"observability"`
-	ResourceManagers []ResourceManager   `mapstructure:"resource_managers"`
-	Plugin           PluginConfig        `mapstructure:"plugin"`
-	Replay           ReplayConfig        `mapstructure:"replay"`
-	Publisher        *Publisher          `mapstructure:"publisher"`
+	Version          Version            `mapstructure:"version"`
+	Log              LogConfig          `mapstructure:"log"`
+	Serve            Serve              `mapstructure:"serve"`
+	Telemetry        TelemetryConfig    `mapstructure:"telemetry"`
+	EventManager     EventManagerConfig `mapstructure:"event_manager"`
+	Dashboard        string             `mapstructure:"dashboard"`
+	ResourceManagers []ResourceManager  `mapstructure:"resource_managers"`
+	Plugin           PluginConfig       `mapstructure:"plugin"`
+	Replay           ReplayConfig       `mapstructure:"replay"`
+	Publisher        *Publisher         `mapstructure:"publisher"`
 }
 
 type Serve struct {
@@ -33,10 +34,9 @@ type TelemetryConfig struct {
 	MetricServerAddr string `mapstructure:"telegraf_addr"`
 }
 
-type ObservabilityConfig struct {
-	AlertManagerHost     string `mapstructure:"alert_manager_host"`
-	AlertManagerEndpoint string `mapstructure:"alert_manager_endpoint"`
-	Dashboard            string `mapstructure:"dashboard"`
+type EventManagerConfig struct {
+	Host     string `mapstructure:"host"`
+	Endpoint string `mapstructure:"endpoint"`
 }
 
 type ResourceManager struct {

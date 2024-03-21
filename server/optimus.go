@@ -320,9 +320,9 @@ func (s *OptimusServer) setupHandlers() error {
 		func(err error) {
 			s.logger.Error("alert-manager error accumulator : " + err.Error())
 		},
-		s.conf.Observability.AlertManagerHost,
-		s.conf.Observability.AlertManagerEndpoint,
-		s.conf.Observability.Dashboard,
+		s.conf.EventManager.Host,
+		s.conf.EventManager.Endpoint,
+		s.conf.Dashboard,
 	)
 
 	newEngine := compiler.NewEngine()

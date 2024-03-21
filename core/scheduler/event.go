@@ -30,7 +30,7 @@ const (
 
 	SLAMissEvent    JobEventType = "sla_miss"
 	JobFailureEvent JobEventType = "failure"
-	JobSuccessEvent JobEventType = "job_success" //TODO: this need to be changed to 'success'
+	JobSuccessEvent JobEventType = "job_success"
 
 	TaskStartEvent   JobEventType = "task_start"
 	TaskRetryEvent   JobEventType = "task_retry"

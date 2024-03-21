@@ -1,7 +1,6 @@
 package alertmanager_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,43 +11,46 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/notify/webhook"
+	"github.com/goto/optimus/ext/notify/alertmanager"
 )
 
-func TestWebhook(t *testing.T) {
+func TestAlertManager(t *testing.T) {
 	projectName := "ss"
 	namespaceName := "bb"
-	jobDestinationTableURN := "project-dest-table"
 	jobName := scheduler.JobName("foo-job-spec")
 	tnnt, _ := tenant.NewTenant(projectName, namespaceName)
 	eventTime := time.Now()
 	scheduledAt := eventTime.Add(-2 * time.Hour)
-	t.Run("should send webhook to user url successfully", func(t *testing.T) {
-		muxRouter := http.NewServeMux()
-		server := httptest.NewServer(muxRouter)
-		defer server.Close()
-		muxRouter.HandleFunc("/users/webhook_end_point", func(rw http.ResponseWriter, r *http.Request) {
-			rw.Header().Set("Content-Type", "application/json")
-			response, _ := json.Marshal(struct {
-				Ok bool `json:"ok"`
-			}{
-				Ok: true,
-			})
-			rw.Write(response)
+	alertManagerEndPoint := "/endpoint"
+
+	t.Run("should send event to alert manager", func(t *testing.T) {
+		reqRecorder := httptest.NewRecorder()
+		httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, r.Method, http.MethodPost)
+			assert.Equal(t, r.Header.Get("Content-Type"), "application/json")
+
+			assert.Equal(t, r.URL.String(), alertManagerEndPoint)
+
+			var payload alertmanager.AlertPayload
+			assert.Nil(t, json.NewDecoder(r.Body).Decode(&payload))
+
+			// Check if the payload is properly formed
+			assert.NotEmpty(t, payload.Data.Dashboard)
+			assert.NotEmpty(t, payload.Data.Status)
+			assert.Equal(t, payload.Data.EventType, scheduler.SLAMissEvent)
+			assert.NotEmpty(t, payload.Data.Summary)
+			assert.NotEmpty(t, payload.Data.Severity)
+
+			w.WriteHeader(http.StatusOK)
 		})
+		mockServer := httptest.NewServer(httpHandler)
+		defer mockServer.Close()
 
-		var sendErrors []error
-		ctx, cancel := context.WithCancel(context.Background())
-		client := webhook.NewNotifier(
-			ctx,
-			time.Millisecond*500,
-			func(err error) {
-				sendErrors = append(sendErrors, err)
-			},
-		)
-
-		client.Trigger(scheduler.WebhookAttrs{
-			Owner: "",
+		err := alertmanager.RelayEvent(&scheduler.AlertAttrs{
+			Owner:  "@data-batching",
+			JobURN: "urn:optimus:project:job:project.namespace.job_name",
+			Title:  "Optimus Job Alert",
+			Status: scheduler.StatusFiring,
 			JobEvent: &scheduler.Event{
 				JobName:        jobName,
 				Tenant:         tnnt,
@@ -58,79 +60,16 @@ func TestWebhook(t *testing.T) {
 				Status:         "success",
 				JobScheduledAt: scheduledAt,
 				Values:         map[string]any{},
-				SLAObjectList:  nil,
-			},
-			Meta: &scheduler.JobRunMeta{
-				Labels: map[string]string{
-					"label1": "cohort1",
-					"label2": "cohort2",
+				SLAObjectList: []*scheduler.SLAObject{
+					&scheduler.SLAObject{
+						JobName:        jobName,
+						JobScheduledAt: scheduledAt,
+					},
 				},
-				DestinationURN: jobDestinationTableURN,
 			},
-			Route: server.URL,
-			Headers: map[string]string{
-				"auth": "compiled_headers",
-			},
-		})
-
-		assert.Nil(t, sendErrors)
-		cancel()
-		err := client.Close()
+		}, mockServer.URL, alertManagerEndPoint, "dashboard_url")
 		assert.Nil(t, err)
-	})
-	t.Run("should log wehook failure errors", func(t *testing.T) {
-		muxRouter := http.NewServeMux()
-		server := httptest.NewServer(muxRouter)
-		defer server.Close()
-		muxRouter.HandleFunc("/users/webhook_end_point", func(rw http.ResponseWriter, r *http.Request) {
-			rw.Header().Set("Content-Type", "application/json")
-			response, _ := json.Marshal(struct {
-				Ok bool `json:"ok"`
-			}{
-				Ok: true,
-			})
-			rw.Write(response)
-		})
 
-		var sendErrors []error
-		ctx, cancel := context.WithCancel(context.Background())
-		client := webhook.NewNotifier(
-			ctx,
-			time.Millisecond*500,
-			func(err error) {
-				sendErrors = append(sendErrors, err)
-				assert.True(t, true, len(sendErrors) > 0)
-			},
-		)
-
-		client.Trigger(scheduler.WebhookAttrs{
-			Owner: "",
-			JobEvent: &scheduler.Event{
-				JobName:        jobName,
-				Tenant:         tnnt,
-				Type:           scheduler.SLAMissEvent,
-				EventTime:      eventTime,
-				OperatorName:   "bq2bq",
-				Status:         "success",
-				JobScheduledAt: scheduledAt,
-				Values:         map[string]any{},
-				SLAObjectList:  nil,
-			},
-			Meta: &scheduler.JobRunMeta{
-				Labels: map[string]string{
-					"label1": "cohort1",
-					"label2": "cohort2",
-				},
-				DestinationURN: jobDestinationTableURN,
-			},
-			Route: server.URL,
-			Headers: map[string]string{
-				"auth": "compiled_headers",
-			},
-		})
-
-		cancel()
-		err := client.Close()
-		assert.Nil(t, err)
+		assert.Equal(t, reqRecorder.Code, http.StatusOK)
 	})
 }

@@ -127,6 +127,27 @@ func TestNotificationService(t *testing.T) {
 				err := notifyService.Webhook(ctx, event)
 				assert.Nil(t, err)
 			})
+
+			t.Run("should send event to alert manager", func(t *testing.T) {
+				jobRepo := new(JobRepository)
+				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
+				defer jobRepo.AssertExpectations(t)
+
+				alertManager := new(mockAlertManager)
+				alertManager.On("Relay", &scheduler.AlertAttrs{
+					Owner:    "jobOwnerName",
+					JobURN:   job.URN(),
+					Title:    "Optimus Job Alert",
+					Status:   scheduler.StatusFiring,
+					JobEvent: event,
+				})
+
+				notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, alertManager)
+
+				err := notifyService.Relay(ctx, event)
+				assert.Nil(t, err)
+			})
+
 			t.Run("should send slack notification", func(t *testing.T) {
 				jobRepo := new(JobRepository)
 				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)

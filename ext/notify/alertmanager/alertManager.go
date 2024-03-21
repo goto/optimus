@@ -66,7 +66,7 @@ type alertData struct {
 	Dashboard string `json:"dashboard"`
 }
 
-type alertPayload struct {
+type AlertPayload struct {
 	Data     alertData         `json:"data"`
 	Template string            `json:"template"`
 	Labels   map[string]string `json:"labels"`
@@ -79,24 +79,7 @@ func (a *AlertManager) Relay(alert *scheduler.AlertAttrs) {
 	}()
 }
 
-func (a *AlertManager) relayEvent(e *scheduler.AlertAttrs) error {
-
-	dashboardVar := map[string]string{
-		"var-project":       e.JobEvent.Tenant.ProjectName().String(),
-		"var-namespace":     e.JobEvent.Tenant.NamespaceName().String(),
-		"var-job":           e.JobEvent.JobName.String(),
-		"var-schedule_time": e.JobEvent.JobScheduledAt.Format(radarTimeFormat),
-	}
-
-	dashboardUrl, _ := url.Parse(a.dashboard)
-	q := dashboardUrl.Query()
-	for k, v := range dashboardVar {
-		q.Set(k, v)
-	}
-	dashboardUrl.RawQuery = q.Encode()
-
-	client := &http.Client{}
-
+func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL string) error {
 	var notificationMsg string
 	switch e.JobEvent.Type {
 	case scheduler.JobFailureEvent:
@@ -117,20 +100,26 @@ func (a *AlertManager) relayEvent(e *scheduler.AlertAttrs) error {
 		}
 	}
 
-	payload := alertPayload{
+	dashURL, _ := url.Parse(dashboardURL)
+	q := dashURL.Query()
+	q.Set("var-project", e.JobEvent.Tenant.ProjectName().String())
+	q.Set("var-namespace", e.JobEvent.Tenant.NamespaceName().String())
+	q.Set("var-job", e.JobEvent.JobName.String())
+	q.Set("var-schedule_time", e.JobEvent.JobScheduledAt.Format(radarTimeFormat))
+	dashURL.RawQuery = q.Encode()
+
+	payload := AlertPayload{
 		Data: alertData{
 			EventType: e.JobEvent.Type,
 			Title:     e.Title,
 			Status:    e.Status,
 			Severity:  "CRITICAL",
 			Summary:   notificationMsg,
-			Dashboard: dashboardUrl.String(),
+			Dashboard: dashURL.String(),
 		},
 		Labels: map[string]string{
 			"job_urn":    e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
-			"team":       "optimus_showcase", //Todo: remove before merging, hardcoded for testing
-			"severity":   "WARNING",
 		},
 	}
 	payloadJSON, err := json.Marshal(payload)
@@ -140,12 +129,13 @@ func (a *AlertManager) relayEvent(e *scheduler.AlertAttrs) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout) // nolint:contextcheck
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.host+a.endpoint, bytes.NewBuffer(payloadJSON))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, host+endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return err
 	}
 	req.Header.Add("Content-Type", "application/json")
 
+	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
 		return err
@@ -153,7 +143,6 @@ func (a *AlertManager) relayEvent(e *scheduler.AlertAttrs) error {
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("non 200 status code received status: %s", res.Status)
 	}
-	eventWorkerSendCounter.Inc()
 
 	return res.Body.Close()
 }
@@ -163,9 +152,12 @@ func (a *AlertManager) Worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-a.alertChan:
-			err := a.relayEvent(e) // nolint:contextcheck
+			err := RelayEvent(e, a.host, a.endpoint, a.dashboard) // nolint:contextcheck
 			if err != nil {
 				a.workerErrChan <- fmt.Errorf("alert worker: %w", err)
+				eventWorkerSendErrCounter.Inc()
+			} else {
+				eventWorkerSendCounter.Inc()
 			}
 		case <-ctx.Done():
 			close(a.workerErrChan)

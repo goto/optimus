@@ -1,4 +1,4 @@
-package alertManager_test
+package alertmanager_test
 
 import (
 	"context"

@@ -29,7 +29,7 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
-	"github.com/goto/optimus/ext/notify/alertManager"
+	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
@@ -300,7 +300,7 @@ func (s *OptimusServer) setupHandlers() error {
 		},
 	)
 
-	alertsHandler := alertManager.New(
+	alertsHandler := alertmanager.New(
 		notificationContext,
 		func(err error) {
 			s.logger.Error("alert-manager error accumulator : " + err.Error())

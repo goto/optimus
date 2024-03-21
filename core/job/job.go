@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	EntityJob = "job"
+	EntityJob  = "job"
+	urnContext = "optimus"
 
 	UpstreamTypeStatic   UpstreamType = "static"
 	UpstreamTypeInferred UpstreamType = "inferred"

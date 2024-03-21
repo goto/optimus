@@ -14,9 +14,10 @@ type Optimus struct {
 	Project    Project      `mapstructure:"project"`
 	Namespaces []*Namespace `mapstructure:"namespaces"`
 
-	Server    Serve           `mapstructure:"serve"`
-	Log       LogConfig       `mapstructure:"log"`
-	Telemetry TelemetryConfig `mapstructure:"telemetry"`
+	Server        Serve               `mapstructure:"serve"`
+	Log           LogConfig           `mapstructure:"log"`
+	Telemetry     TelemetryConfig     `mapstructure:"telemetry"`
+	Observability ObservabilityConfig `mapstructure:"observability"`
 
 	namespaceNameToNamespace map[string]*Namespace
 }

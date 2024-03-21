@@ -24,6 +24,8 @@ func (o OperatorType) String() string {
 const (
 	EntityJobRun = "jobRun"
 
+	urnContext = "optimus"
+
 	OperatorTask   OperatorType = "task"
 	OperatorSensor OperatorType = "sensor"
 	OperatorHook   OperatorType = "hook"
@@ -64,6 +66,10 @@ func (j *Job) GetHook(hookName string) (*Hook, error) {
 		}
 	}
 	return nil, errors.NotFound(EntityJobRun, "hook:"+hookName)
+}
+
+func (j *Job) URN() string {
+	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, j.Tenant.ProjectName(), j.Tenant.ProjectName(), j.Tenant.NamespaceName(), j.Name)
 }
 
 type Task struct {

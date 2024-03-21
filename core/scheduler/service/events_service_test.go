@@ -33,7 +33,7 @@ func TestNotificationService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(nil, fmt.Errorf("some error"))
 			defer jobRepo.AssertExpectations(t)
 
-			notifyService := service.NewNotifyService(logger, jobRepo, nil, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, nil)
 
 			event := &scheduler.Event{
 				JobName: jobName,
@@ -122,7 +122,7 @@ func TestNotificationService(t *testing.T) {
 				templateCompiler.On("Compile", mock.Anything, secretContext).Return(map[string]string{"header": "headerValue"}, nil)
 				defer templateCompiler.AssertExpectations(t)
 
-				notifyService := service.NewNotifyService(logger, jobRepo, tenantService, nil, webhookChannel, templateCompiler)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, webhookChannel, templateCompiler, nil)
 
 				err := notifyService.Webhook(ctx, event)
 				assert.Nil(t, err)
@@ -154,7 +154,7 @@ func TestNotificationService(t *testing.T) {
 					"pagerduty": notifyChanelPager,
 				}
 
-				notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
 
 				err := notifyService.Push(ctx, event)
 				assert.Nil(t, err)
@@ -217,7 +217,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 			assert.Nil(t, err)
@@ -279,7 +279,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewNotifyService(logger, jobRepo, tenantService, notifierChannels, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 
@@ -314,6 +314,20 @@ func (m *mockWebhookChanel) Trigger(attr scheduler.WebhookAttrs) {
 }
 
 func (m *mockWebhookChanel) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+type mockAlertManager struct {
+	io.Closer
+	mock.Mock
+}
+
+func (m *mockAlertManager) Relay(attr *scheduler.AlertAttrs) {
+	m.Called(attr)
+}
+
+func (m *mockAlertManager) Close() error {
 	args := m.Called()
 	return args.Error(0)
 }

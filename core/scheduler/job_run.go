@@ -69,6 +69,14 @@ type OperatorRun struct {
 	EndTime      *time.Time
 }
 
+type AlertAttrs struct {
+	Owner    string
+	JobURN   string
+	Title    string
+	Status   EventStatus
+	JobEvent *Event
+}
+
 type WebhookAttrs struct {
 	Owner    string
 	JobEvent *Event

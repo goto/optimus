@@ -61,7 +61,7 @@ func TestAlertManager(t *testing.T) {
 				JobScheduledAt: scheduledAt,
 				Values:         map[string]any{},
 				SLAObjectList: []*scheduler.SLAObject{
-					&scheduler.SLAObject{
+					{
 						JobName:        jobName,
 						JobScheduledAt: scheduledAt,
 					},

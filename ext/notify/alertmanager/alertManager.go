@@ -73,6 +73,10 @@ type AlertPayload struct {
 }
 
 func (a *AlertManager) Relay(alert *scheduler.AlertAttrs) {
+	if a.host == "" {
+		// Don't alert if alert manager is not configured in server config
+		return
+	}
 	go func() {
 		a.alertChan <- alert
 		eventQueueCounter.Inc()
@@ -88,7 +92,7 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL string) er
 			"*Owner*\t\t:\t<%s>\t\t*Job*\t\t\t:\t`%s`\n"+
 			"*Task ID*\t\t:\t%s\t\t\t*Scheduled At*:\t`%s`\n",
 			e.JobEvent.Status, e.JobEvent.Tenant.ProjectName(), e.JobEvent.Tenant.NamespaceName(),
-			e.Owner, e.JobEvent.JobName, e.JobEvent.JobScheduledAt.Format(time.RFC822), e.JobEvent.OperatorName)
+			e.Owner, e.JobEvent.JobName, e.JobEvent.OperatorName, e.JobEvent.JobScheduledAt.Format(time.RFC822))
 	case scheduler.SLAMissEvent:
 		notificationMsg = fmt.Sprintf("[Job] SLA MISS :alert:\n"+
 			"*Project*\t\t:\t%s\t\t\t*Namespace*\t:\t%s\n"+
@@ -120,6 +124,11 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL string) er
 		Labels: map[string]string{
 			"job_urn":    e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
+			"identifier": fmt.Sprintf("%s:%s:%s",
+				e.JobEvent.Tenant.ProjectName(),
+				e.JobEvent.Tenant.NamespaceName(),
+				e.JobEvent.JobName),
+			"severity": "CRITICAL",
 		},
 	}
 	payloadJSON, err := json.Marshal(payload)

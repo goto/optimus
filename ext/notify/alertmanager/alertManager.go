@@ -156,7 +156,7 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL string) er
 	return res.Body.Close()
 }
 
-func (a *AlertManager) Worker(ctx context.Context) {
+func (a *AlertManager) worker(ctx context.Context) {
 	defer a.wg.Done()
 	for {
 		select {
@@ -184,11 +184,14 @@ func (a *AlertManager) Close() error { // nolint: unparam
 }
 
 func New(ctx context.Context, errHandler func(error), host, endpoint, dashboard string) *AlertManager {
-	ch := make(chan *scheduler.AlertAttrs, httpChannelBufferSize)
+	if host == "" {
+		return &AlertManager{}
+	}
+
 	this := &AlertManager{
-		alertChan:          ch,
-		wg:                 sync.WaitGroup{},
+		alertChan:          make(chan *scheduler.AlertAttrs, httpChannelBufferSize),
 		workerErrChan:      make(chan error),
+		wg:                 sync.WaitGroup{},
 		host:               host,
 		endpoint:           endpoint,
 		dashboard:          dashboard,
@@ -205,6 +208,6 @@ func New(ctx context.Context, errHandler func(error), host, endpoint, dashboard 
 	}()
 
 	this.wg.Add(1)
-	go this.Worker(ctx)
+	go this.worker(ctx)
 	return this
 }

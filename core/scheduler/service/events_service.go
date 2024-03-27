@@ -30,19 +30,43 @@ type Webhook interface {
 	Trigger(attr scheduler.WebhookAttrs)
 }
 
-type NotifyService struct {
+type AlertManager interface {
+	io.Closer
+	Relay(attr *scheduler.AlertAttrs)
+}
+
+type EventsService struct {
 	notifyChannels map[string]Notifier
 	webhookChannel Webhook
+	alertManager   AlertManager
 	compiler       TemplateCompiler
 	jobRepo        JobRepository
 	tenantService  TenantService
 	l              log.Logger
 }
 
-func (n *NotifyService) Webhook(ctx context.Context, event *scheduler.Event) error {
-	jobDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
+func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error {
+	jobDetails, err := e.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
 	if err != nil {
-		n.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
+		e.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
+		return err
+	}
+	if event.Type == scheduler.JobFailureEvent || event.Type == scheduler.SLAMissEvent {
+		e.alertManager.Relay(&scheduler.AlertAttrs{
+			Owner:    jobDetails.JobMetadata.Owner,
+			JobURN:   jobDetails.Job.URN(),
+			Title:    "Optimus Job Alert",
+			Status:   scheduler.StatusFiring,
+			JobEvent: event,
+		})
+	}
+	return nil
+}
+
+func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) error {
+	jobDetails, err := e.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
+	if err != nil {
+		e.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
 		return err
 	}
 	multierror := errors.NewMultiError("ErrorsInNotifyPush")
@@ -52,9 +76,9 @@ func (n *NotifyService) Webhook(ctx context.Context, event *scheduler.Event) err
 	for _, webhook := range jobDetails.Webhook {
 		if event.Type.IsOfType(webhook.On) {
 			if plainTextSecretsList == nil {
-				plainTextSecretsList, err = n.tenantService.GetSecrets(ctx, event.Tenant)
+				plainTextSecretsList, err = e.tenantService.GetSecrets(ctx, event.Tenant)
 				if err != nil {
-					n.l.Error("error getting secrets for project [%s] namespace [%s]: %s",
+					e.l.Error("error getting secrets for project [%s] namespace [%s]: %s",
 						event.Tenant.ProjectName().String(), event.Tenant.NamespaceName().String(), err)
 					multierror.Append(err)
 					continue
@@ -74,24 +98,24 @@ func (n *NotifyService) Webhook(ctx context.Context, event *scheduler.Event) err
 					Route: endpoint.URL,
 				}
 				if len(endpoint.Headers) > 0 {
-					compiledHeaders, err := n.compiler.Compile(endpoint.Headers, headerContext)
+					compiledHeaders, err := e.compiler.Compile(endpoint.Headers, headerContext)
 					if err != nil {
 						multierror.Append(fmt.Errorf("error compiling template with config: %w", err))
 						continue
 					}
 					webhookAttr.Headers = compiledHeaders
 				}
-				n.webhookChannel.Trigger(webhookAttr)
+				e.webhookChannel.Trigger(webhookAttr)
 			}
 		}
 	}
 	return multierror.ToErr()
 }
 
-func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error {
-	jobDetails, err := n.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
+func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {
+	jobDetails, err := e.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
 	if err != nil {
-		n.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
+		e.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
 		return err
 	}
 	notificationConfig := jobDetails.Alerts
@@ -106,11 +130,11 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 				scheme := chanParts[0]
 				route := chanParts[1]
 
-				n.l.Debug("notification event for job: %s , event: %+v", event.JobName, event)
+				e.l.Debug("notification event for job: %s , event: %+v", event.JobName, event)
 				if plainTextSecretsList == nil {
-					plainTextSecretsList, err = n.tenantService.GetSecrets(ctx, event.Tenant)
+					plainTextSecretsList, err = e.tenantService.GetSecrets(ctx, event.Tenant)
 					if err != nil {
-						n.l.Error("error getting secrets for project [%s] namespace [%s]: %s",
+						e.l.Error("error getting secrets for project [%s] namespace [%s]: %s",
 							event.Tenant.ProjectName().String(), event.Tenant.NamespaceName().String(), err)
 						multierror.Append(err)
 						continue
@@ -130,14 +154,14 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 					return err
 				}
 
-				if notifyChannel, ok := n.notifyChannels[scheme]; ok {
+				if notifyChannel, ok := e.notifyChannels[scheme]; ok {
 					if currErr := notifyChannel.Notify(ctx, scheduler.NotifyAttrs{
 						Owner:    jobDetails.JobMetadata.Owner,
 						JobEvent: event,
 						Secret:   secret,
 						Route:    route,
 					}); currErr != nil {
-						n.l.Error("Error: No notification event for job current error: %s", currErr)
+						e.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
 					}
 				}
@@ -152,24 +176,25 @@ func (n *NotifyService) Push(ctx context.Context, event *scheduler.Event) error 
 	return multierror.ToErr()
 }
 
-func (n *NotifyService) Close() error {
+func (e *EventsService) Close() error {
 	me := errors.NewMultiError("ErrorsInNotifyClose")
-	for _, notify := range n.notifyChannels {
+	for _, notify := range e.notifyChannels {
 		if cerr := notify.Close(); cerr != nil {
-			n.l.Error("error closing notificication channel: %s", cerr)
+			e.l.Error("error closing notificication channel: %s", cerr)
 			me.Append(cerr)
 		}
 	}
 	return me.ToErr()
 }
 
-func NewNotifyService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler) *NotifyService {
-	return &NotifyService{
+func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler, alertsHandler AlertManager) *EventsService {
+	return &EventsService{
 		l:              l,
 		jobRepo:        jobRepo,
 		tenantService:  tenantService,
 		notifyChannels: notifyChan,
 		webhookChannel: webhookNotifier,
 		compiler:       compiler,
+		alertManager:   alertsHandler,
 	}
 }

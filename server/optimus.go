@@ -30,6 +30,7 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
+	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
@@ -314,12 +315,22 @@ func (s *OptimusServer) setupHandlers() error {
 		},
 	)
 
+	alertsHandler := alertmanager.New(
+		notificationContext,
+		func(err error) {
+			s.logger.Error("alert-manager error accumulator : " + err.Error())
+		},
+		s.conf.EventManager.Host,
+		s.conf.EventManager.Endpoint,
+		s.conf.Dashboard,
+	)
+
 	newEngine := compiler.NewEngine()
 
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
-	notificationService := schedulerService.NewNotifyService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine)
+	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
 	if err != nil {
 		return err
@@ -367,7 +378,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Resource Handler
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, resourceService))
 
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, notificationService))
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))
@@ -381,7 +392,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterReplayServiceServer(s.grpcServer, schedulerHandler.NewReplayHandler(s.logger, replayService))
 
 	s.cleanupFn = append(s.cleanupFn, func() {
-		err = notificationService.Close()
+		err = eventsService.Close()
 		if err != nil {
 			s.logger.Error("Error while closing event service: %s", err)
 		}

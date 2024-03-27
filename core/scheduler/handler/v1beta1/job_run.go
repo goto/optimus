@@ -25,6 +25,7 @@ type JobRunService interface {
 type Notifier interface {
 	Push(ctx context.Context, event *scheduler.Event) error
 	Webhook(ctx context.Context, event *scheduler.Event) error
+	Relay(ctx context.Context, event *scheduler.Event) error
 }
 
 type JobRunHandler struct {
@@ -180,6 +181,9 @@ func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJob
 		h.l.Error("error updating job run state for Job: %s, Project: %s, eventType: %s, schedule_at: %s, err: %s", jobName, tnnt.ProjectName(), event.Type, event.JobScheduledAt.String(), err.Error())
 		me.Append(errors.AddErrContext(err, scheduler.EntityJobRun, "scheduler could not update job run state"))
 	}
+
+	err = h.notifier.Relay(ctx, event)
+	me.Append(err)
 
 	err = h.notifier.Webhook(ctx, event)
 	me.Append(err)

@@ -14,6 +14,7 @@ import (
 
 type (
 	EventName        string
+	EventStatus      string
 	JobEventType     string
 	JobEventCategory string
 )
@@ -45,6 +46,9 @@ const (
 	SensorRetryEvent   JobEventType = "sensor_retry"
 	SensorFailEvent    JobEventType = "sensor_fail"
 	SensorSuccessEvent JobEventType = "sensor_success"
+
+	StatusFiring   EventStatus = "firing"
+	StatusResolved EventStatus = "resolved"
 )
 
 func FromStringToEventType(name string) (JobEventType, error) {
@@ -96,6 +100,7 @@ func (s *SLAObject) String() string {
 
 type Event struct {
 	JobName        JobName
+	URN            string
 	Tenant         tenant.Tenant
 	Type           JobEventType
 	EventTime      time.Time

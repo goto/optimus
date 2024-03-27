@@ -503,6 +503,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(nil)
 			notifier.On("Webhook", ctx, event).
 				Return(nil)
+			notifier.On("Relay", ctx, event).Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
 			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier)
@@ -549,6 +550,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(fmt.Errorf("some error"))
 			notifier.On("Webhook", ctx, event).
 				Return(nil)
+			notifier.On("Relay", ctx, event).Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
 			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier)
@@ -740,6 +742,11 @@ func (m *mockNotifier) Push(ctx context.Context, event *scheduler.Event) error {
 }
 
 func (m *mockNotifier) Webhook(ctx context.Context, event *scheduler.Event) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *mockNotifier) Relay(ctx context.Context, event *scheduler.Event) error {
 	args := m.Called(ctx, event)
 	return args.Error(0)
 }

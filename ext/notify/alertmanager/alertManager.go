@@ -18,10 +18,13 @@ import (
 )
 
 const (
+	entity                = "alertManager"
 	httpChannelBufferSize = 100
 	eventBatchInterval    = time.Second * 10
 	httpTimeout           = time.Second * 10
 	radarTimeFormat       = "2006/01/02 15:04:05"
+	failureAlertTemplate  = "optimus-job-failure"
+	slaAlertTemplate      = "optimus-job-sla-miss"
 )
 
 var (
@@ -49,25 +52,16 @@ type AlertManager struct {
 	wg            sync.WaitGroup
 	workerErrChan chan error
 
-	host      string
-	endpoint  string
-	dashboard string
+	host        string
+	endpoint    string
+	dashboard   string
+	dataConsole string
 
 	eventBatchInterval time.Duration
 }
 
-type alertData struct {
-	EventType scheduler.JobEventType `json:"num_alerts_firing"`
-	Status    scheduler.EventStatus  `json:"status"`
-
-	Severity  string `json:"severity"`
-	Title     string `json:"alert_name"`
-	Summary   string `json:"summary"`
-	Dashboard string `json:"dashboard"`
-}
-
 type AlertPayload struct {
-	Data     alertData         `json:"data"`
+	Data     map[string]string `json:"data"`
 	Template string            `json:"template"`
 	Labels   map[string]string `json:"labels"`
 }
@@ -83,26 +77,9 @@ func (a *AlertManager) Relay(alert *scheduler.AlertAttrs) {
 	}()
 }
 
-func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL string) error {
-	var notificationMsg string
-	switch e.JobEvent.Type {
-	case scheduler.JobFailureEvent:
-		notificationMsg = fmt.Sprintf("*[Job]* `%s` :alert:\n"+
-			"*Project*\t\t:\t%s\t\t\t*Namespace*\t:\t%s\n"+
-			"*Owner*\t\t:\t<%s>\t\t*Job*\t\t\t:\t`%s`\n"+
-			"*Task ID*\t\t:\t%s\t\t\t*Scheduled At*:\t`%s`\n",
-			e.JobEvent.Status, e.JobEvent.Tenant.ProjectName(), e.JobEvent.Tenant.NamespaceName(),
-			e.Owner, e.JobEvent.JobName, e.JobEvent.OperatorName, e.JobEvent.JobScheduledAt.Format(time.RFC822))
-	case scheduler.SLAMissEvent:
-		notificationMsg = fmt.Sprintf("[Job] SLA MISS :alert:\n"+
-			"*Project*\t\t:\t%s\t\t\t*Namespace*\t:\t%s\n"+
-			"*Owner*\t\t:\t<%s>\t\t*Job*\t\t\t:\t`%s`\nPending Tasks:\n",
-			e.JobEvent.Tenant.ProjectName(), e.JobEvent.Tenant.NamespaceName(),
-			e.Owner, e.JobEvent.JobName)
-		for _, object := range e.JobEvent.SLAObjectList {
-			notificationMsg += fmt.Sprintf("Task: %s\n", object.JobName)
-		}
-	}
+func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConsole string) error {
+	var template string
+	var templateContext map[string]string
 
 	dashURL, _ := url.Parse(dashboardURL)
 	q := dashURL.Query()
@@ -111,16 +88,28 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL string) er
 	q.Set("var-job", e.JobEvent.JobName.String())
 	q.Set("var-schedule_time", e.JobEvent.JobScheduledAt.Format(radarTimeFormat))
 	dashURL.RawQuery = q.Encode()
+	templateContext = map[string]string{
+		"project":      e.JobEvent.Tenant.ProjectName().String(),
+		"namespace":    e.JobEvent.Tenant.NamespaceName().String(),
+		"job_name":     e.JobEvent.JobName.String(),
+		"owner":        e.Owner,
+		"scheduled_at": e.JobEvent.JobScheduledAt.Format(radarTimeFormat),
+		"console_link": fmt.Sprintf("%s/%s/%s", dataConsole, "optimus", e.JobEvent.JobName),
+		"dashboard":    dashURL.String(),
+		"airflow_logs": fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, e.JobEvent.JobName),
+	}
+	switch e.JobEvent.Type {
+	case scheduler.JobFailureEvent:
+		template = failureAlertTemplate
+		templateContext["task_id"] = e.JobEvent.OperatorName
+	case scheduler.SLAMissEvent:
+		template = slaAlertTemplate
+		templateContext["state"] = e.JobEvent.Status.String()
+	}
 
 	payload := AlertPayload{
-		Data: alertData{
-			EventType: e.JobEvent.Type,
-			Title:     e.Title,
-			Status:    e.Status,
-			Severity:  "CRITICAL",
-			Summary:   notificationMsg,
-			Dashboard: dashURL.String(),
-		},
+		Data:     templateContext,
+		Template: template,
 		Labels: map[string]string{
 			"job_urn":    e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
@@ -161,7 +150,7 @@ func (a *AlertManager) worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-a.alertChan:
-			err := RelayEvent(e, a.host, a.endpoint, a.dashboard) // nolint:contextcheck
+			err := RelayEvent(e, a.host, a.endpoint, a.dashboard, a.dataConsole) // nolint:contextcheck
 			if err != nil {
 				a.workerErrChan <- fmt.Errorf("alert worker: %w", err)
 				eventWorkerSendErrCounter.Inc()
@@ -183,7 +172,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 	return nil
 }
 
-func New(ctx context.Context, errHandler func(error), host, endpoint, dashboard string) *AlertManager {
+func New(ctx context.Context, errHandler func(error), host, endpoint, dashboard, dataConsole string) *AlertManager {
 	if host == "" {
 		return &AlertManager{}
 	}
@@ -195,6 +184,7 @@ func New(ctx context.Context, errHandler func(error), host, endpoint, dashboard 
 		host:               host,
 		endpoint:           endpoint,
 		dashboard:          dashboard,
+		dataConsole:        dataConsole,
 		eventBatchInterval: eventBatchInterval,
 	}
 

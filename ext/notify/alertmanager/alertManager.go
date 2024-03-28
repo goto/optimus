@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	entity                = "alertManager"
 	httpChannelBufferSize = 100
 	eventBatchInterval    = time.Second * 10
 	httpTimeout           = time.Second * 10

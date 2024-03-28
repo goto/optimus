@@ -402,23 +402,23 @@ func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any
 
 func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.Event) ([]*scheduler.SLAObject, []time.Time) {
 	scheduleTimesList := make([]time.Time, len(event.SLAObjectList))
-	unfilteredSlaObj := make([]*scheduler.SLAObject, len(event.SLAObjectList))
+	unfilteredSLAObj := make([]*scheduler.SLAObject, len(event.SLAObjectList))
 	var slaBreachedJobRunScheduleTimes []time.Time
 
 	for i, SLAObject := range event.SLAObjectList {
 		scheduleTimesList[i] = SLAObject.JobScheduledAt
-		unfilteredSlaObj[i] = &scheduler.SLAObject{JobName: SLAObject.JobName, JobScheduledAt: SLAObject.JobScheduledAt}
+		unfilteredSLAObj[i] = &scheduler.SLAObject{JobName: SLAObject.JobName, JobScheduledAt: SLAObject.JobScheduledAt}
 	}
 	jobRuns, err := s.repo.GetByScheduledTimes(ctx, event.Tenant, event.JobName, scheduleTimesList)
 	if err != nil {
 		s.l.Error("error getting job runs by schedule time, skipping the filter", err)
-		return unfilteredSlaObj, slaBreachedJobRunScheduleTimes
+		return unfilteredSLAObj, slaBreachedJobRunScheduleTimes
 	}
 	if len(jobRuns) == 0 {
 		s.l.Error("no job runs found for given schedule time, skipping the filter (perhaps the sla is due to schedule delay, in such cases the job wont be persisted in optimus DB)", err)
 		event.Status = scheduler.StateNotScheduled
 		event.JobScheduledAt = event.SLAObjectList[0].JobScheduledAt // pick the first reported sla
-		return unfilteredSlaObj, slaBreachedJobRunScheduleTimes
+		return unfilteredSLAObj, slaBreachedJobRunScheduleTimes
 	}
 
 	var filteredSLAObject []*scheduler.SLAObject

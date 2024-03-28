@@ -347,10 +347,6 @@ func (m *mockWebhookChanel) Close() error {
 type mockAlertManager struct {
 	io.Closer
 	mock.Mock
-	host        string
-	endpoint    string
-	dashboard   string
-	dataConsole string
 }
 
 func (m *mockAlertManager) Relay(attr *scheduler.AlertAttrs) {

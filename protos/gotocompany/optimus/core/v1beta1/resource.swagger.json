@@ -272,6 +272,53 @@
         "tags": [
           "ResourceService"
         ]
+      },
+      "delete": {
+        "summary": "DeleteResource soft delete a specific resource",
+        "operationId": "ResourceService_DeleteResource",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1DeleteResourceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "datastoreName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "resourceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ResourceService"
+        ]
       }
     },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/datastore/{datastoreName}/resources-apply": {
@@ -408,6 +455,23 @@
           "type": "boolean"
         },
         "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1DeleteResourceResponse": {
+      "type": "object",
+      "properties": {
+        "isDeleted": {
+          "type": "boolean"
+        },
+        "DownstreamJobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failedReason": {
           "type": "string"
         }
       }

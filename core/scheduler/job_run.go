@@ -70,11 +70,12 @@ type OperatorRun struct {
 }
 
 type AlertAttrs struct {
-	Owner    string
-	JobURN   string
-	Title    string
-	Status   EventStatus
-	JobEvent *Event
+	Owner         string
+	JobURN        string
+	Title         string
+	SchedulerHost string
+	Status        EventStatus
+	JobEvent      *Event
 }
 
 type WebhookAttrs struct {

@@ -91,10 +91,10 @@ func (a *deleteCommand) RunE(_ *cobra.Command, _ []string) error {
 		a.namespaceName = namespace.Name
 	}
 
-	return a.apply()
+	return a.delete()
 }
 
-func (a *deleteCommand) apply() error {
+func (a *deleteCommand) delete() error {
 	conn, err := a.connection.Create(a.clientConfig.Host)
 	if err != nil {
 		return err
@@ -120,16 +120,13 @@ func (a *deleteCommand) apply() error {
 	spinner.Stop()
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			a.logger.Error("Apply took too long, timing out")
+			a.logger.Error("delete took too long, timing out")
 		}
-		return fmt.Errorf("failed to apply resourcse: %w", err)
+		return fmt.Errorf("failed to delete resource: %w", err)
 	}
 
-	if !responses.IsDeleted {
-		a.logger.Error(fmt.Sprintf("failed to delete resource %s with message: %s", deleteResourceRequest.ResourceName, responses.FailedReason))
-		return fmt.Errorf("failed to delete resource: %s", responses.FailedReason)
-	} else {
-		a.logger.Info("success to delete resource %s", deleteResourceRequest.ResourceName)
+	if len(responses.GetDownstreamJobs()) > 0 {
+		a.logger.Info(fmt.Sprintf("success delete resource %s with downstreamJobs: [%s]", deleteResourceRequest.ResourceName, responses.DownstreamJobs))
 	}
 
 	return nil

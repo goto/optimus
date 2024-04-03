@@ -26,6 +26,7 @@ const (
 type ResourceService interface {
 	Create(ctx context.Context, res *resource.Resource) error
 	Update(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error
+	Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResponse, error)
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
 	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
@@ -263,6 +264,37 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 	}
 
 	return &pb.UpdateResourceResponse{}, nil
+}
+
+func (rh ResourceHandler) DeleteResource(ctx context.Context, req *pb.DeleteResourceRequest) (*pb.DeleteResourceResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "failed to update resource")
+	}
+
+	store, err := resource.FromStringToStore(req.GetDatastoreName())
+	if err != nil {
+		rh.l.Error("invalid datastore name [%s]: %s", req.GetDatastoreName(), err)
+		return nil, errors.GRPCErr(err, "invalid update resource request")
+	}
+
+	deleteReq := &resource.DeleteRequest{
+		Tenant:    tnnt,
+		Datastore: store,
+		FullName:  req.GetResourceName(),
+		Force:     req.GetForce(),
+	}
+	var deleteRes *resource.DeleteResponse
+	deleteRes, err = rh.service.Delete(ctx, deleteReq)
+	raiseResourceDatastoreEventMetric(tnnt, deleteRes.Resource.Store().String(), deleteRes.Resource.Kind(), deleteRes.Resource.Status().String())
+	if err != nil {
+		rh.l.Error("error deleting resource [%s]: %s", deleteRes.Resource.FullName(), err)
+		return nil, errors.GRPCErr(err, "failed to delete resource "+err.Error())
+	}
+
+	res := &pb.DeleteResourceResponse{DownstreamJobs: deleteRes.DownstreamJobs}
+	return res, nil
 }
 
 func (rh ResourceHandler) ChangeResourceNamespace(ctx context.Context, req *pb.ChangeResourceNamespaceRequest) (*pb.ChangeResourceNamespaceResponse, error) {

@@ -51,6 +51,15 @@ func (r *Resource) MarkToUpdate() error {
 	return errors.InvalidStateTransition(EntityResource, msg)
 }
 
+func (r *Resource) MarkDeleted() error {
+	if r.status == StatusValidationSuccess {
+		r.status = StatusDeleted
+		return nil
+	}
+	msg := fmt.Sprintf("status transition for [%s] from status [%s] to status [%s] is not allowed", r.FullName(), r.status, StatusToUpdate)
+	return errors.InvalidStateTransition(EntityResource, msg)
+}
+
 func (r *Resource) MarkExistInStore() error {
 	if r.status == StatusToCreate {
 		r.status = StatusExistInStore

@@ -53,6 +53,22 @@ func (r Repository) Update(ctx context.Context, resourceModel *resource.Resource
 	return nil
 }
 
+func (r Repository) Delete(ctx context.Context, resourceModel *resource.Resource) error {
+	res := FromResourceToModel(resourceModel)
+
+	deleteResourceQuery := `UPDATE resource SET status=$5, updated_at=NOW()
+                WHERE full_name=$1 AND store=$2 AND project_name = $3 And namespace_name = $4`
+	tag, err := r.db.Exec(ctx, deleteResourceQuery, res.FullName, res.Store, res.ProjectName, res.NamespaceName, resource.StatusDeleted)
+	if err != nil {
+		return errors.Wrap(resource.EntityResource, "error updating resource to database", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return errors.NotFound(resource.EntityResource, "no resource to delete for "+res.FullName)
+	}
+	return nil
+}
+
 func (r Repository) ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error {
 	updateResource := `UPDATE resource SET namespace_name=$1, updated_at=now()
 	WHERE full_name=$2 AND store=$3 AND project_name = $4 And namespace_name = $5`

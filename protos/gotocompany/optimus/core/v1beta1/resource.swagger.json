@@ -314,6 +314,12 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -462,17 +468,11 @@
     "v1beta1DeleteResourceResponse": {
       "type": "object",
       "properties": {
-        "isDeleted": {
-          "type": "boolean"
-        },
         "DownstreamJobs": {
           "type": "array",
           "items": {
             "type": "string"
           }
-        },
-        "failedReason": {
-          "type": "string"
         }
       }
     },

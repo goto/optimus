@@ -807,6 +807,135 @@ func TestResourceHandler(t *testing.T) {
 			assert.Equal(t, names[0], resp.Statuses[0].ResourceName)
 		})
 	})
+	t.Run("DeleteResource", func(t *testing.T) {
+		resourceName := "project.dataset.test_table"
+		spec := map[string]any{"a": "b"}
+		existing, _ := resource.NewResource(resourceName, "table", resource.Bigquery, tnnt, &resource.Metadata{}, spec)
+
+		t.Run("success", func(t *testing.T) {
+			var (
+				service = new(resourceService)
+				handler = v1beta1.NewResourceHandler(logger, service)
+				req     = &pb.DeleteResourceRequest{
+					ProjectName:   tnnt.ProjectName().String(),
+					NamespaceName: tnnt.NamespaceName().String(),
+					DatastoreName: resource.Bigquery.String(),
+					ResourceName:  existing.FullName(),
+					Force:         false,
+				}
+			)
+			defer service.AssertExpectations(t)
+
+			var downstreamJobs []string
+			deleteReq := &resource.DeleteRequest{
+				Tenant:    tnnt,
+				Datastore: resource.Bigquery,
+				FullName:  req.GetResourceName(),
+				Force:     req.GetForce(),
+			}
+			deleteRes := &resource.DeleteResponse{DownstreamJobs: downstreamJobs, Resource: existing}
+			service.On("Delete", ctx, deleteReq).Return(deleteRes, nil)
+
+			res, err := handler.DeleteResource(ctx, req)
+			assert.NoError(t, err)
+			assert.NotNil(t, res)
+			assert.ElementsMatch(t, res.DownstreamJobs, downstreamJobs)
+		})
+		t.Run("success with force", func(t *testing.T) {
+			var (
+				service = new(resourceService)
+				handler = v1beta1.NewResourceHandler(logger, service)
+				req     = &pb.DeleteResourceRequest{
+					ProjectName:   tnnt.ProjectName().String(),
+					NamespaceName: tnnt.NamespaceName().String(),
+					DatastoreName: resource.Bigquery.String(),
+					ResourceName:  existing.FullName(),
+					Force:         true,
+				}
+			)
+			defer service.AssertExpectations(t)
+
+			var downstreamJobs = []string{"proj/JobA"}
+			deleteReq := &resource.DeleteRequest{
+				Tenant:    tnnt,
+				Datastore: resource.Bigquery,
+				FullName:  req.GetResourceName(),
+				Force:     req.GetForce(),
+			}
+			deleteRes := &resource.DeleteResponse{DownstreamJobs: downstreamJobs, Resource: existing}
+			service.On("Delete", ctx, deleteReq).Return(deleteRes, nil)
+
+			res, err := handler.DeleteResource(ctx, req)
+			assert.NoError(t, err)
+			assert.NotNil(t, res)
+			assert.NotNil(t, res.DownstreamJobs)
+			assert.ElementsMatch(t, res.DownstreamJobs, downstreamJobs)
+		})
+		t.Run("return error when delete", func(t *testing.T) {
+			var (
+				service = new(resourceService)
+				handler = v1beta1.NewResourceHandler(logger, service)
+				req     = &pb.DeleteResourceRequest{
+					ProjectName:   tnnt.ProjectName().String(),
+					NamespaceName: tnnt.NamespaceName().String(),
+					DatastoreName: resource.Bigquery.String(),
+					ResourceName:  existing.FullName(),
+					Force:         true,
+				}
+			)
+			defer service.AssertExpectations(t)
+
+			var downstreamJobs = []string{"proj/JobA"}
+			deleteReq := &resource.DeleteRequest{
+				Tenant:    tnnt,
+				Datastore: resource.Bigquery,
+				FullName:  req.GetResourceName(),
+				Force:     req.GetForce(),
+			}
+			deleteRes := &resource.DeleteResponse{DownstreamJobs: downstreamJobs, Resource: existing}
+			service.On("Delete", ctx, deleteReq).Return(deleteRes, context.DeadlineExceeded)
+
+			res, err := handler.DeleteResource(ctx, req)
+			assert.Error(t, err)
+			assert.Nil(t, res)
+		})
+		t.Run("return error when resource store unknown", func(t *testing.T) {
+			var (
+				service = new(resourceService)
+				handler = v1beta1.NewResourceHandler(logger, service)
+				req     = &pb.DeleteResourceRequest{
+					ProjectName:   tnnt.ProjectName().String(),
+					NamespaceName: tnnt.NamespaceName().String(),
+					DatastoreName: "unknown",
+					ResourceName:  existing.FullName(),
+					Force:         true,
+				}
+			)
+			defer service.AssertExpectations(t)
+
+			res, err := handler.DeleteResource(ctx, req)
+			assert.Error(t, err)
+			assert.Nil(t, res)
+		})
+		t.Run("return error when tenant invalid", func(t *testing.T) {
+			var (
+				service = new(resourceService)
+				handler = v1beta1.NewResourceHandler(logger, service)
+				req     = &pb.DeleteResourceRequest{
+					ProjectName:   tnnt.ProjectName().String(),
+					NamespaceName: "",
+					DatastoreName: "unknown",
+					ResourceName:  existing.FullName(),
+					Force:         true,
+				}
+			)
+			defer service.AssertExpectations(t)
+
+			res, err := handler.DeleteResource(ctx, req)
+			assert.Error(t, err)
+			assert.Nil(t, res)
+		})
+	})
 }
 
 type resourceService struct {
@@ -821,6 +950,15 @@ func (r *resourceService) Create(ctx context.Context, res *resource.Resource) er
 func (r *resourceService) Update(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error {
 	args := r.Called(ctx, res, logWriter)
 	return args.Error(0)
+}
+
+func (r *resourceService) Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResponse, error) {
+	args := r.Called(ctx, req)
+	var jobs *resource.DeleteResponse
+	if args.Get(0) != nil {
+		jobs = args.Get(0).(*resource.DeleteResponse)
+	}
+	return jobs, args.Error(1)
 }
 
 func (r *resourceService) Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error) {

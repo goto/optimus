@@ -292,6 +292,44 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.EqualValues(t, serviceResource.StatusSuccess, storedResources[1].Status())
 		})
 	})
+
+	t.Run("Delete", func(t *testing.T) {
+		t.Run("returns error if resource does not exist", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToDelete, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			_ = resourceToDelete.MarkValidationSuccess()
+			_ = resourceToDelete.MarkDeleted()
+
+			actualError := repository.Delete(ctx, resourceToDelete)
+			assert.ErrorContains(t, actualError, "not found for entity resource")
+		})
+
+		t.Run("updates resource and returns nil if no error is encountered", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToCreate.UpdateURN("bigquery://project:dataset")
+
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			resourceToDelete := serviceResource.FromExisting(resourceToCreate, serviceResource.ReplaceStatus(serviceResource.StatusSuccess))
+			_ = resourceToDelete.MarkValidationSuccess()
+			_ = resourceToDelete.MarkDeleted()
+			actualError := repository.Delete(ctx, resourceToDelete)
+			assert.NoError(t, actualError)
+
+			storedResources, err := repository.ReadByFullName(ctx, tnnt, store, resourceToDelete.FullName())
+			assert.NoError(t, err)
+			assert.NotNil(t, storedResources)
+			assert.True(t, storedResources.IsDeleted())
+		})
+	})
 }
 
 func dbSetup() *pgxpool.Pool {

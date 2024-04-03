@@ -22,6 +22,7 @@ const (
 	StateSuccess State = "success"
 	StateFailed  State = "failed"
 
+	StateNotScheduled State = "waiting_to_schedule"
 	StateWaitUpstream State = "wait_upstream"
 	StateInProgress   State = "in_progress"
 
@@ -52,6 +53,8 @@ func StateFromString(state string) (State, error) {
 		return StateWaitUpstream, nil
 	case string(StateInProgress):
 		return StateInProgress, nil
+	case string(StateNotScheduled):
+		return StateNotScheduled, nil
 	default:
 		return "", errors.InvalidArgument(EntityJobRun, "invalid state for run "+state)
 	}

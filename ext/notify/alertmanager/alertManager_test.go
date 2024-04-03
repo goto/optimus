@@ -35,11 +35,14 @@ func TestAlertManager(t *testing.T) {
 			assert.Nil(t, json.NewDecoder(r.Body).Decode(&payload))
 
 			// Check if the payload is properly formed
-			assert.NotEmpty(t, payload.Data.Dashboard)
-			assert.NotEmpty(t, payload.Data.Status)
-			assert.Equal(t, payload.Data.EventType, scheduler.SLAMissEvent)
-			assert.NotEmpty(t, payload.Data.Summary)
-			assert.NotEmpty(t, payload.Data.Severity)
+			assert.NotEmpty(t, payload.Data["project"])
+			assert.NotEmpty(t, payload.Data["namespace"])
+			assert.NotEmpty(t, payload.Data["job_name"])
+			assert.NotEmpty(t, payload.Data["owner"])
+			assert.NotEmpty(t, payload.Data["scheduled_at"])
+			assert.NotEmpty(t, payload.Data["console_link"])
+			assert.NotEmpty(t, payload.Data["dashboard"])
+			assert.NotEmpty(t, payload.Data["airflow_logs"])
 
 			w.WriteHeader(http.StatusOK)
 		})
@@ -67,7 +70,7 @@ func TestAlertManager(t *testing.T) {
 					},
 				},
 			},
-		}, mockServer.URL, alertManagerEndPoint, "dashboard_url")
+		}, mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url")
 		assert.Nil(t, err)
 
 		assert.Equal(t, reqRecorder.Code, http.StatusOK)

@@ -389,7 +389,7 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 			continue
 		}
 
-		if resource.StatusForToCreate(existing.Status()) {
+		if resource.StatusForToCreate(existing.Status()) || existing.IsDeleted() {
 			_ = incoming.MarkToCreate()
 		} else if resource.StatusForToUpdate(existing.Status()) {
 			_ = incoming.MarkToUpdate()
@@ -404,7 +404,7 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 
 	for _, existing := range existingMappedByFullName {
 		_, found := incomingByFullName[existing.FullName()]
-		if found {
+		if found || existing.IsDeleted() {
 			continue
 		}
 
@@ -518,9 +518,6 @@ func (ResourceService) isToRefreshDownstream(incoming, existing *resource.Resour
 func createFullNameToResourceMap(resources []*resource.Resource) map[string]*resource.Resource {
 	output := make(map[string]*resource.Resource, len(resources))
 	for _, r := range resources {
-		if r.IsDeleted() {
-			continue
-		}
 		output[r.FullName()] = r
 	}
 	return output

@@ -904,6 +904,65 @@ func TestResourceService(t *testing.T) {
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
 			assert.NoError(t, actualError)
 		})
+
+		t.Run("returns nil if no error is encountered with a recreation resource", func(t *testing.T) {
+			existingToCreate := resourceWithStatus("project.dataset.view1", viewSpec, resource.StatusCreateFailure)
+			existingToSkip := resourceWithStatus("project.dataset.view2", viewSpec, resource.StatusSuccess)
+			existingToUpdate := resourceWithStatus("project.dataset.view3", viewSpec, resource.StatusUpdateFailure)
+			existingToRecreate := resourceWithStatus("project.dataset.view4", viewSpec, resource.StatusDeleted)
+
+			updatedViewSpec := map[string]any{
+				"view_query": "select 1;",
+			}
+			incomingToUpdate, err := resource.NewResource("project.dataset.view3", "view", resource.Bigquery, tnnt, meta, updatedViewSpec)
+			assert.NoError(t, err)
+			incomingToCreateExisting, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			assert.NoError(t, resErr)
+			incomingToSkip, resErr := resource.NewResource("project.dataset.view2", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			assert.NoError(t, resErr)
+			incomingToCreate, resErr := resource.NewResource("project.dataset.view5", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			assert.NoError(t, resErr)
+			incomingToRecreate, resErr := resource.NewResource("project.dataset.view4", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			assert.NoError(t, resErr)
+
+			repo := newResourceRepository(t)
+			repo.On("ReadAll", ctx, tnnt, resource.Bigquery).Return([]*resource.Resource{existingToCreate, existingToSkip, existingToUpdate, existingToRecreate}, nil)
+			repo.On("Create", ctx, incomingToCreate).Return(nil)
+			repo.On("Update", ctx, incomingToUpdate).Return(nil)
+			repo.On("Update", ctx, incomingToCreateExisting).Return(nil)
+			repo.On("Update", ctx, incomingToRecreate).Return(nil)
+
+			mgr := newResourceManager(t)
+			mgr.On("Validate", mock.Anything).Return(nil)
+			mgr.On("GetURN", mock.Anything).Return("bigquery://project:dataset.view1", nil)
+			mgr.On("BatchUpdate", ctx, resource.Bigquery, []*resource.Resource{incomingToCreate, incomingToUpdate, incomingToCreateExisting, incomingToRecreate}).
+				Run(func(args mock.Arguments) {
+					res := args.Get(2).([]*resource.Resource)
+					for _, r := range res {
+						if r.Status() == resource.StatusToDelete {
+							r.MarkDeleted()
+							continue
+						}
+						r.MarkSuccess()
+					}
+				}).
+				Return(nil)
+
+			eventHandler := newEventHandler(t)
+			argMatcher := mock.MatchedBy(func(ev moderator.Event) bool {
+				return ev != nil
+			})
+			eventHandler.On("HandleEvent", argMatcher).Return().Times(4)
+
+			refresher := new(mockDownstreamRefresher)
+			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
+
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil)
+
+			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting, incomingToRecreate}
+			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
+			assert.NoError(t, actualError)
+		})
 	})
 
 	t.Run("SyncResource", func(t *testing.T) {

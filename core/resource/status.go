@@ -55,7 +55,7 @@ func FromStringToStatus(status string) Status {
 }
 
 func StatusForToCreate(status Status) bool {
-	return status == StatusCreateFailure || status == StatusToCreate
+	return status == StatusCreateFailure || status == StatusToCreate || status == StatusDeleted
 }
 
 func StatusForToUpdate(status Status) bool {

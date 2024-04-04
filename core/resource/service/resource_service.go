@@ -389,7 +389,7 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 			continue
 		}
 
-		if resource.StatusForToCreate(existing.Status()) || existing.IsDeleted() {
+		if resource.StatusForToCreate(existing.Status()) {
 			_ = incoming.MarkToCreate()
 		} else if resource.StatusForToUpdate(existing.Status()) {
 			_ = incoming.MarkToUpdate()

@@ -419,8 +419,10 @@ func (jh *JobHandler) RefreshJobs(request *pb.RefreshJobsRequest, stream pb.JobS
 	return nil
 }
 
+// Deprecated: do not use
 func (jh *JobHandler) CheckJobSpecifications(req *pb.CheckJobSpecificationsRequest, stream pb.JobSpecificationService_CheckJobSpecificationsServer) error {
-	startTime := time.Now()
+	panic("deprecated, use validate endpoint instead")
+}
 
 	responseWriter := writer.NewCheckJobSpecificationResponseWriter(stream)
 	jobTenant, err := tenant.NewTenant(req.ProjectName, req.NamespaceName)

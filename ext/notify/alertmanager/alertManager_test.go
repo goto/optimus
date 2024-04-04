@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/core/scheduler"
@@ -50,10 +51,11 @@ func TestAlertManager(t *testing.T) {
 		defer mockServer.Close()
 
 		err := alertmanager.RelayEvent(&scheduler.AlertAttrs{
-			Owner:  "@data-batching",
-			JobURN: "urn:optimus:project:job:project.namespace.job_name",
-			Title:  "Optimus Job Alert",
-			Status: scheduler.StatusFiring,
+			Owner:         "@data-batching",
+			JobURN:        "urn:optimus:project:job:project.namespace.job_name",
+			Title:         "Optimus Job Alert",
+			SchedulerHost: "localhost",
+			Status:        scheduler.StatusFiring,
 			JobEvent: &scheduler.Event{
 				JobName:        jobName,
 				Tenant:         tnnt,
@@ -70,7 +72,7 @@ func TestAlertManager(t *testing.T) {
 					},
 				},
 			},
-		}, mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url")
+		}, mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", log.NewNoop())
 		assert.Nil(t, err)
 
 		assert.Equal(t, reqRecorder.Code, http.StatusOK)

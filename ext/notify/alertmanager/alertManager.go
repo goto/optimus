@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
@@ -50,6 +52,7 @@ type AlertManager struct {
 	alertChan     chan *scheduler.AlertAttrs
 	wg            sync.WaitGroup
 	workerErrChan chan error
+	logger        log.Logger
 
 	host        string
 	endpoint    string
@@ -76,7 +79,7 @@ func (a *AlertManager) Relay(alert *scheduler.AlertAttrs) {
 	}()
 }
 
-func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConsole string) error {
+func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConsole string, logger log.Logger) error {
 	var template string
 	var templateContext map[string]string
 
@@ -126,6 +129,11 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConso
 
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout) // nolint:contextcheck
 	defer cancel()
+	reqId, err := uuid.NewUUID()
+	if err != nil {
+		return err
+	}
+	logger.Debug(fmt.Sprintf("sending request to alert manager url:%s, body:%s, reqId: %s", host+endpoint, payloadJSON, reqId))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, host+endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return err
@@ -137,6 +145,13 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConso
 	if err != nil {
 		return err
 	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	logger.Debug(fmt.Sprintf("alert manager response code:%s, resp:%s, reqId: %s", res.Status, body, reqId))
+
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("non 200 status code received status: %s", res.Status)
 	}
@@ -149,7 +164,7 @@ func (a *AlertManager) worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-a.alertChan:
-			err := RelayEvent(e, a.host, a.endpoint, a.dashboard, a.dataConsole) // nolint:contextcheck
+			err := RelayEvent(e, a.host, a.endpoint, a.dashboard, a.dataConsole, a.logger) // nolint:contextcheck
 			if err != nil {
 				a.workerErrChan <- fmt.Errorf("alert worker: %w", err)
 				eventWorkerSendErrCounter.Inc()
@@ -171,16 +186,20 @@ func (a *AlertManager) Close() error { // nolint: unparam
 	return nil
 }
 
-func New(ctx context.Context, errHandler func(error), host, endpoint, dashboard, dataConsole string) *AlertManager {
+func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string) *AlertManager {
+	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
+		logger.Info("alert-manager: host name not found in config, Optimus can not send events to Alert manager.")
 		return &AlertManager{}
 	}
 
 	this := &AlertManager{
-		alertChan:          make(chan *scheduler.AlertAttrs, httpChannelBufferSize),
-		workerErrChan:      make(chan error),
-		wg:                 sync.WaitGroup{},
-		host:               host,
+		alertChan:     make(chan *scheduler.AlertAttrs, httpChannelBufferSize),
+		workerErrChan: make(chan error),
+		wg:            sync.WaitGroup{},
+		host:          host,
+		logger:        logger,
+
 		endpoint:           endpoint,
 		dashboard:          dashboard,
 		dataConsole:        dataConsole,
@@ -190,7 +209,7 @@ func New(ctx context.Context, errHandler func(error), host, endpoint, dashboard,
 	this.wg.Add(1)
 	go func() {
 		for err := range this.workerErrChan {
-			errHandler(err)
+			this.logger.Error("alert-manager : " + err.Error())
 			eventWorkerSendErrCounter.Inc()
 		}
 		this.wg.Done()

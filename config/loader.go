@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -106,6 +107,11 @@ func LoadServerConfig(filePath string) (*ServerConfig, error) {
 	}
 
 	cfg.Log.Level = LogLevel(strings.ToUpper(string(cfg.Log.Level)))
+	loadedConfig, err := json.MarshalIndent(cfg, "", "    ")
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("Optimus server starting with config : \n%s", loadedConfig)
 
 	return cfg, nil
 }

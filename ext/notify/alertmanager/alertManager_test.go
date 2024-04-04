@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/notify/alertmanager"
+
 	"github.com/goto/salt/log"
 )
 

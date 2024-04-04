@@ -1268,6 +1268,68 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 
 	return job.ResourceURN(destinationURN), nil
 }
+
+func (j *JobService) validateJobsForDeletion(ctx context.Context, jobTenant tenant.Tenant, jobsToDelete []*job.Job) map[job.Name][]dto.ValidateResult {
+	specByFullName := make(map[job.FullName]*job.Spec, len(jobsToDelete))
+	for _, subjectJob := range jobsToDelete {
+		fullName := job.FullNameFrom(jobTenant.ProjectName(), subjectJob.Spec().Name())
+		specByFullName[fullName] = subjectJob.Spec()
+	}
+
+	output := make(map[job.Name][]dto.ValidateResult)
+	for _, job := range jobsToDelete {
+		output[job.Spec().Name()] = j.validateOneJobForDeletion(ctx, jobTenant, job.Spec(), specByFullName)
+	}
+
+	return output
+}
+
+func (j *JobService) validateOneJobForDeletion(
+	ctx context.Context,
+	jobTenant tenant.Tenant, spec *job.Spec,
+	specByFullName map[job.FullName]*job.Spec,
+) []dto.ValidateResult {
+	const name = "validate for deletion"
+	var logger writer.BufferedLogger
+
+	downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), make(map[job.FullName]bool))
+	if err != nil {
+		result := dto.ValidateResult{
+			Name: name,
+			Messages: []string{
+				"downstreams can not be fetched",
+				err.Error(),
+			},
+			Success: false,
+		}
+
+		return []dto.ValidateResult{result}
+	}
+
+	me := errors.NewMultiError(name)
+	safeToDelete := validateDeleteJob(jobTenant, downstreams, specByFullName, spec, &logger, me)
+
+	var messages []string
+	success := true
+	if !safeToDelete {
+		messages = []string{
+			"job is not safe for deletion",
+			me.Error(),
+		}
+		success = false
+	} else {
+		messages = []string{"job is safe for deletion"}
+	}
+
+	return []dto.ValidateResult{
+		{
+			Name:     name,
+			Messages: messages,
+			Success:  success,
+		},
+	}
+}
+
 func (j *JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
 	const name = "tenant validation"
 

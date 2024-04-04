@@ -1291,6 +1291,55 @@ func (j *JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*jo
 	return output
 }
 
+func (j *JobService) validateJobs(ctx context.Context, jobTenant tenant.Tenant, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	tenantDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
+	if err != nil {
+		return nil, err
+	}
+
+	output := make(map[job.Name][]dto.ValidateResult)
+	for _, subjectJob := range jobsToValidate {
+		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob)
+	}
+
+	return output, nil
+}
+
+func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job) []dto.ValidateResult {
+	destination, err := j.generateDestinationURN(ctx, tenantDetails, subjectJob.Spec())
+	if err != nil {
+		result := dto.ValidateResult{
+			Name: "destination retrieval",
+			Messages: []string{
+				fmt.Sprintf("can not generate destination resource [%s]", destination),
+				err.Error(),
+			},
+			Success: false,
+		}
+
+		return []dto.ValidateResult{result}
+	}
+
+	var output []dto.ValidateResult
+
+	result := j.validateWindow(tenantDetails.Project(), subjectJob.Spec().WindowConfig())
+	output = append(output, result)
+
+	result = j.validateRun(ctx, subjectJob, destination)
+	output = append(output, result)
+
+	result = j.validateSource(ctx, tenantDetails, subjectJob.Spec())
+	output = append(output, result)
+
+	result = j.validateDestination(ctx, destination)
+	output = append(output, result)
+
+	result = j.validateUpstream(ctx, subjectJob)
+	output = append(output, result)
+
+	return output
+}
+
 // TODO: do something here
 func (j *JobService) validateCyclic(jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
 	const name = "cyclic validation"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
@@ -12,7 +13,10 @@ import (
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/job/dto"
 	"github.com/goto/optimus/core/job/service/filter"
+	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
@@ -46,6 +50,9 @@ type JobService struct {
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
+	jobInputCompiler JobInputCompiler
+	resourceChecker  ResourceExistenceChecker
+
 	logger log.Logger
 }
 
@@ -54,6 +61,7 @@ func NewJobService(
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
 	jobDeploymentService JobDeploymentService, engine Engine,
+	jobInputCompiler JobInputCompiler, resourceChecker ResourceExistenceChecker,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -66,6 +74,8 @@ func NewJobService(
 		logger:               logger,
 		jobDeploymentService: jobDeploymentService,
 		engine:               engine,
+		jobInputCompiler:     jobInputCompiler,
+		resourceChecker:      resourceChecker,
 	}
 }
 
@@ -1268,6 +1278,38 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 
 	return job.ResourceURN(destinationURN), nil
 }
+
+func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) (map[job.Name][]dto.ValidateResult, error) {
+	if len(request.JobNames) > 0 && len(request.JobSpecs) > 0 {
+		return nil, errors.NewError(errors.ErrInvalidArgument, job.EntityJob, "job names and specs can not be specified together")
+	}
+
+	if err := j.validateDuplication(request); err != nil {
+		return nil, err
+	}
+
+	jobsToValidate, err := j.getJobsToValidate(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	if output := j.validateTenant(request.Tenant, jobsToValidate); len(output) > 0 {
+		return output, nil
+	}
+
+	if request.DeletionMode {
+		return j.validateJobsForDeletion(ctx, request.Tenant, jobsToValidate), nil
+	}
+
+	if result, err := j.validateCyclic(jobsToValidate); err != nil {
+		return nil, err
+	} else if len(result) > 0 {
+		return result, nil
+	}
+
+	return j.validateJobs(ctx, request.Tenant, jobsToValidate)
+}
+
 func (*JobService) validateDuplication(request dto.ValidateRequest) error {
 	jobNameCountMap := make(map[string]int)
 	if len(request.JobNames) > 0 {
@@ -1291,6 +1333,47 @@ func (*JobService) validateDuplication(request dto.ValidateRequest) error {
 	return errors.NewError(errors.ErrInvalidArgument, job.EntityJob, message)
 }
 
+func (j *JobService) getJobsToValidate(ctx context.Context, request dto.ValidateRequest) ([]*job.Job, error) {
+	var jobsToValidate []*job.Job
+	if len(request.JobNames) > 0 {
+		existingJobs, err := j.getJobByName(ctx, request.Tenant, request.JobNames)
+		if err != nil {
+			return nil, err
+		}
+
+		jobsToValidate = existingJobs
+	} else {
+		jobsToValidate = make([]*job.Job, len(request.JobSpecs))
+		for i, spec := range request.JobSpecs {
+			jobsToValidate[i] = job.NewJob(request.Tenant, spec, "", nil, false)
+		}
+	}
+
+	return jobsToValidate, nil
+}
+
+func (j *JobService) getJobByName(ctx context.Context, tnnt tenant.Tenant, jobNames []string) ([]*job.Job, error) {
+	me := errors.NewMultiError("getting job by name")
+
+	retrievedJobs := make([]*job.Job, len(jobNames))
+	for i, name := range jobNames {
+		jobName, err := job.NameFrom(name)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		subjectJob, err := j.jobRepo.GetByJobName(ctx, tnnt.ProjectName(), jobName)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		retrievedJobs[i] = subjectJob
+	}
+
+	return retrievedJobs, me.ToErr()
+}
 
 func (j *JobService) validateJobsForDeletion(ctx context.Context, jobTenant tenant.Tenant, jobsToDelete []*job.Job) map[job.Name][]dto.ValidateResult {
 	specByFullName := make(map[job.FullName]*job.Spec, len(jobsToDelete))

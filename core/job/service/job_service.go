@@ -1268,3 +1268,27 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 
 	return job.ResourceURN(destinationURN), nil
 }
+
+func (*JobService) validateWindow(project *tenant.Project, windowConfig window.Config) dto.ValidateResult {
+	const name = "window validation"
+
+	if windowType := windowConfig.Type(); windowType == window.Preset {
+		preset := windowConfig.Preset
+		if _, err := project.GetPreset(preset); err != nil {
+			return dto.ValidateResult{
+				Name: name,
+				Messages: []string{
+					fmt.Sprintf("window preset [%s] is not found within project", preset),
+					err.Error(),
+				},
+				Success: false,
+			}
+		}
+	}
+
+	return dto.ValidateResult{
+		Name:     name,
+		Messages: []string{"no issue"},
+		Success:  true,
+	}
+}

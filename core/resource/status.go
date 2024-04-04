@@ -14,6 +14,7 @@ const (
 	StatusValidationSuccess Status = "validation_success"
 	StatusToCreate          Status = "to_create"
 	StatusToUpdate          Status = "to_update"
+	StatusToDelete          Status = "to_delete"
 	StatusDeleted           Status = "deleted"
 	StatusSkipped           Status = "skipped"
 	StatusCreateFailure     Status = "create_failure"
@@ -63,6 +64,8 @@ func StatusForToUpdate(status Status) bool {
 		status == StatusExistInStore ||
 		status == StatusUpdateFailure
 }
+
+func StatusForToDelete(status Status) bool { return status == StatusToDelete }
 
 func StatusIsSuccess(status Status) bool {
 	return status == StatusSuccess

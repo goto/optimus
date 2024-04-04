@@ -203,8 +203,7 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 		}
 		rs.logger.Info(fmt.Sprintf("attempt to delete resource %s with downstreamJobs: [%s]", existing.FullName(), jobNames))
 	}
-	_ = existing.MarkValidationSuccess()
-	_ = existing.MarkDeleted()
+	_ = existing.MarkToDelete()
 
 	err = rs.repo.Delete(ctx, existing)
 	if err != nil {
@@ -329,11 +328,15 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 
 	var toCreate []*resource.Resource
 	var toUpdate []*resource.Resource
+	var toDelete []*resource.Resource
 	for _, r := range toUpdateOnStore {
-		if r.Status() == resource.StatusToCreate {
+		switch r.Status() {
+		case resource.StatusToCreate:
 			toCreate = append(toCreate, r)
-		} else if r.Status() == resource.StatusToUpdate {
+		case resource.StatusToUpdate:
 			toUpdate = append(toUpdate, r)
+		case resource.StatusToDelete:
+			toDelete = append(toDelete, r)
 		}
 	}
 
@@ -347,6 +350,10 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 		rs.raiseUpdateEvent(r)
 	}
 
+	for _, r := range toDelete {
+		rs.raiseDeleteEvent(r)
+	}
+
 	if err = rs.handleRefreshDownstream(ctx, toUpdate, existingMappedByFullName, logWriter); err != nil {
 		multiError.Append(err)
 	}
@@ -357,8 +364,10 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomings []*resource.Resource, existingMappedByFullName map[string]*resource.Resource) ([]*resource.Resource, error) { // nolint:gocritic
 	var toUpdateOnStore []*resource.Resource
 	me := errors.NewMultiError("error in resources to batch update")
+	incomingByFullName := make(map[string]*resource.Resource)
 
 	for _, incoming := range incomings {
+		incomingByFullName[incoming.FullName()] = incoming
 		if incoming.Status() != resource.StatusValidationSuccess {
 			continue
 		}
@@ -392,6 +401,21 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 		}
 		me.Append(err)
 	}
+
+	for _, existing := range existingMappedByFullName {
+		_, found := incomingByFullName[existing.FullName()]
+		if found {
+			continue
+		}
+
+		_ = existing.MarkToDelete()
+		err := rs.repo.Update(ctx, existing)
+		if err == nil {
+			toUpdateOnStore = append(toUpdateOnStore, existing)
+		}
+		me.Append(err)
+	}
+
 	return toUpdateOnStore, me.ToErr()
 }
 
@@ -416,6 +440,19 @@ func (rs ResourceService) raiseUpdateEvent(res *resource.Resource) { // nolint:g
 	ev, err := event.NewResourceUpdatedEvent(res)
 	if err != nil {
 		rs.logger.Error("error creating event for resource update: %s", err)
+		return
+	}
+	rs.eventHandler.HandleEvent(ev)
+}
+
+func (rs ResourceService) raiseDeleteEvent(res *resource.Resource) { // nolint:gocritic
+	if res.Status() != resource.StatusDeleted {
+		return
+	}
+
+	ev, err := event.NewResourceDeleteEvent(res)
+	if err != nil {
+		rs.logger.Error("error creating event for resource delete: %s", err)
 		return
 	}
 	rs.eventHandler.HandleEvent(ev)
@@ -481,6 +518,9 @@ func (ResourceService) isToRefreshDownstream(incoming, existing *resource.Resour
 func createFullNameToResourceMap(resources []*resource.Resource) map[string]*resource.Resource {
 	output := make(map[string]*resource.Resource, len(resources))
 	for _, r := range resources {
+		if r.IsDeleted() {
+			continue
+		}
 		output[r.FullName()] = r
 	}
 	return output

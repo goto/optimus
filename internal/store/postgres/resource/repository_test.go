@@ -300,8 +300,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToDelete, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			_ = resourceToDelete.MarkValidationSuccess()
-			_ = resourceToDelete.MarkDeleted()
+			_ = resourceToDelete.MarkToDelete()
 
 			actualError := repository.Delete(ctx, resourceToDelete)
 			assert.ErrorContains(t, actualError, "not found for entity resource")
@@ -319,8 +318,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NoError(t, err)
 
 			resourceToDelete := serviceResource.FromExisting(resourceToCreate, serviceResource.ReplaceStatus(serviceResource.StatusSuccess))
-			_ = resourceToDelete.MarkValidationSuccess()
-			_ = resourceToDelete.MarkDeleted()
+			_ = resourceToDelete.MarkToDelete()
 			actualError := repository.Delete(ctx, resourceToDelete)
 			assert.NoError(t, actualError)
 

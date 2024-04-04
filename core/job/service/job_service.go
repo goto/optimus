@@ -1268,6 +1268,41 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 
 	return job.ResourceURN(destinationURN), nil
 }
+
+func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {
+	const name = "source validation"
+
+	sourceURNs, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, spec)
+	if err != nil {
+		return dto.ValidateResult{
+			Name: name,
+			Messages: []string{
+				"can not identify the resource sources of the job",
+				err.Error(),
+			},
+			Success: false,
+		}
+	}
+
+	messages := make([]string, len(sourceURNs))
+	success := true
+
+	for _, urn := range sourceURNs {
+		currentMessage, currentSuccess := j.validateResourceURN(ctx, urn)
+		if !currentSuccess {
+			success = false
+		}
+
+		messages = append(messages, currentMessage)
+	}
+
+	return dto.ValidateResult{
+		Name:     name,
+		Messages: messages,
+		Success:  success,
+	}
+}
+
 func (j *JobService) validateResourceURN(ctx context.Context, urn job.ResourceURN) (string, bool) {
 	activeInDB := true
 	if resource, err := j.resourceChecker.GetResourceByURN(ctx, urn.String()); err != nil {

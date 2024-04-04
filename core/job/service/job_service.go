@@ -1269,6 +1269,110 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 	return job.ResourceURN(destinationURN), nil
 }
 
+func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination job.ResourceURN) dto.ValidateResult {
+	const name = "job run validation"
+
+	referenceTime := time.Now()
+	runConfigs, err := j.getRunConfigs(referenceTime, subjectJob.Spec())
+	if err != nil {
+		return dto.ValidateResult{
+			Name: name,
+			Messages: []string{
+				"can not get job run config",
+				err.Error(),
+			},
+			Success: false,
+		}
+	}
+
+	var messages []string
+	success := true
+
+	jobWithDetails := j.getSchedulerJobWithDetail(subjectJob, destination)
+	for _, config := range runConfigs {
+		var msg string
+		if _, err := j.jobInputCompiler.Compile(ctx, jobWithDetails, config, referenceTime); err != nil {
+			success = false
+
+			msg = fmt.Sprintf("compiling [%s] with type [%s] failed with error: %v", config.Executor.Name, config.Executor.Type.String(), err)
+		} else {
+			msg = fmt.Sprintf("compiling [%s] with type [%s] contains no issue", config.Executor.Name, config.Executor.Type.String())
+		}
+
+		messages = append(messages, msg)
+	}
+
+	return dto.ValidateResult{
+		Name:     name,
+		Messages: messages,
+		Success:  success,
+	}
+}
+
+func (*JobService) getSchedulerJobWithDetail(subjectJob *job.Job, destination job.ResourceURN) *scheduler.JobWithDetails {
+	hooks := make([]*scheduler.Hook, len(subjectJob.Spec().Hooks()))
+	for i, hook := range subjectJob.Spec().Hooks() {
+		hooks[i] = &scheduler.Hook{
+			Name:   hook.Name(),
+			Config: hook.Config(),
+		}
+	}
+
+	return &scheduler.JobWithDetails{
+		Name: scheduler.JobName(subjectJob.GetName()),
+		Job: &scheduler.Job{
+			Name:        scheduler.JobName(subjectJob.GetName()),
+			Tenant:      subjectJob.Tenant(),
+			Destination: destination.String(),
+			Task: &scheduler.Task{
+				Name:   string(subjectJob.Spec().Task().Name()),
+				Config: subjectJob.Spec().Task().Config(),
+			},
+			Hooks:        hooks,
+			WindowConfig: subjectJob.Spec().WindowConfig(),
+			Assets:       subjectJob.Spec().Asset(),
+		},
+		JobMetadata: &scheduler.JobMetadata{
+			Version:     subjectJob.Spec().Version(),
+			Owner:       subjectJob.Spec().Owner(),
+			Description: subjectJob.Spec().Description(),
+			Labels:      subjectJob.Spec().Labels(),
+		},
+	}
+}
+
+func (*JobService) getRunConfigs(referenceTime time.Time, spec *job.Spec) ([]scheduler.RunConfig, error) {
+	var runConfigs []scheduler.RunConfig
+
+	executor, err := scheduler.ExecutorFromEnum(spec.Task().Name().String(), scheduler.ExecutorTask.String())
+	if err != nil {
+		return nil, err
+	}
+
+	runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "")
+	if err != nil {
+		return nil, err
+	}
+
+	runConfigs = append(runConfigs, runConfig)
+
+	for _, hook := range spec.Hooks() {
+		executor, err := scheduler.ExecutorFromEnum(hook.Name(), scheduler.ExecutorHook.String())
+		if err != nil {
+			return nil, err
+		}
+
+		runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "")
+		if err != nil {
+			return nil, err
+		}
+
+		runConfigs = append(runConfigs, runConfig)
+	}
+
+	return runConfigs, nil
+}
+
 func (*JobService) validateWindow(project *tenant.Project, windowConfig window.Config) dto.ValidateResult {
 	const name = "window validation"
 

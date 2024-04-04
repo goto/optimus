@@ -1268,6 +1268,28 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 
 	return job.ResourceURN(destinationURN), nil
 }
+func (j *JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
+	const name = "tenant validation"
+
+	output := make(map[job.Name][]dto.ValidateResult)
+	for _, subjectJob := range jobsToValidate {
+		tnnt := subjectJob.Tenant()
+		if tnnt.ProjectName() != rootTnnt.ProjectName() || tnnt.NamespaceName() != rootTnnt.NamespaceName() {
+			result := dto.ValidateResult{
+				Name: name,
+				Messages: []string{
+					fmt.Sprintf("current tenant is [%s.%s]", tnnt.ProjectName(), tnnt.NamespaceName()),
+					fmt.Sprintf("expected tenant is [%s.%s]", rootTnnt.ProjectName(), rootTnnt.NamespaceName()),
+				},
+				Success: false,
+			}
+
+			output[subjectJob.Spec().Name()] = []dto.ValidateResult{result}
+		}
+	}
+
+	return output
+}
 
 // TODO: do something here
 func (j *JobService) validateCyclic(jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {

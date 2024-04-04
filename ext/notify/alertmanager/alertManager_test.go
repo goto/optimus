@@ -43,7 +43,6 @@ func TestAlertManager(t *testing.T) {
 			assert.NotEmpty(t, payload.Data["scheduled_at"])
 			assert.NotEmpty(t, payload.Data["console_link"])
 			assert.NotEmpty(t, payload.Data["dashboard"])
-			assert.NotEmpty(t, payload.Data["airflow_logs"])
 
 			w.WriteHeader(http.StatusOK)
 		})

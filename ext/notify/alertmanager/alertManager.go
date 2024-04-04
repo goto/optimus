@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sync"
 	"time"
 
@@ -44,6 +45,8 @@ var (
 		Name:        scheduler.MetricNotificationSend,
 		ConstLabels: map[string]string{"type": notifierType},
 	})
+
+	httpRegex = regexp.MustCompile(`^(http|https)://`)
 )
 
 type AlertManager struct {
@@ -98,8 +101,12 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConso
 		"scheduled_at": e.JobEvent.JobScheduledAt.Format(radarTimeFormat),
 		"console_link": fmt.Sprintf("%s/%s/%s", dataConsole, "optimus", e.JobEvent.JobName),
 		"dashboard":    dashURL.String(),
-		"airflow_logs": fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, e.JobEvent.JobName),
 	}
+
+	if httpRegex.MatchString(e.SchedulerHost) {
+		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, e.JobEvent.JobName)
+	}
+
 	switch e.JobEvent.Type {
 	case scheduler.JobFailureEvent:
 		template = failureAlertTemplate

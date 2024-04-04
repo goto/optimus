@@ -317,9 +317,7 @@ func (s *OptimusServer) setupHandlers() error {
 
 	alertsHandler := alertmanager.New(
 		notificationContext,
-		func(err error) {
-			s.logger.Error("alert-manager error accumulator : " + err.Error())
-		},
+		s.logger,
 		s.conf.Alerting.EventManager.Host,
 		s.conf.Alerting.EventManager.Endpoint,
 		s.conf.Alerting.Dashboard,

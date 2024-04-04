@@ -1269,6 +1269,56 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 	return job.ResourceURN(destinationURN), nil
 }
 
+// TODO: do something here
+func (j *JobService) validateCyclic(jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	const name = "cyclic validation"
+
+	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
+	// assumption, all job specs from input are also the job within same project
+	jobWithUpstreamPerJobName, err := j.getJobWithUpstreamPerJobName(jobsToValidate)
+	if err != nil {
+		return nil, err
+	}
+
+	output := make(map[job.Name][]dto.ValidateResult)
+
+	identifierToJobsMap := getIdentifierToJobsMap(jobWithUpstreamPerJobName)
+	for _, subjectJob := range jobsToValidate {
+		dagTree := j.buildDAGTree(subjectJob.Spec().Name(), jobWithUpstreamPerJobName, identifierToJobsMap)
+		cyclicNames, err := dagTree.ValidateCyclic()
+		if err != nil {
+			output[subjectJob.Spec().Name()] = []dto.ValidateResult{
+				{
+					Name: name,
+					Messages: append([]string{
+						"cyclic dependency is detected",
+						err.Error(),
+					}, cyclicNames...),
+					Success: false,
+				},
+			}
+		}
+	}
+
+	return output, nil
+}
+
+func (*JobService) getJobWithUpstreamPerJobName(jobsToValidate []*job.Job) (map[job.Name]*job.WithUpstream, error) {
+	me := errors.NewMultiError("get job with upstream per job name")
+
+	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
+	for _, jobToValidate := range jobsToValidate {
+		jobWithUpstream, err := jobToValidate.GetJobWithUnresolvedUpstream()
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		jobsToValidateMap[jobToValidate.Spec().Name()] = jobWithUpstream
+	}
+	return jobsToValidateMap, me.ToErr()
+}
+
 func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
 	const name = "upstream validation"
 

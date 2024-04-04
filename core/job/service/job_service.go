@@ -642,76 +642,6 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 	return me.ToErr()
 }
 
-func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
-	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
-	if err != nil {
-		j.logger.Error("error getting tenant details: %s", err)
-		return err
-	}
-
-	if err := job.Specs(jobSpecs).Validate(); err != nil {
-		return err
-	}
-
-	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
-	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
-	if err != nil {
-		return err
-	}
-
-	toAdd, toUpdate, toDelete, unmodifiedSpecs, unmodifiedDirtySpecs := j.differentiateSpecs(jobTenant, existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
-	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, %d deleted specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
-	if len(unmodifiedDirtySpecs) > 0 {
-		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
-	}
-	if len(toAdd)+len(toUpdate)+len(toDelete)+len(unmodifiedDirtySpecs) == 0 {
-		return nil
-	}
-
-	me := errors.NewMultiError("validate specs errors")
-	// TODO: add dry_run check because, generate jobs does not go a Dry Run , and Invalid SQL schemas could not be detected without that.
-	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
-	me.Append(err)
-
-	err = j.upstreamResolver.CheckStaticResolvable(ctx, jobTenant, incomingJobs, logWriter)
-	me.Append(err)
-
-	// TODO: resolve job dependencies before check cyclic
-	err = j.validateDeleteJobs(ctx, jobTenant, toDelete, logWriter)
-	me.Append(err)
-
-	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
-	// assumption, all job specs from input are also the job within same project
-	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, append(unmodifiedSpecs, unmodifiedDirtySpecs...))
-	identifierToJobsMap := getIdentifierToJobsMap(jobsToValidateMap)
-	for _, jobEntity := range incomingJobs {
-		if _, err := j.validateCyclic(jobEntity.Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
-			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Spec().Name(), err)
-			me.Append(err)
-			break
-		}
-	}
-
-	return me.ToErr()
-}
-
-func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Tenant, toDelete []*job.Spec, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("delete job specs check errors")
-	toDeleteMap := job.Specs(toDelete).ToFullNameAndSpecMap(jobTenant.ProjectName())
-
-	for _, jobToDelete := range toDelete {
-		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), jobToDelete.Name(), map[job.FullName]bool{})
-		if err != nil {
-			j.logger.Error("error getting all downstreams for job [%s]: %s", jobToDelete.Name().String(), err)
-			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), jobToDelete.Name().String(), err.Error()))
-			me.Append(err)
-			continue
-		}
-		validateDeleteJob(jobTenant, downstreams, toDeleteMap, jobToDelete, logWriter, me)
-	}
-	return me.ToErr()
-}
-
 func validateDeleteJob(jobTenant tenant.Tenant, downstreams []*job.Downstream, toDeleteMap map[job.FullName]*job.Spec, jobToDelete *job.Spec, logWriter writer.LogWriter, me *errors.MultiError) bool {
 	notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, job.DownstreamList(downstreams).GetDownstreamFullNames())
 
@@ -759,33 +689,6 @@ func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.P
 		downstreams = append(downstreams, childDownstreams...)
 	}
 	return downstreams, nil
-}
-
-func getAllJobsToValidateMap(incomingJobs, existingJobs []*job.Job, unmodifiedSpecs []*job.Spec) map[job.Name]*job.WithUpstream {
-	// TODO: check whether we need to accumulate encountered errors
-	me := errors.NewMultiError("validate specs errors")
-
-	existingJobMap := job.Jobs(existingJobs).GetNameAndJobMap()
-	var unmodifiedJobs []*job.Job
-	for _, unmodifiedSpec := range unmodifiedSpecs {
-		if unmodifiedJob, ok := existingJobMap[unmodifiedSpec.Name()]; ok {
-			unmodifiedJobs = append(unmodifiedJobs, unmodifiedJob)
-			continue
-		}
-		errorsMsg := fmt.Sprintf("unable to validate existing job %s", unmodifiedSpec.Name().String())
-		me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg))
-	}
-
-	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
-	for _, jobToValidate := range append(incomingJobs, unmodifiedJobs...) {
-		jobWithUpstream, err := jobToValidate.GetJobWithUnresolvedUpstream()
-		if err != nil {
-			me.Append(err)
-			continue
-		}
-		jobsToValidateMap[jobToValidate.Spec().Name()] = jobWithUpstream
-	}
-	return jobsToValidateMap
 }
 
 func getIdentifierToJobsMap(jobsToValidateMap map[job.Name]*job.WithUpstream) map[string][]*job.WithUpstream {
@@ -1068,11 +971,6 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	}
 
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false), nil
-}
-
-func (j *JobService) validateCyclic(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) ([]string, error) {
-	dagTree := j.buildDAGTree(rootName, jobMap, identifierToJobMap)
-	return dagTree.ValidateCyclic()
 }
 
 func (*JobService) buildDAGTree(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) *tree.MultiRootTree {

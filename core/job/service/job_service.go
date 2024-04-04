@@ -1268,6 +1268,29 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 
 	return job.ResourceURN(destinationURN), nil
 }
+func (*JobService) validateDuplication(request dto.ValidateRequest) error {
+	jobNameCountMap := make(map[string]int)
+	if len(request.JobNames) > 0 {
+		for _, name := range request.JobNames {
+			jobNameCountMap[name]++
+		}
+	} else {
+		for _, spec := range request.JobSpecs {
+			jobNameCountMap[spec.Name().String()]++
+		}
+	}
+
+	var duplicated []string
+	for name, count := range jobNameCountMap {
+		if count > 1 {
+			duplicated = append(duplicated, name)
+		}
+	}
+
+	message := fmt.Sprintf("the following jobs are duplicated: [%s]", strings.Join(duplicated, ", "))
+	return errors.NewError(errors.ErrInvalidArgument, job.EntityJob, message)
+}
+
 
 func (j *JobService) validateJobsForDeletion(ctx context.Context, jobTenant tenant.Tenant, jobsToDelete []*job.Job) map[job.Name][]dto.ValidateResult {
 	specByFullName := make(map[job.FullName]*job.Spec, len(jobsToDelete))

@@ -129,11 +129,11 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConso
 
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout) // nolint:contextcheck
 	defer cancel()
-	reqId, err := uuid.NewUUID()
+	reqID, err := uuid.NewUUID()
 	if err != nil {
 		return err
 	}
-	logger.Debug(fmt.Sprintf("sending request to alert manager url:%s, body:%s, reqId: %s", host+endpoint, payloadJSON, reqId))
+	logger.Debug(fmt.Sprintf("sending request to alert manager url:%s, body:%s, reqID: %s", host+endpoint, payloadJSON, reqID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, host+endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return err
@@ -150,7 +150,7 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConso
 	if err != nil {
 		return err
 	}
-	logger.Debug(fmt.Sprintf("alert manager response code:%s, resp:%s, reqId: %s", res.Status, body, reqId))
+	logger.Debug(fmt.Sprintf("alert manager response code:%s, resp:%s, reqID: %s", res.Status, body, reqID))
 
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("non 200 status code received status: %s", res.Status)

@@ -105,15 +105,17 @@ func LoadServerConfig(filePath string) (*ServerConfig, error) {
 	if err := l.Load(cfg); err != nil && !errors.As(err, &config.ConfigFileNotFoundError{}) {
 		return nil, err
 	}
-
 	cfg.Log.Level = LogLevel(strings.ToUpper(string(cfg.Log.Level)))
+	logConfig(cfg)
+	return cfg, nil
+}
+
+func logConfig(cfg *ServerConfig) {
 	loadedConfig, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
-		return nil, err
+		fmt.Println("error while trying  to marshal server config") // nolint:forbidigo
 	}
-	fmt.Printf("Optimus server starting with config : \n%s", loadedConfig)
-
-	return cfg, nil
+	fmt.Printf("Optimus server starting with config : \n%s", loadedConfig) // nolint:forbidigo
 }
 
 func validateFilepath(fs afero.Fs, fpath string) error {

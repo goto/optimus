@@ -1269,6 +1269,25 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 	return job.ResourceURN(destinationURN), nil
 }
 
+func (j *JobService) validateDestination(ctx context.Context, destination job.ResourceURN) dto.ValidateResult {
+	const name = "destination validation"
+
+	if destination == "" {
+		return dto.ValidateResult{
+			Name:     name,
+			Messages: []string{"no issue"},
+			Success:  true,
+		}
+	}
+
+	message, success := j.validateResourceURN(ctx, destination)
+	return dto.ValidateResult{
+		Name:     name,
+		Messages: []string{message},
+		Success:  success,
+	}
+}
+
 func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {
 	const name = "source validation"
 

@@ -113,9 +113,9 @@ func LoadServerConfig(filePath string) (*ServerConfig, error) {
 func logConfig(cfg *ServerConfig) {
 	loadedConfig, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
-		fmt.Println("error while trying  to marshal server config") // nolint:forbidigo
+		fmt.Fprintf(os.Stderr, "error while trying  to marshal server config")
 	}
-	fmt.Printf("Optimus server starting with config : \n%s", loadedConfig) // nolint:forbidigo
+	fmt.Fprintf(os.Stderr, "Optimus server starting with config : \n%s", loadedConfig)
 }
 
 func validateFilepath(fs afero.Fs, fpath string) error {

@@ -1268,6 +1268,33 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 
 	return job.ResourceURN(destinationURN), nil
 }
+func (j *JobService) validateResourceURN(ctx context.Context, urn job.ResourceURN) (string, bool) {
+	activeInDB := true
+	if resource, err := j.resourceChecker.GetResourceByURN(ctx, urn.String()); err != nil {
+		activeInDB = false
+	} else if resource.Status() == "deleted" { // TODO: update this properly
+		activeInDB = false
+	}
+
+	existInStore, err := j.resourceChecker.ExistInStoreByURN(ctx, urn.String()) // TODO: check if we can use resource status
+	if err != nil {
+		return err.Error(), false
+	}
+
+	if activeInDB && existInStore {
+		return "no issue", true
+	}
+
+	if existInStore {
+		return "resource exists in store but not in db", true
+	}
+
+	if activeInDB {
+		return "resource exists in db but not in store", false
+	}
+
+	return "resource does not exist in both db and store", false
+}
 
 func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination job.ResourceURN) dto.ValidateResult {
 	const name = "job run validation"

@@ -225,6 +225,9 @@ func (rs ResourceService) ChangeNamespace(ctx context.Context, datastore resourc
 		rs.logger.Error("failed to read existing resource [%s]: %s", resourceFullName, err)
 		return err
 	}
+	if resourceSpec.IsDeleted() {
+		return errors.NewError(errors.ErrNotFound, resource.EntityResource, "resource are not found or has been deleted")
+	}
 	if err := rs.repo.ChangeNamespace(ctx, resourceSpec, newTenant); err != nil {
 		rs.logger.Error("error changing namespace of stored resource [%s]: %s", resourceSpec.FullName(), err)
 		return err

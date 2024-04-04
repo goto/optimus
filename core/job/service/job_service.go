@@ -127,6 +127,15 @@ type UpstreamResolver interface {
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
 }
 
+type JobInputCompiler interface {
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+}
+
+type ResourceExistenceChecker interface {
+	GetResourceByURN(ctx context.Context, urn string) (*resource.Resource, error)
+	ExistInStoreByURN(ctx context.Context, urn string) (bool, error)
+}
+
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
 	logWriter := writer.NewLogWriter(j.logger)
 	me := errors.NewMultiError("add specs errors")

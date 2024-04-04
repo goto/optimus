@@ -1269,6 +1269,29 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 	return job.ResourceURN(destinationURN), nil
 }
 
+func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
+	const name = "upstream validation"
+
+	var logger writer.BufferedLogger
+
+	if _, err := j.upstreamResolver.Resolve(ctx, subjectJob, &logger); err != nil {
+		return dto.ValidateResult{
+			Name: name,
+			Messages: []string{
+				"can not resolve upstream",
+				err.Error(),
+			},
+			Success: false,
+		}
+	}
+
+	return dto.ValidateResult{
+		Name:     name,
+		Messages: []string{"no issue"},
+		Success:  true,
+	}
+}
+
 func (j *JobService) validateDestination(ctx context.Context, destination job.ResourceURN) dto.ValidateResult {
 	const name = "destination validation"
 

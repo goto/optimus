@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goto/salt/log"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/notify/alertmanager"
-
-	"github.com/goto/salt/log"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestAlertManager(t *testing.T) {

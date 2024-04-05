@@ -42,32 +42,28 @@ func (u URN) IsZero() bool {
 }
 
 func ParseURN(urn string) (URN, error) {
-	if urn == "" {
-		return zeroURN, nil
-	}
-
 	splitURN := strings.Split(urn, urnSeparator)
 	if len(splitURN) != 2 {
-		return zeroURN, errURNWrongPattern
+		return URN{}, errURNWrongPattern
 	}
 
 	store := splitURN[0]
 	name := splitURN[1]
 
 	if store == "" {
-		return zeroURN, errURNStoreNotSpecified
+		return URN{}, errURNStoreNotSpecified
 	}
 
 	if name == "" {
-		return zeroURN, errURNNameNotSpecified
+		return URN{}, errURNNameNotSpecified
 	}
 
 	if trimmedStore := strings.TrimSpace(store); len(trimmedStore) != len(store) {
-		return zeroURN, errURNStoreContainsWhitespace
+		return URN{}, errURNStoreContainsWhitespace
 	}
 
 	if trimmedName := strings.TrimSpace(name); len(trimmedName) != len(name) {
-		return zeroURN, errURNNameContainsWhitespace
+		return URN{}, errURNNameContainsWhitespace
 	}
 
 	return URN{

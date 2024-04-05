@@ -15,6 +15,11 @@ func TestParseURN(t *testing.T) {
 			errorMessage  string
 		}{
 			{
+				conditionName: "empty urn",
+				inputURN:      "",
+				errorMessage:  "urn does not follow pattern <store>://<name>",
+			},
+			{
 				conditionName: "store is not specified",
 				inputURN:      "://project.dataset.name",
 				errorMessage:  "urn store is not specified",
@@ -44,16 +49,7 @@ func TestParseURN(t *testing.T) {
 		}
 	})
 
-	t.Run("should return zero urn and nil if parsing empty succeeds", func(t *testing.T) {
-		urn := ""
-
-		actualURN, actualError := lib.ParseURN(urn)
-
-		assert.Zero(t, actualURN)
-		assert.NoError(t, actualError)
-	})
-
-	t.Run("should return non-zero urn and nil if parsing non-empty succeeds", func(t *testing.T) {
+	t.Run("should return urn and nil if parsing succeeds", func(t *testing.T) {
 		urn := "store://project.dataset.name"
 
 		actualURN, actualError := lib.ParseURN(urn)

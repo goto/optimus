@@ -60,7 +60,24 @@ func TestParseURN(t *testing.T) {
 }
 
 func TestURN(t *testing.T) {
-	t.Run("should return empty member if urn is improper", func(t *testing.T) {
+	t.Run("IsZero", func(t *testing.T) {
+		t.Run("should return true if urn is zero valued", func(t *testing.T) {
+			var urn lib.URN
+
+			assert.True(t, urn.IsZero())
+		})
+
+		t.Run("should return false if urn is not zero valued", func(t *testing.T) {
+			rawURN := "store://project.dataset.name"
+
+			urn, err := lib.ParseURN(rawURN)
+			assert.NoError(t, err)
+
+			assert.False(t, urn.IsZero())
+		})
+	})
+
+	t.Run("should return empty member if urn is not initialized", func(t *testing.T) {
 		var urn lib.URN
 
 		assert.Empty(t, urn.GetStore())
@@ -68,7 +85,7 @@ func TestURN(t *testing.T) {
 		assert.Empty(t, urn.String())
 	})
 
-	t.Run("should return proper member if the urn is valid", func(t *testing.T) {
+	t.Run("should return proper member if the urn is parsed", func(t *testing.T) {
 		rawURN := "store://project.dataset.name"
 
 		expectedStore := "store"

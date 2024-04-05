@@ -16,6 +16,8 @@ var (
 	errURNNameContainsWhitespace  = errors.New("urn name contains whitespace")
 )
 
+var zeroURN URN
+
 type URN struct {
 	store string
 	name  string
@@ -33,6 +35,10 @@ func (u URN) GetName() string {
 
 func (u URN) String() string {
 	return u.raw
+}
+
+func (u URN) IsZero() bool {
+	return u == zeroURN
 }
 
 func ParseURN(urn string) (URN, error) {

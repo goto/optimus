@@ -112,6 +112,12 @@ func TestParseURN(t *testing.T) {
 	})
 }
 
+func TestZeroURN(t *testing.T) {
+	t.Run("should return zero urn", func(t *testing.T) {
+		assert.Zero(t, lib.ZeroURN())
+	})
+}
+
 func TestURN(t *testing.T) {
 	t.Run("IsZero", func(t *testing.T) {
 		t.Run("should return true if urn is zero valued", func(t *testing.T) {
@@ -150,11 +156,5 @@ func TestURN(t *testing.T) {
 		assert.EqualValues(t, expectedStore, urn.GetStore())
 		assert.EqualValues(t, expectedName, urn.GetName())
 		assert.EqualValues(t, rawURN, urn.String())
-	})
-}
-
-func TestZeroURN(t *testing.T) {
-	t.Run("should return zero urn", func(t *testing.T) {
-		assert.Zero(t, lib.ZeroURN())
 	})
 }

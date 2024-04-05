@@ -25,6 +25,12 @@ type URN struct {
 	raw string
 }
 
+func NewURN(store string, name string) (URN, error) {
+	rawURN := store + urnSeparator + name
+
+	return ParseURN(rawURN)
+}
+
 func (u URN) GetStore() string {
 	return u.store
 }
@@ -39,12 +45,6 @@ func (u URN) String() string {
 
 func (u URN) IsZero() bool {
 	return u == zeroURN
-}
-
-func NewURN(store string, name string) (URN, error) {
-	rawURN := store + urnSeparator + name
-
-	return ParseURN(rawURN)
 }
 
 func ParseURN(urn string) (URN, error) {

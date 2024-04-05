@@ -61,21 +61,11 @@ func TestParseURN(t *testing.T) {
 
 func TestURN(t *testing.T) {
 	t.Run("should return empty member if urn is improper", func(t *testing.T) {
-		t.Run("case urn is value-based zero", func(t *testing.T) {
-			var urn lib.URN
+		var urn lib.URN
 
-			assert.Empty(t, urn.GetStore())
-			assert.Empty(t, urn.GetName())
-			assert.Empty(t, urn.String())
-		})
-
-		t.Run("case urn is reference-based zero", func(t *testing.T) {
-			var urn *lib.URN
-
-			assert.Empty(t, urn.GetStore())
-			assert.Empty(t, urn.GetName())
-			assert.Empty(t, urn.String())
-		})
+		assert.Empty(t, urn.GetStore())
+		assert.Empty(t, urn.GetName())
+		assert.Empty(t, urn.String())
 	})
 
 	t.Run("should return proper member if the urn is valid", func(t *testing.T) {

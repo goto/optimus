@@ -23,24 +23,15 @@ type URN struct {
 	raw string
 }
 
-func (u *URN) GetStore() string {
-	if u == nil {
-		return ""
-	}
+func (u URN) GetStore() string {
 	return u.store
 }
 
-func (u *URN) GetName() string {
-	if u == nil {
-		return ""
-	}
+func (u URN) GetName() string {
 	return u.name
 }
 
-func (u *URN) String() string {
-	if u == nil {
-		return ""
-	}
+func (u URN) String() string {
 	return u.raw
 }
 

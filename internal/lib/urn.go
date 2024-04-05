@@ -72,3 +72,7 @@ func ParseURN(urn string) (URN, error) {
 		raw:   urn,
 	}, nil
 }
+
+func ZeroURN() URN {
+	return zeroURN
+}

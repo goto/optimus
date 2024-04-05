@@ -99,3 +99,9 @@ func TestURN(t *testing.T) {
 		assert.EqualValues(t, rawURN, urn.String())
 	})
 }
+
+func TestZeroURN(t *testing.T) {
+	t.Run("should return zero urn", func(t *testing.T) {
+		assert.Zero(t, lib.ZeroURN())
+	})
+}

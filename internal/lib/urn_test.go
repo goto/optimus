@@ -7,6 +7,59 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewURN(t *testing.T) {
+	t.Run("should return zero urn and error if parsing fails", func(t *testing.T) {
+		testTable := []struct {
+			conditionName string
+			store         string
+			name          string
+			errorMessage  string
+		}{
+			{
+				conditionName: "empty store",
+				store:         "",
+				name:          "project.dataset.name",
+				errorMessage:  "urn store is not specified",
+			},
+			{
+				conditionName: "empty name",
+				store:         "store",
+				name:          "",
+				errorMessage:  "urn name is not specified",
+			},
+			{
+				conditionName: "store contains whitespace",
+				store:         "store ",
+				name:          "project.dataset.name",
+				errorMessage:  "urn store contains whitespace",
+			},
+			{
+				conditionName: "name contains whitespace",
+				store:         "store",
+				name:          "project.dataset.name ",
+				errorMessage:  "urn name contains whitespace",
+			},
+		}
+
+		for _, testCase := range testTable {
+			actualURN, actualError := lib.NewURN(testCase.store, testCase.name)
+
+			assert.Zero(t, actualURN, testCase.conditionName)
+			assert.EqualError(t, actualError, testCase.errorMessage, testCase.conditionName)
+		}
+	})
+
+	t.Run("should return urn and nil if parsing succeeds", func(t *testing.T) {
+		store := "store"
+		name := "project.dataset.name"
+
+		actualURN, actualError := lib.NewURN(store, name)
+
+		assert.NotZero(t, actualURN)
+		assert.NoError(t, actualError)
+	})
+}
+
 func TestParseURN(t *testing.T) {
 	t.Run("should return zero urn and error if parsing fails", func(t *testing.T) {
 		testTable := []struct {

@@ -41,6 +41,12 @@ func (u URN) IsZero() bool {
 	return u == zeroURN
 }
 
+func NewURN(store string, name string) (URN, error) {
+	rawURN := store + urnSeparator + name
+
+	return ParseURN(rawURN)
+}
+
 func ParseURN(urn string) (URN, error) {
 	splitURN := strings.Split(urn, urnSeparator)
 	if len(splitURN) != 2 {

@@ -19,14 +19,29 @@ var (
 type URN struct {
 	store string
 	name  string
+
+	raw string
 }
 
-func (u URN) GetStore() string {
+func (u *URN) GetStore() string {
+	if u == nil {
+		return ""
+	}
 	return u.store
 }
 
-func (u URN) GetName() string {
+func (u *URN) GetName() string {
+	if u == nil {
+		return ""
+	}
 	return u.name
+}
+
+func (u *URN) String() string {
+	if u == nil {
+		return ""
+	}
+	return u.raw
 }
 
 func ParseURN(urn string) (URN, error) {
@@ -57,5 +72,6 @@ func ParseURN(urn string) (URN, error) {
 	return URN{
 		store: store,
 		name:  name,
+		raw:   urn,
 	}, nil
 }

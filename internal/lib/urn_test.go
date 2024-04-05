@@ -58,3 +58,37 @@ func TestParseURN(t *testing.T) {
 		assert.NoError(t, actualError)
 	})
 }
+
+func TestURN(t *testing.T) {
+	t.Run("should return empty member if urn is improper", func(t *testing.T) {
+		t.Run("case urn is value-based zero", func(t *testing.T) {
+			var urn lib.URN
+
+			assert.Empty(t, urn.GetStore())
+			assert.Empty(t, urn.GetName())
+			assert.Empty(t, urn.String())
+		})
+
+		t.Run("case urn is reference-based zero", func(t *testing.T) {
+			var urn *lib.URN
+
+			assert.Empty(t, urn.GetStore())
+			assert.Empty(t, urn.GetName())
+			assert.Empty(t, urn.String())
+		})
+	})
+
+	t.Run("should return proper member if the urn is valid", func(t *testing.T) {
+		rawURN := "store://project.dataset.name"
+
+		expectedStore := "store"
+		expectedName := "project.dataset.name"
+
+		urn, err := lib.ParseURN(rawURN)
+		assert.NoError(t, err)
+
+		assert.EqualValues(t, expectedStore, urn.GetStore())
+		assert.EqualValues(t, expectedName, urn.GetName())
+		assert.EqualValues(t, rawURN, urn.String())
+	})
+}

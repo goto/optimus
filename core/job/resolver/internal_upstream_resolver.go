@@ -11,11 +11,12 @@ import (
 )
 
 type internalUpstreamResolver struct {
-	jobRepository JobRepository
+	jobRepository    JobRepository
+	resourceResolver ResourceResolver
 }
 
-func NewInternalUpstreamResolver(jobRepository JobRepository) *internalUpstreamResolver {
-	return &internalUpstreamResolver{jobRepository: jobRepository}
+func NewInternalUpstreamResolver(jobRepository JobRepository, resourceResolver ResourceResolver) *internalUpstreamResolver {
+	return &internalUpstreamResolver{jobRepository: jobRepository, resourceResolver: resourceResolver}
 }
 
 func (i internalUpstreamResolver) Resolve(ctx context.Context, jobWithUnresolvedUpstream *job.WithUpstream) (*job.WithUpstream, error) {
@@ -49,7 +50,12 @@ func (i internalUpstreamResolver) Resolve(ctx context.Context, jobWithUnresolved
 	}
 
 	distinctUpstreams := job.Upstreams(upstreamResults).Deduplicate()
-	return job.NewWithUpstream(jobWithUnresolvedUpstream.Job(), distinctUpstreams), me.ToErr()
+	jobWithMergedUpstream := job.NewWithUpstream(jobWithUnresolvedUpstream.Job(), distinctUpstreams)
+	err = i.resourceResolver.CheckIsDeleted(ctx, []*job.WithUpstream{jobWithMergedUpstream})
+	if err != nil {
+		return nil, err
+	}
+	return jobWithMergedUpstream, me.ToErr()
 }
 
 func (i internalUpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobsWithUnresolvedUpstream []*job.WithUpstream) ([]*job.WithUpstream, error) {
@@ -62,6 +68,10 @@ func (i internalUpstreamResolver) BulkResolve(ctx context.Context, projectName t
 	}
 
 	jobsWithMergedUpstream := job.WithUpstreams(jobsWithUnresolvedUpstream).MergeWithResolvedUpstreams(allInternalUpstreamMap)
+	err = i.resourceResolver.CheckIsDeleted(ctx, jobsWithMergedUpstream)
+	if err != nil {
+		return nil, err
+	}
 	return jobsWithMergedUpstream, nil
 }
 

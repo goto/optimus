@@ -51,6 +51,8 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves inferred and static upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
+
 			defer logWriter.AssertExpectations(t)
 
 			jobRepo.On("GetAllByResourceDestination", ctx, jobASources[0]).Return([]*job.Job{jobB}, nil)
@@ -60,7 +62,9 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC, unresolvedUpstreamD})
 			expectedJobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{internalUpstreamB, internalUpstreamC, unresolvedUpstreamD})
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedJobWithUpstream.Job(), result.Job())
@@ -69,6 +73,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves inferred and static upstream internally and prioritize static upstream when duplication found", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			specD, _ := job.NewSpecBuilder(jobVersion, "job-D", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
@@ -86,7 +91,9 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobD, []*job.Upstream{unresolvedUpstreamCStatic, unresolvedUpstreamCInferred})
 			expectedJobWithUpstream := job.NewWithUpstream(jobD, []*job.Upstream{internalUpstreamCStatic})
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
 			assert.NoError(t, err)
 			assert.EqualValues(t, expectedJobWithUpstream, result)
@@ -94,6 +101,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves inferred upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			specX, _ := job.NewSpecBuilder(jobVersion, "job-X", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -105,7 +113,9 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamB})
 			expectedJobWithUpstream := job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamB})
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, expectedJobWithUpstream.Upstreams(), result.Upstreams())
@@ -113,6 +123,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves static upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			specX, _ := job.NewSpecBuilder(jobVersion, "job-X", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
@@ -124,15 +135,17 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamC})
 			expectedJobWithUpstream := job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamC})
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, expectedJobWithUpstream.Upstreams(), result.Upstreams())
 		})
 		t.Run("should not stop the process but keep appending error when unable to resolve inferred upstream", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			jobRepo.On("GetAllByResourceDestination", ctx, jobASources[0]).Return([]*job.Job{}, errors.New("internal error"))
@@ -142,17 +155,19 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC, unresolvedUpstreamD})
 
-			expectedJobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, internalUpstreamC, unresolvedUpstreamD})
+			expectedJobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{internalUpstreamC, unresolvedUpstreamB, unresolvedUpstreamD})
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
 			assert.ErrorContains(t, err, "internal error")
 			assert.ElementsMatch(t, expectedJobWithUpstream.Upstreams(), result.Upstreams())
 		})
 		t.Run("should not stop the process but keep appending error when unable to resolve static upstream", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			specEUpstreamSpec, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"job-unknown", "job-C"}).Build()
@@ -167,9 +182,11 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			unresolvedUpstreamUnknown := job.NewUpstreamUnresolvedStatic("job-unknown", sampleTenant.ProjectName())
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, unresolvedUpstreamC})
 
-			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, internalUpstreamC})
+			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{internalUpstreamC, unresolvedUpstreamUnknown})
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
 			assert.ErrorContains(t, err, "not found")
 			assert.ElementsMatch(t, expectedJobWithUpstream.Upstreams(), result.Upstreams())
@@ -178,6 +195,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobRepo := new(JobRepository)
 
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			specEUpstreamSpec, err := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"/", "job-C"}).Build()
@@ -194,9 +212,11 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			unresolvedUpstreamUnknown := job.NewUpstreamUnresolvedStatic("job-unknown", sampleTenant.ProjectName())
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, unresolvedUpstreamC})
 
-			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, internalUpstreamC})
+			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{internalUpstreamC, unresolvedUpstreamUnknown})
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
 			assert.ErrorContains(t, err, "name is empty")
 			assert.ElementsMatch(t, expectedJobWithUpstream.Upstreams(), result.Upstreams())
@@ -211,8 +231,8 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 		t.Run("resolves upstream internally in bulk", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			internalUpstreamMap := map[job.Name][]*job.Upstream{
@@ -231,7 +251,9 @@ func TestInternalUpstreamResolver(t *testing.T) {
 				job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamB, internalUpstreamC}),
 			}
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			resourceResolver.On("CheckIsDeleted", ctx, expectedJobsWithUpstream).Return(nil)
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.BulkResolve(ctx, sampleTenant.ProjectName(), jobsWithUnresolvedUpstream)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedJobsWithUpstream[0].Job(), result[0].Job())
@@ -239,10 +261,41 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			assert.ElementsMatch(t, expectedJobsWithUpstream[0].Upstreams(), result[0].Upstreams())
 			assert.ElementsMatch(t, expectedJobsWithUpstream[1].Upstreams(), result[1].Upstreams())
 		})
+
+		t.Run("return error on deleted resources", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
+			defer logWriter.AssertExpectations(t)
+
+			internalUpstreamMap := map[job.Name][]*job.Upstream{
+				"job-A": {internalUpstreamB, internalUpstreamC},
+				"job-X": {internalUpstreamB, internalUpstreamC},
+			}
+			jobRepo.On("ResolveUpstreams", ctx, sampleTenant.ProjectName(), []job.Name{"job-A", "job-X"}).Return(internalUpstreamMap, nil)
+
+			jobsWithUnresolvedUpstream := []*job.WithUpstream{
+				job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC, unresolvedUpstreamD}),
+				job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC}),
+			}
+
+			expectedJobsWithUpstream := []*job.WithUpstream{
+				job.NewWithUpstream(jobA, []*job.Upstream{internalUpstreamB, internalUpstreamC, unresolvedUpstreamD}),
+				job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamB, internalUpstreamC}),
+			}
+
+			resourceResolver.On("CheckIsDeleted", ctx, expectedJobsWithUpstream).Return(errors.New("failed precondition"))
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
+			result, err := internalUpstreamResolver.BulkResolve(ctx, sampleTenant.ProjectName(), jobsWithUnresolvedUpstream)
+			assert.Error(t, err)
+			assert.Nil(t, result)
+		})
+
 		t.Run("returns error if unable to resolve upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-
 			logWriter := new(mockWriter)
+			resourceResolver := new(resourceResolverMock)
 			defer logWriter.AssertExpectations(t)
 
 			jobRepo.On("ResolveUpstreams", ctx, sampleTenant.ProjectName(), []job.Name{"job-A", "job-X"}).Return(nil, errors.New("internal error"))
@@ -252,7 +305,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 				job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC}),
 			}
 
-			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.BulkResolve(ctx, sampleTenant.ProjectName(), jobsWithUnresolvedUpstream)
 			assert.ErrorContains(t, err, "internal error")
 			assert.Nil(t, result)

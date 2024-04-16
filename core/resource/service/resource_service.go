@@ -25,6 +25,7 @@ type ResourceRepository interface {
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
+	FindByURNs(ctx context.Context, tnnt tenant.Tenant, urns ...string) ([]*resource.Resource, error)
 }
 
 type ResourceManager interface {
@@ -524,4 +525,41 @@ func createFullNameToResourceMap(resources []*resource.Resource) map[string]*res
 		output[r.FullName()] = r
 	}
 	return output
+}
+
+func (rs ResourceService) CheckIsDeleted(ctx context.Context, jobWithUpstreams []*job.WithUpstream) error {
+	var (
+		resourceURNsByTenant = make(map[tenant.Tenant][]string)
+		me                   = errors.NewMultiError("failed get tenants on GetActiveByUpstreamJobs")
+	)
+
+	for i := range jobWithUpstreams {
+		for _, upstream := range jobWithUpstreams[i].Upstreams() {
+			tnnt, err := tenant.NewTenant(upstream.ProjectName().String(), upstream.NamespaceName().String())
+			if err != nil {
+				me.Append(err)
+				continue
+			}
+
+			exist := resourceURNsByTenant[tnnt]
+			exist = append(exist, upstream.Resource().String())
+			resourceURNsByTenant[tnnt] = exist
+		}
+
+		for tnnt, resourceURNs := range resourceURNsByTenant {
+			resources, err := rs.repo.FindByURNs(ctx, tnnt, resourceURNs...)
+			if err != nil {
+				me.Append(err)
+				continue
+			}
+
+			for _, resourceData := range resources {
+				if resourceData.IsDeleted() {
+					return errors.FailedPrecondition(resource.EntityResource, fmt.Sprintf("JobUpstream with name: %s have resource with urn: %s", jobWithUpstreams[i].Name().String(), resourceData.URN()))
+				}
+			}
+		}
+	}
+
+	return me.ToErr()
 }

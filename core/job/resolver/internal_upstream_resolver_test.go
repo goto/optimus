@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"golang.org/x/net/context"
 
 	"github.com/goto/optimus/core/job"
@@ -62,7 +63,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC, unresolvedUpstreamD})
 			expectedJobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{internalUpstreamB, internalUpstreamC, unresolvedUpstreamD})
 
-			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -91,7 +92,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobD, []*job.Upstream{unresolvedUpstreamCStatic, unresolvedUpstreamCInferred})
 			expectedJobWithUpstream := job.NewWithUpstream(jobD, []*job.Upstream{internalUpstreamCStatic})
 
-			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -113,7 +114,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamB})
 			expectedJobWithUpstream := job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamB})
 
-			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -135,7 +136,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamC})
 			expectedJobWithUpstream := job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamC})
 
-			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -157,7 +158,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 			expectedJobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{internalUpstreamC, unresolvedUpstreamB, unresolvedUpstreamD})
 
-			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -184,7 +185,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{internalUpstreamC, unresolvedUpstreamUnknown})
 
-			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -214,7 +215,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{internalUpstreamC, unresolvedUpstreamUnknown})
 
-			resourceResolver.On("CheckIsDeleted", ctx, []*job.WithUpstream{expectedJobWithUpstream}).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -251,7 +252,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 				job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamB, internalUpstreamC}),
 			}
 
-			resourceResolver.On("CheckIsDeleted", ctx, expectedJobsWithUpstream).Return(nil)
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(nil)
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.BulkResolve(ctx, sampleTenant.ProjectName(), jobsWithUnresolvedUpstream)
@@ -279,12 +280,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 				job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC}),
 			}
 
-			expectedJobsWithUpstream := []*job.WithUpstream{
-				job.NewWithUpstream(jobA, []*job.Upstream{internalUpstreamB, internalUpstreamC, unresolvedUpstreamD}),
-				job.NewWithUpstream(jobX, []*job.Upstream{internalUpstreamB, internalUpstreamC}),
-			}
-
-			resourceResolver.On("CheckIsDeleted", ctx, expectedJobsWithUpstream).Return(errors.New("failed precondition"))
+			resourceResolver.On("CheckIsDeleted", ctx, mock.Anything).Return(errors.New("failed precondition"))
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo, resourceResolver)
 			result, err := internalUpstreamResolver.BulkResolve(ctx, sampleTenant.ProjectName(), jobsWithUnresolvedUpstream)

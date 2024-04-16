@@ -55,7 +55,7 @@ func TestAlertManager(t *testing.T) {
 			Title:         "Optimus Job Alert",
 			SchedulerHost: "localhost",
 			Status:        scheduler.StatusFiring,
-			JobEvent: &scheduler.Event{
+			JobRunEvent: &scheduler.Event{
 				JobName:        jobName,
 				Tenant:         tnnt,
 				Type:           scheduler.SLAMissEvent,

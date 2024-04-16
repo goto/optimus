@@ -17,42 +17,61 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
 )
 
 const (
 	httpChannelBufferSize = 100
 	eventBatchInterval    = time.Second * 10
 	httpTimeout           = time.Second * 10
-	radarTimeFormat       = "2006/01/02 15:04:05"
-	failureAlertTemplate  = "optimus-job-failure"
-	slaAlertTemplate      = "optimus-job-sla-miss"
+
+	urnContext = "optimus"
+
+	RadarTimeFormat = "2006/01/02 15:04:05"
+
+	ReplayTemplate       = "optimus-replay"
+	JobChangeTemplate    = "optimus-job-change"
+	FailureAlertTemplate = "optimus-job-failure"
+	SlaAlertTemplate     = "optimus-job-sla-miss"
+
+	MsgTypeAlert = "True"
+
+	metricNotificationQueue         = "alert_manager_queue_total"
+	metricNotificationWorkerSendErr = "alert_manager_worker_send_err_total"
+	metricNotificationSend          = "alert_manager_worker_send_total"
 )
 
 var (
-	notifierType      = "event"
+	notifierType      = "alert"
 	eventQueueCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name:        scheduler.MetricNotificationQueue,
+		Name:        metricNotificationQueue,
 		ConstLabels: map[string]string{"type": notifierType},
 	})
-
 	eventWorkerSendErrCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name:        scheduler.MetricNotificationWorkerSendErr,
+		Name:        metricNotificationWorkerSendErr,
 		ConstLabels: map[string]string{"type": notifierType},
 	})
-
 	eventWorkerSendCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name:        scheduler.MetricNotificationSend,
+		Name:        metricNotificationSend,
 		ConstLabels: map[string]string{"type": notifierType},
 	})
 
 	httpRegex = regexp.MustCompile(`^(http|https)://`)
 )
 
+type AlertEvent struct {
+	JobName         string
+	SchedulerHost   string
+	Tenant          tenant.Tenant
+	EventType       string
+	TemplateContext map[string]string
+	Template        string
+}
+
 type AlertManager struct {
 	io.Closer
 
-	alertChan     chan *scheduler.AlertAttrs
+	alertChan     chan *AlertEvent
 	wg            sync.WaitGroup
 	workerErrChan chan error
 	logger        log.Logger
@@ -71,7 +90,7 @@ type AlertPayload struct {
 	Labels   map[string]string `json:"labels"`
 }
 
-func (a *AlertManager) Relay(alert *scheduler.AlertAttrs) {
+func (a *AlertManager) Relay(alert *AlertEvent) {
 	if a.host == "" {
 		// Don't alert if alert manager is not configured in server config
 		return
@@ -82,51 +101,41 @@ func (a *AlertManager) Relay(alert *scheduler.AlertAttrs) {
 	}()
 }
 
-func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConsole string, logger log.Logger) error {
-	var template string
-	var templateContext map[string]string
+func getJobURN(jobName string, tnnt tenant.Tenant) string {
+	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, tnnt.ProjectName(), tnnt.ProjectName(), tnnt.NamespaceName(), jobName)
+}
 
-	dashURL, _ := url.Parse(dashboardURL)
-	q := dashURL.Query()
-	q.Set("var-project", e.JobEvent.Tenant.ProjectName().String())
-	q.Set("var-namespace", e.JobEvent.Tenant.NamespaceName().String())
-	q.Set("var-job", e.JobEvent.JobName.String())
-	q.Set("var-schedule_time", e.JobEvent.JobScheduledAt.Format(radarTimeFormat))
-	dashURL.RawQuery = q.Encode()
-	templateContext = map[string]string{
-		"project":      e.JobEvent.Tenant.ProjectName().String(),
-		"namespace":    e.JobEvent.Tenant.NamespaceName().String(),
-		"job_name":     e.JobEvent.JobName.String(),
-		"owner":        e.Owner,
-		"scheduled_at": e.JobEvent.JobScheduledAt.Format(radarTimeFormat),
-		"console_link": fmt.Sprintf("%s/%s/%s", dataConsole, "optimus", e.JobEvent.JobName),
-		"dashboard":    dashURL.String(),
+func RelayEvent(e *AlertEvent, host, endpoint, dashboardURL, dataConsole string, logger log.Logger) error {
+	template := e.Template
+	tnnt := e.Tenant
+	jobName := e.JobName
+	schedulerHost := e.SchedulerHost
+	templateContext := e.TemplateContext
+
+	if len(dataConsole) > 0 {
+		templateContext["console_link"] = fmt.Sprintf("%s/%s/%s", dataConsole, "optimus", jobName)
 	}
 
-	if httpRegex.MatchString(e.SchedulerHost) {
-		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, e.JobEvent.JobName)
+	if len(dashboardURL) > 0 {
+		dashURL, _ := url.Parse(dashboardURL)
+		q := dashURL.Query()
+		q.Set("var-project", tnnt.ProjectName().String())
+		q.Set("var-namespace", tnnt.NamespaceName().String())
+		q.Set("var-job", jobName)
+		dashURL.RawQuery = q.Encode()
+		templateContext["dashboard"] = dashURL.String()
 	}
 
-	switch e.JobEvent.Type {
-	case scheduler.JobFailureEvent:
-		template = failureAlertTemplate
-		templateContext["task_id"] = e.JobEvent.OperatorName
-	case scheduler.SLAMissEvent:
-		template = slaAlertTemplate
-		templateContext["state"] = e.JobEvent.Status.String()
+	if len(schedulerHost) > 0 && httpRegex.MatchString(schedulerHost) {
+		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, jobName)
 	}
 
 	payload := AlertPayload{
 		Data:     templateContext,
 		Template: template,
 		Labels: map[string]string{
-			"job_urn":    e.JobURN,
-			"event_type": e.JobEvent.Type.String(),
-			"identifier": fmt.Sprintf("%s:%s:%s",
-				e.JobEvent.Tenant.ProjectName(),
-				e.JobEvent.Tenant.NamespaceName(),
-				e.JobEvent.JobName),
-			"severity": "CRITICAL",
+			"identifier": getJobURN(jobName, tnnt),
+			"event_type": e.EventType,
 		},
 	}
 	payloadJSON, err := json.Marshal(payload)
@@ -201,7 +210,7 @@ func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, data
 	}
 
 	this := &AlertManager{
-		alertChan:     make(chan *scheduler.AlertAttrs, httpChannelBufferSize),
+		alertChan:     make(chan *AlertEvent, httpChannelBufferSize),
 		workerErrChan: make(chan error),
 		wg:            sync.WaitGroup{},
 		host:          host,

@@ -75,7 +75,7 @@ type AlertAttrs struct {
 	Title         string
 	SchedulerHost string
 	Status        EventStatus
-	JobEvent      *Event
+	JobRunEvent   *Event
 }
 
 type WebhookAttrs struct {

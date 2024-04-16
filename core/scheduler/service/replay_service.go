@@ -47,6 +47,8 @@ type ReplayService struct {
 	jobRepo    JobRepository
 	runGetter  SchedulerRunGetter
 
+	alertHandler AlertManager
+
 	validator ReplayValidator
 	executor  ReplayExecutor
 
@@ -127,11 +129,24 @@ func (r *ReplayService) CancelReplay(ctx context.Context, replayWithRun *schedul
 	}
 	statusSummary := scheduler.JobRunStatusList(replayWithRun.Runs).GetJobRunStatusSummary()
 	cancelMessage := fmt.Sprintf("replay cancelled with run status %s", statusSummary)
-	return r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
+	err := r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
+	if err != nil {
+		return err
+	}
+	r.alertHandler.Relay(GetReplayEventObj(replayWithRun.Replay.Tenant(), replayWithRun.Replay.JobName().String(), scheduler.ReplayStateCancelled, replayWithRun.Replay.ID().String()))
+	return nil
 }
 
-func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
-	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, executor: worker, runGetter: runGetter, logger: logger}
+func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, alertManager AlertManager, logger log.Logger) *ReplayService {
+	return &ReplayService{
+		replayRepo:   replayRepo,
+		jobRepo:      jobRepo,
+		alertHandler: alertManager,
+		validator:    validator,
+		executor:     worker,
+		runGetter:    runGetter,
+		logger:       logger,
+	}
 }
 
 func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt tenant.Tenant, jobName scheduler.JobName) (*cron.ScheduleSpec, error) {

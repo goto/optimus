@@ -10,6 +10,7 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/telemetry"
@@ -32,7 +33,7 @@ type Webhook interface {
 
 type AlertManager interface {
 	io.Closer
-	Relay(attr *scheduler.AlertAttrs)
+	Relay(attr *alertmanager.AlertEvent)
 }
 
 type EventsService struct {
@@ -43,6 +44,54 @@ type EventsService struct {
 	jobRepo        JobRepository
 	tenantService  TenantService
 	l              log.Logger
+}
+
+func GetReplayEventObj(tnnt tenant.Tenant, jobName string, stateChangeTo scheduler.ReplayState, replayID string) *alertmanager.AlertEvent {
+	event := &alertmanager.AlertEvent{
+		JobName:   jobName,
+		Tenant:    tnnt,
+		EventType: stateChangeTo.String(),
+		TemplateContext: map[string]string{
+			"replay_id": replayID,
+			"project":   tnnt.ProjectName().String(),
+			"namespace": tnnt.NamespaceName().String(),
+			"job_name":  jobName,
+			"event":     stateChangeTo.String(),
+		},
+		Template: alertmanager.ReplayTemplate,
+	}
+
+	switch stateChangeTo {
+	case scheduler.ReplayStateFailed, scheduler.ReplayStateCancelled:
+		event.TemplateContext["is_alert"] = alertmanager.MsgTypeAlert
+	}
+	return event
+}
+
+func GetJobRunEventObj(tnnt tenant.Tenant, schedulerHost, jobName, owner string, event *scheduler.Event) *alertmanager.AlertEvent {
+	alertEvent := alertmanager.AlertEvent{
+		JobName:       jobName,
+		SchedulerHost: schedulerHost,
+		Tenant:        tnnt,
+		EventType:     event.Type.String(),
+		TemplateContext: map[string]string{
+			"is_alert":     alertmanager.MsgTypeAlert,
+			"project":      tnnt.ProjectName().String(),
+			"namespace":    tnnt.NamespaceName().String(),
+			"job_name":     jobName,
+			"owner":        owner,
+			"scheduled_at": event.JobScheduledAt.Format(alertmanager.RadarTimeFormat),
+		},
+	}
+	switch event.Type {
+	case scheduler.JobFailureEvent:
+		alertEvent.Template = alertmanager.FailureAlertTemplate
+		alertEvent.TemplateContext["task_id"] = event.OperatorName
+	case scheduler.SLAMissEvent:
+		alertEvent.Template = alertmanager.SlaAlertTemplate
+		alertEvent.TemplateContext["state"] = event.Status.String()
+	}
+	return &alertEvent
 }
 
 func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error {
@@ -60,14 +109,7 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 		return err
 	}
 	if event.Type == scheduler.JobFailureEvent || event.Type == scheduler.SLAMissEvent {
-		e.alertManager.Relay(&scheduler.AlertAttrs{
-			Owner:         jobDetails.JobMetadata.Owner,
-			JobURN:        jobDetails.Job.URN(),
-			Title:         "Optimus Job Alert",
-			SchedulerHost: schedulerHost,
-			Status:        scheduler.StatusFiring,
-			JobEvent:      event,
-		})
+		e.alertManager.Relay(GetJobRunEventObj(tenantWithDetails.ToTenant(), schedulerHost, jobDetails.Name.String(), jobDetails.JobMetadata.Owner, event))
 	}
 	return nil
 }

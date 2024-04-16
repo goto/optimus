@@ -140,7 +140,7 @@ func TestNotificationService(t *testing.T) {
 					Title:         "Optimus Job Alert",
 					SchedulerHost: "localhost",
 					Status:        scheduler.StatusFiring,
-					JobEvent:      event,
+					JobRunEvent:   event,
 				})
 				tenantService := new(mockTenantService)
 				tenantWithDetails, _ := tenant.NewTenantDetails(project, namespace, []*tenant.PlainTextSecret{})

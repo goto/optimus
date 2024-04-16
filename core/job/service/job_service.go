@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
@@ -30,6 +32,7 @@ const (
 	// projectConfigPrefix will be used to prefix all the config variables of
 	// a project, i.e. registered entities
 	projectConfigPrefix = "GLOBAL__"
+	jobSpecChangeEvent  = "job_spec_changed"
 )
 
 type JobService struct {
@@ -43,17 +46,24 @@ type JobService struct {
 
 	tenantDetailsGetter TenantDetailsGetter
 
+	alertHandler AlertManager
+
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
 	logger log.Logger
 }
 
+type AlertManager interface {
+	io.Closer
+	Relay(attr *alertmanager.AlertEvent)
+}
+
 func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
-	jobDeploymentService JobDeploymentService, engine Engine,
+	jobDeploymentService JobDeploymentService, engine Engine, alertManager AlertManager,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -64,6 +74,7 @@ func NewJobService(
 		eventHandler:         eventHandler,
 		tenantDetailsGetter:  tenantDetailsGetter,
 		logger:               logger,
+		alertHandler:         alertManager,
 		jobDeploymentService: jobDeploymentService,
 		engine:               engine,
 	}
@@ -185,6 +196,9 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 
 	updatedJobs, err := j.jobRepo.Update(ctx, jobs)
 	me.Append(err)
+	for _, job := range updatedJobs {
+		j.alertHandler.Relay(getJobChangeEventObj(tenantWithDetails.ToTenant(), job.GetName(), jobSpecChangeEvent))
+	}
 
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), updatedJobs, logWriter)
 	me.Append(err)
@@ -847,6 +861,20 @@ func (j *JobService) bulkAdd(ctx context.Context, tenantWithDetails *tenant.With
 	return addedJobs, me.ToErr()
 }
 
+func getJobChangeEventObj(tnnt tenant.Tenant, jobName string, eventType string) *alertmanager.AlertEvent {
+	return &alertmanager.AlertEvent{
+		JobName:   jobName,
+		Tenant:    tnnt,
+		EventType: eventType,
+		TemplateContext: map[string]string{
+			"project":   tnnt.ProjectName().String(),
+			"namespace": tnnt.NamespaceName().String(),
+			"job_name":  jobName,
+		},
+		Template: alertmanager.JobChangeTemplate,
+	}
+}
+
 func (j *JobService) bulkUpdate(ctx context.Context, tenantWithDetails *tenant.WithDetails, specsToUpdate []*job.Spec, logWriter writer.LogWriter) ([]*job.Job, error) {
 	me := errors.NewMultiError("bulk update specs errors")
 
@@ -863,6 +891,9 @@ func (j *JobService) bulkUpdate(ctx context.Context, tenantWithDetails *tenant.W
 		j.logger.Error("error updating jobs for namespace [%s]: %s", tenantWithDetails.Namespace().Name(), err)
 		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] update jobs failure found: %s", tenantWithDetails.Namespace().Name().String(), err.Error()))
 		me.Append(err)
+	}
+	for _, job := range updatedJobs {
+		j.alertHandler.Relay(getJobChangeEventObj(tenantWithDetails.ToTenant(), job.GetName(), jobSpecChangeEvent))
 	}
 
 	if len(updatedJobs) > 0 {

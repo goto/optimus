@@ -336,9 +336,9 @@ func (s *OptimusServer) setupHandlers() error {
 	}
 
 	replayRepository := schedulerRepo.NewReplayRepository(s.dbPool)
-	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay)
+	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay, alertsHandler)
 	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
-	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, replayWorker, newScheduler, s.logger)
+	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, replayWorker, newScheduler, alertsHandler, s.logger)
 
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
@@ -355,7 +355,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
-	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, pluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
+	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, pluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine, alertsHandler)
 
 	// Resource Bounded Context
 	resourceRepository := resource.NewRepository(s.dbPool)

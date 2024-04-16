@@ -22,11 +22,12 @@ const (
 )
 
 type ReplayWorker struct {
-	logger     log.Logger
-	replayRepo ReplayRepository
-	jobRepo    JobRepository
-	scheduler  ReplayScheduler
-	config     config.ReplayConfig
+	logger        log.Logger
+	replayRepo    ReplayRepository
+	jobRepo       JobRepository
+	scheduler     ReplayScheduler
+	config        config.ReplayConfig
+	alertsHandler AlertManager
 }
 
 type ReplayScheduler interface {
@@ -37,13 +38,14 @@ type ReplayScheduler interface {
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 }
 
-func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig) *ReplayWorker {
+func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig, alertsHandler AlertManager) *ReplayWorker {
 	return &ReplayWorker{
-		logger:     logger,
-		jobRepo:    jobRepo,
-		replayRepo: replayRepository,
-		config:     cfg,
-		scheduler:  scheduler,
+		logger:        logger,
+		jobRepo:       jobRepo,
+		replayRepo:    replayRepository,
+		config:        cfg,
+		scheduler:     scheduler,
+		alertsHandler: alertsHandler,
 	}
 }
 
@@ -56,10 +58,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, jobTenant, jobName)
 	if err != nil {
 		w.logger.Error("[ReplayID: %s] unable to get cron value for job [%s]: %s", replayID.String(), jobName.String(), err)
-		if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
-			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayID, err.Error())
-		}
-		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)
+		w.updateReplayStatus(ctx, replayID, jobTenant, jobName, err.Error())
 		return
 	}
 
@@ -72,12 +71,16 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 			errMessage = "replay execution timed out"
 		}
 		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayID.String(), jobName.String(), errMessage)
-
-		if err := w.replayRepo.UpdateReplayStatus(cleanupCtx, replayID, scheduler.ReplayStateFailed, errMessage); err != nil {
-			w.logger.Error("[ReplayID: %s] unable to set replay status to 'failed': %s", replayID, err.Error())
-		}
-		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)
+		w.updateReplayStatus(cleanupCtx, replayID, jobTenant, jobName, errMessage)
 	}
+}
+
+func (w *ReplayWorker) updateReplayStatus(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName, message string) {
+	if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, message); err != nil {
+		w.logger.Error("[ReplayID: %s] unable to set replay status to 'failed': %s", replayID, err.Error())
+	}
+	w.alertsHandler.Relay(GetReplayEventObj(jobTenant, jobName.String(), scheduler.ReplayStateFailed, replayID.String()))
+	raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)
 }
 
 func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
@@ -128,7 +131,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		// check if replay request is on termination state
 		if syncedRunStatus.IsAllTerminated() {
-			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus, runStatusSummary)
+			return w.finishReplay(ctx, replayWithRun, syncedRunStatus, runStatusSummary)
 		}
 
 		// pick runs to be triggered
@@ -162,21 +165,24 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			w.logger.Error("[ReplayID: %s] unable to update replay runs: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
+		//	should a replay state change event be send at this time, please help to know why replay state is being set to progress again here
 	}
 }
 
-func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus scheduler.JobRunStatusList, runStatusSummary string) error {
+func (w *ReplayWorker) finishReplay(ctx context.Context, replay *scheduler.ReplayWithRun, syncedRunStatus scheduler.JobRunStatusList, runStatusSummary string) error {
 	replayState := scheduler.ReplayStateSuccess
 	if syncedRunStatus.IsAnyFailure() {
 		replayState = scheduler.ReplayStateFailed
 	}
 	msg := fmt.Sprintf("replay is finished with run status: %s", runStatusSummary)
-	w.logger.Info("[ReplayID: %s] replay finished with status %s", replayID, replayState)
+	w.logger.Info("[ReplayID: %s] replay finished with status %s", replay.Replay.ID(), replayState)
 
-	if err := w.replayRepo.UpdateReplay(ctx, replayID, replayState, syncedRunStatus, msg); err != nil {
-		w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayID, err)
+	if err := w.replayRepo.UpdateReplay(ctx, replay.Replay.ID(), replayState, syncedRunStatus, msg); err != nil {
+		w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replay.Replay.ID(), err)
 		return err
 	}
+
+	w.alertsHandler.Relay(GetReplayEventObj(replay.Replay.Tenant(), replay.Replay.JobName().String(), replayState, replay.Replay.ID().String()))
 	return nil
 }
 

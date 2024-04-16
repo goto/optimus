@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/job/resolver"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/resourcemanager"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -35,7 +36,15 @@ func TestExternalUpstreamResolver(t *testing.T) {
 	jobTask := job.NewTask(taskName, jobTaskConfig)
 	upstreamSpec, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"external-project/job-B"}).Build()
 	specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
-	jobA := job.NewJob(sampleTenant, specA, "", []job.ResourceURN{"resource-C"}, false)
+
+	resourceURNB, err := lib.ParseURN("store://resource-B")
+	assert.NoError(t, err)
+	resourceURNC, err := lib.ParseURN("store://resource-C")
+	assert.NoError(t, err)
+	resourceURND, err := lib.ParseURN("store://resource-D")
+	assert.NoError(t, err)
+
+	jobA := job.NewJob(sampleTenant, specA, lib.ZeroURN(), []lib.URN{resourceURNC}, false)
 
 	t.Run("BulkResolve", func(t *testing.T) {
 		t.Run("resolves upstream externally", func(t *testing.T) {
@@ -43,11 +52,11 @@ func TestExternalUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			unresolvedUpstreamB := job.NewUpstreamUnresolvedStatic("job-B", externalTenant.ProjectName())
-			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred("resource-C")
+			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred(resourceURNC)
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC})
 
-			upstreamB := job.NewUpstreamResolved("job-B", "external-host", "resource-B", externalTenant, "static", taskName, true)
-			upstreamC := job.NewUpstreamResolved("job-C", "external-host", "resource-C", externalTenant, "inferred", taskName, true)
+			upstreamB := job.NewUpstreamResolved("job-B", "external-host", resourceURNB, externalTenant, "static", taskName, true)
+			upstreamC := job.NewUpstreamResolved("job-C", "external-host", resourceURNC, externalTenant, "inferred", taskName, true)
 			resourceManager.On("GetOptimusUpstreams", ctx, unresolvedUpstreamB).Return([]*job.Upstream{upstreamB}, nil).Once()
 			resourceManager.On("GetOptimusUpstreams", ctx, unresolvedUpstreamC).Return([]*job.Upstream{upstreamC}, nil).Once()
 
@@ -67,12 +76,12 @@ func TestExternalUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			unresolvedUpstreamB := job.NewUpstreamUnresolvedStatic("job-B", externalTenant.ProjectName())
-			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred("resource-C")
-			upstreamD := job.NewUpstreamResolved("job-D", "internal-host", "resource-D", sampleTenant, "inferred", taskName, false)
+			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred(resourceURNC)
+			upstreamD := job.NewUpstreamResolved("job-D", "internal-host", resourceURND, sampleTenant, "inferred", taskName, false)
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC, upstreamD})
 
-			upstreamB := job.NewUpstreamResolved("job-B", "external-host", "resource-B", externalTenant, "static", taskName, true)
-			upstreamC := job.NewUpstreamResolved("job-C", "external-host", "resource-C", externalTenant, "inferred", taskName, true)
+			upstreamB := job.NewUpstreamResolved("job-B", "external-host", resourceURNB, externalTenant, "static", taskName, true)
+			upstreamC := job.NewUpstreamResolved("job-C", "external-host", resourceURNC, externalTenant, "inferred", taskName, true)
 			resourceManager.On("GetOptimusUpstreams", ctx, unresolvedUpstreamB).Return([]*job.Upstream{upstreamB}, nil).Once()
 			resourceManager.On("GetOptimusUpstreams", ctx, unresolvedUpstreamC).Return([]*job.Upstream{upstreamC}, nil).Once()
 
@@ -92,7 +101,7 @@ func TestExternalUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			unresolvedUpstreamB := job.NewUpstreamUnresolvedStatic("job-B", externalTenant.ProjectName())
-			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred("resource-C")
+			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred(resourceURNC)
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC})
 
 			resourceManager.On("GetOptimusUpstreams", ctx, unresolvedUpstreamB).Return([]*job.Upstream{}, errors.New("connection error")).Once()
@@ -113,7 +122,7 @@ func TestExternalUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			unresolvedUpstreamB := job.NewUpstreamUnresolvedStatic("job-B", externalTenant.ProjectName())
-			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred("resource-C")
+			unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred(resourceURNC)
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC})
 
 			extUpstreamResolver := resolver.NewTestExternalUpstreamResolver(nil)

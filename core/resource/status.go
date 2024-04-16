@@ -10,6 +10,8 @@ const (
 	StatusValidationSuccess Status = "validation_success"
 	StatusToCreate          Status = "to_create"
 	StatusToUpdate          Status = "to_update"
+	StatusToDelete          Status = "to_delete"
+	StatusDeleted           Status = "deleted"
 	StatusSkipped           Status = "skipped"
 	StatusCreateFailure     Status = "create_failure"
 	StatusUpdateFailure     Status = "update_failure"

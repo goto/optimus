@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
@@ -199,7 +200,7 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	return jobSpecBuilder.Build()
 }
 
-func fromResourceURNs(resourceURNs []job.ResourceURN) []string {
+func fromResourceURNs(resourceURNs []lib.URN) []string {
 	var resources []string
 	for _, resourceURN := range resourceURNs {
 		resources = append(resources, resourceURN.String())

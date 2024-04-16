@@ -14,9 +14,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/job/dto"
 	"github.com/goto/optimus/core/job/handler/v1beta1"
 	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/writer"
@@ -75,6 +77,15 @@ func TestNewJobHandler(t *testing.T) {
 
 	log := log.NewNoop()
 	sampleOwner := "sample-owner"
+
+	resourceURNA, err := lib.ParseURN("store://table-A")
+	assert.NoError(t, err)
+	resourceURNB, err := lib.ParseURN("store://table-B")
+	assert.NoError(t, err)
+	resourceURNC, err := lib.ParseURN("store://table-C")
+	assert.NoError(t, err)
+	resourceURND, err := lib.ParseURN("store://table-D")
+	assert.NoError(t, err)
 
 	t.Run("AddJobSpecifications", func(t *testing.T) {
 		t.Run("adds job", func(t *testing.T) {
@@ -1260,7 +1271,7 @@ func TestNewJobHandler(t *testing.T) {
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
 
 			request := pb.GetJobSpecificationRequest{
 				ProjectName:   sampleTenant.ProjectName().String(),
@@ -1299,9 +1310,9 @@ func TestNewJobHandler(t *testing.T) {
 			request := pb.GetJobSpecificationsRequest{}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, "table-B", []job.ResourceURN{"table-C"}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1322,9 +1333,9 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, "table-B", []job.ResourceURN{"table-C"}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1364,9 +1375,9 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, "table-B", []job.ResourceURN{"table-C"}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1389,9 +1400,9 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, "table-B", []job.ResourceURN{"table-C"}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1404,6 +1415,7 @@ func TestNewJobHandler(t *testing.T) {
 			assert.Empty(t, resp.Jobs[1].Assets)
 		})
 	})
+	// TODO: change this to validate
 	t.Run("CheckJobSpecifications", func(t *testing.T) {
 		t.Run("return error when creating tenant failed", func(t *testing.T) {
 			jobService := new(JobService)
@@ -1537,10 +1549,10 @@ func TestNewJobHandler(t *testing.T) {
 			httpUpstream, _ := job.NewSpecHTTPUpstreamBuilder("sample-upstream", "sample-url").Build()
 			upstreamSpec, _ := job.NewSpecUpstreamBuilder().WithSpecHTTPUpstream([]*job.SpecHTTPUpstream{httpUpstream}).Build()
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).WithMetadata(metadataSpec).Build()
-			jobA := job.NewJob(sampleTenant, specA, "resource-A", nil, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, nil, false)
 
-			upstreamB := job.NewUpstreamResolved("job-B", "", "resource-b", sampleTenant, "static", "bq2bq", false)
-			upstreamC := job.NewUpstreamResolved("job-C", "other-host", "resource-c", sampleTenant, "inferred", "bq2bq", true)
+			upstreamB := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", "bq2bq", false)
+			upstreamC := job.NewUpstreamResolved("job-C", "other-host", resourceURNC, sampleTenant, "inferred", "bq2bq", true)
 
 			jobAUpstream := []*job.Upstream{
 				upstreamB,
@@ -1649,11 +1661,11 @@ func TestNewJobHandler(t *testing.T) {
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).
 				WithSpecUpstream(upstreamSpec).
 				WithHooks([]*job.Hook{hook1}).Build()
-			jobA := job.NewJob(sampleTenant, specA, "resource-A", nil, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, nil, false)
 
-			upstreamB := job.NewUpstreamResolved("job-B", "", "resource-b", sampleTenant, "static", "bq2bq", false)
-			upstreamC := job.NewUpstreamResolved("job-C", "other-host", "resource-c", sampleTenant, "inferred", "bq2bq", true)
-			upstreamD := job.NewUpstreamUnresolvedInferred("resource-d")
+			upstreamB := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", "bq2bq", false)
+			upstreamC := job.NewUpstreamResolved("job-C", "other-host", resourceURNC, sampleTenant, "inferred", "bq2bq", true)
+			upstreamD := job.NewUpstreamUnresolvedInferred(resourceURND)
 			upstreamE := job.NewUpstreamUnresolvedStatic("job-e", project.Name())
 
 			jobAUpstream := []*job.Upstream{
@@ -1819,10 +1831,10 @@ func TestNewJobHandler(t *testing.T) {
 			jobService := new(JobService)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, "resource-A", nil, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, nil, false)
 
-			upstreamB := job.NewUpstreamResolved("job-B", "", "resource-b", sampleTenant, "static", "bq2bq", false)
-			upstreamC := job.NewUpstreamResolved("job-C", "other-host", "resource-c", sampleTenant, "inferred", "bq2bq", true)
+			upstreamB := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", "bq2bq", false)
+			upstreamC := job.NewUpstreamResolved("job-C", "other-host", resourceURNC, sampleTenant, "inferred", "bq2bq", true)
 
 			jobAUpstream := []*job.Upstream{
 				upstreamB,
@@ -1982,7 +1994,7 @@ func TestNewJobHandler(t *testing.T) {
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
 
 			req := &pb.GetJobTaskRequest{
 				ProjectName:   sampleTenant.ProjectName().String(),
@@ -2002,7 +2014,7 @@ func TestNewJobHandler(t *testing.T) {
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, "table-A", []job.ResourceURN{"table-B"}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
 
 			req := &pb.GetJobTaskRequest{
 				ProjectName:   sampleTenant.ProjectName().String(),
@@ -2273,18 +2285,25 @@ func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs 
 	return r0
 }
 
-// Validate provides a mock function with given fields: ctx, jobTenant, jobSpecs, logWriter
-func (_m *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
-	ret := _m.Called(ctx, jobTenant, jobSpecs, logWriter)
+// Validate provides a mock function with given fields: ctx, request
+func (_m *JobService) Validate(ctx context.Context, request dto.ValidateRequest) (map[job.Name][]dto.ValidateResult, error) {
+	ret := _m.Called(ctx, request)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec, []job.Name, writer.LogWriter) error); ok {
-		r0 = rf(ctx, jobTenant, jobSpecs, jobNamesWithInvalidSpec, logWriter)
+	var r0 map[job.Name][]dto.ValidateResult
+	if rf, ok := ret.Get(0).(func(context.Context, dto.ValidateRequest) map[job.Name][]dto.ValidateResult); ok {
+		r0 = rf(ctx, request)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(map[job.Name][]dto.ValidateResult)
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, dto.ValidateRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // ReplaceAllJobSpecificationsServer is an autogenerated mock type for the ReplaceAllJobSpecificationsServer type

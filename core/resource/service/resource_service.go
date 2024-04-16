@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/writer"
 )
 
@@ -33,10 +34,11 @@ type ResourceManager interface {
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
 	Validate(res *resource.Resource) error
 	GetURN(res *resource.Resource) (string, error)
+	Exist(ctx context.Context, urn lib.URN) (bool, error)
 }
 
 type DownstreamRefresher interface {
-	RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error
+	RefreshResourceDownstream(ctx context.Context, resourceURNs []lib.URN, logWriter writer.LogWriter) error
 }
 
 type EventHandler interface {
@@ -231,6 +233,14 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 	}
 
 	return synced, nil
+}
+
+func (rs ResourceService) ExistInStore(ctx context.Context, urn lib.URN) (bool, error) {
+	if urn.IsZero() {
+		return false, errors.NewError(errors.ErrInvalidArgument, resource.EntityResource, "urn is zero-valued")
+	}
+
+	return rs.mgr.Exist(ctx, urn)
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic

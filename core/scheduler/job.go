@@ -9,6 +9,7 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 )
 
@@ -51,7 +52,7 @@ type Job struct {
 	Name   JobName
 	Tenant tenant.Tenant
 
-	Destination string
+	Destination lib.URN
 	Task        *Task
 	Hooks       []*Hook
 

@@ -120,13 +120,8 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConso
 		Data:     templateContext,
 		Template: template,
 		Labels: map[string]string{
-			"job_urn":    e.JobURN,
+			"identifier": e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
-			"identifier": fmt.Sprintf("%s:%s:%s",
-				e.JobEvent.Tenant.ProjectName(),
-				e.JobEvent.Tenant.NamespaceName(),
-				e.JobEvent.JobName),
-			"severity": "CRITICAL",
 		},
 	}
 	payloadJSON, err := json.Marshal(payload)

@@ -6,14 +6,15 @@ import (
 	"fmt"
 
 	"github.com/MakeNowJust/heredoc"
+	"github.com/goto/salt/log"
+	"github.com/spf13/cobra"
+
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/client/cmd/internal/survey"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/salt/log"
-	"github.com/spf13/cobra"
 )
 
 type deleteCommand struct {
@@ -111,6 +112,7 @@ func (a *deleteCommand) delete() error {
 		NamespaceName: a.namespaceName,
 		DatastoreName: a.storeName,
 		ResourceName:  a.resourceName,
+		Force:         a.force,
 	}
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), applyTimeout)

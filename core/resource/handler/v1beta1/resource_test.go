@@ -855,7 +855,7 @@ func TestResourceHandler(t *testing.T) {
 			)
 			defer service.AssertExpectations(t)
 
-			var downstreamJobs = []string{"proj/JobA"}
+			downstreamJobs := []string{"proj/JobA"}
 			deleteReq := &resource.DeleteRequest{
 				Tenant:    tnnt,
 				Datastore: resource.Bigquery,
@@ -885,7 +885,7 @@ func TestResourceHandler(t *testing.T) {
 			)
 			defer service.AssertExpectations(t)
 
-			var downstreamJobs = []string{"proj/JobA"}
+			downstreamJobs := []string{"proj/JobA"}
 			deleteReq := &resource.DeleteRequest{
 				Tenant:    tnnt,
 				Datastore: resource.Bigquery,

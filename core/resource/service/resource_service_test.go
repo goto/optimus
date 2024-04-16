@@ -972,8 +972,7 @@ func TestResourceService(t *testing.T) {
 			assert.NotEmpty(t, actual.DownstreamJobs)
 			assert.Len(t, actual.DownstreamJobs, len(downstreamList))
 
-			var downstreamSlice []*job.Downstream
-			downstreamSlice = downstreamList
+			var downstreamSlice []*job.Downstream = downstreamList
 			for i := range actual.DownstreamJobs {
 				assert.EqualValues(t, actual.DownstreamJobs[i], downstreamSlice[i].FullName())
 			}

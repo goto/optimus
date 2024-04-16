@@ -1388,7 +1388,7 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 		result := dto.ValidateResult{
 			Name: "destination retrieval",
 			Messages: []string{
-				fmt.Sprintf("can not generate destination resource [%s]", destination),
+				"can not generate destination resource",
 				err.Error(),
 			},
 			Success: false,

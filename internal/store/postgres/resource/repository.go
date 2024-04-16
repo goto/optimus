@@ -187,8 +187,9 @@ func (r Repository) FindByURNs(ctx context.Context, tnnt tenant.Tenant, urns ...
 	args := []any{tnnt.ProjectName(), tnnt.NamespaceName()}
 	if len(urns) > 0 {
 		var urnParameter []string
+		const startNumber = 3
 		for i := range urns {
-			urnParameter = append(urnParameter, "$"+strconv.Itoa(3+i))
+			urnParameter = append(urnParameter, "$"+strconv.Itoa(startNumber+i))
 			args = append(args, urns[i])
 		}
 		query += "(" + strings.Join(urnParameter, ",") + ")"

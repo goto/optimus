@@ -13,13 +13,17 @@ import (
 	serviceResource "github.com/goto/optimus/core/resource"
 	serviceTenant "github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/internal/lib"
 	repoResource "github.com/goto/optimus/internal/store/postgres/resource"
 	repoTenant "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
 )
 
 func BenchmarkResourceRepository(b *testing.B) {
-	const maxNumberOfResources = 64
+	const (
+		maxNumberOfResources = 64
+		store                = "store"
+	)
 
 	projectName := "project_test"
 	transporterKafkaBrokerKey := "KAFKA_BROKERS"
@@ -79,7 +83,9 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
 			assert.NoError(b, err)
 
-			urn := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			urn, err := lib.NewURN(store, name)
+			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
 
@@ -97,7 +103,9 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
 			assert.NoError(b, err)
 
-			urn := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			urn, err := lib.NewURN(store, name)
+			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
 
@@ -122,7 +130,9 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceToUpdate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, updatedMeta, spec)
 			assert.NoError(b, err)
 
-			urn := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			urn, err := lib.NewURN(store, name)
+			assert.NoError(b, err)
 			err = resourceToUpdate.UpdateURN(urn)
 			assert.NoError(b, err)
 
@@ -149,7 +159,9 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
 			assert.NoError(b, err)
 
-			urn := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			urn, err := lib.NewURN(store, name)
+			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
 
@@ -180,7 +192,9 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
 			assert.NoError(b, err)
 
-			urn := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			urn, err := lib.NewURN(store, name)
+			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
 
@@ -206,7 +220,9 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
 			assert.NoError(b, err)
 
-			urn := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			urn, err := lib.NewURN(store, name)
+			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
 
@@ -234,7 +250,9 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
 			assert.NoError(b, err)
 
-			urn := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
+			urn, err := lib.NewURN(store, name)
+			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
 

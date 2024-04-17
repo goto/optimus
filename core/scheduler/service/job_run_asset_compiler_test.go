@@ -57,7 +57,7 @@ func TestJobAssetsCompiler(t *testing.T) {
 		"DSTART":          interval.Start().Format(time.RFC3339),
 		"DEND":            interval.End().Format(time.RFC3339),
 		"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
-		"JOB_DESTINATION": job.Destination,
+		"JOB_DESTINATION": job.Destination.String(),
 	}
 
 	logger := log.NewNoop()

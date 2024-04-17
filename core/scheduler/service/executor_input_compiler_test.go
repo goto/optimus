@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
@@ -41,6 +42,9 @@ func TestExecutorCompiler(t *testing.T) {
 	scheduleTime := currentTime.Add(-time.Hour)
 
 	logger := log.NewLogrus()
+
+	destinationURN, err := lib.ParseURN("store://some_destination_table_name")
+	assert.NoError(t, err)
 
 	t.Run("Compile", func(t *testing.T) {
 		t.Run("should give error if tenant service getDetails fails", func(t *testing.T) {
@@ -144,7 +148,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
-				"JOB_DESTINATION": job.Destination,
+				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
 
@@ -168,7 +172,7 @@ func TestExecutorCompiler(t *testing.T) {
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
-				Destination: "some_destination_table_name",
+				Destination: destinationURN,
 				Task: &scheduler.Task{
 					Name: "bq2bq",
 					Config: map[string]string{
@@ -213,7 +217,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
-				"JOB_DESTINATION": job.Destination,
+				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
 
@@ -270,7 +274,7 @@ func TestExecutorCompiler(t *testing.T) {
 						"DSTART":               interval.Start().Format(time.RFC3339),
 						"DEND":                 interval.End().Format(time.RFC3339),
 						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
-						"JOB_DESTINATION":      job.Destination,
+						"JOB_DESTINATION":      job.Destination.String(),
 						"some.config.compiled": "val.compiled",
 					},
 					Secrets: map[string]string{"secret.config.compiled": "a.secret.val.compiled"},
@@ -322,7 +326,7 @@ func TestExecutorCompiler(t *testing.T) {
 						"DSTART":               interval.Start().Format(time.RFC3339),
 						"DEND":                 interval.End().Format(time.RFC3339),
 						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
-						"JOB_DESTINATION":      job.Destination,
+						"JOB_DESTINATION":      job.Destination.String(),
 						"some.config.compiled": "val.compiled",
 					},
 					Secrets: map[string]string{"secret.config.compiled": "a.secret.val.compiled"},
@@ -350,7 +354,7 @@ func TestExecutorCompiler(t *testing.T) {
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
-				Destination: "some_destination_table_name",
+				Destination: destinationURN,
 				Task: &scheduler.Task{
 					Name: "bq2bq",
 					Config: map[string]string{
@@ -396,7 +400,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
-				"JOB_DESTINATION": job.Destination,
+				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
 
@@ -427,7 +431,7 @@ func TestExecutorCompiler(t *testing.T) {
 					"DSTART":          interval.Start().Format(time.RFC3339),
 					"DEND":            interval.End().Format(time.RFC3339),
 					"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
-					"JOB_DESTINATION": job.Destination,
+					"JOB_DESTINATION": job.Destination.String(),
 					"hook.compiled":   "hook.val.compiled",
 					"JOB_LABELS":      "job_id=00000000-0000-0000-0000-000000000000,job_name=job1,namespace=ns1,project=proj1",
 				},
@@ -449,7 +453,7 @@ func TestExecutorCompiler(t *testing.T) {
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
-				Destination: "some_destination_table_name",
+				Destination: destinationURN,
 				Task: &scheduler.Task{
 					Name: "bq2bq",
 					Config: map[string]string{
@@ -495,7 +499,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
-				"JOB_DESTINATION": job.Destination,
+				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
 
@@ -529,7 +533,7 @@ func TestExecutorCompiler(t *testing.T) {
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
-				Destination: "some_destination_table_name",
+				Destination: destinationURN,
 				Task: &scheduler.Task{
 					Name: "bq2bq",
 					Config: map[string]string{
@@ -567,7 +571,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
 				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
-				"JOB_DESTINATION": job.Destination,
+				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
 

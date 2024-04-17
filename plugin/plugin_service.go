@@ -10,6 +10,7 @@ import (
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
 	"github.com/goto/optimus/sdk/plugin"
@@ -81,7 +82,7 @@ func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, e
 	return taskPlugin.Info(), nil
 }
 
-func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]string, error) {
+func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]lib.URN, error) {
 	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return nil, err
@@ -91,7 +92,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	if assetParsers == nil {
 		// if plugin doesn't contain parser, then it doesn't support auto upstream generation
 		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", taskPlugin.Info().Name)
-		return []string{}, nil
+		return []lib.URN{}, nil
 	}
 
 	// construct all possible identifier from given parser
@@ -124,7 +125,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	}
 
 	// identify all upstream resource urns by all identifier from given asset
-	resourceURNs := []string{}
+	var resourceURNs []lib.URN
 	me := errors.NewMultiError("identify upstream errors")
 	for _, upstreamIdentifier := range upstreamIdentifiers {
 		currentResourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, assets)
@@ -141,7 +142,8 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	if err != nil {
 		return nil, err
 	}
-	filteredResourceURNs := []string{}
+
+	filteredResourceURNs := make([]lib.URN, 0)
 	for _, resourceURN := range resourceURNs {
 		if resourceURN == destinationURN {
 			s.l.Warn("ignore destination resource %s", resourceURN)
@@ -153,10 +155,10 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	return filteredResourceURNs, me.ToErr()
 }
 
-func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (string, error) {
+func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (lib.URN, error) {
 	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
-		return "", err
+		return lib.ZeroURN(), err
 	}
 
 	// for now only support single template
@@ -164,16 +166,21 @@ func (s PluginService) ConstructDestinationURN(_ context.Context, taskName strin
 	if destinationURNTemplate == "" {
 		// if plugin doesn't contain destination template, then it doesn't support auto destination generation
 		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", taskPlugin.Info().Name)
-		return "", nil
+		return lib.ZeroURN(), nil
 	}
 
 	convertedURNTemplate := convertToGoTemplate(destinationURNTemplate)
 	tmpl, err := template.New("destination_urn_" + taskPlugin.Info().Name).Parse(convertedURNTemplate)
 	if err != nil {
-		return "", err
+		return lib.ZeroURN(), err
 	}
 
-	return generateResourceURNFromTemplate(tmpl, compiledConfig)
+	rawURN, err := generateResourceURNFromTemplate(tmpl, compiledConfig)
+	if err != nil {
+		return lib.ZeroURN(), err
+	}
+
+	return lib.ParseURN(rawURN)
 }
 
 // convertToGoTemplate transforms plugin destination urn template format to go template format

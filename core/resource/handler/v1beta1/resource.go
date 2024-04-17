@@ -287,12 +287,12 @@ func (rh ResourceHandler) DeleteResource(ctx context.Context, req *pb.DeleteReso
 	}
 	var deleteRes *resource.DeleteResponse
 	deleteRes, err = rh.service.Delete(ctx, deleteReq)
-	raiseResourceDatastoreEventMetric(tnnt, deleteRes.Resource.Store().String(), deleteRes.Resource.Kind(), deleteRes.Resource.Status().String())
 	if err != nil {
-		rh.l.Error("error deleting resource [%s]: %s", deleteRes.Resource.FullName(), err)
+		rh.l.Error("error deleting resource [%s]: %s", req.ResourceName, err)
 		return nil, errors.GRPCErr(err, "failed to delete resource "+err.Error())
 	}
 
+	raiseResourceDatastoreEventMetric(tnnt, deleteRes.Resource.Store().String(), deleteRes.Resource.Kind(), deleteRes.Resource.Status().String())
 	res := &pb.DeleteResourceResponse{DownstreamJobs: deleteRes.DownstreamJobs}
 	return res, nil
 }

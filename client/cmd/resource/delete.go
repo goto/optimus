@@ -44,7 +44,7 @@ func NewDeleteCommand() *cobra.Command {
 		Use:     "delete",
 		Short:   "Delete resource from optimus",
 		Long:    heredoc.Doc(`Delete resource from Optimus`),
-		Example: "optimus resource delete <resource-name>",
+		Example: "optimus resource delete <resource-name> -c=<config-file-path>",
 		Annotations: map[string]string{
 			"group:core": "true",
 		},
@@ -52,10 +52,10 @@ func NewDeleteCommand() *cobra.Command {
 		PreRunE: apply.PreRunE,
 	}
 	cmd.Flags().StringVarP(&apply.configFilePath, "config", "c", apply.configFilePath, "File path for client configuration")
-	cmd.Flags().StringVarP(&apply.resourceName, "resource-name", "R", "", "Selected resource of optimus project")
 	cmd.Flags().BoolVarP(&apply.verbose, "verbose", "v", false, "Print details related to delete stages")
 	cmd.Flags().StringVarP(&apply.namespaceName, "namespace", "n", "", "Namespace name within project")
 	cmd.Flags().StringVarP(&apply.storeName, "datastore", "s", "bigquery", "Datastore type where the resource belongs")
+	cmd.Flags().BoolVarP(&apply.force, "force", "f", false, "force delete, ignoring job upstream")
 	return cmd
 }
 
@@ -71,7 +71,11 @@ func (a *deleteCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func (a *deleteCommand) RunE(_ *cobra.Command, _ []string) error {
+func (a *deleteCommand) RunE(_ *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		return errors.New("one argument for resource name is required")
+	}
+	a.resourceName = args[0]
 	a.logger.Info("> Validating resource name")
 	if len(a.resourceName) == 0 {
 		return errors.New("empty resource name")
@@ -129,6 +133,8 @@ func (a *deleteCommand) delete() error {
 
 	if len(responses.GetDownstreamJobs()) > 0 {
 		a.logger.Info(fmt.Sprintf("success delete resource %s with downstreamJobs: [%s]", deleteResourceRequest.ResourceName, responses.DownstreamJobs))
+	} else {
+		a.logger.Info(fmt.Sprintf("success delete resource %s", deleteResourceRequest.ResourceName))
 	}
 
 	return nil

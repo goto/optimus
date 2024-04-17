@@ -245,7 +245,7 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 		return nil, err
 	}
 	if res.IsDeleted() {
-		return nil, errors.NewError(errors.ErrNotFound, resource.EntityResource, "resource are not found or has been deleted")
+		return nil, errors.NotFound(resource.EntityResource, "resource are not found or has been deleted")
 	}
 	return res, nil
 }

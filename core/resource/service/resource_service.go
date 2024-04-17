@@ -10,7 +10,6 @@ import (
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
-	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -33,7 +32,7 @@ type ResourceManager interface {
 	SyncResource(ctx context.Context, res *resource.Resource) error
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
 	Validate(res *resource.Resource) error
-	GetURN(res *resource.Resource) (string, error)
+	GetURN(res *resource.Resource) (lib.URN, error)
 	Exist(ctx context.Context, urn lib.URN) (bool, error)
 }
 
@@ -386,7 +385,7 @@ func (rs ResourceService) handleRefreshDownstream( // nolint:gocritic
 	existingMappedByFullName map[string]*resource.Resource,
 	logWriter writer.LogWriter,
 ) error {
-	var resourceURNsToRefresh []job.ResourceURN
+	var resourceURNsToRefresh []lib.URN
 	for _, incoming := range incomings {
 		if incoming.Status() != resource.StatusSuccess {
 			continue
@@ -402,7 +401,7 @@ func (rs ResourceService) handleRefreshDownstream( // nolint:gocritic
 		}
 
 		if rs.isToRefreshDownstream(incoming, existing) {
-			resourceURNsToRefresh = append(resourceURNsToRefresh, job.ResourceURN(incoming.URN()))
+			resourceURNsToRefresh = append(resourceURNsToRefresh, incoming.URN())
 		} else {
 			rs.logger.Warn(skipMessage)
 			logWriter.Write(writer.LogLevelWarning, skipMessage)

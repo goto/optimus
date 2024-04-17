@@ -52,7 +52,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, createRequest).Return(errors.InternalError("resource", "error in create", nil))
 			defer storeService.AssertExpectations(t)
 
@@ -80,7 +80,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, createRequest).Return(errors.InvalidArgument("res", "error in create"))
 			defer storeService.AssertExpectations(t)
 
@@ -108,7 +108,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, createRequest).Return(errors.AlreadyExists("resource", "error in create"))
 			defer storeService.AssertExpectations(t)
 
@@ -134,7 +134,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, createRequest).Return(nil)
 			defer storeService.AssertExpectations(t)
 
@@ -175,7 +175,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Update", ctx, updateRequest).Return(errors.InternalError("resource", "error in update", nil))
 			defer storeService.AssertExpectations(t)
 
@@ -204,7 +204,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Update", ctx, updateRequest).Return(errors.InvalidArgument("res", "error in update"))
 			defer storeService.AssertExpectations(t)
 
@@ -232,7 +232,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Update", ctx, updateRequest).Return(nil)
 			defer storeService.AssertExpectations(t)
 
@@ -266,7 +266,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(nil, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Validate", updateRequest).Return(nil)
 			defer storeService.AssertExpectations(t)
 
@@ -300,7 +300,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(nil, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("GetURN", updateRequest).Return("snowflake://db.schema.table", nil)
 			defer storeService.AssertExpectations(t)
 
@@ -358,7 +358,7 @@ func TestResourceManager(t *testing.T) {
 			})
 			me2 := errors.NewMultiError("error in db update")
 			me.Append(errors.InternalError("resource", "enable to update state in db", nil))
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("BatchUpdate", ctx, matcher).Return(me2)
 			defer storeService.AssertExpectations(t)
 
@@ -394,7 +394,7 @@ func TestResourceManager(t *testing.T) {
 				}
 				return false
 			})
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("BatchUpdate", ctx, matcher).Return(nil)
 			defer storeService.AssertExpectations(t)
 
@@ -435,7 +435,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(nil, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Backup", ctx, backup, []*resource.Resource{res}).Return(&resource.BackupResult{
 				ResourceNames: []string{"proj.ds.name1"},
 			}, nil)
@@ -478,7 +478,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, res).Return(errors.InternalError("resource", "error in create", nil))
 			defer storeService.AssertExpectations(t)
 
@@ -505,7 +505,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, res).Return(errors.AlreadyExists(resource.EntityResource, "table already exists"))
 			storeService.On("Update", ctx, res).Return(errors.InternalError("resource", "error in update", nil))
 			defer storeService.AssertExpectations(t)
@@ -533,7 +533,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, res).Return(nil)
 			defer storeService.AssertExpectations(t)
 
@@ -560,7 +560,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(repo, logger)
 
-			storeService := new(mockDataStore)
+			storeService := NewDataStore(t)
 			storeService.On("Create", ctx, res).Return(errors.AlreadyExists(resource.EntityResource, "table already exists"))
 			storeService.On("Update", ctx, res).Return(nil)
 			defer storeService.AssertExpectations(t)
@@ -582,35 +582,179 @@ func (m *mockRepo) UpdateStatus(ctx context.Context, res ...*resource.Resource) 
 	return args.Error(0)
 }
 
-type mockDataStore struct {
+// DataStore is an autogenerated mock type for the DataStore type
+type DataStore struct {
 	mock.Mock
 }
 
-func (m *mockDataStore) Create(ctx context.Context, r *resource.Resource) error {
-	return m.Called(ctx, r).Error(0)
-}
+// Backup provides a mock function with given fields: _a0, _a1, _a2
+func (_m *DataStore) Backup(_a0 context.Context, _a1 *resource.Backup, _a2 []*resource.Resource) (*resource.BackupResult, error) {
+	ret := _m.Called(_a0, _a1, _a2)
 
-func (m *mockDataStore) Update(ctx context.Context, r *resource.Resource) error {
-	return m.Called(ctx, r).Error(0)
-}
-
-func (m *mockDataStore) BatchUpdate(ctx context.Context, resources []*resource.Resource) error {
-	return m.Called(ctx, resources).Error(0)
-}
-
-func (m *mockDataStore) Validate(r *resource.Resource) error {
-	return m.Called(r).Error(0)
-}
-
-func (m *mockDataStore) GetURN(r *resource.Resource) (string, error) {
-	args := m.Called(r)
-	return args.Get(0).(string), args.Error(1)
-}
-
-func (m *mockDataStore) Backup(ctx context.Context, backup *resource.Backup, resources []*resource.Resource) (*resource.BackupResult, error) {
-	args := m.Called(ctx, backup, resources)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if len(ret) == 0 {
+		panic("no return value specified for Backup")
 	}
-	return args.Get(0).(*resource.BackupResult), args.Error(1)
+
+	var r0 *resource.BackupResult
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *resource.Backup, []*resource.Resource) (*resource.BackupResult, error)); ok {
+		return rf(_a0, _a1, _a2)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *resource.Backup, []*resource.Resource) *resource.BackupResult); ok {
+		r0 = rf(_a0, _a1, _a2)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*resource.BackupResult)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *resource.Backup, []*resource.Resource) error); ok {
+		r1 = rf(_a0, _a1, _a2)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// BatchUpdate provides a mock function with given fields: _a0, _a1
+func (_m *DataStore) BatchUpdate(_a0 context.Context, _a1 []*resource.Resource) error {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BatchUpdate")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, []*resource.Resource) error); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Create provides a mock function with given fields: _a0, _a1
+func (_m *DataStore) Create(_a0 context.Context, _a1 *resource.Resource) error {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Create")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *resource.Resource) error); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Exist provides a mock function with given fields: ctx, fullName
+func (_m *DataStore) Exist(ctx context.Context, fullName string) (bool, error) {
+	ret := _m.Called(ctx, fullName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Exist")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (bool, error)); ok {
+		return rf(ctx, fullName)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) bool); ok {
+		r0 = rf(ctx, fullName)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, fullName)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetURN provides a mock function with given fields: res
+func (_m *DataStore) GetURN(res *resource.Resource) (string, error) {
+	ret := _m.Called(res)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetURN")
+	}
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*resource.Resource) (string, error)); ok {
+		return rf(res)
+	}
+	if rf, ok := ret.Get(0).(func(*resource.Resource) string); ok {
+		r0 = rf(res)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(*resource.Resource) error); ok {
+		r1 = rf(res)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Update provides a mock function with given fields: _a0, _a1
+func (_m *DataStore) Update(_a0 context.Context, _a1 *resource.Resource) error {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Update")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *resource.Resource) error); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Validate provides a mock function with given fields: _a0
+func (_m *DataStore) Validate(_a0 *resource.Resource) error {
+	ret := _m.Called(_a0)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Validate")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*resource.Resource) error); ok {
+		r0 = rf(_a0)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// NewDataStore creates a new instance of DataStore. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// The first argument is typically a *testing.T value.
+func NewDataStore(t interface {
+	mock.TestingT
+	Cleanup(func())
+}) *DataStore {
+	mock := &DataStore{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
 }

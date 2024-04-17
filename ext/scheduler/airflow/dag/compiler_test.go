@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/scheduler/airflow/dag"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/sdk/plugin"
@@ -158,11 +159,16 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 		Labels:      map[string]string{"orchestrator": "optimus"},
 	}
 
+	urn, err := lib.ParseURN("bigquery://billing:reports.weekly-status")
+	if err != nil {
+		panic(err)
+	}
+
 	jobName := scheduler.JobName("infra.billing.weekly-status-reports")
 	job := &scheduler.Job{
 		Name:         jobName,
 		Tenant:       tnnt,
-		Destination:  "bigquery://billing:reports.weekly-status",
+		Destination:  urn,
 		Task:         &scheduler.Task{Name: "bq-bq"},
 		Hooks:        hooks,
 		WindowConfig: window1,

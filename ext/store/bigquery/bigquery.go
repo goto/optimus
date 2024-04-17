@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 )
 
 const (
@@ -227,7 +228,7 @@ func (Store) Validate(r *resource.Resource) error {
 	}
 }
 
-func (Store) GetURN(res *resource.Resource) (string, error) {
+func (Store) GetURN(res *resource.Resource) (lib.URN, error) {
 	return URNFor(res)
 }
 
@@ -245,6 +246,55 @@ func (s Store) Backup(ctx context.Context, backup *resource.Backup, resources []
 
 	return BackupResources(ctx, backup, resources, client)
 }
+
+// // TODO: update the following line
+// func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, fullName string) error {
+// 	spanCtx, span := startChildSpan(ctx, "bigquery/Exist")
+// 	defer span.End()
+
+// 	account, err := s.secretProvider.GetSecret(spanCtx, tnnt, accountKey)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	client, err := s.clientProvider.Get(spanCtx, account.Value())
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer client.Close()
+
+// 	client.Exist()
+
+// 	dataset, err := DataSetFrom("", "")
+// 	if err != nil {
+// 		return err
+// 	}
+// 	resourceName, err := ResourceNameFor(res)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	switch res.Kind() {
+// 	case KindDataset:
+// 		handle := client.DatasetHandleFrom(dataset)
+// 		return handle.Create(spanCtx, res)
+
+// 	case KindTable:
+// 		handle := client.TableHandleFrom(dataset, resourceName)
+// 		return handle.Create(spanCtx, res)
+
+// 	case KindExternalTable:
+// 		handle := client.ExternalTableHandleFrom(dataset, resourceName)
+// 		return handle.Create(spanCtx, res)
+
+// 	case KindView:
+// 		handle := client.ViewHandleFrom(dataset, resourceName)
+// 		return handle.Create(spanCtx, res)
+
+// 	default:
+// 		return errors.InvalidArgument(store, "invalid kind for bigquery resource "+res.Kind())
+// 	}
+// }
 
 func startChildSpan(ctx context.Context, name string) (context.Context, trace.Span) {
 	tracer := otel.Tracer("datastore/bigquery")

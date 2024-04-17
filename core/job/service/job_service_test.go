@@ -3443,7 +3443,7 @@ func TestJobService(t *testing.T) {
 					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil).Once()
 					pluginService.On("ConstructDestinationURN", ctx, invalidJobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil).Once()
 					sourcesToValidate := []lib.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
-					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil).Once() // TODO: add this
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil).Once()
 					pluginService.On("IdentifyUpstreams", ctx, invalidJobTask.Name().String(), mock.Anything, mock.Anything).Return(nil, errors.New("unexpected sources error")).Once()
 
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("unexpected compile error"))
@@ -3536,6 +3536,140 @@ func TestJobService(t *testing.T) {
 									"unexpected sources error",
 								},
 								Success: false,
+							},
+							{
+								Name:     "destination validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Name:     "upstream validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+						},
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.EqualValues(t, expectedResult["jobA"], actualResult["jobA"])
+					assert.EqualValues(t, expectedResult["jobB"], actualResult["jobB"])
+					assert.NoError(t, actualError)
+				})
+
+				t.Run("returns successful result and nil if no validation failed", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					pluginService := NewPluginService(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+						pluginService, upstreamResolver, tenantDetailsGetter, nil,
+						log, nil, compiler.NewEngine(),
+						jobRunInputCompiler, resourceExistenceChecker,
+					)
+
+					resourceURND, err := lib.ParseURN("bigquery://project:dataset.tableD")
+					assert.NoError(t, err)
+
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+					jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil).Twice()
+					sourcesToValidate := []lib.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil).Once()
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]lib.URN{}, nil).Once()
+
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
+
+					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
+					assert.NoError(t, err)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURND).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURND).Return(true, nil)
+
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil).Twice()
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     []*job.Spec{jobSpecA, jobSpecB},
+						JobNames:     nil,
+						DeletionMode: false,
+					}
+
+					expectedResult := map[job.Name][]dto.ValidateResult{
+						"jobA": {
+							{
+								Name:     "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Name:     "job run validation",
+								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+								Success:  true,
+							},
+							{
+								Name: "source validation",
+								Messages: []string{
+									"bigquery://project:dataset.tableA: no issue",
+									"bigquery://project:dataset.tableB: no issue",
+									"bigquery://project:dataset.tableC: no issue",
+									"bigquery://project:dataset.tableD: no issue",
+								},
+								Success: true,
+							},
+							{
+								Name:     "destination validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Name:     "upstream validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+						},
+						"jobB": {
+							{
+								Name:     "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Name:     "job run validation",
+								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+								Success:  true,
+							},
+							{
+								Name:     "source validation",
+								Messages: []string{},
+								Success:  true,
 							},
 							{
 								Name:     "destination validation",

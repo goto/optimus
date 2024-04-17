@@ -853,7 +853,7 @@ func TestResourceService(t *testing.T) {
 			existingToCreate := resourceWithStatus("project.dataset.view1", viewSpec, resource.StatusCreateFailure)
 			existingToSkip := resourceWithStatus("project.dataset.view2", viewSpec, resource.StatusSuccess)
 			existingToUpdate := resourceWithStatus("project.dataset.view3", viewSpec, resource.StatusUpdateFailure)
-			existingToDelete := resourceWithStatus("project.dataset.view4", viewSpec, resource.StatusValidationSuccess)
+			existingToDelete := resourceWithStatus("project.dataset.view4", viewSpec, resource.StatusSuccess)
 			incomingToDelete := resourceWithStatus("project.dataset.view4", viewSpec, resource.StatusToDelete)
 
 			updatedViewSpec := map[string]any{

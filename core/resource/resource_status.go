@@ -52,7 +52,7 @@ func (r *Resource) MarkToUpdate() error {
 }
 
 func (r *Resource) MarkToDelete() error {
-	if r.status == StatusValidationSuccess {
+	if StatusForToDelete(r.status) {
 		r.status = StatusToDelete
 		return nil
 	}

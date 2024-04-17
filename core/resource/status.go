@@ -65,7 +65,9 @@ func StatusForToUpdate(status Status) bool {
 		status == StatusUpdateFailure
 }
 
-func StatusForToDelete(status Status) bool { return status == StatusToDelete }
+func StatusForToDelete(status Status) bool {
+	return status == StatusSuccess || status == StatusExistInStore || status == StatusSkipped
+}
 
 func StatusIsSuccess(status Status) bool {
 	return status == StatusSuccess

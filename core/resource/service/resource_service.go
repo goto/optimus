@@ -356,6 +356,7 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 
 	for _, r := range toDelete {
 		rs.raiseDeleteEvent(r)
+		logWriter.Write(writer.LogLevelWarning, fmt.Sprintf("[deleted] %s", r.FullName()))
 	}
 
 	if err = rs.handleRefreshDownstream(ctx, toUpdate, existingMappedByFullName, logWriter); err != nil {

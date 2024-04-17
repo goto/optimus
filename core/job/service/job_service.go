@@ -51,8 +51,8 @@ type JobService struct {
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
-	jobInputCompiler JobRunInputCompiler
-	resourceChecker  ResourceExistenceChecker
+	jobRunInputCompiler JobRunInputCompiler
+	resourceChecker     ResourceExistenceChecker
 
 	logger log.Logger
 }
@@ -75,7 +75,7 @@ func NewJobService(
 		logger:               logger,
 		jobDeploymentService: jobDeploymentService,
 		engine:               engine,
-		jobInputCompiler:     jobInputCompiler,
+		jobRunInputCompiler:  jobInputCompiler,
 		resourceChecker:      resourceChecker,
 	}
 }
@@ -144,7 +144,7 @@ type JobRunInputCompiler interface {
 
 type ResourceExistenceChecker interface {
 	GetByURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (*resource.Resource, error)
-	ExistInStore(ctx context.Context, urn lib.URN) (bool, error)
+	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error)
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
@@ -1263,8 +1263,8 @@ func (j *JobService) getJobsToValidate(ctx context.Context, request dto.Validate
 func (j *JobService) getJobByNames(ctx context.Context, tnnt tenant.Tenant, jobNames []string) ([]*job.Job, error) {
 	me := errors.NewMultiError("getting job by name")
 
-	retrievedJobs := make([]*job.Job, len(jobNames))
-	for i, name := range jobNames {
+	var retrievedJobs []*job.Job
+	for _, name := range jobNames {
 		jobName, err := job.NameFrom(name)
 		if err != nil {
 			me.Append(err)
@@ -1277,7 +1277,7 @@ func (j *JobService) getJobByNames(ctx context.Context, tnnt tenant.Tenant, jobN
 			continue
 		}
 
-		retrievedJobs[i] = subjectJob
+		retrievedJobs = append(retrievedJobs, subjectJob)
 	}
 
 	return retrievedJobs, me.ToErr()
@@ -1526,13 +1526,13 @@ func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tena
 	messages := make([]string, len(sourceURNs))
 	success := true
 
-	for _, urn := range sourceURNs {
+	for i, urn := range sourceURNs {
 		currentMessage, currentSuccess := j.validateResourceURN(ctx, tenantWithDetails.ToTenant(), urn)
 		if !currentSuccess {
 			success = false
 		}
 
-		messages = append(messages, currentMessage)
+		messages[i] = fmt.Sprintf("%s: %s", urn.String(), currentMessage)
 	}
 
 	return dto.ValidateResult{
@@ -1553,7 +1553,7 @@ func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant
 		}
 	}
 
-	existInStore, err := j.resourceChecker.ExistInStore(ctx, urn)
+	existInStore, err := j.resourceChecker.ExistInStore(ctx, tnnt, urn)
 	if err != nil {
 		return err.Error(), false
 	}
@@ -1595,7 +1595,7 @@ func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, desti
 	jobWithDetails := j.getSchedulerJobWithDetail(subjectJob, destination)
 	for _, config := range runConfigs {
 		var msg string
-		if _, err := j.jobInputCompiler.Compile(ctx, jobWithDetails, config, referenceTime); err != nil {
+		if _, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, config, referenceTime); err != nil {
 			success = false
 
 			msg = fmt.Sprintf("compiling [%s] with type [%s] failed with error: %v", config.Executor.Name, config.Executor.Type.String(), err)

@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
@@ -230,11 +231,15 @@ func (j *Job) toJob() (*scheduler.Job, error) {
 			return nil, err
 		}
 	}
+	destination, err := lib.ParseURN(j.Destination)
+	if err != nil {
+		return nil, err
+	}
 	schedulerJob := scheduler.Job{
 		ID:           j.ID,
 		Name:         scheduler.JobName(j.Name),
 		Tenant:       t,
-		Destination:  j.Destination,
+		Destination:  destination,
 		WindowConfig: w,
 		Assets:       j.Assets,
 		Task: &scheduler.Task{

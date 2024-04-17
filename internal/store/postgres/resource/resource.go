@@ -9,6 +9,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 )
 
 type Resource struct {
@@ -43,7 +44,7 @@ func FromResourceToModel(r *resource.Resource) *Resource {
 		NamespaceName: r.Tenant().NamespaceName().String(),
 		Metadata:      metadata,
 		Spec:          r.Spec(),
-		URN:           r.URN(),
+		URN:           r.URN().String(),
 		Status:        r.Status().String(),
 	}
 }
@@ -65,7 +66,8 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 	output, err := resource.NewResource(r.FullName, r.Kind, store, tnnt, metadata, r.Spec)
 	if err == nil {
 		output = resource.FromExisting(output, resource.ReplaceStatus(resource.FromStringToStatus(r.Status)))
-		output.UpdateURN(r.URN)
+		urn, _ := lib.ParseURN(r.URN)
+		output.UpdateURN(urn)
 	}
 	return output, err
 }

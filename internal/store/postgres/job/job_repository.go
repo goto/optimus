@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/store/postgres"
 )
 
@@ -437,9 +438,11 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 
 	var upstreams []*job.Upstream
 	for _, storeUpstream := range storeUpstreams {
-		var resourceURN job.ResourceURN
+		var resourceURN lib.URN
 		if storeUpstream.UpstreamResourceURN.Valid {
-			resourceURN = job.ResourceURN(storeUpstream.UpstreamResourceURN.String)
+			if storeUpstream.UpstreamResourceURN.String != "" {
+				resourceURN, _ = lib.ParseURN(storeUpstream.UpstreamResourceURN.String)
+			}
 		}
 
 		var upstreamName job.Name
@@ -548,12 +551,12 @@ func (j JobRepository) GetAllByProjectName(ctx context.Context, projectName tena
 	return jobs, me.ToErr()
 }
 
-func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination job.ResourceURN) ([]*job.Job, error) {
+func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination lib.URN) ([]*job.Job, error) {
 	me := errors.NewMultiError("get all job specs by resource destination")
 
 	getAllByDestination := `SELECT ` + jobColumns + ` FROM job WHERE destination = $1 AND deleted_at IS NULL;`
 
-	rows, err := j.db.Query(ctx, getAllByDestination, resourceDestination)
+	rows, err := j.db.Query(ctx, getAllByDestination, resourceDestination.String())
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "error while jobs for destination:  "+resourceDestination.String(), err)
 	}
@@ -590,11 +593,24 @@ func specToJob(spec *Spec) (*job.Job, error) {
 		return nil, err
 	}
 
-	destination := job.ResourceURN(spec.Destination)
+	var destination lib.URN
+	if spec.Destination != "" {
+		destination, err = lib.ParseURN(spec.Destination)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	var sources []job.ResourceURN
+	var sources []lib.URN
 	for _, source := range spec.Sources {
-		resourceURN := job.ResourceURN(source)
+		var resourceURN lib.URN
+		if source != "" {
+			resourceURN, err = lib.ParseURN(source)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		sources = append(sources, resourceURN)
 	}
 
@@ -872,7 +888,7 @@ WHERE project_name=$1 AND job_name=$2;`
 	return j.toUpstreams(storeJobsWithUpstreams)
 }
 
-func (j JobRepository) GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination job.ResourceURN) ([]*job.Downstream, error) {
+func (j JobRepository) GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination lib.URN) ([]*job.Downstream, error) {
 	query := `
 SELECT
 	name as job_name, project_name, namespace_name, task_name
@@ -880,7 +896,7 @@ FROM job
 WHERE project_name = $1 AND $2 = ANY(sources)
 AND deleted_at IS NULL;`
 
-	rows, err := j.db.Query(ctx, query, projectName, destination)
+	rows, err := j.db.Query(ctx, query, projectName, destination.String())
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "error while getting job downstream", err)
 	}
@@ -963,7 +979,7 @@ func fromStoreDownstream(storeDownstreamList []Downstream) ([]*job.Downstream, e
 	return downstreamList, me.ToErr()
 }
 
-func (j JobRepository) GetDownstreamBySources(ctx context.Context, sources []job.ResourceURN) ([]*job.Downstream, error) {
+func (j JobRepository) GetDownstreamBySources(ctx context.Context, sources []lib.URN) ([]*job.Downstream, error) {
 	if len(sources) == 0 {
 		return nil, nil
 	}

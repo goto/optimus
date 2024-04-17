@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	jobRepo "github.com/goto/optimus/internal/store/postgres/job"
@@ -226,7 +227,11 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	sampleTenant, err := tenant.NewTenant(proj.Name().String(), namespace.Name().String())
 	assert.NoError(t, err)
-	jobA := job.NewJob(sampleTenant, jobSpecA, "dev.resource.sample_a", []job.ResourceURN{"resource-3"}, false)
+	resourceURNA, err := lib.ParseURN("store://dev.resource.sample_a")
+	assert.NoError(t, err)
+	source, err := lib.ParseURN("store://resource-3")
+	assert.NoError(t, err)
+	jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []lib.URN{source}, false)
 
 	jobSpecB, err := job.NewSpecBuilder(jobVersion, jobBName, jobOwner, jobSchedule, customConfig, jobTask).
 		WithDescription(jobDescription).
@@ -237,7 +242,9 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 		WithMetadata(jobMetadata).
 		Build()
 	assert.NoError(t, err)
-	jobB := job.NewJob(sampleTenant, jobSpecB, "dev.resource.sample_b", nil, false)
+	resourceURNB, err := lib.ParseURN("store://dev.resource.sample_b")
+	assert.NoError(t, err)
+	jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, nil, false)
 
 	jobs := []*job.Job{jobA, jobB}
 
@@ -247,7 +254,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.Nil(t, err)
 	assert.EqualValues(t, jobs, addedJobs)
 
-	upstreamB := job.NewUpstreamResolved(jobBName, "internal", "dev.resource.sample_b", sampleTenant, job.UpstreamTypeStatic, taskName, false)
+	upstreamB := job.NewUpstreamResolved(jobBName, "internal", resourceURNB, sampleTenant, job.UpstreamTypeStatic, taskName, false)
 	upstreams := []*job.Upstream{upstreamB}
 	jobWithUpstream := job.NewWithUpstream(jobA, upstreams)
 	err = jobRepository.ReplaceUpstreams(ctx, []*job.WithUpstream{jobWithUpstream})
@@ -262,7 +269,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 func compareEqualJob(j *job.Job, s *scheduler.Job) bool {
 	return j.GetName() == s.Name.String() &&
 		j.Tenant() == s.Tenant &&
-		j.Destination().String() == s.Destination &&
+		j.Destination().String() == s.Destination.String() &&
 		j.Spec().Task().Name().String() == s.Task.Name
 }
 

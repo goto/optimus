@@ -179,6 +179,15 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 		j.logger.Error("error getting tenant details: %s", err)
 		return err
 	}
+	existingJobs := make(map[job.Name]*job.Job)
+	for _, spec := range specs {
+		existingJob, err := j.jobRepo.GetByJobName(ctx, jobTenant.ProjectName(), spec.Name())
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		existingJobs[spec.Name()] = existingJob
+	}
 
 	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
 	me.Append(err)
@@ -195,10 +204,12 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	err = j.uploadJobs(ctx, jobTenant, nil, updatedJobs, nil)
 	me.Append(err)
 
-	for _, job := range updatedJobs {
-		j.raiseUpdateEvent(job)
+	if len(updatedJobs) > 0 {
+		for _, updatedJob := range updatedJobs {
+			j.raiseUpdateEvent(updatedJob, getUpdateImpactType(existingJobs[updatedJob.Spec().Name()], updatedJob))
+		}
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(updatedJobs))
 	}
-	raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(updatedJobs))
 
 	if len(updatedJobs) < len(specs) {
 		totalFailed := len(specs) - len(updatedJobs)
@@ -296,7 +307,7 @@ func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenan
 		errorsMsg := fmt.Sprintf(" unable to create new job on scheduler : %s", err.Error())
 		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
 	}
-	j.raiseUpdateEvent(newJobSpec)
+	j.raiseUpdateEvent(newJobSpec, job.UnspecifiedImpactChange)
 	return nil
 }
 
@@ -473,6 +484,27 @@ func (j *JobService) logFoundDirtySpecs(tnnt tenant.Tenant, unmodifiedDirtySpecs
 	logWriter.Write(writer.LogLevelInfo, infoMsg)
 }
 
+func getUpdateImpactType(currentJob, incomingJob *job.Job) job.UpdateImpact {
+	if currentJob.Spec().DiffBehaviorally(incomingJob.Spec()) {
+		return job.JobBehaviourImpact
+	}
+	return job.JobInternalImpact
+}
+
+func (j *JobService) raiseUpdateEvents(existingJobs, addedJobs, updatedJobs []*job.Job) {
+	if len(updatedJobs) > 0 {
+		existingJobsMap := job.Jobs(existingJobs).GetNameMap()
+		for _, job := range updatedJobs {
+			j.raiseUpdateEvent(job, getUpdateImpactType(existingJobsMap[job.Spec().Name()], job))
+		}
+	}
+
+	for _, job := range addedJobs {
+		j.raiseCreateEvent(job)
+	}
+
+}
+
 func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
@@ -496,6 +528,8 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	toUpdate = append(toUpdate, unmodifiedDirtySpecs...)
 
 	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, toAdd, toUpdate, logWriter)
+	j.raiseUpdateEvents(existingJobs, addedJobs, updatedJobs)
+
 	me.Append(err)
 	jobsMarkedDirty, err := j.markJobsAsDirty(ctx, jobTenant, append(addedJobs, updatedJobs...))
 	me.Append(err)
@@ -827,15 +861,10 @@ func (j *JobService) bulkAdd(ctx context.Context, tenantWithDetails *tenant.With
 		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] add jobs failure found: %s", tenantWithDetails.Namespace().Name().String(), err.Error()))
 		me.Append(err)
 	}
-
 	if len(addedJobs) > 0 {
 		logWriter.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] successfully added %d jobs", tenantWithDetails.Namespace().Name().String(), len(addedJobs)))
-		for _, job := range addedJobs {
-			j.raiseCreateEvent(job)
-		}
 		raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventStateAdded, len(addedJobs))
 	}
-
 	for _, addedJob := range addedJobs {
 		if addedJob.Spec().Schedule().CatchUp() {
 			msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
@@ -852,24 +881,18 @@ func (j *JobService) bulkUpdate(ctx context.Context, tenantWithDetails *tenant.W
 
 	jobsToUpdate, err := j.generateJobs(ctx, tenantWithDetails, specsToUpdate, logWriter)
 	me.Append(err)
-
 	if len(jobsToUpdate) == 0 {
 		j.logger.Warn("no jobs to be updated")
 		return nil, me.ToErr()
 	}
-
 	updatedJobs, err := j.jobRepo.Update(ctx, jobsToUpdate)
 	if err != nil {
 		j.logger.Error("error updating jobs for namespace [%s]: %s", tenantWithDetails.Namespace().Name(), err)
 		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] update jobs failure found: %s", tenantWithDetails.Namespace().Name().String(), err.Error()))
 		me.Append(err)
 	}
-
 	if len(updatedJobs) > 0 {
 		logWriter.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] successfully updated %d jobs", tenantWithDetails.Namespace().Name().String(), len(updatedJobs)))
-		for _, job := range updatedJobs {
-			j.raiseUpdateEvent(job)
-		}
 		raiseJobEventMetric(tenantWithDetails.ToTenant(), job.MetricJobEventStateUpdated, len(updatedJobs))
 	}
 
@@ -1185,8 +1208,8 @@ func (j *JobService) raiseCreateEvent(job *job.Job) {
 	j.eventHandler.HandleEvent(jobEvent)
 }
 
-func (j *JobService) raiseUpdateEvent(job *job.Job) {
-	jobEvent, err := event.NewJobUpdateEvent(job)
+func (j *JobService) raiseUpdateEvent(job *job.Job, impactType job.UpdateImpact) {
+	jobEvent, err := event.NewJobUpdateEvent(job, impactType)
 	if err != nil {
 		j.logger.Error("error creating event for job update: %s", err)
 		return

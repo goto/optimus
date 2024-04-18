@@ -29,28 +29,29 @@ func NewJobCreatedEvent(job *job.Job) (*JobCreated, error) {
 }
 
 func (j *JobCreated) Bytes() ([]byte, error) {
-	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_CREATE)
+	return jobEventToBytes(j.Event, j.Job, job.UnspecifiedImpactChange, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_CREATE)
 }
 
 type JobUpdated struct {
 	Event
-
-	Job *job.Job
+	UpdateImpact job.UpdateImpact
+	Job          *job.Job
 }
 
-func NewJobUpdateEvent(job *job.Job) (*JobUpdated, error) {
+func NewJobUpdateEvent(job *job.Job, updateImpact job.UpdateImpact) (*JobUpdated, error) {
 	baseEvent, err := NewBaseEvent()
 	if err != nil {
 		return nil, err
 	}
 	return &JobUpdated{
-		Event: baseEvent,
-		Job:   job,
+		Event:        baseEvent,
+		UpdateImpact: updateImpact,
+		Job:          job,
 	}, nil
 }
 
 func (j *JobUpdated) Bytes() ([]byte, error) {
-	return jobEventToBytes(j.Event, j.Job, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_UPDATE)
+	return jobEventToBytes(j.Event, j.Job, j.UpdateImpact, pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_UPDATE)
 }
 
 type JobDeleted struct {
@@ -82,7 +83,8 @@ func (j *JobDeleted) Bytes() ([]byte, error) {
 		EventType:     pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_DELETE,
 		Payload: &pbInt.OptimusChangeEvent_JobChange{
 			JobChange: &pbInt.JobChangePayload{
-				JobName: j.JobName.String(),
+				JobName:      j.JobName.String(),
+				ChangeImpact: pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_BEHAVIOUR,
 			},
 		},
 	}
@@ -135,21 +137,32 @@ func (j *JobStateChange) Bytes() ([]byte, error) {
 	return proto.Marshal(optEvent)
 }
 
-func jobEventToBytes(event Event, job *job.Job, eventType pbInt.OptimusChangeEvent_EventType) ([]byte, error) {
-	jobPb := v1beta1.ToJobProto(job)
+func jobEventToBytes(event Event, j *job.Job, updateType job.UpdateImpact, eventType pbInt.OptimusChangeEvent_EventType) ([]byte, error) {
+	jobPb := v1beta1.ToJobProto(j)
 	occurredAt := timestamppb.New(event.OccurredAt)
+	var impact pbInt.JobChangePayload_ChangeImpact
+	switch updateType {
+	case job.UnspecifiedImpactChange:
+		impact = pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_UNSPECIFIED
+	case job.JobInternalImpact:
+		impact = pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_INTERNAL
+	case job.JobBehaviourImpact:
+		impact = pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_BEHAVIOUR
+	}
 	optEvent := &pbInt.OptimusChangeEvent{
 		EventId:       event.ID.String(),
 		OccurredAt:    occurredAt,
-		ProjectName:   job.Tenant().ProjectName().String(),
-		NamespaceName: job.Tenant().NamespaceName().String(),
+		ProjectName:   j.Tenant().ProjectName().String(),
+		NamespaceName: j.Tenant().NamespaceName().String(),
 		EventType:     eventType,
 		Payload: &pbInt.OptimusChangeEvent_JobChange{
 			JobChange: &pbInt.JobChangePayload{
-				JobName: job.GetName(),
-				JobSpec: jobPb,
+				JobName:      j.GetName(),
+				JobSpec:      jobPb,
+				ChangeImpact: impact,
 			},
 		},
 	}
+
 	return proto.Marshal(optEvent)
 }

@@ -2,6 +2,7 @@ package job
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -36,6 +37,28 @@ type Spec struct {
 
 func (s *Spec) Version() int {
 	return s.version
+}
+
+func (s *Spec) DiffBehaviorally(incoming *Spec) bool {
+	if !reflect.DeepEqual(s.schedule, incoming.schedule) {
+		return true
+	}
+	if !reflect.DeepEqual(s.windowConfig, incoming.windowConfig) {
+		return true
+	}
+	if !reflect.DeepEqual(s.task, incoming.task) {
+		return true
+	}
+	if !reflect.DeepEqual(s.hooks, incoming.hooks) {
+		return true
+	}
+	if !reflect.DeepEqual(s.asset, incoming.asset) {
+		return true
+	}
+	if !reflect.DeepEqual(s.upstreamSpec, incoming.upstreamSpec) {
+		return true
+	}
+	return false
 }
 
 func (s *Spec) Name() Name {

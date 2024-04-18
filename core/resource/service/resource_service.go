@@ -531,7 +531,7 @@ func createFullNameToResourceMap(resources []*resource.Resource) map[string]*res
 func (rs ResourceService) CheckIsDeleted(ctx context.Context, jobWithUpstreams []*job.WithUpstream) error {
 	var (
 		resourceURNsByTenant = make(map[tenant.Tenant][]string)
-		me                   = errors.NewMultiError("failed get tenants on GetActiveByUpstreamJobs")
+		me                   = errors.NewMultiError("failed get tenants or resource on CheckIsDeleted")
 	)
 
 	for i := range jobWithUpstreams {

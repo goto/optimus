@@ -47,6 +47,10 @@ func NameFrom(name string) (Name, error) {
 	return Name(name), nil
 }
 
+func (n Name) Sections() []string {
+	return strings.Split(n.String(), nameSectionSeparator)
+}
+
 func (n Name) String() string {
 	return string(n)
 }
@@ -119,10 +123,6 @@ func (r *Resource) UpdateTenant(tnnt tenant.Tenant) {
 
 func (r *Resource) Metadata() *Metadata {
 	return r.metadata
-}
-
-func (r *Resource) NameSections() []string {
-	return strings.Split(r.name.String(), nameSectionSeparator)
 }
 
 func (r *Resource) Kind() string {

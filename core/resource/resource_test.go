@@ -130,7 +130,7 @@ func TestNewResource(t *testing.T) {
 		assert.Equal(t, "proj.set.res_name", res.Name().String())
 		assert.Equal(t, urn, res.URN())
 		assert.EqualValues(t, meta, res.Metadata())
-		assert.Equal(t, 3, len(res.NameSections()))
+		assert.Equal(t, 3, len(res.Name().Sections()))
 		assert.Equal(t, "table", res.Kind())
 		assert.EqualValues(t, tnnt, res.Tenant())
 		assert.Equal(t, resource.Bigquery.String(), res.Store().String())
@@ -148,7 +148,7 @@ func TestNewResource(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, "proj.dataset", res.FullName())
-		assert.Equal(t, 2, len(res.NameSections()))
+		assert.Equal(t, 2, len(res.Name().Sections()))
 		assert.EqualValues(t, meta, res.Metadata())
 		assert.Equal(t, "dataset", res.Kind())
 		assert.EqualValues(t, tnnt, res.Tenant())

@@ -2,6 +2,7 @@ package bigquery
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	bq "cloud.google.com/go/bigquery"
@@ -21,6 +22,8 @@ const (
 
 	ConcurrentTicketPerSec = 5
 	ConcurrentLimit        = 20
+
+	bigqueryID = "bigquery"
 )
 
 type ResourceHandle interface {
@@ -73,11 +76,11 @@ func (s Store) Create(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, err := DataSetFor(res)
+	dataset, err := DataSetFor(res.Name())
 	if err != nil {
 		return err
 	}
-	resourceName, err := ResourceNameFor(res)
+	resourceName, err := ResourceNameFor(res.Name(), res.Kind())
 	if err != nil {
 		return err
 	}
@@ -119,11 +122,11 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, err := DataSetFor(res)
+	dataset, err := DataSetFor(res.Name())
 	if err != nil {
 		return err
 	}
-	resourceName, err := ResourceNameFor(res)
+	resourceName, err := ResourceNameFor(res.Name(), res.Kind())
 	if err != nil {
 		return err
 	}
@@ -247,10 +250,15 @@ func (s Store) Backup(ctx context.Context, backup *resource.Backup, resources []
 	return BackupResources(ctx, backup, resources, client)
 }
 
-// TODO: update the following line
+// TODO: add unit test
 func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
 	spanCtx, span := startChildSpan(ctx, "bigquery/Exist")
 	defer span.End()
+
+	if urn.GetStore() != bigqueryID {
+		msg := fmt.Sprintf("expected store [%s] but received [%s]", bigqueryID, urn.GetStore())
+		return false, errors.InvalidArgument(store, msg)
+	}
 
 	account, err := s.secretProvider.GetSecret(spanCtx, tnnt, accountKey)
 	if err != nil {
@@ -263,39 +271,40 @@ func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool
 	}
 	defer client.Close()
 
-	// client.Exist()
+	name, err := resource.NameFrom(urn.GetName())
+	if err != nil {
+		return false, err
+	}
 
-	// dataset, err := DataSetFrom("", "")
-	// if err != nil {
-	// 	return err
-	// }
-	// resourceName, err := ResourceNameFor(res)
-	// if err != nil {
-	// 	return err
-	// }
+	dataset, err := DataSetFor(name)
+	if err != nil {
+		return false, err
+	}
 
-	// switch res.Kind() {
-	// case KindDataset:
-	// 	handle := client.DatasetHandleFrom(dataset)
-	// 	return handle.Create(spanCtx, res)
+	if client.DatasetHandleFrom(dataset).Exists(spanCtx) {
+		return true, nil
+	}
 
-	// case KindTable:
-	// 	handle := client.TableHandleFrom(dataset, resourceName)
-	// 	return handle.Create(spanCtx, res)
+	kindToHandleFn := map[string]func(ds Dataset, name string) ResourceHandle{
+		KindTable: func(ds Dataset, name string) ResourceHandle {
+			return client.TableHandleFrom(ds, name)
+		},
+		KindExternalTable: client.ExternalTableHandleFrom,
+		KindView:          client.ViewHandleFrom,
+	}
 
-	// case KindExternalTable:
-	// 	handle := client.ExternalTableHandleFrom(dataset, resourceName)
-	// 	return handle.Create(spanCtx, res)
+	for kind, resourceHandleFn := range kindToHandleFn {
+		resourceName, err := ResourceNameFor(name, kind)
+		if err != nil {
+			return false, err
+		}
 
-	// case KindView:
-	// 	handle := client.ViewHandleFrom(dataset, resourceName)
-	// 	return handle.Create(spanCtx, res)
+		if resourceHandleFn(dataset, resourceName).Exists(spanCtx) {
+			return true, nil
+		}
+	}
 
-	// default:
-	// 	return errors.InvalidArgument(store, "invalid kind for bigquery resource "+res.Kind())
-	// }
-
-	return true, nil
+	return false, nil
 }
 
 func startChildSpan(ctx context.Context, name string) (context.Context, trace.Span) {

@@ -233,7 +233,7 @@ type JobUpstream struct {
 	JobName        string
 	Host           string
 	TaskName       string        // TODO: remove after airflow migration
-	DestinationURN string        //- bigquery://pilot.playground.table
+	DestinationURN lib.URN       //- bigquery://pilot.playground.table
 	Tenant         tenant.Tenant // Current or external tenant
 	Type           string
 	External       bool

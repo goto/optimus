@@ -60,7 +60,7 @@ func TestPostgresJobRepository(t *testing.T) {
 					assert.Equal(t, "resolved", job.Upstreams.UpstreamJobs[0].State)
 					assert.Equal(t, false, job.Upstreams.UpstreamJobs[0].External)
 					assert.Equal(t, "bq2bq", job.Upstreams.UpstreamJobs[0].TaskName)
-					assert.Equal(t, "dev.resource.sample_b", job.Upstreams.UpstreamJobs[0].DestinationURN)
+					assert.Equal(t, "store://dev.resource.sample_b", job.Upstreams.UpstreamJobs[0].DestinationURN.String())
 				}
 			}
 		})

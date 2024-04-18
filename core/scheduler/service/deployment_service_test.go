@@ -13,6 +13,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib"
 )
 
 func TestDeploymentService(t *testing.T) {
@@ -24,11 +25,14 @@ func TestDeploymentService(t *testing.T) {
 	tnnt1, _ := tenant.NewTenant(proj1Name.String(), namespace1Name.String())
 	tnnt2, _ := tenant.NewTenant(proj1Name.String(), namespace2Name.String())
 
+	urn, err := lib.ParseURN("bigquery://some-resource")
+	assert.NoError(t, err)
+
 	jobUpstreamStatic := scheduler.JobUpstream{
 		JobName:        "job3",
 		Host:           "some-host",
 		TaskName:       "bq2bq",
-		DestinationURN: "bigquery://some-resource",
+		DestinationURN: urn,
 		Tenant:         tenant.Tenant{},
 		Type:           scheduler.UpstreamTypeStatic,
 		External:       true,
@@ -38,7 +42,7 @@ func TestDeploymentService(t *testing.T) {
 		JobName:        "job3",
 		Host:           "some-host",
 		TaskName:       "bq2bq",
-		DestinationURN: "bigquery://some-resource",
+		DestinationURN: urn,
 		Tenant:         tenant.Tenant{},
 		Type:           scheduler.UpstreamTypeInferred,
 		External:       true,

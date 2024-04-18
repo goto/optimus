@@ -74,11 +74,16 @@ func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
 		return nil, err
 	}
 
+	destinationURN, err := lib.ParseURN(j.UpstreamResourceUrn.String)
+	if err != nil {
+		return nil, err
+	}
+
 	return &scheduler.JobUpstream{
 		JobName:        j.UpstreamJobName.String,
 		Host:           j.UpstreamHost.String,
 		TaskName:       j.UpstreamTaskName.String,
-		DestinationURN: j.UpstreamResourceUrn.String,
+		DestinationURN: destinationURN,
 		Tenant:         t,
 		Type:           j.UpstreamType,
 		External:       j.UpstreamExternal.Bool,

@@ -295,7 +295,7 @@ func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool
 	for kind, resourceHandleFn := range kindToHandleFn {
 		resourceName, err := ResourceNameFor(name, kind)
 		if err != nil {
-			return true, nil
+			return true, nil // nolint:nilerr
 		}
 
 		if resourceHandleFn(dataset, resourceName).Exists(spanCtx) {

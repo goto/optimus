@@ -25,7 +25,6 @@ import (
 const (
 	metricReplaceAllDuration = "job_replace_all_duration_seconds"
 	metricRefreshDuration    = "job_refresh_duration_seconds"
-	metricValidationDuration = "job_validation_duration_seconds"
 )
 
 type JobHandler struct {
@@ -420,8 +419,8 @@ func (jh *JobHandler) RefreshJobs(request *pb.RefreshJobsRequest, stream pb.JobS
 	return nil
 }
 
-// Deprecated: do not use
-func (jh *JobHandler) CheckJobSpecifications(req *pb.CheckJobSpecificationsRequest, stream pb.JobSpecificationService_CheckJobSpecificationsServer) error {
+// Deprecated: Do not use.
+func (*JobHandler) CheckJobSpecifications(_ *pb.CheckJobSpecificationsRequest, _ pb.JobSpecificationService_CheckJobSpecificationsServer) error {
 	panic("deprecated, use validate endpoint instead")
 }
 

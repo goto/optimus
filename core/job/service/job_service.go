@@ -1345,7 +1345,7 @@ func (j *JobService) validateOneJobForDeletion(
 	}
 }
 
-func (j *JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
+func (*JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
 	const name = "tenant validation"
 
 	output := make(map[job.Name][]dto.ValidateResult)

@@ -6,7 +6,10 @@ import (
 	"strings"
 )
 
-const urnSeparator = "://"
+const (
+	urnSeparator       = "://"
+	urnComponentLength = 2
+)
 
 var (
 	errURNWrongPattern            = fmt.Errorf("urn does not follow pattern <store>%s<name>", urnSeparator)
@@ -49,7 +52,7 @@ func (u URN) IsZero() bool {
 
 func ParseURN(urn string) (URN, error) {
 	splitURN := strings.Split(urn, urnSeparator)
-	if len(splitURN) != 2 {
+	if len(splitURN) != urnComponentLength {
 		return URN{}, errURNWrongPattern
 	}
 

@@ -2424,10 +2424,9 @@ func TestJobService(t *testing.T) {
 
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			jobBDestination := resourceURNB
-			jobBUpstreamName := lib.URN(resourceURNC)
-			jobB := job.NewJob(sampleTenant, specB, jobBDestination, []lib.URN{jobBUpstreamName}, false)
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, []lib.URN{resourceURNC}, false)
 
-			resourceURNs := []lib.URN{jobAUpstreamName, jobBUpstreamName}
+			resourceURNs := []lib.URN{jobAUpstreamName, resourceURNC}
 
 			jobDownstreams := []*job.Downstream{
 				job.NewDownstream(jobA.Spec().Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), jobTask.Name()),
@@ -2444,7 +2443,7 @@ func TestJobService(t *testing.T) {
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return([]lib.URN{jobAUpstreamName}, nil)
 
 			pluginService.On("ConstructDestinationURN", ctx, specB.Task().Name().String(), mock.Anything).Return(jobBDestination, nil).Once()
-			pluginService.On("IdentifyUpstreams", ctx, specB.Task().Name().String(), mock.Anything, mock.Anything).Return([]lib.URN{jobBUpstreamName}, nil)
+			pluginService.On("IdentifyUpstreams", ctx, specB.Task().Name().String(), mock.Anything, mock.Anything).Return([]lib.URN{resourceURNC}, nil)
 
 			jobRepo.On("Update", ctx, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 
@@ -2519,7 +2518,7 @@ func TestJobService(t *testing.T) {
 				jobRepo := new(JobRepository)
 				defer jobRepo.AssertExpectations(t)
 
-				jobRepo.On("GetAllByResourceDestination", ctx, lib.URN(resourceURNA)).Return(nil, errors.New("error encountered"))
+				jobRepo.On("GetAllByResourceDestination", ctx, resourceURNA).Return(nil, errors.New("error encountered"))
 
 				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil, log, nil, nil, nil, nil)
 				actual, err := jobService.GetByFilter(ctx, filter.WithString(filter.ResourceDestination, "bigquery://project:dataset.tableA"))

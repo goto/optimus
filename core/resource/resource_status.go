@@ -97,6 +97,6 @@ func (r *Resource) MarkDeleted() error {
 		r.status = StatusDeleted
 		return nil
 	}
-	msg := fmt.Sprintf("status transition for [%s] from status [%s] to status success is not allowed", r.FullName(), r.status)
+	msg := fmt.Sprintf("status transition for [%s] from status [%s] to status deleted is not allowed", r.FullName(), r.status)
 	return errors.InvalidStateTransition(EntityResource, msg)
 }

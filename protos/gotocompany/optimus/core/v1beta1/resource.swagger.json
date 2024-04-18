@@ -468,7 +468,7 @@
     "v1beta1DeleteResourceResponse": {
       "type": "object",
       "properties": {
-        "DownstreamJobs": {
+        "downstreamJobs": {
           "type": "array",
           "items": {
             "type": "string"

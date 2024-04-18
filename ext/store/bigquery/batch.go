@@ -32,7 +32,7 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 
 	if b.DatasetDetails != nil {
 		dsHandle := client.DatasetHandleFrom(b.Dataset)
-		if err := createOrUpdate(ctx, dsHandle, b.DatasetDetails); err != nil {
+		if err := createOrUpdateOrDelete(ctx, dsHandle, b.DatasetDetails); err != nil {
 			return err
 		}
 	}
@@ -49,7 +49,7 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 					return res, err
 				}
 				handle := client.TableHandleFrom(ds, resourceName)
-				err = createOrUpdate(ctx, handle, res)
+				err = createOrUpdateOrDelete(ctx, handle, res)
 				return res, err
 			}
 		}(table))
@@ -67,7 +67,7 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 					return res, err
 				}
 				handle := client.ExternalTableHandleFrom(ds, resourceName)
-				err = createOrUpdate(ctx, handle, res)
+				err = createOrUpdateOrDelete(ctx, handle, res)
 				return res, err
 			}
 		}(extTables))
@@ -85,7 +85,7 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 					return res, err
 				}
 				handle := client.ViewHandleFrom(ds, resourceName)
-				err = createOrUpdate(ctx, handle, res)
+				err = createOrUpdateOrDelete(ctx, handle, res)
 				return res, err
 			}
 		}(view))
@@ -93,11 +93,13 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 	return nil
 }
 
-func createOrUpdate(ctx context.Context, handle ResourceHandle, res *resource.Resource) error {
+func createOrUpdateOrDelete(ctx context.Context, handle ResourceHandle, res *resource.Resource) error {
 	if res.Status() == resource.StatusToUpdate {
 		return update(ctx, handle, res)
 	} else if res.Status() == resource.StatusToCreate {
 		return create(ctx, handle, res)
+	} else if res.Status() == resource.StatusToDelete {
+		return deleteResource(ctx, handle, res)
 	}
 	return nil
 }
@@ -122,6 +124,11 @@ func update(ctx context.Context, handle ResourceHandle, res *resource.Resource) 
 		return err
 	}
 	return res.MarkSuccess()
+}
+
+// deleteResource will delete resource from Optimus only.
+func deleteResource(_ context.Context, _ ResourceHandle, res *resource.Resource) error {
+	return res.MarkDeleted()
 }
 
 func (b *Batch) validateDataset(ctx context.Context, client Client) error {

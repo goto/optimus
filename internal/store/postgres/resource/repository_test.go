@@ -300,8 +300,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToDelete, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			_ = resourceToDelete.MarkValidationSuccess()
-			_ = resourceToDelete.MarkDeleted()
+			_ = resourceToDelete.MarkToDelete()
 
 			actualError := repository.Delete(ctx, resourceToDelete)
 			assert.ErrorContains(t, actualError, "not found for entity resource")
@@ -319,8 +318,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NoError(t, err)
 
 			resourceToDelete := serviceResource.FromExisting(resourceToCreate, serviceResource.ReplaceStatus(serviceResource.StatusSuccess))
-			_ = resourceToDelete.MarkValidationSuccess()
-			_ = resourceToDelete.MarkDeleted()
+			_ = resourceToDelete.MarkToDelete()
 			actualError := repository.Delete(ctx, resourceToDelete)
 			assert.NoError(t, actualError)
 
@@ -328,6 +326,76 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, storedResources)
 			assert.True(t, storedResources.IsDeleted())
+		})
+	})
+
+	t.Run("FindByURNs", func(t *testing.T) {
+		t.Run("find resource by one urn and returns nil if no error is encountered", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToCreate.UpdateURN("bigquery://project:dataset")
+
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			actualResource, actualError := repository.FindByURNs(ctx, tnnt, resourceToCreate.URN())
+			assert.NoError(t, actualError)
+			assert.NotNil(t, actualResource)
+			assert.Len(t, actualResource, 1)
+			assert.Equal(t, actualResource[0], resourceToCreate)
+		})
+
+		t.Run("find resource by urns and returns nil if no error is encountered", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreateA, err := serviceResource.NewResource("project.datasetA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToCreateA.UpdateURN("bigquery://project:datasetA")
+			err = repository.Create(ctx, resourceToCreateA)
+			assert.NoError(t, err)
+
+			resourceToCreateB, err := serviceResource.NewResource("project.datasetB", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToCreateB.UpdateURN("bigquery://project:datasetB")
+			err = repository.Create(ctx, resourceToCreateB)
+			assert.NoError(t, err)
+
+			expectedResource := []*serviceResource.Resource{resourceToCreateA, resourceToCreateB}
+
+			actualResource, actualError := repository.FindByURNs(ctx, tnnt, resourceToCreateA.URN(), resourceToCreateB.URN())
+			assert.NoError(t, actualError)
+			assert.NotNil(t, actualResource)
+			assert.Len(t, actualResource, 2)
+			assert.ElementsMatch(t, actualResource, expectedResource)
+		})
+
+		t.Run("find resource by urns and returns nil if no error is encountered", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreateA, err := serviceResource.NewResource("project.datasetA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToCreateA.UpdateURN("bigquery://project:datasetA")
+			err = repository.Create(ctx, resourceToCreateA)
+			assert.NoError(t, err)
+
+			resourceToCreateB, err := serviceResource.NewResource("project.datasetB", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToCreateB.UpdateURN("bigquery://project:datasetB")
+			err = repository.Create(ctx, resourceToCreateB)
+			assert.NoError(t, err)
+
+			expectedResource := []*serviceResource.Resource{resourceToCreateA, resourceToCreateB}
+
+			actualResource, actualError := repository.FindByURNs(ctx, tnnt, resourceToCreateA.URN(), resourceToCreateB.URN())
+			assert.NoError(t, actualError)
+			assert.NotNil(t, actualResource)
+			assert.Len(t, actualResource, 2)
+			assert.ElementsMatch(t, actualResource, expectedResource)
 		})
 	})
 }

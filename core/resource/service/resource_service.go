@@ -25,6 +25,7 @@ type ResourceRepository interface {
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
+	FindByURNs(ctx context.Context, tnnt tenant.Tenant, urns ...string) ([]*resource.Resource, error)
 }
 
 type ResourceManager interface {
@@ -203,8 +204,7 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 		}
 		rs.logger.Info(fmt.Sprintf("attempt to delete resource %s with downstreamJobs: [%s]", existing.FullName(), jobNames))
 	}
-	_ = existing.MarkValidationSuccess()
-	_ = existing.MarkDeleted()
+	_ = existing.MarkToDelete()
 
 	err = rs.repo.Delete(ctx, existing)
 	if err != nil {
@@ -225,6 +225,9 @@ func (rs ResourceService) ChangeNamespace(ctx context.Context, datastore resourc
 	if err != nil {
 		rs.logger.Error("failed to read existing resource [%s]: %s", resourceFullName, err)
 		return err
+	}
+	if resourceSpec.IsDeleted() {
+		return errors.NewError(errors.ErrNotFound, resource.EntityResource, "resource are not found or has been deleted")
 	}
 	if err := rs.repo.ChangeNamespace(ctx, resourceSpec, newTenant); err != nil {
 		rs.logger.Error("error changing namespace of stored resource [%s]: %s", resourceSpec.FullName(), err)
@@ -329,11 +332,15 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 
 	var toCreate []*resource.Resource
 	var toUpdate []*resource.Resource
+	var toDelete []*resource.Resource
 	for _, r := range toUpdateOnStore {
-		if r.Status() == resource.StatusToCreate {
+		switch r.Status() {
+		case resource.StatusToCreate:
 			toCreate = append(toCreate, r)
-		} else if r.Status() == resource.StatusToUpdate {
+		case resource.StatusToUpdate:
 			toUpdate = append(toUpdate, r)
+		case resource.StatusToDelete:
+			toDelete = append(toDelete, r)
 		}
 	}
 
@@ -347,6 +354,11 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 		rs.raiseUpdateEvent(r)
 	}
 
+	for _, r := range toDelete {
+		rs.raiseDeleteEvent(r)
+		logWriter.Write(writer.LogLevelWarning, fmt.Sprintf("[deleted] %s", r.FullName()))
+	}
+
 	if err = rs.handleRefreshDownstream(ctx, toUpdate, existingMappedByFullName, logWriter); err != nil {
 		multiError.Append(err)
 	}
@@ -357,8 +369,10 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomings []*resource.Resource, existingMappedByFullName map[string]*resource.Resource) ([]*resource.Resource, error) { // nolint:gocritic
 	var toUpdateOnStore []*resource.Resource
 	me := errors.NewMultiError("error in resources to batch update")
+	incomingByFullName := make(map[string]*resource.Resource)
 
 	for _, incoming := range incomings {
+		incomingByFullName[incoming.FullName()] = incoming
 		if incoming.Status() != resource.StatusValidationSuccess {
 			continue
 		}
@@ -392,6 +406,21 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 		}
 		me.Append(err)
 	}
+
+	for _, existing := range existingMappedByFullName {
+		_, found := incomingByFullName[existing.FullName()]
+		if found || existing.IsDeleted() {
+			continue
+		}
+
+		_ = existing.MarkToDelete()
+		err := rs.repo.Update(ctx, existing)
+		if err == nil {
+			toUpdateOnStore = append(toUpdateOnStore, existing)
+		}
+		me.Append(err)
+	}
+
 	return toUpdateOnStore, me.ToErr()
 }
 
@@ -416,6 +445,19 @@ func (rs ResourceService) raiseUpdateEvent(res *resource.Resource) { // nolint:g
 	ev, err := event.NewResourceUpdatedEvent(res)
 	if err != nil {
 		rs.logger.Error("error creating event for resource update: %s", err)
+		return
+	}
+	rs.eventHandler.HandleEvent(ev)
+}
+
+func (rs ResourceService) raiseDeleteEvent(res *resource.Resource) { // nolint:gocritic
+	if res.Status() != resource.StatusDeleted {
+		return
+	}
+
+	ev, err := event.NewResourceDeleteEvent(res)
+	if err != nil {
+		rs.logger.Error("error creating event for resource delete: %s", err)
 		return
 	}
 	rs.eventHandler.HandleEvent(ev)
@@ -484,4 +526,41 @@ func createFullNameToResourceMap(resources []*resource.Resource) map[string]*res
 		output[r.FullName()] = r
 	}
 	return output
+}
+
+func (rs ResourceService) CheckIsDeleted(ctx context.Context, jobWithUpstreams []*job.WithUpstream) error {
+	var (
+		resourceURNsByTenant = make(map[tenant.Tenant][]string)
+		me                   = errors.NewMultiError("failed get tenants or resource on CheckIsDeleted")
+	)
+
+	for i := range jobWithUpstreams {
+		for _, upstream := range jobWithUpstreams[i].Upstreams() {
+			tnnt, err := tenant.NewTenant(upstream.ProjectName().String(), upstream.NamespaceName().String())
+			if err != nil {
+				me.Append(err)
+				continue
+			}
+
+			exist := resourceURNsByTenant[tnnt]
+			exist = append(exist, upstream.Resource().String())
+			resourceURNsByTenant[tnnt] = exist
+		}
+
+		for tnnt, resourceURNs := range resourceURNsByTenant {
+			resources, err := rs.repo.FindByURNs(ctx, tnnt, resourceURNs...)
+			if err != nil {
+				me.Append(err)
+				continue
+			}
+
+			for _, resourceData := range resources {
+				if resourceData.IsDeleted() {
+					return errors.FailedPrecondition(resource.EntityResource, fmt.Sprintf("JobUpstream with name: %s have resource with urn: %s", jobWithUpstreams[i].Name().String(), resourceData.URN()))
+				}
+			}
+		}
+	}
+
+	return me.ToErr()
 }

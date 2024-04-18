@@ -3,6 +3,8 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -178,4 +180,42 @@ func (r Repository) UpdateStatus(ctx context.Context, resources ...*resource.Res
 	}
 
 	return multiErr.ToErr()
+}
+
+func (r Repository) FindByURNs(ctx context.Context, tnnt tenant.Tenant, urns ...string) ([]*resource.Resource, error) {
+	query := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and namespace_name = $2 and urn IN `
+	args := []any{tnnt.ProjectName(), tnnt.NamespaceName()}
+	if len(urns) > 0 {
+		var urnParameter []string
+		const startNumber = 3
+		for i := range urns {
+			urnParameter = append(urnParameter, "$"+strconv.Itoa(startNumber+i))
+			args = append(args, urns[i])
+		}
+		query += "(" + strings.Join(urnParameter, ",") + ")"
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, "error in Query", err)
+	}
+	defer rows.Close()
+
+	var resources []*resource.Resource
+	for rows.Next() {
+		var res Resource
+		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+		if err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error in Scan", err)
+		}
+
+		resourceModel, err := FromModelToResource(&res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resourceModel)
+	}
+
+	return resources, nil
 }

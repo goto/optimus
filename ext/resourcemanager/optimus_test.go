@@ -211,7 +211,7 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
 			actualHeaderValue := r.Header.Get("key")
 			o.EqualValues(expectedHeaderValue, actualHeaderValue)
 
-			expectedRawQuery := "resource_destination=sample-resource"
+			expectedRawQuery := "resource_destination=store://sample-resource"
 			actualRawQuery := r.URL.RawQuery
 			o.EqualValues(expectedRawQuery, actualRawQuery)
 

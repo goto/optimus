@@ -25,7 +25,7 @@ type URN struct {
 	raw string
 }
 
-func NewURN(store string, name string) (URN, error) {
+func NewURN(store, name string) (URN, error) {
 	rawURN := store + urnSeparator + name
 
 	return ParseURN(rawURN)

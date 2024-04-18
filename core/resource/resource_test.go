@@ -128,7 +128,7 @@ func TestNewResource(t *testing.T) {
 
 		assert.Equal(t, "proj.set.res_name", res.FullName())
 		assert.Equal(t, "proj.set.res_name", res.Name().String())
-		assert.Equal(t, "bigquery://proj:set.res_name", res.URN())
+		assert.Equal(t, urn, res.URN())
 		assert.EqualValues(t, meta, res.Metadata())
 		assert.Equal(t, 3, len(res.NameSections()))
 		assert.Equal(t, "table", res.Kind())

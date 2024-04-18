@@ -33,7 +33,7 @@ type ResourceManager interface {
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
 	Validate(res *resource.Resource) error
 	GetURN(res *resource.Resource) (lib.URN, error)
-	Exist(ctx context.Context, urn lib.URN) (bool, error)
+	Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error)
 }
 
 type DownstreamRefresher interface {
@@ -234,12 +234,26 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 	return synced, nil
 }
 
-func (rs ResourceService) ExistInStore(ctx context.Context, urn lib.URN) (bool, error) {
+func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (*resource.Resource, error) {
+	if urn.IsZero() {
+		rs.logger.Error("urn is zero value")
+		return nil, errors.InvalidArgument(resource.EntityResource, "urn is zero value")
+	}
+
+	store, err := resource.FromStringToStore(urn.GetStore())
+	if err != nil {
+		return nil, err
+	}
+
+	return rs.repo.ReadByFullName(ctx, tnnt, store, urn.GetName())
+}
+
+func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
 	if urn.IsZero() {
 		return false, errors.NewError(errors.ErrInvalidArgument, resource.EntityResource, "urn is zero-valued")
 	}
 
-	return rs.mgr.Exist(ctx, urn)
+	return rs.mgr.Exist(ctx, tnnt, urn)
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic

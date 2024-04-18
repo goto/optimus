@@ -351,18 +351,26 @@ func (s *OptimusServer) setupHandlers() error {
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
 
+	// Resource Bounded Context - requirements
+	resourceRepository := resource.NewRepository(s.dbPool)
+	backupRepository := resource.NewBackupRepository(s.dbPool)
+	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
+	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler) // note: job service can be nil
+
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
-	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, pluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
+	jJobService := jService.NewJobService(
+		jJobRepo, jJobRepo, jJobRepo,
+		pluginService, jUpstreamResolver, tenantService,
+		s.eventHandler, s.logger, newJobRunService, newEngine,
+		jobInputCompiler, secondaryResourceService,
+	)
 
 	// Resource Bounded Context
-	resourceRepository := resource.NewRepository(s.dbPool)
-	backupRepository := resource.NewBackupRepository(s.dbPool)
-	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
-	resourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler)
+	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 
 	// Register datastore
@@ -376,7 +384,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterNamespaceServiceServer(s.grpcServer, tHandler.NewNamespaceHandler(s.logger, tNamespaceService))
 
 	// Resource Handler
-	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, resourceService))
+	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService))
 
 	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService))
 

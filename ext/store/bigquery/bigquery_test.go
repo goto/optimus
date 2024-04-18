@@ -13,6 +13,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/internal/lib"
 )
 
 func TestBigqueryStore(t *testing.T) {
@@ -648,10 +649,13 @@ func TestBigqueryStore(t *testing.T) {
 				tnnt, &resource.Metadata{}, spec)
 			assert.NoError(t, err)
 
-			bqStore := bigquery.NewBigqueryDataStore(nil, nil)
-			urn, err := bqStore.GetURN(res)
+			expectedURN, err := lib.ParseURN("bigquery://project:set.view_name1")
 			assert.NoError(t, err)
-			assert.Equal(t, "bigquery://project:set.view_name1", urn)
+
+			bqStore := bigquery.NewBigqueryDataStore(nil, nil)
+			actualURN, err := bqStore.GetURN(res)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedURN, actualURN)
 		})
 	})
 	t.Run("Backup", func(t *testing.T) {

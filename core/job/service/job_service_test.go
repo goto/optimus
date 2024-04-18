@@ -4511,7 +4511,7 @@ func (_m *PluginService) ConstructDestinationURN(ctx context.Context, taskName s
 }
 
 // IdentifyUpstreams provides a mock function with given fields: ctx, taskName, compiledConfig, assets
-func (_m *PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig map[string]string, assets map[string]string) ([]lib.URN, error) {
+func (_m *PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]lib.URN, error) {
 	ret := _m.Called(ctx, taskName, compiledConfig, assets)
 
 	if len(ret) == 0 {
@@ -4575,7 +4575,8 @@ func (_m *PluginService) Info(ctx context.Context, taskName string) (*plugin.Inf
 func NewPluginService(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *PluginService {
+},
+) *PluginService {
 	mock := &PluginService{}
 	mock.Mock.Test(t)
 
@@ -4762,7 +4763,8 @@ func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWi
 func NewJobRunInputCompiler(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *JobRunInputCompiler {
+},
+) *JobRunInputCompiler {
 	mock := &JobRunInputCompiler{}
 	mock.Mock.Test(t)
 
@@ -4839,7 +4841,8 @@ func (_m *ResourceExistenceChecker) GetByURN(ctx context.Context, tnnt tenant.Te
 func NewResourceExistenceChecker(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *ResourceExistenceChecker {
+},
+) *ResourceExistenceChecker {
 	mock := &ResourceExistenceChecker{}
 	mock.Mock.Test(t)
 

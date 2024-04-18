@@ -13,6 +13,7 @@ import (
 	"github.com/goto/optimus/core/resource/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	lib "github.com/goto/optimus/internal/lib"
 )
 
 func TestResourceManager(t *testing.T) {
@@ -300,15 +301,18 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(nil, logger)
 
+			urn, err := lib.ParseURN("snowflake://db.schema.table")
+			assert.NoError(t, err)
+
 			storeService := NewDataStore(t)
-			storeService.On("GetURN", updateRequest).Return("snowflake://db.schema.table", nil)
+			storeService.On("GetURN", updateRequest).Return(urn, nil)
 			defer storeService.AssertExpectations(t)
 
 			manager.RegisterDatastore(store, storeService)
 
-			urn, err := manager.GetURN(updateRequest)
+			actualURN, err := manager.GetURN(updateRequest)
 			assert.NoError(t, err)
-			assert.Equal(t, "snowflake://db.schema.table", urn)
+			assert.Equal(t, urn, actualURN)
 		})
 	})
 	t.Run("BatchUpdate", func(t *testing.T) {
@@ -653,9 +657,9 @@ func (_m *DataStore) Create(_a0 context.Context, _a1 *resource.Resource) error {
 	return r0
 }
 
-// Exist provides a mock function with given fields: ctx, fullName
-func (_m *DataStore) Exist(ctx context.Context, fullName string) (bool, error) {
-	ret := _m.Called(ctx, fullName)
+// Exist provides a mock function with given fields: ctx, tnnt, urn
+func (_m *DataStore) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
+	ret := _m.Called(ctx, tnnt, urn)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Exist")
@@ -663,17 +667,17 @@ func (_m *DataStore) Exist(ctx context.Context, fullName string) (bool, error) {
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (bool, error)); ok {
-		return rf(ctx, fullName)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) (bool, error)); ok {
+		return rf(ctx, tnnt, urn)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) bool); ok {
-		r0 = rf(ctx, fullName)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) bool); ok {
+		r0 = rf(ctx, tnnt, urn)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, fullName)
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, lib.URN) error); ok {
+		r1 = rf(ctx, tnnt, urn)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -682,22 +686,22 @@ func (_m *DataStore) Exist(ctx context.Context, fullName string) (bool, error) {
 }
 
 // GetURN provides a mock function with given fields: res
-func (_m *DataStore) GetURN(res *resource.Resource) (string, error) {
+func (_m *DataStore) GetURN(res *resource.Resource) (lib.URN, error) {
 	ret := _m.Called(res)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetURN")
 	}
 
-	var r0 string
+	var r0 lib.URN
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*resource.Resource) (string, error)); ok {
+	if rf, ok := ret.Get(0).(func(*resource.Resource) (lib.URN, error)); ok {
 		return rf(res)
 	}
-	if rf, ok := ret.Get(0).(func(*resource.Resource) string); ok {
+	if rf, ok := ret.Get(0).(func(*resource.Resource) lib.URN); ok {
 		r0 = rf(res)
 	} else {
-		r0 = ret.Get(0).(string)
+		r0 = ret.Get(0).(lib.URN)
 	}
 
 	if rf, ok := ret.Get(1).(func(*resource.Resource) error); ok {
@@ -750,7 +754,8 @@ func (_m *DataStore) Validate(_a0 *resource.Resource) error {
 func NewDataStore(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *DataStore {
+},
+) *DataStore {
 	mock := &DataStore{}
 	mock.Mock.Test(t)
 

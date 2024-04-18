@@ -19,7 +19,7 @@ import (
 func TestWebhook(t *testing.T) {
 	projectName := "ss"
 	namespaceName := "bb"
-	jobDestinationTableURN, err := lib.ParseURN("store:/project-dest-table")
+	jobDestinationTableURN, err := lib.ParseURN("store://project-dest-table")
 	assert.NoError(t, err)
 
 	jobName := scheduler.JobName("foo-job-spec")

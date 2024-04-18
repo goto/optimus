@@ -3,8 +3,9 @@ package lib_test
 import (
 	"testing"
 
-	"github.com/goto/optimus/internal/lib"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/internal/lib"
 )
 
 func TestNewURN(t *testing.T) {

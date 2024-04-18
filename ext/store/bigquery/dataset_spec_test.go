@@ -221,7 +221,7 @@ func TestURNFor(t *testing.T) {
 
 		urn, err := bigquery.URNFor(res)
 		assert.NoError(t, err)
-		assert.Equal(t, "bigquery://p-project:dataset", urn)
+		assert.Equal(t, "bigquery://p-project:dataset", urn.String())
 	})
 	t.Run("returns error when cannot get resource name", func(t *testing.T) {
 		res, err := resource.NewResource("p-project.dataset.", bigquery.KindTable, bqStore, tnnt, &metadata, spec)
@@ -237,6 +237,6 @@ func TestURNFor(t *testing.T) {
 
 		urn, err := bigquery.URNFor(res)
 		assert.NoError(t, err)
-		assert.Equal(t, "bigquery://p-project:dataset.table1", urn)
+		assert.Equal(t, "bigquery://p-project:dataset.table1", urn.String())
 	})
 }

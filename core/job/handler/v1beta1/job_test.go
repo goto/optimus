@@ -1415,127 +1415,6 @@ func TestNewJobHandler(t *testing.T) {
 			assert.Empty(t, resp.Jobs[1].Assets)
 		})
 	})
-	// TODO: change this to validate
-	t.Run("CheckJobSpecifications", func(t *testing.T) {
-		t.Run("return error when creating tenant failed", func(t *testing.T) {
-			jobService := new(JobService)
-			defer jobService.AssertExpectations(t)
-
-			stream := new(CheckJobSpecificationsServer)
-			defer stream.AssertExpectations(t)
-
-			request := &pb.CheckJobSpecificationsRequest{}
-
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
-			err := jobHandler.CheckJobSpecifications(request, stream)
-			assert.Error(t, err)
-			assert.Equal(t, "invalid argument for entity project: project name is empty", err.Error())
-		})
-		t.Run("return error when job proto conversion failed", func(t *testing.T) {
-			jobService := new(JobService)
-			defer jobService.AssertExpectations(t)
-
-			stream := new(CheckJobSpecificationsServer)
-			defer stream.AssertExpectations(t)
-
-			jobSpecProto := &pb.JobSpecification{
-				Version:          int32(jobVersion),
-				Name:             "",
-				Owner:            sampleOwner,
-				StartDate:        jobSchedule.StartDate().String(),
-				EndDate:          jobSchedule.EndDate().String(),
-				Interval:         jobSchedule.Interval(),
-				TaskName:         jobTask.Name().String(),
-				WindowSize:       jobWindow.GetSize(),
-				WindowOffset:     jobWindow.GetOffset(),
-				WindowTruncateTo: jobWindow.GetTruncateTo(),
-			}
-			jobProtos := []*pb.JobSpecification{jobSpecProto}
-
-			stream.On("Context").Return(ctx)
-			jobService.On("Validate", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
-
-			request := &pb.CheckJobSpecificationsRequest{
-				ProjectName:   sampleTenant.ProjectName().String(),
-				NamespaceName: sampleTenant.NamespaceName().String(),
-				Jobs:          jobProtos,
-			}
-
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
-			err := jobHandler.CheckJobSpecifications(request, stream)
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "invalid argument for entity job: name is empty")
-		})
-		t.Run("return error when service validate job is failed", func(t *testing.T) {
-			jobService := new(JobService)
-			defer jobService.AssertExpectations(t)
-
-			stream := new(CheckJobSpecificationsServer)
-			defer stream.AssertExpectations(t)
-
-			jobSpecProto := &pb.JobSpecification{
-				Version:          int32(jobVersion),
-				Name:             "job-A",
-				Owner:            sampleOwner,
-				StartDate:        jobSchedule.StartDate().String(),
-				EndDate:          jobSchedule.EndDate().String(),
-				Interval:         jobSchedule.Interval(),
-				TaskName:         jobTask.Name().String(),
-				WindowSize:       jobWindow.GetSize(),
-				WindowOffset:     jobWindow.GetOffset(),
-				WindowTruncateTo: jobWindow.GetTruncateTo(),
-			}
-			jobProtos := []*pb.JobSpecification{jobSpecProto}
-
-			stream.On("Context").Return(ctx)
-			jobService.On("Validate", ctx, sampleTenant, mock.Anything, mock.Anything).Return(errors.New("error encountered"))
-
-			request := &pb.CheckJobSpecificationsRequest{
-				ProjectName:   sampleTenant.ProjectName().String(),
-				NamespaceName: sampleTenant.NamespaceName().String(),
-				Jobs:          jobProtos,
-			}
-
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
-			err := jobHandler.CheckJobSpecifications(request, stream)
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "error encountered")
-		})
-		t.Run("return success", func(t *testing.T) {
-			jobService := new(JobService)
-			defer jobService.AssertExpectations(t)
-
-			stream := new(CheckJobSpecificationsServer)
-			defer stream.AssertExpectations(t)
-
-			jobSpecProto := &pb.JobSpecification{
-				Version:          int32(jobVersion),
-				Name:             "job-A",
-				Owner:            sampleOwner,
-				StartDate:        jobSchedule.StartDate().String(),
-				EndDate:          jobSchedule.EndDate().String(),
-				Interval:         jobSchedule.Interval(),
-				TaskName:         jobTask.Name().String(),
-				WindowSize:       jobWindow.GetSize(),
-				WindowOffset:     jobWindow.GetOffset(),
-				WindowTruncateTo: jobWindow.GetTruncateTo(),
-			}
-			jobProtos := []*pb.JobSpecification{jobSpecProto}
-
-			stream.On("Context").Return(ctx)
-			jobService.On("Validate", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
-
-			request := &pb.CheckJobSpecificationsRequest{
-				ProjectName:   sampleTenant.ProjectName().String(),
-				NamespaceName: sampleTenant.NamespaceName().String(),
-				Jobs:          jobProtos,
-			}
-
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
-			err := jobHandler.CheckJobSpecifications(request, stream)
-			assert.NoError(t, err)
-		})
-	})
 	t.Run("JobInspect", func(t *testing.T) {
 		configs := []*pb.JobConfigItem{
 			{
@@ -1588,7 +1467,7 @@ func TestNewJobHandler(t *testing.T) {
 						WindowSize:       specA.WindowConfig().GetSize(),
 						WindowOffset:     specA.WindowConfig().GetOffset(),
 						WindowTruncateTo: specA.WindowConfig().GetTruncateTo(),
-						Destination:      "resource-A",
+						Destination:      "store://table-A",
 						Config: []*pb.JobConfigItem{{
 							Name:  "sample_key",
 							Value: "sample_value",
@@ -1603,7 +1482,7 @@ func TestNewJobHandler(t *testing.T) {
 						},
 						Metadata: jobMetadata,
 					},
-					Destination: "resource-A",
+					Destination: "store://table-A",
 				},
 				Upstreams: &pb.JobInspectResponse_UpstreamSection{
 					ExternalDependency: []*pb.JobInspectResponse_JobDependency{
@@ -1728,12 +1607,12 @@ func TestNewJobHandler(t *testing.T) {
 						WindowSize:       specA.WindowConfig().GetSize(),
 						WindowOffset:     specA.WindowConfig().GetOffset(),
 						WindowTruncateTo: specA.WindowConfig().GetTruncateTo(),
-						Destination:      "resource-A",
+						Destination:      "store://table-A",
 						Config:           configs,
 						Dependencies:     jobDependenciesWithHTTPProto,
 						Hooks:            jobHooksProto,
 					},
-					Destination: "resource-A",
+					Destination: "store://table-A",
 				},
 				Upstreams: &pb.JobInspectResponse_UpstreamSection{
 					ExternalDependency: []*pb.JobInspectResponse_JobDependency{
@@ -1874,13 +1753,13 @@ func TestNewJobHandler(t *testing.T) {
 						WindowSize:       specA.WindowConfig().GetSize(),
 						WindowOffset:     specA.WindowConfig().GetOffset(),
 						WindowTruncateTo: specA.WindowConfig().GetTruncateTo(),
-						Destination:      "resource-A",
+						Destination:      "store://table-A",
 						Config: []*pb.JobConfigItem{{
 							Name:  "sample_key",
 							Value: "sample_value",
 						}},
 					},
-					Destination: "resource-A",
+					Destination: "store://table-A",
 				},
 				Upstreams: &pb.JobInspectResponse_UpstreamSection{
 					ExternalDependency: []*pb.JobInspectResponse_JobDependency{

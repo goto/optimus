@@ -1053,9 +1053,9 @@ func (_m *ResourceManager) CreateResource(ctx context.Context, res *resource.Res
 	return r0
 }
 
-// Exist provides a mock function with given fields: ctx, urn
-func (_m *ResourceManager) Exist(ctx context.Context, urn lib.URN) (bool, error) {
-	ret := _m.Called(ctx, urn)
+// Exist provides a mock function with given fields: ctx, tnnt, urn
+func (_m *ResourceManager) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
+	ret := _m.Called(ctx, tnnt, urn)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Exist")
@@ -1063,17 +1063,17 @@ func (_m *ResourceManager) Exist(ctx context.Context, urn lib.URN) (bool, error)
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, lib.URN) (bool, error)); ok {
-		return rf(ctx, urn)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) (bool, error)); ok {
+		return rf(ctx, tnnt, urn)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, lib.URN) bool); ok {
-		r0 = rf(ctx, urn)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) bool); ok {
+		r0 = rf(ctx, tnnt, urn)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, lib.URN) error); ok {
-		r1 = rf(ctx, urn)
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, lib.URN) error); ok {
+		r1 = rf(ctx, tnnt, urn)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1168,7 +1168,8 @@ func (_m *ResourceManager) Validate(res *resource.Resource) error {
 func NewResourceManager(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *ResourceManager {
+},
+) *ResourceManager {
 	mock := &ResourceManager{}
 	mock.Mock.Test(t)
 

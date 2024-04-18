@@ -250,7 +250,6 @@ func (s Store) Backup(ctx context.Context, backup *resource.Backup, resources []
 	return BackupResources(ctx, backup, resources, client)
 }
 
-// TODO: add unit test
 func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
 	spanCtx, span := startChildSpan(ctx, "bigquery/Exist")
 	defer span.End()
@@ -281,8 +280,8 @@ func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool
 		return false, err
 	}
 
-	if client.DatasetHandleFrom(dataset).Exists(spanCtx) {
-		return true, nil
+	if !client.DatasetHandleFrom(dataset).Exists(spanCtx) {
+		return false, nil
 	}
 
 	kindToHandleFn := map[string]func(ds Dataset, name string) ResourceHandle{
@@ -296,7 +295,7 @@ func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool
 	for kind, resourceHandleFn := range kindToHandleFn {
 		resourceName, err := ResourceNameFor(name, kind)
 		if err != nil {
-			return false, err
+			return true, nil
 		}
 
 		if resourceHandleFn(dataset, resourceName).Exists(spanCtx) {

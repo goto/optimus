@@ -103,6 +103,7 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	v.logger.Info("Validation is finished, took %s", time.Since(start).Round(time.Second))
 	return nil
 }
 

@@ -254,7 +254,20 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 }
 
 func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
-	return rs.repo.ReadAll(ctx, tnnt, store)
+	resources, err := rs.repo.ReadAll(ctx, tnnt, store)
+	if err != nil {
+		return nil, err
+	}
+
+	var res []*resource.Resource
+	for i := range resources {
+		if resources[i].IsDeleted() {
+			continue
+		}
+		res = append(res, resources[i])
+	}
+
+	return res, nil
 }
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic

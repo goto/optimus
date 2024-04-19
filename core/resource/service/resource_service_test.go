@@ -540,6 +540,23 @@ func TestResourceService(t *testing.T) {
 			assert.EqualValues(t, []*resource.Resource{existingResource}, actualResources)
 			assert.NoError(t, actualError)
 		})
+
+		t.Run("returns empty resources and nil if no error is encountered when resources deleted", func(t *testing.T) {
+			existingResource, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusDeleted))
+			assert.NoError(t, err)
+
+			repo := newResourceRepository(t)
+			repo.On("ReadAll", ctx, tnnt, resource.Bigquery).Return([]*resource.Resource{existingResource}, nil)
+
+			refresher := new(mockDownstreamRefresher)
+
+			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil)
+
+			actualResources, actualError := rscService.GetAll(ctx, tnnt, resource.Bigquery)
+			assert.Len(t, actualResources, 0)
+			assert.NoError(t, actualError)
+		})
 	})
 
 	t.Run("Deploy", func(t *testing.T) {

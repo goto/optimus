@@ -498,11 +498,9 @@ func (j *JobService) raiseUpdateEvents(existingJobs, addedJobs, updatedJobs []*j
 			j.raiseUpdateEvent(job, getUpdateImpactType(existingJobsMap[job.Spec().Name()], job))
 		}
 	}
-
 	for _, job := range addedJobs {
 		j.raiseCreateEvent(job)
 	}
-
 }
 
 func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {

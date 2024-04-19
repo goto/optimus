@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -89,7 +90,78 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	var request *pb.ValidateRequest
+	v.logger.Info("Validating job specifications for project [%s]", v.clientConfig.Project.Name)
+	start := time.Now()
+
+	if err := v.executeLocalValidation(); err != nil {
+		v.logger.Info("Validation is finished, took %s", time.Since(start).Round(time.Second))
+		return err
+	}
+
+	if err := v.executeServerValidation(namespace); err != nil {
+		v.logger.Info("Validation is finished, took %s", time.Since(start).Round(time.Second))
+		return err
+	}
+
+	return nil
+}
+
+func (v *validateCommand) executeLocalValidation() error {
+	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs())
+	if err != nil {
+		return err
+	}
+
+	namespaceNamesByJobName := make(map[string][]string)
+	for _, namespace := range v.clientConfig.Namespaces {
+		jobs, err := jobSpecReadWriter.ReadAll(namespace.Job.Path)
+		if err != nil {
+			return err
+		}
+
+		for _, j := range jobs {
+			namespaceNamesByJobName[j.Name] = append(namespaceNamesByJobName[j.Name], namespace.Name)
+		}
+	}
+
+	success := true
+	for jobName, namespaceNames := range namespaceNamesByJobName {
+		if len(namespaceNames) == 1 {
+			continue
+		}
+
+		uniqueNames := v.deduplicate(namespaceNames)
+		v.logger.Error("[%s] is written [%d] times in namespace [%s]", jobName, len(namespaceNames), strings.Join(uniqueNames, ", "))
+		success = false
+	}
+
+	if !success {
+		return errors.New("local duplication is detected")
+	}
+
+	return nil
+}
+
+func (*validateCommand) deduplicate(input []string) []string {
+	var output []string
+
+	tmp := make(map[string]bool)
+	for _, s := range input {
+		if !tmp[s] {
+			tmp[s] = true
+			output = append(output, s)
+		}
+	}
+
+	return output
+}
+
+func (v *validateCommand) executeServerValidation(namespace *config.Namespace) error {
+	var (
+		request *pb.ValidateRequest
+		err     error
+	)
+
 	if v.fromServer {
 		request = v.getRequestForJobNames()
 	} else {
@@ -100,17 +172,11 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	v.logger.Info("Validating job specifications for project [%s] namespace [%s]", v.clientConfig.Project.Name, v.namespaceName)
-
-	start := time.Now()
 	response, err := v.executeValidation(request)
-	end := time.Now()
-
 	if err != nil {
 		err = v.processResponse(response)
 	}
 
-	v.logger.Info("Validation is finished, took [%s] %s", end.Sub(start).Round(time.Second))
 	return err
 }
 

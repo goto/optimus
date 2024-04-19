@@ -3076,14 +3076,14 @@ func TestJobService(t *testing.T) {
 				expectedResult := map[job.Name][]dto.ValidateResult{
 					"job1": {
 						{
-							Name:     "validate for deletion",
+							Name:     "deletion validation",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
 					},
 					"job2": {
 						{
-							Name: "validate for deletion",
+							Name: "deletion validation",
 							Messages: []string{
 								"downstreams can not be fetched",
 								"unknown error",
@@ -3139,14 +3139,14 @@ func TestJobService(t *testing.T) {
 				expectedResult := map[job.Name][]dto.ValidateResult{
 					"job1": {
 						{
-							Name:     "validate for deletion",
+							Name:     "deletion validation",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
 					},
 					"job2": {
 						{
-							Name:     "validate for deletion",
+							Name:     "deletion validation",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
@@ -3201,15 +3201,15 @@ func TestJobService(t *testing.T) {
 				expectedResult := map[job.Name][]dto.ValidateResult{
 					"job1": {
 						{
-							Name:     "validate for deletion",
+							Name:     "deletion validation",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
 					},
 					"job2": {
 						{
-							Name:     "validate for deletion",
-							Messages: []string{"job is not safe for deletion", "validate for deletion:\n failed precondition for entity job: deletion of job job2 will fail. job is being used by test-proj/job3"},
+							Name:     "deletion validation",
+							Messages: []string{"job is not safe for deletion", "deletion validation:\n failed precondition for entity job: deletion of job job2 will fail. job is being used by test-proj/job3"},
 							Success:  false,
 						},
 					},
@@ -3379,14 +3379,14 @@ func TestJobService(t *testing.T) {
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
-								Name:     "destination retrieval",
+								Name:     "destination validation",
 								Messages: []string{"can not generate destination resource", "unknown error"},
 								Success:  false,
 							},
 						},
 						"jobB": {
 							{
-								Name:     "destination retrieval",
+								Name:     "destination validation",
 								Messages: []string{"can not generate destination resource", "unknown error"},
 								Success:  false,
 							},
@@ -3476,19 +3476,9 @@ func TestJobService(t *testing.T) {
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
-								Name: "window validation",
-								Messages: []string{
-									"window preset [daily] is not found within project",
-									"not found for entity project: preset not found daily",
-								},
-								Success: false,
-							},
-							{
-								Name: "job run validation",
-								Messages: []string{
-									"compiling [bq2bq] with type [task] failed with error: unexpected compile error",
-								},
-								Success: false,
+								Name:     "destination validation",
+								Messages: []string{"no issue"},
+								Success:  true,
 							},
 							{
 								Name: "source validation",
@@ -3501,9 +3491,19 @@ func TestJobService(t *testing.T) {
 								Success: false,
 							},
 							{
-								Name:     "destination validation",
-								Messages: []string{"no issue"},
-								Success:  true,
+								Name: "window validation",
+								Messages: []string{
+									"window preset [daily] is not found within project",
+									"not found for entity project: preset not found daily",
+								},
+								Success: false,
+							},
+							{
+								Name: "run validation",
+								Messages: []string{
+									"compiling [bq2bq] with type [task] failed with error: unexpected compile error",
+								},
+								Success: false,
 							},
 							{
 								Name: "upstream validation",
@@ -3516,17 +3516,9 @@ func TestJobService(t *testing.T) {
 						},
 						"jobB": {
 							{
-								Name:     "window validation",
+								Name:     "destination validation",
 								Messages: []string{"no issue"},
 								Success:  true,
-							},
-							{
-								Name: "job run validation",
-								Messages: []string{
-									"can not get job run config",
-									"invalid argument for entity jobRun: executor name is invalid",
-								},
-								Success: false,
 							},
 							{
 								Name: "source validation",
@@ -3537,9 +3529,17 @@ func TestJobService(t *testing.T) {
 								Success: false,
 							},
 							{
-								Name:     "destination validation",
+								Name:     "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
+							},
+							{
+								Name: "run validation",
+								Messages: []string{
+									"can not get run config",
+									"invalid argument for entity jobRun: executor name is invalid",
+								},
+								Success: false,
 							},
 							{
 								Name:     "upstream validation",
@@ -3624,13 +3624,8 @@ func TestJobService(t *testing.T) {
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
-								Name:     "window validation",
+								Name:     "destination validation",
 								Messages: []string{"no issue"},
-								Success:  true,
-							},
-							{
-								Name:     "job run validation",
-								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
 								Success:  true,
 							},
 							{
@@ -3644,8 +3639,13 @@ func TestJobService(t *testing.T) {
 								Success: true,
 							},
 							{
-								Name:     "destination validation",
+								Name:     "window validation",
 								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Name:     "run validation",
+								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
 								Success:  true,
 							},
 							{
@@ -3656,13 +3656,8 @@ func TestJobService(t *testing.T) {
 						},
 						"jobB": {
 							{
-								Name:     "window validation",
+								Name:     "destination validation",
 								Messages: []string{"no issue"},
-								Success:  true,
-							},
-							{
-								Name:     "job run validation",
-								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
 								Success:  true,
 							},
 							{
@@ -3671,8 +3666,13 @@ func TestJobService(t *testing.T) {
 								Success:  true,
 							},
 							{
-								Name:     "destination validation",
+								Name:     "window validation",
 								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Name:     "run validation",
+								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
 								Success:  true,
 							},
 							{

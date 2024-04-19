@@ -1168,20 +1168,26 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 }
 
 func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) (map[job.Name][]dto.ValidateResult, error) {
+	const stage = "preparation"
 	if err := j.validateRequest(request); err != nil {
+		registerJobValidationMetric(request.Tenant, stage, false)
 		return nil, err
 	}
 
 	if err := j.validateDuplication(request); err != nil {
+		registerJobValidationMetric(request.Tenant, stage, false)
 		return nil, err
 	}
 
 	jobsToValidate, err := j.getJobsToValidate(ctx, request)
 	if err != nil {
+		registerJobValidationMetric(request.Tenant, stage, false)
 		return nil, err
 	}
 
-	if output := j.validateTenant(request.Tenant, jobsToValidate); len(output) > 0 {
+	registerJobValidationMetric(request.Tenant, stage, true)
+
+	if output := j.validateTenantOnEachJob(request.Tenant, jobsToValidate); len(output) > 0 {
 		return output, nil
 	}
 
@@ -1189,7 +1195,7 @@ func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) 
 		return j.validateJobsForDeletion(ctx, request.Tenant, jobsToValidate), nil
 	}
 
-	if result, err := j.validateCyclic(jobsToValidate); err != nil {
+	if result, err := j.validateCyclic(request.Tenant, jobsToValidate); err != nil {
 		return nil, err
 	} else if len(result) > 0 {
 		return result, nil
@@ -1303,13 +1309,13 @@ func (j *JobService) validateOneJobForDeletion(
 	jobTenant tenant.Tenant, spec *job.Spec,
 	specByFullName map[job.FullName]*job.Spec,
 ) []dto.ValidateResult {
-	const name = "validate for deletion"
+	const stage = "deletion validation"
 	var logger writer.BufferedLogger
 
 	downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), make(map[job.FullName]bool))
 	if err != nil {
 		result := dto.ValidateResult{
-			Name: name,
+			Name: stage,
 			Messages: []string{
 				"downstreams can not be fetched",
 				err.Error(),
@@ -1317,10 +1323,12 @@ func (j *JobService) validateOneJobForDeletion(
 			Success: false,
 		}
 
+		registerJobValidationMetric(jobTenant, stage, false)
+
 		return []dto.ValidateResult{result}
 	}
 
-	me := errors.NewMultiError(name)
+	me := errors.NewMultiError(stage)
 	safeToDelete := validateDeleteJob(jobTenant, downstreams, specByFullName, spec, &logger, me)
 
 	var messages []string
@@ -1336,24 +1344,26 @@ func (j *JobService) validateOneJobForDeletion(
 		messages = []string{"job is safe for deletion"}
 	}
 
+	registerJobValidationMetric(jobTenant, stage, success)
+
 	return []dto.ValidateResult{
 		{
-			Name:     name,
+			Name:     stage,
 			Messages: messages,
 			Success:  success,
 		},
 	}
 }
 
-func (*JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
-	const name = "tenant validation"
+func (*JobService) validateTenantOnEachJob(rootTnnt tenant.Tenant, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
+	const stage = "tenant validation"
 
 	output := make(map[job.Name][]dto.ValidateResult)
 	for _, subjectJob := range jobsToValidate {
 		tnnt := subjectJob.Tenant()
 		if tnnt.ProjectName() != rootTnnt.ProjectName() || tnnt.NamespaceName() != rootTnnt.NamespaceName() {
 			result := dto.ValidateResult{
-				Name: name,
+				Name: stage,
 				Messages: []string{
 					fmt.Sprintf("current tenant is [%s.%s]", tnnt.ProjectName(), tnnt.NamespaceName()),
 					fmt.Sprintf("expected tenant is [%s.%s]", rootTnnt.ProjectName(), rootTnnt.NamespaceName()),
@@ -1362,6 +1372,10 @@ func (*JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*job.
 			}
 
 			output[subjectJob.Spec().Name()] = []dto.ValidateResult{result}
+
+			registerJobValidationMetric(rootTnnt, stage, false)
+		} else {
+			registerJobValidationMetric(rootTnnt, stage, true)
 		}
 	}
 
@@ -1369,10 +1383,15 @@ func (*JobService) validateTenant(rootTnnt tenant.Tenant, jobsToValidate []*job.
 }
 
 func (j *JobService) validateJobs(ctx context.Context, jobTenant tenant.Tenant, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	const stage = "tenant validation"
+
 	tenantDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
+		registerJobValidationMetric(jobTenant, stage, false)
 		return nil, err
 	}
+
+	registerJobValidationMetric(jobTenant, stage, true)
 
 	output := make(map[job.Name][]dto.ValidateResult)
 	for _, subjectJob := range jobsToValidate {
@@ -1383,10 +1402,12 @@ func (j *JobService) validateJobs(ctx context.Context, jobTenant tenant.Tenant, 
 }
 
 func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job) []dto.ValidateResult {
+	const stage = "destination validation"
+
 	destination, err := j.generateDestinationURN(ctx, tenantDetails, subjectJob.Spec())
 	if err != nil {
 		result := dto.ValidateResult{
-			Name: "destination retrieval",
+			Name: stage,
 			Messages: []string{
 				"can not generate destination resource",
 				err.Error(),
@@ -1394,21 +1415,23 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 			Success: false,
 		}
 
+		registerJobValidationMetric(tenantDetails.ToTenant(), stage, false)
+
 		return []dto.ValidateResult{result}
 	}
 
 	var output []dto.ValidateResult
 
-	result := j.validateWindow(tenantDetails.Project(), subjectJob.Spec().WindowConfig())
-	output = append(output, result)
-
-	result = j.validateRun(ctx, subjectJob, destination)
+	result := j.validateDestination(ctx, tenantDetails.ToTenant(), destination)
 	output = append(output, result)
 
 	result = j.validateSource(ctx, tenantDetails, subjectJob.Spec())
 	output = append(output, result)
 
-	result = j.validateDestination(ctx, tenantDetails.ToTenant(), destination)
+	result = j.validateWindow(tenantDetails, subjectJob.Spec().WindowConfig())
+	output = append(output, result)
+
+	result = j.validateRun(ctx, subjectJob, destination)
 	output = append(output, result)
 
 	result = j.validateUpstream(ctx, subjectJob)
@@ -1417,13 +1440,14 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	return output
 }
 
-func (j *JobService) validateCyclic(jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
-	const name = "cyclic validation"
+func (j *JobService) validateCyclic(tnnt tenant.Tenant, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	const stage = "cyclic validation"
 
 	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
 	// assumption, all job specs from input are also the job within same project
 	jobWithUpstreamPerJobName, err := j.getJobWithUpstreamPerJobName(jobsToValidate)
 	if err != nil {
+		registerJobValidationMetric(tnnt, stage, false)
 		return nil, err
 	}
 
@@ -1436,7 +1460,7 @@ func (j *JobService) validateCyclic(jobsToValidate []*job.Job) (map[job.Name][]d
 		if err != nil {
 			output[subjectJob.Spec().Name()] = []dto.ValidateResult{
 				{
-					Name: name,
+					Name: stage,
 					Messages: append([]string{
 						"cyclic dependency is detected",
 						err.Error(),
@@ -1444,6 +1468,10 @@ func (j *JobService) validateCyclic(jobsToValidate []*job.Job) (map[job.Name][]d
 					Success: false,
 				},
 			}
+
+			registerJobValidationMetric(tnnt, stage, false)
+		} else {
+			registerJobValidationMetric(tnnt, stage, true)
 		}
 	}
 
@@ -1467,13 +1495,15 @@ func (*JobService) getJobWithUpstreamPerJobName(jobsToValidate []*job.Job) (map[
 }
 
 func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
-	const name = "upstream validation"
+	const stage = "upstream validation"
 
 	var logger writer.BufferedLogger
 
 	if _, err := j.upstreamResolver.Resolve(ctx, subjectJob, &logger); err != nil {
+		registerJobValidationMetric(subjectJob.Tenant(), stage, false)
+
 		return dto.ValidateResult{
-			Name: name,
+			Name: stage,
 			Messages: []string{
 				"can not resolve upstream",
 				err.Error(),
@@ -1482,39 +1512,47 @@ func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) 
 		}
 	}
 
+	registerJobValidationMetric(subjectJob.Tenant(), stage, true)
+
 	return dto.ValidateResult{
-		Name:     name,
+		Name:     stage,
 		Messages: []string{"no issue"},
 		Success:  true,
 	}
 }
 
 func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant, destination lib.URN) dto.ValidateResult {
-	const name = "destination validation"
+	const stage = "destination validation"
 
 	if destination.IsZero() {
+		registerJobValidationMetric(tnnt, stage, true)
+
 		return dto.ValidateResult{
-			Name:     name,
+			Name:     stage,
 			Messages: []string{"no issue"},
 			Success:  true,
 		}
 	}
 
 	message, success := j.validateResourceURN(ctx, tnnt, destination)
+	registerJobValidationMetric(tnnt, stage, success)
+
 	return dto.ValidateResult{
-		Name:     name,
+		Name:     stage,
 		Messages: []string{message},
 		Success:  success,
 	}
 }
 
 func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {
-	const name = "source validation"
+	const stage = "source validation"
 
 	sourceURNs, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, spec)
 	if err != nil {
+		registerJobValidationMetric(tenantWithDetails.ToTenant(), stage, false)
+
 		return dto.ValidateResult{
-			Name: name,
+			Name: stage,
 			Messages: []string{
 				"can not identify the resource sources of the job",
 				err.Error(),
@@ -1535,8 +1573,10 @@ func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tena
 		messages[i] = fmt.Sprintf("%s: %s", urn.String(), currentMessage)
 	}
 
+	registerJobValidationMetric(tenantWithDetails.ToTenant(), stage, success)
+
 	return dto.ValidateResult{
-		Name:     name,
+		Name:     stage,
 		Messages: messages,
 		Success:  success,
 	}
@@ -1574,15 +1614,17 @@ func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant
 }
 
 func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination lib.URN) dto.ValidateResult {
-	const name = "job run validation"
+	const stage = "run validation"
 
 	referenceTime := time.Now()
 	runConfigs, err := j.getRunConfigs(referenceTime, subjectJob.Spec())
 	if err != nil {
+		registerJobValidationMetric(subjectJob.Tenant(), stage, false)
+
 		return dto.ValidateResult{
-			Name: name,
+			Name: stage,
 			Messages: []string{
-				"can not get job run config",
+				"can not get run config",
 				err.Error(),
 			},
 			Success: false,
@@ -1606,8 +1648,10 @@ func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, desti
 		messages = append(messages, msg)
 	}
 
+	registerJobValidationMetric(subjectJob.Tenant(), stage, success)
+
 	return dto.ValidateResult{
-		Name:     name,
+		Name:     stage,
 		Messages: messages,
 		Success:  success,
 	}
@@ -1677,14 +1721,16 @@ func (*JobService) getRunConfigs(referenceTime time.Time, spec *job.Spec) ([]sch
 	return runConfigs, nil
 }
 
-func (*JobService) validateWindow(project *tenant.Project, windowConfig window.Config) dto.ValidateResult {
-	const name = "window validation"
+func (*JobService) validateWindow(tenantDetails *tenant.WithDetails, windowConfig window.Config) dto.ValidateResult {
+	const stage = "window validation"
 
 	if windowType := windowConfig.Type(); windowType == window.Preset {
 		preset := windowConfig.Preset
-		if _, err := project.GetPreset(preset); err != nil {
+		if _, err := tenantDetails.Project().GetPreset(preset); err != nil {
+			registerJobValidationMetric(tenantDetails.ToTenant(), stage, false)
+
 			return dto.ValidateResult{
-				Name: name,
+				Name: stage,
 				Messages: []string{
 					fmt.Sprintf("window preset [%s] is not found within project", preset),
 					err.Error(),
@@ -1694,9 +1740,22 @@ func (*JobService) validateWindow(project *tenant.Project, windowConfig window.C
 		}
 	}
 
+	registerJobValidationMetric(tenantDetails.ToTenant(), stage, true)
+
 	return dto.ValidateResult{
-		Name:     name,
+		Name:     stage,
 		Messages: []string{"no issue"},
 		Success:  true,
 	}
+}
+
+func registerJobValidationMetric(tnnt tenant.Tenant, stage string, success bool) {
+	counter := telemetry.NewCounter(job.MetricJobValidation, map[string]string{
+		"project":   tnnt.ProjectName().String(),
+		"namespace": tnnt.NamespaceName().String(),
+		"stage":     stage,
+		"success":   fmt.Sprintf("%t", success),
+	})
+
+	counter.Add(1)
 }

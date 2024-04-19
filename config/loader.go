@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -104,10 +105,17 @@ func LoadServerConfig(filePath string) (*ServerConfig, error) {
 	if err := l.Load(cfg); err != nil && !errors.As(err, &config.ConfigFileNotFoundError{}) {
 		return nil, err
 	}
-
 	cfg.Log.Level = LogLevel(strings.ToUpper(string(cfg.Log.Level)))
-
+	logConfig(cfg)
 	return cfg, nil
+}
+
+func logConfig(cfg *ServerConfig) {
+	loadedConfig, err := json.MarshalIndent(cfg, "", "    ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error while trying  to marshal server config")
+	}
+	fmt.Fprintf(os.Stderr, "Optimus server starting with config : \n%s", loadedConfig)
 }
 
 func validateFilepath(fs afero.Fs, fpath string) error {

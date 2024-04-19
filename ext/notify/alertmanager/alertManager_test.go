@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/core/scheduler"
@@ -35,11 +36,13 @@ func TestAlertManager(t *testing.T) {
 			assert.Nil(t, json.NewDecoder(r.Body).Decode(&payload))
 
 			// Check if the payload is properly formed
-			assert.NotEmpty(t, payload.Data.Dashboard)
-			assert.NotEmpty(t, payload.Data.Status)
-			assert.Equal(t, payload.Data.EventType, scheduler.SLAMissEvent)
-			assert.NotEmpty(t, payload.Data.Summary)
-			assert.NotEmpty(t, payload.Data.Severity)
+			assert.NotEmpty(t, payload.Data["project"])
+			assert.NotEmpty(t, payload.Data["namespace"])
+			assert.NotEmpty(t, payload.Data["job_name"])
+			assert.NotEmpty(t, payload.Data["owner"])
+			assert.NotEmpty(t, payload.Data["scheduled_at"])
+			assert.NotEmpty(t, payload.Data["console_link"])
+			assert.NotEmpty(t, payload.Data["dashboard"])
 
 			w.WriteHeader(http.StatusOK)
 		})
@@ -47,10 +50,11 @@ func TestAlertManager(t *testing.T) {
 		defer mockServer.Close()
 
 		err := alertmanager.RelayEvent(&scheduler.AlertAttrs{
-			Owner:  "@data-batching",
-			JobURN: "urn:optimus:project:job:project.namespace.job_name",
-			Title:  "Optimus Job Alert",
-			Status: scheduler.StatusFiring,
+			Owner:         "@data-batching",
+			JobURN:        "urn:optimus:project:job:project.namespace.job_name",
+			Title:         "Optimus Job Alert",
+			SchedulerHost: "localhost",
+			Status:        scheduler.StatusFiring,
 			JobEvent: &scheduler.Event{
 				JobName:        jobName,
 				Tenant:         tnnt,
@@ -67,7 +71,7 @@ func TestAlertManager(t *testing.T) {
 					},
 				},
 			},
-		}, mockServer.URL, alertManagerEndPoint, "dashboard_url")
+		}, mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", log.NewNoop())
 		assert.Nil(t, err)
 
 		assert.Equal(t, reqRecorder.Code, http.StatusOK)

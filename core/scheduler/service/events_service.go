@@ -51,13 +51,22 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 		e.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
 		return err
 	}
+	tenantWithDetails, err := e.tenantService.GetDetails(ctx, event.Tenant)
+	if err != nil {
+		return err
+	}
+	schedulerHost, err := tenantWithDetails.GetConfig(tenant.ProjectSchedulerHost)
+	if err != nil {
+		return err
+	}
 	if event.Type == scheduler.JobFailureEvent || event.Type == scheduler.SLAMissEvent {
 		e.alertManager.Relay(&scheduler.AlertAttrs{
-			Owner:    jobDetails.JobMetadata.Owner,
-			JobURN:   jobDetails.Job.URN(),
-			Title:    "Optimus Job Alert",
-			Status:   scheduler.StatusFiring,
-			JobEvent: event,
+			Owner:         jobDetails.JobMetadata.Owner,
+			JobURN:        jobDetails.Job.URN(),
+			Title:         "Optimus Job Alert",
+			SchedulerHost: schedulerHost,
+			Status:        scheduler.StatusFiring,
+			JobEvent:      event,
 		})
 	}
 	return nil

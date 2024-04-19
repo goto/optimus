@@ -400,22 +400,30 @@ func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any
 	return output
 }
 
-func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Event) error {
-	if len(event.SLAObjectList) < 1 {
-		return nil
-	}
-	var scheduleTimesList []time.Time
-	for _, SLAObject := range event.SLAObjectList {
-		scheduleTimesList = append(scheduleTimesList, SLAObject.JobScheduledAt)
+func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.Event) ([]*scheduler.SLAObject, []time.Time) {
+	scheduleTimesList := make([]time.Time, len(event.SLAObjectList))
+	unfilteredSLAObj := make([]*scheduler.SLAObject, len(event.SLAObjectList))
+	var slaBreachedJobRunScheduleTimes []time.Time
+
+	for i, SLAObject := range event.SLAObjectList {
+		scheduleTimesList[i] = SLAObject.JobScheduledAt
+		unfilteredSLAObj[i] = &scheduler.SLAObject{JobName: SLAObject.JobName, JobScheduledAt: SLAObject.JobScheduledAt}
 	}
 	jobRuns, err := s.repo.GetByScheduledTimes(ctx, event.Tenant, event.JobName, scheduleTimesList)
 	if err != nil {
-		s.l.Error("error getting job runs by schedule time", err)
-		return err
+		s.l.Error("error getting job runs by schedule time, skipping the filter", err)
+		return unfilteredSLAObj, slaBreachedJobRunScheduleTimes
+	}
+	if len(jobRuns) == 0 {
+		s.l.Error("no job runs found for given schedule time, skipping the filter (perhaps the sla is due to schedule delay, in such cases the job wont be persisted in optimus DB)", err)
+		event.Status = scheduler.StateNotScheduled
+		event.JobScheduledAt = event.SLAObjectList[0].JobScheduledAt // pick the first reported sla
+		return unfilteredSLAObj, slaBreachedJobRunScheduleTimes
 	}
 
-	var slaBreachedJobRunScheduleTimes []time.Time
 	var filteredSLAObject []*scheduler.SLAObject
+	var latestScheduleTime time.Time
+	var latestJobRun *scheduler.JobRun
 	for _, jobRun := range jobRuns {
 		if !jobRun.HasSLABreached() {
 			s.l.Error("received sla miss callback for job run that has not breached SLA, jobName: %s, scheduled_at: %s, start_time: %s, end_time: %s, SLA definition: %s",
@@ -426,12 +434,28 @@ func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Ev
 			JobName:        jobRun.JobName,
 			JobScheduledAt: jobRun.ScheduledAt,
 		})
+		if jobRun.ScheduledAt.Unix() > latestScheduleTime.Unix() {
+			latestScheduleTime = jobRun.ScheduledAt
+			latestJobRun = jobRun
+		}
 		slaBreachedJobRunScheduleTimes = append(slaBreachedJobRunScheduleTimes, jobRun.ScheduledAt)
 	}
+	if latestJobRun != nil {
+		event.Status = latestJobRun.State
+		event.JobScheduledAt = latestJobRun.ScheduledAt
+	}
 
-	event.SLAObjectList = filteredSLAObject
+	return filteredSLAObject, slaBreachedJobRunScheduleTimes
+}
 
-	err = s.repo.UpdateSLA(ctx, event.JobName, event.Tenant.ProjectName(), slaBreachedJobRunScheduleTimes)
+func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Event) error {
+	if len(event.SLAObjectList) < 1 {
+		return nil
+	}
+	var slaBreachedJobRunScheduleTimes []time.Time
+	event.SLAObjectList, slaBreachedJobRunScheduleTimes = s.filterSLAObjects(ctx, event)
+
+	err := s.repo.UpdateSLA(ctx, event.JobName, event.Tenant.ProjectName(), slaBreachedJobRunScheduleTimes)
 	if err != nil {
 		s.l.Error("error updating job run sla status", err)
 		return err

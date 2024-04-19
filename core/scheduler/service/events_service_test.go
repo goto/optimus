@@ -136,14 +136,19 @@ func TestNotificationService(t *testing.T) {
 
 				alertManager := new(mockAlertManager)
 				alertManager.On("Relay", &scheduler.AlertAttrs{
-					Owner:    "jobOwnerName",
-					JobURN:   job.URN(),
-					Title:    "Optimus Job Alert",
-					Status:   scheduler.StatusFiring,
-					JobEvent: event,
+					Owner:         "jobOwnerName",
+					JobURN:        job.URN(),
+					Title:         "Optimus Job Alert",
+					SchedulerHost: "localhost",
+					Status:        scheduler.StatusFiring,
+					JobEvent:      event,
 				})
+				tenantService := new(mockTenantService)
+				tenantWithDetails, _ := tenant.NewTenantDetails(project, namespace, []*tenant.PlainTextSecret{})
+				tenantService.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
+				defer tenantService.AssertExpectations(t)
 
-				notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, alertManager)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager)
 
 				err := notifyService.Relay(ctx, event)
 				assert.Nil(t, err)

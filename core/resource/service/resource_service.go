@@ -241,19 +241,11 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 		rs.logger.Error("resource full name is empty")
 		return nil, errors.InvalidArgument(resource.EntityResource, "empty resource full name")
 	}
-	res, err := rs.repo.ReadByFullName(ctx, tnnt, store, resourceFullName, true)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return rs.repo.ReadByFullName(ctx, tnnt, store, resourceFullName, true)
 }
 
 func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
-	resources, err := rs.repo.ReadAll(ctx, tnnt, store, true)
-	if err != nil {
-		return nil, err
-	}
-	return resources, nil
+	return rs.repo.ReadAll(ctx, tnnt, store, true)
 }
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic

@@ -51,7 +51,6 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves inferred and static upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
-
 			defer logWriter.AssertExpectations(t)
 
 			jobRepo.On("GetAllByResourceDestination", ctx, jobASources[0]).Return([]*job.Job{jobB}, nil)
@@ -70,7 +69,6 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves inferred and static upstream internally and prioritize static upstream when duplication found", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
-
 			defer logWriter.AssertExpectations(t)
 
 			specD, _ := job.NewSpecBuilder(jobVersion, "job-D", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
@@ -96,7 +94,6 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves inferred upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
-
 			defer logWriter.AssertExpectations(t)
 
 			specX, _ := job.NewSpecBuilder(jobVersion, "job-X", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -116,7 +113,6 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		t.Run("resolves static upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 			logWriter := new(mockWriter)
-
 			defer logWriter.AssertExpectations(t)
 
 			specX, _ := job.NewSpecBuilder(jobVersion, "job-X", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
@@ -135,8 +131,8 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		})
 		t.Run("should not stop the process but keep appending error when unable to resolve inferred upstream", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-			logWriter := new(mockWriter)
 
+			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
 			jobRepo.On("GetAllByResourceDestination", ctx, jobASources[0]).Return([]*job.Job{}, errors.New("internal error"))
@@ -146,7 +142,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, unresolvedUpstreamC, unresolvedUpstreamD})
 
-			expectedJobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{internalUpstreamC, unresolvedUpstreamB, unresolvedUpstreamD})
+			expectedJobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{unresolvedUpstreamB, internalUpstreamC, unresolvedUpstreamD})
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -155,8 +151,8 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		})
 		t.Run("should not stop the process but keep appending error when unable to resolve static upstream", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-			logWriter := new(mockWriter)
 
+			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
 			specEUpstreamSpec, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"job-unknown", "job-C"}).Build()
@@ -171,7 +167,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			unresolvedUpstreamUnknown := job.NewUpstreamUnresolvedStatic("job-unknown", sampleTenant.ProjectName())
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, unresolvedUpstreamC})
 
-			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{internalUpstreamC, unresolvedUpstreamUnknown})
+			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, internalUpstreamC})
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -182,7 +178,6 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			jobRepo := new(JobRepository)
 
 			logWriter := new(mockWriter)
-
 			defer logWriter.AssertExpectations(t)
 
 			specEUpstreamSpec, err := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"/", "job-C"}).Build()
@@ -199,7 +194,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			unresolvedUpstreamUnknown := job.NewUpstreamUnresolvedStatic("job-unknown", sampleTenant.ProjectName())
 			jobWithUnresolvedUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, unresolvedUpstreamC})
 
-			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{internalUpstreamC, unresolvedUpstreamUnknown})
+			expectedJobWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{unresolvedUpstreamUnknown, internalUpstreamC})
 
 			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
 			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
@@ -216,8 +211,8 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 		t.Run("resolves upstream internally in bulk", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-			logWriter := new(mockWriter)
 
+			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
 			internalUpstreamMap := map[job.Name][]*job.Upstream{
@@ -244,11 +239,10 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			assert.ElementsMatch(t, expectedJobsWithUpstream[0].Upstreams(), result[0].Upstreams())
 			assert.ElementsMatch(t, expectedJobsWithUpstream[1].Upstreams(), result[1].Upstreams())
 		})
-
 		t.Run("returns error if unable to resolve upstream internally", func(t *testing.T) {
 			jobRepo := new(JobRepository)
-			logWriter := new(mockWriter)
 
+			logWriter := new(mockWriter)
 			defer logWriter.AssertExpectations(t)
 
 			jobRepo.On("ResolveUpstreams", ctx, sampleTenant.ProjectName(), []job.Name{"job-A", "job-X"}).Return(nil, errors.New("internal error"))

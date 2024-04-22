@@ -1185,13 +1185,17 @@ func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) 
 		return nil, err
 	}
 
+	tenantDetails, err := j.tenantDetailsGetter.GetDetails(ctx, request.Tenant)
+	if err != nil {
+		registerJobValidationMetric(request.Tenant, stage, false)
+		return nil, err
+	}
+
 	registerJobValidationMetric(request.Tenant, stage, true)
 
 	if output := j.validateTenantOnEachJob(request.Tenant, jobsToValidate); len(output) > 0 {
 		return output, nil
 	}
-
-	// TODO: add tenant check in the above
 
 	if request.DeletionMode {
 		return j.validateJobsForDeletion(ctx, request.Tenant, jobsToValidate), nil
@@ -1203,7 +1207,7 @@ func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) 
 		return result, nil
 	}
 
-	return j.validateJobs(ctx, request.Tenant, jobsToValidate)
+	return j.validateJobs(ctx, tenantDetails, jobsToValidate)
 }
 
 func (*JobService) validateRequest(request dto.ValidateRequest) error {
@@ -1384,17 +1388,7 @@ func (*JobService) validateTenantOnEachJob(rootTnnt tenant.Tenant, jobsToValidat
 	return output
 }
 
-func (j *JobService) validateJobs(ctx context.Context, jobTenant tenant.Tenant, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
-	const stage = "tenant validation"
-
-	tenantDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
-	if err != nil {
-		registerJobValidationMetric(jobTenant, stage, false)
-		return nil, err
-	}
-
-	registerJobValidationMetric(jobTenant, stage, true)
-
+func (j *JobService) validateJobs(ctx context.Context, tenantDetails *tenant.WithDetails, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
 	output := make(map[job.Name][]dto.ValidateResult)
 	for _, subjectJob := range jobsToValidate {
 		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob)

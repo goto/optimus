@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/goto/optimus/core/resource"
@@ -76,43 +75,33 @@ func (r Repository) ChangeNamespace(ctx context.Context, res *resource.Resource,
 		return err
 	}
 
-	var tx pgx.Tx
-	tx, err = r.db.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return errors.Wrap(resource.EntityResource, "error begin db transaction", err)
 	}
-	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
-	}()
 
 	err = r.hardDelete(ctx, tx, existingResource)
 	if err != nil {
+		_ = tx.Rollback(ctx)
 		return err
 	}
 
-	var (
-		updateResource = `UPDATE resource SET namespace_name=$1, updated_at=now()
+	updateResource := `UPDATE resource SET namespace_name=$1, updated_at=now()
 	WHERE full_name=$2 AND store=$3 AND project_name = $4 And namespace_name = $5`
-		tag pgconn.CommandTag
-	)
-	tag, err = tx.Exec(ctx, updateResource,
+	tag, err := tx.Exec(ctx, updateResource,
 		newTenant.NamespaceName(), res.FullName(), res.Store(),
 		res.Tenant().ProjectName(), res.Tenant().NamespaceName())
 	if err != nil {
+		_ = tx.Rollback(ctx)
 		return errors.Wrap(resource.EntityResource, "error changing tenant for resource:"+res.FullName(), err)
 	}
 	if tag.RowsAffected() == 0 {
+		_ = tx.Rollback(ctx)
 		return errors.NotFound(resource.EntityResource, "no resource to changing tenant for ")
 	}
 
 	err = tx.Commit(ctx)
-	if err != nil {
-		return errors.Wrap(resource.EntityResource, "error commit db transaction", err)
-	}
-
-	return nil
+	return errors.WrapIfErr(resource.EntityResource, "error commit db transaction", err)
 }
 
 func (Repository) hardDelete(ctx context.Context, tx pgx.Tx, res *resource.Resource) error {

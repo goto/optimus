@@ -25,7 +25,6 @@ type ResourceRepository interface {
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
-	FindByURNs(ctx context.Context, tnnt tenant.Tenant, urns ...string) ([]*resource.Resource, error)
 }
 
 type ResourceManager interface {
@@ -257,9 +256,6 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 
 	var res []*resource.Resource
 	for i := range resources {
-		if resources[i].IsDeleted() {
-			continue
-		}
 		res = append(res, resources[i])
 	}
 

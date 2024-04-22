@@ -1191,6 +1191,8 @@ func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) 
 		return output, nil
 	}
 
+	// TODO: add tenant check in the above
+
 	if request.DeletionMode {
 		return j.validateJobsForDeletion(ctx, request.Tenant, jobsToValidate), nil
 	}
@@ -1685,6 +1687,11 @@ func (*JobService) getSchedulerJobWithDetail(subjectJob *job.Job, destination li
 			Owner:       subjectJob.Spec().Owner(),
 			Description: subjectJob.Spec().Description(),
 			Labels:      subjectJob.Spec().Labels(),
+		},
+		Schedule: &scheduler.Schedule{
+			DependsOnPast: subjectJob.Spec().Schedule().DependsOnPast(),
+			CatchUp:       subjectJob.Spec().Schedule().CatchUp(),
+			Interval:      subjectJob.Spec().Schedule().Interval(),
 		},
 	}
 }

@@ -253,13 +253,7 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	if err != nil {
 		return nil, err
 	}
-
-	var res []*resource.Resource
-	for i := range resources {
-		res = append(res, resources[i])
-	}
-
-	return res, nil
+	return resources, nil
 }
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic

@@ -708,16 +708,3 @@ type mockWriter struct {
 func (m *mockWriter) Write(level writer.LogLevel, s string) error {
 	return m.Called(level, s).Error(0)
 }
-
-type resourceResolverMock struct {
-	mock.Mock
-}
-
-// CheckIsDeleted provides a mock function with given fields: ctx, jobWithUpstreams
-func (_m *resourceResolverMock) CheckIsDeleted(ctx context.Context, jobWithUpstreams []*job.WithUpstream) error {
-	ret := _m.Called(ctx, jobWithUpstreams)
-	if ret.Get(0) == nil {
-		return nil
-	}
-	return ret.Error(0)
-}

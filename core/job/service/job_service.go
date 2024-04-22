@@ -1525,7 +1525,7 @@ func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant
 
 		return dto.ValidateResult{
 			Name:     stage,
-			Messages: []string{"no issue"},
+			Messages: []string{fmt.Sprintf("%s: no issue", destination.String())},
 			Success:  true,
 		}
 	}
@@ -1535,7 +1535,7 @@ func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant
 
 	return dto.ValidateResult{
 		Name:     stage,
-		Messages: []string{message},
+		Messages: []string{fmt.Sprintf("%s: %s", destination.String(), message)},
 		Success:  success,
 	}
 }
@@ -1554,6 +1554,14 @@ func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tena
 				err.Error(),
 			},
 			Success: false,
+		}
+	}
+
+	if len(sourceURNs) == 0 {
+		return dto.ValidateResult{
+			Name:     stage,
+			Messages: []string{"no issue"},
+			Success:  true,
 		}
 	}
 

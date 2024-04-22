@@ -245,7 +245,12 @@ func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn 
 		return nil, err
 	}
 
-	return rs.repo.ReadByFullName(ctx, tnnt, store, urn.GetName())
+	name, err := resource.NameFrom(urn.GetName())
+	if err != nil {
+		return nil, err
+	}
+
+	return rs.repo.ReadByFullName(ctx, tnnt, store, name.String())
 }
 
 func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {

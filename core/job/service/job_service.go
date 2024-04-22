@@ -1581,6 +1581,7 @@ func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tena
 func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (string, bool) {
 	activeInDB := true
 	if rsc, err := j.resourceChecker.GetByURN(ctx, tnnt, urn); err != nil {
+		j.logger.Warn("suppress error is encountered when reading resource from db: %v", err)
 		activeInDB = false
 	} else {
 		switch rsc.Status() {

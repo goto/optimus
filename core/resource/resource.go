@@ -44,7 +44,9 @@ func NameFrom(name string) (Name, error) {
 		return "", errors.InvalidArgument(EntityResource, "resource name is empty")
 	}
 
-	return Name(name), nil
+	cleaned := strings.ReplaceAll(name, ":", ".") // TODO: design flaw, needs to be refactored
+
+	return Name(cleaned), nil
 }
 
 func (n Name) Sections() []string {

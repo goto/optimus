@@ -140,6 +140,35 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Len(t, storedNewResources, 1)
 		})
+
+		t.Run("updates resource and delete soft-deleted resource", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceExisting, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceExisting.UpdateURN("bigquery://project:dataset")
+
+			otherTnnt, err := tenant.NewTenant(tnnt.ProjectName().String(), "n-optimus-2")
+			assert.NoError(t, err)
+			resourceToChange, err := serviceResource.NewResource("project.dataset", kindDataset, store, otherTnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToChange.UpdateURN("bigquery://project:dataset")
+
+			assert.NoError(t, repository.Create(ctx, resourceExisting), "failed create resource")
+			assert.NoError(t, repository.Delete(ctx, resourceExisting), "failed delete resource")
+			assert.NoError(t, repository.Create(ctx, resourceToChange), "failed create resource to change")
+
+			actualError := repository.ChangeNamespace(ctx, resourceToChange, tnnt)
+			assert.NoError(t, actualError)
+
+			storedResources, err := repository.GetResources(ctx, tnnt, store, []string{resourceToChange.FullName()})
+			assert.NoError(t, err)
+			assert.Len(t, storedResources, 1)
+			storedNewResources, err := repository.GetResources(ctx, otherTnnt, store, []string{resourceToChange.FullName()})
+			assert.NoError(t, err)
+			assert.Len(t, storedNewResources, 0)
+		})
 	})
 
 	t.Run("ReadByFullName", func(t *testing.T) {

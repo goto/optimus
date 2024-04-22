@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/goto/optimus/core/resource"
@@ -70,19 +71,60 @@ func (r Repository) Delete(ctx context.Context, resourceModel *resource.Resource
 }
 
 func (r Repository) ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error {
-	updateResource := `UPDATE resource SET namespace_name=$1, updated_at=now()
+	existingResource, err := r.ReadByFullName(ctx, newTenant, res.Store(), res.FullName(), false)
+	if err != nil && !errors.IsErrorType(err, errors.ErrNotFound) {
+		return err
+	}
+
+	var tx pgx.Tx
+	tx, err = r.db.Begin(ctx)
+	if err != nil {
+		return errors.Wrap(resource.EntityResource, "error begin db transaction", err)
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
+
+	err = r.hardDelete(ctx, tx, existingResource)
+	if err != nil {
+		return err
+	}
+
+	var (
+		updateResource = `UPDATE resource SET namespace_name=$1, updated_at=now()
 	WHERE full_name=$2 AND store=$3 AND project_name = $4 And namespace_name = $5`
-	tag, err := r.db.Exec(ctx, updateResource,
+		tag pgconn.CommandTag
+	)
+	tag, err = tx.Exec(ctx, updateResource,
 		newTenant.NamespaceName(), res.FullName(), res.Store(),
 		res.Tenant().ProjectName(), res.Tenant().NamespaceName())
 	if err != nil {
 		return errors.Wrap(resource.EntityResource, "error changing tenant for resource:"+res.FullName(), err)
 	}
-
 	if tag.RowsAffected() == 0 {
 		return errors.NotFound(resource.EntityResource, "no resource to changing tenant for ")
 	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return errors.Wrap(resource.EntityResource, "error commit db transaction", err)
+	}
+
 	return nil
+}
+
+func (Repository) hardDelete(ctx context.Context, tx pgx.Tx, res *resource.Resource) error {
+	if res == nil || !res.IsDeleted() {
+		return nil
+	}
+
+	deleteResourceQuery := `DELETE FROM resource 
+       WHERE project_name = $1 AND namespace_name = $2 AND store = $3 AND full_name = $4 AND status = $5`
+	args := []any{res.Tenant().ProjectName(), res.Tenant().NamespaceName(), res.Store(), res.Name(), resource.StatusDeleted}
+	_, err := tx.Exec(ctx, deleteResourceQuery, args...)
+	return errors.WrapIfErr(resource.EntityResource, "failed exec delete", err)
 }
 
 func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error) {

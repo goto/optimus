@@ -56,7 +56,7 @@ func (r *Resource) MarkToDelete() error {
 		r.status = StatusToDelete
 		return nil
 	}
-	msg := fmt.Sprintf("status transition for [%s] from status [%s] to status [%s] is not allowed", r.FullName(), r.status, StatusToUpdate)
+	msg := fmt.Sprintf("status transition for [%s] from status [%s] to status [%s] is not allowed", r.FullName(), r.status, StatusToDelete)
 	return errors.InvalidStateTransition(EntityResource, msg)
 }
 

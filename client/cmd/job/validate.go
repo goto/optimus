@@ -173,12 +173,24 @@ func (v *validateCommand) executeServerValidation(namespace *config.Namespace) e
 		return err
 	}
 
+	success := true
+
 	response, err := v.executeValidation(request)
 	if err != nil {
-		err = v.processResponse(response)
+		v.logger.Error("error returned when executing validation: %v", err)
+		success = false
 	}
 
-	return err
+	if err := v.processResponse(response); err != nil {
+		v.logger.Error("error returned when processing response: %v", err)
+		success = false
+	}
+
+	if !success {
+		return errors.New("encountered one or more errors")
+	}
+
+	return nil
 }
 
 func (v *validateCommand) processResponse(response *pb.ValidateResponse) error {
@@ -202,7 +214,7 @@ func (v *validateCommand) printBriefResponse(response *pb.ValidateResponse) erro
 			if r.Success {
 				successResultCount++
 			} else {
-				v.logger.Error("  %s", r.GetName())
+				v.logger.Info("  %s", r.GetName())
 				for _, m := range r.GetMessages() {
 					v.logger.Error("    %s", m)
 				}
@@ -233,7 +245,7 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 		v.logger.Info("[%s]", jobName)
 		result := rawResult.GetResults()
 		for _, r := range result {
-			v.logger.Error("  %s", r.GetName())
+			v.logger.Info("  %s", r.GetName())
 			if r.Success {
 				successResultCount++
 

@@ -11,6 +11,7 @@ import (
 
 	serviceResource "github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/errors"
 	repoResource "github.com/goto/optimus/internal/store/postgres/resource"
 	tenantPostgres "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
@@ -306,7 +307,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.ErrorContains(t, actualError, "not found for entity resource")
 		})
 
-		t.Run("updates resource and returns nil if no error is encountered", func(t *testing.T) {
+		t.Run("delete resource and returns error on deleted resource", func(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
@@ -323,9 +324,9 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NoError(t, actualError)
 
 			storedResources, err := repository.ReadByFullName(ctx, tnnt, store, resourceToDelete.FullName(), true)
-			assert.NoError(t, err)
-			assert.NotNil(t, storedResources)
-			assert.True(t, storedResources.IsDeleted())
+			assert.Error(t, err)
+			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
+			assert.Nil(t, storedResources)
 		})
 	})
 }

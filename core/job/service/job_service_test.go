@@ -3787,7 +3787,7 @@ func TestJobService(t *testing.T) {
 		})
 	})
 
-	t.Run("GetDownstreamByDestination", func(t *testing.T) {
+	t.Run("GetDownstreamByResourceURN", func(t *testing.T) {
 		tnnt, _ := tenant.NewTenant("proj123", "name123")
 		urn := job.ResourceURN("bigquery://dataset.table_test")
 		downstreamJobs := []*job.Downstream{
@@ -3803,7 +3803,7 @@ func TestJobService(t *testing.T) {
 
 			downstreamRepo.On("GetDownstreamBySources", ctx, []job.ResourceURN{urn}).Return(downstreamJobs, nil)
 
-			actual, err := jobService.GetDownstreamByDestination(ctx, tnnt, urn)
+			actual, err := jobService.GetDownstreamByResourceURN(ctx, tnnt, urn)
 			assert.NoError(t, err)
 			assert.NotNil(t, actual)
 			assert.Len(t, actual.GetDownstreamFullNames(), 1)
@@ -3817,7 +3817,7 @@ func TestJobService(t *testing.T) {
 
 			downstreamRepo.On("GetDownstreamBySources", ctx, []job.ResourceURN{urn}).Return(nil, context.DeadlineExceeded)
 
-			actual, err := jobService.GetDownstreamByDestination(ctx, tnnt, urn)
+			actual, err := jobService.GetDownstreamByResourceURN(ctx, tnnt, urn)
 			assert.Error(t, err)
 			assert.Nil(t, actual)
 		})

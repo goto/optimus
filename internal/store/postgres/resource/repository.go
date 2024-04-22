@@ -87,11 +87,18 @@ func (r Repository) ChangeNamespace(ctx context.Context, res *resource.Resource,
 	return nil
 }
 
-func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string) (*resource.Resource, error) {
+func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error) {
 	var res Resource
 	getResource := `SELECT ` + resourceColumns + ` FROM resource WHERE full_name = $1 AND store = $2 AND
 	project_name = $3 AND namespace_name = $4`
-	err := r.db.QueryRow(ctx, getResource, fullName, store, tnnt.ProjectName(), tnnt.NamespaceName()).
+	args := []any{fullName, store, tnnt.ProjectName(), tnnt.NamespaceName()}
+
+	if onlyActive {
+		getResource += ` AND status NOT IN ($5, $6)`
+		args = append(args, resource.StatusDeleted, resource.StatusToDelete)
+	}
+
+	err := r.db.QueryRow(ctx, getResource, args...).
 		Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
 			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
 	if err != nil {
@@ -105,9 +112,16 @@ func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, stor
 	return FromModelToResource(&res)
 }
 
-func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
+func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error) {
 	getAllResources := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and namespace_name = $2 and store = $3`
-	rows, err := r.db.Query(ctx, getAllResources, tnnt.ProjectName(), tnnt.NamespaceName(), store)
+	args := []any{tnnt.ProjectName(), tnnt.NamespaceName(), store}
+
+	if onlyActive {
+		getAllResources += ` AND status NOT IN ($4, $5)`
+		args = append(args, resource.StatusDeleted, resource.StatusToDelete)
+	}
+
+	rows, err := r.db.Query(ctx, getAllResources, args...)
 	if err != nil {
 		return nil, errors.Wrap(resource.EntityResource, "error in ReadAll", err)
 	}

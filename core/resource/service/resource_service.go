@@ -20,10 +20,10 @@ import (
 type ResourceRepository interface {
 	Create(ctx context.Context, res *resource.Resource) error
 	Update(ctx context.Context, res *resource.Resource) error
-	Delete(ctx context.Context, resourceModel *resource.Resource) error
+	Delete(ctx context.Context, res *resource.Resource) error
 	ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error
-	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string) (*resource.Resource, error)
-	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
+	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
+	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	FindByURNs(ctx context.Context, tnnt tenant.Tenant, urns ...string) ([]*resource.Resource, error)
 }
@@ -41,8 +41,8 @@ type DownstreamRefresher interface {
 	RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error
 }
 
-type DependencyResolver interface {
-	GetDownstreamByDestination(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error)
+type DownstreamResolver interface {
+	GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error)
 }
 
 type EventHandler interface {
@@ -53,7 +53,7 @@ type ResourceService struct {
 	repo               ResourceRepository
 	mgr                ResourceManager
 	refresher          DownstreamRefresher
-	dependencyResolver DependencyResolver
+	downstreamResolver DownstreamResolver
 
 	logger       log.Logger
 	eventHandler EventHandler
@@ -62,13 +62,13 @@ type ResourceService struct {
 func NewResourceService(
 	logger log.Logger,
 	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
-	eventHandler EventHandler, dependencyResolver DependencyResolver,
+	eventHandler EventHandler, downstreamResolver DownstreamResolver,
 ) *ResourceService {
 	return &ResourceService{
 		repo:               repo,
 		mgr:                mgr,
 		refresher:          downstreamRefresher,
-		dependencyResolver: dependencyResolver,
+		downstreamResolver: downstreamResolver,
 		logger:             logger,
 		eventHandler:       eventHandler,
 	}
@@ -92,7 +92,7 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	if existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName()); err != nil {
+	if existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName(), false); err != nil {
 		if !errors.IsErrorType(err, errors.ErrNotFound) {
 			rs.logger.Error("error getting resource [%s]: %s", incoming.FullName(), err)
 			return err
@@ -147,7 +147,7 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName())
+	existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName(), true)
 	if err != nil {
 		rs.logger.Error("error getting stored resource [%s]: %s", incoming.FullName(), err)
 		return err
@@ -190,7 +190,7 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 		return nil, err
 	}
 
-	downstreamList, err := rs.dependencyResolver.GetDownstreamByDestination(ctx, existing.Tenant(), job.ResourceURN(existing.URN()))
+	downstreamList, err := rs.downstreamResolver.GetDownstreamByResourceURN(ctx, existing.Tenant(), job.ResourceURN(existing.URN()))
 	if err != nil {
 		return nil, err
 	}
@@ -199,16 +199,15 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 	if len(downstreamList) > 0 {
 		jobNames = downstreamList.GetDownstreamFullNames().String()
 		if !req.Force {
-			msg := fmt.Sprintf("there are still resource downstream using %s, jobs: [%s]", existing.FullName(), jobNames)
+			msg := fmt.Sprintf("there are still resource using %s, jobs: [%s]", existing.FullName(), jobNames)
 			return nil, errors.NewError(errors.ErrFailedPrecond, resource.EntityResource, msg)
 		}
 		rs.logger.Info(fmt.Sprintf("attempt to delete resource %s with downstreamJobs: [%s]", existing.FullName(), jobNames))
 	}
 	_ = existing.MarkToDelete()
 
-	err = rs.repo.Delete(ctx, existing)
-	if err != nil {
-		rs.logger.Error("error deleting resource [%s] to db: %s", existing.FullName(), err)
+	if err = rs.repo.Delete(ctx, existing); err != nil {
+		rs.logger.Error("error soft-delete resource [%s] to db: %s", existing.FullName(), err)
 		return nil, err
 	}
 
@@ -221,13 +220,13 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 }
 
 func (rs ResourceService) ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error { // nolint:gocritic
-	resourceSpec, err := rs.Get(ctx, oldTenant, datastore, resourceFullName)
+	resourceSpec, err := rs.repo.ReadByFullName(ctx, oldTenant, datastore, resourceFullName, true)
 	if err != nil {
 		rs.logger.Error("failed to read existing resource [%s]: %s", resourceFullName, err)
 		return err
 	}
 	if resourceSpec.IsDeleted() {
-		return errors.NewError(errors.ErrNotFound, resource.EntityResource, "resource are not found or has been deleted")
+		return errors.FailedPrecondition(resource.EntityResource, "resources are deleted, please recreated/redeployed to change its namespace")
 	}
 	if err := rs.repo.ChangeNamespace(ctx, resourceSpec, newTenant); err != nil {
 		rs.logger.Error("error changing namespace of stored resource [%s]: %s", resourceSpec.FullName(), err)
@@ -243,18 +242,15 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 		rs.logger.Error("resource full name is empty")
 		return nil, errors.InvalidArgument(resource.EntityResource, "empty resource full name")
 	}
-	res, err := rs.repo.ReadByFullName(ctx, tnnt, store, resourceFullName)
+	res, err := rs.repo.ReadByFullName(ctx, tnnt, store, resourceFullName, true)
 	if err != nil {
 		return nil, err
-	}
-	if res.IsDeleted() {
-		return nil, errors.NotFound(resource.EntityResource, "resource are not found or has been deleted")
 	}
 	return res, nil
 }
 
 func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
-	resources, err := rs.repo.ReadAll(ctx, tnnt, store)
+	resources, err := rs.repo.ReadAll(ctx, tnnt, store, true)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +323,7 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 		r.MarkValidationSuccess()
 	}
 
-	existingResources, err := rs.repo.ReadAll(ctx, tnnt, store)
+	existingResources, err := rs.repo.ReadAll(ctx, tnnt, store, false)
 	if err != nil {
 		rs.logger.Error("error reading all existing resources: %s", err)
 		multiError.Append(err)
@@ -539,41 +535,4 @@ func createFullNameToResourceMap(resources []*resource.Resource) map[string]*res
 		output[r.FullName()] = r
 	}
 	return output
-}
-
-func (rs ResourceService) CheckIsDeleted(ctx context.Context, jobWithUpstreams []*job.WithUpstream) error {
-	var (
-		resourceURNsByTenant = make(map[tenant.Tenant][]string)
-		me                   = errors.NewMultiError("failed get tenants or resource on CheckIsDeleted")
-	)
-
-	for i := range jobWithUpstreams {
-		for _, upstream := range jobWithUpstreams[i].Upstreams() {
-			tnnt, err := tenant.NewTenant(upstream.ProjectName().String(), upstream.NamespaceName().String())
-			if err != nil {
-				me.Append(err)
-				continue
-			}
-
-			exist := resourceURNsByTenant[tnnt]
-			exist = append(exist, upstream.Resource().String())
-			resourceURNsByTenant[tnnt] = exist
-		}
-
-		for tnnt, resourceURNs := range resourceURNsByTenant {
-			resources, err := rs.repo.FindByURNs(ctx, tnnt, resourceURNs...)
-			if err != nil {
-				me.Append(err)
-				continue
-			}
-
-			for _, resourceData := range resources {
-				if resourceData.IsDeleted() {
-					return errors.FailedPrecondition(resource.EntityResource, fmt.Sprintf("JobUpstream with name: %s have resource with urn: %s", jobWithUpstreams[i].Name().String(), resourceData.URN()))
-				}
-			}
-		}
-	}
-
-	return me.ToErr()
 }

@@ -1260,7 +1260,7 @@ func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetai
 	return job.ResourceURN(destinationURN), nil
 }
 
-func (j *JobService) GetDownstreamByDestination(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error) {
+func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error) {
 	var dependentJobs []*job.Downstream
 
 	jobs, err := j.downstreamRepo.GetDownstreamBySources(ctx, []job.ResourceURN{urn})

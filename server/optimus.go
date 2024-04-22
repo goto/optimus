@@ -345,8 +345,6 @@ func (s *OptimusServer) setupHandlers() error {
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
 	)
 
-	var resourceResolver rService.ResourceService
-
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
@@ -355,7 +353,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
-	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo, &resourceResolver)
+	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
 	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, pluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
 
@@ -364,7 +362,6 @@ func (s *OptimusServer) setupHandlers() error {
 	backupRepository := resource.NewBackupRepository(s.dbPool)
 	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
 	resourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService)
-	resourceResolver = *resourceService
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 
 	// Register datastore

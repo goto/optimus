@@ -55,7 +55,7 @@ func NewDeleteCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&apply.verbose, "verbose", "v", false, "Print details related to delete stages")
 	cmd.Flags().StringVarP(&apply.namespaceName, "namespace", "n", "", "Namespace name within project")
 	cmd.Flags().StringVarP(&apply.storeName, "datastore", "s", "bigquery", "Datastore type where the resource belongs")
-	cmd.Flags().BoolVarP(&apply.force, "force", "f", false, "force delete, ignoring job upstream")
+	cmd.Flags().BoolVarP(&apply.force, "force", "f", false, "Force delete, ignoring job downstream")
 	return cmd
 }
 

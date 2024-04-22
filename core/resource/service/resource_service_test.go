@@ -15,8 +15,6 @@ import (
 	"github.com/goto/optimus/core/resource/service"
 	"github.com/goto/optimus/core/tenant"
 	oErrors "github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/writer"
 )
 
@@ -506,7 +504,7 @@ func TestResourceService(t *testing.T) {
 			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil)
 
 			actualResource, actualError := rscService.Get(ctx, tnnt, resource.Bigquery, fullName)
-			assert.Nil(t, actualResource)
+			assert.NotNil(t, actualResource)
 			assert.Error(t, actualError)
 		})
 	})
@@ -1058,7 +1056,7 @@ func TestResourceService(t *testing.T) {
 		resourceName := "dataset.table_test"
 		t.Run("success without downstream jobs", func(t *testing.T) {
 			var (
-				mockDepResolver = new(mockDependencyResolver)
+				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
 				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
 				req             = &resource.DeleteRequest{
@@ -1072,7 +1070,7 @@ func TestResourceService(t *testing.T) {
 			defer mockDepResolver.AssertExpectations(t)
 
 			repo.On("ReadByFullName", ctx, req.Tenant, req.Datastore, req.FullName).Return(existingResource, nil)
-			mockDepResolver.On("GetDownstreamByDestination", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
+			mockDepResolver.On("GetDownstreamByResourceURN", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
 				Return(nil, nil)
 			repo.On("Delete", ctx, existingResource).Return(nil)
 
@@ -1084,7 +1082,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("success with downstream jobs and force true", func(t *testing.T) {
 			var (
-				mockDepResolver = new(mockDependencyResolver)
+				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
 				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
 				req             = &resource.DeleteRequest{
@@ -1098,7 +1096,7 @@ func TestResourceService(t *testing.T) {
 			defer mockDepResolver.AssertExpectations(t)
 
 			repo.On("ReadByFullName", ctx, req.Tenant, req.Datastore, req.FullName).Return(existingResource, nil)
-			mockDepResolver.On("GetDownstreamByDestination", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
+			mockDepResolver.On("GetDownstreamByResourceURN", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
 				Return(downstreamList, nil)
 			repo.On("Delete", ctx, existingResource).Return(nil)
 
@@ -1116,7 +1114,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("return error when delete", func(t *testing.T) {
 			var (
-				mockDepResolver = new(mockDependencyResolver)
+				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
 				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
 				req             = &resource.DeleteRequest{
@@ -1130,7 +1128,7 @@ func TestResourceService(t *testing.T) {
 			defer mockDepResolver.AssertExpectations(t)
 
 			repo.On("ReadByFullName", ctx, req.Tenant, req.Datastore, req.FullName).Return(existingResource, nil)
-			mockDepResolver.On("GetDownstreamByDestination", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
+			mockDepResolver.On("GetDownstreamByResourceURN", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
 				Return(nil, nil)
 			repo.On("Delete", ctx, existingResource).Return(context.DeadlineExceeded)
 
@@ -1141,7 +1139,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("return error when downstream still exists", func(t *testing.T) {
 			var (
-				mockDepResolver = new(mockDependencyResolver)
+				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
 				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
 				req             = &resource.DeleteRequest{
@@ -1155,18 +1153,18 @@ func TestResourceService(t *testing.T) {
 			defer mockDepResolver.AssertExpectations(t)
 
 			repo.On("ReadByFullName", ctx, req.Tenant, req.Datastore, req.FullName).Return(existingResource, nil)
-			mockDepResolver.On("GetDownstreamByDestination", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
+			mockDepResolver.On("GetDownstreamByResourceURN", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
 				Return(downstreamList, nil)
 
 			actual, err := rscService.Delete(ctx, req)
 			assert.Error(t, err)
-			assert.ErrorContains(t, err, "failed precondition for entity resource: there are still resource downstream using dataset.table_test, jobs: [project_test/projA/JobA]")
+			assert.ErrorContains(t, err, "failed precondition for entity resource: there are still resource using dataset.table_test, jobs: [project_test/projA/JobA]")
 			assert.Nil(t, actual)
 		})
 
 		t.Run("return error when resolve downstream dependency", func(t *testing.T) {
 			var (
-				mockDepResolver = new(mockDependencyResolver)
+				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
 				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
 				req             = &resource.DeleteRequest{
@@ -1180,7 +1178,7 @@ func TestResourceService(t *testing.T) {
 			defer mockDepResolver.AssertExpectations(t)
 
 			repo.On("ReadByFullName", ctx, req.Tenant, req.Datastore, req.FullName).Return(existingResource, nil)
-			mockDepResolver.On("GetDownstreamByDestination", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
+			mockDepResolver.On("GetDownstreamByResourceURN", ctx, existingResource.Tenant(), job.ResourceURN(existingResource.URN())).
 				Return(downstreamList, context.DeadlineExceeded)
 
 			actual, err := rscService.Delete(ctx, req)
@@ -1190,7 +1188,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("return error when get resource", func(t *testing.T) {
 			var (
-				mockDepResolver = new(mockDependencyResolver)
+				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
 				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
 				req             = &resource.DeleteRequest{
@@ -1207,100 +1205,6 @@ func TestResourceService(t *testing.T) {
 			actual, err := rscService.Delete(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, actual)
-		})
-	})
-	t.Run("CheckDeletedResource", func(t *testing.T) {
-		jobVersion := 1
-		sampleOwner := "dwh"
-		startDate, _ := job.ScheduleDateFrom("2022-10-01")
-		jobSchedule, _ := job.NewScheduleBuilder(startDate).Build()
-		jobConfig, _ := job.ConfigFrom(map[string]string{"sample_key": "sample_value"})
-		w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
-		jobWindow := window.NewCustomConfig(w)
-		sampleTenant, _ := tenant.NewTenant("projA", "namespace-A")
-		jobTask := job.NewTask("bq2bq", jobConfig)
-		asset := map[string]string{
-			"query.sql": "select * from something",
-		}
-
-		specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-		jobB := job.NewJob(sampleTenant, specB, "table-B", []job.ResourceURN{"table-C"}, false)
-
-		t.Run("success on no deleted resources found", func(t *testing.T) {
-			var (
-				repo               = newResourceRepository(t)
-				rscService         = service.NewResourceService(logger, repo, nil, nil, nil, nil)
-				resourceUrn        = job.ResourceURN("bigquery://project.dataset.sample-d")
-				resourceMeta       = resource.Metadata{Version: 1, Description: "description"}
-				resourceData, _    = resource.NewResource("project.dataset.sample-d", "tables", resource.Bigquery, sampleTenant, &resourceMeta, spec)
-				resources          = []*resource.Resource{resourceData}
-				upstreamUnresolved = job.NewUpstreamResolved("project.dataset.sample-d", "", resourceUrn, sampleTenant, job.UpstreamTypeStatic, "task-B", false)
-				upstreams          = []*job.Upstream{upstreamUnresolved}
-				jobWithUpstream    = []*job.WithUpstream{job.NewWithUpstream(jobB, upstreams)}
-			)
-			defer repo.AssertExpectations(t)
-
-			repo.On("FindByURNs", ctx, sampleTenant, []string{resourceUrn.String()}).Return(resources, nil)
-
-			err := rscService.CheckIsDeleted(ctx, jobWithUpstream)
-			assert.NoError(t, err)
-		})
-
-		t.Run("return error on deleted resources", func(t *testing.T) {
-			var (
-				repo         = newResourceRepository(t)
-				rscService   = service.NewResourceService(logger, repo, nil, nil, nil, nil)
-				resourceUrn  = job.ResourceURN("bigquery://project.dataset.sample-d")
-				resourceMeta = resource.Metadata{Version: 1, Description: "description"}
-				resourceData = func() *resource.Resource {
-					res, _ := resource.NewResource("project.dataset.sample-d", "tables", resource.Bigquery, sampleTenant, &resourceMeta, spec)
-					res.UpdateURN(resourceUrn.String())
-					return resource.FromExisting(res, resource.ReplaceStatus(resource.StatusDeleted))
-				}()
-				resources          = []*resource.Resource{resourceData}
-				upstreamUnresolved = job.NewUpstreamResolved("project.dataset.sample-d", "", resourceUrn, sampleTenant, job.UpstreamTypeStatic, "task-B", false)
-				upstreams          = []*job.Upstream{upstreamUnresolved}
-				jobWithUpstream    = []*job.WithUpstream{job.NewWithUpstream(jobB, upstreams)}
-			)
-			defer repo.AssertExpectations(t)
-
-			repo.On("FindByURNs", ctx, sampleTenant, []string{resourceUrn.String()}).Return(resources, nil)
-
-			err := rscService.CheckIsDeleted(ctx, jobWithUpstream)
-			assert.Error(t, err)
-			assert.Equal(t, err.Error(), "failed precondition for entity resource: JobUpstream with name: job-B have resource with urn: bigquery://project.dataset.sample-d")
-		})
-
-		t.Run("return error on find by urns", func(t *testing.T) {
-			var (
-				repo               = newResourceRepository(t)
-				rscService         = service.NewResourceService(logger, repo, nil, nil, nil, nil)
-				resourceUrn        = job.ResourceURN("bigquery://project.dataset.sample-d")
-				upstreamUnresolved = job.NewUpstreamResolved("project.dataset.sample-d", "", resourceUrn, sampleTenant, job.UpstreamTypeStatic, "task-B", false)
-				upstreams          = []*job.Upstream{upstreamUnresolved}
-				jobWithUpstream    = []*job.WithUpstream{job.NewWithUpstream(jobB, upstreams)}
-			)
-			defer repo.AssertExpectations(t)
-
-			repo.On("FindByURNs", ctx, sampleTenant, []string{resourceUrn.String()}).Return(nil, context.DeadlineExceeded)
-
-			err := rscService.CheckIsDeleted(ctx, jobWithUpstream)
-			assert.Error(t, err)
-		})
-
-		t.Run("return error on invalid tenant", func(t *testing.T) {
-			var (
-				repo               = newResourceRepository(t)
-				rscService         = service.NewResourceService(logger, repo, nil, nil, nil, nil)
-				resourceUrn        = job.ResourceURN("bigquery://project.dataset.sample-d")
-				upstreamUnresolved = job.NewUpstreamResolved("project.dataset.sample-d", "", resourceUrn, tenant.Tenant{}, job.UpstreamTypeStatic, "task-B", false)
-				upstreams          = []*job.Upstream{upstreamUnresolved}
-				jobWithUpstream    = []*job.WithUpstream{job.NewWithUpstream(jobB, upstreams)}
-			)
-			defer repo.AssertExpectations(t)
-
-			err := rscService.CheckIsDeleted(ctx, jobWithUpstream)
-			assert.Error(t, err)
 		})
 	})
 }
@@ -1444,11 +1348,11 @@ func (m *mockDownstreamRefresher) RefreshResourceDownstream(ctx context.Context,
 	return m.Called(ctx, resourceURNs, logWriter).Error(0)
 }
 
-type mockDependencyResolver struct {
+type mockDownstreamResolver struct {
 	mock.Mock
 }
 
-func (m *mockDependencyResolver) GetDownstreamByDestination(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error) {
+func (m *mockDownstreamResolver) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error) {
 	args := m.Called(ctx, tnnt, urn)
 	if args.Get(0) != nil {
 		return args.Get(0).(job.DownstreamList), args.Error(1)

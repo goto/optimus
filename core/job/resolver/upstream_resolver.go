@@ -42,10 +42,6 @@ type JobRepository interface {
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 }
 
-type ResourceResolver interface {
-	CheckIsDeleted(ctx context.Context, jobWithUpstreams []*job.WithUpstream) error
-}
-
 func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant.Tenant, incomingJobs []*job.Job, logWriter writer.LogWriter) error {
 	me := errors.NewMultiError("check static resolvable incomingJobs errors")
 	incomingJobNameMap := make(map[job.Name]*job.Job)

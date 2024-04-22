@@ -60,7 +60,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, actualError)
 
-			storedResource, err := repository.ReadByFullName(ctx, tnnt, store, "project.dataset")
+			storedResource, err := repository.ReadByFullName(ctx, tnnt, store, "project.dataset", true)
 			assert.NoError(t, err)
 			assert.EqualValues(t, resourceToCreate, storedResource)
 		})
@@ -94,7 +94,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.Update(ctx, resourceToUpdate)
 			assert.NoError(t, actualError)
 
-			storedResources, err := repository.ReadAll(ctx, tnnt, store)
+			storedResources, err := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NoError(t, err)
 			assert.Len(t, storedResources, 1)
 			assert.EqualValues(t, resourceToUpdate, storedResources[0])
@@ -146,7 +146,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
-			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, "project.dataset")
+			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, "project.dataset", true)
 			assert.Nil(t, actualResource)
 			assert.ErrorContains(t, actualError, "not found for entity resource")
 		})
@@ -162,7 +162,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)
 
-			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, fullName)
+			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, fullName, true)
 			assert.NotNil(t, actualResource)
 			assert.NoError(t, actualError)
 			assert.EqualValues(t, resourceToCreate, actualResource)
@@ -174,7 +174,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
-			actualResources, actualError := repository.ReadAll(ctx, tnnt, store)
+			actualResources, actualError := repository.ReadAll(ctx, tnnt, store, true)
 			assert.Empty(t, actualResources)
 			assert.NoError(t, actualError)
 		})
@@ -189,7 +189,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)
 
-			actualResources, actualError := repository.ReadAll(ctx, tnnt, store)
+			actualResources, actualError := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NotEmpty(t, actualResources)
 			assert.NoError(t, actualError)
 			assert.EqualValues(t, []*serviceResource.Resource{resourceToCreate}, actualResources)
@@ -247,7 +247,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.Error(t, actualError)
 			assert.ErrorContains(t, actualError, "error updating status for project.dataset2")
 
-			storedResources, err := repository.ReadAll(ctx, tnnt, store)
+			storedResources, err := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NoError(t, err)
 			assert.Len(t, storedResources, 1)
 			assert.EqualValues(t, serviceResource.StatusSuccess, storedResources[0].Status())
@@ -283,7 +283,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.UpdateStatus(ctx, resourcesToUpdate...)
 			assert.NoError(t, actualError)
 
-			storedResources, err := repository.ReadAll(ctx, tnnt, store)
+			storedResources, err := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NoError(t, err)
 			assert.Len(t, storedResources, 2)
 			assert.EqualValues(t, existingResource1.Spec(), storedResources[0].Spec())
@@ -322,7 +322,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.Delete(ctx, resourceToDelete)
 			assert.NoError(t, actualError)
 
-			storedResources, err := repository.ReadByFullName(ctx, tnnt, store, resourceToDelete.FullName())
+			storedResources, err := repository.ReadByFullName(ctx, tnnt, store, resourceToDelete.FullName(), true)
 			assert.NoError(t, err)
 			assert.NotNil(t, storedResources)
 			assert.True(t, storedResources.IsDeleted())

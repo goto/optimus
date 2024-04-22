@@ -1,12 +1,14 @@
 package job
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
@@ -194,6 +196,10 @@ func (v *validateCommand) executeServerValidation(namespace *config.Namespace) e
 }
 
 func (v *validateCommand) processResponse(response *pb.ValidateResponse) error {
+	if response == nil {
+		return nil
+	}
+
 	if v.verbose {
 		return v.printCompleteResponse(response)
 	}
@@ -240,21 +246,31 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 
 	var successJobsCount int
 	for jobName, rawResult := range resultsByJobName {
+		v.logger.Info("[%s]", jobName)
+
+		buff := bytes.NewBuffer(nil)
+		table := tablewriter.NewWriter(buff)
+		table.SetAutoMergeCellsByColumnIndex([]int{0})
+		table.SetRowLine(true)
+		table.SetHeader([]string{
+			"Name",
+			"Success",
+			"Messages",
+		})
+
 		var successResultCount int
 
-		v.logger.Info("[%s]", jobName)
 		result := rawResult.GetResults()
 		for _, r := range result {
-			v.logger.Info("  %s", r.GetName())
 			if r.Success {
 				successResultCount++
 
 				for _, m := range r.GetMessages() {
-					v.logger.Info("    %s", m)
+					table.Append([]string{r.GetName(), "TRUE", m})
 				}
 			} else {
 				for _, m := range r.GetMessages() {
-					v.logger.Error("    %s", m)
+					table.Append([]string{r.GetName(), "FALSE", m})
 				}
 			}
 		}
@@ -262,6 +278,9 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 		if successResultCount == len(result) {
 			successJobsCount++
 		}
+
+		table.Render()
+		v.logger.Info(buff.String())
 
 		v.logger.Info("[%s] pass %d of %d validations", jobName, successResultCount, len(result))
 	}

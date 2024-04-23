@@ -92,7 +92,7 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	v.logger.Info("Validating job specifications for project [%s]", v.clientConfig.Project.Name)
+	v.logger.Info("Validating job specifications for namespace [%s]", v.namespaceName)
 	start := time.Now()
 
 	if err := v.executeLocalValidation(); err != nil {
@@ -252,11 +252,8 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 		table := tablewriter.NewWriter(buff)
 		table.SetAutoMergeCellsByColumnIndex([]int{0})
 		table.SetRowLine(true)
-		table.SetHeader([]string{
-			"Name",
-			"Success",
-			"Messages",
-		})
+
+		table.SetHeader([]string{"NAME", "SUCCESS", "MESSAGE"})
 
 		var successResultCount int
 
@@ -280,9 +277,15 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 		}
 
 		table.Render()
-		v.logger.Info(buff.String())
 
-		v.logger.Info("[%s] pass %d of %d validations", jobName, successResultCount, len(result))
+		tableStr := buff.String()
+		if len(tableStr) > 0 {
+			v.logger.Info(tableStr[:len(tableStr)-1])
+		} else {
+			v.logger.Info(tableStr)
+		}
+
+		v.logger.Info("[%s] pass %d of %d validations\n\n", jobName, successResultCount, len(result))
 	}
 
 	if successJobsCount != len(resultsByJobName) {

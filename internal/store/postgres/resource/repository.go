@@ -70,7 +70,7 @@ func (r Repository) Delete(ctx context.Context, resourceModel *resource.Resource
 }
 
 func (r Repository) ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error {
-	existingResource, err := r.ReadByFullName(ctx, newTenant, res.Store(), res.FullName(), false)
+	resourceInDestinationNamespace, err := r.ReadByFullName(ctx, newTenant, res.Store(), res.FullName(), false)
 	if err != nil && !errors.IsErrorType(err, errors.ErrNotFound) {
 		return err
 	}
@@ -80,8 +80,7 @@ func (r Repository) ChangeNamespace(ctx context.Context, res *resource.Resource,
 		return errors.Wrap(resource.EntityResource, "error begin db transaction", err)
 	}
 
-	err = r.hardDelete(ctx, tx, existingResource)
-	if err != nil {
+	if err = r.hardDelete(ctx, tx, resourceInDestinationNamespace); err != nil {
 		_ = tx.Rollback(ctx)
 		return err
 	}
@@ -113,7 +112,7 @@ func (Repository) hardDelete(ctx context.Context, tx pgx.Tx, res *resource.Resou
        WHERE project_name = $1 AND namespace_name = $2 AND store = $3 AND full_name = $4 AND status = $5`
 	args := []any{res.Tenant().ProjectName(), res.Tenant().NamespaceName(), res.Store(), res.Name(), resource.StatusDeleted}
 	_, err := tx.Exec(ctx, deleteResourceQuery, args...)
-	return errors.WrapIfErr(resource.EntityResource, "failed exec delete", err)
+	return errors.WrapIfErr(resource.EntityResource, "failed do hard delete", err)
 }
 
 func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error) {

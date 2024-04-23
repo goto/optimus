@@ -2813,128 +2813,155 @@ func TestJobService(t *testing.T) {
 	})
 
 	t.Run("Validate", func(t *testing.T) {
-		t.Run("validate request", func(t *testing.T) {
-			t.Run("returns nil and error if job names length is more than zero while job specs length is also more than zero", func(t *testing.T) {
-				tenantDetailsGetter := new(TenantDetailsGetter)
-				defer tenantDetailsGetter.AssertExpectations(t)
-
-				jobRunInputCompiler := NewJobRunInputCompiler(t)
-				resourceExistenceChecker := NewResourceExistenceChecker(t)
-
-				jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
-
-				request := dto.ValidateRequest{
-					Tenant:       sampleTenant,
-					JobSpecs:     []*job.Spec{{}, {}},
-					JobNames:     []string{"", ""},
-					DeletionMode: false,
-				}
-
-				actualResult, actualError := jobService.Validate(ctx, request)
-
-				assert.Nil(t, actualResult)
-				assert.ErrorContains(t, actualError, "job names and specs can not be specified together")
-			})
-
-			t.Run("returns nil and error if job names and job specs are both empty", func(t *testing.T) {
-				tenantDetailsGetter := new(TenantDetailsGetter)
-				defer tenantDetailsGetter.AssertExpectations(t)
-
-				jobRunInputCompiler := NewJobRunInputCompiler(t)
-				resourceExistenceChecker := NewResourceExistenceChecker(t)
-
-				jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
-
-				request := dto.ValidateRequest{
-					Tenant:       sampleTenant,
-					JobSpecs:     nil,
-					JobNames:     nil,
-					DeletionMode: false,
-				}
-
-				actualResult, actualError := jobService.Validate(ctx, request)
-
-				assert.Nil(t, actualResult)
-				assert.ErrorContains(t, actualError, "job names and job specs are both empty")
-			})
-
-			t.Run("returns nil and error if job names length is more than zero while job specs length is also more than zero", func(t *testing.T) {
-				tenantDetailsGetter := new(TenantDetailsGetter)
-				defer tenantDetailsGetter.AssertExpectations(t)
-
-				jobRunInputCompiler := NewJobRunInputCompiler(t)
-				resourceExistenceChecker := NewResourceExistenceChecker(t)
-
-				jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
-
-				request := dto.ValidateRequest{
-					Tenant:       sampleTenant,
-					JobSpecs:     []*job.Spec{{}, {}},
-					JobNames:     nil,
-					DeletionMode: true,
-				}
-
-				actualResult, actualError := jobService.Validate(ctx, request)
-
-				assert.Nil(t, actualResult)
-				assert.ErrorContains(t, actualError, "deletion job only accepts job names")
-			})
-		})
-
-		t.Run("validate duplication", func(t *testing.T) {
-			t.Run("returns nil and error if job names are duplicated", func(t *testing.T) {
-				tenantDetailsGetter := new(TenantDetailsGetter)
-				defer tenantDetailsGetter.AssertExpectations(t)
-
-				jobRunInputCompiler := NewJobRunInputCompiler(t)
-				resourceExistenceChecker := NewResourceExistenceChecker(t)
-
-				jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
-
-				request := dto.ValidateRequest{
-					Tenant:       sampleTenant,
-					JobSpecs:     nil,
-					JobNames:     []string{"job1", "job2", "job1"},
-					DeletionMode: false,
-				}
-
-				actualResult, actualError := jobService.Validate(ctx, request)
-
-				assert.Nil(t, actualResult)
-				assert.ErrorContains(t, actualError, "the following jobs are duplicated: [job1]")
-			})
-
-			t.Run("returns nil and error if job specs are duplicated based on name", func(t *testing.T) {
-				tenantDetailsGetter := new(TenantDetailsGetter)
-				defer tenantDetailsGetter.AssertExpectations(t)
-
-				jobRunInputCompiler := NewJobRunInputCompiler(t)
-				resourceExistenceChecker := NewResourceExistenceChecker(t)
-
-				jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
-
-				jobSpec1, err := job.NewSpecBuilder(1, "job1", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
-				assert.NoError(t, err)
-				jobSpec2, err := job.NewSpecBuilder(1, "job2", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
-				assert.NoError(t, err)
-				jobSpec3, err := job.NewSpecBuilder(1, "job1", "optimus@goto", jobSchedule, jobWindow, jobTask).Build() // intentional duplication
-				assert.NoError(t, err)
-
-				request := dto.ValidateRequest{
-					Tenant:       sampleTenant,
-					JobSpecs:     []*job.Spec{jobSpec1, jobSpec2, jobSpec3},
-					JobNames:     nil,
-					DeletionMode: false,
-				}
-
-				actualResult, actualError := jobService.Validate(ctx, request)
-
-				assert.Nil(t, actualResult)
-				assert.ErrorContains(t, actualError, "the following jobs are duplicated: [job1]")
-			})
-		})
-
 		t.Run("job preparation", func(t *testing.T) {
+			t.Run("validate request", func(t *testing.T) {
+				t.Run("returns nil and error if job names length is more than zero while job specs length is also more than zero", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     []*job.Spec{{}, {}},
+						JobNames:     []string{"", ""},
+						DeletionMode: false,
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.Nil(t, actualResult)
+					assert.ErrorContains(t, actualError, "job names and specs can not be specified together")
+				})
+
+				t.Run("returns nil and error if job names and job specs are both empty", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     nil,
+						JobNames:     nil,
+						DeletionMode: false,
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.Nil(t, actualResult)
+					assert.ErrorContains(t, actualError, "job names and job specs are both empty")
+				})
+
+				t.Run("returns nil and error if using deletion mode while job names length is zero", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     []*job.Spec{{}, {}},
+						JobNames:     nil,
+						DeletionMode: true,
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.Nil(t, actualResult)
+					assert.ErrorContains(t, actualError, "deletion job only accepts job names")
+				})
+			})
+
+			t.Run("validate duplication", func(t *testing.T) {
+				t.Run("returns nil and error if job names are duplicated", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     nil,
+						JobNames:     []string{"job1", "job2", "job1"},
+						DeletionMode: false,
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.Nil(t, actualResult)
+					assert.ErrorContains(t, actualError, "the following jobs are duplicated: [job1]")
+				})
+
+				t.Run("returns nil and error if job specs are duplicated based on name", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(nil, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+					jobSpec1, err := job.NewSpecBuilder(1, "job1", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+					assert.NoError(t, err)
+					jobSpec2, err := job.NewSpecBuilder(1, "job2", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+					assert.NoError(t, err)
+					jobSpec3, err := job.NewSpecBuilder(1, "job1", "optimus@goto", jobSchedule, jobWindow, jobTask).Build() // intentional duplication
+					assert.NoError(t, err)
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     []*job.Spec{jobSpec1, jobSpec2, jobSpec3},
+						JobNames:     nil,
+						DeletionMode: false,
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.Nil(t, actualResult)
+					assert.ErrorContains(t, actualError, "the following jobs are duplicated: [job1]")
+				})
+			})
+
+			t.Run("returns result and nil if error when getting tenant details", func(t *testing.T) {
+				tenantDetailsGetter := new(TenantDetailsGetter)
+				defer tenantDetailsGetter.AssertExpectations(t)
+
+				jobRepo := new(JobRepository)
+				defer jobRepo.AssertExpectations(t)
+
+				jobRunInputCompiler := NewJobRunInputCompiler(t)
+				resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+				jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+				tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(nil, errors.New("unexpected error in tenant"))
+
+				request := dto.ValidateRequest{
+					Tenant:       sampleTenant,
+					JobSpecs:     nil,
+					JobNames:     []string{"job1", "job2"},
+					DeletionMode: false,
+				}
+
+				actualResult, actualError := jobService.Validate(ctx, request)
+
+				assert.Nil(t, actualResult)
+				assert.ErrorContains(t, actualError, "unexpected error in tenant")
+			})
+
 			t.Run("returns nil and error if one or more of job names are invalid", func(t *testing.T) {
 				tenantDetailsGetter := new(TenantDetailsGetter)
 				defer tenantDetailsGetter.AssertExpectations(t)
@@ -2951,6 +2978,8 @@ func TestJobService(t *testing.T) {
 					DeletionMode: false,
 				}
 
+				tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
 				actualResult, actualError := jobService.Validate(ctx, request)
 
 				assert.Nil(t, actualResult)
@@ -2964,8 +2993,6 @@ func TestJobService(t *testing.T) {
 				jobRepo := new(JobRepository)
 				defer jobRepo.AssertExpectations(t)
 
-				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("job1")).Return(nil, errors.New("unknown repository error"))
-
 				jobRunInputCompiler := NewJobRunInputCompiler(t)
 				resourceExistenceChecker := NewResourceExistenceChecker(t)
 
@@ -2978,14 +3005,16 @@ func TestJobService(t *testing.T) {
 					DeletionMode: false,
 				}
 
+				tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("job1")).Return(nil, errors.New("unknown repository error"))
+
 				actualResult, actualError := jobService.Validate(ctx, request)
 
 				assert.Nil(t, actualResult)
 				assert.ErrorContains(t, actualError, "unknown repository error")
 			})
-		})
 
-		t.Run("validate tenant", func(t *testing.T) {
 			t.Run("returns result and nil if one or more jobs do not have the same tenant as the root", func(t *testing.T) {
 				tenantDetailsGetter := new(TenantDetailsGetter)
 				defer tenantDetailsGetter.AssertExpectations(t)
@@ -3240,13 +3269,16 @@ func TestJobService(t *testing.T) {
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
 
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
 					downstreamRepo := new(DownstreamRepository)
 					defer downstreamRepo.AssertExpectations(t)
 
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+					jobService := service.NewJobService(jobRepo, nil, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
 
 					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
 					assert.NoError(t, err)
@@ -3259,9 +3291,21 @@ func TestJobService(t *testing.T) {
 					jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []lib.URN{resourceURNA}, false)
 					jobC := job.NewJob(sampleTenant, jobSpecC, resourceURNC, []lib.URN{resourceURNB}, false)
 
+					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+					upstreamC := job.NewUpstreamResolved(jobSpecC.Name(), "", resourceURNC, sampleTenant, "static", taskName, false)
+					jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{upstreamC})
+					upstreamA := job.NewUpstreamResolved(jobSpecA.Name(), "", resourceURNA, sampleTenant, "static", taskName, false)
+					jobCWithUpstream := job.NewWithUpstream(jobC, []*job.Upstream{upstreamA})
+
+					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB, jobC}, nil)
+
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobB")).Return(jobB, nil)
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobC")).Return(jobC, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream, jobCWithUpstream}, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -3276,21 +3320,21 @@ func TestJobService(t *testing.T) {
 						"jobA": {
 							{
 								Name:     "cyclic validation",
-								Messages: []string{"cyclic dependency is detected", "a cycle dependency encountered in the tree: \njobA\n└── jobC\n    └── jobB\n        └── jobA\n", "jobA", "jobB", "jobC", "jobA"},
+								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
 								Success:  false,
 							},
 						},
 						"jobB": {
 							{
 								Name:     "cyclic validation",
-								Messages: []string{"cyclic dependency is detected", "a cycle dependency encountered in the tree: \njobA\n└── jobC\n    └── jobB\n        └── jobA\n", "jobA", "jobB", "jobC", "jobA"},
+								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
 								Success:  false,
 							},
 						},
 						"jobC": {
 							{
 								Name:     "cyclic validation",
-								Messages: []string{"cyclic dependency is detected", "a cycle dependency encountered in the tree: \njobA\n└── jobC\n    └── jobB\n        └── jobA\n", "jobA", "jobB", "jobC", "jobA"},
+								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
 								Success:  false,
 							},
 						},
@@ -3306,53 +3350,15 @@ func TestJobService(t *testing.T) {
 			})
 
 			t.Run("validate jobs", func(t *testing.T) {
-				t.Run("returns nil and error if can not get tenant details", func(t *testing.T) {
-					tenantDetailsGetter := new(TenantDetailsGetter)
-					defer tenantDetailsGetter.AssertExpectations(t)
-
-					jobRepo := new(JobRepository)
-					defer jobRepo.AssertExpectations(t)
-
-					downstreamRepo := new(DownstreamRepository)
-					defer downstreamRepo.AssertExpectations(t)
-
-					jobRunInputCompiler := NewJobRunInputCompiler(t)
-					resourceExistenceChecker := NewResourceExistenceChecker(t)
-
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
-
-					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
-					assert.NoError(t, err)
-					jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
-					assert.NoError(t, err)
-
-					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []lib.URN{resourceURNC}, false)
-					jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []lib.URN{resourceURNA}, false)
-
-					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
-					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobB")).Return(jobB, nil)
-
-					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(nil, errors.New("unknown error"))
-
-					request := dto.ValidateRequest{
-						Tenant:       sampleTenant,
-						JobSpecs:     nil,
-						JobNames:     []string{"jobA", "jobB"},
-						DeletionMode: false,
-					}
-
-					actualResult, actualError := jobService.Validate(ctx, request)
-
-					assert.Nil(t, actualResult)
-					assert.ErrorContains(t, actualError, "unknown error")
-				})
-
 				t.Run("returns result and nil if error is encountered when generating destination urn", func(t *testing.T) {
 					tenantDetailsGetter := new(TenantDetailsGetter)
 					defer tenantDetailsGetter.AssertExpectations(t)
 
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
 
 					downstreamRepo := new(DownstreamRepository)
 					defer downstreamRepo.AssertExpectations(t)
@@ -3362,7 +3368,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo, pluginService, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+					jobService := service.NewJobService(jobRepo, nil, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
 
 					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 					assert.NoError(t, err)
@@ -3372,10 +3378,18 @@ func TestJobService(t *testing.T) {
 					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []lib.URN{resourceURNC}, false)
 					jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []lib.URN{resourceURNA}, false)
 
+					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+					jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
+
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobB")).Return(jobB, nil)
+					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
 
 					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), errors.New("unknown error")).Twice()
 
@@ -3434,26 +3448,26 @@ func TestJobService(t *testing.T) {
 						jobRunInputCompiler, resourceExistenceChecker,
 					)
 
-					presetWindow, err := window.NewPresetConfig("daily")
-					assert.NoError(t, err)
-
-					invalidJobTask := job.NewTask("", jobTaskConfig)
-
 					resourceURND, err := lib.ParseURN("bigquery://project:dataset.tableD")
 					assert.NoError(t, err)
 
-					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, presetWindow, jobTask).WithAsset(jobAsset).Build()
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 					assert.NoError(t, err)
-					jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobSchedule, jobWindow, invalidJobTask).WithAsset(jobAsset).Build()
+					jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 					assert.NoError(t, err)
+
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []lib.URN{resourceURNC}, false)
+					jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []lib.URN{resourceURNA}, false)
+
+					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+					jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
-					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil).Once()
-					pluginService.On("ConstructDestinationURN", ctx, invalidJobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil).Once()
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil)
 					sourcesToValidate := []lib.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
-					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil).Once()
-					pluginService.On("IdentifyUpstreams", ctx, invalidJobTask.Name().String(), mock.Anything, mock.Anything).Return(nil, errors.New("unexpected sources error")).Once()
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("unexpected compile error"))
 
@@ -3464,6 +3478,8 @@ func TestJobService(t *testing.T) {
 					assert.NoError(t, err)
 					deletedRsc := resource.FromExisting(rsc, resource.ReplaceStatus(resource.StatusDeleted))
 
+					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
+
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(deletedRsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(false, nil)
 
@@ -3472,6 +3488,9 @@ func TestJobService(t *testing.T) {
 
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURND).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURND).Return(true, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
 
 					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, errors.New("unexpected errors in upstream resolve")).Once()
 					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil).Once()
@@ -3501,12 +3520,9 @@ func TestJobService(t *testing.T) {
 								Success: false,
 							},
 							{
-								Name: "window validation",
-								Messages: []string{
-									"window preset [daily] is not found within project",
-									"not found for entity project: preset not found daily",
-								},
-								Success: false,
+								Name:     "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
 							},
 							{
 								Name: "run validation",
@@ -3533,8 +3549,10 @@ func TestJobService(t *testing.T) {
 							{
 								Name: "source validation",
 								Messages: []string{
-									"can not identify the resource sources of the job",
-									"unexpected sources error",
+									"bigquery://project:dataset.tableA: unexpected exist in store error",
+									"bigquery://project:dataset.tableB: resource does not exist in both db and store",
+									"bigquery://project:dataset.tableC: resource exists in db but not in store",
+									"bigquery://project:dataset.tableD: no issue",
 								},
 								Success: false,
 							},
@@ -3546,8 +3564,7 @@ func TestJobService(t *testing.T) {
 							{
 								Name: "run validation",
 								Messages: []string{
-									"can not get run config",
-									"invalid argument for entity jobRun: executor name is invalid",
+									"compiling [bq2bq] with type [task] failed with error: unexpected compile error",
 								},
 								Success: false,
 							},
@@ -3598,12 +3615,20 @@ func TestJobService(t *testing.T) {
 					jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 					assert.NoError(t, err)
 
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []lib.URN{resourceURNC}, false)
+					jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []lib.URN{resourceURNA}, false)
+
+					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+					jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
+
+					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
+
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
-					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil).Twice()
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(lib.ZeroURN(), nil)
 					sourcesToValidate := []lib.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
-					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil).Once()
-					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]lib.URN{}, nil).Once()
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -3619,10 +3644,13 @@ func TestJobService(t *testing.T) {
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
 
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
+
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURND).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURND).Return(true, nil)
 
-					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil).Twice()
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
 
 					request := dto.ValidateRequest{
 						Tenant:       sampleTenant,
@@ -3671,9 +3699,14 @@ func TestJobService(t *testing.T) {
 								Success:  true,
 							},
 							{
-								Name:     "source validation",
-								Messages: []string{},
-								Success:  true,
+								Name: "source validation",
+								Messages: []string{
+									"bigquery://project:dataset.tableA: no issue",
+									"bigquery://project:dataset.tableB: no issue",
+									"bigquery://project:dataset.tableC: no issue",
+									"bigquery://project:dataset.tableD: no issue",
+								},
+								Success: true,
 							},
 							{
 								Name:     "window validation",

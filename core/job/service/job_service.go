@@ -1179,13 +1179,13 @@ func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) 
 		return nil, err
 	}
 
-	jobsToValidate, err := j.getJobsToValidate(ctx, request)
+	tenantDetails, err := j.tenantDetailsGetter.GetDetails(ctx, request.Tenant)
 	if err != nil {
 		registerJobValidationMetric(request.Tenant, stage, false)
 		return nil, err
 	}
 
-	tenantDetails, err := j.tenantDetailsGetter.GetDetails(ctx, request.Tenant)
+	jobsToValidate, err := j.getJobsToValidate(ctx, tenantDetails, request)
 	if err != nil {
 		registerJobValidationMetric(request.Tenant, stage, false)
 		return nil, err
@@ -1201,7 +1201,7 @@ func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) 
 		return j.validateJobsForDeletion(ctx, request.Tenant, jobsToValidate), nil
 	}
 
-	if result, err := j.validateCyclic(request.Tenant, jobsToValidate); err != nil {
+	if result, err := j.validateCyclic(ctx, request.Tenant, jobsToValidate); err != nil {
 		return nil, err
 	} else if len(result) > 0 {
 		return result, nil
@@ -1253,23 +1253,12 @@ func (*JobService) validateDuplication(request dto.ValidateRequest) error {
 	return nil
 }
 
-func (j *JobService) getJobsToValidate(ctx context.Context, request dto.ValidateRequest) ([]*job.Job, error) {
-	var jobsToValidate []*job.Job
+func (j *JobService) getJobsToValidate(ctx context.Context, tenantDetails *tenant.WithDetails, request dto.ValidateRequest) ([]*job.Job, error) {
 	if len(request.JobNames) > 0 {
-		existingJobs, err := j.getJobByNames(ctx, request.Tenant, request.JobNames)
-		if err != nil {
-			return nil, err
-		}
-
-		jobsToValidate = existingJobs
-	} else {
-		jobsToValidate = make([]*job.Job, len(request.JobSpecs))
-		for i, spec := range request.JobSpecs {
-			jobsToValidate[i] = job.NewJob(request.Tenant, spec, lib.ZeroURN(), nil, false)
-		}
+		return j.getJobByNames(ctx, request.Tenant, request.JobNames)
 	}
 
-	return jobsToValidate, nil
+	return j.generateJobs(ctx, tenantDetails, request.JobSpecs, writer.NewSafeBufferedLogger())
 }
 
 func (j *JobService) getJobByNames(ctx context.Context, tnnt tenant.Tenant, jobNames []string) ([]*job.Job, error) {
@@ -1316,7 +1305,6 @@ func (j *JobService) validateOneJobForDeletion(
 	specByFullName map[job.FullName]*job.Spec,
 ) []dto.ValidateResult {
 	const stage = "deletion validation"
-	var logger writer.BufferedLogger
 
 	downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), make(map[job.FullName]bool))
 	if err != nil {
@@ -1335,7 +1323,7 @@ func (j *JobService) validateOneJobForDeletion(
 	}
 
 	me := errors.NewMultiError(stage)
-	safeToDelete := validateDeleteJob(jobTenant, downstreams, specByFullName, spec, &logger, me)
+	safeToDelete := validateDeleteJob(jobTenant, downstreams, specByFullName, spec, writer.NewSafeBufferedLogger(), me)
 
 	var messages []string
 	success := true
@@ -1436,30 +1424,42 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	return output
 }
 
-func (j *JobService) validateCyclic(tnnt tenant.Tenant, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+func (j *JobService) validateCyclic(ctx context.Context, tnnt tenant.Tenant, incomingJobs []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
 	const stage = "cyclic validation"
+
+	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, tnnt)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := j.upstreamResolver.CheckStaticResolvable(ctx, tnnt, incomingJobs, writer.NewSafeBufferedLogger()); err != nil {
+		return nil, err
+	}
+
+	jobsToValidate := j.getCombinedJobsToValidate(incomingJobs, existingJobs)
+
+	jobsWithUpstream, err := j.upstreamResolver.BulkResolve(ctx, tnnt.ProjectName(), jobsToValidate, writer.NewSafeBufferedLogger())
+	if err != nil {
+		return nil, err
+	}
 
 	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
 	// assumption, all job specs from input are also the job within same project
-	jobWithUpstreamPerJobName, err := j.getJobWithUpstreamPerJobName(jobsToValidate)
-	if err != nil {
-		registerJobValidationMetric(tnnt, stage, false)
-		return nil, err
-	}
+	jobWithUpstreamPerJobName := j.getJobWithUpstreamPerJobName(jobsWithUpstream)
 
 	output := make(map[job.Name][]dto.ValidateResult)
 
 	identifierToJobsMap := j.getIdentifierToJobsMap(jobWithUpstreamPerJobName)
-	for _, subjectJob := range jobsToValidate {
+	for _, subjectJob := range incomingJobs {
 		dagTree := j.buildDAGTree(subjectJob.Spec().Name(), jobWithUpstreamPerJobName, identifierToJobsMap)
 		cyclicNames, err := dagTree.ValidateCyclic()
 		if err != nil {
+			// TODO: update so that cyclic names can be more comprehensible
 			output[subjectJob.Spec().Name()] = []dto.ValidateResult{
 				{
 					Name: stage,
 					Messages: append([]string{
 						"cyclic dependency is detected",
-						err.Error(),
 					}, cyclicNames...),
 					Success: false,
 				},
@@ -1474,28 +1474,37 @@ func (j *JobService) validateCyclic(tnnt tenant.Tenant, jobsToValidate []*job.Jo
 	return output, nil
 }
 
-func (*JobService) getJobWithUpstreamPerJobName(jobsToValidate []*job.Job) (map[job.Name]*job.WithUpstream, error) {
-	me := errors.NewMultiError("get job with upstream per job name")
-
-	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
-	for _, jobToValidate := range jobsToValidate {
-		jobWithUpstream, err := jobToValidate.GetJobWithUnresolvedUpstream()
-		if err != nil {
-			me.Append(err)
-			continue
-		}
-
-		jobsToValidateMap[jobToValidate.Spec().Name()] = jobWithUpstream
+func (*JobService) getCombinedJobsToValidate(incoming, existing []*job.Job) []*job.Job {
+	uniqueJobs := make(map[job.Name]*job.Job)
+	for _, j := range existing {
+		uniqueJobs[j.Spec().Name()] = j
 	}
-	return jobsToValidateMap, me.ToErr()
+
+	for _, j := range incoming {
+		uniqueJobs[j.Spec().Name()] = j
+	}
+
+	var output []*job.Job
+	for _, j := range uniqueJobs {
+		output = append(output, j)
+	}
+
+	return output
+}
+
+func (*JobService) getJobWithUpstreamPerJobName(jobsWithUpstream []*job.WithUpstream) map[job.Name]*job.WithUpstream {
+	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
+	for _, jobWithUpstream := range jobsWithUpstream {
+		jobsToValidateMap[jobWithUpstream.Name()] = jobWithUpstream
+	}
+
+	return jobsToValidateMap
 }
 
 func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
 	const stage = "upstream validation"
 
-	var logger writer.BufferedLogger
-
-	if _, err := j.upstreamResolver.Resolve(ctx, subjectJob, &logger); err != nil {
+	if _, err := j.upstreamResolver.Resolve(ctx, subjectJob, writer.NewSafeBufferedLogger()); err != nil {
 		registerJobValidationMetric(subjectJob.Tenant(), stage, false)
 
 		return dto.ValidateResult{
@@ -1525,7 +1534,7 @@ func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant
 
 		return dto.ValidateResult{
 			Name:     stage,
-			Messages: []string{fmt.Sprintf("%s: no issue", destination.String())},
+			Messages: []string{"no issue"},
 			Success:  true,
 		}
 	}

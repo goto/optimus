@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
+	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -332,6 +334,25 @@ func (v *validateCommand) getRequestForJobSpecs(namespace *config.Namespace) (*p
 	jobSpecs, err := jobSpecReadWriter.ReadAll(namespace.Job.Path)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(v.jobNames) > 0 {
+		specByName := make(map[string]*model.JobSpec)
+		for _, spec := range jobSpecs {
+			specByName[spec.Name] = spec
+		}
+
+		var specsToValidate []*model.JobSpec
+		for _, name := range v.jobNames {
+			spec, ok := specByName[name]
+			if !ok {
+				return nil, fmt.Errorf("spec for job [%s] is not found in local namespace [%s]", name, v.namespaceName)
+			}
+
+			specsToValidate = append(specsToValidate, spec)
+		}
+
+		jobSpecs = specsToValidate
 	}
 
 	jobSpecsProto := make([]*pb.JobSpecification, len(jobSpecs))

@@ -361,7 +361,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceRepository := resource.NewRepository(s.dbPool)
 	backupRepository := resource.NewBackupRepository(s.dbPool)
 	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
-	resourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler)
+	resourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 
 	// Register datastore

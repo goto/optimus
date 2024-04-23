@@ -105,6 +105,9 @@ func findMissingResources(names []string, resources []*resource.Resource) []reso
 
 	resourcesMap := map[string]struct{}{}
 	for _, r := range resources {
+		if r.IsDeleted() {
+			continue
+		}
 		resourcesMap[r.FullName()] = struct{}{}
 	}
 

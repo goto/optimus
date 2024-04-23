@@ -165,7 +165,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceIdx := i % maxNumberOfResources
 			fullName := fullNames[resourceIdx]
 
-			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, serviceResource.Bigquery, fullName)
+			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, serviceResource.Bigquery, fullName, true)
 			assert.NotNil(b, actualResource)
 			assert.Equal(b, fullName, actualResource.FullName())
 			assert.NoError(b, actualError)
@@ -191,7 +191,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			actualResources, actualError := repository.ReadAll(ctx, tnnt, serviceResource.Bigquery)
+			actualResources, actualError := repository.ReadAll(ctx, tnnt, serviceResource.Bigquery, true)
 			assert.Len(b, actualResources, maxNumberOfResources)
 			assert.NoError(b, actualError)
 		}

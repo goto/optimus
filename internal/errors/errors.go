@@ -116,6 +116,15 @@ func NotFound(entity, msg string) *DomainError {
 	}
 }
 
+func FailedPrecondition(entity, msg string) *DomainError {
+	return &DomainError{
+		ErrorType:  ErrFailedPrecond,
+		Entity:     entity,
+		Message:    msg,
+		WrappedErr: nil,
+	}
+}
+
 func Is(err, target error) bool {
 	return errors.Is(err, target)
 }

@@ -1,6 +1,9 @@
 package writer
 
 import (
+	"errors"
+	"sync"
+
 	"github.com/goto/salt/log"
 
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -36,10 +39,30 @@ func (l *saltLogger) Write(level LogLevel, message string) error {
 
 type BufferedLogger struct {
 	Messages []*pb.Log
+
+	mtx *sync.Mutex
+}
+
+func NewSafeBufferedLogger() *BufferedLogger {
+	return &BufferedLogger{
+		Messages: nil,
+		mtx:      new(sync.Mutex),
+	}
 }
 
 // nolint: unparam
 func (b *BufferedLogger) Write(level LogLevel, message string) error {
+	if b == nil {
+		return errors.New("buffered logger is nil")
+	}
+
+	if b.mtx == nil {
+		b.mtx = new(sync.Mutex)
+	}
+
+	b.mtx.Lock()
 	b.Messages = append(b.Messages, newLogStatusProto(level, message))
+	b.mtx.Unlock()
+
 	return nil
 }

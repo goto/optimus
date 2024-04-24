@@ -1,10 +1,10 @@
 package job
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -94,7 +94,7 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	v.logger.Info("Validating job specifications for namespace [%s]", v.namespaceName)
+	v.logger.Info("Validating job specifications for namespace [%s]\n", v.namespaceName)
 	start := time.Now()
 
 	if err := v.executeLocalValidation(); err != nil {
@@ -250,9 +250,8 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 	for jobName, rawResult := range resultsByJobName {
 		v.logger.Info("[%s]", jobName)
 
-		buff := bytes.NewBuffer(nil)
-		table := tablewriter.NewWriter(buff)
-		table.SetAutoMergeCellsByColumnIndex([]int{0})
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetAutoMergeCellsByColumnIndex([]int{0, 1})
 		table.SetRowLine(true)
 
 		table.SetHeader([]string{"NAME", "SUCCESS", "MESSAGE"})
@@ -263,14 +262,10 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 		for _, r := range result {
 			if r.Success {
 				successResultCount++
+			}
 
-				for _, m := range r.GetMessages() {
-					table.Append([]string{r.GetName(), "TRUE", m})
-				}
-			} else {
-				for _, m := range r.GetMessages() {
-					table.Append([]string{r.GetName(), "FALSE", m})
-				}
+			for i := 0; i < len(r.Messages); i++ {
+				table.Append([]string{r.Name, strings.ToUpper(fmt.Sprintf("%t", r.Success)), r.Messages[i]})
 			}
 		}
 
@@ -278,16 +273,12 @@ func (v *validateCommand) printCompleteResponse(response *pb.ValidateResponse) e
 			successJobsCount++
 		}
 
+		table.SetFooter([]string{"", "", fmt.Sprintf("passed %d of %d validations", successResultCount, len(result))})
+		table.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
+
 		table.Render()
 
-		tableStr := buff.String()
-		if len(tableStr) > 0 {
-			v.logger.Info(tableStr[:len(tableStr)-1])
-		} else {
-			v.logger.Info(tableStr)
-		}
-
-		v.logger.Info("[%s] pass %d of %d validations\n\n", jobName, successResultCount, len(result))
+		v.logger.Info("\n")
 	}
 
 	if successJobsCount != len(resultsByJobName) {

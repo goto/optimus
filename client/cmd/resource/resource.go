@@ -19,5 +19,6 @@ func NewResourceCommand() *cobra.Command {
 	cmd.AddCommand(NewExportCommand())
 	cmd.AddCommand(NewChangeNamespaceCommand())
 	cmd.AddCommand(NewApplyCommand())
+	cmd.AddCommand(NewDeleteCommand())
 	return cmd
 }

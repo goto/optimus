@@ -53,6 +53,27 @@ func (r ResourceUpdated) Bytes() ([]byte, error) {
 	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_UPDATE)
 }
 
+type ResourceDeleted struct {
+	Event
+
+	Resource *resource.Resource
+}
+
+func NewResourceDeleteEvent(rsc *resource.Resource) (*ResourceDeleted, error) {
+	baseEvent, err := NewBaseEvent()
+	if err != nil {
+		return nil, err
+	}
+	return &ResourceDeleted{
+		Event:    baseEvent,
+		Resource: rsc,
+	}, nil
+}
+
+func (r ResourceDeleted) Bytes() ([]byte, error) {
+	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_DELETE)
+}
+
 func resourceEventToBytes(event Event, rsc *resource.Resource, eventType pbInt.OptimusChangeEvent_EventType) ([]byte, error) {
 	meta := rsc.Metadata()
 	if meta == nil {

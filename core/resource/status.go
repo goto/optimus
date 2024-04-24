@@ -1,6 +1,10 @@
 package resource
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/goto/optimus/core/tenant"
+)
 
 type Status string
 
@@ -43,13 +47,15 @@ func FromStringToStatus(status string) Status {
 		return StatusExistInStore
 	case StatusSuccess.String():
 		return StatusSuccess
+	case StatusDeleted.String():
+		return StatusDeleted
 	default:
 		return StatusUnknown
 	}
 }
 
 func StatusForToCreate(status Status) bool {
-	return status == StatusCreateFailure || status == StatusToCreate
+	return status == StatusCreateFailure || status == StatusToCreate || status == StatusDeleted
 }
 
 func StatusForToUpdate(status Status) bool {
@@ -57,6 +63,10 @@ func StatusForToUpdate(status Status) bool {
 		status == StatusToUpdate ||
 		status == StatusExistInStore ||
 		status == StatusUpdateFailure
+}
+
+func StatusForToDelete(status Status) bool {
+	return status == StatusSuccess || status == StatusExistInStore || status == StatusSkipped
 }
 
 func StatusIsSuccess(status Status) bool {
@@ -67,3 +77,17 @@ type SyncResponse struct {
 	ResourceNames    []string
 	IgnoredResources []IgnoredResource
 }
+
+type (
+	DeleteRequest struct {
+		Tenant    tenant.Tenant
+		Datastore Store
+		FullName  string
+		Force     bool
+	}
+
+	DeleteResponse struct {
+		DownstreamJobs []string
+		Resource       *Resource
+	}
+)

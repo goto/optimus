@@ -527,6 +527,34 @@ func TestBigqueryStore(t *testing.T) {
 			err = bqStore.BatchUpdate(ctx, []*resource.Resource{updateDS})
 			assert.Nil(t, err)
 		})
+
+		t.Run("returns no error when successfully updates with delete resource", func(t *testing.T) {
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			dataset, err := resource.NewResource("project.dataset", bigquery.KindDataset, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+			deleteDS := resource.FromExisting(dataset, resource.ReplaceStatus(resource.StatusToDelete))
+
+			datasetHandle := new(mockTableResourceHandle)
+			defer datasetHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("DatasetHandleFrom", ds).Return(datasetHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", mock.Anything, "secret_value").Return(client, nil)
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			err = bqStore.BatchUpdate(ctx, []*resource.Resource{deleteDS})
+			assert.Nil(t, err)
+			assert.EqualValues(t, deleteDS.Status(), resource.StatusDeleted)
+		})
 	})
 	t.Run("Validate", func(t *testing.T) {
 		invalidSpec := map[string]any{

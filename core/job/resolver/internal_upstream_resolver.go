@@ -50,7 +50,8 @@ func (i internalUpstreamResolver) Resolve(ctx context.Context, jobWithUnresolved
 	}
 
 	distinctUpstreams := job.Upstreams(upstreamResults).Deduplicate()
-	return job.NewWithUpstream(jobWithUnresolvedUpstream.Job(), distinctUpstreams), me.ToErr()
+	jobWithMergedUpstream := job.NewWithUpstream(jobWithUnresolvedUpstream.Job(), distinctUpstreams)
+	return jobWithMergedUpstream, me.ToErr()
 }
 
 func (i internalUpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobsWithUnresolvedUpstream []*job.WithUpstream) ([]*job.WithUpstream, error) {

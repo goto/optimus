@@ -11,6 +11,7 @@ import (
 
 	serviceResource "github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib"
 	repoResource "github.com/goto/optimus/internal/store/postgres/resource"
 	tenantPostgres "github.com/goto/optimus/internal/store/postgres/tenant"
@@ -66,7 +67,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, actualError)
 
-			storedResource, err := repository.ReadByFullName(ctx, tnnt, store, "project.dataset")
+			storedResource, err := repository.ReadByFullName(ctx, tnnt, store, "project.dataset", true)
 			assert.NoError(t, err)
 			assert.EqualValues(t, resourceToCreate, storedResource)
 		})
@@ -100,7 +101,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.Update(ctx, resourceToUpdate)
 			assert.NoError(t, actualError)
 
-			storedResources, err := repository.ReadAll(ctx, tnnt, store)
+			storedResources, err := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NoError(t, err)
 			assert.Len(t, storedResources, 1)
 			assert.EqualValues(t, resourceToUpdate, storedResources[0])
@@ -145,6 +146,38 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Len(t, storedNewResources, 1)
 		})
+
+		t.Run("updates resource and delete soft-deleted resource", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			urn, err := lib.ParseURN("bigquery://project:dataset")
+			assert.NoError(t, err)
+
+			resourceExisting, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceExisting.UpdateURN(urn)
+
+			otherTnnt, err := tenant.NewTenant(tnnt.ProjectName().String(), "n-optimus-2")
+			assert.NoError(t, err)
+			resourceToChange, err := serviceResource.NewResource("project.dataset", kindDataset, store, otherTnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToChange.UpdateURN(urn)
+
+			assert.NoError(t, repository.Create(ctx, resourceExisting), "failed create resource")
+			assert.NoError(t, repository.Delete(ctx, resourceExisting), "failed delete resource")
+			assert.NoError(t, repository.Create(ctx, resourceToChange), "failed create resource to change")
+
+			actualError := repository.ChangeNamespace(ctx, resourceToChange, tnnt)
+			assert.NoError(t, actualError)
+
+			storedResources, err := repository.GetResources(ctx, tnnt, store, []string{resourceToChange.FullName()})
+			assert.NoError(t, err)
+			assert.Len(t, storedResources, 1)
+			storedNewResources, err := repository.GetResources(ctx, otherTnnt, store, []string{resourceToChange.FullName()})
+			assert.NoError(t, err)
+			assert.Len(t, storedNewResources, 0)
+		})
 	})
 
 	t.Run("ReadByFullName", func(t *testing.T) {
@@ -152,7 +185,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
-			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, "project.dataset")
+			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, "project.dataset", true)
 			assert.Nil(t, actualResource)
 			assert.ErrorContains(t, actualError, "not found for entity resource")
 		})
@@ -168,7 +201,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)
 
-			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, fullName)
+			actualResource, actualError := repository.ReadByFullName(ctx, tnnt, store, fullName, true)
 			assert.NotNil(t, actualResource)
 			assert.NoError(t, actualError)
 			assert.EqualValues(t, resourceToCreate, actualResource)
@@ -180,7 +213,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
-			actualResources, actualError := repository.ReadAll(ctx, tnnt, store)
+			actualResources, actualError := repository.ReadAll(ctx, tnnt, store, true)
 			assert.Empty(t, actualResources)
 			assert.NoError(t, actualError)
 		})
@@ -195,7 +228,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)
 
-			actualResources, actualError := repository.ReadAll(ctx, tnnt, store)
+			actualResources, actualError := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NotEmpty(t, actualResources)
 			assert.NoError(t, actualError)
 			assert.EqualValues(t, []*serviceResource.Resource{resourceToCreate}, actualResources)
@@ -257,7 +290,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.Error(t, actualError)
 			assert.ErrorContains(t, actualError, "error updating status for project.dataset2")
 
-			storedResources, err := repository.ReadAll(ctx, tnnt, store)
+			storedResources, err := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NoError(t, err)
 			assert.Len(t, storedResources, 1)
 			assert.EqualValues(t, serviceResource.StatusSuccess, storedResources[0].Status())
@@ -297,13 +330,52 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.UpdateStatus(ctx, resourcesToUpdate...)
 			assert.NoError(t, actualError)
 
-			storedResources, err := repository.ReadAll(ctx, tnnt, store)
+			storedResources, err := repository.ReadAll(ctx, tnnt, store, true)
 			assert.NoError(t, err)
 			assert.Len(t, storedResources, 2)
 			assert.EqualValues(t, existingResource1.Spec(), storedResources[0].Spec())
 			assert.EqualValues(t, serviceResource.StatusSuccess, storedResources[0].Status())
 			assert.EqualValues(t, existingResource2.Spec(), storedResources[1].Spec())
 			assert.EqualValues(t, serviceResource.StatusSuccess, storedResources[1].Status())
+		})
+	})
+
+	t.Run("Delete", func(t *testing.T) {
+		t.Run("returns error if resource does not exist", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToDelete, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			_ = resourceToDelete.MarkToDelete()
+
+			actualError := repository.Delete(ctx, resourceToDelete)
+			assert.ErrorContains(t, actualError, "not found for entity resource")
+		})
+
+		t.Run("delete resource and returns error on deleted resource", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			urn, err := lib.ParseURN("bigquery://project:dataset")
+			assert.NoError(t, err)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			resourceToCreate.UpdateURN(urn)
+
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			resourceToDelete := serviceResource.FromExisting(resourceToCreate, serviceResource.ReplaceStatus(serviceResource.StatusSuccess))
+			_ = resourceToDelete.MarkToDelete()
+			actualError := repository.Delete(ctx, resourceToDelete)
+			assert.NoError(t, actualError)
+
+			storedResources, err := repository.ReadByFullName(ctx, tnnt, store, resourceToDelete.FullName(), true)
+			assert.Error(t, err)
+			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
+			assert.Nil(t, storedResources)
 		})
 	})
 }

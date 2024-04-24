@@ -169,6 +169,8 @@ func (r *Resource) Equal(incoming *Resource) bool {
 	return reflect.DeepEqual(r.metadata, incoming.metadata)
 }
 
+func (r *Resource) IsDeleted() bool { return r.status == StatusDeleted }
+
 type FromExistingOpt func(r *Resource)
 
 func ReplaceStatus(status Status) FromExistingOpt {

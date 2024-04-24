@@ -354,7 +354,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceRepository := resource.NewRepository(s.dbPool)
 	backupRepository := resource.NewBackupRepository(s.dbPool)
 	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
-	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler) // note: job service can be nil
+	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil) // note: job service can be nil
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
@@ -369,7 +369,7 @@ func (s *OptimusServer) setupHandlers() error {
 	)
 
 	// Resource Bounded Context
-	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler)
+	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 
 	// Register datastore

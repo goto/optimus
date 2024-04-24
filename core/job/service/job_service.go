@@ -1446,15 +1446,20 @@ func (j *JobService) validateCyclic(ctx context.Context, tnnt tenant.Tenant, inc
 	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
 	// assumption, all job specs from input are also the job within same project
 	jobWithUpstreamPerJobName := j.getJobWithUpstreamPerJobName(jobsWithUpstream)
+	identifierToJobsMap := j.getIdentifierToJobsMap(jobWithUpstreamPerJobName)
 
 	output := make(map[job.Name][]dto.ValidateResult)
 
-	identifierToJobsMap := j.getIdentifierToJobsMap(jobWithUpstreamPerJobName)
+	isJobNameCyclic := make(map[string]bool)
 	for _, subjectJob := range incomingJobs {
 		dagTree := j.buildDAGTree(subjectJob.Spec().Name(), jobWithUpstreamPerJobName, identifierToJobsMap)
 		cyclicNames, err := dagTree.ValidateCyclic()
-		if err != nil {
-			// TODO: update so that cyclic names can be more comprehensible
+
+		for _, name := range cyclicNames {
+			isJobNameCyclic[name] = true
+		}
+
+		if err != nil && isJobNameCyclic[subjectJob.GetName()] {
 			output[subjectJob.Spec().Name()] = []dto.ValidateResult{
 				{
 					Name: stage,

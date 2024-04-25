@@ -62,6 +62,7 @@ func (j *Job) GetName() string {
 func (j *Job) URN() string {
 	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, j.tenant.ProjectName(), j.tenant.ProjectName(), j.tenant.NamespaceName(), j.GetName())
 }
+
 func GetURN(jobName Name, tnnt tenant.Tenant) string {
 	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, tnnt.ProjectName(), tnnt.ProjectName(), tnnt.NamespaceName(), jobName.String())
 }

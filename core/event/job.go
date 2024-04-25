@@ -59,9 +59,10 @@ type JobDeleted struct {
 
 	JobName   job.Name
 	JobTenant tenant.Tenant
+	JobURN    string
 }
 
-func NewJobDeleteEvent(tnnt tenant.Tenant, jobName job.Name) (*JobDeleted, error) {
+func NewJobDeleteEvent(tnnt tenant.Tenant, jobName job.Name, jobURN string) (*JobDeleted, error) {
 	baseEvent, err := NewBaseEvent()
 	if err != nil {
 		return nil, err
@@ -70,6 +71,7 @@ func NewJobDeleteEvent(tnnt tenant.Tenant, jobName job.Name) (*JobDeleted, error
 		Event:     baseEvent,
 		JobName:   jobName,
 		JobTenant: tnnt,
+		JobURN:    jobURN,
 	}, nil
 }
 
@@ -81,10 +83,11 @@ func (j *JobDeleted) Bytes() ([]byte, error) {
 		ProjectName:   j.JobTenant.ProjectName().String(),
 		NamespaceName: j.JobTenant.NamespaceName().String(),
 		EventType:     pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_DELETE,
+		JobUrn:        j.JobURN,
 		Payload: &pbInt.OptimusChangeEvent_JobChange{
 			JobChange: &pbInt.JobChangePayload{
 				JobName:      j.JobName.String(),
-				ChangeImpact: pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_BEHAVIOUR,
+				ChangeImpact: pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_BEHAVIOUR,
 			},
 		},
 	}
@@ -97,9 +100,10 @@ type JobStateChange struct {
 	JobName   job.Name
 	JobTenant tenant.Tenant
 	State     job.State
+	JobURN    string
 }
 
-func NewJobStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) (*JobStateChange, error) {
+func NewJobStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State, jobURN string) (*JobStateChange, error) {
 	baseEvent, err := NewBaseEvent()
 	if err != nil {
 		return nil, err
@@ -109,6 +113,7 @@ func NewJobStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.Stat
 		JobName:   jobName,
 		JobTenant: tnnt,
 		State:     state,
+		JobURN:    jobURN,
 	}, nil
 }
 
@@ -127,6 +132,7 @@ func (j *JobStateChange) Bytes() ([]byte, error) {
 		ProjectName:   j.JobTenant.ProjectName().String(),
 		NamespaceName: j.JobTenant.NamespaceName().String(),
 		EventType:     pbInt.OptimusChangeEvent_EVENT_TYPE_JOB_STATE_CHANGE,
+		JobUrn:        j.JobURN,
 		Payload: &pbInt.OptimusChangeEvent_JobStateChange{
 			JobStateChange: &pbInt.JobStateChangePayload{
 				JobName: j.JobName.String(),
@@ -140,14 +146,14 @@ func (j *JobStateChange) Bytes() ([]byte, error) {
 func jobEventToBytes(event Event, j *job.Job, updateType job.UpdateImpact, eventType pbInt.OptimusChangeEvent_EventType) ([]byte, error) {
 	jobPb := v1beta1.ToJobProto(j)
 	occurredAt := timestamppb.New(event.OccurredAt)
-	var impact pbInt.JobChangePayload_ChangeImpact
+	var impact pbInt.ChangeImpact
 	switch updateType {
 	case job.UnspecifiedImpactChange:
-		impact = pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_UNSPECIFIED
+		impact = pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_UNSPECIFIED
 	case job.JobInternalImpact:
-		impact = pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_INTERNAL
+		impact = pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_INTERNAL
 	case job.JobBehaviourImpact:
-		impact = pbInt.JobChangePayload_CHANGE_IMPACT_TYPE_BEHAVIOUR
+		impact = pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_BEHAVIOUR
 	}
 	optEvent := &pbInt.OptimusChangeEvent{
 		EventId:       event.ID.String(),
@@ -155,6 +161,7 @@ func jobEventToBytes(event Event, j *job.Job, updateType job.UpdateImpact, event
 		ProjectName:   j.Tenant().ProjectName().String(),
 		NamespaceName: j.Tenant().NamespaceName().String(),
 		EventType:     eventType,
+		JobUrn:        j.URN(),
 		Payload: &pbInt.OptimusChangeEvent_JobChange{
 			JobChange: &pbInt.JobChangePayload{
 				JobName:      j.GetName(),

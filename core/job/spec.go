@@ -40,7 +40,7 @@ func (s *Spec) Version() int {
 }
 
 func (s *Spec) DiffBehaviorally(incoming *Spec) bool {
-	if !reflect.DeepEqual(s.schedule, incoming.schedule) {
+	if s.schedule.interval != incoming.schedule.interval {
 		return true
 	}
 	if !reflect.DeepEqual(s.windowConfig, incoming.windowConfig) {
@@ -49,13 +49,7 @@ func (s *Spec) DiffBehaviorally(incoming *Spec) bool {
 	if !reflect.DeepEqual(s.task, incoming.task) {
 		return true
 	}
-	if !reflect.DeepEqual(s.hooks, incoming.hooks) {
-		return true
-	}
 	if !reflect.DeepEqual(s.asset, incoming.asset) {
-		return true
-	}
-	if !reflect.DeepEqual(s.upstreamSpec, incoming.upstreamSpec) {
 		return true
 	}
 	return false

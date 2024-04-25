@@ -239,7 +239,7 @@ func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, j
 
 	raiseJobEventMetric(jobTenant, metricName, len(jobNames))
 	for _, jobName := range jobNames {
-		j.raiseStateChangeEvent(jobTenant, jobName, jobState)
+		j.raiseStateChangeEvent(jobTenant, jobName, jobState, job.GetURN(jobName, jobTenant))
 	}
 	return nil
 }
@@ -605,6 +605,10 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 		specs := job.Jobs(jobs).GetSpecs()
 		updatedJobs, err := j.bulkUpdate(ctx, tenantWithDetails, specs, logWriter)
 		me.Append(err)
+		for _, updatedJob := range updatedJobs {
+			// can this be avoided, as we may not want to raise an event on refresh
+			j.raiseUpdateEvent(updatedJob, job.JobInternalImpact)
+		}
 
 		j.logger.Debug("resolving upstreams for [%d] jobs of project [%s] namespace [%s]", len(updatedJobs), projectName, namespaceName)
 		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, projectName, updatedJobs, logWriter)
@@ -1215,8 +1219,8 @@ func (j *JobService) raiseUpdateEvent(job *job.Job, impactType job.UpdateImpact)
 	j.eventHandler.HandleEvent(jobEvent)
 }
 
-func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) {
-	jobEvent, err := event.NewJobStateChangeEvent(tnnt, jobName, state)
+func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State, jobUrn string) {
+	jobEvent, err := event.NewJobStateChangeEvent(tnnt, jobName, state, jobUrn)
 	if err != nil {
 		j.logger.Error("error creating event for job state change: %s", err)
 		return
@@ -1225,7 +1229,7 @@ func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name,
 }
 
 func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
-	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName)
+	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName, job.GetURN(jobName, tnnt))
 	if err != nil {
 		j.logger.Error("error creating event for job delete: %s", err)
 		return

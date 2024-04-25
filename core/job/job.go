@@ -33,6 +33,7 @@ const (
 	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
 	JobInternalImpact       UpdateImpact = "internal_impact"
 	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
+	urnContext                           = "optimus"
 )
 
 type Job struct {
@@ -56,6 +57,13 @@ func (j *Job) Spec() *Spec {
 
 func (j *Job) GetName() string {
 	return j.spec.name.String()
+}
+
+func (j *Job) URN() string {
+	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, j.tenant.ProjectName(), j.tenant.ProjectName(), j.tenant.NamespaceName(), j.GetName())
+}
+func GetURN(jobName Name, tnnt tenant.Tenant) string {
+	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, tnnt.ProjectName(), tnnt.ProjectName(), tnnt.NamespaceName(), jobName.String())
 }
 
 func (j *Job) FullName() string {

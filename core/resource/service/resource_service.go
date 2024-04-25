@@ -169,7 +169,7 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	rs.raiseUpdateEvent(incoming)
+	rs.raiseUpdateEvent(incoming, existing.GetUpdateImpact(incoming))
 
 	err = rs.handleRefreshDownstream(ctx,
 		[]*resource.Resource{incoming},
@@ -229,7 +229,7 @@ func (rs ResourceService) ChangeNamespace(ctx context.Context, datastore resourc
 		return err
 	}
 	resourceSpec.UpdateTenant(newTenant)
-	rs.raiseUpdateEvent(resourceSpec)
+	rs.raiseUpdateEvent(resourceSpec, resource.UnspecifiedImpactChange)
 	return nil
 }
 
@@ -339,7 +339,14 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 	}
 
 	for _, r := range toUpdate {
-		rs.raiseUpdateEvent(r)
+		var oldResource *resource.Resource
+		for _, existingResource := range existingResources {
+			if existingResource.Name() == r.Name() {
+				oldResource = existingResource
+				break
+			}
+		}
+		rs.raiseUpdateEvent(r, oldResource.GetUpdateImpact(r))
 	}
 
 	for _, r := range toDelete {
@@ -425,12 +432,12 @@ func (rs ResourceService) raiseCreateEvent(res *resource.Resource) { // nolint:g
 	rs.eventHandler.HandleEvent(ev)
 }
 
-func (rs ResourceService) raiseUpdateEvent(res *resource.Resource) { // nolint:gocritic
+func (rs ResourceService) raiseUpdateEvent(res *resource.Resource, impact resource.UpdateImpact) { // nolint:gocritic
 	if res.Status() != resource.StatusSuccess {
 		return
 	}
 
-	ev, err := event.NewResourceUpdatedEvent(res)
+	ev, err := event.NewResourceUpdatedEvent(res, impact)
 	if err != nil {
 		rs.logger.Error("error creating event for resource update: %s", err)
 		return

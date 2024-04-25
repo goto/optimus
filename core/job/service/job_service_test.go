@@ -555,6 +555,7 @@ func TestJobService(t *testing.T) {
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreamName, false)
 			jobs := []*job.Job{jobA}
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", "bigquery://project:dataset.tableB", sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
@@ -632,18 +633,26 @@ func TestJobService(t *testing.T) {
 
 			jobADestination := job.ResourceURN("bigquery://project:dataset.tableA")
 			jobBDestination := job.ResourceURN("bigquery://project:dataset.tableB")
+			jobCDestination := job.ResourceURN("bigquery://project:dataset.tableC")
 			var jobDestination job.ResourceURN
 			pluginService.On("ConstructDestinationURN", ctx, specB.Task().Name().String(), mock.Anything).Return(jobBDestination.String(), nil).Once()
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(jobADestination.String(), nil).Once()
 			pluginService.On("ConstructDestinationURN", ctx, specC.Task().Name().String(), mock.Anything).Return(jobDestination.String(), errors.New("generate destination error")).Once()
 
 			jobAUpstreamName := []job.ResourceURN{"bigquery://project:dataset.tableB"}
+			jobBUpstreamName := []job.ResourceURN{"bigquery://project:dataset.tableC"}
+			jobCUpstreamName := []job.ResourceURN{"bigquery://project:dataset.tableD"}
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return([]string{}, errors.New("generate upstream error"))
 			pluginService.On("IdentifyUpstreams", ctx, specB.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString(jobAUpstreamName), nil)
 
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreamName, false)
+			jobB := job.NewJob(sampleTenant, specA, jobBDestination, jobBUpstreamName, false)
+			jobC := job.NewJob(sampleTenant, specA, jobCDestination, jobCUpstreamName, false)
 			jobs := []*job.Job{jobA}
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specB.Name()).Return(jobB, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specC.Name()).Return(jobC, nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", "bigquery://project:dataset.tableB", sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
@@ -679,11 +688,18 @@ func TestJobService(t *testing.T) {
 			tenantDetailsGetter := new(TenantDetailsGetter)
 			defer tenantDetailsGetter.AssertExpectations(t)
 
+			var jobADestination job.ResourceURN
+			jobBDestination := job.ResourceURN("bigquery://project:dataset.tableB")
+
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, []job.ResourceURN{jobBDestination}, false)
+			jobB := job.NewJob(sampleTenant, specA, jobBDestination, []job.ResourceURN{jobADestination}, false)
 			specs := []*job.Spec{specB, specA}
 
 			jobRepo.On("Update", ctx, mock.Anything).Return(nil, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specB.Name()).Return(jobB, nil)
 
 			upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -691,8 +707,6 @@ func TestJobService(t *testing.T) {
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
-			var jobADestination job.ResourceURN
-			jobBDestination := job.ResourceURN("bigquery://project:dataset.tableB")
 			pluginService.On("ConstructDestinationURN", ctx, specB.Task().Name().String(), mock.Anything).Return(jobBDestination.String(), nil).Once()
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(jobADestination.String(), errors.New("generate destination error")).Once()
 
@@ -736,6 +750,7 @@ func TestJobService(t *testing.T) {
 			jobs := []*job.Job{jobA}
 
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return("", nil)
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return([]string{}, nil)
@@ -791,9 +806,14 @@ func TestJobService(t *testing.T) {
 			jobSourcesA := []job.ResourceURN{"bigquery://project:dataset.tableB"}
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString(jobSourcesA), nil)
 
+			jobADestination := job.ResourceURN("bigquery://project:dataset.tableA")
+			jobAUpstreamName := []job.ResourceURN{"bigquery://project:dataset.tableB"}
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreamName, false)
 			jobB := job.NewJob(sampleTenant, specB, "", nil, false)
 			savedJobs := []*job.Job{jobB}
 			jobRepo.On("Update", ctx, mock.Anything).Return(savedJobs, errors.New("unable to save job A"), nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specB.Name()).Return(jobB, nil)
 
 			jobWithUpstreamB := job.NewWithUpstream(jobB, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), savedJobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamB}, nil, nil)
@@ -843,7 +863,11 @@ func TestJobService(t *testing.T) {
 			jobSourcesA := []job.ResourceURN{"bigquery://project:dataset.tableB"}
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobResourceURNsToString(jobSourcesA), nil)
 
+			jobADestination := job.ResourceURN("bigquery://project:dataset.tableA")
+			jobAUpstreamName := []job.ResourceURN{"bigquery://project:dataset.tableB"}
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreamName, false)
 			jobRepo.On("Update", ctx, mock.Anything).Return([]*job.Job{}, errors.New("unable to update job A"), errors.New("all jobs failed"))
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine())
 			err := jobService.Update(ctx, sampleTenant, specs)
@@ -887,6 +911,7 @@ func TestJobService(t *testing.T) {
 			jobA := job.NewJob(sampleTenant, specA, resourceA, jobSourcesA, false)
 			jobs := []*job.Job{jobA}
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 
 			jobWithUpstreamA := job.NewWithUpstream(jobA, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamA}, nil, nil)
@@ -940,6 +965,7 @@ func TestJobService(t *testing.T) {
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreamName, false)
 			jobs := []*job.Job{jobA}
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", "bigquery://project:dataset.tableB", sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})

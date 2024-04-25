@@ -13,7 +13,12 @@ import (
 const (
 	EntityResource       = "resource"
 	nameSectionSeparator = "."
+
+	UnspecifiedImpactChange    UpdateImpact = "unspecified_impact"
+	ResourceDataPipeLineImpact UpdateImpact = "data_impact"
 )
+
+type UpdateImpact string
 
 type Metadata struct {
 	Version     int32
@@ -63,6 +68,13 @@ type Resource struct {
 	metadata *Metadata
 
 	status Status
+}
+
+func (r *Resource) GetUpdateImpact(incoming *Resource) UpdateImpact {
+	if !reflect.DeepEqual(r.spec, incoming.spec) {
+		return ResourceDataPipeLineImpact
+	}
+	return UnspecifiedImpactChange
 }
 
 func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *Metadata, spec map[string]any) (*Resource, error) {

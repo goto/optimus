@@ -19,12 +19,17 @@ type CustomWindow struct {
 }
 
 func (w CustomWindow) GetInterval(ref time.Time) (interval.Interval, error) {
-	end, err := w.GetEnd(ref)
+	truncatedTime, err := w.alignToTimeUnit(ref)
 	if err != nil {
 		return interval.Interval{}, err
 	}
 
-	start := w.size.SubtractFrom(end)
+	tempEnd := truncatedTime
+	tempStart := w.size.SubtractFrom(tempEnd)
+
+	end := w.delay.SubtractFrom(tempEnd)
+	start := w.delay.SubtractFrom(tempStart)
+
 	return interval.NewInterval(start, end), nil
 }
 

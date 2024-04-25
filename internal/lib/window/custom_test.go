@@ -221,7 +221,7 @@ func TestCustomWindow(t *testing.T) {
 					},
 					{
 						ref:   time.Date(2023, time.January, 13, 0, 0, 0, 0, time.UTC),
-						start: time.Date(2022, time.September, 29, 0, 0, 0, 0, time.UTC),
+						start: time.Date(2022, time.September, 28, 0, 0, 0, 0, time.UTC),
 						end:   time.Date(2022, time.December, 29, 0, 0, 0, 0, time.UTC),
 					},
 				},

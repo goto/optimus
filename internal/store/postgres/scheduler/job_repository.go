@@ -123,7 +123,7 @@ type Job struct {
 }
 type Window struct {
 	WindowSize       string `json:",omitempty"`
-	WindowDelay      string `json:",omitempty"`
+	WindowShiftBy    string `json:",omitempty"`
 	WindowTruncateTo string `json:",omitempty"`
 	WindowLocation   string `json:",omitempty"`
 	WindowOffset     string `json:",omitempty"`
@@ -148,7 +148,7 @@ func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 	if jobVersion == window.NewWindowVersion {
 		sc := window.SimpleConfig{
 			Size:       storageWindow.WindowSize,
-			Delay:      storageWindow.WindowDelay,
+			ShiftBy:    storageWindow.WindowShiftBy,
 			Location:   storageWindow.WindowLocation,
 			TruncateTo: storageWindow.WindowTruncateTo,
 		}

@@ -52,7 +52,7 @@ func (p Preset) Equal(incoming Preset) bool {
 	return true
 }
 
-func NewPreset(name, description, size, delay, location, truncateTo string) (Preset, error) {
+func NewPreset(name, description, size, shiftBy, location, truncateTo string) (Preset, error) {
 	if name == "" {
 		return Preset{}, errors.InvalidArgument(EntityProject, "name is empty")
 	}
@@ -61,7 +61,7 @@ func NewPreset(name, description, size, delay, location, truncateTo string) (Pre
 		return Preset{}, errors.InvalidArgument(EntityProject, "description is empty")
 	}
 
-	config, err := window.NewSimpleConfig(size, delay, location, truncateTo)
+	config, err := window.NewSimpleConfig(size, shiftBy, location, truncateTo)
 	if err != nil {
 		return Preset{}, err
 	}

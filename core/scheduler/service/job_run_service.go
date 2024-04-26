@@ -224,7 +224,7 @@ func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobW
 			config = windowConfig.GetSimpleConfig()
 		}
 
-		config.Delay = ""
+		config.ShiftBy = ""
 		config.TruncateTo = string(duration.None)
 
 		cw, err := window.FromCustomConfig(config)

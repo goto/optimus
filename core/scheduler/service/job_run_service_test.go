@@ -1407,7 +1407,7 @@ func TestJobRunService(t *testing.T) {
 
 			projectGetter.On("Get", ctx, projName).Return(project, nil)
 
-			windowConfig, err := window.NewConfig(preset.Config().Size, preset.Config().Delay, preset.Config().Location, preset.Config().TruncateTo)
+			windowConfig, err := window.NewConfig(preset.Config().Size, preset.Config().ShiftBy, preset.Config().Location, preset.Config().TruncateTo)
 			assert.NotNil(t, windowConfig)
 			assert.NoError(t, err)
 

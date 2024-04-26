@@ -11,8 +11,8 @@ import (
 var errNegativeSize = errors.InvalidArgument("window", "size can not be negative")
 
 type CustomWindow struct {
-	size  duration.Duration
-	delay duration.Duration
+	size    duration.Duration
+	shiftBy duration.Duration
 
 	timezone   *time.Location
 	truncateTo string // Instead of empty, let's use None for the unit. makes it easy to understand
@@ -27,8 +27,8 @@ func (w CustomWindow) GetInterval(ref time.Time) (interval.Interval, error) {
 	tempEnd := truncatedTime
 	tempStart := w.size.SubtractFrom(tempEnd)
 
-	end := w.delay.SubtractFrom(tempEnd)
-	start := w.delay.SubtractFrom(tempStart)
+	end := w.shiftBy.AddFrom(tempEnd)
+	start := w.shiftBy.AddFrom(tempStart)
 
 	return interval.NewInterval(start, end), nil
 }
@@ -38,7 +38,7 @@ func (w CustomWindow) GetEnd(ref time.Time) (time.Time, error) {
 	if err != nil {
 		return ref, err
 	}
-	return w.delay.SubtractFrom(truncatedTime), nil
+	return w.shiftBy.AddFrom(truncatedTime), nil
 }
 
 func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
@@ -82,10 +82,10 @@ func (w CustomWindow) alignToTimeUnit(ref time.Time) (time.Time, error) {
 }
 
 // TODO: this function is not used anywhere at the moment, consider removing it
-func NewCustomWindow(size, delay duration.Duration, location *time.Location, truncateTo string) CustomWindow {
+func NewCustomWindow(size, shiftBy duration.Duration, location *time.Location, truncateTo string) CustomWindow {
 	return CustomWindow{
 		size:       size,
-		delay:      delay,
+		shiftBy:    shiftBy,
 		timezone:   location,
 		truncateTo: truncateTo,
 	}
@@ -101,7 +101,7 @@ func FromCustomConfig(c SimpleConfig) (CustomWindow, error) {
 		return CustomWindow{}, errNegativeSize
 	}
 
-	delay, err := duration.From(c.Delay)
+	shiftBy, err := duration.From(c.ShiftBy)
 	if err != nil {
 		return CustomWindow{}, err
 	}
@@ -113,7 +113,7 @@ func FromCustomConfig(c SimpleConfig) (CustomWindow, error) {
 
 	return CustomWindow{
 		size:       size,
-		delay:      delay,
+		shiftBy:    shiftBy,
 		timezone:   loc,
 		truncateTo: c.TruncateTo,
 	}, nil

@@ -22,10 +22,18 @@ type Duration struct {
 	unit  Unit
 }
 
+func (d Duration) AddFrom(t time.Time) time.Time {
+	return addByCountUnit(t, d.count, d.unit)
+}
+
 func (d Duration) SubtractFrom(t time.Time) time.Time {
 	count := d.count * -1
 
-	switch d.unit {
+	return addByCountUnit(t, count, d.unit)
+}
+
+func addByCountUnit(t time.Time, count int, unit Unit) time.Time {
+	switch unit {
 	case None:
 		return t
 	case Hour:

@@ -179,61 +179,61 @@ func TestCustomWindow(t *testing.T) {
 				},
 			},
 			{
-				name:   "returns day interval with hour delay",
+				name:   "returns day interval with shift by hour",
 				window: window.NewCustomWindow(day, hour, time.UTC, ""),
 				values: []values{
 					{
 						ref:   refTimeIST,
-						start: time.Date(2023, time.November, 6, 22, 0, 0, 0, time.UTC),
-						end:   time.Date(2023, time.November, 9, 22, 0, 0, 0, time.UTC),
+						start: time.Date(2023, time.November, 7, 2, 0, 0, 0, time.UTC),
+						end:   time.Date(2023, time.November, 10, 2, 0, 0, 0, time.UTC),
 					},
 					{
 						ref:   time.Date(2023, time.November, 9, 0, 0, 0, 0, time.UTC),
-						start: time.Date(2023, time.November, 5, 22, 0, 0, 0, time.UTC),
-						end:   time.Date(2023, time.November, 8, 22, 0, 0, 0, time.UTC),
+						start: time.Date(2023, time.November, 6, 2, 0, 0, 0, time.UTC),
+						end:   time.Date(2023, time.November, 9, 2, 0, 0, 0, time.UTC),
 					},
 				},
 			},
 			{
-				name:   "returns week interval with days delay",
+				name:   "returns week interval with shift by day",
 				window: window.NewCustomWindow(week, day, time.UTC, ""),
 				values: []values{
 					{
 						ref:   refTimeIST,
-						start: time.Date(2023, time.October, 27, 0, 0, 0, 0, time.UTC),
-						end:   time.Date(2023, time.November, 3, 0, 0, 0, 0, time.UTC),
+						start: time.Date(2023, time.November, 2, 0, 0, 0, 0, time.UTC),
+						end:   time.Date(2023, time.November, 9, 0, 0, 0, 0, time.UTC),
 					},
 					{
 						ref:   time.Date(2023, time.November, 13, 0, 0, 0, 0, time.UTC),
-						start: time.Date(2023, time.November, 3, 0, 0, 0, 0, time.UTC),
-						end:   time.Date(2023, time.November, 10, 0, 0, 0, 0, time.UTC),
+						start: time.Date(2023, time.November, 9, 0, 0, 0, 0, time.UTC),
+						end:   time.Date(2023, time.November, 16, 0, 0, 0, 0, time.UTC),
 					},
 				},
 			},
 			{
-				name:   "returns month interval with days delay",
+				name:   "returns month interval with shift by day",
 				window: window.NewCustomWindow(month, day, time.UTC, ""),
 				values: []values{
 					{
 						ref:   refTimeIST,
-						start: time.Date(2023, time.July, 29, 0, 0, 0, 0, time.UTC),
-						end:   time.Date(2023, time.October, 29, 0, 0, 0, 0, time.UTC),
+						start: time.Date(2023, time.August, 4, 0, 0, 0, 0, time.UTC),
+						end:   time.Date(2023, time.November, 4, 0, 0, 0, 0, time.UTC),
 					},
 					{
 						ref:   time.Date(2023, time.January, 13, 0, 0, 0, 0, time.UTC),
-						start: time.Date(2022, time.September, 28, 0, 0, 0, 0, time.UTC),
-						end:   time.Date(2022, time.December, 29, 0, 0, 0, 0, time.UTC),
+						start: time.Date(2022, time.October, 4, 0, 0, 0, 0, time.UTC),
+						end:   time.Date(2023, time.January, 4, 0, 0, 0, 0, time.UTC),
 					},
 				},
 			},
 			{
-				name:   "returns days in month interval with days delay",
+				name:   "returns days in month interval with shift by day",
 				window: window.NewCustomWindow(duration.NewDuration(27, duration.Day), day, time.UTC, "M"),
 				values: []values{
 					{
 						ref:   refTimeIST,
-						start: time.Date(2023, time.October, 2, 0, 0, 0, 0, time.UTC),
-						end:   time.Date(2023, time.October, 29, 0, 0, 0, 0, time.UTC),
+						start: time.Date(2023, time.October, 8, 0, 0, 0, 0, time.UTC),
+						end:   time.Date(2023, time.November, 4, 0, 0, 0, 0, time.UTC),
 					},
 				},
 			},
@@ -250,7 +250,7 @@ func TestCustomWindow(t *testing.T) {
 			})
 		}
 	})
-	t.Run("GetEnd without delay", func(t *testing.T) {
+	t.Run("GetEnd without shift by", func(t *testing.T) {
 		tests := []struct {
 			name   string
 			window window.CustomWindow
@@ -334,7 +334,7 @@ func TestCustomWindow(t *testing.T) {
 		t.Run("returns error when size is invalid", func(t *testing.T) {
 			_, err := window.FromCustomConfig(window.SimpleConfig{
 				Size:       "3g",
-				Delay:      "",
+				ShiftBy:    "",
 				Location:   "",
 				TruncateTo: "",
 			})
@@ -343,16 +343,16 @@ func TestCustomWindow(t *testing.T) {
 		t.Run("returns error when size count is negative", func(t *testing.T) {
 			_, err := window.FromCustomConfig(window.SimpleConfig{
 				Size:       "-3h",
-				Delay:      "",
+				ShiftBy:    "",
 				Location:   "",
 				TruncateTo: "",
 			})
 			assert.Error(t, err)
 		})
-		t.Run("returns error when delay is invalid", func(t *testing.T) {
+		t.Run("returns error when shift by is invalid", func(t *testing.T) {
 			_, err := window.FromCustomConfig(window.SimpleConfig{
 				Size:       "1d",
-				Delay:      "2p",
+				ShiftBy:    "2p",
 				Location:   "",
 				TruncateTo: "",
 			})
@@ -361,7 +361,7 @@ func TestCustomWindow(t *testing.T) {
 		t.Run("returns error when location is invalid", func(t *testing.T) {
 			_, err := window.FromCustomConfig(window.SimpleConfig{
 				Size:       "1d",
-				Delay:      "1h",
+				ShiftBy:    "1h",
 				Location:   "Unknown",
 				TruncateTo: "",
 			})

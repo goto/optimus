@@ -80,17 +80,21 @@ func (v *view) getResultSection() string {
 func (v *view) getResultTable() string {
 	buff := new(bytes.Buffer)
 	table := tablewriter.NewWriter(buff)
+	table.SetRowLine(true)
 
 	interval, err := v.calculateInterval()
 	if err != nil {
 		table.SetHeader([]string{"ERROR"})
 		table.Append([]string{err.Error()})
 	} else {
-		startRow := interval.Start().Format(time.RFC3339)
-		endRow := interval.End().Format(time.RFC3339)
+		startTime := interval.Start().Format(time.RFC3339)
+		startDay := interval.Start().Weekday().String()
+		endTime := interval.End().Format(time.RFC3339)
+		endDay := interval.End().Weekday().String()
 
 		table.SetHeader([]string{"Start Time", "End Time"})
-		table.Append([]string{startRow, endRow})
+		table.Append([]string{startTime, endTime})
+		table.Append([]string{startDay, endDay})
 	}
 
 	table.Render()

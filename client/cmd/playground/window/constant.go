@@ -11,8 +11,8 @@ const (
 
 	pointToSizeInput      cursorPointer = "size_input"
 	pointToSizeUnit       cursorPointer = "size_unit"
-	pointToDelayInput     cursorPointer = "delay_input"
-	pointToDelayUnit      cursorPointer = "delay_unit"
+	pointToShiftByInput   cursorPointer = "shift_by_input"
+	pointToShiftByUnit    cursorPointer = "shift_by_unit"
 	pointToTruncateToUnit cursorPointer = "truncate_to_unit"
 	pointToLocationInput  cursorPointer = "location_input"
 )

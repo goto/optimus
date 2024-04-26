@@ -124,7 +124,7 @@ func toPresetProto(presetMap model.PresetsMap) map[string]*pb.ProjectSpecificati
 			Name:        name,
 			Description: p.Description,
 			TruncateTo:  p.Window.TruncateTo,
-			Delay:       p.Window.Delay,
+			ShiftBy:     p.Window.ShiftBy,
 			Size:        p.Window.Size,
 			Location:    p.Window.Location,
 		}

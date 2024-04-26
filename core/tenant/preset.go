@@ -37,7 +37,7 @@ func (p Preset) Equal(incoming Preset) bool {
 		return false
 	}
 
-	if p.config.Delay != incoming.config.Delay {
+	if p.config.ShiftBy != incoming.config.ShiftBy {
 		return false
 	}
 

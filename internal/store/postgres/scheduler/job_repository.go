@@ -74,9 +74,14 @@ func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
 		return nil, err
 	}
 
-	destinationURN, err := lib.ParseURN(j.UpstreamResourceUrn.String)
-	if err != nil {
-		return nil, err
+	var destinationURN lib.URN
+	if j.UpstreamResourceUrn.String != "" {
+		tmpURN, err := lib.ParseURN(j.UpstreamResourceUrn.String)
+		if err != nil {
+			return nil, err
+		}
+
+		destinationURN = tmpURN
 	}
 
 	return &scheduler.JobUpstream{

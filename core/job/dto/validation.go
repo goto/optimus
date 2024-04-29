@@ -13,7 +13,7 @@ type ValidateRequest struct {
 }
 
 type ValidateResult struct {
-	Name     string
+	Stage    ValidateStage
 	Messages []string
 	Success  bool
 }

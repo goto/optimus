@@ -3050,7 +3050,7 @@ func TestJobService(t *testing.T) {
 				expectedResult := map[job.Name][]dto.ValidateResult{
 					"job2": {
 						{
-							Name: "tenant validation",
+							Stage: "tenant validation",
 							Messages: []string{
 								fmt.Sprintf("current tenant is [%s.%s]", otherTenant.ProjectName(), otherTenant.NamespaceName()),
 								fmt.Sprintf("expected tenant is [%s.%s]", sampleTenant.ProjectName(), sampleTenant.NamespaceName()),
@@ -3109,14 +3109,14 @@ func TestJobService(t *testing.T) {
 				expectedResult := map[job.Name][]dto.ValidateResult{
 					"job1": {
 						{
-							Name:     "deletion validation",
+							Stage:    "validation for deletion",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
 					},
 					"job2": {
 						{
-							Name: "deletion validation",
+							Stage: "validation for deletion",
 							Messages: []string{
 								"downstreams can not be fetched",
 								"unknown error",
@@ -3174,14 +3174,14 @@ func TestJobService(t *testing.T) {
 				expectedResult := map[job.Name][]dto.ValidateResult{
 					"job1": {
 						{
-							Name:     "deletion validation",
+							Stage:    "validation for deletion",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
 					},
 					"job2": {
 						{
-							Name:     "deletion validation",
+							Stage:    "validation for deletion",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
@@ -3238,15 +3238,15 @@ func TestJobService(t *testing.T) {
 				expectedResult := map[job.Name][]dto.ValidateResult{
 					"job1": {
 						{
-							Name:     "deletion validation",
+							Stage:    "validation for deletion",
 							Messages: []string{"job is safe for deletion"},
 							Success:  true,
 						},
 					},
 					"job2": {
 						{
-							Name:     "deletion validation",
-							Messages: []string{"job is not safe for deletion", "deletion validation:\n failed precondition for entity job: deletion of job job2 will fail. job is being used by test-proj/job3"},
+							Stage:    "validation for deletion",
+							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job2 will fail. job is being used by test-proj/job3"},
 							Success:  false,
 						},
 					},
@@ -3319,21 +3319,21 @@ func TestJobService(t *testing.T) {
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
-								Name:     "cyclic validation",
+								Stage:    "cyclic validation",
 								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
 								Success:  false,
 							},
 						},
 						"jobB": {
 							{
-								Name:     "cyclic validation",
+								Stage:    "cyclic validation",
 								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
 								Success:  false,
 							},
 						},
 						"jobC": {
 							{
-								Name:     "cyclic validation",
+								Stage:    "cyclic validation",
 								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
 								Success:  false,
 							},
@@ -3403,14 +3403,14 @@ func TestJobService(t *testing.T) {
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
-								Name:     "destination validation",
+								Stage:    "destination validation",
 								Messages: []string{"can not generate destination resource", "unknown error"},
 								Success:  false,
 							},
 						},
 						"jobB": {
 							{
-								Name:     "destination validation",
+								Stage:    "destination validation",
 								Messages: []string{"can not generate destination resource", "unknown error"},
 								Success:  false,
 							},
@@ -3505,12 +3505,12 @@ func TestJobService(t *testing.T) {
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
-								Name:     "destination validation",
+								Stage:    "destination validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name: "source validation",
+								Stage: "source validation",
 								Messages: []string{
 									"bigquery://project:dataset.tableA: unexpected exist in store error",
 									"bigquery://project:dataset.tableB: resource does not exist in both db and store",
@@ -3520,19 +3520,19 @@ func TestJobService(t *testing.T) {
 								Success: false,
 							},
 							{
-								Name:     "window validation",
+								Stage:    "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name: "run validation",
+								Stage: "compile validation for run",
 								Messages: []string{
 									"compiling [bq2bq] with type [task] failed with error: unexpected compile error",
 								},
 								Success: false,
 							},
 							{
-								Name: "upstream validation",
+								Stage: "upstream validation",
 								Messages: []string{
 									"can not resolve upstream",
 									"unexpected errors in upstream resolve",
@@ -3542,12 +3542,12 @@ func TestJobService(t *testing.T) {
 						},
 						"jobB": {
 							{
-								Name:     "destination validation",
+								Stage:    "destination validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name: "source validation",
+								Stage: "source validation",
 								Messages: []string{
 									"bigquery://project:dataset.tableA: unexpected exist in store error",
 									"bigquery://project:dataset.tableB: resource does not exist in both db and store",
@@ -3557,19 +3557,19 @@ func TestJobService(t *testing.T) {
 								Success: false,
 							},
 							{
-								Name:     "window validation",
+								Stage:    "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name: "run validation",
+								Stage: "compile validation for run",
 								Messages: []string{
 									"compiling [bq2bq] with type [task] failed with error: unexpected compile error",
 								},
 								Success: false,
 							},
 							{
-								Name:     "upstream validation",
+								Stage:    "upstream validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
@@ -3662,12 +3662,12 @@ func TestJobService(t *testing.T) {
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
-								Name:     "destination validation",
+								Stage:    "destination validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name: "source validation",
+								Stage: "source validation",
 								Messages: []string{
 									"bigquery://project:dataset.tableA: no issue",
 									"bigquery://project:dataset.tableB: no issue",
@@ -3677,29 +3677,29 @@ func TestJobService(t *testing.T) {
 								Success: true,
 							},
 							{
-								Name:     "window validation",
+								Stage:    "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name:     "run validation",
+								Stage:    "compile validation for run",
 								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
 								Success:  true,
 							},
 							{
-								Name:     "upstream validation",
+								Stage:    "upstream validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 						},
 						"jobB": {
 							{
-								Name:     "destination validation",
+								Stage:    "destination validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name: "source validation",
+								Stage: "source validation",
 								Messages: []string{
 									"bigquery://project:dataset.tableA: no issue",
 									"bigquery://project:dataset.tableB: no issue",
@@ -3709,17 +3709,17 @@ func TestJobService(t *testing.T) {
 								Success: true,
 							},
 							{
-								Name:     "window validation",
+								Stage:    "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
 							{
-								Name:     "run validation",
+								Stage:    "compile validation for run",
 								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
 								Success:  true,
 							},
 							{
-								Name:     "upstream validation",
+								Stage:    "upstream validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},

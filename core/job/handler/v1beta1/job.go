@@ -652,7 +652,7 @@ func toValidateResultProto(result map[job.Name][]dto.ValidateResult) map[string]
 		resultsProto := make([]*pb.ValidateResponse_Result, len(validateResults))
 		for i, rst := range validateResults {
 			resultsProto[i] = &pb.ValidateResponse_Result{
-				Name:     rst.Name,
+				Name:     rst.Stage.String(),
 				Messages: rst.Messages,
 				Success:  rst.Success,
 			}

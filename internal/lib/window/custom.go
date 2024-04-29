@@ -24,13 +24,13 @@ func (w CustomWindow) GetInterval(ref time.Time) (interval.Interval, error) {
 		return interval.Interval{}, err
 	}
 
-	tempEnd := truncatedTime
-	tempStart := w.size.SubtractFrom(tempEnd)
+	endTimeWithoutShifting := truncatedTime
+	startTimeWithoutShifting := w.size.SubtractFrom(endTimeWithoutShifting)
 
-	end := w.shiftBy.AddFrom(tempEnd)
-	start := w.shiftBy.AddFrom(tempStart)
+	finalEndTime := w.shiftBy.AddFrom(endTimeWithoutShifting)
+	finalStartTime := w.shiftBy.AddFrom(startTimeWithoutShifting)
 
-	return interval.NewInterval(start, end), nil
+	return interval.NewInterval(finalStartTime, finalEndTime), nil
 }
 
 func (w CustomWindow) GetEnd(ref time.Time) (time.Time, error) {

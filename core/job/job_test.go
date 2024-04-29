@@ -67,19 +67,6 @@ func TestEntityJob(t *testing.T) {
 			assert.EqualValues(t, expectedMap, resultMap)
 		})
 	})
-	t.Run("GetNameAndJobMap", func(t *testing.T) {
-		t.Run("should return map with name as key and job as value", func(t *testing.T) {
-			expectedMap := map[job.Name]*job.Job{
-				specA.Name(): jobA,
-				specB.Name(): jobB,
-			}
-
-			jobs := job.Jobs([]*job.Job{jobA, jobB})
-			resultMap := jobs.GetNameAndJobMap()
-
-			assert.EqualValues(t, expectedMap, resultMap)
-		})
-	})
 	t.Run("GetNamespaceNameAndJobsMap", func(t *testing.T) {
 		t.Run("should return map with namespace name as key and jobs as value", func(t *testing.T) {
 			expectedMap := map[tenant.NamespaceName][]*job.Job{

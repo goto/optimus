@@ -179,14 +179,6 @@ func (j Jobs) GetNameMap() map[Name]*Job {
 	return jobNameMap
 }
 
-func (j Jobs) GetNameAndJobMap() map[Name]*Job {
-	nameAndJobMap := make(map[Name]*Job, len(j))
-	for _, job := range j {
-		nameAndJobMap[job.spec.Name()] = job
-	}
-	return nameAndJobMap
-}
-
 func (j Jobs) GetNamespaceNameAndJobsMap() map[tenant.NamespaceName][]*Job {
 	jobsPerNamespaceName := make(map[tenant.NamespaceName][]*Job, len(j))
 	for _, job := range j {

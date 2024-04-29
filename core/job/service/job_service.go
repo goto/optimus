@@ -1284,11 +1284,7 @@ func (j *JobService) getJobByNames(ctx context.Context, tnnt tenant.Tenant, jobN
 }
 
 func (j *JobService) validateJobsForDeletion(ctx context.Context, jobTenant tenant.Tenant, jobsToDelete []*job.Job) map[job.Name][]dto.ValidateResult {
-	specByFullName := make(map[job.FullName]*job.Spec, len(jobsToDelete))
-	for _, subjectJob := range jobsToDelete {
-		fullName := job.FullNameFrom(jobTenant.ProjectName(), subjectJob.Spec().Name())
-		specByFullName[fullName] = subjectJob.Spec()
-	}
+	specByFullName := job.Jobs(jobsToDelete).GetFullNameToSpecMap()
 
 	output := make(map[job.Name][]dto.ValidateResult)
 	for _, job := range jobsToDelete {

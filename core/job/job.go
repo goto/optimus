@@ -195,6 +195,16 @@ func (j Jobs) GetSpecs() []*Spec {
 	return specs
 }
 
+func (j Jobs) GetFullNameToSpecMap() map[FullName]*Spec {
+	fullNameToSpecMap := make(map[FullName]*Spec, len(j))
+	for _, subjectJob := range j {
+		fullName := FullNameFrom(subjectJob.ProjectName(), subjectJob.Spec().Name())
+		fullNameToSpecMap[fullName] = subjectJob.Spec()
+	}
+
+	return fullNameToSpecMap
+}
+
 func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
 	me := errors.NewMultiError("get unresolved upstreams errors")
 

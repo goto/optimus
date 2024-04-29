@@ -66,7 +66,12 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 	output, err := resource.NewResource(r.FullName, r.Kind, store, tnnt, metadata, r.Spec)
 	if err == nil {
 		output = resource.FromExisting(output, resource.ReplaceStatus(resource.FromStringToStatus(r.Status)))
-		urn, _ := lib.ParseURN(r.URN)
+
+		urn, err := lib.ParseURN(r.URN)
+		if err != nil {
+			return nil, err
+		}
+
 		output.UpdateURN(urn)
 	}
 	return output, err

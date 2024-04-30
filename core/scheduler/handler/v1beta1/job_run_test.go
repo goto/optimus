@@ -654,7 +654,7 @@ func TestJobRunHandler(t *testing.T) {
 
 			preset := tenant.NewPresetWithConfig("yesterday", "preset for test", window.SimpleConfig{
 				Size:       "1d",
-				Delay:      "-1d",
+				ShiftBy:    "1d",
 				Location:   "",
 				TruncateTo: "",
 			})

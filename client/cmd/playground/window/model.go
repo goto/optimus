@@ -16,8 +16,8 @@ type model struct {
 
 	sizeInput      textinput.Model
 	sizeUnit       duration.Unit
-	delayInput     textinput.Model
-	delayUnit      duration.Unit
+	shfitByInput   textinput.Model
+	shiftByUnit    duration.Unit
 	truncateToUnit duration.Unit
 	locationInput  textinput.Model
 
@@ -29,9 +29,9 @@ func newModel() *model {
 	sizeInput.SetValue("1")
 	sizeUnit := duration.Day
 
-	delayInput := textinput.New()
-	delayInput.SetValue("1")
-	delayUnit := duration.Day
+	shiftByInput := textinput.New()
+	shiftByInput.SetValue("1")
+	shiftByUnit := duration.Day
 
 	locationInput := textinput.New()
 	locationInput.SetValue("UTC")
@@ -42,8 +42,8 @@ func newModel() *model {
 		currentCursor:  pointToSizeInput,
 		sizeInput:      sizeInput,
 		sizeUnit:       sizeUnit,
-		delayInput:     delayInput,
-		delayUnit:      delayUnit,
+		shfitByInput:   shiftByInput,
+		shiftByUnit:    shiftByUnit,
 		locationInput:  locationInput,
 		truncateToUnit: truncateToUnit,
 		scheduleTime:   time.Now().UTC(),
@@ -88,8 +88,8 @@ func (m *model) View() string {
 		currentCursor:  m.currentCursor,
 		sizeInput:      m.sizeInput.Value(),
 		sizeUnit:       m.sizeUnit,
-		delayInput:     m.delayInput.Value(),
-		delayUnit:      m.delayUnit,
+		shiftByInput:   m.shfitByInput.Value(),
+		shiftByUnit:    m.shiftByUnit,
 		truncateToUnit: m.truncateToUnit,
 		locationInput:  m.locationInput.Value(),
 
@@ -103,8 +103,8 @@ func (m *model) handleInput(msg tea.Msg) {
 	switch m.currentCursor {
 	case pointToSizeInput:
 		m.sizeInput, _ = m.sizeInput.Update(msg)
-	case pointToDelayInput:
-		m.delayInput, _ = m.delayInput.Update(msg)
+	case pointToShiftByInput:
+		m.shfitByInput, _ = m.shfitByInput.Update(msg)
 	case pointToLocationInput:
 		m.locationInput, _ = m.locationInput.Update(msg)
 	}
@@ -115,8 +115,8 @@ func (m *model) handleDecrement() {
 	case pointToSizeUnit:
 		m.decrementUnit(&m.sizeUnit)
 		m.truncateToUnit = m.sizeUnit
-	case pointToDelayUnit:
-		m.decrementUnit(&m.delayUnit)
+	case pointToShiftByUnit:
+		m.decrementUnit(&m.shiftByUnit)
 	case pointToTruncateToUnit:
 		m.decrementUnit(&m.truncateToUnit)
 	default:
@@ -161,8 +161,8 @@ func (m *model) handleIncrement() {
 	case pointToSizeUnit:
 		m.incrementUnit(&m.sizeUnit)
 		m.truncateToUnit = m.sizeUnit
-	case pointToDelayUnit:
-		m.incrementUnit(&m.delayUnit)
+	case pointToShiftByUnit:
+		m.incrementUnit(&m.shiftByUnit)
 	case pointToTruncateToUnit:
 		m.incrementUnit(&m.truncateToUnit)
 	default:
@@ -217,9 +217,9 @@ func (m *model) handleRight() {
 	case pointToSizeInput:
 		m.sizeInput.Blur()
 		m.currentCursor = pointToSizeUnit
-	case pointToDelayInput:
-		m.delayInput.Blur()
-		m.currentCursor = pointToDelayUnit
+	case pointToShiftByInput:
+		m.shfitByInput.Blur()
+		m.currentCursor = pointToShiftByUnit
 	}
 }
 
@@ -238,9 +238,9 @@ func (m *model) handleLeft() {
 	case pointToSizeUnit:
 		m.sizeInput.Focus()
 		m.currentCursor = pointToSizeInput
-	case pointToDelayUnit:
-		m.delayInput.Focus()
-		m.currentCursor = pointToDelayInput
+	case pointToShiftByUnit:
+		m.shfitByInput.Focus()
+		m.currentCursor = pointToShiftByInput
 	}
 }
 
@@ -248,12 +248,12 @@ func (m *model) handleDown() {
 	switch m.currentCursor {
 	case pointToSizeInput:
 		m.sizeInput.Blur()
-		m.delayInput.Focus()
-		m.currentCursor = pointToDelayInput
+		m.shfitByInput.Focus()
+		m.currentCursor = pointToShiftByInput
 	case pointToSizeUnit:
-		m.currentCursor = pointToDelayUnit
-	case pointToDelayInput, pointToDelayUnit:
-		m.delayInput.Blur()
+		m.currentCursor = pointToShiftByUnit
+	case pointToShiftByInput, pointToShiftByUnit:
+		m.shfitByInput.Blur()
 		m.currentCursor = pointToTruncateToUnit
 	case pointToTruncateToUnit:
 		m.locationInput.Focus()
@@ -272,15 +272,15 @@ func (m *model) handleUp() {
 	case pointToSizeInput, pointToSizeUnit:
 		m.sizeInput.Blur()
 		m.currentCursor = pointToYear
-	case pointToDelayInput:
-		m.delayInput.Blur()
+	case pointToShiftByInput:
+		m.shfitByInput.Blur()
 		m.sizeInput.Focus()
 		m.currentCursor = pointToSizeInput
-	case pointToDelayUnit:
+	case pointToShiftByUnit:
 		m.currentCursor = pointToSizeUnit
 	case pointToTruncateToUnit:
-		m.delayInput.Focus()
-		m.currentCursor = pointToDelayInput
+		m.shfitByInput.Focus()
+		m.currentCursor = pointToShiftByInput
 	case pointToLocationInput:
 		m.locationInput.Blur()
 		m.currentCursor = pointToTruncateToUnit

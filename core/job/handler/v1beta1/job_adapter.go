@@ -44,7 +44,7 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		j.Window = &pb.JobSpecification_Window{
 			Preset:     spec.WindowConfig().Preset,
 			Size:       spec.WindowConfig().GetSimpleConfig().Size,
-			Delay:      spec.WindowConfig().GetSimpleConfig().Delay,
+			ShiftBy:    spec.WindowConfig().GetSimpleConfig().ShiftBy,
 			Location:   spec.WindowConfig().GetSimpleConfig().Location,
 			TruncateTo: spec.WindowConfig().GetSimpleConfig().TruncateTo,
 		}
@@ -228,7 +228,7 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 			return window.NewPresetConfig(w.Preset)
 		}
 		if js.Version == window.NewWindowVersion {
-			return window.NewConfig(w.Size, w.Delay, w.Location, w.TruncateTo)
+			return window.NewConfig(w.Size, w.ShiftBy, w.Location, w.TruncateTo)
 		}
 	}
 

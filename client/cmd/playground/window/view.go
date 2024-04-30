@@ -20,8 +20,8 @@ type view struct {
 
 	sizeInput      string
 	sizeUnit       duration.Unit
-	delayInput     string
-	delayUnit      duration.Unit
+	shiftByInput   string
+	shiftByUnit    duration.Unit
 	truncateToUnit duration.Unit
 	locationInput  string
 
@@ -80,17 +80,21 @@ func (v *view) getResultSection() string {
 func (v *view) getResultTable() string {
 	buff := new(bytes.Buffer)
 	table := tablewriter.NewWriter(buff)
+	table.SetRowLine(true)
 
 	interval, err := v.calculateInterval()
 	if err != nil {
 		table.SetHeader([]string{"ERROR"})
 		table.Append([]string{err.Error()})
 	} else {
-		startRow := interval.Start().Format(time.RFC3339)
-		endRow := interval.End().Format(time.RFC3339)
+		startTime := interval.Start().Format(time.RFC3339)
+		startDay := interval.Start().Weekday().String()
+		endTime := interval.End().Format(time.RFC3339)
+		endDay := interval.End().Weekday().String()
 
 		table.SetHeader([]string{"Start Time", "End Time"})
-		table.Append([]string{startRow, endRow})
+		table.Append([]string{startTime, endTime})
+		table.Append([]string{startDay, endDay})
 	}
 
 	table.Render()
@@ -116,10 +120,10 @@ func (v *view) getInputHint() string {
 (shift+up) or (shift+w) to increment
 (shift+down) or (shift+s) to decrement
 `
-	case pointToDelayInput:
+	case pointToShiftByInput:
 		hint = `empty or numeric value
 (and negative is allowed)`
-	case pointToDelayUnit:
+	case pointToShiftByUnit:
 		hint = `valid values are:
 - <empty> or None
 - h: hour
@@ -128,7 +132,7 @@ func (v *view) getInputHint() string {
 - M: month
 - y: year
 
-<empty> or None are only valid if delay value is empty
+<empty> or None are only valid if shift by value is empty
 
 (shift+up) or (shift+w) to increment
 (shift+down) or (shift+s) to decrement
@@ -199,8 +203,8 @@ func (v *view) getInputTable() string {
 		v.getSizeInput(),
 	})
 	table.Append([]string{
-		"delay",
-		v.getDelayInput(),
+		"shift_by",
+		v.getShiftByInput(),
 	})
 	table.Append([]string{
 		"truncate_to",
@@ -229,7 +233,7 @@ func (v *view) calculateInterval() (interval.Interval, error) {
 		return interval.Interval{}, err
 	}
 
-	delayDuration, err := v.getDelayDuration()
+	shiftByDuration, err := v.getShiftByDuration()
 	if err != nil {
 		return interval.Interval{}, err
 	}
@@ -244,13 +248,13 @@ func (v *view) calculateInterval() (interval.Interval, error) {
 		truncate = string(v.truncateToUnit)
 	}
 
-	customWindow := window.NewCustomWindow(sizeDuration, delayDuration, location, truncate)
+	customWindow := window.NewCustomWindow(sizeDuration, shiftByDuration, location, truncate)
 
 	return customWindow.GetInterval(v.scheduleTime)
 }
 
-func (v *view) getDelayDuration() (duration.Duration, error) {
-	return v.getDuration(v.delayInput, v.delayUnit)
+func (v *view) getShiftByDuration() (duration.Duration, error) {
+	return v.getDuration(v.shiftByInput, v.shiftByUnit)
 }
 
 func (v *view) getSizeDuration() (duration.Duration, error) {
@@ -295,10 +299,10 @@ func (v *view) getSizeInput() string {
 	return sizeInput + " " + sizeUnit
 }
 
-func (v *view) getDelayInput() string {
-	delayInput := v.getValueWithCursor(pointToDelayInput, v.delayInput)
-	delayUnit := v.getValueWithCursor(pointToDelayUnit, string(v.delayUnit))
-	return delayInput + " " + delayUnit
+func (v *view) getShiftByInput() string {
+	shiftByInput := v.getValueWithCursor(pointToShiftByInput, v.shiftByInput)
+	shiftByUnit := v.getValueWithCursor(pointToShiftByUnit, string(v.shiftByUnit))
+	return shiftByInput + " " + shiftByUnit
 }
 
 func (v *view) getTruncateToInput() string {

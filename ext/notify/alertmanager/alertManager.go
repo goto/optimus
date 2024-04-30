@@ -25,8 +25,10 @@ const (
 	eventBatchInterval    = time.Second * 10
 	httpTimeout           = time.Second * 10
 	radarTimeFormat       = "2006/01/02 15:04:05"
-	failureAlertTemplate  = "optimus-job-failure"
-	slaAlertTemplate      = "optimus-job-sla-miss"
+
+	failureAlertTemplate        = "optimus-job-failure"
+	slaAlertTemplate            = "optimus-job-sla-miss"
+	successNotificationTemplate = "optimus-job-success"
 )
 
 var (
@@ -113,6 +115,9 @@ func RelayEvent(e *scheduler.AlertAttrs, host, endpoint, dashboardURL, dataConso
 		templateContext["task_id"] = e.JobEvent.OperatorName
 	case scheduler.SLAMissEvent:
 		template = slaAlertTemplate
+		templateContext["state"] = e.JobEvent.Status.String()
+	case scheduler.JobSuccessEvent:
+		template = successNotificationTemplate
 		templateContext["state"] = e.JobEvent.Status.String()
 	}
 

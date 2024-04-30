@@ -21,7 +21,7 @@ type Type string
 
 type SimpleConfig struct {
 	Size       string
-	Delay      string
+	ShiftBy    string
 	Location   string
 	TruncateTo string // TODO: remove later if unused
 }
@@ -48,13 +48,7 @@ func (c Config) GetSize() string { // nolint: gocritic
 
 func (c Config) GetOffset() string { // nolint: gocritic
 	if c.Window == nil {
-		if c.simple.Delay == "" {
-			return ""
-		}
-		if strings.HasPrefix(c.simple.Delay, "-") {
-			return c.simple.Delay[1:]
-		}
-		return "-" + c.simple.Delay
+		return c.simple.ShiftBy
 	}
 
 	return c.Window.GetOffset()
@@ -99,7 +93,7 @@ func NewCustomConfig(w models.Window) Config {
 	}
 }
 
-func NewSimpleConfig(size, delay, location, truncateTo string) (SimpleConfig, error) {
+func NewSimpleConfig(size, shiftBy, location, truncateTo string) (SimpleConfig, error) {
 	validationErr := errors.NewMultiError("error in window config")
 
 	err := duration.Validate(size)
@@ -109,7 +103,7 @@ func NewSimpleConfig(size, delay, location, truncateTo string) (SimpleConfig, er
 		validationErr.Append(errNegativeSize)
 	}
 
-	err = duration.Validate(delay)
+	err = duration.Validate(shiftBy)
 	validationErr.Append(err)
 
 	_, err = time.LoadLocation(location)
@@ -126,14 +120,14 @@ func NewSimpleConfig(size, delay, location, truncateTo string) (SimpleConfig, er
 
 	return SimpleConfig{
 		Size:       size,
-		Delay:      delay,
+		ShiftBy:    shiftBy,
 		Location:   location,
 		TruncateTo: truncateTo,
 	}, nil
 }
 
-func NewConfig(size, delay, location, truncateTo string) (Config, error) {
-	simpleConfig, err := NewSimpleConfig(size, delay, location, truncateTo)
+func NewConfig(size, shiftBy, location, truncateTo string) (Config, error) {
+	simpleConfig, err := NewSimpleConfig(size, shiftBy, location, truncateTo)
 	if err != nil {
 		return Config{}, err
 	}

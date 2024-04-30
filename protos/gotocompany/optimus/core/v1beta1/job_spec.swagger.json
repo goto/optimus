@@ -877,6 +877,9 @@
         "delay": {
           "type": "string"
         },
+        "shiftBy": {
+          "type": "string"
+        },
         "location": {
           "type": "string"
         },

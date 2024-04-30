@@ -40,7 +40,7 @@ func TestWindowConfig(t *testing.T) {
 			assert.Equal(t, "custom", string(config.Type()))
 		})
 		t.Run("creates a custom window config version 3", func(t *testing.T) {
-			config, err := window.NewConfig("1d", "1h", "", "")
+			config, err := window.NewConfig("1d", "-1h", "", "")
 
 			assert.NoError(t, err)
 			assert.Equal(t, "", config.Preset)

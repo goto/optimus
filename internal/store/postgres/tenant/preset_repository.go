@@ -18,7 +18,7 @@ type PresetRepository struct {
 }
 
 const (
-	presetColumns           = `id, project_name, name, description, window_truncate_to, window_delay, window_size, window_location, created_at, updated_at`
+	presetColumns           = `id, project_name, name, description, window_truncate_to, window_shift_by, window_size, window_location, created_at, updated_at`
 	getPresetsByProjectName = `select ` + presetColumns + ` from preset where project_name = $1`
 )
 
@@ -36,7 +36,7 @@ type Preset struct {
 	Description string
 
 	TruncateTo string
-	Delay      string
+	ShiftBy    string
 	Size       string
 	Location   string
 
@@ -46,14 +46,14 @@ type Preset struct {
 
 func (p PresetRepository) Create(ctx context.Context, projectName tenant.ProjectName, preset tenant.Preset) error {
 	insertStatement := `INSERT INTO preset
-	(project_name, name, description, window_size, window_delay, window_location, window_truncate_to, created_at, updated_at)
+	(project_name, name, description, window_size, window_shift_by, window_location, window_truncate_to, created_at, updated_at)
 VALUES
 	($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 `
 
 	_, err := p.db.Exec(ctx, insertStatement, projectName,
 		preset.Name(), preset.Description(),
-		preset.Config().Size, preset.Config().Delay, preset.Config().Location, preset.Config().TruncateTo,
+		preset.Config().Size, preset.Config().ShiftBy, preset.Config().Location, preset.Config().TruncateTo,
 	)
 
 	return errors.WrapIfErr(tenant.EntityProject, "error inserting preset", err)
@@ -75,7 +75,7 @@ func (p PresetRepository) Read(ctx context.Context, projectName tenant.ProjectNa
 	for i, existing := range existings {
 		conf := window.SimpleConfig{
 			Size:       existing.Size,
-			Delay:      existing.Delay,
+			ShiftBy:    existing.ShiftBy,
 			Location:   existing.Location,
 			TruncateTo: existing.TruncateTo,
 		}
@@ -92,7 +92,7 @@ func (p PresetRepository) Update(ctx context.Context, projectName tenant.Project
 SET
 	description = $1,
 	window_truncate_to = $2,
-	window_delay = $3,
+	window_shift_by = $3,
 	window_size = $4,
 	window_location = $5,
 	updated_at = NOW()
@@ -102,7 +102,7 @@ WHERE
 `
 
 	result, err := p.db.Exec(ctx, updateStatement,
-		preset.Description(), preset.Config().TruncateTo, preset.Config().Delay, preset.Config().Size, preset.Config().Location,
+		preset.Description(), preset.Config().TruncateTo, preset.Config().ShiftBy, preset.Config().Size, preset.Config().Location,
 		projectName, preset.Name(),
 	)
 	if err != nil {
@@ -132,7 +132,7 @@ func (PresetRepository) scanRows(rows pgx.Rows) ([]*Preset, error) {
 			&preset.Name,
 			&preset.Description,
 			&preset.TruncateTo,
-			&preset.Delay,
+			&preset.ShiftBy,
 			&preset.Size,
 			&preset.Location,
 			&preset.CreatedAt,

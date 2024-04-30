@@ -156,7 +156,7 @@ func TestProjectHandler(t *testing.T) {
 			savedProj, _ := tenant.NewProject("savedProj", conf)
 			pres := tenant.NewPresetWithConfig("yesterday", "description", window.SimpleConfig{
 				Size:       "1d",
-				Delay:      "",
+				ShiftBy:    "",
 				Location:   "",
 				TruncateTo: "",
 			})

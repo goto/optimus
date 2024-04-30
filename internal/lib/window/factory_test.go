@@ -49,7 +49,7 @@ func TestWindowFactory(t *testing.T) {
 			w, err := window.From[Preset](config, "", func(name string) (Preset, error) {
 				conf := window.SimpleConfig{
 					Size:       "1d",
-					Delay:      "",
+					ShiftBy:    "",
 					TruncateTo: "",
 					Location:   "",
 				}

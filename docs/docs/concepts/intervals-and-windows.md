@@ -29,8 +29,8 @@ The following is the list of available configuration the user can setup a window
 
 - **Size**: size enables the user to define the duration for which the data needs to be consumed by job. Size can be defined in
    in units like "1h", "1d", "1w", "1M" to define the respective size of data to consume.
-- **Delay**: optional configuration to allow delaying the processing of some data interval, e.g., a configuration with size 1d, with
-   delay 1d, means that it will consume data of 1 day, the day before yesterday.
+- **Shift By**: optional configuration to allow shifting the window by the specified value, e.g., a configuration with size 1d, with
+   shift by -1d, means that it will consume data of 1 day, the day before yesterday.
 - **Truncate_to**: optional configuration to override the time unit for the window interval, e.g., a config with size 1d, with 
    truncate_to "h", will mean data for last 24 hours, to the end of previous hour.
 - **Location**: optional configuration to define the time zone to be used for this window configuration, if not defined the
@@ -39,7 +39,7 @@ The following is the list of available configuration the user can setup a window
 ```yaml
 window:
   size: 1d
-  delay: 1d
+  shift_by: -1d
   truncate_to: "h"
   location: "Asia/Jakarta"
 ```
@@ -142,7 +142,7 @@ window preset always use window `version: 2`. The main components of window pres
 * **Window Preset File**
 
 Presets configuration is put in a dedicated YAML file. The way to configure it still uses the same window configuration
-like `truncate_to`, `delay`, `location` and `size`. Though, there are some additions, like the name of the preset and the description to explain this preset.
+like `truncate_to`, `shift_by`, `location` and `size`. Though, there are some additions, like the name of the preset and the description to explain this preset.
 The following is an example of how to define a preset under `presets.yaml` file (note that the file name does not have to be this one).
 
 ```yaml

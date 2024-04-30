@@ -241,9 +241,13 @@ func (j *Job) toJob() (*scheduler.Job, error) {
 			return nil, err
 		}
 	}
-	destination, err := lib.ParseURN(j.Destination)
-	if err != nil {
-		return nil, err
+	var destination lib.URN
+	if j.Destination != "" {
+		tempURN, err := lib.ParseURN(j.Destination)
+		if err != nil {
+			return nil, err
+		}
+		destination = tempURN
 	}
 	schedulerJob := scheduler.Job{
 		ID:           j.ID,

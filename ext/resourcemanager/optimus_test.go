@@ -11,6 +11,7 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/resourcemanager"
 )
@@ -22,6 +23,9 @@ type OptimusResourceManager struct {
 func (o *OptimusResourceManager) TestGetJobSpecifications() {
 	apiPath := "/api/v1beta1/jobs"
 	sampleTenant, _ := tenant.NewTenant("test-proj", "test-ns")
+
+	urn, err := resource.NewURN("store", "sample-resource")
+	o.NoError(err)
 
 	o.Run("should return nil and error if context is nil", func() {
 		conf := config.ResourceManager{
@@ -174,7 +178,7 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
 		ctx := context.Background()
 		unresolvedUpstream := job.NewUpstreamUnresolvedStatic("job", "test-proj")
 
-		dependency := job.NewUpstreamResolved("job", server.URL, "", sampleTenant, "static", "sample-task", true)
+		dependency := job.NewUpstreamResolved("job", server.URL, resource.ZeroURN(), sampleTenant, "static", "sample-task", true)
 		expectedDependencies := []*job.Upstream{dependency}
 
 		actualOptimusDependencies, actualError := manager.GetOptimusUpstreams(ctx, unresolvedUpstream)
@@ -207,7 +211,7 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
 			actualHeaderValue := r.Header.Get("key")
 			o.EqualValues(expectedHeaderValue, actualHeaderValue)
 
-			expectedRawQuery := "resource_destination=sample-resource"
+			expectedRawQuery := "resource_destination=store://sample-resource"
 			actualRawQuery := r.URL.RawQuery
 			o.EqualValues(expectedRawQuery, actualRawQuery)
 
@@ -232,9 +236,9 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
 		})
 
 		ctx := context.Background()
-		unresolvedUpstream := job.NewUpstreamUnresolvedInferred("sample-resource")
+		unresolvedUpstream := job.NewUpstreamUnresolvedInferred(urn)
 
-		dependency := job.NewUpstreamResolved("job", server.URL, "", sampleTenant, "inferred", "sample-task", true)
+		dependency := job.NewUpstreamResolved("job", server.URL, resource.ZeroURN(), sampleTenant, "inferred", "sample-task", true)
 		expectedDependencies := []*job.Upstream{dependency}
 
 		actualOptimusDependencies, actualError := manager.GetOptimusUpstreams(ctx, unresolvedUpstream)
@@ -288,7 +292,7 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
                     }]
                 }],
                 "taskName": "task-1",
-				"destination": "resource"
+				"destination": "store://sample-resource"
             }
         }
     ]
@@ -301,7 +305,7 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
 		ctx := context.Background()
 		unresolvedUpstream := job.NewUpstreamUnresolvedStatic("job", "test-proj")
 
-		dependency := job.NewUpstreamResolved("job", server.URL, "resource", sampleTenant, "static", "task-1", true)
+		dependency := job.NewUpstreamResolved("job", server.URL, urn, sampleTenant, "static", "task-1", true)
 		expectedDependencies := []*job.Upstream{dependency}
 
 		actualOptimusDependencies, actualError := manager.GetOptimusUpstreams(ctx, unresolvedUpstream)

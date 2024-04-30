@@ -34,6 +34,9 @@ func TestPostgresResourceRepository(t *testing.T) {
 	store := serviceResource.Bigquery
 	kindDataset := "dataset"
 
+	resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset")
+	assert.NoError(t, err)
+
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error if resource with the provided full name is already defined within project and namespace", func(t *testing.T) {
 			pool := dbSetup()
@@ -41,7 +44,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToCreate.UpdateURN("bigquery://project:dataset")
+			resourceToCreate.UpdateURN(resourceURN)
 
 			actualFirstError := repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, actualFirstError)
@@ -55,7 +58,9 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			err = resourceToCreate.UpdateURN("bigquery://project:dataset")
+			resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset")
+			assert.NoError(t, err)
+			err = resourceToCreate.UpdateURN(resourceURN)
 			assert.NoError(t, err)
 
 			actualError := repository.Create(ctx, resourceToCreate)
@@ -74,7 +79,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToUpdate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToUpdate.UpdateURN("bigquery://project:dataset")
+			resourceToUpdate.UpdateURN(resourceURN)
 
 			actualError := repository.Update(ctx, resourceToUpdate)
 			assert.ErrorContains(t, actualError, "not found for entity resource")
@@ -86,7 +91,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToCreate.UpdateURN("bigquery://project:dataset")
+			resourceToCreate.UpdateURN(resourceURN)
 
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)
@@ -112,7 +117,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToUpdate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToUpdate.UpdateURN("bigquery://project:dataset")
+			resourceToUpdate.UpdateURN(resourceURN)
 
 			actualError := repository.ChangeNamespace(ctx, resourceToUpdate, newTenant)
 			assert.ErrorContains(t, actualError, "not found for entity resource")
@@ -124,7 +129,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToCreate.UpdateURN("bigquery://project:dataset")
+			resourceToCreate.UpdateURN(resourceURN)
 
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)
@@ -145,15 +150,18 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
+			urn, err := serviceResource.ParseURN("bigquery://project:dataset")
+			assert.NoError(t, err)
+
 			resourceExisting, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceExisting.UpdateURN("bigquery://project:dataset")
+			resourceExisting.UpdateURN(urn)
 
 			otherTnnt, err := tenant.NewTenant(tnnt.ProjectName().String(), "n-optimus-2")
 			assert.NoError(t, err)
 			resourceToChange, err := serviceResource.NewResource("project.dataset", kindDataset, store, otherTnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToChange.UpdateURN("bigquery://project:dataset")
+			resourceToChange.UpdateURN(urn)
 
 			assert.NoError(t, repository.Create(ctx, resourceExisting), "failed create resource")
 			assert.NoError(t, repository.Delete(ctx, resourceExisting), "failed delete resource")
@@ -234,7 +242,9 @@ func TestPostgresResourceRepository(t *testing.T) {
 			name1 := "project.dataset"
 			resourceToCreate1, err := serviceResource.NewResource(name1, kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToCreate1.UpdateURN("bigquery://project:dataset1")
+			resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset1")
+			assert.NoError(t, err)
+			resourceToCreate1.UpdateURN(resourceURN)
 
 			err = repository.Create(ctx, resourceToCreate1)
 			assert.NoError(t, err)
@@ -245,7 +255,9 @@ func TestPostgresResourceRepository(t *testing.T) {
 			name2 := "project.dataset.view"
 			resourceToCreate2, err := serviceResource.NewResource(name2, "view", store, tnnt, meta, viewSpec)
 			assert.NoError(t, err)
-			resourceToCreate2.UpdateURN("bigquery://project:dataset.view")
+			resourceURN, err = serviceResource.ParseURN("bigquery://project:dataset.view")
+			assert.NoError(t, err)
+			resourceToCreate2.UpdateURN(resourceURN)
 
 			err = repository.Create(ctx, resourceToCreate2)
 			assert.NoError(t, err)
@@ -289,10 +301,14 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			existingResource1, err := serviceResource.NewResource("project.dataset1", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			existingResource1.UpdateURN("bigquery://project:dataset1")
+			resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset1")
+			assert.NoError(t, err)
+			existingResource1.UpdateURN(resourceURN)
 			existingResource2, err := serviceResource.NewResource("project.dataset2", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			existingResource2.UpdateURN("bigquery://project:dataset2")
+			resourceURN, err = serviceResource.ParseURN("bigquery://project:dataset2")
+			assert.NoError(t, err)
+			existingResource2.UpdateURN(resourceURN)
 			err = repository.Create(ctx, existingResource1)
 			assert.NoError(t, err)
 			err = repository.Create(ctx, existingResource2)
@@ -340,9 +356,12 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
+			urn, err := serviceResource.ParseURN("bigquery://project:dataset")
+			assert.NoError(t, err)
+
 			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceToCreate.UpdateURN("bigquery://project:dataset")
+			resourceToCreate.UpdateURN(urn)
 
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)

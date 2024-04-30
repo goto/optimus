@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
@@ -12,7 +13,10 @@ import (
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/job/dto"
 	"github.com/goto/optimus/core/job/service/filter"
+	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
@@ -46,6 +50,9 @@ type JobService struct {
 	jobDeploymentService JobDeploymentService
 	engine               Engine
 
+	jobRunInputCompiler JobRunInputCompiler
+	resourceChecker     ResourceExistenceChecker
+
 	logger log.Logger
 }
 
@@ -54,6 +61,7 @@ func NewJobService(
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
 	jobDeploymentService JobDeploymentService, engine Engine,
+	jobInputCompiler JobRunInputCompiler, resourceChecker ResourceExistenceChecker,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -66,6 +74,8 @@ func NewJobService(
 		logger:               logger,
 		jobDeploymentService: jobDeploymentService,
 		engine:               engine,
+		jobRunInputCompiler:  jobInputCompiler,
+		resourceChecker:      resourceChecker,
 	}
 }
 
@@ -76,8 +86,8 @@ type Engine interface {
 
 type PluginService interface {
 	Info(ctx context.Context, taskName string) (*plugin.Info, error)
-	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []string, err error)
-	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN string, err error)
+	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []resource.URN, err error)
+	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN resource.URN, err error)
 }
 
 type TenantDetailsGetter interface {
@@ -98,7 +108,7 @@ type JobRepository interface {
 	ChangeJobNamespace(ctx context.Context, jobName job.Name, tenant, newTenant tenant.Tenant) error
 
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
-	GetAllByResourceDestination(ctx context.Context, resourceDestination job.ResourceURN) ([]*job.Job, error)
+	GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error)
 	GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error)
 	GetAllByProjectName(ctx context.Context, projectName tenant.ProjectName) ([]*job.Job, error)
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
@@ -112,9 +122,9 @@ type UpstreamRepository interface {
 }
 
 type DownstreamRepository interface {
-	GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination job.ResourceURN) ([]*job.Downstream, error)
+	GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination resource.URN) ([]*job.Downstream, error)
 	GetDownstreamByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Downstream, error)
-	GetDownstreamBySources(ctx context.Context, sources []job.ResourceURN) ([]*job.Downstream, error)
+	GetDownstreamBySources(ctx context.Context, sources []resource.URN) ([]*job.Downstream, error)
 }
 
 type EventHandler interface {
@@ -125,6 +135,15 @@ type UpstreamResolver interface {
 	CheckStaticResolvable(ctx context.Context, tnnt tenant.Tenant, jobs []*job.Job, logWriter writer.LogWriter) error
 	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
+}
+
+type JobRunInputCompiler interface {
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+}
+
+type ResourceExistenceChecker interface {
+	GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
+	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
@@ -327,8 +346,12 @@ func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOp
 	if f.Contains(filter.ResourceDestination) {
 		j.logger.Debug("getting all jobs by resource destination [%s]", f.GetStringValue(filter.ResourceDestination))
 
-		resourceDestination := job.ResourceURN(f.GetStringValue(filter.ResourceDestination))
-		return j.jobRepo.GetAllByResourceDestination(ctx, resourceDestination)
+		resourceDestinationURN, err := resource.ParseURN(f.GetStringValue(filter.ResourceDestination))
+		if err != nil {
+			return nil, err
+		}
+
+		return j.jobRepo.GetAllByResourceDestination(ctx, resourceDestinationURN)
 	}
 
 	// when project name and job names exist, filter by project and job names
@@ -589,7 +612,7 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 	return me.ToErr()
 }
 
-func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error {
+func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs []resource.URN, logWriter writer.LogWriter) error {
 	downstreams, err := j.downstreamRepo.GetDownstreamBySources(ctx, resourceURNs)
 	if err != nil {
 		j.logger.Error("error identifying job downstream for given resources: %s", err)
@@ -620,76 +643,6 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 		counter.Add(float64(len(jobNames)))
 	}
 
-	return me.ToErr()
-}
-
-func (j *JobService) Validate(ctx context.Context, jobTenant tenant.Tenant, jobSpecs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error {
-	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
-	if err != nil {
-		j.logger.Error("error getting tenant details: %s", err)
-		return err
-	}
-
-	if err := job.Specs(jobSpecs).Validate(); err != nil {
-		return err
-	}
-
-	validatedJobSpecs := job.Specs(jobSpecs).GetValid()
-	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, jobTenant)
-	if err != nil {
-		return err
-	}
-
-	toAdd, toUpdate, toDelete, unmodifiedSpecs, unmodifiedDirtySpecs := j.differentiateSpecs(jobTenant, existingJobs, validatedJobSpecs, jobNamesWithInvalidSpec)
-	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, %d deleted specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
-	if len(unmodifiedDirtySpecs) > 0 {
-		j.logFoundDirtySpecs(tenantWithDetails.ToTenant(), unmodifiedDirtySpecs, logWriter)
-	}
-	if len(toAdd)+len(toUpdate)+len(toDelete)+len(unmodifiedDirtySpecs) == 0 {
-		return nil
-	}
-
-	me := errors.NewMultiError("validate specs errors")
-	// TODO: add dry_run check because, generate jobs does not go a Dry Run , and Invalid SQL schemas could not be detected without that.
-	incomingJobs, err := j.generateJobs(ctx, tenantWithDetails, append(toAdd, append(unmodifiedDirtySpecs, toUpdate...)...), logWriter)
-	me.Append(err)
-
-	err = j.upstreamResolver.CheckStaticResolvable(ctx, jobTenant, incomingJobs, logWriter)
-	me.Append(err)
-
-	// TODO: resolve job dependencies before check cyclic
-	err = j.validateDeleteJobs(ctx, jobTenant, toDelete, logWriter)
-	me.Append(err)
-
-	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
-	// assumption, all job specs from input are also the job within same project
-	jobsToValidateMap := getAllJobsToValidateMap(incomingJobs, existingJobs, append(unmodifiedSpecs, unmodifiedDirtySpecs...))
-	identifierToJobsMap := getIdentifierToJobsMap(jobsToValidateMap)
-	for _, jobEntity := range incomingJobs {
-		if _, err := j.validateCyclic(jobEntity.Spec().Name(), jobsToValidateMap, identifierToJobsMap); err != nil {
-			j.logger.Error("error when executing cyclic validation on [%s]: %s", jobEntity.Spec().Name(), err)
-			me.Append(err)
-			break
-		}
-	}
-
-	return me.ToErr()
-}
-
-func (j *JobService) validateDeleteJobs(ctx context.Context, jobTenant tenant.Tenant, toDelete []*job.Spec, logWriter writer.LogWriter) error {
-	me := errors.NewMultiError("delete job specs check errors")
-	toDeleteMap := job.Specs(toDelete).ToFullNameAndSpecMap(jobTenant.ProjectName())
-
-	for _, jobToDelete := range toDelete {
-		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), jobToDelete.Name(), map[job.FullName]bool{})
-		if err != nil {
-			j.logger.Error("error getting all downstreams for job [%s]: %s", jobToDelete.Name().String(), err)
-			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), jobToDelete.Name().String(), err.Error()))
-			me.Append(err)
-			continue
-		}
-		validateDeleteJob(jobTenant, downstreams, toDeleteMap, jobToDelete, logWriter, me)
-	}
 	return me.ToErr()
 }
 
@@ -742,34 +695,7 @@ func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.P
 	return downstreams, nil
 }
 
-func getAllJobsToValidateMap(incomingJobs, existingJobs []*job.Job, unmodifiedSpecs []*job.Spec) map[job.Name]*job.WithUpstream {
-	// TODO: check whether we need to accumulate encountered errors
-	me := errors.NewMultiError("validate specs errors")
-
-	existingJobMap := job.Jobs(existingJobs).GetNameAndJobMap()
-	var unmodifiedJobs []*job.Job
-	for _, unmodifiedSpec := range unmodifiedSpecs {
-		if unmodifiedJob, ok := existingJobMap[unmodifiedSpec.Name()]; ok {
-			unmodifiedJobs = append(unmodifiedJobs, unmodifiedJob)
-			continue
-		}
-		errorsMsg := fmt.Sprintf("unable to validate existing job %s", unmodifiedSpec.Name().String())
-		me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg))
-	}
-
-	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
-	for _, jobToValidate := range append(incomingJobs, unmodifiedJobs...) {
-		jobWithUpstream, err := jobToValidate.GetJobWithUnresolvedUpstream()
-		if err != nil {
-			me.Append(err)
-			continue
-		}
-		jobsToValidateMap[jobToValidate.Spec().Name()] = jobWithUpstream
-	}
-	return jobsToValidateMap
-}
-
-func getIdentifierToJobsMap(jobsToValidateMap map[job.Name]*job.WithUpstream) map[string][]*job.WithUpstream {
+func (*JobService) getIdentifierToJobsMap(jobsToValidateMap map[job.Name]*job.WithUpstream) map[string][]*job.WithUpstream {
 	identifierToJobsMap := make(map[string][]*job.WithUpstream)
 	for _, jobEntity := range jobsToValidateMap {
 		jobIdentifiers := []string{jobEntity.Job().FullName()}
@@ -1051,11 +977,6 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false), nil
 }
 
-func (j *JobService) validateCyclic(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) ([]string, error) {
-	dagTree := j.buildDAGTree(rootName, jobMap, identifierToJobMap)
-	return dagTree.ValidateCyclic()
-}
-
 func (*JobService) buildDAGTree(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) *tree.MultiRootTree {
 	rootJob := jobMap[rootName]
 
@@ -1228,42 +1149,621 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	}).Add(float64(metricValue))
 }
 
-func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]job.ResourceURN, error) {
+func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]resource.URN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
 	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
 	assets := spec.Asset()
 
-	resourceURNs, err := j.pluginService.IdentifyUpstreams(ctx, taskName, compileConfigs, assets)
-	if err != nil {
-		return nil, err
-	}
-
-	jobResourceURNs := make([]job.ResourceURN, len(resourceURNs))
-	for i, resourceURN := range resourceURNs {
-		jobResourceURNs[i] = job.ResourceURN(resourceURN)
-	}
-
-	return jobResourceURNs, nil
+	return j.pluginService.IdentifyUpstreams(ctx, taskName, compileConfigs, assets)
 }
 
-func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (job.ResourceURN, error) {
+func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (resource.URN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
 	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
 
-	destinationURN, err := j.pluginService.ConstructDestinationURN(ctx, taskName, compileConfigs)
-	if err != nil {
-		return "", err
-	}
-
-	return job.ResourceURN(destinationURN), nil
+	return j.pluginService.ConstructDestinationURN(ctx, taskName, compileConfigs)
 }
 
-func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error) {
+func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) (map[job.Name][]dto.ValidateResult, error) {
+	if err := j.validateRequest(request); err != nil {
+		registerJobValidationMetric(request.Tenant, dto.StagePreparation, false)
+		return nil, err
+	}
+
+	if err := j.validateDuplication(request); err != nil {
+		registerJobValidationMetric(request.Tenant, dto.StagePreparation, false)
+		return nil, err
+	}
+
+	tenantDetails, err := j.tenantDetailsGetter.GetDetails(ctx, request.Tenant)
+	if err != nil {
+		registerJobValidationMetric(request.Tenant, dto.StagePreparation, false)
+		return nil, err
+	}
+
+	jobsToValidate, err := j.getJobsToValidate(ctx, tenantDetails, request)
+	if err != nil {
+		registerJobValidationMetric(request.Tenant, dto.StagePreparation, false)
+		return nil, err
+	}
+
+	registerJobValidationMetric(request.Tenant, dto.StagePreparation, true)
+
+	if output := j.validateTenantOnEachJob(request.Tenant, jobsToValidate); len(output) > 0 {
+		return output, nil
+	}
+
+	if request.DeletionMode {
+		return j.validateJobsForDeletion(ctx, request.Tenant, jobsToValidate), nil
+	}
+
+	if result, err := j.validateCyclic(ctx, request.Tenant, jobsToValidate); err != nil {
+		return nil, err
+	} else if len(result) > 0 {
+		return result, nil
+	}
+
+	return j.validateJobs(ctx, tenantDetails, jobsToValidate)
+}
+
+func (*JobService) validateRequest(request dto.ValidateRequest) error {
+	if len(request.JobNames) > 0 && len(request.JobSpecs) > 0 {
+		return errors.NewError(errors.ErrInvalidArgument, job.EntityJob, "job names and specs can not be specified together")
+	}
+
+	if len(request.JobNames) == 0 && len(request.JobSpecs) == 0 {
+		return errors.NewError(errors.ErrInvalidArgument, job.EntityJob, "job names and job specs are both empty")
+	}
+
+	if request.DeletionMode && len(request.JobNames) == 0 {
+		return errors.NewError(errors.ErrInvalidArgument, job.EntityJob, "deletion job only accepts job names")
+	}
+
+	return nil
+}
+
+func (*JobService) validateDuplication(request dto.ValidateRequest) error {
+	jobNameCountMap := make(map[string]int)
+	if len(request.JobNames) > 0 {
+		for _, name := range request.JobNames {
+			jobNameCountMap[name]++
+		}
+	} else {
+		for _, spec := range request.JobSpecs {
+			jobNameCountMap[spec.Name().String()]++
+		}
+	}
+
+	var duplicated []string
+	for name, count := range jobNameCountMap {
+		if count > 1 {
+			duplicated = append(duplicated, name)
+		}
+	}
+
+	if len(duplicated) > 0 {
+		message := fmt.Sprintf("the following jobs are duplicated: [%s]", strings.Join(duplicated, ", "))
+		return errors.NewError(errors.ErrInvalidArgument, job.EntityJob, message)
+	}
+
+	return nil
+}
+
+func (j *JobService) getJobsToValidate(ctx context.Context, tenantDetails *tenant.WithDetails, request dto.ValidateRequest) ([]*job.Job, error) {
+	if len(request.JobNames) > 0 {
+		return j.getJobByNames(ctx, request.Tenant, request.JobNames)
+	}
+
+	return j.generateJobs(ctx, tenantDetails, request.JobSpecs, writer.NewSafeBufferedLogger())
+}
+
+func (j *JobService) getJobByNames(ctx context.Context, tnnt tenant.Tenant, jobNames []string) ([]*job.Job, error) {
+	me := errors.NewMultiError("getting job by name")
+
+	var retrievedJobs []*job.Job
+	for _, name := range jobNames {
+		jobName, err := job.NameFrom(name)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		subjectJob, err := j.jobRepo.GetByJobName(ctx, tnnt.ProjectName(), jobName)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		retrievedJobs = append(retrievedJobs, subjectJob)
+	}
+
+	return retrievedJobs, me.ToErr()
+}
+
+func (j *JobService) validateJobsForDeletion(ctx context.Context, jobTenant tenant.Tenant, jobsToDelete []*job.Job) map[job.Name][]dto.ValidateResult {
+	specByFullName := job.Jobs(jobsToDelete).GetFullNameToSpecMap()
+
+	output := make(map[job.Name][]dto.ValidateResult)
+	for _, job := range jobsToDelete {
+		output[job.Spec().Name()] = j.validateOneJobForDeletion(ctx, jobTenant, job.Spec(), specByFullName)
+	}
+
+	return output
+}
+
+func (j *JobService) validateOneJobForDeletion(
+	ctx context.Context,
+	jobTenant tenant.Tenant, spec *job.Spec,
+	specByFullName map[job.FullName]*job.Spec,
+) []dto.ValidateResult {
+	downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), make(map[job.FullName]bool))
+	if err != nil {
+		result := dto.ValidateResult{
+			Stage: dto.StageDeletionValidation,
+			Messages: []string{
+				"downstreams can not be fetched",
+				err.Error(),
+			},
+			Success: false,
+		}
+
+		registerJobValidationMetric(jobTenant, dto.StageDeletionValidation, false)
+
+		return []dto.ValidateResult{result}
+	}
+
+	me := errors.NewMultiError("validating job for deletion errors")
+	safeToDelete := validateDeleteJob(jobTenant, downstreams, specByFullName, spec, writer.NewSafeBufferedLogger(), me)
+
+	var messages []string
+	success := true
+	if !safeToDelete {
+		messages = []string{"job is not safe for deletion"}
+		if err := me.ToErr(); err != nil {
+			messages = append(messages, err.Error())
+		}
+
+		success = false
+	} else {
+		messages = []string{"job is safe for deletion"}
+	}
+
+	registerJobValidationMetric(jobTenant, dto.StageDeletionValidation, success)
+
+	return []dto.ValidateResult{
+		{
+			Stage:    dto.StageDeletionValidation,
+			Messages: messages,
+			Success:  success,
+		},
+	}
+}
+
+func (*JobService) validateTenantOnEachJob(rootTnnt tenant.Tenant, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
+	output := make(map[job.Name][]dto.ValidateResult)
+	for _, subjectJob := range jobsToValidate {
+		tnnt := subjectJob.Tenant()
+		if tnnt.ProjectName() != rootTnnt.ProjectName() || tnnt.NamespaceName() != rootTnnt.NamespaceName() {
+			result := dto.ValidateResult{
+				Stage: dto.StageTenantValidation,
+				Messages: []string{
+					fmt.Sprintf("current tenant is [%s.%s]", tnnt.ProjectName(), tnnt.NamespaceName()),
+					fmt.Sprintf("expected tenant is [%s.%s]", rootTnnt.ProjectName(), rootTnnt.NamespaceName()),
+				},
+				Success: false,
+			}
+
+			output[subjectJob.Spec().Name()] = []dto.ValidateResult{result}
+
+			registerJobValidationMetric(rootTnnt, dto.StageTenantValidation, false)
+		} else {
+			registerJobValidationMetric(rootTnnt, dto.StageTenantValidation, true)
+		}
+	}
+
+	return output
+}
+
+func (j *JobService) validateJobs(ctx context.Context, tenantDetails *tenant.WithDetails, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	output := make(map[job.Name][]dto.ValidateResult)
+	for _, subjectJob := range jobsToValidate {
+		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob)
+	}
+
+	return output, nil
+}
+
+func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job) []dto.ValidateResult {
+	destination, err := j.generateDestinationURN(ctx, tenantDetails, subjectJob.Spec())
+	if err != nil {
+		result := dto.ValidateResult{
+			Stage: dto.StageDestinationValidation,
+			Messages: []string{
+				"can not generate destination resource",
+				err.Error(),
+			},
+			Success: false,
+		}
+
+		registerJobValidationMetric(tenantDetails.ToTenant(), dto.StageDestinationValidation, false)
+
+		return []dto.ValidateResult{result}
+	}
+
+	var output []dto.ValidateResult
+
+	result := j.validateDestination(ctx, tenantDetails.ToTenant(), destination)
+	output = append(output, result)
+
+	result = j.validateSource(ctx, tenantDetails, subjectJob.Spec())
+	output = append(output, result)
+
+	result = j.validateWindow(tenantDetails, subjectJob.Spec().WindowConfig())
+	output = append(output, result)
+
+	result = j.validateRun(ctx, subjectJob, destination)
+	output = append(output, result)
+
+	result = j.validateUpstream(ctx, subjectJob)
+	output = append(output, result)
+
+	return output
+}
+
+func (j *JobService) validateCyclic(ctx context.Context, tnnt tenant.Tenant, incomingJobs []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, tnnt)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := j.upstreamResolver.CheckStaticResolvable(ctx, tnnt, incomingJobs, writer.NewSafeBufferedLogger()); err != nil {
+		return nil, err
+	}
+
+	jobsToValidate := j.getCombinedJobsToValidate(incomingJobs, existingJobs)
+
+	jobsWithUpstream, err := j.upstreamResolver.BulkResolve(ctx, tnnt.ProjectName(), jobsToValidate, writer.NewSafeBufferedLogger())
+	if err != nil {
+		return nil, err
+	}
+
+	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
+	// assumption, all job specs from input are also the job within same project
+	jobWithUpstreamPerJobName := j.getJobWithUpstreamPerJobName(jobsWithUpstream)
+	identifierToJobsMap := j.getIdentifierToJobsMap(jobWithUpstreamPerJobName)
+
+	output := make(map[job.Name][]dto.ValidateResult)
+
+	isJobNameCyclic := make(map[string]bool)
+	for _, subjectJob := range incomingJobs {
+		dagTree := j.buildDAGTree(subjectJob.Spec().Name(), jobWithUpstreamPerJobName, identifierToJobsMap)
+		cyclicNames, err := dagTree.ValidateCyclic()
+
+		for _, name := range cyclicNames {
+			isJobNameCyclic[name] = true
+		}
+
+		if err != nil && isJobNameCyclic[subjectJob.GetName()] {
+			output[subjectJob.Spec().Name()] = []dto.ValidateResult{
+				{
+					Stage: dto.StageCyclicValidation,
+					Messages: append([]string{
+						"cyclic dependency is detected",
+					}, cyclicNames...),
+					Success: false,
+				},
+			}
+
+			registerJobValidationMetric(tnnt, dto.StageCyclicValidation, false)
+		} else {
+			registerJobValidationMetric(tnnt, dto.StageCyclicValidation, true)
+		}
+	}
+
+	return output, nil
+}
+
+func (*JobService) getCombinedJobsToValidate(incoming, existing []*job.Job) []*job.Job {
+	uniqueJobs := make(map[job.Name]*job.Job)
+	for _, j := range existing {
+		uniqueJobs[j.Spec().Name()] = j
+	}
+
+	for _, j := range incoming {
+		uniqueJobs[j.Spec().Name()] = j
+	}
+
+	var output []*job.Job
+	for _, j := range uniqueJobs {
+		output = append(output, j)
+	}
+
+	return output
+}
+
+func (*JobService) getJobWithUpstreamPerJobName(jobsWithUpstream []*job.WithUpstream) map[job.Name]*job.WithUpstream {
+	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
+	for _, jobWithUpstream := range jobsWithUpstream {
+		jobsToValidateMap[jobWithUpstream.Name()] = jobWithUpstream
+	}
+
+	return jobsToValidateMap
+}
+
+func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
+	if _, err := j.upstreamResolver.Resolve(ctx, subjectJob, writer.NewSafeBufferedLogger()); err != nil {
+		registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, false)
+
+		return dto.ValidateResult{
+			Stage: dto.StageUpstreamValidation,
+			Messages: []string{
+				"can not resolve upstream",
+				err.Error(),
+			},
+			Success: false,
+		}
+	}
+
+	registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, true)
+
+	return dto.ValidateResult{
+		Stage:    dto.StageUpstreamValidation,
+		Messages: []string{"no issue"},
+		Success:  true,
+	}
+}
+
+func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant, destination resource.URN) dto.ValidateResult {
+	if destination.IsZero() {
+		registerJobValidationMetric(tnnt, dto.StageDestinationValidation, true)
+
+		return dto.ValidateResult{
+			Stage:    dto.StageDestinationValidation,
+			Messages: []string{"no issue"},
+			Success:  true,
+		}
+	}
+
+	message, success := j.validateResourceURN(ctx, tnnt, destination)
+	registerJobValidationMetric(tnnt, dto.StageDestinationValidation, success)
+
+	return dto.ValidateResult{
+		Stage:    dto.StageDestinationValidation,
+		Messages: []string{fmt.Sprintf("%s: %s", destination.String(), message)},
+		Success:  success,
+	}
+}
+
+func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {
+	sourceURNs, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, spec)
+	if err != nil {
+		registerJobValidationMetric(tenantWithDetails.ToTenant(), dto.StageSourceValidation, false)
+
+		return dto.ValidateResult{
+			Stage: dto.StageSourceValidation,
+			Messages: []string{
+				"can not identify the resource sources of the job",
+				err.Error(),
+			},
+			Success: false,
+		}
+	}
+
+	if len(sourceURNs) == 0 {
+		return dto.ValidateResult{
+			Stage:    dto.StageSourceValidation,
+			Messages: []string{"no issue"},
+			Success:  true,
+		}
+	}
+
+	messages := make([]string, len(sourceURNs))
+	success := true
+
+	for i, urn := range sourceURNs {
+		currentMessage, currentSuccess := j.validateResourceURN(ctx, tenantWithDetails.ToTenant(), urn)
+		if !currentSuccess {
+			success = false
+		}
+
+		messages[i] = fmt.Sprintf("%s: %s", urn.String(), currentMessage)
+	}
+
+	registerJobValidationMetric(tenantWithDetails.ToTenant(), dto.StageSourceValidation, success)
+
+	return dto.ValidateResult{
+		Stage:    dto.StageSourceValidation,
+		Messages: messages,
+		Success:  success,
+	}
+}
+
+func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (string, bool) {
+	activeInDB := true
+	if rsc, err := j.resourceChecker.GetByURN(ctx, tnnt, urn); err != nil {
+		j.logger.Warn("suppress error is encountered when reading resource from db: %v", err)
+		activeInDB = false
+	} else {
+		switch rsc.Status() {
+		case resource.StatusToDelete, resource.StatusDeleted:
+			activeInDB = false
+		}
+	}
+
+	existInStore, err := j.resourceChecker.ExistInStore(ctx, tnnt, urn)
+	if err != nil {
+		return err.Error(), false
+	}
+
+	if activeInDB && existInStore {
+		return "no issue", true
+	}
+
+	if existInStore {
+		return "resource exists in store but not in db", true
+	}
+
+	if activeInDB {
+		return "resource exists in db but not in store", false
+	}
+
+	return "resource does not exist in both db and store", false
+}
+
+func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination resource.URN) dto.ValidateResult {
+	referenceTime := time.Now()
+	runConfigs, err := j.getRunConfigs(referenceTime, subjectJob.Spec())
+	if err != nil {
+		registerJobValidationMetric(subjectJob.Tenant(), dto.StageRunCompileValidation, false)
+
+		return dto.ValidateResult{
+			Stage: dto.StageRunCompileValidation,
+			Messages: []string{
+				"can not get run config",
+				err.Error(),
+			},
+			Success: false,
+		}
+	}
+
+	var messages []string
+	success := true
+
+	jobWithDetails := j.getSchedulerJobWithDetail(subjectJob, destination)
+	for _, config := range runConfigs {
+		var msg string
+		if _, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, config, referenceTime); err != nil {
+			success = false
+
+			msg = fmt.Sprintf("compiling [%s] with type [%s] failed with error: %v", config.Executor.Name, config.Executor.Type.String(), err)
+		} else {
+			msg = fmt.Sprintf("compiling [%s] with type [%s] contains no issue", config.Executor.Name, config.Executor.Type.String())
+		}
+
+		messages = append(messages, msg)
+	}
+
+	registerJobValidationMetric(subjectJob.Tenant(), dto.StageRunCompileValidation, success)
+
+	return dto.ValidateResult{
+		Stage:    dto.StageRunCompileValidation,
+		Messages: messages,
+		Success:  success,
+	}
+}
+
+func (*JobService) getSchedulerJobWithDetail(subjectJob *job.Job, destination resource.URN) *scheduler.JobWithDetails {
+	hooks := make([]*scheduler.Hook, len(subjectJob.Spec().Hooks()))
+	for i, hook := range subjectJob.Spec().Hooks() {
+		hooks[i] = &scheduler.Hook{
+			Name:   hook.Name(),
+			Config: hook.Config(),
+		}
+	}
+
+	return &scheduler.JobWithDetails{
+		Name: scheduler.JobName(subjectJob.GetName()),
+		Job: &scheduler.Job{
+			Name:        scheduler.JobName(subjectJob.GetName()),
+			Tenant:      subjectJob.Tenant(),
+			Destination: destination,
+			Task: &scheduler.Task{
+				Name:   string(subjectJob.Spec().Task().Name()),
+				Config: subjectJob.Spec().Task().Config(),
+			},
+			Hooks:        hooks,
+			WindowConfig: subjectJob.Spec().WindowConfig(),
+			Assets:       subjectJob.Spec().Asset(),
+		},
+		JobMetadata: &scheduler.JobMetadata{
+			Version:     subjectJob.Spec().Version(),
+			Owner:       subjectJob.Spec().Owner(),
+			Description: subjectJob.Spec().Description(),
+			Labels:      subjectJob.Spec().Labels(),
+		},
+		Schedule: &scheduler.Schedule{
+			DependsOnPast: subjectJob.Spec().Schedule().DependsOnPast(),
+			CatchUp:       subjectJob.Spec().Schedule().CatchUp(),
+			Interval:      subjectJob.Spec().Schedule().Interval(),
+		},
+	}
+}
+
+func (*JobService) getRunConfigs(referenceTime time.Time, spec *job.Spec) ([]scheduler.RunConfig, error) {
+	var runConfigs []scheduler.RunConfig
+
+	executor, err := scheduler.ExecutorFromEnum(spec.Task().Name().String(), scheduler.ExecutorTask.String())
+	if err != nil {
+		return nil, err
+	}
+
+	runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "")
+	if err != nil {
+		return nil, err
+	}
+
+	runConfigs = append(runConfigs, runConfig)
+
+	for _, hook := range spec.Hooks() {
+		executor, err := scheduler.ExecutorFromEnum(hook.Name(), scheduler.ExecutorHook.String())
+		if err != nil {
+			return nil, err
+		}
+
+		runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "")
+		if err != nil {
+			return nil, err
+		}
+
+		runConfigs = append(runConfigs, runConfig)
+	}
+
+	return runConfigs, nil
+}
+
+func (*JobService) validateWindow(tenantDetails *tenant.WithDetails, windowConfig window.Config) dto.ValidateResult {
+	if windowType := windowConfig.Type(); windowType == window.Preset {
+		preset := windowConfig.Preset
+		if _, err := tenantDetails.Project().GetPreset(preset); err != nil {
+			registerJobValidationMetric(tenantDetails.ToTenant(), dto.StageWindowValidation, false)
+
+			return dto.ValidateResult{
+				Stage: dto.StageWindowValidation,
+				Messages: []string{
+					fmt.Sprintf("window preset [%s] is not found within project", preset),
+					err.Error(),
+				},
+				Success: false,
+			}
+		}
+	}
+
+	registerJobValidationMetric(tenantDetails.ToTenant(), dto.StageWindowValidation, true)
+
+	return dto.ValidateResult{
+		Stage:    dto.StageWindowValidation,
+		Messages: []string{"no issue"},
+		Success:  true,
+	}
+}
+
+func registerJobValidationMetric(tnnt tenant.Tenant, stage dto.ValidateStage, success bool) {
+	counter := telemetry.NewCounter(job.MetricJobValidation, map[string]string{
+		"project":   tnnt.ProjectName().String(),
+		"namespace": tnnt.NamespaceName().String(),
+		"stage":     stage.String(),
+		"success":   fmt.Sprintf("%t", success),
+	})
+
+	counter.Add(1)
+}
+
+func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (job.DownstreamList, error) {
 	var dependentJobs []*job.Downstream
 
-	jobs, err := j.downstreamRepo.GetDownstreamBySources(ctx, []job.ResourceURN{urn})
+	jobs, err := j.downstreamRepo.GetDownstreamBySources(ctx, []resource.URN{urn})
 	if err != nil {
 		return nil, err
 	}

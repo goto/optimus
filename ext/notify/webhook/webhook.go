@@ -85,7 +85,7 @@ func fireWebhook(e event) error {
 		JobName:     e.meta.JobName.String(),
 		Project:     e.meta.Tenant.ProjectName().String(),
 		Namespace:   e.meta.Tenant.NamespaceName().String(),
-		Destination: e.jobMeta.DestinationURN,
+		Destination: e.jobMeta.DestinationURN.String(),
 		ScheduledAt: e.meta.JobScheduledAt.String(),
 		Status:      e.meta.Status.String(),
 		JobLabel:    e.jobMeta.Labels,

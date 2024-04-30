@@ -185,20 +185,6 @@ func (s Specs) ToFullNameAndSpecMap(projectName tenant.ProjectName) map[FullName
 	return fullnameAndSpecMap
 }
 
-func (s Specs) Validate() error {
-	me := errors.NewMultiError("validate specs errors")
-	jobNameCount := s.getJobNameCount()
-	isJobNameVisited := map[Name]bool{}
-	for _, spec := range s {
-		if jobNameCount[spec.Name()] > 1 && !isJobNameVisited[spec.Name()] {
-			me.Append(fmt.Errorf("duplicate %s", spec.Name()))
-		}
-		isJobNameVisited[spec.Name()] = true
-	}
-
-	return me.ToErr()
-}
-
 func (s Specs) GetValid() []*Spec {
 	jobNameCount := s.getJobNameCount()
 	validSpecs := []*Spec{}

@@ -14,6 +14,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -73,11 +74,21 @@ func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
 		return nil, err
 	}
 
+	var destinationURN resource.URN
+	if j.UpstreamResourceUrn.String != "" {
+		tmpURN, err := resource.ParseURN(j.UpstreamResourceUrn.String)
+		if err != nil {
+			return nil, err
+		}
+
+		destinationURN = tmpURN
+	}
+
 	return &scheduler.JobUpstream{
 		JobName:        j.UpstreamJobName.String,
 		Host:           j.UpstreamHost.String,
 		TaskName:       j.UpstreamTaskName.String,
-		DestinationURN: j.UpstreamResourceUrn.String,
+		DestinationURN: destinationURN,
 		Tenant:         t,
 		Type:           j.UpstreamType,
 		External:       j.UpstreamExternal.Bool,
@@ -230,11 +241,19 @@ func (j *Job) toJob() (*scheduler.Job, error) {
 			return nil, err
 		}
 	}
+	var destination resource.URN
+	if j.Destination != "" {
+		tempURN, err := resource.ParseURN(j.Destination)
+		if err != nil {
+			return nil, err
+		}
+		destination = tempURN
+	}
 	schedulerJob := scheduler.Job{
 		ID:           j.ID,
 		Name:         scheduler.JobName(j.Name),
 		Tenant:       t,
-		Destination:  j.Destination,
+		Destination:  destination,
 		WindowConfig: w,
 		Assets:       j.Assets,
 		Task: &scheduler.Task{

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
@@ -51,7 +52,7 @@ type Job struct {
 	Name   JobName
 	Tenant tenant.Tenant
 
-	Destination string
+	Destination resource.URN
 	Task        *Task
 	Hooks       []*Hook
 
@@ -232,7 +233,7 @@ type JobUpstream struct {
 	JobName        string
 	Host           string
 	TaskName       string        // TODO: remove after airflow migration
-	DestinationURN string        //- bigquery://pilot.playground.table
+	DestinationURN resource.URN  //- bigquery://pilot.playground.table
 	Tenant         tenant.Tenant // Current or external tenant
 	Type           string
 	External       bool

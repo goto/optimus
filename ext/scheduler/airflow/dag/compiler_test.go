@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/scheduler/airflow/dag"
@@ -158,11 +159,16 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 		Labels:      map[string]string{"orchestrator": "optimus"},
 	}
 
+	urn, err := resource.ParseURN("bigquery://billing:reports.weekly-status")
+	if err != nil {
+		panic(err)
+	}
+
 	jobName := scheduler.JobName("infra.billing.weekly-status-reports")
 	job := &scheduler.Job{
 		Name:         jobName,
 		Tenant:       tnnt,
-		Destination:  "bigquery://billing:reports.weekly-status",
+		Destination:  urn,
 		Task:         &scheduler.Task{Name: "bq-bq"},
 		Hooks:        hooks,
 		WindowConfig: window1,

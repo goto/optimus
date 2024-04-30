@@ -222,7 +222,7 @@ func getSystemDefinedConfigs(job *scheduler.Job, interval interval.Interval, exe
 		configDstart:        interval.Start().Format(TimeISOFormat),
 		configDend:          interval.End().Format(TimeISOFormat),
 		configExecutionTime: executedAt.Format(TimeISOFormat),
-		configDestination:   job.Destination,
+		configDestination:   job.Destination.String(),
 	}
 	// TODO: remove this condition after v1/v2 removal, add to map directly
 	if job.WindowConfig.GetVersion() == window.NewWindowVersion {

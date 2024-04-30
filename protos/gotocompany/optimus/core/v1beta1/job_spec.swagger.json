@@ -305,6 +305,59 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/validate": {
+      "post": {
+        "summary": "Validate validates whether the job specifications are valid",
+        "operationId": "JobSpecificationService_Validate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1ValidateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "fromServer": {
+                  "$ref": "#/definitions/ValidateRequestFromServer"
+                },
+                "fromOutside": {
+                  "$ref": "#/definitions/ValidateRequestFromOutside"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "JobSpecificationService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/{jobName}": {
       "get": {
         "summary": "GetJobSpecification reads a provided job spec of a namespace",
@@ -932,6 +985,59 @@
         }
       }
     },
+    "ValidateRequestFromOutside": {
+      "type": "object",
+      "properties": {
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobSpecification"
+          }
+        }
+      }
+    },
+    "ValidateRequestFromServer": {
+      "type": "object",
+      "properties": {
+        "jobNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deletionMode": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ValidateResponseResult": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "success": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ValidateResponseResultList": {
+      "type": "object",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ValidateResponseResult"
+          }
+        }
+      }
+    },
     "WebhookWebhookEndpoint": {
       "type": "object",
       "properties": {
@@ -1510,6 +1616,17 @@
     },
     "v1beta1UpdateJobsStateResponse": {
       "type": "object"
+    },
+    "v1beta1ValidateResponse": {
+      "type": "object",
+      "properties": {
+        "resultsByJobName": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ValidateResponseResultList"
+          }
+        }
+      }
     }
   },
   "externalDocs": {

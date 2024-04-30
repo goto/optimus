@@ -110,11 +110,11 @@ func resourceEventToBytes(event Event, rsc *resource.Resource, eventType pbInt.O
 		ProjectName:   rsc.Tenant().ProjectName().String(),
 		NamespaceName: rsc.Tenant().NamespaceName().String(),
 		EventType:     eventType,
+		ChangeImpact:  updateImpact,
 		Payload: &pbInt.OptimusChangeEvent_ResourceChange{
 			ResourceChange: &pbInt.ResourceChangePayload{
 				DatastoreName: rsc.Store().String(),
 				Resource:      resourcePb,
-				ChangeImpact:  updateImpact,
 			},
 		},
 	}

@@ -46,10 +46,14 @@ type JobSpecificationServiceClient interface {
 	ChangeJobNamespace(ctx context.Context, in *ChangeJobNamespaceRequest, opts ...grpc.CallOption) (*ChangeJobNamespaceResponse, error)
 	// ListJobSpecification returns list of jobs created in a project
 	ListJobSpecification(ctx context.Context, in *ListJobSpecificationRequest, opts ...grpc.CallOption) (*ListJobSpecificationResponse, error)
+	// Deprecated: Do not use.
 	// CheckJobSpecification checks if a job specification is valid
 	CheckJobSpecification(ctx context.Context, in *CheckJobSpecificationRequest, opts ...grpc.CallOption) (*CheckJobSpecificationResponse, error)
+	// Deprecated: Do not use.
 	// CheckJobSpecifications checks if the job specifications are valid
 	CheckJobSpecifications(ctx context.Context, in *CheckJobSpecificationsRequest, opts ...grpc.CallOption) (JobSpecificationService_CheckJobSpecificationsClient, error)
+	// Validate validates whether the job specifications are valid
+	Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	// RefreshJobs do redeployment using the current persisted state.
 	// It will returns a stream of messages which can be used to track the progress.
 	RefreshJobs(ctx context.Context, in *RefreshJobsRequest, opts ...grpc.CallOption) (JobSpecificationService_RefreshJobsClient, error)
@@ -190,6 +194,7 @@ func (c *jobSpecificationServiceClient) ListJobSpecification(ctx context.Context
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *jobSpecificationServiceClient) CheckJobSpecification(ctx context.Context, in *CheckJobSpecificationRequest, opts ...grpc.CallOption) (*CheckJobSpecificationResponse, error) {
 	out := new(CheckJobSpecificationResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/CheckJobSpecification", in, out, opts...)
@@ -199,6 +204,7 @@ func (c *jobSpecificationServiceClient) CheckJobSpecification(ctx context.Contex
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *jobSpecificationServiceClient) CheckJobSpecifications(ctx context.Context, in *CheckJobSpecificationsRequest, opts ...grpc.CallOption) (JobSpecificationService_CheckJobSpecificationsClient, error) {
 	stream, err := c.cc.NewStream(ctx, &JobSpecificationService_ServiceDesc.Streams[1], "/gotocompany.optimus.core.v1beta1.JobSpecificationService/CheckJobSpecifications", opts...)
 	if err != nil {
@@ -229,6 +235,15 @@ func (x *jobSpecificationServiceCheckJobSpecificationsClient) Recv() (*CheckJobS
 		return nil, err
 	}
 	return m, nil
+}
+
+func (c *jobSpecificationServiceClient) Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidateResponse, error) {
+	out := new(ValidateResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/Validate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *jobSpecificationServiceClient) RefreshJobs(ctx context.Context, in *RefreshJobsRequest, opts ...grpc.CallOption) (JobSpecificationService_RefreshJobsClient, error) {
@@ -368,10 +383,14 @@ type JobSpecificationServiceServer interface {
 	ChangeJobNamespace(context.Context, *ChangeJobNamespaceRequest) (*ChangeJobNamespaceResponse, error)
 	// ListJobSpecification returns list of jobs created in a project
 	ListJobSpecification(context.Context, *ListJobSpecificationRequest) (*ListJobSpecificationResponse, error)
+	// Deprecated: Do not use.
 	// CheckJobSpecification checks if a job specification is valid
 	CheckJobSpecification(context.Context, *CheckJobSpecificationRequest) (*CheckJobSpecificationResponse, error)
+	// Deprecated: Do not use.
 	// CheckJobSpecifications checks if the job specifications are valid
 	CheckJobSpecifications(*CheckJobSpecificationsRequest, JobSpecificationService_CheckJobSpecificationsServer) error
+	// Validate validates whether the job specifications are valid
+	Validate(context.Context, *ValidateRequest) (*ValidateResponse, error)
 	// RefreshJobs do redeployment using the current persisted state.
 	// It will returns a stream of messages which can be used to track the progress.
 	RefreshJobs(*RefreshJobsRequest, JobSpecificationService_RefreshJobsServer) error
@@ -432,6 +451,9 @@ func (UnimplementedJobSpecificationServiceServer) CheckJobSpecification(context.
 }
 func (UnimplementedJobSpecificationServiceServer) CheckJobSpecifications(*CheckJobSpecificationsRequest, JobSpecificationService_CheckJobSpecificationsServer) error {
 	return status.Errorf(codes.Unimplemented, "method CheckJobSpecifications not implemented")
+}
+func (UnimplementedJobSpecificationServiceServer) Validate(context.Context, *ValidateRequest) (*ValidateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Validate not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) RefreshJobs(*RefreshJobsRequest, JobSpecificationService_RefreshJobsServer) error {
 	return status.Errorf(codes.Unimplemented, "method RefreshJobs not implemented")
@@ -695,6 +717,24 @@ func (x *jobSpecificationServiceCheckJobSpecificationsServer) Send(m *CheckJobSp
 	return x.ServerStream.SendMsg(m)
 }
 
+func _JobSpecificationService_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobSpecificationServiceServer).Validate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/Validate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobSpecificationServiceServer).Validate(ctx, req.(*ValidateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _JobSpecificationService_RefreshJobs_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(RefreshJobsRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -878,6 +918,10 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckJobSpecification",
 			Handler:    _JobSpecificationService_CheckJobSpecification_Handler,
+		},
+		{
+			MethodName: "Validate",
+			Handler:    _JobSpecificationService_Validate_Handler,
 		},
 		{
 			MethodName: "GetDeployJobsStatus",

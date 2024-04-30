@@ -239,7 +239,7 @@ func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, j
 
 	raiseJobEventMetric(jobTenant, metricName, len(jobNames))
 	for _, jobName := range jobNames {
-		j.raiseStateChangeEvent(jobTenant, jobName, jobState, job.GetURN(jobName, jobTenant))
+		j.raiseStateChangeEvent(jobTenant, jobName, jobState)
 	}
 	return nil
 }
@@ -1219,8 +1219,8 @@ func (j *JobService) raiseUpdateEvent(job *job.Job, impactType job.UpdateImpact)
 	j.eventHandler.HandleEvent(jobEvent)
 }
 
-func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State, jobUrn string) {
-	jobEvent, err := event.NewJobStateChangeEvent(tnnt, jobName, state, jobUrn)
+func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.State) {
+	jobEvent, err := event.NewJobStateChangeEvent(tnnt, jobName, state)
 	if err != nil {
 		j.logger.Error("error creating event for job state change: %s", err)
 		return
@@ -1229,7 +1229,7 @@ func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name,
 }
 
 func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
-	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName, job.GetURN(jobName, tnnt))
+	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName)
 	if err != nil {
 		j.logger.Error("error creating event for job delete: %s", err)
 		return

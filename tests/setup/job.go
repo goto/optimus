@@ -2,8 +2,8 @@ package setup
 
 import (
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -38,8 +38,8 @@ type DummyJobBuilder struct {
 
 	name job.Name
 
-	destinationURN lib.URN
-	sourceURNs     []lib.URN
+	destinationURN resource.URN
+	sourceURNs     []resource.URN
 
 	specUpstreamNames []job.SpecUpstreamName
 	specHTTPUpstreams []*job.SpecHTTPUpstream
@@ -103,12 +103,12 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 		panic(err)
 	}
 
-	dummyDestination, err := lib.ParseURN("store://sample_job_destination")
+	dummyDestination, err := resource.ParseURN("store://sample_job_destination")
 	if err != nil {
 		panic(err)
 	}
 
-	dummySource, err := lib.ParseURN("store://source_of_sample_job")
+	dummySource, err := resource.ParseURN("store://source_of_sample_job")
 	if err != nil {
 		panic(err)
 	}
@@ -136,7 +136,7 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 		scheduler:             map[string]string{"scheduler_config_key": "value"},
 		name:                  name,
 		destinationURN:        dummyDestination,
-		sourceURNs:            []lib.URN{dummySource},
+		sourceURNs:            []resource.URN{dummySource},
 		specUpstreamNames:     []job.SpecUpstreamName{job.SpecUpstreamNameFrom("smpale_job_upstream")},
 		specHTTPUpstreams:     []*job.SpecHTTPUpstream{specHTTPUpstream},
 	}
@@ -256,13 +256,13 @@ func (d *DummyJobBuilder) OverrideName(name job.Name) *DummyJobBuilder {
 	return &output
 }
 
-func (d *DummyJobBuilder) OverrideDestinationURN(destinationURN lib.URN) *DummyJobBuilder {
+func (d *DummyJobBuilder) OverrideDestinationURN(destinationURN resource.URN) *DummyJobBuilder {
 	output := *d
 	output.destinationURN = destinationURN
 	return &output
 }
 
-func (d *DummyJobBuilder) OverrideSourceURNs(sourceURNs []lib.URN) *DummyJobBuilder {
+func (d *DummyJobBuilder) OverrideSourceURNs(sourceURNs []resource.URN) *DummyJobBuilder {
 	output := *d
 	output.sourceURNs = sourceURNs
 	return &output

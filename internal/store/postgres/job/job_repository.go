@@ -14,7 +14,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/store/postgres"
 )
 
@@ -438,10 +437,10 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 
 	var upstreams []*job.Upstream
 	for _, storeUpstream := range storeUpstreams {
-		var resourceURN lib.URN
+		var resourceURN resource.URN
 		if storeUpstream.UpstreamResourceURN.Valid {
 			if storeUpstream.UpstreamResourceURN.String != "" {
-				resourceURN, _ = lib.ParseURN(storeUpstream.UpstreamResourceURN.String)
+				resourceURN, _ = resource.ParseURN(storeUpstream.UpstreamResourceURN.String)
 			}
 		}
 
@@ -551,7 +550,7 @@ func (j JobRepository) GetAllByProjectName(ctx context.Context, projectName tena
 	return jobs, me.ToErr()
 }
 
-func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination lib.URN) ([]*job.Job, error) {
+func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
 	me := errors.NewMultiError("get all job specs by resource destination")
 
 	getAllByDestination := `SELECT ` + jobColumns + ` FROM job WHERE destination = $1 AND deleted_at IS NULL;`
@@ -593,19 +592,19 @@ func specToJob(spec *Spec) (*job.Job, error) {
 		return nil, err
 	}
 
-	var destination lib.URN
+	var destination resource.URN
 	if spec.Destination != "" {
-		destination, err = lib.ParseURN(spec.Destination)
+		destination, err = resource.ParseURN(spec.Destination)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	var sources []lib.URN
+	var sources []resource.URN
 	for _, source := range spec.Sources {
-		var resourceURN lib.URN
+		var resourceURN resource.URN
 		if source != "" {
-			resourceURN, err = lib.ParseURN(source)
+			resourceURN, err = resource.ParseURN(source)
 			if err != nil {
 				return nil, err
 			}
@@ -888,7 +887,7 @@ WHERE project_name=$1 AND job_name=$2;`
 	return j.toUpstreams(storeJobsWithUpstreams)
 }
 
-func (j JobRepository) GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination lib.URN) ([]*job.Downstream, error) {
+func (j JobRepository) GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination resource.URN) ([]*job.Downstream, error) {
 	query := `
 SELECT
 	name as job_name, project_name, namespace_name, task_name
@@ -979,7 +978,7 @@ func fromStoreDownstream(storeDownstreamList []Downstream) ([]*job.Downstream, e
 	return downstreamList, me.ToErr()
 }
 
-func (j JobRepository) GetDownstreamBySources(ctx context.Context, sources []lib.URN) ([]*job.Downstream, error) {
+func (j JobRepository) GetDownstreamBySources(ctx context.Context, sources []resource.URN) ([]*job.Downstream, error) {
 	if len(sources) == 0 {
 		return nil, nil
 	}

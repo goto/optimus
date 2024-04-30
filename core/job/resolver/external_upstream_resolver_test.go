@@ -12,9 +12,9 @@ import (
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/resolver"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/resourcemanager"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -37,14 +37,14 @@ func TestExternalUpstreamResolver(t *testing.T) {
 	upstreamSpec, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"external-project/job-B"}).Build()
 	specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
 
-	resourceURNB, err := lib.ParseURN("store://resource-B")
+	resourceURNB, err := resource.ParseURN("store://resource-B")
 	assert.NoError(t, err)
-	resourceURNC, err := lib.ParseURN("store://resource-C")
+	resourceURNC, err := resource.ParseURN("store://resource-C")
 	assert.NoError(t, err)
-	resourceURND, err := lib.ParseURN("store://resource-D")
+	resourceURND, err := resource.ParseURN("store://resource-D")
 	assert.NoError(t, err)
 
-	jobA := job.NewJob(sampleTenant, specA, lib.ZeroURN(), []lib.URN{resourceURNC}, false)
+	jobA := job.NewJob(sampleTenant, specA, resource.ZeroURN(), []resource.URN{resourceURNC}, false)
 
 	t.Run("BulkResolve", func(t *testing.T) {
 		t.Run("resolves upstream externally", func(t *testing.T) {

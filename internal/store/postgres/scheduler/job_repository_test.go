@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	jobRepo "github.com/goto/optimus/internal/store/postgres/job"
@@ -227,11 +227,11 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	sampleTenant, err := tenant.NewTenant(proj.Name().String(), namespace.Name().String())
 	assert.NoError(t, err)
-	resourceURNA, err := lib.ParseURN("store://dev.resource.sample_a")
+	resourceURNA, err := resource.ParseURN("store://dev.resource.sample_a")
 	assert.NoError(t, err)
-	source, err := lib.ParseURN("store://resource-3")
+	source, err := resource.ParseURN("store://resource-3")
 	assert.NoError(t, err)
-	jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []lib.URN{source}, false)
+	jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{source}, false)
 
 	jobSpecB, err := job.NewSpecBuilder(jobVersion, jobBName, jobOwner, jobSchedule, customConfig, jobTask).
 		WithDescription(jobDescription).
@@ -242,7 +242,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 		WithMetadata(jobMetadata).
 		Build()
 	assert.NoError(t, err)
-	resourceURNB, err := lib.ParseURN("store://dev.resource.sample_b")
+	resourceURNB, err := resource.ParseURN("store://dev.resource.sample_b")
 	assert.NoError(t, err)
 	jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, nil, false)
 

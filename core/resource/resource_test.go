@@ -7,7 +7,6 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/labels"
 )
 
@@ -121,7 +120,7 @@ func TestNewResource(t *testing.T) {
 		res, err := resource.NewResource("proj.set.res_name", "table",
 			resource.Bigquery, tnnt, meta, spec)
 		assert.Nil(t, err)
-		urn, err := lib.ParseURN("bigquery://proj:set.res_name")
+		urn, err := resource.ParseURN("bigquery://proj:set.res_name")
 		assert.NoError(t, err)
 		err = res.UpdateURN(urn)
 		assert.Nil(t, err)
@@ -387,7 +386,7 @@ func TestResource(t *testing.T) {
 			validResource, err := resource.NewResource("project.dataset.table", "table", resource.Bigquery, tnnt, metadata, spec)
 			assert.NoError(t, err)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.table")
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
 			err = validResource.UpdateURN(urn)
 			assert.NoError(t, err)
@@ -397,7 +396,7 @@ func TestResource(t *testing.T) {
 			validResource, err := resource.NewResource("project.dataset.table", "table", resource.Bigquery, tnnt, metadata, spec)
 			assert.NoError(t, err)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.table")
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
 			err = validResource.UpdateURN(urn)
 			assert.NoError(t, err)

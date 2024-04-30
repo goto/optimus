@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
@@ -43,7 +43,7 @@ func TestExecutorCompiler(t *testing.T) {
 
 	logger := log.NewLogrus()
 
-	destinationURN, err := lib.ParseURN("store://some_destination_table_name")
+	destinationURN, err := resource.ParseURN("store://some_destination_table_name")
 	assert.NoError(t, err)
 
 	t.Run("Compile", func(t *testing.T) {

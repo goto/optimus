@@ -14,10 +14,10 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
@@ -74,9 +74,9 @@ func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
 		return nil, err
 	}
 
-	var destinationURN lib.URN
+	var destinationURN resource.URN
 	if j.UpstreamResourceUrn.String != "" {
-		tmpURN, err := lib.ParseURN(j.UpstreamResourceUrn.String)
+		tmpURN, err := resource.ParseURN(j.UpstreamResourceUrn.String)
 		if err != nil {
 			return nil, err
 		}
@@ -241,9 +241,9 @@ func (j *Job) toJob() (*scheduler.Job, error) {
 			return nil, err
 		}
 	}
-	var destination lib.URN
+	var destination resource.URN
 	if j.Destination != "" {
-		tempURN, err := lib.ParseURN(j.Destination)
+		tempURN, err := resource.ParseURN(j.Destination)
 		if err != nil {
 			return nil, err
 		}

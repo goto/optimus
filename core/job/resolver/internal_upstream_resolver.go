@@ -6,9 +6,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 )
 
 type internalUpstreamResolver struct {
@@ -67,7 +67,7 @@ func (i internalUpstreamResolver) BulkResolve(ctx context.Context, projectName t
 	return jobsWithMergedUpstream, nil
 }
 
-func (i internalUpstreamResolver) resolveInferredUpstream(ctx context.Context, sources []lib.URN) ([]*job.Upstream, error) {
+func (i internalUpstreamResolver) resolveInferredUpstream(ctx context.Context, sources []resource.URN) ([]*job.Upstream, error) {
 	var internalUpstream []*job.Upstream
 	me := errors.NewMultiError("resolve internal inferred upstream errors")
 	for _, source := range sources {

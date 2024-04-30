@@ -20,7 +20,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/telemetry"
@@ -87,8 +86,8 @@ type Engine interface {
 
 type PluginService interface {
 	Info(ctx context.Context, taskName string) (*plugin.Info, error)
-	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []lib.URN, err error)
-	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN lib.URN, err error)
+	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []resource.URN, err error)
+	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN resource.URN, err error)
 }
 
 type TenantDetailsGetter interface {
@@ -109,7 +108,7 @@ type JobRepository interface {
 	ChangeJobNamespace(ctx context.Context, jobName job.Name, tenant, newTenant tenant.Tenant) error
 
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
-	GetAllByResourceDestination(ctx context.Context, resourceDestination lib.URN) ([]*job.Job, error)
+	GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error)
 	GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error)
 	GetAllByProjectName(ctx context.Context, projectName tenant.ProjectName) ([]*job.Job, error)
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
@@ -123,9 +122,9 @@ type UpstreamRepository interface {
 }
 
 type DownstreamRepository interface {
-	GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination lib.URN) ([]*job.Downstream, error)
+	GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination resource.URN) ([]*job.Downstream, error)
 	GetDownstreamByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Downstream, error)
-	GetDownstreamBySources(ctx context.Context, sources []lib.URN) ([]*job.Downstream, error)
+	GetDownstreamBySources(ctx context.Context, sources []resource.URN) ([]*job.Downstream, error)
 }
 
 type EventHandler interface {
@@ -143,8 +142,8 @@ type JobRunInputCompiler interface {
 }
 
 type ResourceExistenceChecker interface {
-	GetByURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (*resource.Resource, error)
-	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error)
+	GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
+	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
@@ -347,7 +346,7 @@ func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOp
 	if f.Contains(filter.ResourceDestination) {
 		j.logger.Debug("getting all jobs by resource destination [%s]", f.GetStringValue(filter.ResourceDestination))
 
-		resourceDestinationURN, err := lib.ParseURN(f.GetStringValue(filter.ResourceDestination))
+		resourceDestinationURN, err := resource.ParseURN(f.GetStringValue(filter.ResourceDestination))
 		if err != nil {
 			return nil, err
 		}
@@ -613,7 +612,7 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 	return me.ToErr()
 }
 
-func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs []lib.URN, logWriter writer.LogWriter) error {
+func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs []resource.URN, logWriter writer.LogWriter) error {
 	downstreams, err := j.downstreamRepo.GetDownstreamBySources(ctx, resourceURNs)
 	if err != nil {
 		j.logger.Error("error identifying job downstream for given resources: %s", err)
@@ -1150,7 +1149,7 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	}).Add(float64(metricValue))
 }
 
-func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]lib.URN, error) {
+func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]resource.URN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
 	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
@@ -1159,7 +1158,7 @@ func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails
 	return j.pluginService.IdentifyUpstreams(ctx, taskName, compileConfigs, assets)
 }
 
-func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (lib.URN, error) {
+func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (resource.URN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
 	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
@@ -1516,7 +1515,7 @@ func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) 
 	}
 }
 
-func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant, destination lib.URN) dto.ValidateResult {
+func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant, destination resource.URN) dto.ValidateResult {
 	if destination.IsZero() {
 		registerJobValidationMetric(tnnt, dto.StageDestinationValidation, true)
 
@@ -1581,7 +1580,7 @@ func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tena
 	}
 }
 
-func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (string, bool) {
+func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (string, bool) {
 	activeInDB := true
 	if rsc, err := j.resourceChecker.GetByURN(ctx, tnnt, urn); err != nil {
 		j.logger.Warn("suppress error is encountered when reading resource from db: %v", err)
@@ -1613,7 +1612,7 @@ func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant
 	return "resource does not exist in both db and store", false
 }
 
-func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination lib.URN) dto.ValidateResult {
+func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination resource.URN) dto.ValidateResult {
 	referenceTime := time.Now()
 	runConfigs, err := j.getRunConfigs(referenceTime, subjectJob.Spec())
 	if err != nil {
@@ -1655,7 +1654,7 @@ func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, desti
 	}
 }
 
-func (*JobService) getSchedulerJobWithDetail(subjectJob *job.Job, destination lib.URN) *scheduler.JobWithDetails {
+func (*JobService) getSchedulerJobWithDetail(subjectJob *job.Job, destination resource.URN) *scheduler.JobWithDetails {
 	hooks := make([]*scheduler.Hook, len(subjectJob.Spec().Hooks()))
 	for i, hook := range subjectJob.Spec().Hooks() {
 		hooks[i] = &scheduler.Hook{
@@ -1761,10 +1760,10 @@ func registerJobValidationMetric(tnnt tenant.Tenant, stage dto.ValidateStage, su
 	counter.Add(1)
 }
 
-func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (job.DownstreamList, error) {
+func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (job.DownstreamList, error) {
 	var dependentJobs []*job.Downstream
 
-	jobs, err := j.downstreamRepo.GetDownstreamBySources(ctx, []lib.URN{urn})
+	jobs, err := j.downstreamRepo.GetDownstreamBySources(ctx, []resource.URN{urn})
 	if err != nil {
 		return nil, err
 	}

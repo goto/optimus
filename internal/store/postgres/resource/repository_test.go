@@ -12,7 +12,6 @@ import (
 	serviceResource "github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	repoResource "github.com/goto/optimus/internal/store/postgres/resource"
 	tenantPostgres "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
@@ -35,7 +34,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 	store := serviceResource.Bigquery
 	kindDataset := "dataset"
 
-	resourceURN, err := lib.ParseURN("bigquery://project:dataset")
+	resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset")
 	assert.NoError(t, err)
 
 	t.Run("Create", func(t *testing.T) {
@@ -59,7 +58,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceURN, err := lib.ParseURN("bigquery://project:dataset")
+			resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset")
 			assert.NoError(t, err)
 			err = resourceToCreate.UpdateURN(resourceURN)
 			assert.NoError(t, err)
@@ -151,7 +150,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset")
+			urn, err := serviceResource.ParseURN("bigquery://project:dataset")
 			assert.NoError(t, err)
 
 			resourceExisting, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)
@@ -243,7 +242,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			name1 := "project.dataset"
 			resourceToCreate1, err := serviceResource.NewResource(name1, kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceURN, err := lib.ParseURN("bigquery://project:dataset1")
+			resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset1")
 			assert.NoError(t, err)
 			resourceToCreate1.UpdateURN(resourceURN)
 
@@ -256,7 +255,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			name2 := "project.dataset.view"
 			resourceToCreate2, err := serviceResource.NewResource(name2, "view", store, tnnt, meta, viewSpec)
 			assert.NoError(t, err)
-			resourceURN, err = lib.ParseURN("bigquery://project:dataset.view")
+			resourceURN, err = serviceResource.ParseURN("bigquery://project:dataset.view")
 			assert.NoError(t, err)
 			resourceToCreate2.UpdateURN(resourceURN)
 
@@ -302,12 +301,12 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			existingResource1, err := serviceResource.NewResource("project.dataset1", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceURN, err := lib.ParseURN("bigquery://project:dataset1")
+			resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset1")
 			assert.NoError(t, err)
 			existingResource1.UpdateURN(resourceURN)
 			existingResource2, err := serviceResource.NewResource("project.dataset2", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
-			resourceURN, err = lib.ParseURN("bigquery://project:dataset2")
+			resourceURN, err = serviceResource.ParseURN("bigquery://project:dataset2")
 			assert.NoError(t, err)
 			existingResource2.UpdateURN(resourceURN)
 			err = repository.Create(ctx, existingResource1)
@@ -357,7 +356,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			pool := dbSetup()
 			repository := repoResource.NewRepository(pool)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset")
+			urn, err := serviceResource.ParseURN("bigquery://project:dataset")
 			assert.NoError(t, err)
 
 			resourceToCreate, err := serviceResource.NewResource("project.dataset", kindDataset, store, tnnt, meta, spec)

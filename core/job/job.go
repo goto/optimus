@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 )
 
 const (
@@ -39,8 +39,8 @@ type Job struct {
 
 	spec *Spec
 
-	destination lib.URN
-	sources     []lib.URN
+	destination resource.URN
+	sources     []resource.URN
 
 	isDirty bool
 }
@@ -117,7 +117,7 @@ func (j *Job) GetStaticUpstreamsToResolve() ([]*Upstream, error) {
 }
 
 type ResourceURNWithUpstreams struct {
-	URN       lib.URN
+	URN       resource.URN
 	Upstreams []*ResourceURNWithUpstreams
 }
 
@@ -138,11 +138,11 @@ func (rs ResourceURNWithUpstreamsList) Flatten() []*ResourceURNWithUpstreams {
 	return output
 }
 
-func (j *Job) Destination() lib.URN {
+func (j *Job) Destination() resource.URN {
 	return j.destination
 }
 
-func (j *Job) Sources() []lib.URN {
+func (j *Job) Sources() []resource.URN {
 	return j.sources
 }
 
@@ -157,7 +157,7 @@ func (j *Job) ProjectName() tenant.ProjectName {
 	return j.Tenant().ProjectName()
 }
 
-func NewJob(tenant tenant.Tenant, spec *Spec, destination lib.URN, sources []lib.URN, isDirty bool) *Job {
+func NewJob(tenant tenant.Tenant, spec *Spec, destination resource.URN, sources []resource.URN, isDirty bool) *Job {
 	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty}
 }
 
@@ -314,7 +314,7 @@ func (w WithUpstreams) MergeWithResolvedUpstreams(resolvedUpstreamsBySubjectJobM
 type Upstream struct {
 	name     Name
 	host     string
-	resource lib.URN
+	resource resource.URN
 	taskName TaskName
 
 	projectName   tenant.ProjectName
@@ -326,7 +326,7 @@ type Upstream struct {
 	external bool
 }
 
-func NewUpstreamResolved(name Name, host string, resource lib.URN, jobTenant tenant.Tenant, upstreamType UpstreamType, taskName TaskName, external bool) *Upstream {
+func NewUpstreamResolved(name Name, host string, resource resource.URN, jobTenant tenant.Tenant, upstreamType UpstreamType, taskName TaskName, external bool) *Upstream {
 	return &Upstream{
 		name:          name,
 		host:          host,
@@ -340,7 +340,7 @@ func NewUpstreamResolved(name Name, host string, resource lib.URN, jobTenant ten
 	}
 }
 
-func NewUpstreamUnresolvedInferred(resource lib.URN) *Upstream {
+func NewUpstreamUnresolvedInferred(resource resource.URN) *Upstream {
 	return &Upstream{resource: resource, _type: UpstreamTypeInferred, state: UpstreamStateUnresolved}
 }
 
@@ -356,7 +356,7 @@ func (u *Upstream) Host() string {
 	return u.host
 }
 
-func (u *Upstream) Resource() lib.URN {
+func (u *Upstream) Resource() resource.URN {
 	return u.resource
 }
 

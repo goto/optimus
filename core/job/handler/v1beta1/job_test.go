@@ -17,8 +17,8 @@ import (
 	"github.com/goto/optimus/core/job/dto"
 	"github.com/goto/optimus/core/job/handler/v1beta1"
 	"github.com/goto/optimus/core/job/service/filter"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/writer"
@@ -78,13 +78,13 @@ func TestNewJobHandler(t *testing.T) {
 	log := log.NewNoop()
 	sampleOwner := "sample-owner"
 
-	resourceURNA, err := lib.ParseURN("store://table-A")
+	resourceURNA, err := resource.ParseURN("store://table-A")
 	assert.NoError(t, err)
-	resourceURNB, err := lib.ParseURN("store://table-B")
+	resourceURNB, err := resource.ParseURN("store://table-B")
 	assert.NoError(t, err)
-	resourceURNC, err := lib.ParseURN("store://table-C")
+	resourceURNC, err := resource.ParseURN("store://table-C")
 	assert.NoError(t, err)
-	resourceURND, err := lib.ParseURN("store://table-D")
+	resourceURND, err := resource.ParseURN("store://table-D")
 	assert.NoError(t, err)
 
 	t.Run("AddJobSpecifications", func(t *testing.T) {
@@ -1271,7 +1271,7 @@ func TestNewJobHandler(t *testing.T) {
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 
 			request := pb.GetJobSpecificationRequest{
 				ProjectName:   sampleTenant.ProjectName().String(),
@@ -1310,9 +1310,9 @@ func TestNewJobHandler(t *testing.T) {
 			request := pb.GetJobSpecificationsRequest{}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1333,9 +1333,9 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1375,9 +1375,9 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1400,9 +1400,9 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", sampleOwner, jobSchedule, jobWindow, jobTask).WithAsset(asset).Build()
-			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []lib.URN{resourceURNC}, false)
+			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
 			jobHandler := v1beta1.NewJobHandler(jobService, log)
@@ -1873,7 +1873,7 @@ func TestNewJobHandler(t *testing.T) {
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 
 			req := &pb.GetJobTaskRequest{
 				ProjectName:   sampleTenant.ProjectName().String(),
@@ -1893,7 +1893,7 @@ func TestNewJobHandler(t *testing.T) {
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []lib.URN{resourceURNB}, false)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 
 			req := &pb.GetJobTaskRequest{
 				ProjectName:   sampleTenant.ProjectName().String(),

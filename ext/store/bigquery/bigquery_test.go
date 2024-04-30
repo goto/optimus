@@ -13,7 +13,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/optimus/internal/lib"
 )
 
 func TestBigqueryStore(t *testing.T) {
@@ -677,7 +676,7 @@ func TestBigqueryStore(t *testing.T) {
 				tnnt, &resource.Metadata{}, spec)
 			assert.NoError(t, err)
 
-			expectedURN, err := lib.ParseURN("bigquery://project:set.view_name1")
+			expectedURN, err := resource.ParseURN("bigquery://project:set.view_name1")
 			assert.NoError(t, err)
 
 			bqStore := bigquery.NewBigqueryDataStore(nil, nil)
@@ -768,7 +767,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
-			urn, err := lib.NewURN("random_store", "project.dataset.table")
+			urn, err := resource.NewURN("random_store", "project.dataset.table")
 			assert.NoError(t, err)
 
 			actualExist, actualError := bqStore.Exist(ctx, tnnt, urn)
@@ -792,7 +791,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
-			urn, err := lib.NewURN("bigquery", "project.dataset.table")
+			urn, err := resource.NewURN("bigquery", "project.dataset.table")
 			assert.NoError(t, err)
 
 			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").Return(nil, errors.New("expected error for testing"))
@@ -818,7 +817,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
-			urn, err := lib.NewURN("bigquery", "project.dataset.table")
+			urn, err := resource.NewURN("bigquery", "project.dataset.table")
 			assert.NoError(t, err)
 
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
@@ -847,7 +846,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
-			urn, err := lib.NewURN("bigquery", "invalid_name")
+			urn, err := resource.NewURN("bigquery", "invalid_name")
 			assert.NoError(t, err)
 
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
@@ -881,7 +880,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
-			urn, err := lib.NewURN("bigquery", "project.dataset")
+			urn, err := resource.NewURN("bigquery", "project.dataset")
 			assert.NoError(t, err)
 
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
@@ -919,7 +918,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
-			urn, err := lib.NewURN("bigquery", "project.dataset.table")
+			urn, err := resource.NewURN("bigquery", "project.dataset.table")
 			assert.NoError(t, err)
 
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
@@ -960,7 +959,7 @@ func TestBigqueryStore(t *testing.T) {
 
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
-			urn, err := lib.NewURN("bigquery", "project.dataset.table")
+			urn, err := resource.NewURN("bigquery", "project.dataset.table")
 			assert.NoError(t, err)
 
 			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")

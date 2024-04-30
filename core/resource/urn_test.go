@@ -1,11 +1,11 @@
-package lib_test
+package resource_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/goto/optimus/internal/lib"
+	"github.com/goto/optimus/core/resource"
 )
 
 func TestNewURN(t *testing.T) {
@@ -43,7 +43,7 @@ func TestNewURN(t *testing.T) {
 		}
 
 		for _, testCase := range testTable {
-			actualURN, actualError := lib.NewURN(testCase.store, testCase.name)
+			actualURN, actualError := resource.NewURN(testCase.store, testCase.name)
 
 			assert.Zero(t, actualURN, testCase.conditionName)
 			assert.EqualError(t, actualError, testCase.errorMessage, testCase.conditionName)
@@ -54,7 +54,7 @@ func TestNewURN(t *testing.T) {
 		store := "store"
 		name := "project.dataset.name"
 
-		actualURN, actualError := lib.NewURN(store, name)
+		actualURN, actualError := resource.NewURN(store, name)
 
 		assert.NotZero(t, actualURN)
 		assert.NoError(t, actualError)
@@ -96,7 +96,7 @@ func TestParseURN(t *testing.T) {
 		}
 
 		for _, testCase := range testTable {
-			actualURN, actualError := lib.ParseURN(testCase.inputURN)
+			actualURN, actualError := resource.ParseURN(testCase.inputURN)
 
 			assert.Zero(t, actualURN, testCase.conditionName)
 			assert.EqualError(t, actualError, testCase.errorMessage, testCase.conditionName)
@@ -106,7 +106,7 @@ func TestParseURN(t *testing.T) {
 	t.Run("should return urn and nil if parsing succeeds", func(t *testing.T) {
 		urn := "store://project.dataset.name"
 
-		actualURN, actualError := lib.ParseURN(urn)
+		actualURN, actualError := resource.ParseURN(urn)
 
 		assert.NotZero(t, actualURN)
 		assert.NoError(t, actualError)
@@ -115,14 +115,14 @@ func TestParseURN(t *testing.T) {
 
 func TestZeroURN(t *testing.T) {
 	t.Run("should return zero urn", func(t *testing.T) {
-		assert.Zero(t, lib.ZeroURN())
+		assert.Zero(t, resource.ZeroURN())
 	})
 }
 
 func TestURN(t *testing.T) {
 	t.Run("IsZero", func(t *testing.T) {
 		t.Run("should return true if urn is zero valued", func(t *testing.T) {
-			var urn lib.URN
+			var urn resource.URN
 
 			assert.True(t, urn.IsZero())
 		})
@@ -130,7 +130,7 @@ func TestURN(t *testing.T) {
 		t.Run("should return false if urn is not zero valued", func(t *testing.T) {
 			rawURN := "store://project.dataset.name"
 
-			urn, err := lib.ParseURN(rawURN)
+			urn, err := resource.ParseURN(rawURN)
 			assert.NoError(t, err)
 
 			assert.False(t, urn.IsZero())
@@ -138,7 +138,7 @@ func TestURN(t *testing.T) {
 	})
 
 	t.Run("should return empty member if urn is not initialized", func(t *testing.T) {
-		var urn lib.URN
+		var urn resource.URN
 
 		assert.Empty(t, urn.GetStore())
 		assert.Empty(t, urn.GetName())
@@ -151,7 +151,7 @@ func TestURN(t *testing.T) {
 		expectedStore := "store"
 		expectedName := "project.dataset.name"
 
-		urn, err := lib.ParseURN(rawURN)
+		urn, err := resource.ParseURN(rawURN)
 		assert.NoError(t, err)
 
 		assert.EqualValues(t, expectedStore, urn.GetStore())

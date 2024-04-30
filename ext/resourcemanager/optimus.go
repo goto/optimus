@@ -14,8 +14,8 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 )
 
 // ResourceManager is repository for external job spec
@@ -154,9 +154,9 @@ func (o *OptimusResourceManager) toOptimusDependency(response *jobSpecificationR
 		return nil, err
 	}
 
-	var resourceURN lib.URN
+	var resourceURN resource.URN
 	if response.Job.Destination != "" {
-		urn, err := lib.ParseURN(response.Job.Destination)
+		urn, err := resource.ParseURN(response.Job.Destination)
 		if err != nil {
 			return nil, err
 		}

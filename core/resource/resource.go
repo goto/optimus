@@ -7,7 +7,6 @@ import (
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/labels"
 )
 
@@ -62,7 +61,7 @@ type Resource struct {
 
 	kind  string
 	store Store
-	urn   lib.URN
+	urn   URN
 
 	tenant tenant.Tenant
 
@@ -106,11 +105,11 @@ func (r *Resource) FullName() string {
 	return r.name.String()
 }
 
-func (r *Resource) URN() lib.URN {
+func (r *Resource) URN() URN {
 	return r.urn
 }
 
-func (r *Resource) UpdateURN(urn lib.URN) error {
+func (r *Resource) UpdateURN(urn URN) error {
 	if r.urn.IsZero() {
 		r.urn = urn
 		return nil

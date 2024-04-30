@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 )
 
 func TestNotificationService(t *testing.T) {
@@ -110,7 +110,7 @@ func TestNotificationService(t *testing.T) {
 					JobEvent: event,
 					Meta: &scheduler.JobRunMeta{
 						Labels:         nil,
-						DestinationURN: lib.ZeroURN(),
+						DestinationURN: resource.ZeroURN(),
 					},
 					Route: "http://someDomain.com/endpoint",
 					Headers: map[string]string{

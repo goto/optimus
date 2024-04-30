@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 )
 
 func TestDeploymentService(t *testing.T) {
@@ -25,7 +25,7 @@ func TestDeploymentService(t *testing.T) {
 	tnnt1, _ := tenant.NewTenant(proj1Name.String(), namespace1Name.String())
 	tnnt2, _ := tenant.NewTenant(proj1Name.String(), namespace2Name.String())
 
-	urn, err := lib.ParseURN("bigquery://some-resource")
+	urn, err := resource.ParseURN("bigquery://some-resource")
 	assert.NoError(t, err)
 
 	jobUpstreamStatic := scheduler.JobUpstream{

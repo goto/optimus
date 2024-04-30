@@ -14,7 +14,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/writer"
 )
 
@@ -34,16 +33,16 @@ type ResourceManager interface {
 	SyncResource(ctx context.Context, res *resource.Resource) error
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
 	Validate(res *resource.Resource) error
-	GetURN(res *resource.Resource) (lib.URN, error)
-	Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error)
+	GetURN(res *resource.Resource) (resource.URN, error)
+	Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
 type DownstreamRefresher interface {
-	RefreshResourceDownstream(ctx context.Context, resourceURNs []lib.URN, logWriter writer.LogWriter) error
+	RefreshResourceDownstream(ctx context.Context, resourceURNs []resource.URN, logWriter writer.LogWriter) error
 }
 
 type DownstreamResolver interface {
-	GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (job.DownstreamList, error)
+	GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (job.DownstreamList, error)
 }
 
 type EventHandler interface {
@@ -277,7 +276,7 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 	return synced, nil
 }
 
-func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (*resource.Resource, error) {
+func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error) {
 	if urn.IsZero() {
 		rs.logger.Error("urn is zero value")
 		return nil, errors.InvalidArgument(resource.EntityResource, "urn is zero value")
@@ -296,7 +295,7 @@ func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn 
 	return rs.repo.ReadByFullName(ctx, tnnt, store, name.String(), false)
 }
 
-func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
+func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
 	if urn.IsZero() {
 		return false, errors.NewError(errors.ErrInvalidArgument, resource.EntityResource, "urn is zero-valued")
 	}
@@ -486,7 +485,7 @@ func (rs ResourceService) handleRefreshDownstream( // nolint:gocritic
 	existingMappedByFullName map[string]*resource.Resource,
 	logWriter writer.LogWriter,
 ) error {
-	var resourceURNsToRefresh []lib.URN
+	var resourceURNsToRefresh []resource.URN
 	for _, incoming := range incomings {
 		if incoming.Status() != resource.StatusSuccess {
 			continue

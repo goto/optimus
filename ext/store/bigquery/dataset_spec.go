@@ -8,7 +8,6 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 )
 
 const (
@@ -128,22 +127,22 @@ func ValidateName(res *resource.Resource) error {
 	return nil
 }
 
-func URNFor(res *resource.Resource) (lib.URN, error) {
+func URNFor(res *resource.Resource) (resource.URN, error) {
 	dataset, err := DataSetFor(res.Name())
 	if err != nil {
-		return lib.ZeroURN(), err
+		return resource.ZeroURN(), err
 	}
 
 	if res.Kind() == KindDataset {
 		name := dataset.Project + ":" + dataset.DatasetName
-		return lib.NewURN(resource.Bigquery.String(), name)
+		return resource.NewURN(resource.Bigquery.String(), name)
 	}
 
 	resourceName, err := ResourceNameFor(res.Name(), res.Kind())
 	if err != nil {
-		return lib.ZeroURN(), err
+		return resource.ZeroURN(), err
 	}
 
 	name := dataset.Project + ":" + dataset.DatasetName + "." + resourceName
-	return lib.NewURN(resource.Bigquery.String(), name)
+	return resource.NewURN(resource.Bigquery.String(), name)
 }

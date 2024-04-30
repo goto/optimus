@@ -13,7 +13,6 @@ import (
 	"github.com/goto/optimus/core/resource/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	lib "github.com/goto/optimus/internal/lib"
 )
 
 func TestResourceManager(t *testing.T) {
@@ -301,7 +300,7 @@ func TestResourceManager(t *testing.T) {
 			logger := log.NewLogrus()
 			manager := service.NewResourceManager(nil, logger)
 
-			urn, err := lib.ParseURN("snowflake://db.schema.table")
+			urn, err := resource.ParseURN("snowflake://db.schema.table")
 			assert.NoError(t, err)
 
 			storeService := NewDataStore(t)
@@ -658,7 +657,7 @@ func (_m *DataStore) Create(_a0 context.Context, _a1 *resource.Resource) error {
 }
 
 // Exist provides a mock function with given fields: ctx, tnnt, urn
-func (_m *DataStore) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
+func (_m *DataStore) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
 	ret := _m.Called(ctx, tnnt, urn)
 
 	if len(ret) == 0 {
@@ -667,16 +666,16 @@ func (_m *DataStore) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN)
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) (bool, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, resource.URN) (bool, error)); ok {
 		return rf(ctx, tnnt, urn)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) bool); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, resource.URN) bool); ok {
 		r0 = rf(ctx, tnnt, urn)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, lib.URN) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, resource.URN) error); ok {
 		r1 = rf(ctx, tnnt, urn)
 	} else {
 		r1 = ret.Error(1)
@@ -686,22 +685,22 @@ func (_m *DataStore) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN)
 }
 
 // GetURN provides a mock function with given fields: res
-func (_m *DataStore) GetURN(res *resource.Resource) (lib.URN, error) {
+func (_m *DataStore) GetURN(res *resource.Resource) (resource.URN, error) {
 	ret := _m.Called(res)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetURN")
 	}
 
-	var r0 lib.URN
+	var r0 resource.URN
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*resource.Resource) (lib.URN, error)); ok {
+	if rf, ok := ret.Get(0).(func(*resource.Resource) (resource.URN, error)); ok {
 		return rf(res)
 	}
-	if rf, ok := ret.Get(0).(func(*resource.Resource) lib.URN); ok {
+	if rf, ok := ret.Get(0).(func(*resource.Resource) resource.URN); ok {
 		r0 = rf(res)
 	} else {
-		r0 = ret.Get(0).(lib.URN)
+		r0 = ret.Get(0).(resource.URN)
 	}
 
 	if rf, ok := ret.Get(1).(func(*resource.Resource) error); ok {

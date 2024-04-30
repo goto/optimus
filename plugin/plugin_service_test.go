@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/goto/optimus/internal/lib"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/plugin"
 	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
@@ -159,9 +159,9 @@ func TestIdentifyUpstreams(t *testing.T) {
 		YamlMod: pluginYamlTestWithSelector,
 	}
 
-	urn1, err := lib.ParseURN("bigquery://proj:datas.table1")
+	urn1, err := resource.ParseURN("bigquery://proj:datas.table1")
 	assert.NoError(t, err)
-	urn2, err := lib.ParseURN("bigquery://proj:datas.table2")
+	urn2, err := resource.ParseURN("bigquery://proj:datas.table2")
 	assert.NoError(t, err)
 
 	t.Run("return error when plugin is not exist on pluginGetter", func(t *testing.T) {
@@ -311,7 +311,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
-		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]lib.URN{urn1}, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]resource.URN{urn1}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -339,7 +339,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithDestinationTemplate, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
-		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]lib.URN{urn1, urn2}, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]resource.URN{urn1, urn2}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -440,7 +440,7 @@ func TestConstructDestinationURN(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		expectedURN, err := lib.ParseURN("bigquery://project1:dataset1.table1")
+		expectedURN, err := resource.ParseURN("bigquery://project1:dataset1.table1")
 		assert.NoError(t, err)
 
 		result, err := pluginService.ConstructDestinationURN(ctx, taskName, config)
@@ -639,23 +639,23 @@ type UpstreamIdentifier struct {
 }
 
 // IdentifyResources provides a mock function with given fields: ctx, assets
-func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]lib.URN, error) {
+func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
 	ret := _m.Called(ctx, assets)
 
 	if len(ret) == 0 {
 		panic("no return value specified for IdentifyResources")
 	}
 
-	var r0 []lib.URN
+	var r0 []resource.URN
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) ([]lib.URN, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) ([]resource.URN, error)); ok {
 		return rf(ctx, assets)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) []lib.URN); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) []resource.URN); ok {
 		r0 = rf(ctx, assets)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]lib.URN)
+			r0 = ret.Get(0).([]resource.URN)
 		}
 	}
 

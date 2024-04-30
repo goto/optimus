@@ -13,7 +13,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 )
 
 const (
@@ -231,7 +230,7 @@ func (Store) Validate(r *resource.Resource) error {
 	}
 }
 
-func (Store) GetURN(res *resource.Resource) (lib.URN, error) {
+func (Store) GetURN(res *resource.Resource) (resource.URN, error) {
 	return URNFor(res)
 }
 
@@ -250,7 +249,7 @@ func (s Store) Backup(ctx context.Context, backup *resource.Backup, resources []
 	return BackupResources(ctx, backup, resources, client)
 }
 
-func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
+func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
 	spanCtx, span := startChildSpan(ctx, "bigquery/Exist")
 	defer span.End()
 

@@ -9,7 +9,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 )
 
 type Resource struct {
@@ -67,9 +66,9 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 	if err == nil {
 		output = resource.FromExisting(output, resource.ReplaceStatus(resource.FromStringToStatus(r.Status)))
 
-		var urn lib.URN
+		var urn resource.URN
 		if r.URN != "" {
-			tempURN, err := lib.ParseURN(r.URN)
+			tempURN, err := resource.ParseURN(r.URN)
 			if err != nil {
 				return nil, err
 			}

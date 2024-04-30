@@ -13,7 +13,6 @@ import (
 	serviceResource "github.com/goto/optimus/core/resource"
 	serviceTenant "github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/optimus/internal/lib"
 	repoResource "github.com/goto/optimus/internal/store/postgres/resource"
 	repoTenant "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
@@ -84,7 +83,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
-			urn, err := lib.NewURN(store, name)
+			urn, err := serviceResource.NewURN(store, name)
 			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
@@ -104,7 +103,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
-			urn, err := lib.NewURN(store, name)
+			urn, err := serviceResource.NewURN(store, name)
 			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
@@ -131,7 +130,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
-			urn, err := lib.NewURN(store, name)
+			urn, err := serviceResource.NewURN(store, name)
 			assert.NoError(b, err)
 			err = resourceToUpdate.UpdateURN(urn)
 			assert.NoError(b, err)
@@ -160,7 +159,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
-			urn, err := lib.NewURN(store, name)
+			urn, err := serviceResource.NewURN(store, name)
 			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
@@ -193,7 +192,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
-			urn, err := lib.NewURN(store, name)
+			urn, err := serviceResource.NewURN(store, name)
 			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
@@ -221,7 +220,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
-			urn, err := lib.NewURN(store, name)
+			urn, err := serviceResource.NewURN(store, name)
 			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)
@@ -251,7 +250,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
-			urn, err := lib.NewURN(store, name)
+			urn, err := serviceResource.NewURN(store, name)
 			assert.NoError(b, err)
 			err = resourceToCreate.UpdateURN(urn)
 			assert.NoError(b, err)

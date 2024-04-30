@@ -15,7 +15,6 @@ import (
 	"github.com/goto/optimus/core/resource/service"
 	"github.com/goto/optimus/core/tenant"
 	oErrors "github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/writer"
 )
 
@@ -34,9 +33,9 @@ func TestResourceService(t *testing.T) {
 		"description": "test spec",
 	}
 
-	datasetURN, err := lib.ParseURN("bigquery://project:dataset")
+	datasetURN, err := resource.ParseURN("bigquery://project:dataset")
 	assert.NoError(t, err)
-	tableURN, err := lib.ParseURN("bigquery://project:dataset.table")
+	tableURN, err := resource.ParseURN("bigquery://project:dataset.table")
 	assert.NoError(t, err)
 
 	t.Run("Create", func(t *testing.T) {
@@ -58,7 +57,7 @@ func TestResourceService(t *testing.T) {
 
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", incoming).Return(nil)
-			mgr.On("GetURN", incoming).Return(lib.ZeroURN(), errors.New("urn error"))
+			mgr.On("GetURN", incoming).Return(resource.ZeroURN(), errors.New("urn error"))
 
 			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil)
 
@@ -268,7 +267,7 @@ func TestResourceService(t *testing.T) {
 
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", incoming).Return(nil)
-			mgr.On("GetURN", incoming).Return(lib.ZeroURN(), errors.New("urn error"))
+			mgr.On("GetURN", incoming).Return(resource.ZeroURN(), errors.New("urn error"))
 
 			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil)
 
@@ -279,7 +278,7 @@ func TestResourceService(t *testing.T) {
 		t.Run("returns error if cannot update resource urn", func(t *testing.T) {
 			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
 			assert.NoError(t, err)
-			urn, err := lib.ParseURN("bigquery://project:dataset.table")
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
 			err = incoming.UpdateURN(urn)
 			assert.NoError(t, err)
@@ -567,7 +566,7 @@ func TestResourceService(t *testing.T) {
 
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", incoming).Return(nil)
-			mgr.On("GetURN", incoming).Return(lib.ZeroURN(), errors.New("urn error"))
+			mgr.On("GetURN", incoming).Return(resource.ZeroURN(), errors.New("urn error"))
 
 			repo := newResourceRepository(t)
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{}, nil)
@@ -583,7 +582,7 @@ func TestResourceService(t *testing.T) {
 		t.Run("returns error if cannot update resource urn", func(t *testing.T) {
 			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
 			assert.NoError(t, err)
-			urn, err := lib.ParseURN("bigquery://project:dataset.table")
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
 			err = incoming.UpdateURN(urn)
 			assert.NoError(t, err)
@@ -610,7 +609,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return(nil, errors.New("error while read all"))
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.table1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.table1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -631,7 +630,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{existing}, nil)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -683,7 +682,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{existing}, nil)
 			repo.On("Update", ctx, incomingResourceToUpdate).Return(errors.New("error in update"))
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -712,7 +711,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{existing}, nil)
 			repo.On("Update", ctx, incomingResourceToUpdate).Return(nil)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -744,7 +743,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{existingResource}, nil)
 			repo.On("Update", ctx, incomingResourceToUpdate).Return(nil)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -782,7 +781,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("Update", ctx, incomingToUpdate).Return(nil)
 			repo.On("Update", ctx, incomingToCreateExisting).Return(nil)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -834,7 +833,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("Update", ctx, incomingToUpdate).Return(nil)
 			repo.On("Update", ctx, incomingToCreateExisting).Return(nil)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -889,7 +888,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("Update", ctx, incomingToCreateExisting).Return(nil)
 			repo.On("Update", ctx, incomingToDelete).Return(nil)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -951,7 +950,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("Update", ctx, incomingToCreateExisting).Return(nil)
 			repo.On("Update", ctx, incomingToRecreate).Return(nil)
 
-			urn, err := lib.ParseURN("bigquery://project:dataset.view1")
+			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -1300,7 +1299,7 @@ type mockDownstreamRefresher struct {
 	mock.Mock
 }
 
-func (m *mockDownstreamRefresher) RefreshResourceDownstream(ctx context.Context, resourceURNs []lib.URN, logWriter writer.LogWriter) error {
+func (m *mockDownstreamRefresher) RefreshResourceDownstream(ctx context.Context, resourceURNs []resource.URN, logWriter writer.LogWriter) error {
 	return m.Called(ctx, resourceURNs, logWriter).Error(0)
 }
 
@@ -1346,7 +1345,7 @@ func (_m *ResourceManager) CreateResource(ctx context.Context, res *resource.Res
 }
 
 // Exist provides a mock function with given fields: ctx, tnnt, urn
-func (_m *ResourceManager) Exist(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (bool, error) {
+func (_m *ResourceManager) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
 	ret := _m.Called(ctx, tnnt, urn)
 
 	if len(ret) == 0 {
@@ -1355,16 +1354,16 @@ func (_m *ResourceManager) Exist(ctx context.Context, tnnt tenant.Tenant, urn li
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) (bool, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, resource.URN) (bool, error)); ok {
 		return rf(ctx, tnnt, urn)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, lib.URN) bool); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, resource.URN) bool); ok {
 		r0 = rf(ctx, tnnt, urn)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, lib.URN) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, resource.URN) error); ok {
 		r1 = rf(ctx, tnnt, urn)
 	} else {
 		r1 = ret.Error(1)
@@ -1374,22 +1373,22 @@ func (_m *ResourceManager) Exist(ctx context.Context, tnnt tenant.Tenant, urn li
 }
 
 // GetURN provides a mock function with given fields: res
-func (_m *ResourceManager) GetURN(res *resource.Resource) (lib.URN, error) {
+func (_m *ResourceManager) GetURN(res *resource.Resource) (resource.URN, error) {
 	ret := _m.Called(res)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetURN")
 	}
 
-	var r0 lib.URN
+	var r0 resource.URN
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*resource.Resource) (lib.URN, error)); ok {
+	if rf, ok := ret.Get(0).(func(*resource.Resource) (resource.URN, error)); ok {
 		return rf(res)
 	}
-	if rf, ok := ret.Get(0).(func(*resource.Resource) lib.URN); ok {
+	if rf, ok := ret.Get(0).(func(*resource.Resource) resource.URN); ok {
 		r0 = rf(res)
 	} else {
-		r0 = ret.Get(0).(lib.URN)
+		r0 = ret.Get(0).(resource.URN)
 	}
 
 	if rf, ok := ret.Get(1).(func(*resource.Resource) error); ok {
@@ -1474,7 +1473,7 @@ type mockDownstreamResolver struct {
 	mock.Mock
 }
 
-func (m *mockDownstreamResolver) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn lib.URN) (job.DownstreamList, error) {
+func (m *mockDownstreamResolver) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (job.DownstreamList, error) {
 	args := m.Called(ctx, tnnt, urn)
 	if args.Get(0) != nil {
 		return args.Get(0).(job.DownstreamList), args.Error(1)

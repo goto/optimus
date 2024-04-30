@@ -10,8 +10,8 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/resolver"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/writer"
@@ -45,17 +45,17 @@ func TestUpstreamResolver(t *testing.T) {
 	jobTask := job.NewTask(taskName, jobTaskConfig)
 	sampleOwner := "sample-owner"
 
-	resourceURNA, err := lib.ParseURN("store://resource-A")
+	resourceURNA, err := resource.ParseURN("store://resource-A")
 	assert.NoError(t, err)
-	resourceURNB, err := lib.ParseURN("store://resource-B")
+	resourceURNB, err := resource.ParseURN("store://resource-B")
 	assert.NoError(t, err)
-	resourceURNC, err := lib.ParseURN("store://resource-C")
+	resourceURNC, err := resource.ParseURN("store://resource-C")
 	assert.NoError(t, err)
-	resourceURND, err := lib.ParseURN("store://resource-D")
+	resourceURND, err := resource.ParseURN("store://resource-D")
 	assert.NoError(t, err)
-	resourceURNF, err := lib.ParseURN("store://resource-F")
+	resourceURNF, err := resource.ParseURN("store://resource-F")
 	assert.NoError(t, err)
-	resourceURNG, err := lib.ParseURN("store://resource-G")
+	resourceURNG, err := resource.ParseURN("store://resource-G")
 	assert.NoError(t, err)
 
 	t.Run("CheckStaticResolvable", func(t *testing.T) {
@@ -76,7 +76,7 @@ func TestUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			jobBDestination := resourceURNB
-			jobBUpstreams := []lib.URN{resourceURNG} // unresolved inferred dependency
+			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
 			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobB}
@@ -101,7 +101,7 @@ func TestUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			jobBDestination := resourceURNB
-			jobBUpstreams := []lib.URN{resourceURNG} // unresolved inferred dependency
+			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
 			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobB}
@@ -127,7 +127,7 @@ func TestUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			jobBDestination := resourceURNB
-			jobBUpstreams := []lib.URN{resourceURNG} // unresolved inferred dependency
+			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
 			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobB}
@@ -152,11 +152,11 @@ func TestUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			jobADestination := resourceURNA
-			jobAUpstreams := []lib.URN{resourceURNF} // unresolved inferred dependency
+			jobAUpstreams := []resource.URN{resourceURNF} // unresolved inferred dependency
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 
 			jobBDestination := resourceURNB
-			jobBUpstreams := []lib.URN{resourceURNG} // unresolved inferred dependency
+			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
 			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobA, jobB}
@@ -188,11 +188,11 @@ func TestUpstreamResolver(t *testing.T) {
 			defer logWriter.AssertExpectations(t)
 
 			jobADestination := resourceURNA
-			jobAUpstreams := []lib.URN{resourceURNF} // unresolved inferred dependency
+			jobAUpstreams := []resource.URN{resourceURNF} // unresolved inferred dependency
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 
 			jobBDestination := resourceURNB
-			jobBUpstreams := []lib.URN{resourceURNG} // unresolved inferred dependency
+			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
 			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobA, jobB}
@@ -236,7 +236,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobAUpstreams := []lib.URN{resourceURNB}
+			jobAUpstreams := []resource.URN{resourceURNB}
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
@@ -272,7 +272,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobAUpstreams := []lib.URN{resourceURNB, resourceURND}
+			jobAUpstreams := []resource.URN{resourceURNB, resourceURND}
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
@@ -312,7 +312,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobAUpstreams := []lib.URN{resourceURNB}
+			jobAUpstreams := []resource.URN{resourceURNB}
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
@@ -341,7 +341,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobAUpstreams := []lib.URN{resourceURNB, resourceURND}
+			jobAUpstreams := []resource.URN{resourceURNB, resourceURND}
 
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
@@ -383,7 +383,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobAUpstreams := []lib.URN{resourceURNB, resourceURND}
+			jobAUpstreams := []resource.URN{resourceURNB, resourceURND}
 
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
@@ -427,7 +427,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobASources := []lib.URN{resourceURNB, resourceURND}
+			jobASources := []resource.URN{resourceURNB, resourceURND}
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			unresolvedUpstreams := []*job.Upstream{
@@ -468,7 +468,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobASources := []lib.URN{resourceURNB, resourceURND}
+			jobASources := []resource.URN{resourceURNB, resourceURND}
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			unresolvedUpstreams := []*job.Upstream{
@@ -509,7 +509,7 @@ func TestUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 
 			jobADestination := resourceURNA
-			jobASources := []lib.URN{resourceURNB, resourceURND}
+			jobASources := []resource.URN{resourceURNB, resourceURND}
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			unresolvedUpstreams := []*job.Upstream{
@@ -647,11 +647,11 @@ type JobRepository struct {
 }
 
 // GetAllByResourceDestination provides a mock function with given fields: ctx, resourceDestination
-func (_m *JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination lib.URN) ([]*job.Job, error) {
+func (_m *JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
 	ret := _m.Called(ctx, resourceDestination)
 
 	var r0 []*job.Job
-	if rf, ok := ret.Get(0).(func(context.Context, lib.URN) []*job.Job); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, resource.URN) []*job.Job); ok {
 		r0 = rf(ctx, resourceDestination)
 	} else {
 		if ret.Get(0) != nil {
@@ -660,7 +660,7 @@ func (_m *JobRepository) GetAllByResourceDestination(ctx context.Context, resour
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, lib.URN) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, resource.URN) error); ok {
 		r1 = rf(ctx, resourceDestination)
 	} else {
 		r1 = ret.Error(1)

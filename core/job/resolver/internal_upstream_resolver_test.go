@@ -9,8 +9,8 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/resolver"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -19,17 +19,17 @@ func TestInternalUpstreamResolver(t *testing.T) {
 	ctx := context.Background()
 	sampleTenant, _ := tenant.NewTenant("project", "namespace")
 
-	resourceURNA, err := lib.ParseURN("store://resource-A")
+	resourceURNA, err := resource.ParseURN("store://resource-A")
 	assert.NoError(t, err)
-	resourceURNB, err := lib.ParseURN("store://resource-B")
+	resourceURNB, err := resource.ParseURN("store://resource-B")
 	assert.NoError(t, err)
-	resourceURNC, err := lib.ParseURN("store://resource-C")
+	resourceURNC, err := resource.ParseURN("store://resource-C")
 	assert.NoError(t, err)
-	resourceURND, err := lib.ParseURN("store://resource-D")
+	resourceURND, err := resource.ParseURN("store://resource-D")
 	assert.NoError(t, err)
-	resourceURNE, err := lib.ParseURN("store://resource-E")
+	resourceURNE, err := resource.ParseURN("store://resource-E")
 	assert.NoError(t, err)
-	resourceURNX, err := lib.ParseURN("store://resource-X")
+	resourceURNX, err := resource.ParseURN("store://resource-X")
 	assert.NoError(t, err)
 
 	jobVersion := 1
@@ -43,7 +43,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 	upstreamSpec, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"job-C"}).Build()
 	specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
 	jobADestination := resourceURNA
-	jobASources := []lib.URN{resourceURNB, resourceURND}
+	jobASources := []resource.URN{resourceURNB, resourceURND}
 	jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 	specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
@@ -87,7 +87,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 			specD, _ := job.NewSpecBuilder(jobVersion, "job-D", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(upstreamSpec).Build()
 			jobDDestination := resourceURND
-			jobDSources := []lib.URN{resourceURNC}
+			jobDSources := []resource.URN{resourceURNC}
 			jobD := job.NewJob(sampleTenant, specD, jobDDestination, jobDSources, false)
 
 			unresolvedUpstreamCInferred := job.NewUpstreamUnresolvedInferred(resourceURNC)
@@ -112,7 +112,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 
 			specX, _ := job.NewSpecBuilder(jobVersion, "job-X", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			jobXDestination := resourceURNX
-			jobX := job.NewJob(sampleTenant, specX, jobXDestination, []lib.URN{resourceURNB}, false)
+			jobX := job.NewJob(sampleTenant, specX, jobXDestination, []resource.URN{resourceURNB}, false)
 
 			jobRepo.On("GetAllByResourceDestination", ctx, jobX.Sources()[0]).Return([]*job.Job{jobB}, nil)
 
@@ -221,7 +221,7 @@ func TestInternalUpstreamResolver(t *testing.T) {
 		assert.NoError(t, err)
 
 		jobXDestination := resourceURNX
-		jobX := job.NewJob(sampleTenant, specX, jobXDestination, []lib.URN{resourceURNB}, false)
+		jobX := job.NewJob(sampleTenant, specX, jobXDestination, []resource.URN{resourceURNB}, false)
 
 		t.Run("resolves upstream internally in bulk", func(t *testing.T) {
 			jobRepo := new(JobRepository)

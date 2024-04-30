@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	serviceJob "github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	serviceTenant "github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/internal/lib"
 	repoJob "github.com/goto/optimus/internal/store/postgres/job"
 	repoTenant "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
@@ -122,7 +122,7 @@ func BenchmarkJobRepository(b *testing.B) {
 			inferredUpstreamName, err := serviceJob.NameFrom(name)
 			assert.NoError(b, err)
 
-			inferredUpstreamDestination, err := lib.ParseURN(fmt.Sprintf("store://dev.resource.sample_inferred_upstream_%d", i))
+			inferredUpstreamDestination, err := resource.ParseURN(fmt.Sprintf("store://dev.resource.sample_inferred_upstream_%d", i))
 			assert.NoError(b, err)
 
 			jobTreatedAsInferredUpstream := setup.NewDummyJobBuilder().
@@ -137,7 +137,7 @@ func BenchmarkJobRepository(b *testing.B) {
 			currentJob := setup.NewDummyJobBuilder().
 				OverrideName(currentJobName).
 				OverrideSpecUpstreamNames([]serviceJob.SpecUpstreamName{serviceJob.SpecUpstreamNameFrom(staticUpstreamName.String())}).
-				OverrideSourceURNs([]lib.URN{inferredUpstreamDestination}).
+				OverrideSourceURNs([]resource.URN{inferredUpstreamDestination}).
 				Build(tnnt)
 
 			storedJobs, err := repo.Add(ctx, []*serviceJob.Job{
@@ -224,7 +224,7 @@ func BenchmarkJobRepository(b *testing.B) {
 			jobName, err := serviceJob.NameFrom(name)
 			assert.NoError(b, err)
 
-			destination, err := lib.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
+			destination, err := resource.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
 			assert.NoError(b, err)
 
 			jobs[i] = setup.NewDummyJobBuilder().
@@ -257,7 +257,7 @@ func BenchmarkJobRepository(b *testing.B) {
 			jobName, err := serviceJob.NameFrom(name)
 			assert.NoError(b, err)
 
-			destination, err := lib.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
+			destination, err := resource.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
 			assert.NoError(b, err)
 
 			jobs[i] = setup.NewDummyJobBuilder().
@@ -276,7 +276,7 @@ func BenchmarkJobRepository(b *testing.B) {
 
 			upstreams := make([]*serviceJob.Upstream, maxNumberOfUpstreams)
 			for j := 0; j < maxNumberOfUpstreams; j++ {
-				resourceURN, err := lib.ParseURN(fmt.Sprintf("store://dev.resource.resource_%d_%d", i, j))
+				resourceURN, err := resource.ParseURN(fmt.Sprintf("store://dev.resource.resource_%d_%d", i, j))
 				assert.NoError(b, err)
 
 				upstream := serviceJob.NewUpstreamResolved(jobName, "http://optimus.io", resourceURN, tnnt, serviceJob.UpstreamTypeInferred, "bq2bq", false)
@@ -367,7 +367,7 @@ func BenchmarkJobRepository(b *testing.B) {
 
 		upstreams := make([]*serviceJob.Upstream, maxNumberOfUpstreams)
 		for i := 0; i < maxNumberOfUpstreams; i++ {
-			resourceURN, err := lib.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
+			resourceURN, err := resource.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
 			assert.NoError(b, err)
 
 			upstreams[i] = serviceJob.NewUpstreamUnresolvedInferred(resourceURN)
@@ -392,7 +392,7 @@ func BenchmarkJobRepository(b *testing.B) {
 
 		rootJobName, err := serviceJob.NameFrom("root_job")
 		assert.NoError(b, err)
-		rootJobDestination, err := lib.ParseURN("store://root_job_destination")
+		rootJobDestination, err := resource.ParseURN("store://root_job_destination")
 		assert.NoError(b, err)
 		rootJob := setup.NewDummyJobBuilder().
 			OverrideName(rootJobName).
@@ -405,13 +405,13 @@ func BenchmarkJobRepository(b *testing.B) {
 		for i := 0; i < maxNumberOfDownstreams; i++ {
 			currentJobName, err := serviceJob.NameFrom(fmt.Sprintf("downstream_job_%d", i))
 			assert.NoError(b, err)
-			currentDestinationURN, err := lib.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
+			currentDestinationURN, err := resource.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
 			assert.NoError(b, err)
 
 			currentJob := setup.NewDummyJobBuilder().
 				OverrideName(currentJobName).
 				OverrideDestinationURN(currentDestinationURN).
-				OverrideSourceURNs([]lib.URN{rootJobDestination}).
+				OverrideSourceURNs([]resource.URN{rootJobDestination}).
 				Build(tnnt)
 
 			_, err = repo.Add(ctx, []*serviceJob.Job{currentJob})
@@ -433,7 +433,7 @@ func BenchmarkJobRepository(b *testing.B) {
 
 		rootJobName, err := serviceJob.NameFrom("root_job")
 		assert.NoError(b, err)
-		rootJobDestination, err := lib.ParseURN("store://root_job_destination")
+		rootJobDestination, err := resource.ParseURN("store://root_job_destination")
 		assert.NoError(b, err)
 		rootJob := setup.NewDummyJobBuilder().
 			OverrideName(rootJobName).
@@ -446,7 +446,7 @@ func BenchmarkJobRepository(b *testing.B) {
 		for i := 0; i < maxNumberOfDownstreams; i++ {
 			currentJobName, err := serviceJob.NameFrom(fmt.Sprintf("downstream_job_%d", i))
 			assert.NoError(b, err)
-			currentDestinationURN, err := lib.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
+			currentDestinationURN, err := resource.ParseURN(fmt.Sprintf("store://dev.resource.sample_%d", i))
 			assert.NoError(b, err)
 
 			currentJob := setup.NewDummyJobBuilder().

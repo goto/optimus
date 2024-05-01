@@ -32,6 +32,10 @@ const (
 	MetricJobValidation = "job_validation"
 
 	MetricJobRefreshResourceDownstream = "refresh_resource_downstream_total"
+
+	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
+	JobInternalImpact       UpdateImpact = "internal_impact"
+	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
 )
 
 type Job struct {
@@ -114,6 +118,18 @@ func (j *Job) GetStaticUpstreamsToResolve() ([]*Upstream, error) {
 		unresolvedStaticUpstreams = append(unresolvedStaticUpstreams, NewUpstreamUnresolvedStatic(jobUpstreamName, projectUpstreamName))
 	}
 	return unresolvedStaticUpstreams, me.ToErr()
+}
+
+type UpdateImpact string
+
+func (u UpdateImpact) String() string {
+	return string(u)
+}
+
+type ResourceURN string
+
+func (n ResourceURN) String() string {
+	return string(n)
 }
 
 type ResourceURNWithUpstreams struct {

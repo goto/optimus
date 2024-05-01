@@ -29,28 +29,38 @@ func NewResourceCreatedEvent(rsc *resource.Resource) (*ResourceCreated, error) {
 }
 
 func (r ResourceCreated) Bytes() ([]byte, error) {
-	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_CREATE)
+	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_CREATE, pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_UNSPECIFIED)
 }
 
 type ResourceUpdated struct {
 	Event
 
-	Resource *resource.Resource
+	Resource     *resource.Resource
+	UpdateImpact pbInt.ChangeImpact
 }
 
-func NewResourceUpdatedEvent(rsc *resource.Resource) (*ResourceUpdated, error) {
+func NewResourceUpdatedEvent(rsc *resource.Resource, impact resource.UpdateImpact) (*ResourceUpdated, error) {
 	baseEvent, err := NewBaseEvent()
 	if err != nil {
 		return nil, err
 	}
+	var impactProto pbInt.ChangeImpact
+	switch impact {
+	case resource.ResourceDataPipeLineImpact:
+		impactProto = pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_BEHAVIOUR
+	default:
+		impactProto = pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_UNSPECIFIED
+	}
+
 	return &ResourceUpdated{
-		Event:    baseEvent,
-		Resource: rsc,
+		Event:        baseEvent,
+		Resource:     rsc,
+		UpdateImpact: impactProto,
 	}, nil
 }
 
 func (r ResourceUpdated) Bytes() ([]byte, error) {
-	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_UPDATE)
+	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_UPDATE, r.UpdateImpact)
 }
 
 type ResourceDeleted struct {
@@ -71,10 +81,10 @@ func NewResourceDeleteEvent(rsc *resource.Resource) (*ResourceDeleted, error) {
 }
 
 func (r ResourceDeleted) Bytes() ([]byte, error) {
-	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_DELETE)
+	return resourceEventToBytes(r.Event, r.Resource, pbInt.OptimusChangeEvent_EVENT_TYPE_RESOURCE_DELETE, pbInt.ChangeImpact_CHANGE_IMPACT_TYPE_UNSPECIFIED)
 }
 
-func resourceEventToBytes(event Event, rsc *resource.Resource, eventType pbInt.OptimusChangeEvent_EventType) ([]byte, error) {
+func resourceEventToBytes(event Event, rsc *resource.Resource, eventType pbInt.OptimusChangeEvent_EventType, updateImpact pbInt.ChangeImpact) ([]byte, error) {
 	meta := rsc.Metadata()
 	if meta == nil {
 		return nil, errors.InvalidArgument(resource.EntityResource, "missing resource metadata")
@@ -100,6 +110,7 @@ func resourceEventToBytes(event Event, rsc *resource.Resource, eventType pbInt.O
 		ProjectName:   rsc.Tenant().ProjectName().String(),
 		NamespaceName: rsc.Tenant().NamespaceName().String(),
 		EventType:     eventType,
+		ChangeImpact:  updateImpact,
 		Payload: &pbInt.OptimusChangeEvent_ResourceChange{
 			ResourceChange: &pbInt.ResourceChangePayload{
 				DatastoreName: rsc.Store().String(),
@@ -107,5 +118,6 @@ func resourceEventToBytes(event Event, rsc *resource.Resource, eventType pbInt.O
 			},
 		},
 	}
+
 	return proto.Marshal(optEvent)
 }

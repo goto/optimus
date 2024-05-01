@@ -120,14 +120,16 @@ func TestNewResource(t *testing.T) {
 		res, err := resource.NewResource("proj.set.res_name", "table",
 			resource.Bigquery, tnnt, meta, spec)
 		assert.Nil(t, err)
-		err = res.UpdateURN("bigquery://proj:set.res_name")
+		urn, err := resource.ParseURN("bigquery://proj:set.res_name")
+		assert.NoError(t, err)
+		err = res.UpdateURN(urn)
 		assert.Nil(t, err)
 
 		assert.Equal(t, "proj.set.res_name", res.FullName())
 		assert.Equal(t, "proj.set.res_name", res.Name().String())
-		assert.Equal(t, "bigquery://proj:set.res_name", res.URN())
+		assert.Equal(t, urn, res.URN())
 		assert.EqualValues(t, meta, res.Metadata())
-		assert.Equal(t, 3, len(res.NameSections()))
+		assert.Equal(t, 3, len(res.Name().Sections()))
 		assert.Equal(t, "table", res.Kind())
 		assert.EqualValues(t, tnnt, res.Tenant())
 		assert.Equal(t, resource.Bigquery.String(), res.Store().String())
@@ -145,7 +147,7 @@ func TestNewResource(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, "proj.dataset", res.FullName())
-		assert.Equal(t, 2, len(res.NameSections()))
+		assert.Equal(t, 2, len(res.Name().Sections()))
 		assert.EqualValues(t, meta, res.Metadata())
 		assert.Equal(t, "dataset", res.Kind())
 		assert.EqualValues(t, tnnt, res.Tenant())
@@ -384,7 +386,8 @@ func TestResource(t *testing.T) {
 			validResource, err := resource.NewResource("project.dataset.table", "table", resource.Bigquery, tnnt, metadata, spec)
 			assert.NoError(t, err)
 
-			urn := "bigquery://project:dataset.table"
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
+			assert.NoError(t, err)
 			err = validResource.UpdateURN(urn)
 			assert.NoError(t, err)
 			assert.Equal(t, urn, validResource.URN())
@@ -393,7 +396,8 @@ func TestResource(t *testing.T) {
 			validResource, err := resource.NewResource("project.dataset.table", "table", resource.Bigquery, tnnt, metadata, spec)
 			assert.NoError(t, err)
 
-			urn := "bigquery://project:dataset.table"
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
+			assert.NoError(t, err)
 			err = validResource.UpdateURN(urn)
 			assert.NoError(t, err)
 

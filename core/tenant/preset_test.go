@@ -15,7 +15,7 @@ func TestPreset(t *testing.T) {
 				name        string
 				description string
 				truncateTo  string
-				delay       string
+				shiftBy     string
 				size        string
 			}
 			testCases := []struct {
@@ -28,7 +28,7 @@ func TestPreset(t *testing.T) {
 					presetInput: presetInput{
 						name:        "",
 						description: "preset for testing",
-						delay:       "1h",
+						shiftBy:     "1h",
 						size:        "1d",
 					},
 					expectedErrorMessage: "invalid argument for entity project: name is empty",
@@ -38,7 +38,7 @@ func TestPreset(t *testing.T) {
 					presetInput: presetInput{
 						name:        "yesterday",
 						description: "",
-						delay:       "1h",
+						shiftBy:     "1h",
 						size:        "1d",
 					},
 					expectedErrorMessage: "invalid argument for entity project: description is empty",
@@ -49,7 +49,7 @@ func TestPreset(t *testing.T) {
 						name:        "yesterday",
 						description: "preset for testing",
 						truncateTo:  "Z",
-						delay:       "1h",
+						shiftBy:     "1h",
 						size:        "24h",
 					},
 					expectedErrorMessage: "invalid value for unit Z, accepted values are [h,d,w,M,y]",
@@ -60,10 +60,10 @@ func TestPreset(t *testing.T) {
 				name := test.presetInput.name
 				description := test.presetInput.description
 				truncateTo := test.presetInput.truncateTo
-				delay := test.presetInput.delay
+				shiftBy := test.presetInput.shiftBy
 				size := test.presetInput.size
 
-				actualPreset, actualError := tenant.NewPreset(name, description, size, delay, "", truncateTo)
+				actualPreset, actualError := tenant.NewPreset(name, description, size, shiftBy, "", truncateTo)
 
 				assert.Zero(t, actualPreset, test.caseName)
 				assert.ErrorContains(t, actualError, test.expectedErrorMessage, test.caseName)
@@ -73,10 +73,10 @@ func TestPreset(t *testing.T) {
 		t.Run("should return non-zero preset and nil if no error is encountered", func(t *testing.T) {
 			name := "yesterday"
 			description := "preset for testing"
-			delay := "1h"
+			shiftBy := "1h"
 			size := "1d"
 
-			actualPreset, actualError := tenant.NewPreset(name, description, size, delay, "", "")
+			actualPreset, actualError := tenant.NewPreset(name, description, size, shiftBy, "", "")
 
 			assert.NotZero(t, actualPreset)
 			assert.NoError(t, actualError)
@@ -88,10 +88,10 @@ func TestPreset(t *testing.T) {
 			t.Run("should return name", func(t *testing.T) {
 				name := "yesterday"
 				description := "preset for testing"
-				delay := "1h"
+				shiftBy := "1h"
 				size := "1d"
 
-				preset, err := tenant.NewPreset(name, description, size, delay, "", "")
+				preset, err := tenant.NewPreset(name, description, size, shiftBy, "", "")
 				assert.NotZero(t, preset)
 				assert.NoError(t, err)
 
@@ -107,10 +107,10 @@ func TestPreset(t *testing.T) {
 			t.Run("should return description", func(t *testing.T) {
 				name := "yesterday"
 				description := "preset for testing"
-				delay := "1h"
+				shiftBy := "1h"
 				size := "1d"
 
-				preset, err := tenant.NewPreset(name, description, size, delay, "", "")
+				preset, err := tenant.NewPreset(name, description, size, shiftBy, "", "")
 				assert.NotZero(t, preset)
 				assert.NoError(t, err)
 
@@ -127,10 +127,10 @@ func TestPreset(t *testing.T) {
 				name := "yesterday"
 				description := "preset for testing"
 				truncateTo := ""
-				delay := "1h"
+				shiftBy := "1h"
 				size := "1d"
 
-				presetReference, err := tenant.NewPreset(name, description, size, delay, "", truncateTo)
+				presetReference, err := tenant.NewPreset(name, description, size, shiftBy, "", truncateTo)
 				assert.NotZero(t, presetReference)
 				assert.NoError(t, err)
 
@@ -138,7 +138,7 @@ func TestPreset(t *testing.T) {
 					name        string
 					description string
 					truncateTo  string
-					delay       string
+					shiftBy     string
 					size        string
 				}
 				testCases := []struct {
@@ -151,7 +151,7 @@ func TestPreset(t *testing.T) {
 							name:        "different_name",
 							description: description,
 							truncateTo:  truncateTo,
-							delay:       delay,
+							shiftBy:     shiftBy,
 							size:        size,
 						},
 					},
@@ -161,7 +161,7 @@ func TestPreset(t *testing.T) {
 							name:        name,
 							description: "different description for test",
 							truncateTo:  truncateTo,
-							delay:       delay,
+							shiftBy:     shiftBy,
 							size:        size,
 						},
 					},
@@ -171,17 +171,17 @@ func TestPreset(t *testing.T) {
 							name:        name,
 							description: description,
 							truncateTo:  "M",
-							delay:       delay,
+							shiftBy:     shiftBy,
 							size:        size,
 						},
 					},
 					{
-						caseName: "different delay",
+						caseName: "different shift by",
 						presetInput: presetInput{
 							name:        name,
 							description: description,
 							truncateTo:  truncateTo,
-							delay:       "2h",
+							shiftBy:     "2h",
 							size:        size,
 						},
 					},
@@ -191,7 +191,7 @@ func TestPreset(t *testing.T) {
 							name:        name,
 							description: description,
 							truncateTo:  truncateTo,
-							delay:       delay,
+							shiftBy:     shiftBy,
 							size:        "23h",
 						},
 					},
@@ -201,10 +201,10 @@ func TestPreset(t *testing.T) {
 					name := test.presetInput.name
 					description := test.presetInput.description
 					truncateTo := test.presetInput.truncateTo
-					delay := test.presetInput.delay
+					shiftBy := test.presetInput.shiftBy
 					size := test.presetInput.size
 
-					actualPreset, actualError := tenant.NewPreset(name, description, size, delay, "", truncateTo)
+					actualPreset, actualError := tenant.NewPreset(name, description, size, shiftBy, "", truncateTo)
 					assert.NotZero(t, actualPreset, test.caseName)
 					assert.NoError(t, actualError, test.caseName)
 					assert.False(t, presetReference.Equal(actualPreset))
@@ -214,14 +214,14 @@ func TestPreset(t *testing.T) {
 			t.Run("should return true if equal", func(t *testing.T) {
 				name := "yesterday"
 				description := "preset for testing"
-				delay := "1h"
+				shiftBy := "1h"
 				size := "1d"
 
-				presetReference, err := tenant.NewPreset(name, description, size, delay, "", "")
+				presetReference, err := tenant.NewPreset(name, description, size, shiftBy, "", "")
 				assert.NotZero(t, presetReference)
 				assert.NoError(t, err)
 
-				actualPreset, err := tenant.NewPreset(name, description, size, delay, "", "")
+				actualPreset, err := tenant.NewPreset(name, description, size, shiftBy, "", "")
 				assert.NotZero(t, actualPreset)
 				assert.NoError(t, err)
 

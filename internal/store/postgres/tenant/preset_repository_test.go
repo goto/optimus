@@ -40,7 +40,7 @@ func TestPostgresPresetRepository(t *testing.T) {
 
 	conf1 := window.SimpleConfig{
 		Size:       "1d",
-		Delay:      "1h",
+		ShiftBy:    "-1h",
 		Location:   "",
 		TruncateTo: "",
 	}

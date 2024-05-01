@@ -71,11 +71,11 @@ type JobSpecTask struct {
 
 type JobSpecTaskWindow struct {
 	Size string `yaml:"size,omitempty"`
-	// deprecated, replaced by Delay
+	// deprecated, replaced by ShiftBy
 	Offset     string `yaml:"offset,omitempty"`
 	TruncateTo string `yaml:"truncate_to,omitempty"`
 	Preset     string `yaml:"preset,omitempty"`
-	Delay      string `yaml:"delay,omitempty"`
+	ShiftBy    string `yaml:"shift_by,omitempty"`
 	Location   string `yaml:"location,omitempty"`
 }
 
@@ -147,7 +147,7 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 		js.Window = &pb.JobSpecification_Window{
 			Preset:     j.Task.Window.Preset,
 			Size:       j.Task.Window.Size,
-			Delay:      j.Task.Window.Delay,
+			ShiftBy:    j.Task.Window.ShiftBy,
 			Location:   j.Task.Window.Location,
 			TruncateTo: j.Task.Window.TruncateTo,
 		}
@@ -481,7 +481,7 @@ func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 		wc := protoSpec.Window
 		w = JobSpecTaskWindow{
 			Size:       wc.Size,
-			Delay:      wc.Delay,
+			ShiftBy:    wc.ShiftBy,
 			TruncateTo: wc.TruncateTo,
 			Location:   wc.Location,
 			Preset:     wc.Preset,

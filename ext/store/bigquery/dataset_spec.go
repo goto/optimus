@@ -71,38 +71,38 @@ func (d Dataset) FullName() string {
 	return d.Project + "." + d.DatasetName
 }
 
-func DataSetFor(res *resource.Resource) (Dataset, error) {
-	sections := res.NameSections()
+func DataSetFor(name resource.Name) (Dataset, error) {
+	sections := name.Sections()
 	if len(sections) < DatesetNameSections {
-		return Dataset{}, errors.InvalidArgument(EntityDataset, "invalid dataset name: "+res.FullName())
+		return Dataset{}, errors.InvalidArgument(EntityDataset, "invalid dataset name: "+name.String())
 	}
 
 	return DataSetFrom(sections[0], sections[1])
 }
 
-func ResourceNameFor(res *resource.Resource) (string, error) {
-	sections := res.NameSections()
+func ResourceNameFor(name resource.Name, kind string) (string, error) {
+	sections := name.Sections()
 	var strName string
-	if res.Kind() == KindDataset {
+	if kind == KindDataset {
 		if len(sections) < DatesetNameSections {
-			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+res.FullName())
+			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
 		}
 		strName = sections[1]
 	} else {
 		if len(sections) < TableNameSections {
-			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+res.FullName())
+			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
 		}
 		strName = sections[2]
 	}
 
 	if strName == "" {
-		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+res.FullName())
+		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
 	}
 	return strName, nil
 }
 
 func ValidateName(res *resource.Resource) error {
-	sections := res.NameSections()
+	sections := res.Name().Sections()
 	if len(sections) < DatesetNameSections {
 		return errors.InvalidArgument(resource.EntityResource, "invalid sections in name: "+res.FullName())
 	}
@@ -127,21 +127,22 @@ func ValidateName(res *resource.Resource) error {
 	return nil
 }
 
-func URNFor(res *resource.Resource) (string, error) {
-	dataset, err := DataSetFor(res)
+func URNFor(res *resource.Resource) (resource.URN, error) {
+	dataset, err := DataSetFor(res.Name())
 	if err != nil {
-		return "", err
+		return resource.ZeroURN(), err
 	}
 
-	datasetURN := string(resource.Bigquery) + "://" + dataset.Project + ":" + dataset.DatasetName
 	if res.Kind() == KindDataset {
-		return datasetURN, nil
+		name := dataset.Project + ":" + dataset.DatasetName
+		return resource.NewURN(resource.Bigquery.String(), name)
 	}
 
-	name, err := ResourceNameFor(res)
+	resourceName, err := ResourceNameFor(res.Name(), res.Kind())
 	if err != nil {
-		return "", err
+		return resource.ZeroURN(), err
 	}
 
-	return datasetURN + "." + name, nil
+	name := dataset.Project + ":" + dataset.DatasetName + "." + resourceName
+	return resource.NewURN(resource.Bigquery.String(), name)
 }

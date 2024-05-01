@@ -174,21 +174,6 @@ func TestEntitySpec(t *testing.T) {
 			assert.EqualValues(t, expectedMap, resultMap)
 		})
 
-		t.Run("Validate should return error for duplicate jobs", func(t *testing.T) {
-			specA1, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-			assert.NoError(t, err)
-
-			specA2, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-			assert.NoError(t, err)
-
-			specB, err := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-			assert.NoError(t, err)
-
-			specs := job.Specs([]*job.Spec{specA1, specA2, specB})
-			err = specs.Validate()
-
-			assert.ErrorContains(t, err, "duplicate job-A")
-		})
 		t.Run("GetValid should return valid specs", func(t *testing.T) {
 			specA1, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			assert.NoError(t, err)

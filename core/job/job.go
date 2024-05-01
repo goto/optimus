@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 )
@@ -28,6 +29,8 @@ const (
 	MetricJobEventDisabled              = "disabled"
 	MetricJobEventFoundDirty            = "found_dirty"
 
+	MetricJobValidation = "job_validation"
+
 	MetricJobRefreshResourceDownstream = "refresh_resource_downstream_total"
 
 	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
@@ -41,8 +44,8 @@ type Job struct {
 
 	spec *Spec
 
-	destination ResourceURN
-	sources     []ResourceURN
+	destination resource.URN
+	sources     []resource.URN
 
 	isDirty bool
 }
@@ -131,7 +134,7 @@ func (n ResourceURN) String() string {
 }
 
 type ResourceURNWithUpstreams struct {
-	URN       ResourceURN
+	URN       resource.URN
 	Upstreams []*ResourceURNWithUpstreams
 }
 
@@ -152,11 +155,11 @@ func (rs ResourceURNWithUpstreamsList) Flatten() []*ResourceURNWithUpstreams {
 	return output
 }
 
-func (j *Job) Destination() ResourceURN {
+func (j *Job) Destination() resource.URN {
 	return j.destination
 }
 
-func (j *Job) Sources() []ResourceURN {
+func (j *Job) Sources() []resource.URN {
 	return j.sources
 }
 
@@ -171,7 +174,7 @@ func (j *Job) ProjectName() tenant.ProjectName {
 	return j.Tenant().ProjectName()
 }
 
-func NewJob(tenant tenant.Tenant, spec *Spec, destination ResourceURN, sources []ResourceURN, isDirty bool) *Job {
+func NewJob(tenant tenant.Tenant, spec *Spec, destination resource.URN, sources []resource.URN, isDirty bool) *Job {
 	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty}
 }
 
@@ -193,14 +196,6 @@ func (j Jobs) GetNameMap() map[Name]*Job {
 	return jobNameMap
 }
 
-func (j Jobs) GetNameAndJobMap() map[Name]*Job {
-	nameAndJobMap := make(map[Name]*Job, len(j))
-	for _, job := range j {
-		nameAndJobMap[job.spec.Name()] = job
-	}
-	return nameAndJobMap
-}
-
 func (j Jobs) GetNamespaceNameAndJobsMap() map[tenant.NamespaceName][]*Job {
 	jobsPerNamespaceName := make(map[tenant.NamespaceName][]*Job, len(j))
 	for _, job := range j {
@@ -215,6 +210,16 @@ func (j Jobs) GetSpecs() []*Spec {
 		specs = append(specs, currentJob.spec)
 	}
 	return specs
+}
+
+func (j Jobs) GetFullNameToSpecMap() map[FullName]*Spec {
+	fullNameToSpecMap := make(map[FullName]*Spec, len(j))
+	for _, subjectJob := range j {
+		fullName := FullNameFrom(subjectJob.ProjectName(), subjectJob.Spec().Name())
+		fullNameToSpecMap[fullName] = subjectJob.Spec()
+	}
+
+	return fullNameToSpecMap
 }
 
 func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
@@ -326,7 +331,7 @@ func (w WithUpstreams) MergeWithResolvedUpstreams(resolvedUpstreamsBySubjectJobM
 type Upstream struct {
 	name     Name
 	host     string
-	resource ResourceURN
+	resource resource.URN
 	taskName TaskName
 
 	projectName   tenant.ProjectName
@@ -338,7 +343,7 @@ type Upstream struct {
 	external bool
 }
 
-func NewUpstreamResolved(name Name, host string, resource ResourceURN, jobTenant tenant.Tenant, upstreamType UpstreamType, taskName TaskName, external bool) *Upstream {
+func NewUpstreamResolved(name Name, host string, resource resource.URN, jobTenant tenant.Tenant, upstreamType UpstreamType, taskName TaskName, external bool) *Upstream {
 	return &Upstream{
 		name:          name,
 		host:          host,
@@ -352,7 +357,7 @@ func NewUpstreamResolved(name Name, host string, resource ResourceURN, jobTenant
 	}
 }
 
-func NewUpstreamUnresolvedInferred(resource ResourceURN) *Upstream {
+func NewUpstreamUnresolvedInferred(resource resource.URN) *Upstream {
 	return &Upstream{resource: resource, _type: UpstreamTypeInferred, state: UpstreamStateUnresolved}
 }
 
@@ -368,7 +373,7 @@ func (u *Upstream) Host() string {
 	return u.host
 }
 
-func (u *Upstream) Resource() ResourceURN {
+func (u *Upstream) Resource() resource.URN {
 	return u.resource
 }
 
@@ -437,7 +442,7 @@ func (u Upstreams) ToFullNameAndUpstreamMap() map[string]*Upstream {
 func (u Upstreams) ToResourceDestinationAndUpstreamMap() map[string]*Upstream {
 	resourceDestinationUpstreamMap := make(map[string]*Upstream)
 	for _, upstream := range u {
-		if upstream.resource == "" {
+		if upstream.resource.IsZero() {
 			continue
 		}
 		resourceDestinationUpstreamMap[upstream.resource.String()] = upstream

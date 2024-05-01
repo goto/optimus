@@ -6,6 +6,7 @@ import (
 
 	"github.com/goto/salt/log"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/internal/errors"
 )
@@ -22,7 +23,7 @@ type BQUpstreamIdentifier struct {
 	evaluatorFuncs []EvalAssetFunc
 }
 
-func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
+func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
 	resourcesAccumulation := []*bigquery.ResourceURNWithUpstreams{}
 
 	// generate resource urn with upstream from each evaluator
@@ -45,9 +46,17 @@ func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[
 
 	// compiled all collected resources and extract its urns
 	flattenedResources := bigquery.ResourceURNWithUpstreamsList(resourcesAccumulation).FlattenUnique()
-	resourceURNs := make([]string, len(flattenedResources))
-	for i, r := range flattenedResources {
-		resourceURNs[i] = r.ResourceURN.URN()
+	var resourceURNs []resource.URN
+	for _, r := range flattenedResources {
+		rawURN := r.ResourceURN.URN()
+
+		urn, err := resource.ParseURN(rawURN)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		resourceURNs = append(resourceURNs, urn)
 	}
 	return resourceURNs, me.ToErr()
 }

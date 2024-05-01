@@ -67,7 +67,7 @@ type Schedule struct {
 
 type Window struct {
 	WindowSize       string `json:",omitempty"`
-	WindowDelay      string `json:",omitempty"`
+	WindowShiftBy    string `json:",omitempty"`
 	WindowTruncateTo string `json:",omitempty"`
 	WindowLocation   string `json:",omitempty"`
 	WindowOffset     string `json:",omitempty"`
@@ -225,7 +225,7 @@ func toStorageWindow(windowSpec window.Config) ([]byte, error) {
 	if windowSpec.GetVersion() == window.NewWindowVersion {
 		sc := windowSpec.GetSimpleConfig()
 		w.WindowSize = sc.Size
-		w.WindowDelay = sc.Delay
+		w.WindowShiftBy = sc.ShiftBy
 		w.WindowLocation = sc.Location
 		w.WindowTruncateTo = sc.TruncateTo
 	} else if windowSpec.Window != nil {
@@ -520,7 +520,7 @@ func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 	if jobVersion == window.NewWindowVersion {
 		sc := window.SimpleConfig{
 			Size:       storageWindow.WindowSize,
-			Delay:      storageWindow.WindowDelay,
+			ShiftBy:    storageWindow.WindowShiftBy,
 			Location:   storageWindow.WindowLocation,
 			TruncateTo: storageWindow.WindowTruncateTo,
 		}

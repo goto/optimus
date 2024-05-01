@@ -48,7 +48,13 @@ func NameFrom(name string) (Name, error) {
 		return "", errors.InvalidArgument(EntityResource, "resource name is empty")
 	}
 
-	return Name(name), nil
+	cleaned := strings.ReplaceAll(name, ":", ".") // TODO: design flaw, needs to be refactored
+
+	return Name(cleaned), nil
+}
+
+func (n Name) Sections() []string {
+	return strings.Split(n.String(), nameSectionSeparator)
 }
 
 func (n Name) String() string {
@@ -60,7 +66,7 @@ type Resource struct {
 
 	kind  string
 	store Store
-	urn   string
+	urn   URN
 
 	tenant tenant.Tenant
 
@@ -111,12 +117,12 @@ func (r *Resource) FullName() string {
 	return r.name.String()
 }
 
-func (r *Resource) URN() string {
+func (r *Resource) URN() URN {
 	return r.urn
 }
 
-func (r *Resource) UpdateURN(urn string) error {
-	if r.urn == "" {
+func (r *Resource) UpdateURN(urn URN) error {
+	if r.urn.IsZero() {
 		r.urn = urn
 		return nil
 	}
@@ -130,10 +136,6 @@ func (r *Resource) UpdateTenant(tnnt tenant.Tenant) {
 
 func (r *Resource) Metadata() *Metadata {
 	return r.metadata
-}
-
-func (r *Resource) NameSections() []string {
-	return strings.Split(r.name.String(), nameSectionSeparator)
 }
 
 func (r *Resource) Kind() string {

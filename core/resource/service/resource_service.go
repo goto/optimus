@@ -33,15 +33,16 @@ type ResourceManager interface {
 	SyncResource(ctx context.Context, res *resource.Resource) error
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
 	Validate(res *resource.Resource) error
-	GetURN(res *resource.Resource) (string, error)
+	GetURN(res *resource.Resource) (resource.URN, error)
+	Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
 type DownstreamRefresher interface {
-	RefreshResourceDownstream(ctx context.Context, resourceURNs []job.ResourceURN, logWriter writer.LogWriter) error
+	RefreshResourceDownstream(ctx context.Context, resourceURNs []resource.URN, logWriter writer.LogWriter) error
 }
 
 type DownstreamResolver interface {
-	GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn job.ResourceURN) (job.DownstreamList, error)
+	GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (job.DownstreamList, error)
 }
 
 type EventHandler interface {
@@ -189,7 +190,7 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 		return nil, err
 	}
 
-	downstreamList, err := rs.downstreamResolver.GetDownstreamByResourceURN(ctx, existing.Tenant(), job.ResourceURN(existing.URN()))
+	downstreamList, err := rs.downstreamResolver.GetDownstreamByResourceURN(ctx, existing.Tenant(), existing.URN())
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +274,33 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 	}
 
 	return synced, nil
+}
+
+func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error) {
+	if urn.IsZero() {
+		rs.logger.Error("urn is zero value")
+		return nil, errors.InvalidArgument(resource.EntityResource, "urn is zero value")
+	}
+
+	store, err := resource.FromStringToStore(urn.GetStore())
+	if err != nil {
+		return nil, err
+	}
+
+	name, err := resource.NameFrom(urn.GetName())
+	if err != nil {
+		return nil, err
+	}
+
+	return rs.repo.ReadByFullName(ctx, tnnt, store, name.String(), false)
+}
+
+func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
+	if urn.IsZero() {
+		return false, errors.NewError(errors.ErrInvalidArgument, resource.EntityResource, "urn is zero-valued")
+	}
+
+	return rs.mgr.Exist(ctx, tnnt, urn)
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
@@ -457,7 +485,7 @@ func (rs ResourceService) handleRefreshDownstream( // nolint:gocritic
 	existingMappedByFullName map[string]*resource.Resource,
 	logWriter writer.LogWriter,
 ) error {
-	var resourceURNsToRefresh []job.ResourceURN
+	var resourceURNsToRefresh []resource.URN
 	for _, incoming := range incomings {
 		if incoming.Status() != resource.StatusSuccess {
 			continue
@@ -473,7 +501,7 @@ func (rs ResourceService) handleRefreshDownstream( // nolint:gocritic
 		}
 
 		if rs.isToRefreshDownstream(incoming, existing) {
-			resourceURNsToRefresh = append(resourceURNsToRefresh, job.ResourceURN(incoming.URN()))
+			resourceURNsToRefresh = append(resourceURNsToRefresh, incoming.URN())
 		} else {
 			rs.logger.Warn(skipMessage)
 			logWriter.Write(writer.LogLevelWarning, skipMessage)

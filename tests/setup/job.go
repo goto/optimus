@@ -2,6 +2,7 @@ package setup
 
 import (
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
@@ -37,8 +38,8 @@ type DummyJobBuilder struct {
 
 	name job.Name
 
-	destinationURN job.ResourceURN
-	sourceURNs     []job.ResourceURN
+	destinationURN resource.URN
+	sourceURNs     []resource.URN
 
 	specUpstreamNames []job.SpecUpstreamName
 	specHTTPUpstreams []*job.SpecHTTPUpstream
@@ -102,6 +103,16 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 		panic(err)
 	}
 
+	dummyDestination, err := resource.ParseURN("store://sample_job_destination")
+	if err != nil {
+		panic(err)
+	}
+
+	dummySource, err := resource.ParseURN("store://source_of_sample_job")
+	if err != nil {
+		panic(err)
+	}
+
 	return &DummyJobBuilder{
 		version:      version,
 		owner:        "dev_test",
@@ -124,8 +135,8 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 		resourceLimitConfig:   job.NewMetadataResourceConfig("128m", "128Mi"),
 		scheduler:             map[string]string{"scheduler_config_key": "value"},
 		name:                  name,
-		destinationURN:        job.ResourceURN("sample_job_destination"),
-		sourceURNs:            []job.ResourceURN{"source_of_sample_job"},
+		destinationURN:        dummyDestination,
+		sourceURNs:            []resource.URN{dummySource},
 		specUpstreamNames:     []job.SpecUpstreamName{job.SpecUpstreamNameFrom("smpale_job_upstream")},
 		specHTTPUpstreams:     []*job.SpecHTTPUpstream{specHTTPUpstream},
 	}
@@ -245,13 +256,13 @@ func (d *DummyJobBuilder) OverrideName(name job.Name) *DummyJobBuilder {
 	return &output
 }
 
-func (d *DummyJobBuilder) OverrideDestinationURN(destinationURN job.ResourceURN) *DummyJobBuilder {
+func (d *DummyJobBuilder) OverrideDestinationURN(destinationURN resource.URN) *DummyJobBuilder {
 	output := *d
 	output.destinationURN = destinationURN
 	return &output
 }
 
-func (d *DummyJobBuilder) OverrideSourceURNs(sourceURNs []job.ResourceURN) *DummyJobBuilder {
+func (d *DummyJobBuilder) OverrideSourceURNs(sourceURNs []resource.URN) *DummyJobBuilder {
 	output := *d
 	output.sourceURNs = sourceURNs
 	return &output

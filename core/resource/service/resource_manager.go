@@ -7,6 +7,7 @@ import (
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -15,8 +16,9 @@ type DataStore interface {
 	Update(context.Context, *resource.Resource) error
 	BatchUpdate(context.Context, []*resource.Resource) error
 	Validate(*resource.Resource) error
-	GetURN(res *resource.Resource) (string, error)
+	GetURN(res *resource.Resource) (resource.URN, error)
 	Backup(context.Context, *resource.Backup, []*resource.Resource) (*resource.BackupResult, error)
+	Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
 type ResourceStatusRepo interface {
@@ -117,13 +119,13 @@ func (m *ResourceMgr) Validate(res *resource.Resource) error {
 	return datastore.Validate(res)
 }
 
-func (m *ResourceMgr) GetURN(res *resource.Resource) (string, error) {
+func (m *ResourceMgr) GetURN(res *resource.Resource) (resource.URN, error) {
 	store := res.Store()
 	datastore, ok := m.datastoreMap[store]
 	if !ok {
 		msg := fmt.Sprintf("datastore [%s] for resource [%s] is not found", store.String(), res.FullName())
 		m.logger.Error(msg)
-		return "", errors.InternalError(resource.EntityResource, msg, nil)
+		return resource.ZeroURN(), errors.InternalError(resource.EntityResource, msg, nil)
 	}
 
 	return datastore.GetURN(res)
@@ -155,6 +157,26 @@ func (m *ResourceMgr) Backup(ctx context.Context, details *resource.Backup, reso
 
 func (m *ResourceMgr) RegisterDatastore(store resource.Store, dataStore DataStore) {
 	m.datastoreMap[store] = dataStore
+}
+
+func (m *ResourceMgr) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
+	if urn.IsZero() {
+		return false, errors.InvalidArgument(resource.EntityResource, "urn is zero-valued")
+	}
+
+	store, err := resource.FromStringToStore(urn.GetStore())
+	if err != nil {
+		return false, err
+	}
+
+	datastore, ok := m.datastoreMap[store]
+	if !ok {
+		msg := fmt.Sprintf("datastore [%s] is not found", store)
+		m.logger.Error(msg)
+		return false, errors.InternalError(resource.EntityResource, msg, nil)
+	}
+
+	return datastore.Exist(ctx, tnnt, urn)
 }
 
 func NewResourceManager(repo ResourceStatusRepo, logger log.Logger) *ResourceMgr {

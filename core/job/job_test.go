@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
@@ -32,13 +33,15 @@ func TestEntityJob(t *testing.T) {
 	jobTask := job.NewTask("bq2bq", jobTaskConfig)
 
 	specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-	jobADestination := job.ResourceURN("project.dataset.sample-a")
-	jobASources := []job.ResourceURN{"project.dataset.sample-b"}
+	jobADestination, _ := resource.ParseURN("store://project.dataset.sample-a")
+	jobASource, _ := resource.ParseURN("store://project.dataset.sample-b")
+	jobASources := []resource.URN{jobASource}
 	jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 	specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-	jobBDestination := job.ResourceURN("project.dataset.sample-b")
-	jobBSources := []job.ResourceURN{"project.dataset.sample-c"}
+	jobBDestination, _ := resource.ParseURN("store://project.dataset.sample-b")
+	jobBSource, _ := resource.ParseURN("store://project.dataset.sample-c")
+	jobBSources := []resource.URN{jobBSource}
 	jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBSources, false)
 
 	t.Run("GetJobNames", func(t *testing.T) {
@@ -64,19 +67,25 @@ func TestEntityJob(t *testing.T) {
 			assert.EqualValues(t, expectedMap, resultMap)
 		})
 	})
-	t.Run("GetNameAndJobMap", func(t *testing.T) {
-		t.Run("should return map with name as key and job as value", func(t *testing.T) {
-			expectedMap := map[job.Name]*job.Job{
-				specA.Name(): jobA,
-				specB.Name(): jobB,
+
+	t.Run("GetFullNameToSpecMap", func(t *testing.T) {
+		t.Run("should return map with key full name and value spec", func(t *testing.T) {
+			jobs := []*job.Job{jobA, jobB}
+
+			fullNameA := job.FullNameFrom(jobA.ProjectName(), job.Name(jobA.GetName()))
+			fullNameB := job.FullNameFrom(jobB.ProjectName(), job.Name(jobB.GetName()))
+			expectedMap := map[job.FullName]*job.Spec{
+				fullNameA: specA,
+				fullNameB: specB,
 			}
 
-			jobs := job.Jobs([]*job.Job{jobA, jobB})
-			resultMap := jobs.GetNameAndJobMap()
+			actualMap := job.Jobs(jobs).GetFullNameToSpecMap()
 
-			assert.EqualValues(t, expectedMap, resultMap)
+			assert.EqualValues(t, expectedMap[fullNameA], actualMap[fullNameA])
+			assert.EqualValues(t, expectedMap[fullNameB], actualMap[fullNameB])
 		})
 	})
+
 	t.Run("GetNamespaceNameAndJobsMap", func(t *testing.T) {
 		t.Run("should return map with namespace name as key and jobs as value", func(t *testing.T) {
 			expectedMap := map[tenant.NamespaceName][]*job.Job{
@@ -105,8 +114,10 @@ func TestEntityJob(t *testing.T) {
 	t.Run("GetUnresolvedUpstreams", func(t *testing.T) {
 		t.Run("should return upstreams with state unresolved", func(t *testing.T) {
 			upstreamUnresolved1 := job.NewUpstreamUnresolvedStatic("job-B", project.Name())
-			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred("project.dataset.sample-c")
-			upstreamResolved := job.NewUpstreamResolved("job-d", "host-sample", "project.dataset.sample-d", sampleTenant, job.UpstreamTypeStatic, "", false)
+			resourceURNC, _ := resource.ParseURN("store://project.dataset.sample-c")
+			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred(resourceURNC)
+			resourceURND, _ := resource.ParseURN("store://project.dataset.sample-d")
+			upstreamResolved := job.NewUpstreamResolved("job-d", "host-sample", resourceURND, sampleTenant, job.UpstreamTypeStatic, "", false)
 
 			expected := []*job.Upstream{upstreamUnresolved1, upstreamUnresolved2}
 
@@ -119,9 +130,12 @@ func TestEntityJob(t *testing.T) {
 	t.Run("GetResolvedUpstreams", func(t *testing.T) {
 		t.Run("should return upstreams with state resolved", func(t *testing.T) {
 			upstreamUnresolved1 := job.NewUpstreamUnresolvedStatic("job-B", project.Name())
-			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred("project.dataset.sample-c")
-			upstreamResolved1 := job.NewUpstreamResolved("job-d", "host-sample", "project.dataset.sample-d", sampleTenant, job.UpstreamTypeStatic, "", false)
-			upstreamResolved2 := job.NewUpstreamResolved("job-e", "host-sample", "project.dataset.sample-e", sampleTenant, job.UpstreamTypeInferred, "", true)
+			resourceURNC, _ := resource.ParseURN("store://project.dataset.sample-c")
+			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred(resourceURNC)
+			resourceURND, _ := resource.ParseURN("store://project.dataset.sample-d")
+			resourceURNE, _ := resource.ParseURN("store://project.dataset.sample-e")
+			upstreamResolved1 := job.NewUpstreamResolved("job-d", "host-sample", resourceURND, sampleTenant, job.UpstreamTypeStatic, "", false)
+			upstreamResolved2 := job.NewUpstreamResolved("job-e", "host-sample", resourceURNE, sampleTenant, job.UpstreamTypeInferred, "", true)
 
 			expected := []*job.Upstream{upstreamResolved1, upstreamResolved2}
 
@@ -151,8 +165,10 @@ func TestEntityJob(t *testing.T) {
 
 	t.Run("ToFullNameAndUpstreamMap", func(t *testing.T) {
 		t.Run("should return a map with full name as key and boolean as value", func(t *testing.T) {
-			upstreamResolved1 := job.NewUpstreamResolved("job-a", "host-sample", "project.dataset.sample-a", sampleTenant, job.UpstreamTypeStatic, "", false)
-			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", "project.dataset.sample-b", sampleTenant, job.UpstreamTypeInferred, "", false)
+			resourceURNA, _ := resource.ParseURN("store://project.dataset.sample-a")
+			resourceURNB, _ := resource.ParseURN("store://project.dataset.sample-b")
+			upstreamResolved1 := job.NewUpstreamResolved("job-a", "host-sample", resourceURNA, sampleTenant, job.UpstreamTypeStatic, "", false)
+			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", resourceURNB, sampleTenant, job.UpstreamTypeInferred, "", false)
 
 			expectedMap := map[string]*job.Upstream{
 				"test-proj/job-a": upstreamResolved1,
@@ -168,12 +184,14 @@ func TestEntityJob(t *testing.T) {
 
 	t.Run("ToResourceDestinationAndUpstreamMap", func(t *testing.T) {
 		t.Run("should return a map with destination resource urn as key and boolean as value", func(t *testing.T) {
-			upstreamResolved1 := job.NewUpstreamResolved("job-a", "host-sample", "project.dataset.sample-a", sampleTenant, job.UpstreamTypeStatic, "", false)
-			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", "project.dataset.sample-b", sampleTenant, job.UpstreamTypeInferred, "", false)
+			resourceURNA, _ := resource.ParseURN("store://project.dataset.sample-a")
+			resourceURNB, _ := resource.ParseURN("store://project.dataset.sample-b")
+			upstreamResolved1 := job.NewUpstreamResolved("job-a", "host-sample", resourceURNA, sampleTenant, job.UpstreamTypeStatic, "", false)
+			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", resourceURNB, sampleTenant, job.UpstreamTypeInferred, "", false)
 
 			expectedMap := map[string]*job.Upstream{
-				"project.dataset.sample-a": upstreamResolved1,
-				"project.dataset.sample-b": upstreamResolved2,
+				"store://project.dataset.sample-a": upstreamResolved1,
+				"store://project.dataset.sample-b": upstreamResolved2,
 			}
 
 			upstreams := job.Upstreams([]*job.Upstream{upstreamResolved1, upstreamResolved2})
@@ -182,11 +200,14 @@ func TestEntityJob(t *testing.T) {
 			assert.EqualValues(t, expectedMap, resultMap)
 		})
 		t.Run("should skip a job if resource destination is not found and should not return error", func(t *testing.T) {
-			upstreamResolved1 := job.NewUpstreamResolved("job-a", "host-sample", "", sampleTenant, job.UpstreamTypeStatic, "", false)
-			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", "project.dataset.sample-b", sampleTenant, job.UpstreamTypeInferred, "", false)
+			var zeroURN resource.URN
+			resourceURNB, _ := resource.ParseURN("store://project.dataset.sample-b")
+
+			upstreamResolved1 := job.NewUpstreamResolved("job-a", "host-sample", zeroURN, sampleTenant, job.UpstreamTypeStatic, "", false)
+			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", resourceURNB, sampleTenant, job.UpstreamTypeInferred, "", false)
 
 			expectedMap := map[string]*job.Upstream{
-				"project.dataset.sample-b": upstreamResolved2,
+				"store://project.dataset.sample-b": upstreamResolved2,
 			}
 
 			upstreams := job.Upstreams([]*job.Upstream{upstreamResolved1, upstreamResolved2})
@@ -198,13 +219,16 @@ func TestEntityJob(t *testing.T) {
 
 	t.Run("Deduplicate", func(t *testing.T) {
 		t.Run("should return upstreams with static being prioritized if duplication is found", func(t *testing.T) {
-			upstreamResolved1Inferred := job.NewUpstreamResolved("job-a", "host-sample", "project.dataset.sample-a", sampleTenant, job.UpstreamTypeInferred, "", false)
-			upstreamResolved1Static := job.NewUpstreamResolved("job-a", "host-sample", "project.dataset.sample-a", sampleTenant, job.UpstreamTypeStatic, "", false)
-			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", "project.dataset.sample-b", sampleTenant, job.UpstreamTypeInferred, "", false)
+			resourceURNA, _ := resource.ParseURN("store://project.dataset.sample-a")
+			resourceURNB, _ := resource.ParseURN("store://project.dataset.sample-b")
+			resourceURND, _ := resource.ParseURN("store://project.dataset.sample-d")
+			upstreamResolved1Inferred := job.NewUpstreamResolved("job-a", "host-sample", resourceURNA, sampleTenant, job.UpstreamTypeInferred, "", false)
+			upstreamResolved1Static := job.NewUpstreamResolved("job-a", "host-sample", resourceURNA, sampleTenant, job.UpstreamTypeStatic, "", false)
+			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", resourceURNB, sampleTenant, job.UpstreamTypeInferred, "", false)
 			upstreamUnresolved1 := job.NewUpstreamUnresolvedStatic("job-c", sampleTenant.ProjectName())
-			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred("project.dataset.sample-d")
+			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred(resourceURND)
 			upstreamUnresolved3 := job.NewUpstreamUnresolvedStatic("job-c", sampleTenant.ProjectName())
-			upstreamUnresolved4 := job.NewUpstreamUnresolvedInferred("project.dataset.sample-d")
+			upstreamUnresolved4 := job.NewUpstreamUnresolvedInferred(resourceURND)
 
 			expected := []*job.Upstream{
 				upstreamResolved1Static,
@@ -227,9 +251,11 @@ func TestEntityJob(t *testing.T) {
 			assert.ElementsMatch(t, expected, result)
 		})
 		t.Run("should successfully return distinct upstreams when only resolved upstream is present", func(t *testing.T) {
-			upstreamResolved1Inferred := job.NewUpstreamResolved("job-a", "host-sample", "project.dataset.sample-a", sampleTenant, job.UpstreamTypeInferred, "", false)
-			upstreamResolved1Static := job.NewUpstreamResolved("job-a", "host-sample", "project.dataset.sample-a", sampleTenant, job.UpstreamTypeStatic, "", false)
-			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", "project.dataset.sample-b", sampleTenant, job.UpstreamTypeInferred, "", false)
+			resourceURNA, _ := resource.ParseURN("store://project.dataset.sample-a")
+			resourceURNB, _ := resource.ParseURN("store://project.dataset.sample-b")
+			upstreamResolved1Inferred := job.NewUpstreamResolved("job-a", "host-sample", resourceURNA, sampleTenant, job.UpstreamTypeInferred, "", false)
+			upstreamResolved1Static := job.NewUpstreamResolved("job-a", "host-sample", resourceURNA, sampleTenant, job.UpstreamTypeStatic, "", false)
+			upstreamResolved2 := job.NewUpstreamResolved("job-b", "host-sample", resourceURNB, sampleTenant, job.UpstreamTypeInferred, "", false)
 
 			expected := []*job.Upstream{
 				upstreamResolved1Static,
@@ -246,10 +272,11 @@ func TestEntityJob(t *testing.T) {
 			assert.ElementsMatch(t, expected, result)
 		})
 		t.Run("should successfully return distinct upstreams when only unresolved upstream is present", func(t *testing.T) {
+			resourceURND, _ := resource.ParseURN("store://project.dataset.sample-d")
 			upstreamUnresolved1 := job.NewUpstreamUnresolvedStatic("job-c", sampleTenant.ProjectName())
-			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred("project.dataset.sample-d")
+			upstreamUnresolved2 := job.NewUpstreamUnresolvedInferred(resourceURND)
 			upstreamUnresolved3 := job.NewUpstreamUnresolvedStatic("job-c", sampleTenant.ProjectName())
-			upstreamUnresolved4 := job.NewUpstreamUnresolvedInferred("project.dataset.sample-d")
+			upstreamUnresolved4 := job.NewUpstreamUnresolvedInferred(resourceURND)
 
 			expected := []*job.Upstream{
 				upstreamUnresolved1,
@@ -290,8 +317,9 @@ func TestEntityJob(t *testing.T) {
 		t.Run("should return values as inserted", func(t *testing.T) {
 			specUpstream, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"job-E"}).Build()
 			specC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(specUpstream).Build()
-			jobCDestination := job.ResourceURN("project.dataset.sample-c")
-			jobCSources := []job.ResourceURN{"project.dataset.sample-d"}
+			jobCDestination, _ := resource.ParseURN("store://project.dataset.sample-c")
+			jobCSource, _ := resource.ParseURN("store://project.dataset.sample-c")
+			jobCSources := []resource.URN{jobCSource}
 			jobC := job.NewJob(sampleTenant, specC, jobCDestination, jobCSources, false)
 
 			assert.Equal(t, sampleTenant, jobC.Tenant())
@@ -313,10 +341,12 @@ func TestEntityJob(t *testing.T) {
 
 	t.Run("WithUpstream", func(t *testing.T) {
 		t.Run("should return values as constructed", func(t *testing.T) {
-			upstreamResolved := job.NewUpstreamResolved("job-d", "host-sample", "project.dataset.sample-d", sampleTenant, job.UpstreamTypeStatic, "bq2bq", false)
+			resourceURNC, _ := resource.ParseURN("store://project.dataset.sample-c")
+			resourceURND, _ := resource.ParseURN("store://project.dataset.sample-d")
+			upstreamResolved := job.NewUpstreamResolved("job-d", "host-sample", resourceURND, sampleTenant, job.UpstreamTypeStatic, "bq2bq", false)
 			assert.Equal(t, job.Name("job-d"), upstreamResolved.Name())
 			assert.Equal(t, "host-sample", upstreamResolved.Host())
-			assert.Equal(t, job.ResourceURN("project.dataset.sample-d"), upstreamResolved.Resource())
+			assert.Equal(t, resourceURND, upstreamResolved.Resource())
 			assert.Equal(t, job.UpstreamTypeStatic, upstreamResolved.Type())
 			assert.Equal(t, job.UpstreamStateResolved, upstreamResolved.State())
 			assert.Equal(t, project.Name(), upstreamResolved.ProjectName())
@@ -325,7 +355,7 @@ func TestEntityJob(t *testing.T) {
 			assert.Equal(t, job.TaskName("bq2bq"), upstreamResolved.TaskName())
 			assert.Equal(t, "test-proj/job-d", upstreamResolved.FullName())
 
-			upstreamUnresolved := job.NewUpstreamUnresolvedInferred("project.dataset.sample-c")
+			upstreamUnresolved := job.NewUpstreamUnresolvedInferred(resourceURNC)
 
 			jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamResolved, upstreamUnresolved})
 			assert.Equal(t, jobA, jobAWithUpstream.Job())
@@ -337,7 +367,8 @@ func TestEntityJob(t *testing.T) {
 	t.Run("WithUpstreams", func(t *testing.T) {
 		t.Run("GetSubjectJobNames", func(t *testing.T) {
 			t.Run("should return job names of WithUpstream list", func(t *testing.T) {
-				upstreamResolved := job.NewUpstreamResolved("job-d", "host-sample", "project.dataset.sample-d", sampleTenant, job.UpstreamTypeStatic, "bq2bq", false)
+				resourceURND, _ := resource.ParseURN("store://project.dataset.sample-d")
+				upstreamResolved := job.NewUpstreamResolved("job-d", "host-sample", resourceURND, sampleTenant, job.UpstreamTypeStatic, "bq2bq", false)
 				jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamResolved})
 				jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{upstreamResolved})
 				jobsWithUpstream := []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}
@@ -347,15 +378,18 @@ func TestEntityJob(t *testing.T) {
 			})
 		})
 		t.Run("MergeWithResolvedUpstreams", func(t *testing.T) {
-			upstreamCUnresolved := job.NewUpstreamUnresolvedInferred("project.dataset.sample-c")
-			upstreamDUnresolvedInferred := job.NewUpstreamUnresolvedInferred("project.dataset.sample-d")
+			resourceURNC, _ := resource.ParseURN("store://project.dataset.sample-c")
+			resourceURND, _ := resource.ParseURN("store://project.dataset.sample-d")
+			resourceURNF, _ := resource.ParseURN("store://project.dataset.sample-f")
+			upstreamCUnresolved := job.NewUpstreamUnresolvedInferred(resourceURNC)
+			upstreamDUnresolvedInferred := job.NewUpstreamUnresolvedInferred(resourceURND)
 			upstreamDUnresolvedStatic := job.NewUpstreamUnresolvedStatic("job-D", project.Name())
 			upstreamEUnresolved := job.NewUpstreamUnresolvedStatic("job-E", project.Name())
-			upstreamFUnresolved := job.NewUpstreamUnresolvedInferred("project.dataset.sample-f")
+			upstreamFUnresolved := job.NewUpstreamUnresolvedInferred(resourceURNF)
 
-			upstreamCResolved := job.NewUpstreamResolved("job-C", "host-sample", "project.dataset.sample-c", sampleTenant, job.UpstreamTypeInferred, "bq2bq", false)
-			upstreamDResolvedStatic := job.NewUpstreamResolved("job-D", "host-sample", "project.dataset.sample-d", sampleTenant, job.UpstreamTypeStatic, "bq2bq", false)
-			upstreamDResolvedInferred := job.NewUpstreamResolved("job-D", "host-sample", "project.dataset.sample-d", sampleTenant, job.UpstreamTypeInferred, "bq2bq", false)
+			upstreamCResolved := job.NewUpstreamResolved("job-C", "host-sample", resourceURNC, sampleTenant, job.UpstreamTypeInferred, "bq2bq", false)
+			upstreamDResolvedStatic := job.NewUpstreamResolved("job-D", "host-sample", resourceURND, sampleTenant, job.UpstreamTypeStatic, "bq2bq", false)
+			upstreamDResolvedInferred := job.NewUpstreamResolved("job-D", "host-sample", resourceURND, sampleTenant, job.UpstreamTypeInferred, "bq2bq", false)
 
 			resolvedUpstreamMap := map[job.Name][]*job.Upstream{
 				"job-A": {upstreamCResolved, upstreamDResolvedInferred},

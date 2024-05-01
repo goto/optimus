@@ -59,16 +59,20 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 	if err != nil {
 		return err
 	}
+	var status scheduler.EventStatus
 	if event.Type == scheduler.JobFailureEvent || event.Type == scheduler.SLAMissEvent {
-		e.alertManager.Relay(&scheduler.AlertAttrs{
-			Owner:         jobDetails.JobMetadata.Owner,
-			JobURN:        jobDetails.Job.URN(),
-			Title:         "Optimus Job Alert",
-			SchedulerHost: schedulerHost,
-			Status:        scheduler.StatusFiring,
-			JobEvent:      event,
-		})
+		status = scheduler.StatusFiring
+	} else {
+		status = scheduler.StatusResolved
 	}
+	e.alertManager.Relay(&scheduler.AlertAttrs{
+		Owner:         jobDetails.JobMetadata.Owner,
+		JobURN:        jobDetails.Job.URN(),
+		Title:         "Optimus Job Alert",
+		SchedulerHost: schedulerHost,
+		Status:        status,
+		JobEvent:      event,
+	})
 	return nil
 }
 

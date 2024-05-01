@@ -6,6 +6,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
@@ -43,7 +44,7 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		j.Window = &pb.JobSpecification_Window{
 			Preset:     spec.WindowConfig().Preset,
 			Size:       spec.WindowConfig().GetSimpleConfig().Size,
-			Delay:      spec.WindowConfig().GetSimpleConfig().Delay,
+			ShiftBy:    spec.WindowConfig().GetSimpleConfig().ShiftBy,
 			Location:   spec.WindowConfig().GetSimpleConfig().Location,
 			TruncateTo: spec.WindowConfig().GetSimpleConfig().TruncateTo,
 		}
@@ -199,7 +200,7 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	return jobSpecBuilder.Build()
 }
 
-func fromResourceURNs(resourceURNs []job.ResourceURN) []string {
+func fromResourceURNs(resourceURNs []resource.URN) []string {
 	var resources []string
 	for _, resourceURN := range resourceURNs {
 		resources = append(resources, resourceURN.String())
@@ -227,7 +228,7 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 			return window.NewPresetConfig(w.Preset)
 		}
 		if js.Version == window.NewWindowVersion {
-			return window.NewConfig(w.Size, w.Delay, w.Location, w.TruncateTo)
+			return window.NewConfig(w.Size, w.ShiftBy, w.Location, w.TruncateTo)
 		}
 	}
 

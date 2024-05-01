@@ -339,14 +339,7 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 	}
 
 	for _, r := range toUpdate {
-		var oldResource *resource.Resource
-		for _, existingResource := range existingResources {
-			if existingResource.Name() == r.Name() {
-				oldResource = existingResource
-				break
-			}
-		}
-		rs.raiseUpdateEvent(r, oldResource.GetUpdateImpact(r))
+		rs.raiseUpdateEvent(r, existingMappedByFullName[r.FullName()].GetUpdateImpact(r))
 	}
 
 	for _, r := range toDelete {

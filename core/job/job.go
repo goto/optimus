@@ -36,7 +36,6 @@ const (
 	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
 	JobInternalImpact       UpdateImpact = "internal_impact"
 	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
-	urnContext                           = "optimus"
 )
 
 type Job struct {

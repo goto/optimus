@@ -113,7 +113,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	directories := p.getAllDirectories(diffs)
+	directories := git.Diffs(diffs).GetAllDirectories(p.appendDirectory)
 	plans := make(plan.Plans, 0, len(directories))
 	p.logger.Info("[plan] found changed directories: %+v", directories)
 
@@ -183,18 +183,6 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 	}
 
 	return resourcePlan, nil
-}
-
-func (p *planCommand) getAllDirectories(diffs []*git.Diff) []string {
-	directories := make([]string, 0)
-	pathExists := make(map[string]bool)
-
-	for i := range diffs {
-		directories = p.appendDirectory(diffs[i].OldPath, pathExists, directories)
-		directories = p.appendDirectory(diffs[i].NewPath, pathExists, directories)
-	}
-
-	return directories
 }
 
 func (*planCommand) appendDirectory(directory string, directoryExists map[string]bool, fileDirectories []string) []string {

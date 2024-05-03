@@ -1,9 +1,9 @@
 package plan
 
 type Plan struct {
+	Kind          Kind      `csv:"kind"`
 	ProjectName   string    `csv:"project_name"`
 	NamespaceName string    `csv:"namespace_name"`
-	Kind          Kind      `csv:"kind"`
 	KindName      string    `csv:"kind_name"`
 	Operation     Operation `csv:"operation"`
 	Executed      bool      `csv:"executed"`

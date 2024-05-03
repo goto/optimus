@@ -49,9 +49,9 @@ func NewPlanCommand() *cobra.Command {
 	planCmd := &planCommand{logger: logger.NewClientLogger()}
 	cmd := &cobra.Command{
 		Use:     "plan",
-		Short:   "Plan Job Deployment",
-		Long:    "PLan job deployment based on git diff state",
-		Example: "optimus job plan <commit> <commit-before>",
+		Short:   "Plan job deployment",
+		Long:    "Plan job deployment based on git diff state using git reference (commit SHA, branch, tag)",
+		Example: "optimus job plan <ref> <ref-before>",
 		Args:    cobra.MinimumNArgs(2), //nolint
 		PreRunE: planCmd.PreRunE,
 		RunE:    planCmd.RunE,

@@ -6,6 +6,7 @@ type Plan struct {
 	Kind          Kind      `csv:"kind"`
 	KindName      string    `csv:"kind_name"`
 	Operation     Operation `csv:"operation"`
+	Executed      bool      `csv:"executed"`
 }
 
 type Plans []*Plan

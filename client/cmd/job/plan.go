@@ -113,7 +113,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	directories := p.getAllDirectories(diffs)
+	directories := git.Diffs(diffs).GetAllDirectories(p.appendDirectory)
 	plans := make(plan.Plans, 0, len(directories))
 	p.logger.Info("[plan] found changed directories: %+v", directories)
 
@@ -182,17 +182,7 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 	return jobPlan, nil
 }
 
-func (p *planCommand) getAllDirectories(diffs []*git.Diff) []string {
-	directories := make([]string, 0)
-	pathExists := make(map[string]bool)
-	for i := range diffs {
-		directories = p.appendDirectories(diffs[i].OldPath, pathExists, directories)
-		directories = p.appendDirectories(diffs[i].NewPath, pathExists, directories)
-	}
-	return directories
-}
-
-func (*planCommand) appendDirectories(directory string, directoryExists map[string]bool, fileDirectories []string) []string {
+func (*planCommand) appendDirectory(directory string, directoryExists map[string]bool, fileDirectories []string) []string {
 	index := strings.Index(directory, "/assets")
 	if !strings.HasSuffix(directory, "/"+jobFileName) && index < 1 {
 		return fileDirectories

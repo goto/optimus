@@ -10,10 +10,6 @@ import (
 	"github.com/goto/optimus/ext/git"
 )
 
-const (
-	defaultPerPage = 100
-)
-
 type API struct {
 	client *gitlab.Client
 }
@@ -47,47 +43,6 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 			RenamedFile: diff.RenamedFile,
 			DeleteFile:  diff.DeletedFile,
 		})
-	}
-
-	return resp, nil
-}
-
-func (g *API) ListTree(ctx context.Context, projectID any, ref, path string) ([]*git.Tree, error) {
-	var (
-		listTreeOption = &gitlab.ListTreeOptions{
-			ListOptions: gitlab.ListOptions{Page: 1, PerPage: defaultPerPage, OrderBy: "id", Pagination: "keyset", Sort: "asc"},
-			Path:        gitlab.Ptr(path),
-			Ref:         gitlab.Ptr(ref),
-			Recursive:   gitlab.Ptr(true),
-		}
-		resp         = make([]*git.Tree, 0)
-		listTreeResp []*gitlab.TreeNode
-		err          error
-	)
-
-	for {
-		listTreeResp, _, err = g.client.Repositories.ListTree(projectID, listTreeOption, gitlab.WithContext(ctx))
-		if err != nil {
-			return nil, err
-		}
-
-		for _, tree := range listTreeResp {
-			if tree == nil {
-				continue
-			}
-			resp = append(resp, &git.Tree{
-				Name: tree.Name,
-				Type: tree.Type,
-				Path: tree.Path,
-			})
-		}
-
-		if len(listTreeResp) < listTreeOption.PerPage {
-			break
-		}
-
-		// next page
-		listTreeOption.Page++
 	}
 
 	return resp, nil

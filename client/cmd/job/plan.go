@@ -41,7 +41,7 @@ type planCommand struct {
 	clientConfig   *config.ClientConfig
 
 	repository     git.Repository
-	repositoryFile git.RepositoryFiles
+	repositoryFile git.RepositoryFile
 	specReadWriter local.SpecReadWriter[*model.JobSpec]
 }
 

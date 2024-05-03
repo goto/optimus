@@ -2,16 +2,22 @@ package gitlab
 
 import (
 	"context"
+	"net/http"
+
+	"github.com/xanzy/go-gitlab"
 
 	"github.com/goto/optimus/ext/git"
-	"github.com/xanzy/go-gitlab"
+)
+
+const (
+	defaultPerPage = 100
 )
 
 type Gitlab struct {
 	client *gitlab.Client
 }
 
-func (g *Gitlab) CompareDiff(ctx context.Context, projectId any, fromRef, toRef string) ([]*git.Diff, error) {
+func (g *Gitlab) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*git.Diff, error) {
 	var (
 		compareOption = &gitlab.CompareOptions{
 			From:     gitlab.Ptr(fromRef),
@@ -23,7 +29,7 @@ func (g *Gitlab) CompareDiff(ctx context.Context, projectId any, fromRef, toRef 
 		err         error
 	)
 
-	compareResp, _, err = g.client.Repositories.Compare(projectId, compareOption, gitlab.WithContext(ctx))
+	compareResp, _, err = g.client.Repositories.Compare(projectID, compareOption, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -45,10 +51,10 @@ func (g *Gitlab) CompareDiff(ctx context.Context, projectId any, fromRef, toRef 
 	return resp, nil
 }
 
-func (g *Gitlab) ListTree(ctx context.Context, projectId any, ref string, path string) ([]*git.Tree, error) {
+func (g *Gitlab) ListTree(ctx context.Context, projectID any, ref, path string) ([]*git.Tree, error) {
 	var (
 		listTreeOption = &gitlab.ListTreeOptions{
-			ListOptions: gitlab.ListOptions{Page: 1, PerPage: 100, OrderBy: "id", Pagination: "keyset", Sort: "asc"},
+			ListOptions: gitlab.ListOptions{Page: 1, PerPage: defaultPerPage, OrderBy: "id", Pagination: "keyset", Sort: "asc"},
 			Path:        gitlab.Ptr(path),
 			Ref:         gitlab.Ptr(ref),
 			Recursive:   gitlab.Ptr(true),
@@ -59,7 +65,7 @@ func (g *Gitlab) ListTree(ctx context.Context, projectId any, ref string, path s
 	)
 
 	for {
-		listTreeResp, _, err = g.client.Repositories.ListTree(projectId, listTreeOption, gitlab.WithContext(ctx))
+		listTreeResp, _, err = g.client.Repositories.ListTree(projectID, listTreeOption, gitlab.WithContext(ctx))
 		if err != nil {
 			return nil, err
 		}
@@ -86,8 +92,34 @@ func (g *Gitlab) ListTree(ctx context.Context, projectId any, ref string, path s
 	return resp, nil
 }
 
-func NewGitlab(baseUrl, token string) (*Gitlab, error) {
-	client, err := gitlab.NewClient(token, gitlab.WithBaseURL(baseUrl))
+func (g *Gitlab) GetRaw(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
+	var (
+		option *gitlab.GetRawFileOptions
+		resp   *gitlab.Response
+		buff   []byte
+		err    error
+	)
+
+	if ref != "" {
+		option = &gitlab.GetRawFileOptions{Ref: gitlab.Ptr(ref)}
+	}
+
+	buff, resp, err = g.client.RepositoryFiles.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
+	if err != nil {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return buff, nil
+}
+
+func NewGitlab(baseURL, token string) (*Gitlab, error) {
+	var opts []gitlab.ClientOptionFunc
+	if baseURL != "" {
+		opts = append(opts, gitlab.WithBaseURL(baseURL))
+	}
+	client, err := gitlab.NewJobClient(token, opts...)
 	if err != nil {
 		return nil, err
 	}

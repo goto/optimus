@@ -87,10 +87,10 @@ func (p *planCommand) PreRunE(_ *cobra.Command, args []string) error {
 
 	switch p.gitProvider {
 	case "gitlab":
-		var gitlabSvc *gitlab.Gitlab
-		gitlabSvc, err = gitlab.NewGitlab(p.gitURL, p.gitToken)
-		p.repository = gitlabSvc
-		p.repositoryFile = gitlabSvc
+		var gitlabAPI *gitlab.API
+		gitlabAPI, err = gitlab.NewGitlab(p.gitURL, p.gitToken)
+		p.repository = gitlabAPI
+		p.repositoryFile = gitlabAPI
 	default:
 		return errors.New("unsupported git provider, we currently only support: [gitlab]")
 	}

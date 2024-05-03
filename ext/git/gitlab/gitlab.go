@@ -3,6 +3,7 @@ package gitlab
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/xanzy/go-gitlab"
 
@@ -13,11 +14,11 @@ const (
 	defaultPerPage = 100
 )
 
-type Gitlab struct {
+type API struct {
 	client *gitlab.Client
 }
 
-func (g *Gitlab) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*git.Diff, error) {
+func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*git.Diff, error) {
 	var (
 		compareOption = &gitlab.CompareOptions{
 			From:     gitlab.Ptr(fromRef),
@@ -51,7 +52,7 @@ func (g *Gitlab) CompareDiff(ctx context.Context, projectID any, fromRef, toRef 
 	return resp, nil
 }
 
-func (g *Gitlab) ListTree(ctx context.Context, projectID any, ref, path string) ([]*git.Tree, error) {
+func (g *API) ListTree(ctx context.Context, projectID any, ref, path string) ([]*git.Tree, error) {
 	var (
 		listTreeOption = &gitlab.ListTreeOptions{
 			ListOptions: gitlab.ListOptions{Page: 1, PerPage: defaultPerPage, OrderBy: "id", Pagination: "keyset", Sort: "asc"},
@@ -92,7 +93,7 @@ func (g *Gitlab) ListTree(ctx context.Context, projectID any, ref, path string) 
 	return resp, nil
 }
 
-func (g *Gitlab) GetRaw(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
+func (g *API) GetRaw(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
 	var (
 		option *gitlab.GetRawFileOptions
 		resp   *gitlab.Response
@@ -114,15 +115,21 @@ func (g *Gitlab) GetRaw(ctx context.Context, projectID any, ref, fileName string
 	return buff, nil
 }
 
-func NewGitlab(baseURL, token string) (*Gitlab, error) {
-	var opts []gitlab.ClientOptionFunc
+func NewGitlab(baseURL, token string) (*API, error) {
+	var (
+		opts []gitlab.ClientOptionFunc
+		api  = &API{}
+		err  error
+	)
+
 	if baseURL != "" {
 		opts = append(opts, gitlab.WithBaseURL(baseURL))
 	}
-	client, err := gitlab.NewJobClient(token, opts...)
-	if err != nil {
-		return nil, err
-	}
 
-	return &Gitlab{client: client}, nil
+	if os.Getenv("GIT_PERSONAL") == "true" {
+		api.client, err = gitlab.NewClient(token, opts...)
+	} else {
+		api.client, err = gitlab.NewJobClient(token, opts...)
+	}
+	return api, err
 }

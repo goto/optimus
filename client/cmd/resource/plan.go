@@ -1,4 +1,4 @@
-package job
+package resource
 
 import (
 	"context"
@@ -26,7 +26,7 @@ import (
 	"github.com/goto/optimus/ext/git/gitlab"
 )
 
-const jobFileName = "job.yaml"
+const resourceFileName = "resource.yaml"
 
 type planCommand struct {
 	logger log.Logger
@@ -42,16 +42,16 @@ type planCommand struct {
 
 	repository     git.Repository
 	repositoryFile git.RepositoryFiles
-	specReadWriter local.SpecReadWriter[*model.JobSpec]
+	specReadWriter local.SpecReadWriter[*model.ResourceSpec]
 }
 
 func NewPlanCommand() *cobra.Command {
 	planCmd := &planCommand{logger: logger.NewClientLogger()}
 	cmd := &cobra.Command{
 		Use:     "plan",
-		Short:   "Plan Job Deployment",
-		Long:    "PLan job deployment based on git diff state",
-		Example: "optimus job plan <commit> <commit-before>",
+		Short:   "Plan Resource Deployment",
+		Long:    "PLan resource deployment based on git diff state",
+		Example: "optimus resource plan <commit> <commit-before>",
 		Args:    cobra.MinimumNArgs(2), //nolint
 		PreRunE: planCmd.PreRunE,
 		RunE:    planCmd.RunE,
@@ -70,7 +70,7 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 
 	cmd.Flags().StringVarP(&p.projectID, "project-id", "I", os.Getenv("GIT_PROJECT_ID"), "Determine which project will be checked")
 
-	cmd.Flags().StringVarP(&p.output, "output", "o", "./job.csv", "File Output Path")
+	cmd.Flags().StringVarP(&p.output, "output", "o", "./resource.csv", "File Output Path")
 	cmd.Flags().BoolVarP(&p.verbose, "verbose", "v", false, "Print details related to operation")
 }
 
@@ -98,7 +98,7 @@ func (p *planCommand) PreRunE(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	p.specReadWriter, err = specio.NewJobSpecReadWriter(afero.NewOsFs())
+	p.specReadWriter, err = specio.NewResourceSpecReadWriter(afero.NewOsFs())
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 			return err
 		}
 		if p.verbose {
-			p.logger.Info("[plan] %s operation for project %s, namespace %s, job %s", jobPlan.Operation, jobPlan.ProjectName, jobPlan.NamespaceName, jobPlan.KindName)
+			p.logger.Info("[plan] %s operation for project %s, namespace %s, resource %s", jobPlan.Operation, jobPlan.ProjectName, jobPlan.NamespaceName, jobPlan.KindName)
 		}
 		plans = append(plans, jobPlan)
 	}
@@ -133,17 +133,20 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	return p.saveFile(plans)
 }
 
-func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory string) (jobPlan *plan.Plan, err error) {
+func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory string) (resourcePlan *plan.Plan, err error) {
 	var (
-		namespaceName             string
-		sourceRaw, destinationRaw []byte
-		fileName                  = filepath.Join(directory, jobFileName)
+		namespaceName, datastoreType string
+		sourceRaw, destinationRaw    []byte
+		fileName                     = filepath.Join(directory, resourceFileName)
 	)
 
 	for _, namespace := range p.clientConfig.Namespaces {
-		if strings.HasPrefix(directory, namespace.Job.Path) {
-			namespaceName = namespace.Name
-			break
+		for _, datastore := range namespace.Datastore {
+			if strings.HasPrefix(directory, datastore.Path) {
+				namespaceName = namespace.Name
+				datastoreType = datastore.Type
+				break
+			}
 		}
 	}
 	if namespaceName == "" {
@@ -159,48 +162,46 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 		return nil, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.sourceRef, directory))
 	}
 
-	var sourceSpec, destinationSpec model.JobSpec
+	var sourceSpec, destinationSpec model.ResourceSpec
 	if err = yaml.Unmarshal(sourceRaw, &sourceSpec); err != nil {
-		return nil, errors.Join(err, errors.New("failed to unmarshal source job specification"))
+		return nil, errors.Join(err, errors.New("failed to unmarshal source resource specification"))
 	}
 	if err = yaml.Unmarshal(destinationRaw, &destinationSpec); err != nil {
-		return nil, errors.Join(err, errors.New("failed to unmarshal destination job specification"))
+		return nil, errors.Join(err, errors.New("failed to unmarshal destination resource specification"))
 	}
 
-	jobPlan = &plan.Plan{ProjectName: p.clientConfig.Project.Name, NamespaceName: namespaceName, Kind: plan.KindJob}
+	resourcePlan = &plan.Plan{ProjectName: p.clientConfig.Project.Name, NamespaceName: namespaceName, Kind: plan.KindResource}
 	if len(sourceSpec.Name) == 0 && len(destinationSpec.Name) > 0 {
-		jobPlan.KindName = destinationSpec.Name
-		jobPlan.Operation = plan.OperationCreate
+		resourcePlan.KindName = fmt.Sprintf("%s:%s", datastoreType, destinationSpec.Name)
+		resourcePlan.Operation = plan.OperationCreate
 	} else if len(sourceSpec.Name) > 0 && len(destinationSpec.Name) == 0 {
-		jobPlan.KindName = sourceSpec.Name
-		jobPlan.Operation = plan.OperationDelete
+		resourcePlan.KindName = fmt.Sprintf("%s:%s", datastoreType, sourceSpec.Name)
+		resourcePlan.Operation = plan.OperationDelete
 	} else {
-		jobPlan.KindName = destinationSpec.Name
-		jobPlan.Operation = plan.OperationUpdate
+		resourcePlan.KindName = fmt.Sprintf("%s:%s", datastoreType, destinationSpec.Name)
+		resourcePlan.Operation = plan.OperationUpdate
 	}
 
-	return jobPlan, nil
+	return resourcePlan, nil
 }
 
 func (p *planCommand) getAllDirectories(diffs []*git.Diff) []string {
 	directories := make([]string, 0)
 	pathExists := make(map[string]bool)
+
 	for i := range diffs {
-		directories = p.appendDirectories(diffs[i].OldPath, pathExists, directories)
-		directories = p.appendDirectories(diffs[i].NewPath, pathExists, directories)
+		directories = p.appendDirectory(diffs[i].OldPath, pathExists, directories)
+		directories = p.appendDirectory(diffs[i].NewPath, pathExists, directories)
 	}
+
 	return directories
 }
 
-func (*planCommand) appendDirectories(directory string, directoryExists map[string]bool, fileDirectories []string) []string {
-	index := strings.Index(directory, "/assets")
-	if !strings.HasSuffix(directory, "/"+jobFileName) && index < 1 {
+func (*planCommand) appendDirectory(directory string, directoryExists map[string]bool, fileDirectories []string) []string {
+	if !strings.HasSuffix(directory, "/"+resourceFileName) {
 		return fileDirectories
 	}
-	directory = strings.TrimSuffix(directory, "/"+jobFileName)
-	if index > 0 {
-		directory = directory[:index]
-	}
+	directory = strings.TrimSuffix(directory, "/"+resourceFileName)
 	if !directoryExists[directory] {
 		fileDirectories = append(fileDirectories, directory)
 		directoryExists[directory] = true

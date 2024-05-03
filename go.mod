@@ -15,6 +15,7 @@ require (
 	github.com/dustinkirkland/golang-petname v0.0.0-20191129215211-8e5a1ed0cff0
 	github.com/fatih/color v1.7.0
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
+	github.com/gocarina/gocsv v0.0.0-20231116093920-b87c2d0e983a
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/google/uuid v1.3.0
 	github.com/goto/optimus/sdk v0.0.0-20230313071811-2d68a9c815bf

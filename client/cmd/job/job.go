@@ -26,6 +26,7 @@ func NewJobCommand() *cobra.Command {
 		NewJobRunInputCommand(),
 		NewChangeNamespaceCommand(),
 		NewDeleteCommand(),
+		NewPlanCommand(),
 	)
 	return cmd
 }

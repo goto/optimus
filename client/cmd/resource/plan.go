@@ -23,6 +23,7 @@ import (
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/ext/git"
+	"github.com/goto/optimus/ext/git/github"
 	"github.com/goto/optimus/ext/git/gitlab"
 )
 
@@ -91,8 +92,13 @@ func (p *planCommand) PreRunE(_ *cobra.Command, args []string) error {
 		gitlabAPI, err = gitlab.NewGitlab(p.gitURL, p.gitToken)
 		p.repository = gitlabAPI
 		p.repositoryFile = gitlabAPI
+	case "github":
+		var githubAPI *github.API
+		githubAPI, err = github.NewGithub(p.gitURL, p.gitToken)
+		p.repository = githubAPI
+		p.repositoryFile = githubAPI
 	default:
-		return errors.New("unsupported git provider, we currently only support: [gitlab]")
+		return errors.New("unsupported git provider, we currently only support: [github,gitlab]")
 	}
 	if err != nil {
 		return err

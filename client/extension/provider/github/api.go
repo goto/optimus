@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/go-github/v59/github"
 
-	"github.com/goto/optimus/ext/git"
+	"github.com/goto/optimus/client/extension/model"
 )
 
 type API struct {
@@ -37,7 +37,7 @@ func (*API) GetOwnerAndRepoName(projectID any) (owner, repo string, err error) {
 	}
 }
 
-func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*git.Diff, error) {
+func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
 	var (
 		pagination = &github.ListOptions{
 			Page:    1,
@@ -65,13 +65,13 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 		}
 	}
 
-	resp := make([]*git.Diff, 0)
+	resp := make([]*model.Diff, 0)
 	for i := range compareDiffResp {
 		for _, diff := range compareDiffResp[i].Files {
 			if diff == nil {
 				continue
 			}
-			resp = append(resp, &git.Diff{
+			resp = append(resp, &model.Diff{
 				OldPath: diff.GetPreviousFilename(),
 				NewPath: diff.GetFilename(),
 			})
@@ -81,7 +81,7 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 	return resp, nil
 }
 
-func (g *API) GetRaw(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
+func (g *API) GetFileContent(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
 	var (
 		option           = &github.RepositoryContentGetOptions{Ref: ref}
 		resp             *github.Response
@@ -105,7 +105,7 @@ func (g *API) GetRaw(ctx context.Context, projectID any, ref, fileName string) (
 	return []byte(content), err
 }
 
-func NewGithub(baseURL, token string) (*API, error) {
+func NewAPI(baseURL, token string) (*API, error) {
 	var (
 		api = &API{}
 		err error

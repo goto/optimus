@@ -1,8 +1,8 @@
 package git
 
 type Diff struct {
-	OldPath, NewPath                 string
-	NewFile, RenamedFile, DeleteFile bool
+	OldPath string
+	NewPath string
 }
 
 type Diffs []*Diff

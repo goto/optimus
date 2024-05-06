@@ -37,14 +37,14 @@ func (*API) GetOwnerAndRepoName(projectID any) (owner, repo string, err error) {
 	}
 }
 
-func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
+func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
 	var (
 		pagination = &github.ListOptions{
 			Page:    1,
 			PerPage: defaultPerPage,
 		}
 		compareResp      *github.CommitsComparison
-		owner, repo, err = g.GetOwnerAndRepoName(projectID)
+		owner, repo, err = api.GetOwnerAndRepoName(projectID)
 	)
 
 	if err != nil {
@@ -53,7 +53,7 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 
 	compareDiffResp := make([]*github.CommitsComparison, 0)
 	for {
-		compareResp, _, err = g.client.Repositories.CompareCommits(ctx, owner, repo, toRef, fromRef, pagination)
+		compareResp, _, err = api.client.Repositories.CompareCommits(ctx, owner, repo, toRef, fromRef, pagination)
 		if err != nil {
 			return nil, err
 		}
@@ -81,19 +81,19 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 	return resp, nil
 }
 
-func (g *API) GetFileContent(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
+func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
 	var (
 		option           = &github.RepositoryContentGetOptions{Ref: ref}
 		resp             *github.Response
 		repoContent      *github.RepositoryContent
-		owner, repo, err = g.GetOwnerAndRepoName(projectID)
+		owner, repo, err = api.GetOwnerAndRepoName(projectID)
 	)
 
 	if err != nil {
 		return nil, err
 	}
 
-	repoContent, _, resp, err = g.client.Repositories.GetContents(ctx, owner, repo, fileName, option)
+	repoContent, _, resp, err = api.client.Repositories.GetContents(ctx, owner, repo, fileName, option)
 	if err != nil {
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, nil

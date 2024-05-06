@@ -70,7 +70,7 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 
 	cmd.Flags().StringVarP(&p.projectID, "project-id", "I", os.Getenv("GIT_PROJECT_ID"), "Determine which project will be checked")
 
-	cmd.Flags().StringVarP(&p.output, "output", "o", "./job.csv", "File Output Path")
+	cmd.Flags().StringVarP(&p.output, "output", "o", "./job.csv", "File path for output of plan")
 	cmd.Flags().BoolVarP(&p.verbose, "verbose", "v", false, "Print details related to operation")
 }
 

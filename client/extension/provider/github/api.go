@@ -13,7 +13,7 @@ import (
 )
 
 type API struct {
-	client *github.Client
+	repository Repository
 }
 
 const (
@@ -53,16 +53,18 @@ func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef s
 
 	compareDiffResp := make([]*github.CommitsComparison, 0)
 	for {
-		compareResp, _, err = api.client.Repositories.CompareCommits(ctx, owner, repo, toRef, fromRef, pagination)
+		var resp *github.Response
+		compareResp, resp, err = api.repository.CompareCommits(ctx, owner, repo, toRef, fromRef, pagination)
 		if err != nil {
 			return nil, err
 		}
 
 		compareDiffResp = append(compareDiffResp, compareResp)
 
-		if len(compareResp.Commits) < pagination.PerPage {
+		if resp.NextPage == 0 {
 			break
 		}
+		pagination.Page = resp.NextPage
 	}
 
 	resp := make([]*model.Diff, 0)
@@ -93,7 +95,7 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 		return nil, err
 	}
 
-	repoContent, _, resp, err = api.client.Repositories.GetContents(ctx, owner, repo, fileName, option)
+	repoContent, _, resp, err = api.repository.GetContents(ctx, owner, repo, fileName, option)
 	if err != nil {
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, nil
@@ -106,14 +108,18 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 }
 
 func NewAPI(baseURL, token string) (*API, error) {
-	var (
-		api = &API{}
-		err error
-	)
-
-	api.client = github.NewClient(nil).WithAuthToken(token)
+	client := github.NewClient(nil).WithAuthToken(token)
 	if baseURL != "" {
-		api.client, err = api.client.WithEnterpriseURLs(baseURL, os.Getenv("GIT_UPLOAD_URL"))
+		var err error
+		client, err = client.WithEnterpriseURLs(baseURL, os.Getenv("GIT_UPLOAD_URL"))
+		if err != nil {
+			return nil, err
+		}
 	}
-	return api, err
+
+	return NewGitHubAPI(client.Repositories), nil
+}
+
+func NewGitHubAPI(repo Repository) *API {
+	return &API{repository: repo}
 }

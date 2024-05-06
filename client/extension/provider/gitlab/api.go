@@ -7,14 +7,14 @@ import (
 
 	"github.com/xanzy/go-gitlab"
 
-	"github.com/goto/optimus/ext/git"
+	"github.com/goto/optimus/client/extension/model"
 )
 
 type API struct {
 	client *gitlab.Client
 }
 
-func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*git.Diff, error) {
+func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
 	var (
 		compareOption = &gitlab.CompareOptions{
 			From:     gitlab.Ptr(fromRef),
@@ -31,18 +31,18 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 		return nil, err
 	}
 
-	resp := make([]*git.Diff, 0, len(compareResp.Diffs))
+	resp := make([]*model.Diff, 0, len(compareResp.Diffs))
 	for _, diff := range compareResp.Diffs {
 		if diff == nil {
 			continue
 		}
-		resp = append(resp, &git.Diff{OldPath: diff.OldPath, NewPath: diff.NewPath})
+		resp = append(resp, &model.Diff{OldPath: diff.OldPath, NewPath: diff.NewPath})
 	}
 
 	return resp, nil
 }
 
-func (g *API) GetRaw(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
+func (g *API) GetFileContent(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
 	var (
 		option *gitlab.GetRawFileOptions
 		resp   *gitlab.Response
@@ -64,7 +64,7 @@ func (g *API) GetRaw(ctx context.Context, projectID any, ref, fileName string) (
 	return buff, nil
 }
 
-func NewGitlab(baseURL, token string) (*API, error) {
+func NewAPI(baseURL, token string) (*API, error) {
 	var (
 		opts []gitlab.ClientOptionFunc
 		api  = &API{}

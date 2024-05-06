@@ -20,3 +20,8 @@ type Client interface {
 	// Each provider can defines what this parameter is.
 	DownloadAsset(context.Context, string) ([]byte, error)
 }
+
+type RepositoryAPI interface {
+	CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*Diff, error)
+	GetFileContent(ctx context.Context, projectID any, ref, fileName string) ([]byte, error)
+}

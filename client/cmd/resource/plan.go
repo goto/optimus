@@ -18,13 +18,13 @@ import (
 
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/plan"
+	providermodel "github.com/goto/optimus/client/extension/model"
+	"github.com/goto/optimus/client/extension/provider/github"
+	"github.com/goto/optimus/client/extension/provider/gitlab"
 	"github.com/goto/optimus/client/local"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
-	"github.com/goto/optimus/ext/git"
-	"github.com/goto/optimus/ext/git/github"
-	"github.com/goto/optimus/ext/git/gitlab"
 )
 
 const resourceFileName = "resource.yaml"
@@ -41,8 +41,7 @@ type planCommand struct {
 	configFilePath string
 	clientConfig   *config.ClientConfig
 
-	repository     git.Repository
-	repositoryFile git.RepositoryFile
+	repository     providermodel.RepositoryAPI
 	specReadWriter local.SpecReadWriter[*model.ResourceSpec]
 }
 
@@ -88,15 +87,9 @@ func (p *planCommand) PreRunE(_ *cobra.Command, args []string) error {
 
 	switch p.gitProvider {
 	case "gitlab":
-		var gitlabAPI *gitlab.API
-		gitlabAPI, err = gitlab.NewGitlab(p.gitURL, p.gitToken)
-		p.repository = gitlabAPI
-		p.repositoryFile = gitlabAPI
+		p.repository, err = gitlab.NewAPI(p.gitURL, p.gitToken)
 	case "github":
-		var githubAPI *github.API
-		githubAPI, err = github.NewGithub(p.gitURL, p.gitToken)
-		p.repository = githubAPI
-		p.repositoryFile = githubAPI
+		p.repository, err = github.NewAPI(p.gitURL, p.gitToken)
 	default:
 		return errors.New("unsupported git provider, we currently only support: [github,gitlab]")
 	}
@@ -119,7 +112,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	directories := git.Diffs(diffs).GetAllDirectories(p.appendDirectory)
+	directories := providermodel.Diffs(diffs).GetAllDirectories(p.appendDirectory)
 	plans := make(plan.Plans, 0, len(directories))
 	p.logger.Info("[plan] found changed directories: %+v", directories)
 
@@ -159,11 +152,11 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 		return nil, fmt.Errorf("failed to find namespace specified on directory: %s", directory)
 	}
 
-	destinationRaw, err = p.repositoryFile.GetRaw(ctx, p.projectID, p.destinationRef, fileName)
+	destinationRaw, err = p.repository.GetFileContent(ctx, p.projectID, p.destinationRef, fileName)
 	if err != nil {
 		return nil, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.destinationRef, directory))
 	}
-	sourceRaw, err = p.repositoryFile.GetRaw(ctx, p.projectID, p.sourceRef, fileName)
+	sourceRaw, err = p.repository.GetFileContent(ctx, p.projectID, p.sourceRef, fileName)
 	if err != nil {
 		return nil, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.sourceRef, directory))
 	}

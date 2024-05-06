@@ -1,4 +1,4 @@
-package git
+package model
 
 type Diff struct {
 	OldPath string

@@ -14,7 +14,7 @@ type API struct {
 	client *gitlab.Client
 }
 
-func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
+func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
 	var (
 		compareOption = &gitlab.CompareOptions{
 			From:     gitlab.Ptr(fromRef),
@@ -26,7 +26,7 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 		err         error
 	)
 
-	compareResp, _, err = g.client.Repositories.Compare(projectID, compareOption, gitlab.WithContext(ctx))
+	compareResp, _, err = api.client.Repositories.Compare(projectID, compareOption, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 	return resp, nil
 }
 
-func (g *API) GetFileContent(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
+func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName string) ([]byte, error) {
 	var (
 		option *gitlab.GetRawFileOptions
 		resp   *gitlab.Response
@@ -54,7 +54,7 @@ func (g *API) GetFileContent(ctx context.Context, projectID any, ref, fileName s
 		option = &gitlab.GetRawFileOptions{Ref: gitlab.Ptr(ref)}
 	}
 
-	buff, resp, err = g.client.RepositoryFiles.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
+	buff, resp, err = api.client.RepositoryFiles.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
 	if err != nil {
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, nil

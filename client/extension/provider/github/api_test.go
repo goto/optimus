@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/goto/optimus/ext/git/github"
+	"github.com/goto/optimus/client/extension/provider/github"
 )
 
 func TestAPI_getOwnerAndRepoName(t *testing.T) {
@@ -48,7 +48,7 @@ func TestAPI_getOwnerAndRepoName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ap, err := github.NewGithub(tt.fields.baseURL, tt.fields.token)
+			ap, err := github.NewAPI(tt.fields.baseURL, tt.fields.token)
 			assert.NoError(t, err)
 			assert.NotNil(t, ap)
 

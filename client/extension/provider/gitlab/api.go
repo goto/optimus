@@ -11,7 +11,8 @@ import (
 )
 
 type API struct {
-	client *gitlab.Client
+	repository     Repository
+	repositoryFile RepositoryFile
 }
 
 func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
@@ -26,7 +27,7 @@ func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef s
 		err         error
 	)
 
-	compareResp, _, err = api.client.Repositories.Compare(projectID, compareOption, gitlab.WithContext(ctx))
+	compareResp, _, err = api.repository.Compare(projectID, compareOption, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +55,7 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 		option = &gitlab.GetRawFileOptions{Ref: gitlab.Ptr(ref)}
 	}
 
-	buff, resp, err = api.client.RepositoryFiles.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
+	buff, resp, err = api.repositoryFile.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
 	if err != nil {
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, nil
@@ -67,7 +68,6 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 func NewAPI(baseURL, token string) (*API, error) {
 	var (
 		opts []gitlab.ClientOptionFunc
-		api  = &API{}
 		err  error
 	)
 
@@ -75,10 +75,22 @@ func NewAPI(baseURL, token string) (*API, error) {
 		opts = append(opts, gitlab.WithBaseURL(baseURL))
 	}
 
+	var client *gitlab.Client
 	if os.Getenv("GIT_PERSONAL") == "true" {
-		api.client, err = gitlab.NewClient(token, opts...)
+		client, err = gitlab.NewClient(token, opts...)
 	} else {
-		api.client, err = gitlab.NewJobClient(token, opts...)
+		client, err = gitlab.NewJobClient(token, opts...)
 	}
-	return api, err
+	if err != nil {
+		return nil, err
+	}
+
+	return NewGitLabAPI(client.Repositories, client.RepositoryFiles), nil
+}
+
+func NewGitLabAPI(repo Repository, repoFile RepositoryFile) *API {
+	return &API{
+		repository:     repo,
+		repositoryFile: repoFile,
+	}
 }

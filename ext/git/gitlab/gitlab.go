@@ -36,13 +36,7 @@ func (g *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef str
 		if diff == nil {
 			continue
 		}
-		resp = append(resp, &git.Diff{
-			OldPath:     diff.OldPath,
-			NewPath:     diff.NewPath,
-			NewFile:     diff.NewFile,
-			RenamedFile: diff.RenamedFile,
-			DeleteFile:  diff.DeletedFile,
-		})
+		resp = append(resp, &git.Diff{OldPath: diff.OldPath, NewPath: diff.NewPath})
 	}
 
 	return resp, nil

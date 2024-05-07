@@ -97,7 +97,7 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 
 	repoContent, _, resp, err = api.repository.GetContents(ctx, owner, repo, fileName, option)
 	if err != nil {
-		if resp.StatusCode == http.StatusNotFound {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
 		return nil, err

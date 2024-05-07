@@ -57,7 +57,7 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 
 	buff, resp, err = api.repositoryFile.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
 	if err != nil {
-		if resp.StatusCode == http.StatusNotFound {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
 		return nil, err

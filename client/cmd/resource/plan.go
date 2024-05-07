@@ -114,7 +114,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 
 	directories := providermodel.Diffs(diffs).GetAllDirectories(p.appendDirectory)
 	plans := make(plan.Plans, 0, len(directories))
-	p.logger.Info("[plan] found changed directories: %+v", directories)
+	p.logger.Info("resource plan found changed in directories: %+v", directories)
 
 	for _, directory := range directories {
 		var jobPlan *plan.Plan
@@ -123,7 +123,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 			return err
 		}
 		if p.verbose {
-			p.logger.Info("[plan] %s operation for project %s, namespace %s, resource %s", jobPlan.Operation, jobPlan.ProjectName, jobPlan.NamespaceName, jobPlan.KindName)
+			p.logger.Info("[%s] plan operation %s for resource %s", jobPlan.NamespaceName, jobPlan.Operation, jobPlan.KindName)
 		}
 		plans = append(plans, jobPlan)
 	}
@@ -212,6 +212,6 @@ func (p *planCommand) saveFile(plans plan.Plans) error {
 	if err = gocsv.MarshalFile(plans, file); err != nil {
 		return errors.Join(errors.New("failed marshal to csv file"), err)
 	}
-	p.logger.Info("[plan] file plan created: %s", file.Name())
+	p.logger.Info("resource plan file created: %s", file.Name())
 	return nil
 }

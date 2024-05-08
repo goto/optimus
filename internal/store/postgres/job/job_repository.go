@@ -437,11 +437,9 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 
 	var upstreams []*job.Upstream
 	for _, storeUpstream := range storeUpstreams {
-		var resourceURN resource.URN
+		var resourceURN job.ResourceURN
 		if storeUpstream.UpstreamResourceURN.Valid {
-			if storeUpstream.UpstreamResourceURN.String != "" {
-				resourceURN, _ = resource.ParseURN(storeUpstream.UpstreamResourceURN.String)
-			}
+			resourceURN = job.ResourceURN(storeUpstream.UpstreamResourceURN.String)
 		}
 
 		var upstreamName job.Name
@@ -550,12 +548,12 @@ func (j JobRepository) GetAllByProjectName(ctx context.Context, projectName tena
 	return jobs, me.ToErr()
 }
 
-func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
+func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination job.ResourceURN) ([]*job.Job, error) {
 	me := errors.NewMultiError("get all job specs by resource destination")
 
 	getAllByDestination := `SELECT ` + jobColumns + ` FROM job WHERE destination = $1 AND deleted_at IS NULL;`
 
-	rows, err := j.db.Query(ctx, getAllByDestination, resourceDestination.String())
+	rows, err := j.db.Query(ctx, getAllByDestination, resourceDestination)
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "error while jobs for destination:  "+resourceDestination.String(), err)
 	}
@@ -592,24 +590,11 @@ func specToJob(spec *Spec) (*job.Job, error) {
 		return nil, err
 	}
 
-	var destination resource.URN
-	if spec.Destination != "" {
-		destination, err = resource.ParseURN(spec.Destination)
-		if err != nil {
-			return nil, err
-		}
-	}
+	destination := job.ResourceURN(spec.Destination)
 
-	var sources []resource.URN
+	var sources []job.ResourceURN
 	for _, source := range spec.Sources {
-		var resourceURN resource.URN
-		if source != "" {
-			resourceURN, err = resource.ParseURN(source)
-			if err != nil {
-				return nil, err
-			}
-		}
-
+		resourceURN := job.ResourceURN(source)
 		sources = append(sources, resourceURN)
 	}
 
@@ -887,7 +872,7 @@ WHERE project_name=$1 AND job_name=$2;`
 	return j.toUpstreams(storeJobsWithUpstreams)
 }
 
-func (j JobRepository) GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination resource.URN) ([]*job.Downstream, error) {
+func (j JobRepository) GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination job.ResourceURN) ([]*job.Downstream, error) {
 	query := `
 SELECT
 	name as job_name, project_name, namespace_name, task_name
@@ -895,7 +880,7 @@ FROM job
 WHERE project_name = $1 AND $2 = ANY(sources)
 AND deleted_at IS NULL;`
 
-	rows, err := j.db.Query(ctx, query, projectName, destination.String())
+	rows, err := j.db.Query(ctx, query, projectName, destination)
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "error while getting job downstream", err)
 	}
@@ -978,7 +963,7 @@ func fromStoreDownstream(storeDownstreamList []Downstream) ([]*job.Downstream, e
 	return downstreamList, me.ToErr()
 }
 
-func (j JobRepository) GetDownstreamBySources(ctx context.Context, sources []resource.URN) ([]*job.Downstream, error) {
+func (j JobRepository) GetDownstreamBySources(ctx context.Context, sources []job.ResourceURN) ([]*job.Downstream, error) {
 	if len(sources) == 0 {
 		return nil, nil
 	}

@@ -14,7 +14,6 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 )
 
@@ -109,7 +108,7 @@ func (o *OptimusResourceManager) constructGetJobSpecificationsRequest(ctx contex
 	if unresolvedDependency.ProjectName() != "" {
 		filters = append(filters, fmt.Sprintf("project_name=%s", unresolvedDependency.ProjectName().String()))
 	}
-	if !unresolvedDependency.Resource().IsZero() {
+	if unresolvedDependency.Resource() != "" {
 		filters = append(filters, fmt.Sprintf("resource_destination=%s", unresolvedDependency.Resource().String()))
 	}
 
@@ -153,15 +152,6 @@ func (o *OptimusResourceManager) toOptimusDependency(response *jobSpecificationR
 	if err != nil {
 		return nil, err
 	}
-
-	var resourceURN resource.URN
-	if response.Job.Destination != "" {
-		urn, err := resource.ParseURN(response.Job.Destination)
-		if err != nil {
-			return nil, err
-		}
-		resourceURN = urn
-	}
-
+	resourceURN := job.ResourceURN(response.Job.Destination)
 	return job.NewUpstreamResolved(jobName, o.config.Host, resourceURN, jobTenant, unresolvedDependency.Type(), taskName, true), nil
 }

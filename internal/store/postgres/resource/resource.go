@@ -43,7 +43,7 @@ func FromResourceToModel(r *resource.Resource) *Resource {
 		NamespaceName: r.Tenant().NamespaceName().String(),
 		Metadata:      metadata,
 		Spec:          r.Spec(),
-		URN:           r.URN().String(),
+		URN:           r.URN(),
 		Status:        r.Status().String(),
 	}
 }
@@ -65,18 +65,7 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 	output, err := resource.NewResource(r.FullName, r.Kind, store, tnnt, metadata, r.Spec)
 	if err == nil {
 		output = resource.FromExisting(output, resource.ReplaceStatus(resource.FromStringToStatus(r.Status)))
-
-		var urn resource.URN
-		if r.URN != "" {
-			tempURN, err := resource.ParseURN(r.URN)
-			if err != nil {
-				return nil, err
-			}
-
-			urn = tempURN
-		}
-
-		output.UpdateURN(urn)
+		output.UpdateURN(r.URN)
 	}
 	return output, err
 }

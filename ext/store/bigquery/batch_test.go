@@ -117,9 +117,9 @@ func TestBatches(t *testing.T) {
 		extTableHandle.On("Exists", ctx).Return(true)
 		defer extTableHandle.AssertExpectations(t)
 
-		dataset1, err := bigquery.DataSetFor(updateDS.Name())
+		dataset1, err := bigquery.DataSetFor(updateDS)
 		assert.NoError(t, err)
-		dataset2, err := bigquery.DataSetFor(updateExt1.Name())
+		dataset2, err := bigquery.DataSetFor(updateExt1)
 		assert.NoError(t, err)
 		client := new(mockClient)
 
@@ -189,7 +189,7 @@ func TestBatches(t *testing.T) {
 
 		accountSecret := "secret for account"
 
-		tab1Dataset, err := bigquery.DataSetFor(tab1.Name())
+		tab1Dataset, err := bigquery.DataSetFor(tab1)
 		assert.NoError(t, err)
 
 		datasetHandle.On("Exists", ctx).Return(false)
@@ -220,7 +220,7 @@ func TestBatches(t *testing.T) {
 
 		accountSecret := "secret for account"
 
-		tab1Dataset, err := bigquery.DataSetFor(tab1.Name())
+		tab1Dataset, err := bigquery.DataSetFor(tab1)
 		assert.NoError(t, err)
 
 		datasetHandle.On("Exists", ctx).Return(true)
@@ -253,7 +253,7 @@ func TestBatches(t *testing.T) {
 
 		dsToCreate := resource.FromExisting(ds1, resource.ReplaceStatus(resource.StatusToCreate))
 
-		dsToCreateDataset, err := bigquery.DataSetFor(dsToCreate.Name())
+		dsToCreateDataset, err := bigquery.DataSetFor(dsToCreate)
 		assert.NoError(t, err)
 
 		datasetHandle.On("Exists", ctx).Return(false)

@@ -60,11 +60,11 @@ func TestDataSet(t *testing.T) {
 			invalidRes, err := resource.NewResource("proj.", bigquery.KindExternalTable, bqStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
-			_, err = bigquery.DataSetFor(invalidRes.Name())
+			_, err = bigquery.DataSetFor(invalidRes)
 			assert.Error(t, err)
 		})
 		t.Run("returns dataset when valid", func(t *testing.T) {
-			ds, err := bigquery.DataSetFor(res.Name())
+			ds, err := bigquery.DataSetFor(res)
 			assert.NoError(t, err)
 
 			assert.Equal(t, "proj", ds.Project)
@@ -90,7 +90,7 @@ func TestResourceName(t *testing.T) {
 			dsRes, dsErr := resource.NewResource("proj", bigquery.KindDataset, bqStore, tnnt, &metadata, spec)
 			assert.NoError(t, dsErr)
 
-			_, err := bigquery.ResourceNameFor(dsRes.Name(), dsRes.Kind())
+			_, err := bigquery.ResourceNameFor(dsRes)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "invalid resource name: proj")
 		})
@@ -98,7 +98,7 @@ func TestResourceName(t *testing.T) {
 			dsRes, dsErr := resource.NewResource("proj.dataset", bigquery.KindDataset, bqStore, tnnt, &metadata, spec)
 			assert.NoError(t, dsErr)
 
-			name, err := bigquery.ResourceNameFor(dsRes.Name(), dsRes.Kind())
+			name, err := bigquery.ResourceNameFor(dsRes)
 			assert.NoError(t, err)
 			assert.Equal(t, "dataset", name)
 		})
@@ -108,7 +108,7 @@ func TestResourceName(t *testing.T) {
 			dsRes, dsErr := resource.NewResource("proj.dataset", bigquery.KindTable, bqStore, tnnt, &metadata, spec)
 			assert.NoError(t, dsErr)
 
-			_, err := bigquery.ResourceNameFor(dsRes.Name(), dsRes.Kind())
+			_, err := bigquery.ResourceNameFor(dsRes)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "invalid resource name")
 		})
@@ -116,12 +116,12 @@ func TestResourceName(t *testing.T) {
 			dsRes, dsErr := resource.NewResource("proj.dataset.", bigquery.KindTable, bqStore, tnnt, &metadata, spec)
 			assert.NoError(t, dsErr)
 
-			_, err := bigquery.ResourceNameFor(dsRes.Name(), dsRes.Kind())
+			_, err := bigquery.ResourceNameFor(dsRes)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "invalid resource name")
 		})
 		t.Run("name when valid", func(t *testing.T) {
-			name, err := bigquery.ResourceNameFor(res.Name(), res.Kind())
+			name, err := bigquery.ResourceNameFor(res)
 			assert.NoError(t, err)
 			assert.Equal(t, "extTable1", name)
 		})
@@ -221,7 +221,7 @@ func TestURNFor(t *testing.T) {
 
 		urn, err := bigquery.URNFor(res)
 		assert.NoError(t, err)
-		assert.Equal(t, "bigquery://p-project:dataset", urn.String())
+		assert.Equal(t, "bigquery://p-project:dataset", urn)
 	})
 	t.Run("returns error when cannot get resource name", func(t *testing.T) {
 		res, err := resource.NewResource("p-project.dataset.", bigquery.KindTable, bqStore, tnnt, &metadata, spec)
@@ -237,6 +237,6 @@ func TestURNFor(t *testing.T) {
 
 		urn, err := bigquery.URNFor(res)
 		assert.NoError(t, err)
-		assert.Equal(t, "bigquery://p-project:dataset.table1", urn.String())
+		assert.Equal(t, "bigquery://p-project:dataset.table1", urn)
 	})
 }

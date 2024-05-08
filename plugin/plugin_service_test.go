@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/plugin"
 	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
@@ -23,7 +22,8 @@ func TestNewPluginService(t *testing.T) {
 		var logger log.Logger = nil
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -33,7 +33,8 @@ func TestNewPluginService(t *testing.T) {
 	t.Run("should return error when pluginGetter is nil", func(t *testing.T) {
 		logger := log.NewNoop()
 		var pluginGetter plugin.PluginGetter = nil
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -55,7 +56,8 @@ func TestNewPluginService(t *testing.T) {
 		logger := log.NewNoop()
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		var evaluatorFactory plugin.EvaluatorFactory = nil
 
 		_, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
@@ -65,7 +67,8 @@ func TestNewPluginService(t *testing.T) {
 		logger := log.NewNoop()
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -87,7 +90,8 @@ func TestInfo(t *testing.T) {
 	t.Run("returns error when no plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -104,7 +108,8 @@ func TestInfo(t *testing.T) {
 	t.Run("returns error when yaml mod not supported", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -122,7 +127,8 @@ func TestInfo(t *testing.T) {
 	t.Run("returns plugin info", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -159,15 +165,11 @@ func TestIdentifyUpstreams(t *testing.T) {
 		YamlMod: pluginYamlTestWithSelector,
 	}
 
-	urn1, err := resource.ParseURN("bigquery://proj:datas.table1")
-	assert.NoError(t, err)
-	urn2, err := resource.ParseURN("bigquery://proj:datas.table2")
-	assert.NoError(t, err)
-
 	t.Run("return error when plugin is not exist on pluginGetter", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -183,7 +185,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return empty resource urn if plugin doesn't have parser", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
@@ -208,7 +211,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when evaluator factory couldn't return file evaluator", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -225,7 +229,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when evaluator factory couldn't return specilized evaluator", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -242,7 +247,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when evaluator factory couldn't return evaluator due to invalid filepath type", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -261,7 +267,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when bq2bq service account config is not provided", func(t *testing.T) { // will remove once all plugin is supported
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
@@ -281,7 +288,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("return error when upstream generator can't be created", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
@@ -301,17 +309,19 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("should success when no error encountered", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
 		defer evaluator.AssertExpectations(t)
-		upstreamIdentifier := NewUpstreamIdentifier(t)
+		upstreamIdentifier := new(UpstreamIdentifier)
+		defer upstreamIdentifier.AssertExpectations(t)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
-		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]resource.URN{urn1}, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl"}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -324,12 +334,14 @@ func TestIdentifyUpstreams(t *testing.T) {
 	t.Run("should generate clean dependencies without destination in it", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		evaluator := new(Evaluator)
 		defer evaluator.AssertExpectations(t)
-		upstreamIdentifier := NewUpstreamIdentifier(t)
+		upstreamIdentifier := new(UpstreamIdentifier)
+		defer upstreamIdentifier.AssertExpectations(t)
 
 		pluginYamlTestWithDestinationTemplate, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_destination_template.yaml")
 		assert.NoError(t, err)
@@ -339,16 +351,16 @@ func TestIdentifyUpstreams(t *testing.T) {
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithDestinationTemplate, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
-		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]resource.URN{urn1, urn2}, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]string{"bigquery://proj:datas:tabl", "bigquery://projectA:datasetB.tableC"}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
 		configTask := map[string]string{}
 		configTask["BQ_SERVICE_ACCOUNT"] = "service_account_value"
-		configTask["PROJECT"] = "proj"
-		configTask["DATASET"] = "datas"
-		configTask["TABLE"] = "table2"
+		configTask["PROJECT"] = "projectA"
+		configTask["DATASET"] = "datasetB"
+		configTask["TABLE"] = "tableC"
 		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, configTask, assets)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)
@@ -374,7 +386,8 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("returns error if unable to find the plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -390,7 +403,8 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("should return empty destination if the plugin doesn't contain destination template", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -411,7 +425,8 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("returns error if template is not proper", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 		pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_unproper_destination_template.yaml")
@@ -431,7 +446,8 @@ func TestConstructDestinationURN(t *testing.T) {
 	t.Run("should properly generate a destination provided correct config inputs", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
+		upstreamIdentifierFactory := new(UpstreamIdentifierFactory)
+		defer upstreamIdentifierFactory.AssertExpectations(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
@@ -440,13 +456,10 @@ func TestConstructDestinationURN(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		expectedURN, err := resource.ParseURN("bigquery://project1:dataset1.table1")
-		assert.NoError(t, err)
-
 		result, err := pluginService.ConstructDestinationURN(ctx, taskName, config)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, result)
-		assert.Equal(t, expectedURN, result)
+		assert.Equal(t, "bigquery://project1:dataset1.table1", result)
 	})
 }
 
@@ -516,10 +529,6 @@ func (_m *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	if len(ret) == 0 {
-		panic("no return value specified for GetBQUpstreamIdentifier")
-	}
-
 	var r0 upstreamidentifier.UpstreamIdentifier
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)); ok {
@@ -540,21 +549,6 @@ func (_m *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context
 	}
 
 	return r0, r1
-}
-
-// NewUpstreamIdentifierFactory creates a new instance of UpstreamIdentifierFactory. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
-// The first argument is typically a *testing.T value.
-func NewUpstreamIdentifierFactory(t interface {
-	mock.TestingT
-	Cleanup(func())
-},
-) *UpstreamIdentifierFactory {
-	mock := &UpstreamIdentifierFactory{}
-	mock.Mock.Test(t)
-
-	t.Cleanup(func() { mock.AssertExpectations(t) })
-
-	return mock
 }
 
 // EvaluatorFactory is an autogenerated mock type for the EvaluatorFactory type
@@ -639,23 +633,19 @@ type UpstreamIdentifier struct {
 }
 
 // IdentifyResources provides a mock function with given fields: ctx, assets
-func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
+func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error) {
 	ret := _m.Called(ctx, assets)
 
-	if len(ret) == 0 {
-		panic("no return value specified for IdentifyResources")
-	}
-
-	var r0 []resource.URN
+	var r0 []string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) ([]resource.URN, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) ([]string, error)); ok {
 		return rf(ctx, assets)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) []resource.URN); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) []string); ok {
 		r0 = rf(ctx, assets)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]resource.URN)
+			r0 = ret.Get(0).([]string)
 		}
 	}
 
@@ -666,19 +656,4 @@ func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[
 	}
 
 	return r0, r1
-}
-
-// NewUpstreamIdentifier creates a new instance of UpstreamIdentifier. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
-// The first argument is typically a *testing.T value.
-func NewUpstreamIdentifier(t interface {
-	mock.TestingT
-	Cleanup(func())
-},
-) *UpstreamIdentifier {
-	mock := &UpstreamIdentifier{}
-	mock.Mock.Test(t)
-
-	t.Cleanup(func() { mock.AssertExpectations(t) })
-
-	return mock
 }

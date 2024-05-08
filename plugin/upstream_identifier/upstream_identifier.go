@@ -6,7 +6,6 @@ import (
 
 	"github.com/goto/salt/log"
 
-	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
@@ -25,7 +24,7 @@ type UpstreamIdentifierFactory struct {
 }
 
 type UpstreamIdentifier interface {
-	IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error)
+	IdentifyResources(ctx context.Context, assets map[string]string) ([]string, error)
 }
 
 func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {

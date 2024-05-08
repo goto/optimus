@@ -1101,6 +1101,12 @@
       "properties": {
         "log": {
           "type": "string"
+        },
+        "jobNameSuccesses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -1611,6 +1617,12 @@
       "properties": {
         "log": {
           "type": "string"
+        },
+        "jobNameSuccesses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

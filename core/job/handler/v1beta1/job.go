@@ -44,7 +44,7 @@ func NewJobHandler(jobService JobService, changeLogService ChangeLogService, log
 }
 
 type JobService interface {
-	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
+	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
@@ -89,7 +89,8 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		return nil, me.ToErr()
 	}
 
-	if err = jh.jobService.Add(ctx, jobTenant, jobSpecs); err != nil {
+	addedJobs, err := jh.jobService.Add(ctx, jobTenant, jobSpecs)
+	if err != nil {
 		jh.l.Error("failure found when adding job specifications: %s", err)
 		me.Append(err)
 	}
@@ -101,8 +102,13 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		responseLog = "jobs are successfully created"
 	}
 
+	jobSuccesses := make([]string, len(addedJobs))
+	for i, jobName := range addedJobs {
+		jobSuccesses[i] = jobName.String()
+	}
 	return &pb.AddJobSpecificationsResponse{
-		Log: responseLog,
+		Log:              responseLog,
+		JobNameSuccesses: jobSuccesses,
 	}, nil
 }
 

@@ -162,14 +162,14 @@ type ResourceExistenceChecker interface {
 	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
-func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
+func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
 	logWriter := writer.NewLogWriter(j.logger)
 	me := errors.NewMultiError("add specs errors")
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
-		return err
+		return []job.Name{}, err
 	}
 
 	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
@@ -202,7 +202,11 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
 	}
 
-	return me.ToErr()
+	jobSuccess := make([]job.Name, len(addedJobs))
+	for i, addedJob := range addedJobs {
+		jobSuccess[i] = addedJob.Spec().Name()
+	}
+	return jobSuccess, me.ToErr()
 }
 
 func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {

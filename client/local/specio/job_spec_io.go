@@ -49,7 +49,7 @@ func NewJobSpecReadWriter(specFS afero.Fs, opts ...jobSpecReadWriterOpt) (local.
 	return j, nil
 }
 
-func (j jobSpecReadWriter) ReadAll(rootDirPath string) ([]*model.JobSpec, error) {
+func (j *jobSpecReadWriter) ReadAll(rootDirPath string) ([]*model.JobSpec, error) {
 	if rootDirPath == "" {
 		return nil, errors.New("root dir path is empty")
 	}

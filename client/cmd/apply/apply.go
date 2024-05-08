@@ -7,10 +7,9 @@ import (
 	"time"
 
 	"github.com/gocarina/gocsv"
+	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
-
-	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
@@ -35,7 +34,6 @@ type applyCommand struct {
 	jobSpecReadWriter      local.SpecReadWriter[*model.JobSpec]
 	resourceSpecReadWriter local.SpecReadWriter[*model.ResourceSpec]
 
-	verbose        bool
 	configFilePath string
 	sources        []string
 	output         string
@@ -50,9 +48,10 @@ func NewApplyCommand() *cobra.Command {
 		Use:     "apply",
 		Short:   "Apply job/resource changes",
 		Example: "optimus apply --sources <plan_sources_path>...",
-		RunE:    nil,
+		RunE:    apply.RunE,
 		PreRunE: apply.PreRunE,
 	}
+	apply.injectFlags(cmd)
 	return cmd
 }
 
@@ -62,10 +61,9 @@ func (c *applyCommand) injectFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringSliceVarP(&c.sources, "sources", "s", c.sources, "Sources of plan result to be executed")
 	cmd.Flags().StringVarP(&c.output, "output", "o", executedPlanFile, "Output of plan result after executed")
-	cmd.Flags().BoolVarP(&c.verbose, "verbose", "v", false, "Determines whether to show the complete message or just the summary")
 }
 
-func (c *applyCommand) PreRunE(cmd *cobra.Command, _ []string) error {
+func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	// Load config
 	conf, err := internal.LoadOptionalConfig(c.configFilePath)
 	if err != nil {
@@ -244,7 +242,7 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 	}
 
 	return []*pb.AddJobSpecificationsRequest{
-		&pb.AddJobSpecificationsRequest{
+		{
 			ProjectName:   c.config.Project.Name,
 			NamespaceName: namespace.Name,
 			Specs:         jobsToBeSend,
@@ -264,7 +262,7 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 	}
 
 	return []*pb.UpdateJobSpecificationsRequest{
-		&pb.UpdateJobSpecificationsRequest{
+		{
 			ProjectName:   c.config.Project.Name,
 			NamespaceName: namespace.Name,
 			Specs:         jobsToBeSend,
@@ -367,15 +365,17 @@ func (c *applyCommand) getPlans() (plan.Plans, error) {
 	for _, source := range c.sources {
 		f, err := os.OpenFile(source, os.O_RDONLY, os.ModePerm)
 		if err != nil {
+			f.Close()
 			return nil, err
 		}
-		defer f.Close()
 
 		currentPlans := []*plan.Plan{}
 		if err := gocsv.UnmarshalFile(f, &currentPlans); err != nil {
+			f.Close()
 			return nil, err
 		}
 		plans = append(plans, currentPlans...)
+		f.Close()
 	}
 	return plans, nil
 }

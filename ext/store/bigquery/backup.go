@@ -41,7 +41,7 @@ func BackupResources(ctx context.Context, backup *resource.Backup, resources []*
 
 	var backupNames []string
 	if len(tablesToBackup) > 0 {
-		dataset, err := DataSetFor(tablesToBackup[0].Name())
+		dataset, err := DataSetFor(tablesToBackup[0])
 		if err != nil {
 			return nil, err
 		}
@@ -92,11 +92,11 @@ func CreateIfDatasetDoesNotExist(ctx context.Context, client Client, dataset Dat
 }
 
 func BackupTable(ctx context.Context, backup *resource.Backup, source *resource.Resource, client Client) (string, error) {
-	sourceDataset, err := DataSetFor(source.Name())
+	sourceDataset, err := DataSetFor(source)
 	if err != nil {
 		return "", err
 	}
-	sourceName, err := ResourceNameFor(source.Name(), source.Kind())
+	sourceName, err := ResourceNameFor(source)
 	if err != nil {
 		return "", err
 	}

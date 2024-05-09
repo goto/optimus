@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 )
@@ -50,7 +49,7 @@ type JobRun struct {
 
 type JobRunMeta struct {
 	Labels         map[string]string
-	DestinationURN resource.URN
+	DestinationURN string
 }
 
 func (j *JobRun) HasSLABreached() bool {

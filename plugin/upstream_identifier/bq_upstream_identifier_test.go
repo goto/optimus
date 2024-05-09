@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/store/bigquery"
 	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 )
@@ -187,14 +186,7 @@ func TestIdentifyResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamIdentifier)
 
-		urn1, err := resource.ParseURN("bigquery://project1:dataset1.name1")
-		assert.NoError(t, err)
-		urn2, err := resource.ParseURN("bigquery://project1:dataset1.name2")
-		assert.NoError(t, err)
-		urn3, err := resource.ParseURN("bigquery://project1:dataset1.name3")
-		assert.NoError(t, err)
-
-		expectedResourceURNs := []resource.URN{urn1, urn2, urn3}
+		expectedResourceURNs := []string{"bigquery://project1:dataset1.name1", "bigquery://project1:dataset1.name2", "bigquery://project1:dataset1.name3"}
 		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)

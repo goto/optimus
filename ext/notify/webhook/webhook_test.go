@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/notify/webhook"
@@ -19,9 +18,7 @@ import (
 func TestWebhook(t *testing.T) {
 	projectName := "ss"
 	namespaceName := "bb"
-	jobDestinationTableURN, err := resource.ParseURN("store://project-dest-table")
-	assert.NoError(t, err)
-
+	jobDestinationTableURN := "project-dest-table"
 	jobName := scheduler.JobName("foo-job-spec")
 	tnnt, _ := tenant.NewTenant(projectName, namespaceName)
 	eventTime := time.Now()

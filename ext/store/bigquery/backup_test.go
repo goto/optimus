@@ -318,7 +318,7 @@ func TestBigqueryBackup(t *testing.T) {
 			backup, err := resource.NewBackup(store, tnnt, []string{fullName}, "", createdAt, nil)
 			assert.NoError(t, err)
 
-			dataset, err := bigquery.DataSetFor(source.Name())
+			dataset, err := bigquery.DataSetFor(source)
 			assert.NoError(t, err)
 
 			destinationDS, err := bigquery.DestinationDataset(dataset.Project, backup)
@@ -331,10 +331,10 @@ func TestBigqueryBackup(t *testing.T) {
 			backup, err := resource.NewBackup(store, tnnt, []string{fullName}, "", createdAt, nil)
 			assert.NoError(t, err)
 
-			dataset, err := bigquery.DataSetFor(source.Name())
+			dataset, err := bigquery.DataSetFor(source)
 			assert.NoError(t, err)
 
-			name, err := bigquery.ResourceNameFor(source.Name(), source.Kind())
+			name, err := bigquery.ResourceNameFor(source)
 			assert.NoError(t, err)
 
 			destination := bigquery.DestinationName(dataset.DatasetName, name, backup)

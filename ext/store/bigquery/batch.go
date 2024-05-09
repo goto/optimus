@@ -40,11 +40,11 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 	for _, table := range b.Tables {
 		runner.Add(func(res *resource.Resource) func() (interface{}, error) {
 			return func() (interface{}, error) {
-				ds, err := DataSetFor(res.Name())
+				ds, err := DataSetFor(res)
 				if err != nil {
 					return res, err
 				}
-				resourceName, err := ResourceNameFor(res.Name(), res.Kind())
+				resourceName, err := ResourceNameFor(res)
 				if err != nil {
 					return res, err
 				}
@@ -58,11 +58,11 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 	for _, extTables := range b.ExternalTables {
 		runner.Add(func(res *resource.Resource) func() (interface{}, error) {
 			return func() (interface{}, error) {
-				ds, err := DataSetFor(res.Name())
+				ds, err := DataSetFor(res)
 				if err != nil {
 					return res, err
 				}
-				resourceName, err := ResourceNameFor(res.Name(), res.Kind())
+				resourceName, err := ResourceNameFor(res)
 				if err != nil {
 					return res, err
 				}
@@ -76,11 +76,11 @@ func (b *Batch) QueueJobs(ctx context.Context, account string, runner *parallel.
 	for _, view := range b.Views {
 		runner.Add(func(res *resource.Resource) func() (interface{}, error) {
 			return func() (interface{}, error) {
-				ds, err := DataSetFor(res.Name())
+				ds, err := DataSetFor(res)
 				if err != nil {
 					return res, err
 				}
-				resourceName, err := ResourceNameFor(res.Name(), res.Kind())
+				resourceName, err := ResourceNameFor(res)
 				if err != nil {
 					return res, err
 				}
@@ -149,7 +149,7 @@ func BatchesFrom(resources []*resource.Resource, provider ClientProvider) (map[s
 
 	me := errors.NewMultiError("error while creating batches")
 	for _, res := range resources {
-		dataset, err := DataSetFor(res.Name())
+		dataset, err := DataSetFor(res)
 		if err != nil {
 			me.Append(err)
 			continue

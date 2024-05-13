@@ -6,6 +6,7 @@ const (
 	OperationDelete Operation = iota + 1
 	OperationCreate
 	OperationUpdate
+	OperationMigrate
 )
 
 func (o Operation) String() string {
@@ -16,6 +17,8 @@ func (o Operation) String() string {
 		return "create"
 	case OperationUpdate:
 		return "update"
+	case OperationMigrate:
+		return "migrate"
 	default:
 		return ""
 	}
@@ -29,6 +32,8 @@ func NewOperationByString(operation string) Operation {
 		return OperationCreate
 	case "update":
 		return OperationUpdate
+	case "migrate":
+		return OperationMigrate
 	default:
 		return 0
 	}

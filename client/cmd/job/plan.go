@@ -116,16 +116,24 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	plans := make(plan.Plans, 0, len(directories))
 	p.logger.Info("job plan found changed in directories: %+v", directories)
 
+	plansByName := map[string]*plan.Plan{}
 	for _, directory := range directories {
 		var jobPlan *plan.Plan
 		jobPlan, err = p.describePlanFromDirectory(ctx, directory)
 		if err != nil {
 			return err
 		}
+		if jobMigrated := p.getPlanMigrated(plansByName, jobPlan); jobMigrated != nil {
+			jobPlan = jobMigrated
+		}
+		plansByName[jobPlan.KindName] = jobPlan
+	}
+
+	for _, jobPlan := range plansByName {
+		plans = append(plans, jobPlan)
 		if p.verbose {
 			p.logger.Info("[%s] plan operation %s for job %s", jobPlan.NamespaceName, jobPlan.Operation, jobPlan.KindName)
 		}
-		plans = append(plans, jobPlan)
 	}
 
 	sort.SliceStable(plans, plans.SortByOperationPriority)
@@ -179,6 +187,20 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 	}
 
 	return jobPlan, nil
+}
+
+func (*planCommand) getPlanMigrated(plansByName map[string]*plan.Plan, targetPlan *plan.Plan) *plan.Plan {
+	existedPlan, ok := plansByName[targetPlan.KindName]
+	isMigrated := ok && existedPlan.NamespaceName != targetPlan.NamespaceName
+	jobPlan := targetPlan
+	if isMigrated {
+		if existedPlan.Operation == plan.OperationCreate {
+			jobPlan = existedPlan
+		}
+		jobPlan.Operation = plan.OperationMigrate
+		return jobPlan
+	}
+	return nil
 }
 
 func (*planCommand) appendDirectory(directory string, directoryExists map[string]bool, fileDirectories []string) []string {

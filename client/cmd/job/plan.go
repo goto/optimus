@@ -232,6 +232,7 @@ func (*planCommand) appendDirectory(directory string, directoryExists map[string
 func (p *planCommand) saveFile(plans plan.Plans) error {
 	file, err := os.OpenFile(p.output, unix.O_RDWR|unix.O_CREAT, os.ModePerm)
 	if err != nil {
+		return err
 	}
 	defer file.Close()
 

@@ -1,12 +1,14 @@
 package plan
 
+import "encoding/json"
+
 type Operation int
 
 const (
 	OperationDelete Operation = iota + 1
 	OperationCreate
-	OperationUpdate
 	OperationMigrate
+	OperationUpdate
 )
 
 func (o Operation) String() string {
@@ -24,6 +26,8 @@ func (o Operation) String() string {
 	}
 }
 
+func (o Operation) MarshalJSON() ([]byte, error) { return json.Marshal(o.String()) }
+
 func NewOperationByString(operation string) Operation {
 	switch operation {
 	case "delete":
@@ -39,7 +43,11 @@ func NewOperationByString(operation string) Operation {
 	}
 }
 
-func (o *Operation) UnmarshalCSV(csv string) error { //nolint:unparam
-	*o = NewOperationByString(csv)
+func (o *Operation) UnmarshalJSON(value []byte) error {
+	var operationValue string
+	if err := json.Unmarshal(value, &operationValue); err != nil {
+		return err
+	}
+	*o = NewOperationByString(operationValue)
 	return nil
 }

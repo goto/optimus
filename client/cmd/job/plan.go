@@ -113,7 +113,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	directories := providermodel.Diffs(diffs).GetAllDirectories(p.appendDirectory)
-	plans := make(plan.Plans, 0, len(directories))
+	var plans plan.Plans = []*plan.Plan{}
 	p.logger.Info("job plan found changed in directories: %+v", directories)
 
 	plansByName := map[string]*plan.Plan{}
@@ -133,6 +133,15 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		plans = append(plans, jobPlan)
 		if p.verbose {
 			p.logger.Info("[%s] plan operation %s for job %s", jobPlan.NamespaceName, jobPlan.Operation, jobPlan.KindName)
+		}
+		// additional job plan update for every migration operation
+		if jobPlan.Operation == plan.OperationMigrate {
+			jobPlanUpdated := *jobPlan
+			jobPlanUpdated.Operation = plan.OperationUpdate
+			plans = append(plans, &jobPlanUpdated)
+			if p.verbose {
+				p.logger.Info("[%s] plan operation %s for job %s", jobPlanUpdated.NamespaceName, jobPlanUpdated.Operation, jobPlanUpdated.KindName)
+			}
 		}
 	}
 

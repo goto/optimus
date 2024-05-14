@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gocarina/gocsv"
 	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -70,7 +70,7 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 
 	cmd.Flags().StringVarP(&p.projectID, "project-id", "I", os.Getenv("GIT_PROJECT_ID"), "Determine which project will be checked")
 
-	cmd.Flags().StringVarP(&p.output, "output", "o", "./resource.csv", "File path for output of plan")
+	cmd.Flags().StringVarP(&p.output, "output", "o", "./resource.json", "File path for output of plan")
 	cmd.Flags().BoolVarP(&p.verbose, "verbose", "v", false, "Print details related to operation")
 }
 
@@ -132,9 +132,10 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	return p.saveFile(plans)
 }
 
-func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory string) (resourcePlan *plan.Plan, err error) {
+func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory string) (*plan.Plan, error) {
 	var (
 		namespaceName, datastoreType string
+		err                          error
 		sourceRaw, destinationRaw    []byte
 		fileName                     = filepath.Join(directory, resourceFileName)
 	)
@@ -169,7 +170,7 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 		return nil, errors.Join(err, errors.New("failed to unmarshal destination resource specification"))
 	}
 
-	resourcePlan = &plan.Plan{ProjectName: p.clientConfig.Project.Name, NamespaceName: namespaceName, Kind: plan.KindResource}
+	resourcePlan := &plan.Plan{ProjectName: p.clientConfig.Project.Name, NamespaceName: namespaceName, Kind: plan.KindResource}
 	if len(sourceSpec.Name) == 0 && len(destinationSpec.Name) > 0 {
 		resourcePlan.KindName = fmt.Sprintf("%s:%s", datastoreType, destinationSpec.Name)
 		resourcePlan.Operation = plan.OperationCreate
@@ -197,21 +198,19 @@ func (*planCommand) appendDirectory(directory string, directoryExists map[string
 }
 
 func (p *planCommand) saveFile(plans plan.Plans) error {
-	file, err := os.OpenFile(p.output, unix.O_RDWR, os.ModePerm)
+	file, err := os.OpenFile(p.output, unix.O_RDWR|unix.O_CREAT, os.ModePerm)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-		file, err = os.Create(p.output)
 		if err != nil {
 			return err
 		}
 	}
 	defer file.Close()
 
-	if err = gocsv.MarshalFile(plans, file); err != nil {
-		return errors.Join(errors.New("failed marshal to csv file"), err)
+	planBytes, err := json.MarshalIndent(plans, "", " ")
+	if err != nil {
+		return err
 	}
+	file.Write(planBytes)
 	p.logger.Info("resource plan file created: %s", file.Name())
 	return nil
 }

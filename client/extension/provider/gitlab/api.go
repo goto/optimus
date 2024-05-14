@@ -3,7 +3,6 @@ package gitlab
 import (
 	"context"
 	"net/http"
-	"os"
 
 	"github.com/xanzy/go-gitlab"
 
@@ -68,19 +67,13 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 func NewAPI(baseURL, token string) (*API, error) {
 	var (
 		opts []gitlab.ClientOptionFunc
-		err  error
 	)
 
 	if baseURL != "" {
 		opts = append(opts, gitlab.WithBaseURL(baseURL))
 	}
 
-	var client *gitlab.Client
-	if os.Getenv("GIT_PERSONAL") == "true" {
-		client, err = gitlab.NewClient(token, opts...)
-	} else {
-		client, err = gitlab.NewJobClient(token, opts...)
-	}
+	client, err := gitlab.NewClient(token, opts...)
 	if err != nil {
 		return nil, err
 	}

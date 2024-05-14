@@ -348,15 +348,12 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 
 	var toCreate []*resource.Resource
 	var toUpdate []*resource.Resource
-	var toDelete []*resource.Resource
 	for _, r := range toUpdateOnStore {
 		switch r.Status() {
 		case resource.StatusToCreate:
 			toCreate = append(toCreate, r)
 		case resource.StatusToUpdate:
 			toUpdate = append(toUpdate, r)
-		case resource.StatusToDelete:
-			toDelete = append(toDelete, r)
 		}
 	}
 
@@ -370,11 +367,6 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 		rs.raiseUpdateEvent(r, existingMappedByFullName[r.FullName()].GetUpdateImpact(r))
 	}
 
-	for _, r := range toDelete {
-		rs.raiseDeleteEvent(r)
-		logWriter.Write(writer.LogLevelWarning, fmt.Sprintf("[deleted] %s", r.FullName()))
-	}
-
 	if err = rs.handleRefreshDownstream(ctx, toUpdate, existingMappedByFullName, logWriter); err != nil {
 		multiError.Append(err)
 	}
@@ -385,10 +377,8 @@ func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store 
 func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomings []*resource.Resource, existingMappedByFullName map[string]*resource.Resource) ([]*resource.Resource, error) { // nolint:gocritic
 	var toUpdateOnStore []*resource.Resource
 	me := errors.NewMultiError("error in resources to batch update")
-	incomingByFullName := make(map[string]*resource.Resource)
 
 	for _, incoming := range incomings {
-		incomingByFullName[incoming.FullName()] = incoming
 		if incoming.Status() != resource.StatusValidationSuccess {
 			continue
 		}
@@ -423,20 +413,6 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 		me.Append(err)
 	}
 
-	for _, existing := range existingMappedByFullName {
-		_, found := incomingByFullName[existing.FullName()]
-		if found || existing.IsDeleted() {
-			continue
-		}
-
-		_ = existing.MarkToDelete()
-		err := rs.repo.Update(ctx, existing)
-		if err == nil {
-			toUpdateOnStore = append(toUpdateOnStore, existing)
-		}
-		me.Append(err)
-	}
-
 	return toUpdateOnStore, me.ToErr()
 }
 
@@ -461,19 +437,6 @@ func (rs ResourceService) raiseUpdateEvent(res *resource.Resource, impact resour
 	ev, err := event.NewResourceUpdatedEvent(res, impact)
 	if err != nil {
 		rs.logger.Error("error creating event for resource update: %s", err)
-		return
-	}
-	rs.eventHandler.HandleEvent(ev)
-}
-
-func (rs ResourceService) raiseDeleteEvent(res *resource.Resource) { // nolint:gocritic
-	if res.Status() != resource.StatusDeleted {
-		return
-	}
-
-	ev, err := event.NewResourceDeleteEvent(res)
-	if err != nil {
-		rs.logger.Error("error creating event for resource delete: %s", err)
 		return
 	}
 	rs.eventHandler.HandleEvent(ev)

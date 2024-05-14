@@ -1,12 +1,12 @@
 package plan
 
 type Plan struct {
-	Kind          Kind      `csv:"kind"`
-	ProjectName   string    `csv:"project_name"`
-	NamespaceName string    `csv:"namespace_name"`
-	KindName      string    `csv:"kind_name"`
-	Operation     Operation `csv:"operation"`
-	Executed      bool      `csv:"executed"`
+	Kind          Kind      `json:"kind"`
+	ProjectName   string    `json:"project_name"`
+	NamespaceName string    `json:"namespace_name"`
+	KindName      string    `json:"kind_name"`
+	Operation     Operation `json:"operation"`
+	Executed      bool      `json:"executed"`
 }
 
 type Plans []*Plan

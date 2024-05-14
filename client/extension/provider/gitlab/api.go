@@ -65,9 +65,7 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 }
 
 func NewAPI(baseURL, token string) (*API, error) {
-	var (
-		opts []gitlab.ClientOptionFunc
-	)
+	var opts []gitlab.ClientOptionFunc
 
 	if baseURL != "" {
 		opts = append(opts, gitlab.WithBaseURL(baseURL))

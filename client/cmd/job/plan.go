@@ -113,39 +113,25 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	directories := providermodel.Diffs(diffs).GetAllDirectories(p.appendDirectory)
-	var plans plan.Plans
 	p.logger.Info("job plan found changed in directories: %+v", directories)
 
-	plansByName := map[string]*plan.Plan{}
+	compositor := plan.NewCompositor()
 	for _, directory := range directories {
 		var jobPlan *plan.Plan
 		jobPlan, err = p.describePlanFromDirectory(ctx, directory)
 		if err != nil {
 			return err
 		}
-		if jobMigrated := p.getPlanMigrated(plansByName, jobPlan); jobMigrated != nil {
-			jobPlan = jobMigrated
-		}
-		plansByName[jobPlan.KindName] = jobPlan
+		compositor.Add(jobPlan)
 	}
 
-	for _, jobPlan := range plansByName {
-		plans = append(plans, jobPlan)
-		if p.verbose {
-			p.logger.Info("[%s] plan operation %s for job %s", jobPlan.NamespaceName, jobPlan.Operation, jobPlan.KindName)
-		}
-		// additional job plan update for every migration operation
-		if jobPlan.Operation == plan.OperationMigrate {
-			jobPlanUpdated := *jobPlan
-			jobPlanUpdated.Operation = plan.OperationUpdate
-			plans = append(plans, &jobPlanUpdated)
-			if p.verbose {
-				p.logger.Info("[%s] plan operation %s for job %s", jobPlanUpdated.NamespaceName, jobPlanUpdated.Operation, jobPlanUpdated.KindName)
-			}
-		}
-	}
-
+	var plans plan.Plans = compositor.GetAll()
 	sort.SliceStable(plans, plans.SortByOperationPriority)
+	if p.verbose {
+		for i := range plans {
+			p.logger.Info("[%s] plan operation %s for %s %s", plans[i].NamespaceName, plans[i].Operation, plans[i].Kind, plans[i].KindName)
+		}
+	}
 	return p.saveFile(plans)
 }
 
@@ -199,20 +185,6 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 	return jobPlan, nil
 }
 
-func (*planCommand) getPlanMigrated(plansByName map[string]*plan.Plan, targetPlan *plan.Plan) *plan.Plan {
-	existedPlan, ok := plansByName[targetPlan.KindName]
-	isMigrated := ok && existedPlan.NamespaceName != targetPlan.NamespaceName
-	jobPlan := targetPlan
-	if isMigrated {
-		if existedPlan.Operation == plan.OperationCreate {
-			jobPlan = existedPlan
-		}
-		jobPlan.Operation = plan.OperationMigrate
-		return jobPlan
-	}
-	return nil
-}
-
 func (*planCommand) appendDirectory(directory string, directoryExists map[string]bool, fileDirectories []string) []string {
 	index := strings.Index(directory, "/assets")
 	if !strings.HasSuffix(directory, "/"+jobFileName) && index < 1 {
@@ -236,6 +208,8 @@ func (p *planCommand) saveFile(plans plan.Plans) error {
 	}
 	defer file.Close()
 
+	_ = file.Truncate(0)
+	_, _ = file.Seek(0, 0)
 	planBytes, err := json.MarshalIndent(plans, "", " ")
 	if err != nil {
 		return err

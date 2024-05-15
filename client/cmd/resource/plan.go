@@ -113,22 +113,25 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	directories := providermodel.Diffs(diffs).GetAllDirectories(p.appendDirectory)
-	plans := make(plan.Plans, 0, len(directories))
 	p.logger.Info("resource plan found changed in directories: %+v", directories)
 
+	compositor := plan.NewCompositor()
 	for _, directory := range directories {
-		var jobPlan *plan.Plan
-		jobPlan, err = p.describePlanFromDirectory(ctx, directory)
+		var resourcePlan *plan.Plan
+		resourcePlan, err = p.describePlanFromDirectory(ctx, directory)
 		if err != nil {
 			return err
 		}
-		if p.verbose {
-			p.logger.Info("[%s] plan operation %s for resource %s", jobPlan.NamespaceName, jobPlan.Operation, jobPlan.KindName)
-		}
-		plans = append(plans, jobPlan)
+		compositor.Add(resourcePlan)
 	}
 
+	var plans plan.Plans = compositor.GetAll()
 	sort.SliceStable(plans, plans.SortByOperationPriority)
+	if p.verbose {
+		for i := range plans {
+			p.logger.Info("[%s] plan operation %s for %s %s", plans[i].NamespaceName, plans[i].Operation, plans[i].Kind, plans[i].KindName)
+		}
+	}
 	return p.saveFile(plans)
 }
 
@@ -206,6 +209,8 @@ func (p *planCommand) saveFile(plans plan.Plans) error {
 	}
 	defer file.Close()
 
+	_ = file.Truncate(0)
+	_, _ = file.Seek(0, 0)
 	planBytes, err := json.MarshalIndent(plans, "", " ")
 	if err != nil {
 		return err

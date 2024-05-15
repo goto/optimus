@@ -129,7 +129,11 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	sort.SliceStable(plans, plans.SortByOperationPriority)
 	if p.verbose {
 		for i := range plans {
-			p.logger.Info("[%s] plan operation %s for %s %s", plans[i].NamespaceName, plans[i].Operation, plans[i].Kind, plans[i].KindName)
+			msg := fmt.Sprintf("[%s] plan operation %s for %s %s", plans[i].NamespaceName, plans[i].Operation, plans[i].Kind, plans[i].KindName)
+			if plans[i].OldNamespaceName != nil {
+				msg += " with old namespace: " + *plans[i].OldNamespaceName
+			}
+			p.logger.Info(msg)
 		}
 	}
 	return p.saveFile(plans)
@@ -174,10 +178,10 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 	}
 
 	resourcePlan := &plan.Plan{ProjectName: p.clientConfig.Project.Name, NamespaceName: namespaceName, Kind: plan.KindResource}
-	if len(sourceSpec.Name) == 0 && len(destinationSpec.Name) > 0 {
+	if p.isOperationCreate(sourceSpec, destinationSpec) {
 		resourcePlan.KindName = fmt.Sprintf("%s:%s", datastoreType, destinationSpec.Name)
 		resourcePlan.Operation = plan.OperationCreate
-	} else if len(sourceSpec.Name) > 0 && len(destinationSpec.Name) == 0 {
+	} else if p.isOperationDelete(sourceSpec, destinationSpec) {
 		resourcePlan.KindName = fmt.Sprintf("%s:%s", datastoreType, sourceSpec.Name)
 		resourcePlan.Operation = plan.OperationDelete
 	} else {
@@ -186,6 +190,16 @@ func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory s
 	}
 
 	return resourcePlan, nil
+}
+
+// isOperationCreate return true when destinationSpec is exists, but sourceSpec is missing
+func (*planCommand) isOperationCreate(sourceSpec, destinationSpec model.ResourceSpec) bool {
+	return len(sourceSpec.Name) == 0 && len(destinationSpec.Name) > 0
+}
+
+// isOperationCreate return true when sourceSpec is exists, but destinationSpec is missing
+func (*planCommand) isOperationDelete(sourceSpec, destinationSpec model.ResourceSpec) bool {
+	return len(sourceSpec.Name) > 0 && len(destinationSpec.Name) == 0
 }
 
 func (*planCommand) appendDirectory(directory string, directoryExists map[string]bool, fileDirectories []string) []string {

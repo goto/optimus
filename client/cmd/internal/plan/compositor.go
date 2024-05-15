@@ -14,6 +14,7 @@ func NewCompositor() Compositor {
 	}
 }
 
+// Add will append Plan and enqueue create and delete plan Operation
 func (compositor *Compositor) Add(addPlan *Plan) {
 	switch addPlan.Operation {
 	case OperationCreate:
@@ -46,6 +47,9 @@ func (compositor Compositor) GetAll() []*Plan {
 	return res
 }
 
+// getPlan will dequeue create and delete plan Operation
+// if there are same Plan.KindName on different Plan.NamespaceName, it will be merged as one plan with OperationMigrate
+// else it will append as result directly
 func (Compositor) getPlan(createOperation, deleteOperation map[string]Queue[*Plan]) []*Plan {
 	var res []*Plan
 	for kindName, createPlanQueue := range createOperation {

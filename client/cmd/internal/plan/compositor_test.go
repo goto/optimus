@@ -8,7 +8,7 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/plan"
 )
 
-func TestPlanCoordinator(t *testing.T) {
+func TestPlanCompositor(t *testing.T) {
 	var (
 		projectName = "p-optimus-1"
 		job1        = "j-job-1"
@@ -25,12 +25,12 @@ func TestPlanCoordinator(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationMigrate, KindName: job1, OldNamespaceName: &namespace1},
 		}
 
-		coordinator := plan.NewCompositor()
+		compositor := plan.NewCompositor()
 		for i := range inputs {
-			coordinator.Add(inputs[i])
+			compositor.Add(inputs[i])
 		}
 
-		actual := coordinator.GetAll()
+		actual := compositor.GetAll()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -52,12 +52,12 @@ func TestPlanCoordinator(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationDelete, KindName: "job-3"},
 		}
 
-		coordinator := plan.NewCompositor()
+		compositor := plan.NewCompositor()
 		for i := range inputs {
-			coordinator.Add(inputs[i])
+			compositor.Add(inputs[i])
 		}
 
-		actual := coordinator.GetAll()
+		actual := compositor.GetAll()
 		assert.Len(t, actual, len(expected), "actual has %d length, but expect has %d length", len(actual), len(expected))
 		assert.ElementsMatch(t, actual, expected)
 	})
@@ -77,12 +77,12 @@ func TestPlanCoordinator(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationCreate, KindName: "job-3"},
 		}
 
-		coordinator := plan.NewCompositor()
+		compositor := plan.NewCompositor()
 		for i := range inputs {
-			coordinator.Add(inputs[i])
+			compositor.Add(inputs[i])
 		}
 
-		actual := coordinator.GetAll()
+		actual := compositor.GetAll()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -101,12 +101,12 @@ func TestPlanCoordinator(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationCreate, KindName: "job-3"},
 		}
 
-		coordinator := plan.NewCompositor()
+		compositor := plan.NewCompositor()
 		for i := range inputs {
-			coordinator.Add(inputs[i])
+			compositor.Add(inputs[i])
 		}
 
-		actual := coordinator.GetAll()
+		actual := compositor.GetAll()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -125,12 +125,12 @@ func TestPlanCoordinator(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace5, Operation: plan.OperationCreate, KindName: job1},
 		}
 
-		coordinator := plan.NewCompositor()
+		compositor := plan.NewCompositor()
 		for i := range inputs {
-			coordinator.Add(inputs[i])
+			compositor.Add(inputs[i])
 		}
 
-		actual := coordinator.GetAll()
+		actual := compositor.GetAll()
 		assert.ElementsMatch(t, actual, expected)
 	})
 }

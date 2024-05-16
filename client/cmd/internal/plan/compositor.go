@@ -36,15 +36,14 @@ func (compositor *Compositor) Add(addPlan *Plan) {
 	}
 }
 
-func (compositor Compositor) GetAll() []*Plan {
+func (compositor *Compositor) Merge() []*Plan {
 	if len(compositor.createOperation)+len(compositor.deleteOperation) == 0 {
 		return compositor.result
 	}
 
-	res := compositor.result
-	res = append(res, compositor.getPlan(compositor.createOperation, compositor.deleteOperation)...)
-	res = append(res, compositor.getPlan(compositor.deleteOperation, compositor.createOperation)...)
-	return res
+	compositor.result = append(compositor.result, compositor.getPlan(compositor.createOperation, compositor.deleteOperation)...)
+	compositor.result = append(compositor.result, compositor.getPlan(compositor.deleteOperation, compositor.createOperation)...)
+	return compositor.result
 }
 
 // getPlan will dequeue create and delete plan Operation

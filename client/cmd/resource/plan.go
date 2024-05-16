@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/goto/salt/log"
@@ -126,7 +125,6 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	var plans plan.Plans = compositor.Merge()
-	sort.SliceStable(plans, plans.SortByOperationPriority)
 	if p.verbose {
 		for i := range plans {
 			msg := fmt.Sprintf("[%s] plan operation %s for %s %s", plans[i].NamespaceName, plans[i].Operation, plans[i].Kind, plans[i].KindName)

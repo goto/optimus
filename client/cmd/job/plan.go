@@ -125,7 +125,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		compositor.Add(jobPlan)
 	}
 
-	var plans plan.Plans = compositor.GetAll()
+	var plans plan.Plans = compositor.Merge()
 	sort.SliceStable(plans, plans.SortByOperationPriority)
 	if p.verbose {
 		for i := range plans {

@@ -2,11 +2,12 @@ package apply
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
-	"github.com/gocarina/gocsv"
 	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -369,13 +370,18 @@ func (c *applyCommand) getPlans() (plan.Plans, error) {
 			return nil, err
 		}
 
-		currentPlans := []*plan.Plan{}
-		if err := gocsv.UnmarshalFile(f, &currentPlans); err != nil {
+		content, err := io.ReadAll(f)
+		if err != nil {
 			f.Close()
 			return nil, err
 		}
-		plans = append(plans, currentPlans...)
 		f.Close()
+
+		currentPlans := []*plan.Plan{}
+		if err := json.Unmarshal(content, &currentPlans); err != nil {
+			return nil, err
+		}
+		plans = append(plans, currentPlans...)
 	}
 	return plans, nil
 }
@@ -386,5 +392,10 @@ func (c *applyCommand) savePlans(plans plan.Plans) error {
 		return err
 	}
 	defer f.Close()
-	return gocsv.MarshalFile(plans, f)
+	raw, err := json.Marshal(plans)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(raw)
+	return err
 }

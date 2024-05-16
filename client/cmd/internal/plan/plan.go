@@ -13,6 +13,3 @@ type Plan struct {
 }
 
 type Plans []*Plan
-
-// SortByOperationPriority will sort Plans based on Operation integer value priority ASC
-func (p Plans) SortByOperationPriority(i, j int) bool { return p[i].Operation < p[j].Operation }

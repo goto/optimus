@@ -30,7 +30,7 @@ func TestPlanCompositor(t *testing.T) {
 			compositor.Add(inputs[i])
 		}
 
-		actual := compositor.GetAll()
+		actual := compositor.Merge()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -57,7 +57,7 @@ func TestPlanCompositor(t *testing.T) {
 			compositor.Add(inputs[i])
 		}
 
-		actual := compositor.GetAll()
+		actual := compositor.Merge()
 		assert.Len(t, actual, len(expected), "actual has %d length, but expect has %d length", len(actual), len(expected))
 		assert.ElementsMatch(t, actual, expected)
 	})
@@ -82,7 +82,7 @@ func TestPlanCompositor(t *testing.T) {
 			compositor.Add(inputs[i])
 		}
 
-		actual := compositor.GetAll()
+		actual := compositor.Merge()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -106,7 +106,7 @@ func TestPlanCompositor(t *testing.T) {
 			compositor.Add(inputs[i])
 		}
 
-		actual := compositor.GetAll()
+		actual := compositor.Merge()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -130,7 +130,10 @@ func TestPlanCompositor(t *testing.T) {
 			compositor.Add(inputs[i])
 		}
 
-		actual := compositor.GetAll()
+		actual := compositor.Merge()
 		assert.ElementsMatch(t, actual, expected)
+
+		// - make sure the actual result still same when its called multiple times
+		assert.ElementsMatch(t, compositor.Merge(), expected)
 	})
 }

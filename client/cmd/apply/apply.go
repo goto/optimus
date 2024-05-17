@@ -125,13 +125,13 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
 		updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(namespace, plans)...)
 		updateJobRequest = append(updateJobRequest, updateJobs...)
-		deleteJobRequest = append(deleteJobRequest, c.getDeleteJobRequest(c.config.Project.Name, namespace, plans)...)
+		deleteJobRequest = append(deleteJobRequest, c.getDeleteJobRequest(namespace, plans)...)
 		migrateJobRequest = append(migrateJobRequest, migrateJobs...)
 		migrateResources, updateResources := c.getMigrateResourceRequest(namespace, plans)
-		addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(c.config.Project.Name, namespace, plans)...)
-		updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(c.config.Project.Name, namespace, plans)...)
+		addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(namespace, plans)...)
+		updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(namespace, plans)...)
 		updateResourceRequest = append(updateResourceRequest, updateResources...)
-		deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(c.config.Project.Name, namespace, plans)...)
+		deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(namespace, plans)...)
 		migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
 	}
 
@@ -313,7 +313,7 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 	}
 }
 
-func (c *applyCommand) getDeleteJobRequest(projectName string, namespace *config.Namespace, plans plan.Plans) []*pb.DeleteJobSpecificationRequest {
+func (c *applyCommand) getDeleteJobRequest(namespace *config.Namespace, plans plan.Plans) []*pb.DeleteJobSpecificationRequest {
 	jobsToBeDeleted := []*pb.DeleteJobSpecificationRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindJob).GetByOperation(plan.OperationDelete) {
 		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", plan.KindName)
@@ -322,7 +322,7 @@ func (c *applyCommand) getDeleteJobRequest(projectName string, namespace *config
 			continue
 		}
 		jobsToBeDeleted = append(jobsToBeDeleted, &pb.DeleteJobSpecificationRequest{
-			ProjectName:   projectName,
+			ProjectName:   c.config.Project.Name,
 			NamespaceName: namespace.Name,
 			JobName:       jobSpec.Name,
 			CleanHistory:  false,
@@ -366,7 +366,7 @@ func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans p
 	return jobsToBeMigrated, jobsToBeUpdatedRequest
 }
 
-func (c *applyCommand) getAddResourceRequest(projectName string, namespace *config.Namespace, plans plan.Plans) []*pb.CreateResourceRequest {
+func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans plan.Plans) []*pb.CreateResourceRequest {
 	resourcesToBeCreate := []*pb.CreateResourceRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationCreate) {
 		for _, ds := range namespace.Datastore {
@@ -381,7 +381,7 @@ func (c *applyCommand) getAddResourceRequest(projectName string, namespace *conf
 				continue
 			}
 			resourcesToBeCreate = append(resourcesToBeCreate, &pb.CreateResourceRequest{
-				ProjectName:   projectName,
+				ProjectName:   c.config.Project.Name,
 				NamespaceName: namespace.Name,
 				DatastoreName: ds.Type,
 				Resource:      resourceSpecProto,
@@ -391,7 +391,7 @@ func (c *applyCommand) getAddResourceRequest(projectName string, namespace *conf
 	return resourcesToBeCreate
 }
 
-func (c *applyCommand) getUpdateResourceRequest(projectName string, namespace *config.Namespace, plans plan.Plans) []*pb.UpdateResourceRequest {
+func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, plans plan.Plans) []*pb.UpdateResourceRequest {
 	resourcesToBeUpdate := []*pb.UpdateResourceRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationUpdate) {
 		for _, ds := range namespace.Datastore {
@@ -406,7 +406,7 @@ func (c *applyCommand) getUpdateResourceRequest(projectName string, namespace *c
 				continue
 			}
 			resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{
-				ProjectName:   projectName,
+				ProjectName:   c.config.Project.Name,
 				NamespaceName: namespace.Name,
 				DatastoreName: ds.Type,
 				Resource:      resourceSpecProto,
@@ -416,7 +416,7 @@ func (c *applyCommand) getUpdateResourceRequest(projectName string, namespace *c
 	return resourcesToBeUpdate
 }
 
-func (c *applyCommand) getDeleteResourceRequest(projectName string, namespace *config.Namespace, plans plan.Plans) []*pb.DeleteResourceRequest {
+func (c *applyCommand) getDeleteResourceRequest(namespace *config.Namespace, plans plan.Plans) []*pb.DeleteResourceRequest {
 	resourcesToBeDelete := []*pb.DeleteResourceRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationDelete) {
 		for _, ds := range namespace.Datastore {
@@ -426,7 +426,7 @@ func (c *applyCommand) getDeleteResourceRequest(projectName string, namespace *c
 				continue
 			}
 			resourcesToBeDelete = append(resourcesToBeDelete, &pb.DeleteResourceRequest{
-				ProjectName:   projectName,
+				ProjectName:   c.config.Project.Name,
 				NamespaceName: namespace.Name,
 				DatastoreName: ds.Type,
 				ResourceName:  resourceSpec.Name,

@@ -110,38 +110,50 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 
 	// prepare for proto request
 	var (
-		addJobRequest         = []*pb.AddJobSpecificationsRequest{}
-		updateJobRequest      = []*pb.UpdateJobSpecificationsRequest{}
-		deleteJobRequest      = []*pb.DeleteJobSpecificationRequest{}
-		addResourceRequest    = []*pb.CreateResourceRequest{}
-		updateResourceRequest = []*pb.UpdateResourceRequest{}
-		deleteResourceRequest = []*pb.DeleteResourceRequest{}
+		addJobRequest          = []*pb.AddJobSpecificationsRequest{}
+		updateJobRequest       = []*pb.UpdateJobSpecificationsRequest{}
+		deleteJobRequest       = []*pb.DeleteJobSpecificationRequest{}
+		migrateJobRequest      = []*pb.ChangeJobNamespaceRequest{}
+		addResourceRequest     = []*pb.CreateResourceRequest{}
+		updateResourceRequest  = []*pb.UpdateResourceRequest{}
+		deleteResourceRequest  = []*pb.DeleteResourceRequest{}
+		migrateResourceRequest = []*pb.ChangeResourceNamespaceRequest{}
 	)
 
 	for _, namespace := range c.config.Namespaces {
+		migrateJobs, updateJobs := c.getMigrateJobRequest(namespace, plans)
 		addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
 		updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(namespace, plans)...)
+		updateJobRequest = append(updateJobRequest, updateJobs...)
 		deleteJobRequest = append(deleteJobRequest, c.getDeleteJobRequest(c.config.Project.Name, namespace, plans)...)
+		migrateJobRequest = append(migrateJobRequest, migrateJobs...)
+		migrateResources, updateResources := c.getMigrateResourceRequest(namespace, plans)
 		addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(c.config.Project.Name, namespace, plans)...)
 		updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(c.config.Project.Name, namespace, plans)...)
+		updateResourceRequest = append(updateResourceRequest, updateResources...)
 		deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(c.config.Project.Name, namespace, plans)...)
+		migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
 	}
 
 	// send to server based on operation
 	deletedJobs := c.executeJobDelete(ctx, jobClient, deleteJobRequest)
 	addedJobs := c.executeJobAdd(ctx, jobClient, addJobRequest)
+	migratedJobs := c.executeJobMigrate(ctx, jobClient, migrateJobRequest)
 	updatedJobs := c.executeJobUpdate(ctx, jobClient, updateJobRequest)
 	deletedResources := c.executeResourceDelete(ctx, resourceClient, deleteResourceRequest)
 	addedResources := c.executeResourceAdd(ctx, resourceClient, addResourceRequest)
+	migratedResources := c.executeResourceMigrate(ctx, resourceClient, migrateResourceRequest)
 	updatedResources := c.executeResourceUpdate(ctx, resourceClient, updateResourceRequest)
 
 	// update plan file
 	isExecuted := true
 	basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, deletedJobs...)
 	basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, addedJobs...)
+	basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, migratedJobs...)
 	basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, updatedJobs...)
 	basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, deletedResources...)
 	basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, addedResources...)
+	basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, migratedResources...)
 	basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, updatedResources...)
 
 	return c.savePlans(basePlans)
@@ -173,6 +185,21 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 		addedJobs = append(addedJobs, response.JobNameSuccesses...)
 	}
 	return addedJobs
+}
+
+func (c *applyCommand) executeJobMigrate(ctx context.Context, client pb.JobSpecificationServiceClient, requests []*pb.ChangeJobNamespaceRequest) []string {
+	migratedJobs := []string{}
+	for _, request := range requests {
+		response, err := client.ChangeJobNamespace(ctx, request)
+		if err != nil {
+			c.logger.Error(err.Error())
+			continue
+		}
+		if response.Success {
+			migratedJobs = append(migratedJobs, request.JobName)
+		}
+	}
+	return migratedJobs
 }
 
 func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecificationServiceClient, requests []*pb.UpdateJobSpecificationsRequest) []string {
@@ -214,6 +241,21 @@ func (c *applyCommand) executeResourceAdd(ctx context.Context, client pb.Resourc
 		}
 	}
 	return addedResources
+}
+
+func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.ChangeResourceNamespaceRequest) []string {
+	migratedResources := []string{}
+	for _, request := range requests {
+		response, err := client.ChangeResourceNamespace(ctx, request)
+		if err != nil {
+			c.logger.Error(err.Error())
+			continue
+		}
+		if response.Success {
+			migratedResources = append(migratedResources, request.ResourceName)
+		}
+	}
+	return migratedResources
 }
 
 func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.UpdateResourceRequest) []string {
@@ -290,6 +332,40 @@ func (c *applyCommand) getDeleteJobRequest(projectName string, namespace *config
 	return jobsToBeDeleted
 }
 
+func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans plan.Plans) ([]*pb.ChangeJobNamespaceRequest, []*pb.UpdateJobSpecificationsRequest) {
+	// after migration is done, update should be performed on new namespace
+	jobsToBeMigrated := []*pb.ChangeJobNamespaceRequest{}
+	jobsToBeUpdated := []*pb.JobSpecification{}
+
+	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindJob).GetByOperation(plan.OperationMigrate) {
+		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", plan.KindName)
+		if err != nil {
+			c.logger.Error(err.Error())
+			continue
+		}
+		if plan.OldNamespaceName == nil {
+			c.logger.Error(fmt.Sprintf("old namespace on job %s could not be nil", jobSpec.Name))
+			continue
+		}
+		jobsToBeMigrated = append(jobsToBeMigrated, &pb.ChangeJobNamespaceRequest{
+			ProjectName:      c.config.Project.Name,
+			JobName:          jobSpec.Name,
+			NamespaceName:    *plan.OldNamespaceName,
+			NewNamespaceName: plan.NamespaceName,
+		})
+		jobsToBeUpdated = append(jobsToBeUpdated, jobSpec.ToProto())
+	}
+
+	jobsToBeUpdatedRequest := []*pb.UpdateJobSpecificationsRequest{
+		{
+			ProjectName:   c.config.Project.Name,
+			NamespaceName: namespace.Name,
+			Specs:         jobsToBeUpdated,
+		},
+	}
+	return jobsToBeMigrated, jobsToBeUpdatedRequest
+}
+
 func (c *applyCommand) getAddResourceRequest(projectName string, namespace *config.Namespace, plans plan.Plans) []*pb.CreateResourceRequest {
 	resourcesToBeCreate := []*pb.CreateResourceRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationCreate) {
@@ -359,6 +435,44 @@ func (c *applyCommand) getDeleteResourceRequest(projectName string, namespace *c
 		}
 	}
 	return resourcesToBeDelete
+}
+
+func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, plans plan.Plans) ([]*pb.ChangeResourceNamespaceRequest, []*pb.UpdateResourceRequest) {
+	// after migration is done, update should be performed on new namespace
+	resourcesToBeMigrated := []*pb.ChangeResourceNamespaceRequest{}
+	resourcesToBeUpdated := []*pb.UpdateResourceRequest{}
+
+	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationMigrate) {
+		resourceSpec, err := c.resourceSpecReadWriter.ReadByName(".", plan.KindName)
+		if err != nil {
+			c.logger.Error(err.Error())
+			continue
+		}
+		if plan.OldNamespaceName == nil {
+			c.logger.Error(fmt.Sprintf("old namespace on resource %s could not be nil", resourceSpec.Name))
+			continue
+		}
+		resourceSpecProto, err := resourceSpec.ToProto()
+		if err != nil {
+			c.logger.Error(fmt.Sprintf("resource %s could not be converted to proto", resourceSpec.Name))
+			continue
+		}
+		resourcesToBeMigrated = append(resourcesToBeMigrated, &pb.ChangeResourceNamespaceRequest{
+			ProjectName:      c.config.Project.Name,
+			NamespaceName:    *plan.OldNamespaceName,
+			NewNamespaceName: plan.NamespaceName,
+			ResourceName:     resourceSpec.Name,
+			DatastoreName:    resourceSpec.Type,
+		})
+		resourcesToBeUpdated = append(resourcesToBeUpdated, &pb.UpdateResourceRequest{
+			ProjectName:   c.config.Project.Name,
+			NamespaceName: plan.NamespaceName,
+			Resource:      resourceSpecProto,
+			DatastoreName: resourceSpec.Type,
+		})
+	}
+
+	return resourcesToBeMigrated, resourcesToBeUpdated
 }
 
 func (c *applyCommand) getPlans() (plan.Plans, error) {

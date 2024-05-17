@@ -1111,7 +1111,12 @@
       }
     },
     "v1beta1ChangeJobNamespaceResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        }
+      }
     },
     "v1beta1CheckJobSpecificationResponse": {
       "type": "object",

@@ -452,7 +452,12 @@
       }
     },
     "v1beta1ChangeResourceNamespaceResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        }
+      }
     },
     "v1beta1CreateResourceResponse": {
       "type": "object",

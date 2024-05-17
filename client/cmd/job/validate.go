@@ -2,8 +2,10 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
+	"github.com/goto/optimus/client/cmd/internal/plan"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
@@ -26,6 +29,10 @@ const validateTimeout = time.Minute * 15
 type validateCommand struct {
 	logger     log.Logger
 	connection connection.Connection
+
+	usePlan      bool
+	planFilePath string
+	plans        plan.Plans
 
 	configFilePath string
 	namespaceName  string
@@ -51,20 +58,20 @@ func NewValidateCommand() *cobra.Command {
 		Example: `... --namespace <namespace_name>   # upload all jobs within namespace to be validated
 ... --jobs <job_name1,job_name2> -n <namespace_name>   # upload the selected jobs within namespace to be validated
 ... -j <job_name1,job_name2> -n <namespace_name> --from-server   # validate existing jobs in the server, no upload will be done
-... -j <job_name1,job_name2> -n <namespace_name> -s --for-delete   # validation is for delete purpose, no actual deletion`,
+... -j <job_name1,job_name2> -n <namespace_name> -s --for-delete   # validation is for delete purpose, no actual deletion
+... --plan <plan_file_path>   # validate job based on job plan command output`,
 		RunE:    validate.RunE,
 		PreRunE: validate.PreRunE,
 	}
 
 	cmd.Flags().StringVarP(&validate.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
+	cmd.Flags().StringVarP(&validate.planFilePath, "plan", "p", config.EmptyPath, "File path for plan result")
 	cmd.Flags().StringVarP(&validate.namespaceName, "namespace", "n", validate.namespaceName, "Namespace name in which the job resides")
 	cmd.Flags().StringSliceVarP(&validate.jobNames, "jobs", "j", nil, "Selected job names, comma separated without any whitespace if more than one")
 
 	cmd.Flags().BoolVarP(&validate.fromServer, "from-server", "s", false, "Determines whether to upload jobs from local or to use existing from the server")
 	cmd.Flags().BoolVarP(&validate.forDelete, "for-delete", "d", false, "Determines whether the validation is for delete purpose or not, only valid with from-server flag")
 	cmd.Flags().BoolVarP(&validate.verbose, "verbose", "v", false, "Determines whether to show the complete message or just the summary")
-
-	cmd.MarkFlagRequired("namespace")
 
 	return cmd
 }
@@ -76,11 +83,23 @@ func (v *validateCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	}
 	v.clientConfig = conf
 
+	v.plans, err = v.getPlanFromFile()
+	if err != nil {
+		return err
+	}
+
 	v.connection = connection.New(v.logger, conf)
 	return nil
 }
 
 func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
+	if v.usePlan {
+		if v.forDelete || v.fromServer || v.namespaceName != "" || len(v.jobNames) > 0 {
+			return errors.New("[for-delete,from-server,namespace] flag should not be send when validate using plan")
+		}
+		return v.runValidateUsingPlan()
+	}
+
 	if v.forDelete && !v.fromServer {
 		return errors.New("for-delete flag is only valid with from-server flag")
 	}
@@ -360,4 +379,106 @@ func (v *validateCommand) getRequestForJobSpecs(namespace *config.Namespace) (*p
 			},
 		},
 	}, nil
+}
+
+func (v *validateCommand) runValidateUsingPlan() error {
+	if len(v.plans) == 0 {
+		v.logger.Info("Validation job is skipped, got empty plan from path: %s", v.planFilePath)
+		return nil
+	}
+
+	plansByNamespace, plansDeleteByNamespace, err := v.getPlanByNamespace()
+	if err != nil {
+		return err
+	}
+
+	namespaces := make([]string, 0)
+	for namespace := range plansByNamespace {
+		namespaces = append(namespaces, namespace.Name)
+	}
+	for namespace := range plansDeleteByNamespace {
+		if _, exist := plansByNamespace[namespace]; exist {
+			continue
+		}
+		namespaces = append(namespaces, namespace.Name)
+	}
+
+	v.logger.Info("Validating job specifications for namespaces %s\n", namespaces)
+	start := time.Now()
+	defer v.logger.Info("Validation is finished, took %s", time.Since(start).Round(time.Second))
+
+	if err := v.executeLocalValidation(); err != nil {
+		return err
+	}
+
+	v.forDelete, v.fromServer = false, false
+	if err := v.executeServerValidationWithPlans(plansByNamespace); err != nil {
+		return err
+	}
+
+	v.forDelete, v.fromServer = true, true
+	return v.executeServerValidationWithPlans(plansDeleteByNamespace)
+}
+
+func (v *validateCommand) getPlanFromFile() ([]*plan.Plan, error) {
+	if v.planFilePath == "" {
+		return nil, nil
+	}
+
+	file, err := os.Open(v.planFilePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	var plans []*plan.Plan
+	err = json.Unmarshal(bytes, &plans)
+	v.usePlan = len(plans) > 0
+	return plans, err
+}
+
+func (v *validateCommand) getPlanByNamespace() (map[*config.Namespace][]*plan.Plan, map[*config.Namespace][]*plan.Plan, error) {
+	plansByNamespace := make(map[*config.Namespace][]*plan.Plan)
+	plansDeleteByNamespace := make(map[*config.Namespace][]*plan.Plan)
+
+	for i := range v.plans {
+		if v.plans[i].ProjectName != v.clientConfig.Project.Name || v.plans[i].AllowJobValidate() {
+			continue
+		}
+
+		namespace, err := v.clientConfig.GetNamespaceByName(v.plans[i].NamespaceName)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if v.plans[i].Operation == plan.OperationDelete {
+			jobPlans := plansDeleteByNamespace[namespace]
+			plansDeleteByNamespace[namespace] = append(jobPlans, v.plans[i])
+			continue
+		}
+
+		jobPlans := plansByNamespace[namespace]
+		plansByNamespace[namespace] = append(jobPlans, v.plans[i])
+	}
+
+	return plansByNamespace, plansDeleteByNamespace, nil
+}
+
+func (v *validateCommand) executeServerValidationWithPlans(plansByNamespace map[*config.Namespace][]*plan.Plan) error {
+	for namespace, plans := range plansByNamespace {
+		jobNames := make([]string, 0, len(plans))
+		for i := range plans {
+			jobNames = append(jobNames, plans[i].KindName)
+		}
+		v.jobNames = jobNames
+		if err := v.executeServerValidation(namespace); err != nil {
+			return err
+		}
+	}
+	return nil
 }

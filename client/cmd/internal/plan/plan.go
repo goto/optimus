@@ -13,3 +13,5 @@ type Plan struct {
 }
 
 type Plans []*Plan
+
+func (p Plan) AllowJobValidate() bool { return p.Kind != KindJob || p.Operation == OperationMigrate }

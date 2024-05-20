@@ -38,7 +38,7 @@ func (p Plans) GetByOperation(operation Operation) Plans {
 	})
 }
 
-func (p Plans) UpdateExecutedByNames(executed bool, kind Kind, kindNames ...string) {
+func (p Plans) UpdateExecutedByNames(executed bool, kind Kind, kindNames ...string) Plans {
 	mp := map[string]bool{}
 	for _, name := range kindNames {
 		mp[name] = true
@@ -48,6 +48,7 @@ func (p Plans) UpdateExecutedByNames(executed bool, kind Kind, kindNames ...stri
 			p[i].Executed = executed
 		}
 	}
+	return p
 }
 
 func getBy(plans Plans, filter func(*Plan) bool) Plans {

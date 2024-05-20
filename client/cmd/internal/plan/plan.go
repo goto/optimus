@@ -12,6 +12,7 @@ func (p Plan) GetResult() Plan {
 		Job:         p.Job.getResult(),
 		Resource:    p.Resource.getResult(),
 	}
+	return p
 }
 
 func (p Plan) SameProjectName(compare Plan) bool { return p.ProjectName == compare.ProjectName }

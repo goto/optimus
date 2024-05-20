@@ -197,7 +197,7 @@ func (c *applyCommand) executeJobMigrate(ctx context.Context, client pb.JobSpeci
 			c.logger.Error(err.Error())
 			continue
 		}
-		c.logger.Info("job %s successully migrated", request.GetJobName())
+		c.logger.Info("job %s successfully migrated", request.GetJobName())
 		if response.Success {
 			migratedJobs = append(migratedJobs, request.JobName)
 		}
@@ -257,7 +257,7 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 			c.logger.Error(err.Error())
 			continue
 		}
-		c.logger.Info("resource %s successully migrated", request.GetResourceName())
+		c.logger.Info("resource %s successfully migrated", request.GetResourceName())
 		if response.Success {
 			migratedResources = append(migratedResources, request.ResourceName)
 		}

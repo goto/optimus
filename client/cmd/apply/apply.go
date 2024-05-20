@@ -284,6 +284,10 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 		jobsToBeSend = append(jobsToBeSend, jobSpec.ToProto())
 	}
 
+	if len(jobsToBeSend) == 0 {
+		return []*pb.AddJobSpecificationsRequest{}
+	}
+
 	return []*pb.AddJobSpecificationsRequest{
 		{
 			ProjectName:   c.config.Project.Name,
@@ -302,6 +306,10 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 			continue
 		}
 		jobsToBeSend = append(jobsToBeSend, jobSpec.ToProto())
+	}
+
+	if len(jobsToBeSend) == 0 {
+		return []*pb.UpdateJobSpecificationsRequest{}
 	}
 
 	return []*pb.UpdateJobSpecificationsRequest{
@@ -356,12 +364,13 @@ func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans p
 		jobsToBeUpdated = append(jobsToBeUpdated, jobSpec.ToProto())
 	}
 
-	jobsToBeUpdatedRequest := []*pb.UpdateJobSpecificationsRequest{
-		{
+	jobsToBeUpdatedRequest := []*pb.UpdateJobSpecificationsRequest{}
+	if len(jobsToBeUpdated) > 0 {
+		jobsToBeUpdatedRequest = append(jobsToBeUpdatedRequest, &pb.UpdateJobSpecificationsRequest{
 			ProjectName:   c.config.Project.Name,
 			NamespaceName: namespace.Name,
 			Specs:         jobsToBeUpdated,
-		},
+		})
 	}
 	return jobsToBeMigrated, jobsToBeUpdatedRequest
 }

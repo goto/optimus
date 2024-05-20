@@ -209,14 +209,14 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	return jobSuccess, me.ToErr()
 }
 
-func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
+func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
 	logWriter := writer.NewLogWriter(j.logger)
 	me := errors.NewMultiError("update specs errors")
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
-		return err
+		return []job.Name{}, err
 	}
 	existingJobs := make(map[job.Name]*job.Job)
 	for _, spec := range specs {
@@ -255,7 +255,11 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
 	}
 
-	return me.ToErr()
+	jobSuccess := make([]job.Name, len(updatedJobs))
+	for i, updatedJob := range updatedJobs {
+		jobSuccess[i] = updatedJob.Spec().Name()
+	}
+	return jobSuccess, me.ToErr()
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {

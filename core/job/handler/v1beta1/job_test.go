@@ -476,12 +476,13 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpdateJobSpecificationsResponse{
-				Log: "jobs are successfully updated",
+				Log:              "jobs are successfully updated",
+				JobNameSuccesses: []string{"job-A"},
 			}, resp)
 		})
 		t.Run("update complete jobs", func(t *testing.T) {
@@ -512,12 +513,13 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpdateJobSpecificationsResponse{
-				Log: "jobs are successfully updated",
+				Log:              "jobs are successfully updated",
+				JobNameSuccesses: []string{"job-A"},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
@@ -571,7 +573,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-B"}, nil)
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
@@ -602,7 +604,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(errors.New("internal error"))
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{}, errors.New("internal error"))
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.ErrorContains(t, err, "no jobs to be processed")
@@ -645,7 +647,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(errors.New("internal error"))
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{}, errors.New("internal error"))
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
@@ -2264,17 +2266,33 @@ func (_m *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, j
 }
 
 // Update provides a mock function with given fields: ctx, jobTenant, jobs
-func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error {
+func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error) {
 	ret := _m.Called(ctx, jobTenant, jobs)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
-		r0 = rf(ctx, jobTenant, jobs)
-	} else {
-		r0 = ret.Error(0)
+	if len(ret) == 0 {
+		panic("no return value specified for Update")
 	}
 
-	return r0
+	var r0 []job.Name
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) ([]job.Name, error)); ok {
+		return rf(ctx, jobTenant, jobs)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) []job.Name); ok {
+		r0 = rf(ctx, jobTenant, jobs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]job.Name)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
+		r1 = rf(ctx, jobTenant, jobs)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Validate provides a mock function with given fields: ctx, request

@@ -43,7 +43,7 @@ type ReplayRepository interface {
 }
 
 type NamespaceRepository interface {
-	GetByName(context.Context, tenant.ProjectName, tenant.NamespaceName) (*tenant.Namespace, error)
+	GetByName(ctx context.Context, projectName tenant.ProjectName, namespaceName tenant.NamespaceName) (*tenant.Namespace, error)
 }
 
 type ReplayValidator interface {
@@ -74,20 +74,10 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		return uuid.Nil, err
 	}
 
-	// get namespace configuration to obtain the execution project specifically for replay.
-	namespaceDetails, err := r.namespaceRepo.GetByName(ctx, tenant.ProjectName(), tenant.NamespaceName())
+	err = r.injectJobConfigWithNamespaceConfig(ctx, tenant, config)
 	if err != nil {
 		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
 		return uuid.Nil, err
-	}
-
-	for cfgKey, cfgVal := range namespaceDetails.GetConfigs() {
-		// only inject namespace-level configs for replay if they are not present in the ReplayConfig
-		if overridedConfigKey, found := namespaceConfigForReplayMap[cfgKey]; found {
-			if _, configExists := config.JobConfig[overridedConfigKey]; configExists {
-				config.JobConfig[overridedConfigKey] = cfgVal
-			}
-		}
 	}
 
 	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
@@ -112,6 +102,25 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
+}
+
+func (r *ReplayService) injectJobConfigWithNamespaceConfig(ctx context.Context, tenant tenant.Tenant, config *scheduler.ReplayConfig) error {
+	// get namespace configuration to obtain the execution project specifically for replay.
+	namespaceDetails, err := r.namespaceRepo.GetByName(ctx, tenant.ProjectName(), tenant.NamespaceName())
+	if err != nil {
+		return err
+	}
+
+	for cfgKey, cfgVal := range namespaceDetails.GetConfigs() {
+		// only inject namespace-level configs for replay if they are not present in the ReplayConfig
+		if overridedConfigKey, found := namespaceConfigForReplayMap[cfgKey]; found {
+			if _, configExists := config.JobConfig[overridedConfigKey]; !configExists {
+				config.JobConfig[overridedConfigKey] = cfgVal
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {

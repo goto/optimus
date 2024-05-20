@@ -471,6 +471,7 @@ func (v *validateCommand) getPlanByNamespace() (map[*config.Namespace][]*plan.Pl
 
 func (v *validateCommand) executeServerValidationWithPlans(plansByNamespace map[*config.Namespace][]*plan.Plan) error {
 	for namespace, plans := range plansByNamespace {
+		v.namespaceName = namespace.Name
 		jobNames := make([]string, 0, len(plans))
 		for i := range plans {
 			jobNames = append(jobNames, plans[i].KindName)

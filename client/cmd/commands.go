@@ -5,6 +5,7 @@ import (
 	"github.com/goto/salt/cmdx"
 	cli "github.com/spf13/cobra"
 
+	"github.com/goto/optimus/client/cmd/apply"
 	"github.com/goto/optimus/client/cmd/backup"
 	"github.com/goto/optimus/client/cmd/extension"
 	"github.com/goto/optimus/client/cmd/initialize"
@@ -68,6 +69,7 @@ func New() *cli.Command {
 		playground.NewPlaygroundCommand(),
 		scheduler.NewSchedulerCommand(),
 		replay.NewReplayCommand(),
+		apply.NewApplyCommand(),
 
 		// Will decide later, to add it server side or not
 		plugin.NewPluginCommand(),

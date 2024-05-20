@@ -22,11 +22,9 @@ const (
 	defaultExecutionProjectConfigKey = "EXECUTION_PROJECT"
 )
 
-var (
-	namespaceConfigForReplayMap = map[string]string{
-		"REPLAY_EXECUTION_PROJECT": defaultExecutionProjectConfigKey,
-	}
-)
+var namespaceConfigForReplayMap = map[string]string{
+	"REPLAY_EXECUTION_PROJECT": defaultExecutionProjectConfigKey,
+}
 
 type SchedulerRunGetter interface {
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)

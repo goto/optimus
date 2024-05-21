@@ -425,6 +425,7 @@ func (v *validateCommand) getPlanFromFile() ([]*plan.Plan, error) {
 		return nil, nil
 	}
 
+	v.usePlan = true
 	file, err := os.Open(v.planFilePath)
 	if err != nil {
 		return nil, err
@@ -438,7 +439,6 @@ func (v *validateCommand) getPlanFromFile() ([]*plan.Plan, error) {
 
 	var plans []*plan.Plan
 	err = json.Unmarshal(bytes, &plans)
-	v.usePlan = len(plans) > 0
 	return plans, err
 }
 

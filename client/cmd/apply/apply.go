@@ -165,18 +165,27 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	isNotExecuted := false
-	for _, plan := range plans {
-		if plan.Executed {
-			c.logger.Info("✅ [%s] %s %s from namespace %s", plan.Operation, plan.Kind, plan.KindName, plan.NamespaceName)
-		} else {
-			isNotExecuted = true
-			c.logger.Error("❌ [%s] %s %s from namespace %s", plan.Operation, plan.Kind, plan.KindName, plan.NamespaceName)
+	// log summary
+	countTotal := 0
+	countNotExecuted := 0
+	for _, namespace := range c.config.Namespaces {
+		for _, plan := range plans.GetByNamespaceName(namespace.Name) {
+			countTotal++
+			if plan.Executed {
+				c.logger.Info("[%s] %s: %s %s ✅", plan.NamespaceName, plan.Operation, plan.Kind, plan.KindName)
+			} else {
+				countNotExecuted++
+				c.logger.Error("[%s] %s: %s %s ❌", plan.NamespaceName, plan.Operation, plan.Kind, plan.KindName)
+			}
 		}
 	}
 
-	if isNotExecuted {
-		return fmt.Errorf("some operations couldn't be proceed")
+	if countNotExecuted > 0 {
+		if countNotExecuted == countTotal {
+			return fmt.Errorf("all operations couldn't be proceed")
+		}
+		c.logger.Error("some operations couldn't be proceed")
+		os.Exit(3) // custom exit code for partial failure
 	}
 
 	return nil

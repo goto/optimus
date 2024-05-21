@@ -34,6 +34,7 @@ type applyCommand struct {
 	config                 *config.ClientConfig
 	jobSpecReadWriter      local.SpecReadWriter[*model.JobSpec]
 	resourceSpecReadWriter local.SpecReadWriter[*model.ResourceSpec]
+	verbose                bool
 
 	configFilePath string
 	sources        []string
@@ -62,6 +63,7 @@ func (c *applyCommand) injectFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringSliceVarP(&c.sources, "sources", "s", c.sources, "Sources of plan result to be executed")
 	cmd.Flags().StringVarP(&c.output, "output", "o", executedPlanFile, "Output of plan result after executed")
+	cmd.Flags().BoolVarP(&c.verbose, "verbose", "v", false, "Determines whether to show the complete message or just the summary")
 }
 
 func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
@@ -107,6 +109,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	plans := basePlans.GetByProjectName(c.config.Project.Name)
+	plans = plans.GetByExecuted(false)
 
 	// prepare for proto request
 	var (
@@ -121,16 +124,18 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	)
 
 	for _, namespace := range c.config.Namespaces {
-		migrateJobs, updateJobs := c.getMigrateJobRequest(namespace, plans)
+		// job request preparation
+		migrateJobs, updateFromMigrateJobs := c.getMigrateJobRequest(namespace, plans)
 		addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
 		updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(namespace, plans)...)
-		updateJobRequest = append(updateJobRequest, updateJobs...)
+		updateJobRequest = append(updateJobRequest, updateFromMigrateJobs...)
 		deleteJobRequest = append(deleteJobRequest, c.getDeleteJobRequest(namespace, plans)...)
 		migrateJobRequest = append(migrateJobRequest, migrateJobs...)
-		migrateResources, updateResources := c.getMigrateResourceRequest(namespace, plans)
+		// resource request preparation
+		migrateResources, updateFromMigrateResources := c.getMigrateResourceRequest(namespace, plans)
 		addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(namespace, plans)...)
 		updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(namespace, plans)...)
-		updateResourceRequest = append(updateResourceRequest, updateResources...)
+		updateResourceRequest = append(updateResourceRequest, updateFromMigrateResources...)
 		deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(namespace, plans)...)
 		migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
 	}
@@ -147,23 +152,43 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 
 	// update plan file
 	isExecuted := true
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, deletedJobs...)
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, addedJobs...)
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, migratedJobs...)
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindJob, updatedJobs...)
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, deletedResources...)
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, addedResources...)
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, migratedResources...)
-	basePlans = basePlans.UpdateExecutedByNames(isExecuted, plan.KindResource, updatedResources...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, deletedJobs...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, addedJobs...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, migratedJobs...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, updatedJobs...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, deletedResources...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, addedResources...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, migratedResources...)
+	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, updatedResources...)
 
-	return c.savePlans(basePlans)
+	if err := c.savePlans(plans); err != nil {
+		return err
+	}
+
+	isNotExecuted := false
+	for _, plan := range plans {
+		if plan.Executed {
+			c.logger.Info("✅ [%s] %s %s from namespace %s", plan.Operation, plan.Kind, plan.KindName, plan.NamespaceName)
+		} else {
+			isNotExecuted = true
+			c.logger.Error("❌ [%s] %s %s from namespace %s", plan.Operation, plan.Kind, plan.KindName, plan.NamespaceName)
+		}
+	}
+
+	if isNotExecuted {
+		return fmt.Errorf("some operations couldn't be proceed")
+	}
+
+	return nil
 }
 
 func (c *applyCommand) executeJobDelete(ctx context.Context, client pb.JobSpecificationServiceClient, requests []*pb.DeleteJobSpecificationRequest) []string {
 	deletedJobs := []string{}
 	for _, request := range requests {
 		response, err := client.DeleteJobSpecification(ctx, request)
-		c.logger.Info(response.GetMessage())
+		if c.verbose {
+			c.logger.Info(response.GetMessage())
+		}
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue
@@ -179,7 +204,9 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 	addedJobs := []string{}
 	for _, request := range requests {
 		response, err := client.AddJobSpecifications(ctx, request)
-		c.logger.Info(response.GetLog())
+		if c.verbose {
+			c.logger.Info(response.GetLog())
+		}
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue
@@ -197,7 +224,9 @@ func (c *applyCommand) executeJobMigrate(ctx context.Context, client pb.JobSpeci
 			c.logger.Error(err.Error())
 			continue
 		}
-		c.logger.Info("job %s successfully migrated", request.GetJobName())
+		if c.verbose {
+			c.logger.Info("job %s successfully migrated", request.GetJobName())
+		}
 		if response.Success {
 			migratedJobs = append(migratedJobs, request.JobName)
 		}
@@ -209,7 +238,9 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 	updatedJobs := []string{}
 	for _, request := range requests {
 		response, err := client.UpdateJobSpecifications(ctx, request)
-		c.logger.Info(response.GetLog())
+		if c.verbose {
+			c.logger.Info(response.GetLog())
+		}
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue
@@ -227,7 +258,9 @@ func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.Reso
 			c.logger.Error(err.Error())
 			continue
 		}
-		c.logger.Info("resource %s successfully deleted", request.ResourceName)
+		if c.verbose {
+			c.logger.Info("resource %s successfully deleted", request.ResourceName)
+		}
 		deletedResources = append(deletedResources, request.ResourceName)
 	}
 	return deletedResources
@@ -237,7 +270,9 @@ func (c *applyCommand) executeResourceAdd(ctx context.Context, client pb.Resourc
 	addedResources := []string{}
 	for _, request := range requests {
 		response, err := client.CreateResource(ctx, request)
-		c.logger.Info(response.GetMessage())
+		if c.verbose {
+			c.logger.Info(response.GetMessage())
+		}
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue
@@ -257,7 +292,9 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 			c.logger.Error(err.Error())
 			continue
 		}
-		c.logger.Info("resource %s successfully migrated", request.GetResourceName())
+		if c.verbose {
+			c.logger.Info("resource %s successfully migrated", request.GetResourceName())
+		}
 		if response.Success {
 			migratedResources = append(migratedResources, request.ResourceName)
 		}
@@ -269,7 +306,9 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 	updatedResources := []string{}
 	for _, request := range requests {
 		response, err := client.UpdateResource(ctx, request)
-		c.logger.Info(response.GetMessage())
+		if c.verbose {
+			c.logger.Info(response.GetMessage())
+		}
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue

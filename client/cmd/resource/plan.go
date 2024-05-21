@@ -124,7 +124,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		plans = append(plans, resourcePlan)
 	}
 
-	mergedPlans := plans.Merge()
+	mergedPlans := plans.MergeMigrateOperation()
 	if p.verbose {
 		for i := range mergedPlans {
 			msg := fmt.Sprintf("[%s] plan operation %s for %s %s", mergedPlans[i].NamespaceName, mergedPlans[i].Operation, mergedPlans[i].Kind, mergedPlans[i].KindName)

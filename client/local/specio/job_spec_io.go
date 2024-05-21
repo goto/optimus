@@ -23,8 +23,8 @@ type jobSpecReadWriter struct {
 	referenceSpecFileName   string
 	referenceAssetDirName   string
 
-	specFS        afero.Fs
-	allSpecsCache []*model.JobSpec
+	specFS           afero.Fs
+	pathToSpecsCache map[string][]*model.JobSpec
 }
 
 func NewJobSpecReadWriter(specFS afero.Fs, opts ...jobSpecReadWriterOpt) (local.SpecReadWriter[*model.JobSpec], error) {
@@ -37,7 +37,7 @@ func NewJobSpecReadWriter(specFS afero.Fs, opts ...jobSpecReadWriterOpt) (local.
 		referenceSpecFileName:   "job.yaml",
 		referenceAssetDirName:   "assets",
 		specFS:                  specFS,
-		allSpecsCache:           make([]*model.JobSpec, 0),
+		pathToSpecsCache:        map[string][]*model.JobSpec{},
 	}
 
 	for _, opt := range opts {
@@ -53,8 +53,8 @@ func (j *jobSpecReadWriter) ReadAll(rootDirPath string) ([]*model.JobSpec, error
 	if rootDirPath == "" {
 		return nil, errors.New("root dir path is empty")
 	}
-	if len(j.allSpecsCache) > 0 {
-		return j.allSpecsCache, nil
+	if specs, ok := j.pathToSpecsCache[rootDirPath]; ok {
+		return specs, nil
 	}
 
 	jobSpecParentsMappedByDirPath, err := j.readJobSpecParentsMappedByDirPath(rootDirPath)
@@ -77,7 +77,7 @@ func (j *jobSpecReadWriter) ReadAll(rootDirPath string) ([]*model.JobSpec, error
 		}
 		jobSpecs[i] = jobSpec
 	}
-	j.allSpecsCache = jobSpecs
+	j.pathToSpecsCache[rootDirPath] = jobSpecs
 	return jobSpecs, nil
 }
 

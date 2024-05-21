@@ -114,27 +114,27 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	directories := providermodel.Diffs(diffs).GetAllDirectories(p.appendDirectory)
 	p.logger.Info("resource plan found changed in directories: %+v", directories)
 
-	compositor := plan.NewCompositor()
+	var plans plan.Plans
 	for _, directory := range directories {
 		var resourcePlan *plan.Plan
 		resourcePlan, err = p.describePlanFromDirectory(ctx, directory)
 		if err != nil {
 			return err
 		}
-		compositor.Add(resourcePlan)
+		plans = append(plans, resourcePlan)
 	}
 
-	var plans plan.Plans = compositor.Merge()
+	mergedPlans := plans.Merge()
 	if p.verbose {
-		for i := range plans {
-			msg := fmt.Sprintf("[%s] plan operation %s for %s %s", plans[i].NamespaceName, plans[i].Operation, plans[i].Kind, plans[i].KindName)
-			if plans[i].OldNamespaceName != nil {
-				msg += " with old namespace: " + *plans[i].OldNamespaceName
+		for i := range mergedPlans {
+			msg := fmt.Sprintf("[%s] plan operation %s for %s %s", mergedPlans[i].NamespaceName, mergedPlans[i].Operation, mergedPlans[i].Kind, mergedPlans[i].KindName)
+			if mergedPlans[i].OldNamespaceName != nil {
+				msg += " with old namespace: " + *mergedPlans[i].OldNamespaceName
 			}
 			p.logger.Info(msg)
 		}
 	}
-	return p.saveFile(plans)
+	return p.saveFile(mergedPlans)
 }
 
 func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory string) (*plan.Plan, error) {

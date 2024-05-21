@@ -13,3 +13,50 @@ type Plan struct {
 }
 
 type Plans []*Plan
+
+func (p Plans) Merge() []*Plan {
+	res := make([]*Plan, 0, len(p))
+	createPlanByName := make(map[string][]*Plan)
+	deletePlanByName := make(map[string][]*Plan)
+	for _, plan := range p {
+		switch plan.Operation {
+		case OperationCreate:
+			createPlanByName[plan.KindName] = append(createPlanByName[plan.KindName], plan)
+		case OperationDelete:
+			deletePlanByName[plan.KindName] = append(deletePlanByName[plan.KindName], plan)
+		default:
+			res = append(res, plan)
+		}
+	}
+
+	if len(createPlanByName)+len(deletePlanByName) == 0 {
+		return res
+	}
+
+	for kindName, createPlans := range createPlanByName {
+		for _, createPlan := range createPlans {
+			deletePlans, ok := deletePlanByName[kindName]
+			if !ok {
+				res = append(res, createPlan)
+				continue
+			}
+
+			migratePlan := createPlan
+			migratePlan.Operation = OperationMigrate
+			migratePlan.OldNamespaceName = &deletePlans[0].NamespaceName
+			res = append(res, migratePlan)
+			deletePlans = deletePlans[1:]
+			deletePlanByName[kindName] = deletePlans
+			if len(deletePlans) == 0 {
+				delete(deletePlanByName, kindName)
+			}
+		}
+		delete(createPlanByName, kindName)
+	}
+
+	for _, deletePlans := range deletePlanByName {
+		res = append(res, deletePlans...)
+	}
+
+	return res
+}

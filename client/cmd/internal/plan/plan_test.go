@@ -8,7 +8,7 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/plan"
 )
 
-func TestPlanMerge(t *testing.T) {
+func TestPlanMergeMigrateOperation(t *testing.T) {
 	var (
 		projectName = "p-optimus-1"
 		job1        = "j-job-1"
@@ -25,7 +25,7 @@ func TestPlanMerge(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationMigrate, KindName: job1, OldNamespaceName: &namespace1},
 		}
 
-		actual := inputs.Merge()
+		actual := inputs.MergeMigrateOperation()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -47,7 +47,7 @@ func TestPlanMerge(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationDelete, KindName: "job-3"},
 		}
 
-		actual := inputs.Merge()
+		actual := inputs.MergeMigrateOperation()
 		assert.Len(t, actual, len(expected), "actual has %d length, but expect has %d length", len(actual), len(expected))
 		assert.ElementsMatch(t, actual, expected)
 	})
@@ -67,7 +67,7 @@ func TestPlanMerge(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationCreate, KindName: "job-3"},
 		}
 
-		actual := inputs.Merge()
+		actual := inputs.MergeMigrateOperation()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -86,7 +86,7 @@ func TestPlanMerge(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace2, Operation: plan.OperationCreate, KindName: "job-3"},
 		}
 
-		actual := inputs.Merge()
+		actual := inputs.MergeMigrateOperation()
 		assert.ElementsMatch(t, actual, expected)
 	})
 
@@ -105,7 +105,7 @@ func TestPlanMerge(t *testing.T) {
 			{Kind: plan.KindJob, ProjectName: projectName, NamespaceName: namespace5, Operation: plan.OperationCreate, KindName: job1},
 		}
 
-		actual := inputs.Merge()
+		actual := inputs.MergeMigrateOperation()
 		assert.ElementsMatch(t, actual, expected)
 	})
 }

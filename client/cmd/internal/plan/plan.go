@@ -14,7 +14,8 @@ type Plan struct {
 
 type Plans []*Plan
 
-func (p Plans) Merge() []*Plan {
+// MergeMigrateOperation will merge OperationCreate and OperationDelete into one plan as OperationMigrate and leave other operation as it is
+func (p Plans) MergeMigrateOperation() []*Plan {
 	res := make([]*Plan, 0, len(p))
 	createPlanByName := make(map[string][]*Plan)
 	deletePlanByName := make(map[string][]*Plan)

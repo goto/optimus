@@ -40,8 +40,8 @@ type ReplayRepository interface {
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
 }
 
-type NamespaceRepository interface {
-	GetByName(ctx context.Context, projectName tenant.ProjectName, namespaceName tenant.NamespaceName) (*tenant.Namespace, error)
+type TenantGetter interface {
+	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 }
 
 type ReplayValidator interface {
@@ -60,7 +60,7 @@ type ReplayService struct {
 	validator ReplayValidator
 	executor  ReplayExecutor
 
-	namespaceRepo NamespaceRepository
+	tenantGetter TenantGetter
 
 	logger log.Logger
 }
@@ -72,11 +72,12 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		return uuid.Nil, err
 	}
 
-	err = r.injectJobConfigWithNamespaceConfig(ctx, tenant, config)
+	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, tenant, config)
 	if err != nil {
 		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
 		return uuid.Nil, err
 	}
+	config.JobConfig = newConfig
 
 	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
 	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
@@ -102,23 +103,32 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 	return replayID, nil
 }
 
-func (r *ReplayService) injectJobConfigWithNamespaceConfig(ctx context.Context, tenant tenant.Tenant, config *scheduler.ReplayConfig) error {
-	// get namespace configuration to obtain the execution project specifically for replay.
-	namespaceDetails, err := r.namespaceRepo.GetByName(ctx, tenant.ProjectName(), tenant.NamespaceName())
-	if err != nil {
-		return err
+func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tnnt tenant.Tenant, config *scheduler.ReplayConfig) (map[string]string, error) {
+	// copy JobConfig to a new map to mutate it
+	newConfig := map[string]string{}
+	for cfgKey, cfgVal := range config.JobConfig {
+		newConfig[cfgKey] = cfgVal
 	}
 
-	for cfgKey, cfgVal := range namespaceDetails.GetConfigs() {
-		// only inject namespace-level configs for replay if they are not present in the ReplayConfig
+	// get tenant (project & namespace) configuration to obtain the execution project specifically for replay.
+	// note that the current behavior of GetDetails in the implementing struct prioritized namespace config over project config.
+	// so replay execution project in project config will be replaced by the one in namespace level config, if present
+	tenantWithDetails, err := r.tenantGetter.GetDetails(ctx, tnnt)
+	if err != nil {
+		return nil, err
+	}
+
+	tenantConfig := tenantWithDetails.GetConfigs()
+	for cfgKey, cfgVal := range tenantConfig {
+		// only inject tenant-level configs for replay if they are not present in the ReplayConfig
 		if overridedConfigKey, found := namespaceConfigForReplayMap[cfgKey]; found {
 			if _, configExists := config.JobConfig[overridedConfigKey]; !configExists {
-				config.JobConfig[overridedConfigKey] = cfgVal
+				newConfig[overridedConfigKey] = cfgVal
 			}
 		}
 	}
 
-	return nil
+	return newConfig, nil
 }
 
 func (r *ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
@@ -167,8 +177,16 @@ func (r *ReplayService) CancelReplay(ctx context.Context, replayWithRun *schedul
 	return r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
 }
 
-func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, namespaceRepo NamespaceRepository, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
-	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, namespaceRepo: namespaceRepo, validator: validator, executor: worker, runGetter: runGetter, logger: logger}
+func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, tenantGetter TenantGetter, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
+	return &ReplayService{
+		replayRepo:   replayRepo,
+		jobRepo:      jobRepo,
+		tenantGetter: tenantGetter,
+		validator:    validator,
+		executor:     worker,
+		runGetter:    runGetter,
+		logger:       logger,
+	}
 }
 
 func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt tenant.Tenant, jobName scheduler.JobName) (*cron.ScheduleSpec, error) {

@@ -53,7 +53,14 @@ func TestReplayService(t *testing.T) {
 	namespaceCfg := map[string]string{
 		"REPLAY_EXECUTION_PROJECT": "example_project_from_namespace",
 	}
+	projectCfg := map[string]string{
+		"REPLAY_EXECUTION_PROJECT": "example_project_from_project",
+		"STORAGE_PATH":             "file:///tmp/",
+		"SCHEDULER_HOST":           "http://localhost",
+	}
 	namespaceEntity, _ := tenant.NewNamespace(namespaceName.String(), projName, namespaceCfg)
+	projectEntity, _ := tenant.NewProject(projName.String(), projectCfg)
+	tenantWithDetails, _ := tenant.NewTenantDetails(projectEntity, namespaceEntity, tenant.PlainTextSecrets{})
 
 	logger := log.NewLogrus()
 
@@ -71,8 +78,8 @@ func TestReplayService(t *testing.T) {
 			replayWorker := new(ReplayExecutor)
 			defer replayWorker.AssertExpectations(t)
 
-			namespaceRepository := new(NamespaceRepository)
-			defer namespaceRepository.AssertExpectations(t)
+			tenantGetter := new(TenantGetter)
+			defer tenantGetter.AssertExpectations(t)
 
 			scheduledTime1Str := "2023-01-03T12:00:00Z"
 			scheduledTime1, _ := time.Parse(scheduler.ISODateFormat, scheduledTime1Str)
@@ -84,12 +91,12 @@ func TestReplayService(t *testing.T) {
 			replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfig, scheduler.ReplayStateCreated)
 
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
-			namespaceRepository.On("GetByName", ctx, projName, namespaceName).Return(namespaceEntity, nil)
+			tenantGetter.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
 			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
 
-			replayService := service.NewReplayService(replayRepository, jobRepository, namespaceRepository, replayValidator, replayWorker, nil, logger)
+			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfig)
 			assert.NoError(t, err)
 			assert.Equal(t, replayID, result)
@@ -108,12 +115,11 @@ func TestReplayService(t *testing.T) {
 			replayWorker := new(ReplayExecutor)
 			defer replayWorker.AssertExpectations(t)
 
-			namespaceRepository := new(NamespaceRepository)
-			defer namespaceRepository.AssertExpectations(t)
+			tenantGetter := new(TenantGetter)
+			defer tenantGetter.AssertExpectations(t)
 
 			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description)
-			replayJobConfigWithNamespaceConfig := map[string]string{"EXECUTION_PROJECT": "example_project_from_namespace"}
-			replayConfigWithNamespaceConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, replayJobConfigWithNamespaceConfig, description)
+			replayConfigWithNamespaceConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{"EXECUTION_PROJECT": "example_project_from_namespace"}, description)
 
 			scheduledTime1Str := "2023-01-03T12:00:00Z"
 			scheduledTime1, _ := time.Parse(scheduler.ISODateFormat, scheduledTime1Str)
@@ -125,12 +131,12 @@ func TestReplayService(t *testing.T) {
 			replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfigWithNamespaceConfig, scheduler.ReplayStateCreated)
 
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
-			namespaceRepository.On("GetByName", ctx, projName, namespaceName).Return(namespaceEntity, nil)
+			tenantGetter.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
 			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
 
-			replayService := service.NewReplayService(replayRepository, jobRepository, namespaceRepository, replayValidator, replayWorker, nil, logger)
+			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfigEmptyJobConfig)
 			assert.NoError(t, err)
 			assert.Equal(t, replayID, result)
@@ -149,16 +155,16 @@ func TestReplayService(t *testing.T) {
 			replayWorker := new(ReplayExecutor)
 			defer replayWorker.AssertExpectations(t)
 
-			namespaceRepository := new(NamespaceRepository)
-			defer namespaceRepository.AssertExpectations(t)
+			tenantGetter := new(TenantGetter)
+			defer tenantGetter.AssertExpectations(t)
 
 			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description)
 
 			internalErr := errors.New("internal error")
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
-			namespaceRepository.On("GetByName", ctx, projName, namespaceName).Return(nil, internalErr)
+			tenantGetter.On("GetDetails", ctx, tnnt).Return(nil, internalErr)
 
-			replayService := service.NewReplayService(replayRepository, jobRepository, namespaceRepository, replayValidator, replayWorker, nil, logger)
+			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfigEmptyJobConfig)
 			assert.ErrorIs(t, err, internalErr)
 			assert.Equal(t, uuid.Nil, result)
@@ -177,16 +183,16 @@ func TestReplayService(t *testing.T) {
 			replayWorker := new(ReplayExecutor)
 			defer replayWorker.AssertExpectations(t)
 
-			namespaceRepository := new(NamespaceRepository)
-			defer namespaceRepository.AssertExpectations(t)
+			tenantGetter := new(TenantGetter)
+			defer tenantGetter.AssertExpectations(t)
 
 			replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfig, scheduler.ReplayStateCreated)
 
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(errors.New("not passed validation"))
-			namespaceRepository.On("GetByName", ctx, projName, namespaceName).Return(namespaceEntity, nil)
+			tenantGetter.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
 
-			replayService := service.NewReplayService(replayRepository, jobRepository, namespaceRepository, replayValidator, replayWorker, nil, logger)
+			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfig)
 			assert.ErrorContains(t, err, "not passed validation")
 			assert.Equal(t, uuid.Nil, result)
@@ -202,13 +208,13 @@ func TestReplayService(t *testing.T) {
 			replayValidator := new(ReplayValidator)
 			defer replayValidator.AssertExpectations(t)
 
-			namespaceRepository := new(NamespaceRepository)
-			defer namespaceRepository.AssertExpectations(t)
+			tenantGetter := new(TenantGetter)
+			defer tenantGetter.AssertExpectations(t)
 
 			internalErr := errors.New("internal error")
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(nil, internalErr)
 
-			replayService := service.NewReplayService(replayRepository, jobRepository, namespaceRepository, replayValidator, nil, nil, logger)
+			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, nil, nil, logger)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfig)
 			assert.ErrorIs(t, err, internalErr)
 			assert.Equal(t, uuid.Nil, result)
@@ -227,14 +233,14 @@ func TestReplayService(t *testing.T) {
 			replayWorker := new(ReplayExecutor)
 			defer replayWorker.AssertExpectations(t)
 
-			namespaceRepository := new(NamespaceRepository)
-			defer namespaceRepository.AssertExpectations(t)
+			tenantGetter := new(TenantGetter)
+			defer tenantGetter.AssertExpectations(t)
 
 			invalidTenant, _ := tenant.NewTenant(projName.String(), "invalid-namespace")
 
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
 
-			replayService := service.NewReplayService(replayRepository, jobRepository, namespaceRepository, replayValidator, replayWorker, nil, logger)
+			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger)
 			result, err := replayService.CreateReplay(ctx, invalidTenant, jobName, replayConfig)
 			assert.ErrorContains(t, err, "job sample_select does not exist in invalid-namespace namespace")
 			assert.Equal(t, uuid.Nil, result)
@@ -642,33 +648,34 @@ func (_m *ReplayExecutor) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, j
 	_m.Called(replayID, jobTenant, jobName)
 }
 
-type NamespaceRepository struct {
+// TenantGetter is an autogenerated mock type for the TenantGetter type
+type TenantGetter struct {
 	mock.Mock
 }
 
-// GetByName provides a mock function with given fields: ctx, projectName, namespaceName
-func (_m *NamespaceRepository) GetByName(ctx context.Context, projectName tenant.ProjectName, namespaceName tenant.NamespaceName) (*tenant.Namespace, error) {
-	ret := _m.Called(ctx, projectName, namespaceName)
+// GetDetails provides a mock function with given fields: ctx, tnnt
+func (_m *TenantGetter) GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error) {
+	ret := _m.Called(ctx, tnnt)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetByName")
+		panic("no return value specified for GetDetails")
 	}
 
-	var r0 *tenant.Namespace
+	var r0 *tenant.WithDetails
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, tenant.NamespaceName) (*tenant.Namespace, error)); ok {
-		return rf(ctx, projectName, namespaceName)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant) (*tenant.WithDetails, error)); ok {
+		return rf(ctx, tnnt)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, tenant.NamespaceName) *tenant.Namespace); ok {
-		r0 = rf(ctx, projectName, namespaceName)
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant) *tenant.WithDetails); ok {
+		r0 = rf(ctx, tnnt)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*tenant.Namespace)
+			r0 = ret.Get(0).(*tenant.WithDetails)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, tenant.NamespaceName) error); ok {
-		r1 = rf(ctx, projectName, namespaceName)
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant) error); ok {
+		r1 = rf(ctx, tnnt)
 	} else {
 		r1 = ret.Error(1)
 	}

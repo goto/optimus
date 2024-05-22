@@ -197,7 +197,9 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
 
-	return &pb.CreateResourceResponse{}, nil
+	return &pb.CreateResourceResponse{
+		Success: true,
+	}, nil
 }
 
 func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResourceRequest) (*pb.ReadResourceResponse, error) {
@@ -263,7 +265,9 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 
-	return &pb.UpdateResourceResponse{}, nil
+	return &pb.UpdateResourceResponse{
+		Success: true,
+	}, nil
 }
 
 func (rh ResourceHandler) DeleteResource(ctx context.Context, req *pb.DeleteResourceRequest) (*pb.DeleteResourceResponse, error) {
@@ -324,7 +328,9 @@ func (rh ResourceHandler) ChangeResourceNamespace(ctx context.Context, req *pb.C
 		"namespace_destination": newTnnt.NamespaceName().String(),
 	}).Inc()
 
-	return &pb.ChangeResourceNamespaceResponse{}, nil
+	return &pb.ChangeResourceNamespaceResponse{
+		Success: true,
+	}, nil
 }
 
 func (rh ResourceHandler) ApplyResources(ctx context.Context, req *pb.ApplyResourcesRequest) (*pb.ApplyResourcesResponse, error) {

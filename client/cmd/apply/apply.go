@@ -142,14 +142,15 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	// send to server based on operation
-	deletedJobs := c.executeJobDelete(ctx, jobClient, deleteJobRequest)
-	addedJobs := c.executeJobAdd(ctx, jobClient, addJobRequest)
-	migratedJobs := c.executeJobMigrate(ctx, jobClient, migrateJobRequest)
-	updatedJobs := c.executeJobUpdate(ctx, jobClient, updateJobRequest)
-	deletedResources := c.executeResourceDelete(ctx, resourceClient, deleteResourceRequest)
 	addedResources := c.executeResourceAdd(ctx, resourceClient, addResourceRequest)
 	migratedResources := c.executeResourceMigrate(ctx, resourceClient, migrateResourceRequest)
 	updatedResources := c.executeResourceUpdate(ctx, resourceClient, updateResourceRequest)
+	addedJobs := c.executeJobAdd(ctx, jobClient, addJobRequest)
+	migratedJobs := c.executeJobMigrate(ctx, jobClient, migrateJobRequest)
+	updatedJobs := c.executeJobUpdate(ctx, jobClient, updateJobRequest)
+	// job deletion < resource deletion
+	deletedJobs := c.executeJobDelete(ctx, jobClient, deleteJobRequest)
+	deletedResources := c.executeResourceDelete(ctx, resourceClient, deleteResourceRequest)
 
 	// update plan file
 	isExecuted := true
@@ -186,7 +187,8 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("all operations couldn't be proceed")
 		}
 		c.logger.Error("some operations couldn't be proceed")
-		os.Exit(3) // custom exit code for partial failure
+		dialCancel() // call explicitly as defer won't be called on os.Exit
+		os.Exit(3)   // custom exit code for partial failure
 	}
 
 	return nil
@@ -431,6 +433,7 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 	resourcesToBeCreate := []*pb.CreateResourceRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationCreate) {
 		for _, ds := range namespace.Datastore {
+			datastoreName := strings.Split(plan.KindName, ":")[0]
 			resourceName := strings.Split(plan.KindName, ":")[1]
 			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, resourceName)
 			if err != nil {
@@ -445,7 +448,7 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 			resourcesToBeCreate = append(resourcesToBeCreate, &pb.CreateResourceRequest{
 				ProjectName:   c.config.Project.Name,
 				NamespaceName: namespace.Name,
-				DatastoreName: ds.Type,
+				DatastoreName: datastoreName,
 				Resource:      resourceSpecProto,
 			})
 		}
@@ -457,6 +460,7 @@ func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, pla
 	resourcesToBeUpdate := []*pb.UpdateResourceRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationUpdate) {
 		for _, ds := range namespace.Datastore {
+			datastoreName := strings.Split(plan.KindName, ":")[0]
 			resourceName := strings.Split(plan.KindName, ":")[1]
 			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, resourceName)
 			if err != nil {
@@ -471,7 +475,7 @@ func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, pla
 			resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{
 				ProjectName:   c.config.Project.Name,
 				NamespaceName: namespace.Name,
-				DatastoreName: ds.Type,
+				DatastoreName: datastoreName,
 				Resource:      resourceSpecProto,
 			})
 		}
@@ -482,16 +486,15 @@ func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, pla
 func (c *applyCommand) getDeleteResourceRequest(namespace *config.Namespace, plans plan.Plans) []*pb.DeleteResourceRequest {
 	resourcesToBeDelete := []*pb.DeleteResourceRequest{}
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationDelete) {
-		for _, ds := range namespace.Datastore {
-			resourceName := strings.Split(plan.KindName, ":")[1]
-			resourcesToBeDelete = append(resourcesToBeDelete, &pb.DeleteResourceRequest{
-				ProjectName:   c.config.Project.Name,
-				NamespaceName: namespace.Name,
-				DatastoreName: ds.Type,
-				ResourceName:  resourceName,
-				Force:         false,
-			})
-		}
+		datastoreName := strings.Split(plan.KindName, ":")[0]
+		resourceName := strings.Split(plan.KindName, ":")[1]
+		resourcesToBeDelete = append(resourcesToBeDelete, &pb.DeleteResourceRequest{
+			ProjectName:   c.config.Project.Name,
+			NamespaceName: namespace.Name,
+			DatastoreName: datastoreName,
+			ResourceName:  resourceName,
+			Force:         false,
+		})
 	}
 	return resourcesToBeDelete
 }
@@ -503,6 +506,7 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 
 	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationMigrate) {
 		for _, ds := range namespace.Datastore {
+			datastoreName := strings.Split(plan.KindName, ":")[0]
 			resourceName := strings.Split(plan.KindName, ":")[1]
 			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, resourceName)
 			if err != nil {
@@ -523,13 +527,13 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 				NamespaceName:    *plan.OldNamespaceName,
 				NewNamespaceName: plan.NamespaceName,
 				ResourceName:     resourceSpec.Name,
-				DatastoreName:    resourceSpec.Type,
+				DatastoreName:    datastoreName,
 			})
 			resourcesToBeUpdated = append(resourcesToBeUpdated, &pb.UpdateResourceRequest{
 				ProjectName:   c.config.Project.Name,
 				NamespaceName: plan.NamespaceName,
 				Resource:      resourceSpecProto,
-				DatastoreName: resourceSpec.Type,
+				DatastoreName: datastoreName,
 			})
 		}
 	}

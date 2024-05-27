@@ -91,7 +91,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		return uuid.Nil, err
 	}
 
-	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, tenant, config)
+	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, tenant, jobName, config)
 	if err != nil {
 		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
 		return uuid.Nil, err
@@ -122,8 +122,8 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 	return replayID, nil
 }
 
-func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tnnt tenant.Tenant, config *scheduler.ReplayConfig) (map[string]string, error) {
-	// copy JobConfig to a new map to mutate it
+func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
+	// copy ReplayConfig to a new map to mutate it
 	newConfig := map[string]string{}
 	for cfgKey, cfgVal := range config.JobConfig {
 		newConfig[cfgKey] = cfgVal
@@ -134,25 +134,32 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 	// so replay execution project in project config will be replaced by the one in namespace level config, if present
 	tenantWithDetails, err := r.tenantGetter.GetDetails(ctx, tnnt)
 	if err != nil {
-		return nil, err
+		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("failed to get tenant details for project [%s], namespace [%s]",
+				tnnt.ProjectName(), tnnt.NamespaceName()))
+	}
+
+	// get job details to get the task_name
+	job, err := r.jobRepo.GetJob(ctx, tnnt.ProjectName(), jobName)
+	if err != nil {
+		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("failed to get job for job name [%s]", jobName))
 	}
 
 	tenantConfig := tenantWithDetails.GetConfigs()
 	for cfgKey, cfgVal := range tenantConfig {
-		if taskNameToConfigKeyMap, found := namespaceConfigForReplayMap[cfgKey]; found {
-			// TODO change this to job.TaskName
-			var jobName = bq2bq
+		taskNameToConfigKeyMap, mappingFound := namespaceConfigForReplayMap[cfgKey]
+		if !mappingFound {
+			continue
+		}
 
-			overridedConfigKey, pluginExists := taskNameToConfigKeyMap[jobName]
-			if !pluginExists {
-				continue
-			}
+		overridedConfigKey, pluginExists := taskNameToConfigKeyMap[job.Task.Name]
+		if !pluginExists {
+			continue
+		}
 
-			if _, configExists := config.JobConfig[overridedConfigKey]; configExists {
-				// only inject tenant-level configs for replay if they are not present in the ReplayConfig
-				continue
-			}
-
+		if _, configExists := config.JobConfig[overridedConfigKey]; !configExists {
+			// only inject tenant-level configs for replay if they are not present in the ReplayConfig
 			newConfig[overridedConfigKey] = cfgVal
 		}
 	}

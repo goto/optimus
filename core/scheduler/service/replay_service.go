@@ -19,12 +19,31 @@ const (
 
 	metricJobReplay = "jobrun_replay_requests_total"
 
-	defaultExecutionProjectConfigKey = "EXECUTION_PROJECT"
+	// list of supported plugins in optimus, which supports separate execution project.
+	// currently serves as a workaround to explicitly list execution project config keys in each plugins.
+	// after plugin standardization, this all will be removed
+	bq2bq           = "bq2bq"
+	bq2pg           = "bq2pg"
+	pg2bq           = "pg2bq"
+	bq2api          = "bq2api2"
+	clevertap       = "clevertap-bq-sync"
+	transporterTask = "transporter_task"
 )
 
-var namespaceConfigForReplayMap = map[string]string{
-	"REPLAY_EXECUTION_PROJECT": defaultExecutionProjectConfigKey,
-}
+var (
+	pluginExecutionProjectKeyNameMap = map[string]string{
+		bq2bq:           "EXECUTION_PROJECT",
+		bq2pg:           "BQ_EXECUTION_PROJECT",
+		pg2bq:           "BQ_EXECUTION_PROJECT",
+		bq2api:          "EXECUTION_PROJECT",
+		clevertap:       "EXECUTION_PROJECT",
+		transporterTask: "EXECUTION_PROJECT",
+	}
+
+	namespaceConfigForReplayMap = map[string]map[string]string{
+		"REPLAY_EXECUTION_PROJECT": pluginExecutionProjectKeyNameMap,
+	}
+)
 
 type SchedulerRunGetter interface {
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
@@ -120,11 +139,21 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 
 	tenantConfig := tenantWithDetails.GetConfigs()
 	for cfgKey, cfgVal := range tenantConfig {
-		// only inject tenant-level configs for replay if they are not present in the ReplayConfig
-		if overridedConfigKey, found := namespaceConfigForReplayMap[cfgKey]; found {
-			if _, configExists := config.JobConfig[overridedConfigKey]; !configExists {
-				newConfig[overridedConfigKey] = cfgVal
+		if taskNameToConfigKeyMap, found := namespaceConfigForReplayMap[cfgKey]; found {
+			// TODO change this to job.TaskName
+			var jobName = bq2bq
+
+			overridedConfigKey, pluginExists := taskNameToConfigKeyMap[jobName]
+			if !pluginExists {
+				continue
 			}
+
+			if _, configExists := config.JobConfig[overridedConfigKey]; configExists {
+				// only inject tenant-level configs for replay if they are not present in the ReplayConfig
+				continue
+			}
+
+			newConfig[overridedConfigKey] = cfgVal
 		}
 	}
 

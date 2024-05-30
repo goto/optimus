@@ -75,8 +75,8 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&p.syncAll, "sync-all", false, "Create Plan from current state with latest git")
 
 	// - sync diff
-	cmd.Flags().StringVarP(&p.sourceRef, "source", "S", p.sourceRef, "Git Diff Source Reference [commit SHA, branch, tag]")
-	cmd.Flags().StringVarP(&p.destinationRef, "target", "T", p.destinationRef, "Git Diff Target Reference [commit SHA, branch, tag]")
+	cmd.Flags().StringVarP(&p.sourceRef, "source", "S", p.sourceRef, "Git diff source reference [commit SHA, branch, tag]")
+	cmd.Flags().StringVarP(&p.destinationRef, "target", "T", p.destinationRef, "Git diff target reference [commit SHA, branch, tag]")
 }
 
 func (p *planCommand) PreRunE(_ *cobra.Command, _ []string) error {

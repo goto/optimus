@@ -195,7 +195,6 @@ func NewReplayService(
 	logger log.Logger,
 	pluginToExecutionProjectKeyMap map[string]string,
 ) *ReplayService {
-
 	return &ReplayService{
 		replayRepo:                     replayRepo,
 		jobRepo:                        jobRepo,

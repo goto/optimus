@@ -198,6 +198,37 @@ func (p *planCommand) getJobSpec(ctx context.Context, fileName string, ref strin
 	return spec, nil
 }
 
+func (p *planCommand) printPlan(plans plan.Plan) {
+	if !p.verbose {
+		return
+	}
+
+	for namespace, planList := range plans.Resource.Create {
+		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
+		msg := fmt.Sprintf("[%s] plan create resources %v", namespace, names)
+		p.logger.Info(msg)
+	}
+
+	for namespace, planList := range plans.Resource.Delete {
+		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
+		msg := fmt.Sprintf("[%s] plan delete resources %v", namespace, names)
+		p.logger.Info(msg)
+	}
+
+	for namespace, planList := range plans.Resource.Update {
+		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
+		msg := fmt.Sprintf("[%s] plan update resources %v", namespace, names)
+		p.logger.Info(msg)
+	}
+
+	for namespace, planList := range plans.Resource.Migrate {
+		for i := range planList {
+			msg := fmt.Sprintf("[%s] plan migrate resource %v from old_namespace: %s", namespace, planList[i].GetName(), *planList[i].OldNamespace)
+			p.logger.Info(msg)
+		}
+	}
+}
+
 func (p *planCommand) savePlan(plans plan.Plan) error {
 	file, err := os.OpenFile(p.output, os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {

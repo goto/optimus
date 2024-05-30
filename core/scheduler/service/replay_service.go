@@ -19,30 +19,7 @@ const (
 
 	metricJobReplay = "jobrun_replay_requests_total"
 
-	// list of supported plugins in optimus, which supports separate execution project.
-	// currently serves as a workaround to explicitly list execution project config keys in each plugins.
-	// after plugin standardization, this all will be removed
-	bq2bq           = "bq2bq"
-	bq2pg           = "bq2pg"
-	pg2bq           = "pg2bq"
-	bq2api          = "bq2api2"
-	clevertap       = "clevertap-bq-sync"
-	transporterTask = "transporter_task"
-)
-
-var (
-	pluginExecutionProjectKeyNameMap = map[string]string{
-		bq2bq:           "EXECUTION_PROJECT",
-		bq2pg:           "BQ_EXECUTION_PROJECT",
-		pg2bq:           "BQ_EXECUTION_PROJECT",
-		bq2api:          "EXECUTION_PROJECT",
-		clevertap:       "EXECUTION_PROJECT",
-		transporterTask: "EXECUTION_PROJECT",
-	}
-
-	namespaceConfigForReplayMap = map[string]map[string]string{
-		"REPLAY_EXECUTION_PROJECT": pluginExecutionProjectKeyNameMap,
-	}
+	tenantReplayExecutionProjectConfigKey = "REPLAY_EXECUTION_PROJECT"
 )
 
 type SchedulerRunGetter interface {
@@ -82,6 +59,11 @@ type ReplayService struct {
 	tenantGetter TenantGetter
 
 	logger log.Logger
+
+	// stores mapping of task names (optimus plugin names) to its respective execution project config names.
+	// this mapping is needed because our bq plugins supporting execution project uses different config names inside the plugins.
+	// after the config naming is standardized, this map can be omitted
+	pluginToExecutionProjectKeyMap map[string]string
 }
 
 func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
@@ -131,7 +113,6 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 
 	// get tenant (project & namespace) configuration to obtain the execution project specifically for replay.
 	// note that the current behavior of GetDetails in the implementing struct prioritized namespace config over project config.
-	// so replay execution project in project config will be replaced by the one in namespace level config, if present
 	tenantWithDetails, err := r.tenantGetter.GetDetails(ctx, tnnt)
 	if err != nil {
 		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
@@ -139,7 +120,6 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 				tnnt.ProjectName(), tnnt.NamespaceName()))
 	}
 
-	// get job details to get the task_name
 	job, err := r.jobRepo.GetJob(ctx, tnnt.ProjectName(), jobName)
 	if err != nil {
 		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
@@ -147,21 +127,13 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 	}
 
 	tenantConfig := tenantWithDetails.GetConfigs()
-	for cfgKey, cfgVal := range tenantConfig {
-		taskNameToConfigKeyMap, mappingFound := namespaceConfigForReplayMap[cfgKey]
-		if !mappingFound {
-			continue
-		}
 
-		overridedConfigKey, pluginExists := taskNameToConfigKeyMap[job.Task.Name]
-		if !pluginExists {
-			continue
-		}
-
-		if _, configExists := config.JobConfig[overridedConfigKey]; !configExists {
-			// only inject tenant-level configs for replay if they are not present in the ReplayConfig
-			newConfig[overridedConfigKey] = cfgVal
-		}
+	// override the default execution project with the one in tenant config.
+	// only inject tenant-level config if execution project is not provided in ReplayConfig
+	overridedConfigKey, isSupported := r.pluginToExecutionProjectKeyMap[job.Task.Name]
+	tenantExecutionProject := tenantConfig[tenantReplayExecutionProjectConfigKey]
+	if isSupported && tenantExecutionProject != "" {
+		newConfig[overridedConfigKey] = tenantExecutionProject
 	}
 
 	return newConfig, nil
@@ -213,15 +185,26 @@ func (r *ReplayService) CancelReplay(ctx context.Context, replayWithRun *schedul
 	return r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
 }
 
-func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, tenantGetter TenantGetter, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
+func NewReplayService(
+	replayRepo ReplayRepository,
+	jobRepo JobRepository,
+	tenantGetter TenantGetter,
+	validator ReplayValidator,
+	worker ReplayExecutor,
+	runGetter SchedulerRunGetter,
+	logger log.Logger,
+	pluginToExecutionProjectKeyMap map[string]string,
+) *ReplayService {
+
 	return &ReplayService{
-		replayRepo:   replayRepo,
-		jobRepo:      jobRepo,
-		tenantGetter: tenantGetter,
-		validator:    validator,
-		executor:     worker,
-		runGetter:    runGetter,
-		logger:       logger,
+		replayRepo:                     replayRepo,
+		jobRepo:                        jobRepo,
+		tenantGetter:                   tenantGetter,
+		validator:                      validator,
+		executor:                       worker,
+		runGetter:                      runGetter,
+		logger:                         logger,
+		pluginToExecutionProjectKeyMap: pluginToExecutionProjectKeyMap,
 	}
 }
 

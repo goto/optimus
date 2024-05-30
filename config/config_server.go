@@ -61,8 +61,9 @@ type PluginConfig struct {
 }
 
 type ReplayConfig struct {
-	ReplayTimeoutInMinutes     int `mapstructure:"replay_timeout_in_minutes" default:"180"`
-	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"120"`
+	ReplayTimeoutInMinutes            int               `mapstructure:"replay_timeout_in_minutes" default:"180"`
+	ExecutionIntervalInSeconds        int               `mapstructure:"execution_interval_in_seconds" default:"120"`
+	PluginExecutionProjectConfigNames map[string]string `mapstructure:"plugin_execution_project_config_names"`
 }
 
 type Publisher struct {

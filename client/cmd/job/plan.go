@@ -37,7 +37,7 @@ type planCommand struct {
 	output         string
 	configFilePath string
 
-	sourceRef, destinationRef     string
+	sourceRef, targetRef          string
 	gitURL, gitToken, gitProvider string
 	projectID                     string
 	repository                    providermodel.RepositoryAPI
@@ -76,7 +76,7 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 
 	// - sync diff
 	cmd.Flags().StringVarP(&p.sourceRef, "source", "S", p.sourceRef, "Git diff source reference [commit SHA, branch, tag]")
-	cmd.Flags().StringVarP(&p.destinationRef, "target", "T", p.destinationRef, "Git diff target reference [commit SHA, branch, tag]")
+	cmd.Flags().StringVarP(&p.targetRef, "target", "T", p.targetRef, "Git diff target reference [commit SHA, branch, tag]")
 }
 
 func (p *planCommand) PreRunE(_ *cobra.Command, _ []string) error {
@@ -85,7 +85,7 @@ func (p *planCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	if p.syncAll {
 		p.logger.Info("[plan] compare latest with state file")
 	} else {
-		p.logger.Info("[plan] compare: `%s` ← `%s`", p.destinationRef, p.sourceRef)
+		p.logger.Info("[plan] compare: `%s` ← `%s`", p.targetRef, p.sourceRef)
 	}
 
 	p.clientConfig, err = config.LoadClientConfig(p.configFilePath)
@@ -149,7 +149,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 		if err != nil {
 			return plans, err
 		}
-		targetSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.destinationRef)
+		targetSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.targetRef)
 		if err != nil {
 			return plans, err
 		}
@@ -162,7 +162,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 }
 
 func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error) {
-	diffs, err := p.repository.CompareDiff(ctx, p.projectID, p.sourceRef, p.destinationRef)
+	diffs, err := p.repository.CompareDiff(ctx, p.projectID, p.sourceRef, p.targetRef)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func (p *planCommand) getJobSpec(ctx context.Context, fileName string, ref strin
 		return spec, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.sourceRef, fileName))
 	}
 	if err = yaml.Unmarshal(raw, &spec); err != nil {
-		return spec, errors.Join(err, errors.New("failed to unmarshal destination job specification"))
+		return spec, errors.Join(err, fmt.Errorf("failed to unmarshal job specification with ref: %s and directory %s", p.sourceRef, fileName))
 	}
 	return spec, nil
 }

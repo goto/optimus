@@ -12,7 +12,6 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
 
 	"github.com/goto/optimus/client/cmd/internal/logger"
@@ -29,29 +28,31 @@ import (
 const jobFileName = "job.yaml"
 
 type planCommand struct {
-	logger log.Logger
+	logger         log.Logger
+	clientConfig   *config.ClientConfig
+	specReadWriter local.SpecReadWriter[*model.JobSpec]
+
+	syncAll        bool
+	verbose        bool
+	output         string
+	configFilePath string
 
 	sourceRef, destinationRef     string
 	gitURL, gitToken, gitProvider string
-	verbose                       bool
 	projectID                     string
-	output                        string
+	repository                    providermodel.RepositoryAPI
 
-	configFilePath string
-	clientConfig   *config.ClientConfig
-
-	repository     providermodel.RepositoryAPI
-	specReadWriter local.SpecReadWriter[*model.JobSpec]
+	// TODO: add with statefile
 }
 
 func NewPlanCommand() *cobra.Command {
 	planCmd := &planCommand{logger: logger.NewClientLogger()}
 	cmd := &cobra.Command{
-		Use:     "plan",
-		Short:   "Plan job deployment",
-		Long:    "Plan job deployment based on git diff state using git reference (commit SHA, branch, tag)",
-		Example: "optimus job plan <ref> <ref-before>",
-		Args:    cobra.MinimumNArgs(2), //nolint
+		Use:   "plan",
+		Short: "Plan job deployment",
+		Long:  "Plan job deployment based on git diff state using git reference (commit SHA, branch, tag)",
+		Example: `optimus job plan --sync-all # Create Plan diff from latest branch and current state
+optimus job plan --source <source_ref> --target <target_ref>   # Create Plan using git diff 2 references`,
 		PreRunE: planCmd.PreRunE,
 		RunE:    planCmd.RunE,
 	}
@@ -62,23 +63,31 @@ func NewPlanCommand() *cobra.Command {
 
 func (p *planCommand) inject(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&p.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
+	cmd.Flags().StringVarP(&p.output, "output", "o", "./resource.json", "File path for output of plan")
+	cmd.Flags().BoolVarP(&p.verbose, "verbose", "v", false, "Print details related to operation")
 
 	cmd.Flags().StringVarP(&p.gitProvider, "git-provider", "p", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
 	cmd.Flags().StringVarP(&p.gitURL, "git-host", "h", os.Getenv("GIT_HOST"), "Git host based on git provider used in the repository")
 	cmd.Flags().StringVarP(&p.gitToken, "git-token", "t", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
-
 	cmd.Flags().StringVarP(&p.projectID, "project-id", "I", os.Getenv("GIT_PROJECT_ID"), "Determine which project will be checked")
 
-	cmd.Flags().StringVarP(&p.output, "output", "o", "./job.json", "File path for output of plan")
-	cmd.Flags().BoolVarP(&p.verbose, "verbose", "v", false, "Print details related to operation")
+	// - sync all
+	cmd.Flags().BoolVar(&p.syncAll, "sync-all", false, "Create Plan from current state with latest git")
+
+	// - sync diff
+	cmd.Flags().StringVarP(&p.sourceRef, "source", "S", p.sourceRef, "Git Diff Source Reference [commit SHA, branch, tag]")
+	cmd.Flags().StringVarP(&p.destinationRef, "target", "T", p.destinationRef, "Git Diff Target Reference [commit SHA, branch, tag]")
 }
 
-func (p *planCommand) PreRunE(_ *cobra.Command, args []string) error {
+func (p *planCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	var err error
 
-	p.destinationRef = args[0]
-	p.sourceRef = args[1]
-	p.logger.Info("[plan] compare: `%s` ← `%s`", p.destinationRef, p.sourceRef)
+	if p.syncAll {
+		p.logger.Info("[plan] compare latest with state file")
+	} else {
+		p.logger.Info("[plan] compare: `%s` ← `%s`", p.destinationRef, p.sourceRef)
+	}
+
 	p.clientConfig, err = config.LoadClientConfig(p.configFilePath)
 	if err != nil {
 		return err
@@ -105,116 +114,92 @@ func (p *planCommand) PreRunE(_ *cobra.Command, args []string) error {
 }
 
 func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
-	diffs, err := p.repository.CompareDiff(ctx, p.projectID, p.sourceRef, p.destinationRef)
+	var (
+		ctx   = context.Background()
+		plans plan.Plan
+		err   error
+	)
+
+	if p.syncAll {
+		// TODO: implement it:
+	} else {
+		plans, err = p.generatePlanWithGitDiff(ctx)
+	}
 	if err != nil {
 		return err
 	}
 
-	directories := providermodel.Diffs(diffs).GetAllDirectories(p.appendDirectory)
-	p.logger.Info("job plan found changed in directories: %+v", directories)
-
-	var plans plan.Plans
-	for _, directory := range directories {
-		var jobPlan *plan.Plan
-		jobPlan, err = p.describePlanFromDirectory(ctx, directory)
-		if err != nil {
-			return err
-		}
-		plans = append(plans, jobPlan)
-	}
-
-	mergedPlans := plans.MergeMigrateOperation()
-	if p.verbose {
-		for i := range mergedPlans {
-			msg := fmt.Sprintf("[%s] plan operation %s for %s %s", mergedPlans[i].NamespaceName, mergedPlans[i].Operation, mergedPlans[i].Kind, mergedPlans[i].KindName)
-			if mergedPlans[i].OldNamespaceName != nil {
-				msg += " with old namespace: " + *mergedPlans[i].OldNamespaceName
-			}
-			p.logger.Info(msg)
-		}
-	}
-	return p.saveFile(mergedPlans)
+	return p.savePlan(plans)
 }
 
-func (p *planCommand) describePlanFromDirectory(ctx context.Context, directory string) (*plan.Plan, error) {
-	var (
-		namespaceName             string
-		err                       error
-		sourceRaw, destinationRaw []byte
-		fileName                  = filepath.Join(directory, jobFileName)
-	)
+func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, error) {
+	plans := plan.NewPlan(p.clientConfig.Project.Name)
+	affectedDirectories, err := p.getAffectedDirectory(ctx)
+	if err != nil {
+		return plans, err
+	}
 
+	for _, directory := range affectedDirectories {
+		namespace, err := p.getNamespaceNameByJobPath(directory)
+		if err != nil {
+			return plans, err
+		}
+
+		sourceSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.sourceRef)
+		if err != nil {
+			return plans, err
+		}
+		targetSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.destinationRef)
+		if err != nil {
+			return plans, err
+		}
+
+		plans.Job.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.JobPlan{})
+	}
+
+	plans = plans.GetResult()
+	return plans, nil
+}
+
+func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error) {
+	diffs, err := p.repository.CompareDiff(ctx, p.projectID, p.sourceRef, p.destinationRef)
+	if err != nil {
+		return nil, err
+	}
+
+	affectedDirectories := make([]string, 0, len(diffs)*2)
+	for i := range diffs {
+		affectedDirectories = append(affectedDirectories, diffs[i].OldPath, diffs[i].NewPath)
+	}
+
+	directories := plan.DistinctDirectory(plan.GetValidJobDirectory(affectedDirectories))
+	p.logger.Info("job plan found changed in directories: %+v", directories)
+	return directories, nil
+}
+
+func (p *planCommand) getNamespaceNameByJobPath(directory string) (string, error) {
 	for _, namespace := range p.clientConfig.Namespaces {
 		if strings.HasPrefix(directory, namespace.Job.Path) {
-			namespaceName = namespace.Name
-			break
+			return namespace.Name, nil
 		}
 	}
-	if namespaceName == "" {
-		return nil, fmt.Errorf("failed to find namespace specified on directory: %s", directory)
-	}
+	return "", fmt.Errorf("failed to find namespace specified on directory: %s", directory)
+}
 
-	destinationRaw, err = p.repository.GetFileContent(ctx, p.projectID, p.destinationRef, fileName)
+func (p *planCommand) getJobSpec(ctx context.Context, fileName string, ref string) (model.JobSpec, error) {
+	var spec model.JobSpec
+	raw, err := p.repository.GetFileContent(ctx, p.projectID, ref, fileName)
 	if err != nil {
-		return nil, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.destinationRef, directory))
+		return spec, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.sourceRef, fileName))
 	}
-	sourceRaw, err = p.repository.GetFileContent(ctx, p.projectID, p.sourceRef, fileName)
-	if err != nil {
-		return nil, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.sourceRef, directory))
+	if err = yaml.Unmarshal(raw, &spec); err != nil {
+		return spec, errors.Join(err, errors.New("failed to unmarshal destination job specification"))
 	}
-
-	var sourceSpec, destinationSpec model.JobSpec
-	if err = yaml.Unmarshal(sourceRaw, &sourceSpec); err != nil {
-		return nil, errors.Join(err, errors.New("failed to unmarshal source job specification"))
-	}
-	if err = yaml.Unmarshal(destinationRaw, &destinationSpec); err != nil {
-		return nil, errors.Join(err, errors.New("failed to unmarshal destination job specification"))
-	}
-
-	jobPlan := &plan.Plan{ProjectName: p.clientConfig.Project.Name, NamespaceName: namespaceName, Kind: plan.KindJob}
-	if p.isOperationCreate(sourceSpec, destinationSpec) {
-		jobPlan.KindName = destinationSpec.Name
-		jobPlan.Operation = plan.OperationCreate
-	} else if p.isOperationDelete(sourceSpec, destinationSpec) {
-		jobPlan.KindName = sourceSpec.Name
-		jobPlan.Operation = plan.OperationDelete
-	} else {
-		jobPlan.KindName = destinationSpec.Name
-		jobPlan.Operation = plan.OperationUpdate
-	}
-
-	return jobPlan, nil
+	return spec, nil
 }
 
-// isOperationCreate return true when destinationSpec is exists, but sourceSpec is missing
-func (*planCommand) isOperationCreate(sourceSpec, destinationSpec model.JobSpec) bool {
-	return len(sourceSpec.Name) == 0 && len(destinationSpec.Name) > 0
-}
-
-// isOperationCreate return true when sourceSpec is exists, but destinationSpec is missing
-func (*planCommand) isOperationDelete(sourceSpec, destinationSpec model.JobSpec) bool {
-	return len(sourceSpec.Name) > 0 && len(destinationSpec.Name) == 0
-}
-
-func (*planCommand) appendDirectory(directory string, directoryExists map[string]bool, fileDirectories []string) []string {
-	index := strings.Index(directory, "/assets")
-	if !strings.HasSuffix(directory, "/"+jobFileName) && index < 1 {
-		return fileDirectories
-	}
-	directory = strings.TrimSuffix(directory, "/"+jobFileName)
-	if index > 0 {
-		directory = directory[:index]
-	}
-	if !directoryExists[directory] {
-		fileDirectories = append(fileDirectories, directory)
-		directoryExists[directory] = true
-	}
-	return fileDirectories
-}
-
-func (p *planCommand) saveFile(plans plan.Plans) error {
-	file, err := os.OpenFile(p.output, unix.O_RDWR|unix.O_CREAT, os.ModePerm)
+func (p *planCommand) savePlan(plans plan.Plan) error {
+	file, err := os.OpenFile(p.output, os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -222,11 +207,12 @@ func (p *planCommand) saveFile(plans plan.Plans) error {
 
 	_ = file.Truncate(0)
 	_, _ = file.Seek(0, 0)
+
 	planBytes, err := json.MarshalIndent(plans, "", " ")
 	if err != nil {
 		return err
 	}
 	file.Write(planBytes)
-	p.logger.Info("job plan file created: %s", file.Name())
+	p.logger.Info("plan file created: %s", file.Name())
 	return nil
 }

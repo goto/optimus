@@ -1,8 +1,15 @@
 package plan
 
-type Kind string
+type Kind interface {
+	Getter
+	Setter
+}
 
-const (
-	KindJob      Kind = "job"
-	KindResource Kind = "resource"
-)
+type Setter interface {
+	SetName(string)
+	SetOldNamespace(oldNamespace string)
+}
+
+type Getter interface {
+	GetName() string
+}

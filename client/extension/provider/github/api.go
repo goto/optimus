@@ -37,7 +37,7 @@ func (*API) GetOwnerAndRepoName(projectID any) (owner, repo string, err error) {
 	}
 }
 
-func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
+func (api *API) CompareDiff(ctx context.Context, projectID any, target, source string) ([]*model.Diff, error) {
 	var (
 		pagination = &github.ListOptions{
 			Page:    1,
@@ -54,7 +54,7 @@ func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef s
 	compareDiffResp := make([]*github.CommitsComparison, 0)
 	for {
 		var resp *github.Response
-		compareResp, resp, err = api.repository.CompareCommits(ctx, owner, repo, toRef, fromRef, pagination)
+		compareResp, resp, err = api.repository.CompareCommits(ctx, owner, repo, target, source, pagination)
 		if err != nil {
 			return nil, err
 		}

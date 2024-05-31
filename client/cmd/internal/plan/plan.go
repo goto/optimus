@@ -14,6 +14,8 @@ func (p Plan) GetResult() Plan {
 	}
 }
 
+func (p Plan) SameProjectName(compare Plan) bool { return p.ProjectName == compare.ProjectName }
+
 func NewPlan(projectName string) Plan {
 	return Plan{
 		ProjectName: projectName,

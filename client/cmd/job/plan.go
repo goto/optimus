@@ -241,7 +241,7 @@ func (p *planCommand) savePlan(plans plan.Plan) error {
 	existingBytes, _ := io.ReadAll(file)
 	var existingPlan plan.Plan
 	_ = json.Unmarshal(existingBytes, &existingBytes)
-	if existingPlan.ProjectName == plans.ProjectName && plans.Resource.IsZero() {
+	if existingPlan.SameProjectName(plans) && plans.Resource.IsZero() {
 		plans.Resource = existingPlan.Resource
 	}
 

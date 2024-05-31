@@ -8,7 +8,7 @@ type OperationByNamespaces[kind Kind] struct {
 }
 
 // Add will decide where to add the plan, sourceName: latest state, targetName: current state
-func (o *OperationByNamespaces[Kind]) Add(namespace string, sourceName, targetName string, plan Kind) {
+func (o *OperationByNamespaces[Kind]) Add(namespace, sourceName, targetName string, plan Kind) {
 	plan.SetName(targetName)
 
 	if len(sourceName) > 0 && len(targetName) == 0 {
@@ -50,7 +50,7 @@ func (o *OperationByNamespaces[Kind]) getResult() OperationByNamespaces[Kind] {
 				migratePlan := createPlan
 				migratePlan.SetOldNamespace(oldNamespace)
 				migrateOperation.Append(namespace, migratePlan)
-				delete(deletePlans, namespace)
+				delete(deletePlans, oldNamespace)
 				deleteOperation[kindName] = deletePlans
 				if len(deletePlans) == 0 {
 					delete(deleteOperation, kindName)

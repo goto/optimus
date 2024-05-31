@@ -33,7 +33,7 @@ type planCommand struct {
 	clientConfig   *config.ClientConfig
 	specReadWriter local.SpecReadWriter[*model.JobSpec]
 
-	syncAll        bool
+	syncAll        bool // TODO: implement it:
 	verbose        bool
 	output         string
 	configFilePath string
@@ -122,15 +122,12 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		err   error
 	)
 
-	if p.syncAll {
-		// TODO: implement it:
-	} else {
-		plans, err = p.generatePlanWithGitDiff(ctx)
-	}
+	plans, err = p.generatePlanWithGitDiff(ctx)
 	if err != nil {
 		return err
 	}
 
+	p.printPlan(plans)
 	return p.savePlan(plans)
 }
 
@@ -169,7 +166,8 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 		return nil, err
 	}
 
-	affectedDirectories := make([]string, 0, len(diffs)*2)
+	twice := 2
+	affectedDirectories := make([]string, 0, len(diffs)*twice)
 	for i := range diffs {
 		affectedDirectories = append(affectedDirectories, diffs[i].OldPath, diffs[i].NewPath)
 	}
@@ -188,7 +186,7 @@ func (p *planCommand) getNamespaceNameByJobPath(directory string) (string, error
 	return "", fmt.Errorf("failed to find namespace specified on directory: %s", directory)
 }
 
-func (p *planCommand) getJobSpec(ctx context.Context, fileName string, ref string) (model.JobSpec, error) {
+func (p *planCommand) getJobSpec(ctx context.Context, fileName, ref string) (model.JobSpec, error) {
 	var spec model.JobSpec
 	raw, err := p.repository.GetFileContent(ctx, p.projectID, ref, fileName)
 	if err != nil {

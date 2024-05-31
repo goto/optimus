@@ -7,17 +7,18 @@ type OperationByNamespaces[kind Kind] struct {
 	Migrate MapByNamespace[kind] `json:"migrate"`
 }
 
+// Add will decide where to add the plan, sourceName: latest state, targetName: current state
 func (o *OperationByNamespaces[Kind]) Add(namespace string, sourceName, targetName string, plan Kind) {
 	plan.SetName(targetName)
 
 	if len(sourceName) > 0 && len(targetName) == 0 {
 		plan.SetName(sourceName)
-		o.Delete.Append(namespace, plan)
+		o.Create.Append(namespace, plan)
 		return
 	}
 
 	if len(sourceName) == 0 && len(targetName) > 0 {
-		o.Create.Append(namespace, plan)
+		o.Delete.Append(namespace, plan)
 		return
 	}
 
@@ -58,15 +59,21 @@ func (o *OperationByNamespaces[Kind]) getResult() OperationByNamespaces[Kind] {
 			}
 		}
 
-		for namespace, deletePlan := range deleteOperation[kindName] {
+		delete(createOperation, kindName)
+	}
+
+	for _, deletePlans := range deleteOperation {
+		for namespace, deletePlan := range deletePlans {
 			result.Delete.Append(namespace, deletePlan)
 		}
-		delete(deleteOperation, kindName)
-		delete(createOperation, kindName)
 	}
 
 	result.Migrate = migrateOperation
 	return result
+}
+
+func (o OperationByNamespaces[Kind]) IsZero() bool {
+	return o.Create.IsZero() && o.Update.IsZero() && o.Delete.IsZero() && o.Migrate.IsZero()
 }
 
 func NewOperationByNamespace[T Kind]() OperationByNamespaces[T] {

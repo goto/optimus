@@ -42,4 +42,13 @@ func (p *MapByNamespace[Kind]) Append(namespace string, newPlan Kind) {
 	return
 }
 
+func (p *MapByNamespace[Kind]) IsZero() bool {
+	if p == nil {
+		return true
+	}
+
+	value := *p
+	return value == nil || len(value) == 0
+}
+
 func NewMapByNamespace[kind Kind]() MapByNamespace[kind] { return make(MapByNamespace[kind]) }

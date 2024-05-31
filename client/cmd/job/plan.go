@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +38,8 @@ type planCommand struct {
 	output         string
 	configFilePath string
 
-	sourceRef, targetRef          string
+	sourceRef                     string // sourceRef is new state
+	targetRef                     string // targetRef is current state
 	gitURL, gitToken, gitProvider string
 	projectID                     string
 	repository                    providermodel.RepositoryAPI
@@ -63,7 +65,7 @@ optimus job plan --source <source_ref> --target <target_ref>   # Create Plan usi
 
 func (p *planCommand) inject(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&p.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
-	cmd.Flags().StringVarP(&p.output, "output", "o", "./resource.json", "File path for output of plan")
+	cmd.Flags().StringVarP(&p.output, "output", "o", "./plan.json", "File path for output of plan")
 	cmd.Flags().BoolVarP(&p.verbose, "verbose", "v", false, "Print details related to operation")
 
 	cmd.Flags().StringVarP(&p.gitProvider, "git-provider", "p", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
@@ -162,7 +164,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 }
 
 func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error) {
-	diffs, err := p.repository.CompareDiff(ctx, p.projectID, p.sourceRef, p.targetRef)
+	diffs, err := p.repository.CompareDiff(ctx, p.projectID, p.targetRef, p.sourceRef)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +237,13 @@ func (p *planCommand) savePlan(plans plan.Plan) error {
 		return err
 	}
 	defer file.Close()
+
+	existingBytes, _ := io.ReadAll(file)
+	var existingPlan plan.Plan
+	_ = json.Unmarshal(existingBytes, &existingBytes)
+	if existingPlan.ProjectName == plans.ProjectName && plans.Resource.IsZero() {
+		plans.Resource = existingPlan.Resource
+	}
 
 	_ = file.Truncate(0)
 	_, _ = file.Seek(0, 0)

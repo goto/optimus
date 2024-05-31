@@ -14,11 +14,11 @@ type API struct {
 	repositoryFile RepositoryFile
 }
 
-func (api *API) CompareDiff(ctx context.Context, projectID any, fromRef, toRef string) ([]*model.Diff, error) {
+func (api *API) CompareDiff(ctx context.Context, projectID any, target, source string) ([]*model.Diff, error) {
 	var (
 		compareOption = &gitlab.CompareOptions{
-			From:     gitlab.Ptr(fromRef),
-			To:       gitlab.Ptr(toRef),
+			From:     gitlab.Ptr(target),
+			To:       gitlab.Ptr(source),
 			Straight: gitlab.Ptr(true),
 			Unidiff:  gitlab.Ptr(true),
 		}

@@ -102,7 +102,7 @@ func TestAPI_CompareDiff(t *testing.T) {
 		mockRepo.On("CompareCommits", ctx, owner, repo, destination, source, pagination).
 			Return(compareResp, resp, nil)
 
-		diff, err := api.CompareDiff(ctx, projectID, source, destination)
+		diff, err := api.CompareDiff(ctx, projectID, destination, source)
 		assert.NoError(t, err)
 		assert.Len(t, diff, 1)
 		assert.Empty(t, diff[0].OldPath)
@@ -121,7 +121,7 @@ func TestAPI_CompareDiff(t *testing.T) {
 		mockRepo.On("CompareCommits", ctx, owner, repo, destination, source, pagination).
 			Return(nil, resp, context.DeadlineExceeded)
 
-		diff, err := api.CompareDiff(ctx, projectID, source, destination)
+		diff, err := api.CompareDiff(ctx, projectID, destination, source)
 		assert.Error(t, err)
 		assert.Empty(t, diff)
 	})
@@ -131,7 +131,7 @@ func TestAPI_CompareDiff(t *testing.T) {
 		api := githubapi.NewGitHubAPI(mockRepo)
 		defer mockRepo.AssertExpectations(t)
 
-		diff, err := api.CompareDiff(ctx, "project-id-1", source, destination)
+		diff, err := api.CompareDiff(ctx, "project-id-1", destination, source)
 		assert.Error(t, err)
 		assert.Empty(t, diff)
 	})

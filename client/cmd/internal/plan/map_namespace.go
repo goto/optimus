@@ -39,7 +39,6 @@ func (p *MapByNamespace[Kind]) Append(namespace string, newPlan Kind) {
 	plans := plansByNamespace[namespace]
 	plansByNamespace[namespace] = append(plans, newPlan)
 	*p = plansByNamespace
-	return
 }
 
 func (p *MapByNamespace[Kind]) IsZero() bool {
@@ -48,7 +47,7 @@ func (p *MapByNamespace[Kind]) IsZero() bool {
 	}
 
 	value := *p
-	return value == nil || len(value) == 0
+	return len(value) == 0
 }
 
 func NewMapByNamespace[kind Kind]() MapByNamespace[kind] { return make(MapByNamespace[kind]) }

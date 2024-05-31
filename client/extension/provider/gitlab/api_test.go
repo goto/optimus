@@ -20,8 +20,8 @@ func TestAPI_CompareDiff(t *testing.T) {
 		source        = "feat-update"
 		destination   = "master"
 		compareOption = &gitlab.CompareOptions{
-			From:     gitlab.Ptr(source),
-			To:       gitlab.Ptr(destination),
+			From:     gitlab.Ptr(destination),
+			To:       gitlab.Ptr(source),
 			Straight: gitlab.Ptr(true),
 			Unidiff:  gitlab.Ptr(true),
 		}
@@ -46,7 +46,7 @@ func TestAPI_CompareDiff(t *testing.T) {
 		mockRepo.On("Compare", projectID, compareOption, mock.Anything).
 			Return(compareResp, nil, nil)
 
-		actualDiff, err := api.CompareDiff(ctx, projectID, source, destination)
+		actualDiff, err := api.CompareDiff(ctx, projectID, destination, source)
 		assert.NoError(t, err)
 		assert.Len(t, actualDiff, 1)
 		assert.Equal(t, actualDiff[0].OldPath, "go.mod.sum")
@@ -65,7 +65,7 @@ func TestAPI_CompareDiff(t *testing.T) {
 		mockRepo.On("Compare", projectID, compareOption, mock.Anything).
 			Return(nil, nil, context.DeadlineExceeded)
 
-		actualDiff, err := api.CompareDiff(ctx, projectID, source, destination)
+		actualDiff, err := api.CompareDiff(ctx, projectID, destination, source)
 		assert.Error(t, err)
 		assert.Empty(t, actualDiff)
 	})

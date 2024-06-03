@@ -5,6 +5,7 @@ run:
   skip-dirs:
     - api/proto
     - api/third_party
+    - internal/utils
 output:
   format: colored-line-number
 linters:

@@ -414,16 +414,16 @@ func (v *validateCommand) runValidateUsingPlan(jobPlan *plan.Plan) error {
 		return err
 	}
 
-	if err := v.executeServerValidationByPlanOperation(jobPlan.Job.Create.GetPlansByNamespaceName(), false); err != nil {
+	if err := v.executeServerValidationByNamespaces(jobPlan.Job.Create.GetPlansByNamespaceName(), false); err != nil {
 		return err
 	}
-	if err := v.executeServerValidationByPlanOperation(jobPlan.Job.Update.GetPlansByNamespaceName(), false); err != nil {
+	if err := v.executeServerValidationByNamespaces(jobPlan.Job.Update.GetPlansByNamespaceName(), false); err != nil {
 		return err
 	}
-	return v.executeServerValidationByPlanOperation(jobPlan.Job.Delete.GetPlansByNamespaceName(), true)
+	return v.executeServerValidationByNamespaces(jobPlan.Job.Delete.GetPlansByNamespaceName(), true)
 }
 
-func (v *validateCommand) executeServerValidationByPlanOperation(jobNamesByNamespace map[string][]string, fromServer bool) error {
+func (v *validateCommand) executeServerValidationByNamespaces(jobNamesByNamespace map[string][]string, fromServer bool) error {
 	for namespace, jobNames := range jobNamesByNamespace {
 		namespaceConfig, err := v.clientConfig.GetNamespaceByName(namespace)
 		if err != nil {

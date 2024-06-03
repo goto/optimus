@@ -8,7 +8,7 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/plan"
 )
 
-func assertMapPlanMatch[kind plan.Kind](t *testing.T, m1, m2 plan.MapByNamespace[kind]) {
+func assertMapPlanMatch[kind plan.Kind](t *testing.T, m1, m2 plan.ListByNamespace[kind]) {
 	t.Helper()
 	assert.Equal(t, len(m1), len(m2))
 	for namespace, plans := range m1 {
@@ -33,7 +33,7 @@ func TestPlanGetResult(t *testing.T) {
 		expected := plan.Plan{
 			ProjectName: projectName,
 			Job: plan.OperationByNamespaces[*plan.JobPlan]{
-				Migrate: plan.MapByNamespace[*plan.JobPlan]{
+				Migrate: plan.ListByNamespace[*plan.JobPlan]{
 					namespace2: {{Name: job1, OldNamespace: &namespace1}},
 				},
 			},
@@ -60,15 +60,15 @@ func TestPlanGetResult(t *testing.T) {
 		expected := plan.Plan{
 			ProjectName: projectName,
 			Job: plan.OperationByNamespaces[*plan.JobPlan]{
-				Create: plan.MapByNamespace[*plan.JobPlan]{
+				Create: plan.ListByNamespace[*plan.JobPlan]{
 					namespace1: {{Name: "job-1", OldNamespace: nil}},
 					namespace2: {{Name: "job-1", OldNamespace: nil}},
 				},
-				Update: plan.MapByNamespace[*plan.JobPlan]{
+				Update: plan.ListByNamespace[*plan.JobPlan]{
 					namespace1: {{Name: "job-2", OldNamespace: nil}},
 					namespace2: {{Name: "job-2", OldNamespace: nil}},
 				},
-				Delete: plan.MapByNamespace[*plan.JobPlan]{
+				Delete: plan.ListByNamespace[*plan.JobPlan]{
 					namespace1: {{Name: "job-3", OldNamespace: nil}},
 					namespace2: {{Name: "job-3", OldNamespace: nil}},
 				},
@@ -95,15 +95,15 @@ func TestPlanGetResult(t *testing.T) {
 		expected := plan.Plan{
 			ProjectName: projectName,
 			Job: plan.OperationByNamespaces[*plan.JobPlan]{
-				Create: plan.MapByNamespace[*plan.JobPlan]{
+				Create: plan.ListByNamespace[*plan.JobPlan]{
 					namespace2: {{Name: "job-3", OldNamespace: nil}},
 				},
-				Update: plan.MapByNamespace[*plan.JobPlan]{
+				Update: plan.ListByNamespace[*plan.JobPlan]{
 					namespace1: {{Name: "job-2", OldNamespace: nil}},
 					namespace2: {{Name: "job-2", OldNamespace: nil}},
 				},
-				Delete: plan.MapByNamespace[*plan.JobPlan]{},
-				Migrate: plan.MapByNamespace[*plan.JobPlan]{
+				Delete: plan.ListByNamespace[*plan.JobPlan]{},
+				Migrate: plan.ListByNamespace[*plan.JobPlan]{
 					namespace1: {{Name: "job-1", OldNamespace: &namespace2}},
 				},
 			},
@@ -129,15 +129,15 @@ func TestPlanGetResult(t *testing.T) {
 		expected := plan.Plan{
 			ProjectName: projectName,
 			Job: plan.OperationByNamespaces[*plan.JobPlan]{
-				Create: plan.MapByNamespace[*plan.JobPlan]{
+				Create: plan.ListByNamespace[*plan.JobPlan]{
 					namespace2: {{Name: "job-3", OldNamespace: nil}},
 				},
-				Update: plan.MapByNamespace[*plan.JobPlan]{
+				Update: plan.ListByNamespace[*plan.JobPlan]{
 					namespace1: {{Name: "job-2", OldNamespace: nil}},
 					namespace2: {{Name: "job-2", OldNamespace: nil}},
 				},
-				Delete: plan.MapByNamespace[*plan.JobPlan]{},
-				Migrate: plan.MapByNamespace[*plan.JobPlan]{
+				Delete: plan.ListByNamespace[*plan.JobPlan]{},
+				Migrate: plan.ListByNamespace[*plan.JobPlan]{
 					namespace2: {{Name: "job-1", OldNamespace: &namespace1}},
 				},
 			},
@@ -164,12 +164,12 @@ func TestPlanGetResult(t *testing.T) {
 		expected := plan.Plan{
 			ProjectName: projectName,
 			Job: plan.OperationByNamespaces[*plan.JobPlan]{
-				Create: plan.MapByNamespace[*plan.JobPlan]{
+				Create: plan.ListByNamespace[*plan.JobPlan]{
 					namespace2: {{Name: job1, OldNamespace: nil}},
 				},
-				Update: plan.MapByNamespace[*plan.JobPlan]{},
-				Delete: plan.MapByNamespace[*plan.JobPlan]{},
-				Migrate: plan.MapByNamespace[*plan.JobPlan]{
+				Update: plan.ListByNamespace[*plan.JobPlan]{},
+				Delete: plan.ListByNamespace[*plan.JobPlan]{},
+				Migrate: plan.ListByNamespace[*plan.JobPlan]{
 					namespace3: {{Name: job1, OldNamespace: &namespace1}},
 					namespace5: {{Name: job1, OldNamespace: &namespace4}},
 				},

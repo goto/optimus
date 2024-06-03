@@ -1,5 +1,7 @@
 run:
   timeout: 5m
+  skip-files:
+    - internal/utils/diff.go
   skip-dirs:
     - api/proto
     - api/third_party

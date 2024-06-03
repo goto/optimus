@@ -402,7 +402,7 @@ func (v *validateCommand) storeJobPlan() error {
 }
 
 func (v *validateCommand) invalidPlanFlag() bool {
-	return v.forDelete || !v.fromServer || v.namespaceName != "" || len(v.jobNames) > 0
+	return v.forDelete || v.fromServer || v.namespaceName != "" || len(v.jobNames) > 0
 }
 
 func (v *validateCommand) runValidateUsingPlan(jobPlan *plan.Plan) error {

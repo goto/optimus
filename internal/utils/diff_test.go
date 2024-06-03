@@ -30,6 +30,7 @@ type Type1 struct {
 }
 
 func assertDiff(t *testing.T, expected map[string]string, diff []utils.Diff) {
+	t.Helper()
 	assert.Equal(t, len(expected), len(diff))
 	for _, d := range diff {
 		_, ok := expected[d.Field]

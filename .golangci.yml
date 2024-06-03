@@ -54,7 +54,6 @@ linters:
     - musttag
     - interfacebloat
     - testifylint
-    - thelper
     - inamedparam
     - goconst
     - gosmopolitan

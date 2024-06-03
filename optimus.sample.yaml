@@ -38,7 +38,9 @@ project:
 #    # relative path where resource spec for BQ are stored
 #    path: "bq"
 #  # namespace variables usable in specifications
-#  config: {}
+#  config: 
+#    # for bq-related jobs, execution project specific to replay jobs are stored here
+#    replay_execution_project: "data_replay_project"
 #- name: sample_namespace_2
 #  job:
 #    path: "ns2/job"

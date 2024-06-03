@@ -76,6 +76,29 @@ func (o OperationByNamespaces[Kind]) IsZero() bool {
 	return o.Create.IsZero() && o.Update.IsZero() && o.Delete.IsZero() && o.Migrate.IsZero()
 }
 
+func (o OperationByNamespaces[kind]) GetAllNamespaces() []string {
+	namespaces := make([]string, 0)
+	namespaceExists := make(map[string]bool)
+
+	appendDistinct := func(res []string, elements ...string) []string {
+		for _, namespace := range elements {
+			if namespaceExists[namespace] {
+				continue
+			}
+			res = append(res, namespace)
+			namespaceExists[namespace] = true
+		}
+		return res
+	}
+
+	namespaces = appendDistinct(namespaces, o.Create.GetAllNamespaces()...)
+	namespaces = appendDistinct(namespaces, o.Update.GetAllNamespaces()...)
+	namespaces = appendDistinct(namespaces, o.Delete.GetAllNamespaces()...)
+	namespaces = appendDistinct(namespaces, o.Migrate.GetAllNamespaces()...)
+
+	return namespaces
+}
+
 func NewOperationByNamespace[T Kind]() OperationByNamespaces[T] {
 	return OperationByNamespaces[T]{
 		Create:  NewMapByNamespace[T](),

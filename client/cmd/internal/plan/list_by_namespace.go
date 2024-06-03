@@ -1,8 +1,8 @@
 package plan
 
-type MapByNamespace[plan Kind] map[string][]plan
+type ListByNamespace[plan Kind] map[string][]plan
 
-func (p *MapByNamespace[Kind]) GetAll() []Kind {
+func (p *ListByNamespace[Kind]) GetAll() []Kind {
 	res := make([]Kind, 0)
 	for _, plans := range *p {
 		res = append(res, plans...)
@@ -10,7 +10,16 @@ func (p *MapByNamespace[Kind]) GetAll() []Kind {
 	return res
 }
 
-func (p *MapByNamespace[Kind]) GetPlansByNamespaceName() map[string][]string {
+func (p *ListByNamespace[Kind]) GetByNamespace(namespace string) []Kind {
+	for planNamespace, plans := range *p {
+		if namespace == planNamespace {
+			return plans
+		}
+	}
+	return nil
+}
+
+func (p *ListByNamespace[Kind]) GetPlansByNamespaceName() map[string][]string {
 	planByNamespaceName := make(map[string][]string)
 	for namespace, plans := range *p {
 		var names []string
@@ -22,16 +31,7 @@ func (p *MapByNamespace[Kind]) GetPlansByNamespaceName() map[string][]string {
 	return planByNamespaceName
 }
 
-func (p *MapByNamespace[Kind]) GetByNamespace(namespace string) []Kind {
-	for planNamespace, plans := range *p {
-		if namespace == planNamespace {
-			return plans
-		}
-	}
-	return nil
-}
-
-func (p *MapByNamespace[Kind]) GetAllNamespaces() []string {
+func (p *ListByNamespace[Kind]) GetAllNamespaces() []string {
 	res := make([]string, 0)
 	exists := make(map[string]bool)
 	for namespace := range *p {
@@ -44,7 +44,7 @@ func (p *MapByNamespace[Kind]) GetAllNamespaces() []string {
 	return res
 }
 
-func (p *MapByNamespace[Kind]) getMapByNameAndNamespace() map[string]map[string]Kind {
+func (p *ListByNamespace[Kind]) getMapByNameAndNamespace() map[string]map[string]Kind {
 	planByNameAndNamespace := make(map[string]map[string]Kind)
 	for namespace, plans := range *p {
 		for _, plan := range plans {
@@ -59,14 +59,14 @@ func (p *MapByNamespace[Kind]) getMapByNameAndNamespace() map[string]map[string]
 	return planByNameAndNamespace
 }
 
-func (p *MapByNamespace[Kind]) Append(namespace string, newPlan Kind) {
+func (p *ListByNamespace[Kind]) Append(namespace string, newPlan Kind) {
 	plansByNamespace := *p
 	plans := plansByNamespace[namespace]
 	plansByNamespace[namespace] = append(plans, newPlan)
 	*p = plansByNamespace
 }
 
-func (p *MapByNamespace[Kind]) IsZero() bool {
+func (p *ListByNamespace[Kind]) IsZero() bool {
 	if p == nil {
 		return true
 	}
@@ -75,4 +75,4 @@ func (p *MapByNamespace[Kind]) IsZero() bool {
 	return len(value) == 0
 }
 
-func NewMapByNamespace[kind Kind]() MapByNamespace[kind] { return make(MapByNamespace[kind]) }
+func NewListByNamespace[kind Kind]() ListByNamespace[kind] { return make(ListByNamespace[kind]) }

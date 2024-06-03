@@ -13,6 +13,7 @@ linters:
   disable:
     # Rules to review
     - varnamelen
+    - goanalysis_metalinter
     - wrapcheck
     - tagliatelle
     - paralleltest

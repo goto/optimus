@@ -19,6 +19,19 @@ func (p *MapByNamespace[Kind]) GetByNamespace(namespace string) []Kind {
 	return nil
 }
 
+func (p *MapByNamespace[Kind]) GetAllNamespaces() []string {
+	res := make([]string, 0)
+	exists := make(map[string]bool)
+	for namespace := range *p {
+		if exists[namespace] {
+			continue
+		}
+		res = append(res, namespace)
+		exists[namespace] = true
+	}
+	return res
+}
+
 func (p *MapByNamespace[Kind]) getMapByNameAndNamespace() map[string]map[string]Kind {
 	planByNameAndNamespace := make(map[string]map[string]Kind)
 	for namespace, plans := range *p {

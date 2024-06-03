@@ -13,7 +13,7 @@ const (
 	EQ  operation = "eq"
 )
 
-func GetMyersDiff(src, dst []string) string {
+func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
 
 	script := shortestEditScript(src, dst)
 
@@ -51,7 +51,7 @@ func GetMyersDiff(src, dst []string) string {
 	}
 
 	eqDiffLookAheadLR := make([]int, len(changeBuffer))
-	var eqObserverSoFar = 2
+	var eqObserverSoFar = maxNeighbouringLines + 1
 	for i, delta := range changeBuffer {
 		switch delta.Op {
 		case SUB, ADD:
@@ -82,8 +82,8 @@ func GetMyersDiff(src, dst []string) string {
 		case SUB:
 			buffer = append(buffer, fmt.Sprintf("- %s", changeBuffer[i].Text))
 		case EQ:
-			if eqDiffLookAheadRL[i] < 2 || eqDiffLookAheadLR[i] < 2 {
-				buffer = append(buffer, fmt.Sprintf(" %s", changeBuffer[i].Text))
+			if eqDiffLookAheadRL[i] < maxNeighbouringLines || eqDiffLookAheadLR[i] < maxNeighbouringLines {
+				buffer = append(buffer, fmt.Sprintf("  %s", changeBuffer[i].Text))
 				skippingHunk = false
 			} else {
 				if !skippingHunk {
@@ -94,6 +94,9 @@ func GetMyersDiff(src, dst []string) string {
 		case ADD:
 			buffer = append(buffer, fmt.Sprintf("+ %s", changeBuffer[i].Text))
 		}
+	}
+	if len(buffer) == 1 && buffer[0] == "......" {
+		return ""
 	}
 	return strings.Join(buffer, "\n")
 }

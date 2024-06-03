@@ -64,7 +64,7 @@ func compareLargeStrings(prefix AttributePath, text1, text2 string) (stringDiff 
 		}
 	}()
 
-	unifiedDiff := GetMyersDiff(strings.Split(text1, "\n"), strings.Split(text2, "\n"))
+	unifiedDiff := GetMyersDiff(strings.Split(text1, "\n"), strings.Split(text2, "\n"), 2)
 
 	if len(unifiedDiff) > maxStringDiffLength {
 		unifiedDiff = unifiedDiff[:maxStringDiffLength] + "\n ...\n Diff Truncated due to huge size..."
@@ -101,7 +101,7 @@ func compareString(prefix AttributePath, text1, text2 string) []Diff {
 }
 
 // compareList remove all unchanged items and return an associative array
-func compareList[V any](prefix AttributePath, list1, list2 []V, opt *CmpOptions) []Diff {
+func compareList[V any](prefix AttributePath, list1, list2 []V, opt *CmpOptions) []Diff { //nolint
 	list1Dict := make(map[uint64]elementTracker[V])
 	list2Dict := make(map[uint64]elementTracker[V])
 	// make map of all items that are there in list1
@@ -150,7 +150,7 @@ func compareList[V any](prefix AttributePath, list1, list2 []V, opt *CmpOptions)
 	}}
 }
 
-func nestedMapDiff(prefix AttributePath, map1, map2 reflect.Value, opt *CmpOptions) []Diff {
+func nestedMapDiff(prefix AttributePath, map1, map2 reflect.Value, opt *CmpOptions) []Diff { //nolint
 	var diffs []Diff
 	map1Keys := map1.MapKeys()
 	map2Keys := map2.MapKeys()

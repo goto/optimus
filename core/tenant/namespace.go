@@ -12,7 +12,7 @@ func NamespaceNameFrom(name string) (NamespaceName, error) {
 	if name == "" {
 		return "", errors.InvalidArgument(EntityNamespace, "namespace name is empty")
 	}
-	//TODO: add condition, that namespace name should not have "." as this will break the standard URN design
+	// TODO: add condition, that namespace name should not have "." as this will break the standard URN design
 	return NamespaceName(name), nil
 }
 

@@ -1,11 +1,8 @@
 run:
   timeout: 5m
-  skip-files:
-    - internal/utils/diff.go
   skip-dirs:
     - api/proto
     - api/third_party
-    - internal/utils
 output:
   format: colored-line-number
 linters:
@@ -13,7 +10,6 @@ linters:
   disable:
     # Rules to review
     - varnamelen
-    - goanalysis_metalinter
     - wrapcheck
     - tagliatelle
     - paralleltest
@@ -38,6 +34,8 @@ linters:
     - structcheck
     - wastedassign
     - gomoddirectives
+    - depguard
+    - protogetter
 
     # Following linters should be enabled after fixing the code
     - cyclop
@@ -55,6 +53,12 @@ linters:
     - nolintlint
     - musttag
     - interfacebloat
+    - testifylint
+    - thelper
+    - inamedparam
+    - goconst
+    - gosmopolitan
+    - perfsprint
 linters-settings:
   gofumpt:
     lang-version: "1.18"

@@ -34,7 +34,6 @@ func assertDiff(t *testing.T, expected map[string]string, diff []utils.Diff) {
 	for _, d := range diff {
 		_, ok := expected[d.Field]
 		assert.True(t, ok, "%s was not expected to be in diff", d)
-
 	}
 	for key, msg := range expected {
 		var found bool
@@ -49,7 +48,6 @@ func assertDiff(t *testing.T, expected map[string]string, diff []utils.Diff) {
 }
 
 func TestGetDiffs(t *testing.T) {
-
 	type3Object := Type3{
 		Type31: "baseValue",
 		Type32: -12,
@@ -72,7 +70,6 @@ func TestGetDiffs(t *testing.T) {
 	}
 	t.Run("get diff of two interface of same kind", func(t *testing.T) {
 		t.Run("case involving maps and raw json", func(t *testing.T) {
-
 			type newType4 string
 
 			type newType3 struct {
@@ -209,7 +206,6 @@ func TestGetDiffs(t *testing.T) {
 				assertDiff(t, expectedDiff, diffs)
 			})
 			t.Run("if both the pointers are not nil", func(t *testing.T) {
-
 				t.Run("non identical", func(t *testing.T) {
 					newType3Object := Type3{
 						Type31: "baseValue",
@@ -260,7 +256,6 @@ func TestGetDiffs(t *testing.T) {
 					"Field2":        "integer comparison",
 				}
 				assertDiff(t, expectedDiff, diffs)
-
 			})
 			t.Run("comparing Large texts should return unified diffs", func(t *testing.T) {
 				text1 := `
@@ -419,7 +414,6 @@ metadata:
 				}
 				assert.True(t, diffs[0].IsDiffTypeUnified())
 				assertDiff(t, expectedDiff, diffs)
-
 			})
 			t.Run("comparing Large texts should return unified diffs1", func(t *testing.T) {
 				text1 := "select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;select\n    EXTRACT(DAY FROM CURRENT_TIMESTAMP()) + 8000 as `column1`,\n    CAST(\"{{ .EXECUTION_TIME }}\" AS TIMESTAMP) as `column2`;"
@@ -445,7 +439,6 @@ metadata:
 				}
 				assert.True(t, diffs[0].IsDiffTypeUnified())
 				assertDiff(t, expectedDiff, diffs)
-
 			})
 
 			t.Run("comparing small texts should return non unified diffs", func(t *testing.T) {
@@ -476,7 +469,6 @@ def apple():
 				}
 				assert.False(t, diffs[0].IsDiffTypeUnified())
 				assertDiff(t, expectedDiff, diffs)
-
 			})
 			t.Run("if an array ", func(t *testing.T) {
 				newBaseObject := Type1{
@@ -571,7 +563,5 @@ def apple():
 				})
 			})
 		})
-
 	})
-
 }

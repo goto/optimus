@@ -126,13 +126,13 @@ func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	if resp.Message != "" {
 		message = fmt.Sprintf(" (%s)", resp.Message)
 	}
-	buff.WriteString(fmt.Sprintf("Job Name      : %s\n", resp.GetJobName()))
-	buff.WriteString(fmt.Sprintf("Replay Mode   : %s\n", mode))
-	buff.WriteString(fmt.Sprintf("Description   : %s\n", resp.ReplayConfig.GetDescription()))
-	buff.WriteString(fmt.Sprintf("Start Date    : %s\n", resp.ReplayConfig.GetStartTime().AsTime().Format(time.RFC3339)))
-	buff.WriteString(fmt.Sprintf("End Date      : %s\n", resp.ReplayConfig.GetEndTime().AsTime().Format(time.RFC3339)))
-	buff.WriteString(fmt.Sprintf("Replay Status : %s%s\n", resp.GetStatus(), message))
-	buff.WriteString(fmt.Sprintf("Total Runs    : %d\n\n", len(resp.GetReplayRuns())))
+	fmt.Fprintf(buff, "Job Name      : %s\n", resp.GetJobName())
+	fmt.Fprintf(buff, "Replay Mode   : %s\n", mode)
+	fmt.Fprintf(buff, "Description   : %s\n", resp.ReplayConfig.GetDescription())
+	fmt.Fprintf(buff, "Start Date    : %s\n", resp.ReplayConfig.GetStartTime().AsTime().Format(time.RFC3339))
+	fmt.Fprintf(buff, "End Date      : %s\n", resp.ReplayConfig.GetEndTime().AsTime().Format(time.RFC3339))
+	fmt.Fprintf(buff, "Replay Status : %s%s\n", resp.GetStatus(), message)
+	fmt.Fprintf(buff, "Total Runs    : %d\n\n", len(resp.GetReplayRuns()))
 
 	if len(resp.ReplayConfig.GetJobConfig()) > 0 {
 		stringifyReplayConfig(buff, resp.ReplayConfig.GetJobConfig())

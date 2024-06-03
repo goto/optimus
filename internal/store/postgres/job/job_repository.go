@@ -251,7 +251,6 @@ func (j JobRepository) preCheckUpdate(ctx context.Context, jobEntity *job.Job) e
 }
 
 func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) (ChangeLog, error) {
-	//Attributes to Ignore
 	toIgnore := map[string]struct{}{
 		"ID":        {},
 		"CreatedAt": {},
@@ -288,7 +287,6 @@ func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) (ChangeLog, error) 
 }
 
 func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, projectName tenant.ProjectName, changeLog ChangeLog) error {
-
 	changeLogBytes, err := json.Marshal(changeLog)
 	if err != nil {
 		return err

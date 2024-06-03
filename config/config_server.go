@@ -13,8 +13,8 @@ type ServerConfig struct {
 }
 
 type Serve struct {
-	Port            int      `mapstructure:"port" default:"9100"` // port to listen on
-	IngressHost     string   `mapstructure:"ingress_host"`        // service ingress host for jobs to communicate back to optimus
+	Port            int      `default:"9100"                   mapstructure:"port"` // port to listen on
+	IngressHost     string   `mapstructure:"ingress_host"`                          // service ingress host for jobs to communicate back to optimus
 	PortGRPC        int      `mapstructure:"port_grpc"`
 	IngressHostGRPC string   `mapstructure:"ingress_host_grpc"`
 	AppKey          string   `mapstructure:"app_key"` // random 32 character hash used for encrypting secrets
@@ -22,9 +22,9 @@ type Serve struct {
 }
 
 type DBConfig struct {
-	DSN               string `mapstructure:"dsn"`                              // data source name e.g.: postgres://user:password@host:123/database?sslmode=disable
-	MinOpenConnection int    `mapstructure:"min_open_connection" default:"5"`  // minimum open DB connections
-	MaxOpenConnection int    `mapstructure:"max_open_connection" default:"20"` // maximum allowed open DB connections
+	DSN               string `mapstructure:"dsn"`                                    // data source name e.g.: postgres://user:password@host:123/database?sslmode=disable
+	MinOpenConnection int    `default:"5"        mapstructure:"min_open_connection"` // minimum open DB connections
+	MaxOpenConnection int    `default:"20"       mapstructure:"max_open_connection"` // maximum allowed open DB connections
 }
 
 type TelemetryConfig struct {
@@ -61,12 +61,12 @@ type PluginConfig struct {
 }
 
 type ReplayConfig struct {
-	ReplayTimeoutInMinutes     int `mapstructure:"replay_timeout_in_minutes" default:"180"`
-	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"120"`
+	ReplayTimeoutInMinutes     int `default:"180" mapstructure:"replay_timeout_in_minutes"`
+	ExecutionIntervalInSeconds int `default:"120" mapstructure:"execution_interval_in_seconds"`
 }
 
 type Publisher struct {
-	Type   string      `mapstructure:"type" default:"kafka"`
+	Type   string      `default:"kafka"       mapstructure:"type"`
 	Buffer int         `mapstructure:"buffer"`
 	Config interface{} `mapstructure:"config"`
 }

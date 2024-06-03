@@ -1,3 +1,4 @@
+// nolint
 package utils
 
 import (
@@ -59,7 +60,7 @@ func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
 			eqObserverSoFar = 0
 		case EQ:
 			eqDiffLookAheadLR[i] = eqObserverSoFar
-			eqObserverSoFar = eqObserverSoFar + 1
+			eqObserverSoFar++
 		}
 	}
 	eqDiffLookAheadRL := make([]int, len(changeBuffer))
@@ -71,7 +72,7 @@ func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
 			eqObserverSoFar = 0
 		case EQ:
 			eqDiffLookAheadRL[i] = eqObserverSoFar
-			eqObserverSoFar = eqObserverSoFar + 1
+			eqObserverSoFar++
 		}
 	}
 

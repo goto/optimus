@@ -85,9 +85,9 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		}
 		v.logger.Info("validation complete !")
 		return nil
-	} else if fm.IsDir() {
-		return v.validateDir(v.path)
-	} else {
-		return errors.New("invalid path")
 	}
+	if fm.IsDir() {
+		return v.validateDir(v.path)
+	}
+	return errors.New("invalid path")
 }

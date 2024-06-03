@@ -23,8 +23,8 @@ const (
 )
 
 type LogConfig struct {
-	Level  LogLevel `mapstructure:"level" default:"INFO"` // log level - debug, info, warning, error, fatal
-	Format string   `mapstructure:"format"`               // format strategy - plain, json
+	Level  LogLevel `default:"INFO"        mapstructure:"level"` // log level - debug, info, warning, error, fatal
+	Format string   `mapstructure:"format"`                      // format strategy - plain, json
 }
 
 func (v Version) String() string {

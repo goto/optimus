@@ -23,7 +23,6 @@ this is line 9
 this is line 10
 `
 	t.Run("get diff of two empty files", func(t *testing.T) {
-
 		text11 := ``
 		text22 := ``
 		diff := utils.GetMyersDiff(strings.Split(text11, "\n"), strings.Split(text22, "\n"), 2)
@@ -31,14 +30,12 @@ this is line 10
 	})
 
 	t.Run("get diff of two identical files", func(t *testing.T) {
-
 		text2 := text1
 		diff := utils.GetMyersDiff(strings.Split(text1, "\n"), strings.Split(text2, "\n"), 1)
 		assert.Len(t, diff, 0)
 	})
 
 	t.Run("get diff of two files with rows re arranged", func(t *testing.T) {
-
 		text2 := `
 this is line 1
 this is line 2
@@ -64,7 +61,6 @@ this is line 10
 	})
 
 	t.Run("get diff rows re deleted", func(t *testing.T) {
-
 		text2 := `
 this is line 1
 this is line 2
@@ -136,5 +132,4 @@ this is line 10
   this is line 9
 ......`)
 	})
-
 }

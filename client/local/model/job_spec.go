@@ -113,8 +113,8 @@ type JobSpecMetadataResourceConfig struct {
 }
 
 type JobSpecMetadataAirflow struct {
-	Pool  string `yaml:"pool" json:"pool"`
-	Queue string `yaml:"queue" json:"queue"`
+	Pool  string `json:"pool"  yaml:"pool"`
+	Queue string `json:"queue" yaml:"queue"`
 }
 
 func (j *JobSpec) ToProto() *pb.JobSpecification {

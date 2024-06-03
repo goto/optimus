@@ -1,10 +1,10 @@
 package plan
 
 type OperationByNamespaces[kind Kind] struct {
-	Create  MapByNamespace[kind] `json:"create"`
-	Delete  MapByNamespace[kind] `json:"delete"`
-	Update  MapByNamespace[kind] `json:"update"`
-	Migrate MapByNamespace[kind] `json:"migrate"`
+	Create  ListByNamespace[kind] `json:"create"`
+	Delete  ListByNamespace[kind] `json:"delete"`
+	Update  ListByNamespace[kind] `json:"update"`
+	Migrate ListByNamespace[kind] `json:"migrate"`
 }
 
 // Add will decide where to add the plan, sourceName: latest state, targetName: current state
@@ -29,7 +29,7 @@ func (o *OperationByNamespaces[Kind]) getResult() OperationByNamespaces[Kind] {
 	var (
 		createOperation  = o.Create.getMapByNameAndNamespace()
 		deleteOperation  = o.Delete.getMapByNameAndNamespace()
-		migrateOperation = make(MapByNamespace[Kind])
+		migrateOperation = NewListByNamespace[Kind]()
 		result           = NewOperationByNamespace[Kind]()
 	)
 
@@ -101,9 +101,9 @@ func (o OperationByNamespaces[kind]) GetAllNamespaces() []string {
 
 func NewOperationByNamespace[T Kind]() OperationByNamespaces[T] {
 	return OperationByNamespaces[T]{
-		Create:  NewMapByNamespace[T](),
-		Delete:  NewMapByNamespace[T](),
-		Update:  NewMapByNamespace[T](),
-		Migrate: NewMapByNamespace[T](),
+		Create:  NewListByNamespace[T](),
+		Delete:  NewListByNamespace[T](),
+		Update:  NewListByNamespace[T](),
+		Migrate: NewListByNamespace[T](),
 	}
 }

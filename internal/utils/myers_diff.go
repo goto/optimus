@@ -14,7 +14,6 @@ const (
 )
 
 func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
-
 	script := shortestEditScript(src, dst)
 
 	srcIndex, dstIndex := 0, 0
@@ -32,26 +31,26 @@ func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
 				Op:   op,
 				Text: dst[dstIndex],
 			})
-			dstIndex += 1
+			dstIndex++
 		case EQ:
 			changeBuffer = append(changeBuffer, stringChange{
 				Op:   op,
 				Text: src[srcIndex],
 			})
-			srcIndex += 1
-			dstIndex += 1
+			srcIndex++
+			dstIndex++
 
 		case SUB:
 			changeBuffer = append(changeBuffer, stringChange{
 				Op:   op,
 				Text: src[srcIndex],
 			})
-			srcIndex += 1
+			srcIndex++
 		}
 	}
 
 	eqDiffLookAheadLR := make([]int, len(changeBuffer))
-	var eqObserverSoFar = maxNeighbouringLines + 1
+	eqObserverSoFar := maxNeighbouringLines + 1
 	for i, delta := range changeBuffer {
 		switch delta.Op {
 		case SUB, ADD:
@@ -59,7 +58,7 @@ func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
 			eqObserverSoFar = 0
 		case EQ:
 			eqDiffLookAheadLR[i] = eqObserverSoFar
-			eqObserverSoFar = eqObserverSoFar + 1
+			eqObserverSoFar++
 		}
 	}
 	eqDiffLookAheadRL := make([]int, len(changeBuffer))
@@ -71,7 +70,7 @@ func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
 			eqObserverSoFar = 0
 		case EQ:
 			eqDiffLookAheadRL[i] = eqObserverSoFar
-			eqObserverSoFar = eqObserverSoFar + 1
+			eqObserverSoFar++
 		}
 	}
 
@@ -110,7 +109,7 @@ func shortestEditScript(src, dst []string) []operation {
 
 loop:
 	for d := 0; d <= max; d++ {
-		v := make(map[int]int, d+2)
+		v := make(map[int]int, d+2) //nolint: gomnd
 		trace = append(trace, v)
 		if d == 0 {
 			t := 0
@@ -118,7 +117,7 @@ loop:
 				t++
 			}
 			v[0] = t
-			if t == len(src) && t == len(dst) {
+			if t == len(src) && t == len(dst) { //nolint: gocritic
 				break loop
 			}
 			continue
@@ -158,8 +157,8 @@ loop:
 		prevY = prevX - prevK
 		for x > prevX && y > prevY {
 			script = append(script, EQ)
-			x -= 1
-			y -= 1
+			x--
+			y--
 		}
 		if x == prevX {
 			script = append(script, ADD)

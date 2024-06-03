@@ -13,6 +13,9 @@ import (
 const (
 	strLenThreshold     = 250
 	maxStringDiffLength = 3000
+
+	// number of lines to include below and above the changed lines
+	maxDiffContextLength = 2
 )
 
 type Diff struct {
@@ -64,7 +67,7 @@ func compareLargeStrings(prefix AttributePath, text1, text2 string) (stringDiff 
 		}
 	}()
 
-	unifiedDiff := GetMyersDiff(strings.Split(text1, "\n"), strings.Split(text2, "\n"), 2)
+	unifiedDiff := GetMyersDiff(strings.Split(text1, "\n"), strings.Split(text2, "\n"), maxDiffContextLength)
 
 	if len(unifiedDiff) > maxStringDiffLength {
 		unifiedDiff = unifiedDiff[:maxStringDiffLength] + "\n ...\n Diff Truncated due to huge size..."
@@ -210,7 +213,7 @@ func nestedMapDiff(prefix AttributePath, map1, map2 reflect.Value, opt *CmpOptio
 	return diffs
 }
 
-func unMarshalRawJson(j json.RawMessage) (map[string]interface{}, error) {
+func unMarshalRawJSON(j json.RawMessage) (map[string]interface{}, error) {
 	var val map[string]interface{}
 	err := json.Unmarshal(j, &val)
 	if err != nil {
@@ -234,11 +237,11 @@ func GetDiffs(i1, i2 interface{}, opt *CmpOptions) ([]Diff, error) {
 	if err != nil {
 		return nil, err
 	}
-	i1map, err := unMarshalRawJson(k)
+	i1map, err := unMarshalRawJSON(k)
 	if err != nil {
 		return nil, err
 	}
-	i2map, err := unMarshalRawJson(l)
+	i2map, err := unMarshalRawJSON(l)
 	if err != nil {
 		return nil, err
 	}

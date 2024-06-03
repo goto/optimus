@@ -21,7 +21,7 @@ func ProjectNameFrom(name string) (ProjectName, error) {
 	if name == "" {
 		return "", errors.InvalidArgument(EntityProject, "project name is empty")
 	}
-	//TODO: add condition, that project name should not have "." as this will break the standard URN design
+	// TODO: add condition, that project name should not have "." as this will break the standard URN design
 	return ProjectName(name), nil
 }
 

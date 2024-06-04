@@ -173,6 +173,12 @@ func (u *uploadAllCommand) sendNamespaceResourceRequest(stream pb.ResourceServic
 			}
 
 			if err = stream.Send(request); err != nil {
+				if errors.Is(err, io.EOF) {
+					_, errSend := stream.Recv()
+					if errSend != nil {
+						u.logger.Error("stream.Send got EOF, cause: %v", errSend)
+					}
+				}
 				errorReturned = true
 				u.logger.Error("Error: %s", err)
 			}

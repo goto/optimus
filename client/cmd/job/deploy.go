@@ -190,21 +190,25 @@ func (e *deployCommand) executeJobUpdate(ctx context.Context, jobSpecificationSe
 }
 
 func (e *deployCommand) getJobSpecByNames(namespaceJobPath string) ([]*model.JobSpec, error) {
+	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs(), specio.WithJobSpecParentReading())
+	if err != nil {
+		return nil, err
+	}
+	allJobSpecsInNamespace, err := jobSpecReadWriter.ReadAll(namespaceJobPath)
+	if err != nil {
+		return nil, err
+	}
+	jobNameToSpecMap := make(map[string]*model.JobSpec, len(allJobSpecsInNamespace))
+	for _, spec := range allJobSpecsInNamespace {
+		jobNameToSpecMap[spec.Name] = spec
+	}
 	jobSpecs := make([]*model.JobSpec, 0)
 	for _, jobName := range e.jobNames {
-		jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs(), specio.WithJobSpecParentReading())
-		if err != nil {
-			return nil, err
-		}
-		jobSpec, err := jobSpecReadWriter.ReadByName(namespaceJobPath, jobName)
-		if err != nil {
-			return nil, err
-		}
-		if jobSpec == nil {
+		jobSpec, ok := jobNameToSpecMap[jobName]
+		if !ok {
 			return nil, fmt.Errorf("job %s not found in namespace %s", jobName, e.namespaceName)
 		}
 		jobSpecs = append(jobSpecs, jobSpec)
 	}
-
 	return jobSpecs, nil
 }

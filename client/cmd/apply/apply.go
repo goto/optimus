@@ -209,7 +209,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func (c *applyCommand) printSummary(namespaceName, operation, kind string, all []string, success []string) {
+func (c *applyCommand) printSummary(namespaceName, operation, kind string, all, success []string) {
 	isSucccess := map[string]bool{}
 	for _, name := range success {
 		isSucccess[name] = true
@@ -235,8 +235,8 @@ func (c *applyCommand) executeJobDelete(ctx context.Context, client pb.JobSpecif
 			c.logger.Error(err.Error())
 			continue
 		}
-		if response.Success {
-			deletedJobs = append(deletedJobs, request.JobName)
+		if response.GetSuccess() {
+			deletedJobs = append(deletedJobs, request.GetJobName())
 		}
 	}
 	return deletedJobs
@@ -253,7 +253,7 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 			c.logger.Error(err.Error())
 			continue
 		}
-		addedJobs = append(addedJobs, response.JobNameSuccesses...)
+		addedJobs = append(addedJobs, response.GetJobNameSuccesses()...)
 	}
 	return addedJobs
 }
@@ -269,8 +269,8 @@ func (c *applyCommand) executeJobMigrate(ctx context.Context, client pb.JobSpeci
 		if c.verbose {
 			c.logger.Info("job %s successfully migrated", request.GetJobName())
 		}
-		if response.Success {
-			migratedJobs = append(migratedJobs, request.JobName)
+		if response.GetSuccess() {
+			migratedJobs = append(migratedJobs, request.GetJobName())
 		}
 	}
 	return migratedJobs
@@ -287,7 +287,7 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 			c.logger.Error(err.Error())
 			continue
 		}
-		updatedJobs = append(updatedJobs, response.JobNameSuccesses...)
+		updatedJobs = append(updatedJobs, response.GetJobNameSuccesses()...)
 	}
 	return updatedJobs
 }
@@ -301,9 +301,9 @@ func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.Reso
 			continue
 		}
 		if c.verbose {
-			c.logger.Info("resource %s successfully deleted", request.ResourceName)
+			c.logger.Info("resource %s successfully deleted", request.GetResourceName())
 		}
-		deletedResources = append(deletedResources, request.ResourceName)
+		deletedResources = append(deletedResources, request.GetResourceName())
 	}
 	return deletedResources
 }
@@ -319,8 +319,8 @@ func (c *applyCommand) executeResourceAdd(ctx context.Context, client pb.Resourc
 			c.logger.Error(err.Error())
 			continue
 		}
-		if response.Success {
-			addedResources = append(addedResources, request.Resource.Name)
+		if response.GetSuccess() {
+			addedResources = append(addedResources, request.GetResource().GetName())
 		}
 	}
 	return addedResources
@@ -337,8 +337,8 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 		if c.verbose {
 			c.logger.Info("resource %s successfully migrated", request.GetResourceName())
 		}
-		if response.Success {
-			migratedResources = append(migratedResources, request.ResourceName)
+		if response.GetSuccess() {
+			migratedResources = append(migratedResources, request.GetResourceName())
 		}
 	}
 	return migratedResources
@@ -355,8 +355,8 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 			c.logger.Error(err.Error())
 			continue
 		}
-		if response.Success {
-			updatedResources = append(updatedResources, request.Resource.Name)
+		if response.GetSuccess() {
+			updatedResources = append(updatedResources, request.GetResource().GetName())
 		}
 	}
 	return updatedResources

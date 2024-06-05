@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/goto/salt/log"
+	"github.com/spf13/afero"
+	"github.com/spf13/cobra"
+
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/survey"
@@ -12,9 +16,6 @@ import (
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/salt/log"
-	"github.com/spf13/afero"
-	"github.com/spf13/cobra"
 )
 
 const (

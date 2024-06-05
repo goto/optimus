@@ -22,5 +22,3 @@ CREATE TABLE IF NOT EXISTS changelog (
 
     UNIQUE (project_name, name)
 );
-
-CREATE INDEX IF NOT EXISTS changelog_project_name_name_idx ON preset USING btree (project_name, name);

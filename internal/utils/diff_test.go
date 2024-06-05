@@ -413,7 +413,6 @@ metadata:
 				expectedDiff := map[string]string{
 					"Assets.query.sql": "large string with unified diff",
 				}
-				assert.True(t, diffs[0].IsDiffTypeUnified())
 				assertDiff(t, expectedDiff, diffs)
 			})
 			t.Run("comparing Large texts should return unified diffs1", func(t *testing.T) {
@@ -438,7 +437,6 @@ metadata:
 				expectedDiff := map[string]string{
 					"Assets.query.sql": "large string with unified diff",
 				}
-				assert.True(t, diffs[0].IsDiffTypeUnified())
 				assertDiff(t, expectedDiff, diffs)
 			})
 
@@ -468,7 +466,6 @@ def apple():
 				expectedDiff := map[string]string{
 					"Assets.app.py": "small string with non unified diff",
 				}
-				assert.False(t, diffs[0].IsDiffTypeUnified())
 				assertDiff(t, expectedDiff, diffs)
 			})
 			t.Run("if an array ", func(t *testing.T) {

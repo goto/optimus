@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
@@ -25,6 +27,11 @@ const (
 
 	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at, is_dirty`
 )
+
+var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "job_repository_changelog_metrics_error",
+	Help: "success or failure metrics",
+}, []string{"project", "namespace", "name", "msg"})
 
 type JobRepository struct {
 	db *pgxpool.Pool
@@ -57,7 +64,7 @@ func (j JobRepository) insertJobSpec(ctx context.Context, jobEntity *job.Job) er
 	}
 	if existingJob.DeletedAt.Valid {
 		if existingJob.NamespaceName == jobEntity.Tenant().NamespaceName().String() {
-			return j.persistChangelogAndUpdate(ctx, jobEntity)
+			return j.updateAndPersistChangelog(ctx, jobEntity)
 		}
 		errorMsg := fmt.Sprintf("job %s already exists and soft deleted in namespace %s. consider hard delete the job before inserting to this namespace.", existingJob.Name, existingJob.NamespaceName)
 		return errors.NewError(errors.ErrAlreadyExists, job.EntityJob, errorMsg)
@@ -99,7 +106,7 @@ func (j JobRepository) Update(ctx context.Context, jobs []*job.Job) ([]*job.Job,
 			me.Append(err)
 			continue
 		}
-		if err := j.persistChangelogAndUpdate(ctx, jobEntity); err != nil {
+		if err := j.updateAndPersistChangelog(ctx, jobEntity); err != nil {
 			me.Append(err)
 			continue
 		}
@@ -269,16 +276,9 @@ func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) (ChangeLog, error) 
 
 	for _, d := range diff {
 		if _, ok := toIgnore[d.Field]; !ok {
-			if d.IsDiffTypeUnified() {
-				changelog = append(changelog, Change{
-					Property: d.Field,
-					Diff:     fmt.Sprintf("%v", d.Value2),
-				})
-				continue
-			}
 			changelog = append(changelog, Change{
 				Property: d.Field,
-				Diff:     fmt.Sprintf("- %v\n+ %v", d.Value1, d.Value2),
+				Diff:     d.Diff,
 			})
 		}
 	}
@@ -305,22 +305,33 @@ func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, pr
 	return err
 }
 
-func (j JobRepository) persistChangelogAndUpdate(ctx context.Context, jobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
+func (j JobRepository) computeAndPersistChangeLog(ctx context.Context, existingJob *Spec, incomingJobEntity *job.Job) error {
+	changeLog, err := getJobDiff(existingJob, incomingJobEntity)
+	if err != nil {
+		return err
+	}
+	return j.insertChangelog(ctx, incomingJobEntity.Spec().Name(), incomingJobEntity.Tenant().ProjectName(), changeLog)
+}
+
+func (j JobRepository) updateAndPersistChangelog(ctx context.Context, incomingJobEntity *job.Job) error {
+	existingJob, err := j.get(ctx, incomingJobEntity.ProjectName(), incomingJobEntity.Spec().Name(), false)
 	if err != nil {
 		return err
 	}
 
-	if err := j.triggerUpdate(ctx, jobEntity); err != nil {
+	if err := j.triggerUpdate(ctx, incomingJobEntity); err != nil {
 		return err
 	}
 
-	changeLog, err := getJobDiff(existingJob, jobEntity)
-	if err != nil {
-		return err
+	if err = j.computeAndPersistChangeLog(ctx, existingJob, incomingJobEntity); err != nil {
+		changelogMetrics.WithLabelValues(
+			incomingJobEntity.ProjectName().String(),
+			incomingJobEntity.Tenant().NamespaceName().String(),
+			incomingJobEntity.GetName(),
+			err.Error(),
+		).Inc()
 	}
-
-	return j.insertChangelog(ctx, jobEntity.Spec().Name(), jobEntity.Tenant().ProjectName(), changeLog)
+	return nil
 }
 
 func (j JobRepository) triggerUpdate(ctx context.Context, jobEntity *job.Job) error {

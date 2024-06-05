@@ -8,28 +8,23 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/goto/optimus/internal/telemetry"
 )
 
 const (
 	strLenThreshold     = 250
 	maxStringDiffLength = 3000
 
+	entityDiff = "utils-diff"
+
 	// number of lines to include below and above the changed lines
 	maxDiffContextLength = 2
 )
 
 type Diff struct {
-	Field           string
-	diffTypeUnified bool
-	Value1, Value2  interface{}
-}
-
-func (d *Diff) SetDiffTypeUnified() {
-	d.diffTypeUnified = true
-}
-
-func (d *Diff) IsDiffTypeUnified() bool {
-	return d.diffTypeUnified
+	Field string
+	Diff  string
 }
 
 type AttributePath string
@@ -63,7 +58,8 @@ type CmpOptions struct {
 func compareLargeStrings(prefix AttributePath, text1, text2 string) (stringDiff []Diff) {
 	defer func() {
 		if r := recover(); r != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Recovered in compareLargeStrings err:%v\n", r)
+			telemetry.LogPanic(entityDiff, fmt.Sprintf("compareLargeStrings: err:%v", r))
+			_, _ = fmt.Fprintf(os.Stderr, "Panic Recovered in compareLargeStrings err:%v\n", r)
 		}
 	}()
 
@@ -73,12 +69,14 @@ func compareLargeStrings(prefix AttributePath, text1, text2 string) (stringDiff 
 		unifiedDiff = unifiedDiff[:maxStringDiffLength] + "\n ...\n Diff Truncated due to huge size..."
 	}
 	stringDiff = append(stringDiff, Diff{
-		Field:           prefix.String(),
-		diffTypeUnified: true,
-		Value1:          "",
-		Value2:          unifiedDiff,
+		Field: prefix.String(),
+		Diff:  unifiedDiff,
 	})
 	return
+}
+
+func getUnifiedDiff(oldVal, newVal any) string {
+	return fmt.Sprintf("- %v\n+ %v", oldVal, newVal)
 }
 
 func compareString(prefix AttributePath, text1, text2 string) []Diff {
@@ -90,16 +88,14 @@ func compareString(prefix AttributePath, text1, text2 string) []Diff {
 		if stringDiff != nil {
 			return stringDiff
 		}
-		return []Diff{{
-			Field:  prefix.String(),
-			Value1: text1[10:],
-			Value2: text2[10:],
+		return []Diff{{ // panic recovery case
+			Field: prefix.String(),
+			Diff:  getUnifiedDiff(text1[strLenThreshold:], text2[strLenThreshold:]),
 		}}
 	}
 	return []Diff{{
-		Field:  prefix.String(),
-		Value1: text1,
-		Value2: text2,
+		Field: prefix.String(),
+		Diff:  getUnifiedDiff(text1, text2),
 	}}
 }
 
@@ -147,9 +143,8 @@ func compareList[V any](prefix AttributePath, list1, list2 []V, opt *CmpOptions)
 	oldListStr, _ := json.Marshal(oldList)
 	newListStr, _ := json.Marshal(newList)
 	return []Diff{{
-		Field:  prefix.Add("indicesModified").String(),
-		Value1: string(oldListStr),
-		Value2: string(newListStr),
+		Field: prefix.Add("indicesModified").String(),
+		Diff:  getUnifiedDiff(string(oldListStr), string(newListStr)),
 	}}
 }
 
@@ -190,14 +185,14 @@ func nestedMapDiff(prefix AttributePath, map1, map2 reflect.Value, opt *CmpOptio
 					diffs = append(diffs, compareString(qualifiedField, v1.(string), v2.(string))...)
 					continue
 				case !reflect.DeepEqual(v1, v2):
-					diffs = append(diffs, Diff{Field: qualifiedField.String(), Value1: v1, Value2: v2})
+					diffs = append(diffs, Diff{Field: qualifiedField.String(), Diff: getUnifiedDiff(v1, v2)})
 					continue
 				}
 			} else {
-				diffs = append(diffs, Diff{Field: qualifiedField.String(), Value1: v1, Value2: v2})
+				diffs = append(diffs, Diff{Field: qualifiedField.String(), Diff: getUnifiedDiff(v1, v2)})
 			}
 		} else {
-			diffs = append(diffs, Diff{Field: qualifiedField.String(), Value1: v1, Value2: nil})
+			diffs = append(diffs, Diff{Field: qualifiedField.String(), Diff: getUnifiedDiff(v1, nil)})
 		}
 	}
 
@@ -206,7 +201,7 @@ func nestedMapDiff(prefix AttributePath, map1, map2 reflect.Value, opt *CmpOptio
 		qualifiedField := prefix.Add(fmt.Sprintf("%v", key))
 		if _, ok := map1Set[key]; !ok {
 			v2 := map2.MapIndex(k).Interface()
-			diffs = append(diffs, Diff{Field: qualifiedField.String(), Value1: nil, Value2: v2})
+			diffs = append(diffs, Diff{Field: qualifiedField.String(), Diff: getUnifiedDiff(nil, v2)})
 		}
 	}
 
@@ -226,6 +221,7 @@ func unMarshalRawJSON(j json.RawMessage) (map[string]interface{}, error) {
 func GetDiffs(i1, i2 interface{}, opt *CmpOptions) ([]Diff, error) {
 	defer func() {
 		if r := recover(); r != nil {
+			telemetry.LogPanic(entityDiff, fmt.Sprintf("GetDiffs: err:%v", r))
 			_, _ = fmt.Fprintf(os.Stderr, "Recovered in GetDiffs err:%v\n", r)
 		}
 	}()

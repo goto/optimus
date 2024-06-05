@@ -69,11 +69,11 @@ func TestMapHelper(t *testing.T) {
 	})
 	t.Run("MapToList", func(t *testing.T) {
 		t.Run("returns the values in map", func(t *testing.T) {
-			mapping := map[string]string{"a": "B", "c": "d", "e": "f"}
+			mapping := map[string]string{"a": "b", "c": "d", "e": "f"}
 			list := utils.MapToList(mapping)
 			assert.Len(t, list, 3)
 			sort.Strings(list)
-			assert.Equal(t, []string{"B", "d", "f"}, list)
+			assert.Equal(t, []string{"b", "d", "f"}, list)
 		})
 	})
 	t.Run("AppendToMap", func(t *testing.T) {
@@ -97,13 +97,13 @@ func TestMapHelper(t *testing.T) {
 			assert.False(t, result)
 		})
 		t.Run("returns false when some value not found", func(t *testing.T) {
-			mp := map[string]string{"a": "B", "c": "d", "e": "f"}
+			mp := map[string]string{"a": "b", "c": "d", "e": "f"}
 
 			result := utils.Contains(mp, "a", "c", "g")
 			assert.False(t, result)
 		})
 		t.Run("returns true when all values found", func(t *testing.T) {
-			mp := map[string]string{"a": "B", "c": "d", "e": "f"}
+			mp := map[string]string{"a": "b", "c": "d", "e": "f"}
 
 			result := utils.Contains(mp, "a", "c", "e")
 			assert.True(t, result)

@@ -56,6 +56,12 @@ type Spec struct {
 	IsDirty bool
 }
 
+type Change struct {
+	Property string `json:"attribute_name"`
+	Diff     string `json:"diff"`
+}
+type ChangeLog []Change
+
 type Schedule struct {
 	StartDate     time.Time
 	EndDate       *time.Time `json:",omitempty"`

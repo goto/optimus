@@ -33,7 +33,6 @@ type planCommand struct {
 	clientConfig   *config.ClientConfig
 	specReadWriter local.SpecReadWriter[*model.JobSpec]
 
-	syncAll        bool // TODO: implement it:
 	verbose        bool
 	output         string
 	configFilePath string
@@ -43,18 +42,15 @@ type planCommand struct {
 	gitURL, gitToken, gitProvider string
 	projectID                     string
 	repository                    providermodel.RepositoryAPI
-
-	// TODO: add with statefile
 }
 
 func NewPlanCommand() *cobra.Command {
 	planCmd := &planCommand{logger: logger.NewClientLogger()}
 	cmd := &cobra.Command{
-		Use:   "plan",
-		Short: "Plan job deployment",
-		Long:  "Plan job deployment based on git diff state using git reference (commit SHA, branch, tag)",
-		Example: `optimus job plan --sync-all # Create Plan diff from latest branch and current state
-optimus job plan --source <source_ref> --target <target_ref>   # Create Plan using git diff 2 references`,
+		Use:     "plan",
+		Short:   "Plan job deployment",
+		Long:    "Plan job deployment based on git diff state using git reference (commit SHA, branch, tag)",
+		Example: `optimus job plan --source <source_ref> --target <target_ref> --output <output_plan_file>   # Create Plan using git diff 2 references`,
 		PreRunE: planCmd.PreRunE,
 		RunE:    planCmd.RunE,
 	}
@@ -73,22 +69,13 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&p.gitToken, "git-token", "t", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
 	cmd.Flags().StringVarP(&p.projectID, "project-id", "I", os.Getenv("GIT_PROJECT_ID"), "Determine which project will be checked")
 
-	// - sync all
-	cmd.Flags().BoolVar(&p.syncAll, "sync-all", false, "Create Plan from current state with latest git")
-
-	// - sync diff
 	cmd.Flags().StringVarP(&p.sourceRef, "source", "S", p.sourceRef, "Git diff source reference [commit SHA, branch, tag]")
 	cmd.Flags().StringVarP(&p.targetRef, "target", "T", p.targetRef, "Git diff target reference [commit SHA, branch, tag]")
 }
 
 func (p *planCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	var err error
-
-	if p.syncAll {
-		p.logger.Info("[plan] compare latest with state file")
-	} else {
-		p.logger.Info("[plan] compare: `%s` ← `%s`", p.targetRef, p.sourceRef)
-	}
+	p.logger.Info("[plan] compare: `%s` ← `%s`", p.targetRef, p.sourceRef)
 
 	p.clientConfig, err = config.LoadClientConfig(p.configFilePath)
 	if err != nil {

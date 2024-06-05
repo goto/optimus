@@ -11,7 +11,6 @@ import (
 
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
-	"github.com/goto/optimus/client/cmd/internal/survey"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
@@ -32,8 +31,7 @@ type deployCommand struct {
 	namespaceName string
 	host          string
 
-	clientConfig    *config.ClientConfig
-	namespaceSurvey *survey.NamespaceSurvey
+	clientConfig *config.ClientConfig
 
 	jobNames []string
 }
@@ -67,7 +65,6 @@ func (e *deployCommand) PreRunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	e.logger = logger.NewClientLogger()
-	e.namespaceSurvey = survey.NewNamespaceSurvey(e.logger)
 
 	e.connection = connection.New(e.logger, e.clientConfig)
 	return nil

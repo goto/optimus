@@ -94,6 +94,10 @@ func setupGRPCServer(l log.Logger) (*grpc.Server, error) {
 		),
 		grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize),
 		grpc.MaxSendMsgSize(GRPCMaxSendMsgSize),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             2 * time.Minute, // MinTime client should wait until next ping as in client side send ping every 1 Minute
+			PermitWithoutStream: true,            // PermitWithoutStream send ping even without active stream
+		}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			Time:    1 * time.Minute, // Ping the client if it is idle for 1 minute to ensure the connection is still active
 			Timeout: 1 * time.Second, // Wait 1 second for the ping ack before assuming the connection is dead

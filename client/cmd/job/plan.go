@@ -40,7 +40,7 @@ type planCommand struct {
 	sourceRef                     string // sourceRef is new state
 	targetRef                     string // targetRef is current state
 	gitURL, gitToken, gitProvider string
-	projectID                     string
+	gitProjectID                  string
 	repository                    providermodel.RepositoryAPI
 }
 
@@ -64,10 +64,10 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&p.output, "output", "o", "./plan.json", "File path for output of plan")
 	cmd.Flags().BoolVarP(&p.verbose, "verbose", "v", false, "Print details related to operation")
 
-	cmd.Flags().StringVarP(&p.gitProvider, "git-provider", "p", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
-	cmd.Flags().StringVarP(&p.gitURL, "git-host", "h", os.Getenv("GIT_HOST"), "Git host based on git provider used in the repository")
-	cmd.Flags().StringVarP(&p.gitToken, "git-token", "t", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
-	cmd.Flags().StringVarP(&p.projectID, "project-id", "I", os.Getenv("GIT_PROJECT_ID"), "Determine which project will be checked")
+	cmd.Flags().StringVar(&p.gitProvider, "git-provider", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
+	cmd.Flags().StringVar(&p.gitURL, "git-host", os.Getenv("GIT_HOST"), "Git host based on git provider used in the repository")
+	cmd.Flags().StringVar(&p.gitToken, "git-token", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
+	cmd.Flags().StringVar(&p.gitProjectID, "git-project-id", os.Getenv("GIT_PROJECT_ID"), "Determine which git project will be checked")
 
 	cmd.Flags().StringVarP(&p.sourceRef, "source", "S", p.sourceRef, "Git diff source reference [commit SHA, branch, tag]")
 	cmd.Flags().StringVarP(&p.targetRef, "target", "T", p.targetRef, "Git diff target reference [commit SHA, branch, tag]")
@@ -148,7 +148,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 }
 
 func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error) {
-	diffs, err := p.repository.CompareDiff(ctx, p.projectID, p.targetRef, p.sourceRef)
+	diffs, err := p.repository.CompareDiff(ctx, p.gitProjectID, p.targetRef, p.sourceRef)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (p *planCommand) getNamespaceNameByJobPath(directory string) (string, error
 
 func (p *planCommand) getJobSpec(ctx context.Context, fileName, ref string) (model.JobSpec, error) {
 	var spec model.JobSpec
-	raw, err := p.repository.GetFileContent(ctx, p.projectID, ref, fileName)
+	raw, err := p.repository.GetFileContent(ctx, p.gitProjectID, ref, fileName)
 	if err != nil {
 		return spec, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.sourceRef, fileName))
 	}

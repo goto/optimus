@@ -49,6 +49,7 @@ type JobService interface {
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
 	Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (jobSpec *job.Job, err error)
+	GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ( job., error)
 	GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error)
 	GetByFilter(ctx context.Context, filters ...filter.FilterOpt) (jobSpecs []*job.Job, err error)
 	ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error
@@ -218,7 +219,7 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 	}
 	jobName, err := job.NameFrom(req.GetJobName())
 	if err != nil {
-		jh.l.Error("error adapating job name [%s]: %s", req.GetJobName(), err)
+		jh.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, err
 	}
 
@@ -232,6 +233,32 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 	// TODO: return 404 if job is not found
 	return &pb.GetJobSpecificationResponse{
 		Spec: ToJobProto(jobSpec),
+	}, nil
+}
+
+func (jh *JobHandler) GetJobChangelog(ctx context.Context, req *pb.GetJobChangelogRequest) (*pb.GetJobChangelogResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		jh.l.Error("invalid project information request project [%s]: %s", req.GetProjectName(), err)
+		return nil, err
+	}
+
+	jobName, err := job.NameFrom(req.GetJobName())
+	if err != nil {
+		jh.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, err
+	}
+
+	jobSpec, err := jh.jobService.GetChangelog(ctx, projectName, jobName)
+	if err != nil && !errors.IsErrorType(err, errors.ErrNotFound) {
+		errorMsg := "failed to get job specification"
+		jh.l.Error(fmt.Sprintf("%s: %s", err.Error(), errorMsg))
+		return nil, errors.GRPCErr(err, errorMsg)
+	}
+
+	// TODO: return 404 if job is not found
+	return &pb.GetJobChangelogResponse{
+		History: &pb.JobChangelog{},
 	}, nil
 }
 

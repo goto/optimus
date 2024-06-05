@@ -23,8 +23,8 @@
   "paths": {
     "/v1beta1/jobs": {
       "get": {
-        "summary": "GetJobSpecifications read a job spec for provided filters",
-        "operationId": "JobSpecificationService_GetJobSpecifications",
+        "summary": "GetJobChangelog get all the changes done on a job",
+        "operationId": "JobSpecificationService_GetJobChangelog",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -42,12 +42,6 @@
         "parameters": [
           {
             "name": "projectName",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "resourceDestination",
             "in": "query",
             "required": false,
             "type": "string"

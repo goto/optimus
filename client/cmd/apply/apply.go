@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -109,8 +108,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	plans := basePlans.GetByProjectName(c.config.Project.Name)
-	plans = plans.GetByExecuted(false)
+	plans := basePlans
 
 	// prepare for proto request
 	var (
@@ -152,16 +150,15 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	deletedJobs := c.executeJobDelete(ctx, jobClient, deleteJobRequest)
 	deletedResources := c.executeResourceDelete(ctx, resourceClient, deleteResourceRequest)
 
-	// update plan file
-	isExecuted := true
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, deletedJobs...)
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, addedJobs...)
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, migratedJobs...)
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindJob, updatedJobs...)
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, deletedResources...)
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, addedResources...)
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, migratedResources...)
-	plans = plans.UpdateExecutedByNames(isExecuted, plan.KindResource, updatedResources...)
+	// update plan file, delete successful operations
+	plans.Job.Delete = plans.Job.Delete.DeletePlansByNames(deletedJobs...)
+	plans.Job.Create = plans.Job.Create.DeletePlansByNames(addedJobs...)
+	plans.Job.Migrate = plans.Job.Migrate.DeletePlansByNames(migratedJobs...)
+	plans.Job.Update = plans.Job.Update.DeletePlansByNames(updatedJobs...)
+	plans.Resource.Delete = plans.Resource.Delete.DeletePlansByNames(deletedResources...)
+	plans.Resource.Create = plans.Resource.Create.DeletePlansByNames(addedResources...)
+	plans.Resource.Migrate = plans.Resource.Migrate.DeletePlansByNames(migratedResources...)
+	plans.Resource.Update = plans.Resource.Update.DeletePlansByNames(updatedResources...)
 
 	if err := c.savePlans(plans); err != nil {
 		return err
@@ -169,29 +166,62 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 
 	// log summary
 	countTotal := 0
-	countNotExecuted := 0
+	countExecuted := 0
 	for _, namespace := range c.config.Namespaces {
-		for _, plan := range plans.GetByNamespaceName(namespace.Name) {
-			countTotal++
-			if plan.Executed {
-				c.logger.Info("[%s] %s: %s %s ✅", plan.NamespaceName, plan.Operation, plan.Kind, plan.KindName)
-			} else {
-				countNotExecuted++
-				c.logger.Error("[%s] %s: %s %s ❌", plan.NamespaceName, plan.Operation, plan.Kind, plan.KindName)
-			}
-		}
+		createJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Create.GetByNamespace(namespace.Name)).GetNames()
+		createJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Create.GetByNamespace(namespace.Name)).GetNames()
+		deleteJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Delete.GetByNamespace(namespace.Name)).GetNames()
+		deleteJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Delete.GetByNamespace(namespace.Name)).GetNames()
+		updateJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Update.GetByNamespace(namespace.Name)).GetNames()
+		updateJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Update.GetByNamespace(namespace.Name)).GetNames()
+		migrateJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Migrate.GetByNamespace(namespace.Name)).GetNames()
+		migrateJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Migrate.GetByNamespace(namespace.Name)).GetNames()
+
+		createResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Create.GetByNamespace(namespace.Name)).GetNames()
+		createResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Create.GetByNamespace(namespace.Name)).GetNames()
+		deleteResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Delete.GetByNamespace(namespace.Name)).GetNames()
+		deleteResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Delete.GetByNamespace(namespace.Name)).GetNames()
+		updateResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Update.GetByNamespace(namespace.Name)).GetNames()
+		updateResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Update.GetByNamespace(namespace.Name)).GetNames()
+		migrateResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Migrate.GetByNamespace(namespace.Name)).GetNames()
+		migrateResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Migrate.GetByNamespace(namespace.Name)).GetNames()
+
+		c.printSummary(namespace.Name, "create", "job", createJobAll, createJobSuccess)
+		c.printSummary(namespace.Name, "delete", "job", deleteJobAll, deleteJobSuccess)
+		c.printSummary(namespace.Name, "update", "job", updateJobAll, updateJobSuccess)
+		c.printSummary(namespace.Name, "migrate", "job", migrateJobAll, migrateJobSuccess)
+
+		c.printSummary(namespace.Name, "create", "resource", createResourceAll, createResourceSuccess)
+		c.printSummary(namespace.Name, "delete", "resource", deleteResourceAll, deleteResourceSuccess)
+		c.printSummary(namespace.Name, "update", "resource", updateResourceAll, updateResourceSuccess)
+		c.printSummary(namespace.Name, "migrate", "resource", migrateResourceAll, migrateResourceSuccess)
+
+		countTotal += len(createJobAll) + len(deleteJobAll) + len(updateJobAll) + len(migrateJobAll)
+		countTotal += len(createResourceAll) + len(deleteResourceAll) + len(updateResourceAll) + len(migrateResourceAll)
+		countExecuted += len(createJobSuccess) + len(deleteJobSuccess) + len(updateJobSuccess) + len(migrateJobSuccess)
+		countExecuted += len(createResourceSuccess) + len(deleteResourceSuccess) + len(updateResourceSuccess) + len(migrateResourceSuccess)
 	}
 
-	if countNotExecuted > 0 {
-		if countNotExecuted == countTotal {
-			return fmt.Errorf("all operations couldn't be proceed")
-		}
-		c.logger.Error("some operations couldn't be proceed")
-		dialCancel() // call explicitly as defer won't be called on os.Exit
-		os.Exit(3)   // custom exit code for partial failure
+	if countTotal > countExecuted {
+		return fmt.Errorf("some operations couldn't be proceed")
 	}
 
 	return nil
+}
+
+func (c *applyCommand) printSummary(namespaceName, operation, kind string, all []string, success []string) {
+	isSucccess := map[string]bool{}
+	for _, name := range success {
+		isSucccess[name] = true
+	}
+
+	for _, name := range all {
+		if _, ok := isSucccess[name]; ok {
+			c.logger.Info("[%s] %s: %s %s ✅", namespaceName, operation, kind, name)
+		} else {
+			c.logger.Error("[%s] %s: %s %s ❌", namespaceName, operation, kind, name)
+		}
+	}
 }
 
 func (c *applyCommand) executeJobDelete(ctx context.Context, client pb.JobSpecificationServiceClient, requests []*pb.DeleteJobSpecificationRequest) []string {
@@ -332,10 +362,10 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 	return updatedResources
 }
 
-func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.Plans) []*pb.AddJobSpecificationsRequest {
+func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.Plan) []*pb.AddJobSpecificationsRequest {
 	jobsToBeSend := []*pb.JobSpecification{}
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindJob).GetByOperation(plan.OperationCreate) {
-		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", plan.KindName)
+	for _, currentPlan := range plans.Job.Create.GetByNamespace(namespace.Name) {
+		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue
@@ -356,10 +386,10 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 	}
 }
 
-func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans plan.Plans) []*pb.UpdateJobSpecificationsRequest {
+func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans plan.Plan) []*pb.UpdateJobSpecificationsRequest {
 	jobsToBeSend := []*pb.JobSpecification{}
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindJob).GetByOperation(plan.OperationUpdate) {
-		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", plan.KindName)
+	for _, currentPlan := range plans.Job.Update.GetByNamespace(namespace.Name) {
+		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue
@@ -380,13 +410,13 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 	}
 }
 
-func (c *applyCommand) getDeleteJobRequest(namespace *config.Namespace, plans plan.Plans) []*pb.DeleteJobSpecificationRequest {
+func (c *applyCommand) getDeleteJobRequest(namespace *config.Namespace, plans plan.Plan) []*pb.DeleteJobSpecificationRequest {
 	jobsToBeDeleted := []*pb.DeleteJobSpecificationRequest{}
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindJob).GetByOperation(plan.OperationDelete) {
+	for _, currentPlan := range plans.Job.Delete.GetByNamespace(namespace.Name) {
 		jobsToBeDeleted = append(jobsToBeDeleted, &pb.DeleteJobSpecificationRequest{
 			ProjectName:   c.config.Project.Name,
 			NamespaceName: namespace.Name,
-			JobName:       plan.KindName,
+			JobName:       currentPlan.Name,
 			CleanHistory:  false,
 			Force:         false,
 		})
@@ -394,26 +424,26 @@ func (c *applyCommand) getDeleteJobRequest(namespace *config.Namespace, plans pl
 	return jobsToBeDeleted
 }
 
-func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans plan.Plans) ([]*pb.ChangeJobNamespaceRequest, []*pb.UpdateJobSpecificationsRequest) {
+func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans plan.Plan) ([]*pb.ChangeJobNamespaceRequest, []*pb.UpdateJobSpecificationsRequest) {
 	// after migration is done, update should be performed on new namespace
 	jobsToBeMigrated := []*pb.ChangeJobNamespaceRequest{}
 	jobsToBeUpdated := []*pb.JobSpecification{}
 
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindJob).GetByOperation(plan.OperationMigrate) {
-		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", plan.KindName)
+	for _, currentPlan := range plans.Job.Migrate.GetByNamespace(namespace.Name) {
+		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
 		if err != nil {
 			c.logger.Error(err.Error())
 			continue
 		}
-		if plan.OldNamespaceName == nil {
+		if currentPlan.OldNamespace == nil {
 			c.logger.Error(fmt.Sprintf("old namespace on job %s could not be nil", jobSpec.Name))
 			continue
 		}
 		jobsToBeMigrated = append(jobsToBeMigrated, &pb.ChangeJobNamespaceRequest{
 			ProjectName:      c.config.Project.Name,
 			JobName:          jobSpec.Name,
-			NamespaceName:    *plan.OldNamespaceName,
-			NewNamespaceName: plan.NamespaceName,
+			NamespaceName:    *currentPlan.OldNamespace,
+			NewNamespaceName: namespace.Name,
 		})
 		jobsToBeUpdated = append(jobsToBeUpdated, jobSpec.ToProto())
 	}
@@ -429,13 +459,11 @@ func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans p
 	return jobsToBeMigrated, jobsToBeUpdatedRequest
 }
 
-func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans plan.Plans) []*pb.CreateResourceRequest {
+func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans plan.Plan) []*pb.CreateResourceRequest {
 	resourcesToBeCreate := []*pb.CreateResourceRequest{}
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationCreate) {
+	for _, currentPlan := range plans.Resource.Create.GetByNamespace(namespace.Name) {
 		for _, ds := range namespace.Datastore {
-			datastoreName := strings.Split(plan.KindName, ":")[0]
-			resourceName := strings.Split(plan.KindName, ":")[1]
-			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, resourceName)
+			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
 			if err != nil {
 				c.logger.Error(err.Error())
 				continue
@@ -448,7 +476,7 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 			resourcesToBeCreate = append(resourcesToBeCreate, &pb.CreateResourceRequest{
 				ProjectName:   c.config.Project.Name,
 				NamespaceName: namespace.Name,
-				DatastoreName: datastoreName,
+				DatastoreName: currentPlan.Datastore,
 				Resource:      resourceSpecProto,
 			})
 		}
@@ -456,13 +484,11 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 	return resourcesToBeCreate
 }
 
-func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, plans plan.Plans) []*pb.UpdateResourceRequest {
+func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, plans plan.Plan) []*pb.UpdateResourceRequest {
 	resourcesToBeUpdate := []*pb.UpdateResourceRequest{}
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationUpdate) {
+	for _, currentPlan := range plans.Resource.Update.GetByNamespace(namespace.Name) {
 		for _, ds := range namespace.Datastore {
-			datastoreName := strings.Split(plan.KindName, ":")[0]
-			resourceName := strings.Split(plan.KindName, ":")[1]
-			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, resourceName)
+			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
 			if err != nil {
 				c.logger.Error(err.Error())
 				continue
@@ -475,7 +501,7 @@ func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, pla
 			resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{
 				ProjectName:   c.config.Project.Name,
 				NamespaceName: namespace.Name,
-				DatastoreName: datastoreName,
+				DatastoreName: currentPlan.Datastore,
 				Resource:      resourceSpecProto,
 			})
 		}
@@ -483,37 +509,33 @@ func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, pla
 	return resourcesToBeUpdate
 }
 
-func (c *applyCommand) getDeleteResourceRequest(namespace *config.Namespace, plans plan.Plans) []*pb.DeleteResourceRequest {
+func (c *applyCommand) getDeleteResourceRequest(namespace *config.Namespace, plans plan.Plan) []*pb.DeleteResourceRequest {
 	resourcesToBeDelete := []*pb.DeleteResourceRequest{}
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationDelete) {
-		datastoreName := strings.Split(plan.KindName, ":")[0]
-		resourceName := strings.Split(plan.KindName, ":")[1]
+	for _, currentPlan := range plans.Resource.Delete.GetByNamespace(namespace.Name) {
 		resourcesToBeDelete = append(resourcesToBeDelete, &pb.DeleteResourceRequest{
 			ProjectName:   c.config.Project.Name,
 			NamespaceName: namespace.Name,
-			DatastoreName: datastoreName,
-			ResourceName:  resourceName,
+			DatastoreName: currentPlan.Datastore,
+			ResourceName:  currentPlan.Name,
 			Force:         false,
 		})
 	}
 	return resourcesToBeDelete
 }
 
-func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, plans plan.Plans) ([]*pb.ChangeResourceNamespaceRequest, []*pb.UpdateResourceRequest) {
+func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, plans plan.Plan) ([]*pb.ChangeResourceNamespaceRequest, []*pb.UpdateResourceRequest) {
 	// after migration is done, update should be performed on new namespace
 	resourcesToBeMigrated := []*pb.ChangeResourceNamespaceRequest{}
 	resourcesToBeUpdated := []*pb.UpdateResourceRequest{}
 
-	for _, plan := range plans.GetByNamespaceName(namespace.Name).GetByKind(plan.KindResource).GetByOperation(plan.OperationMigrate) {
+	for _, currentPlan := range plans.Resource.Migrate.GetByNamespace(namespace.Name) {
 		for _, ds := range namespace.Datastore {
-			datastoreName := strings.Split(plan.KindName, ":")[0]
-			resourceName := strings.Split(plan.KindName, ":")[1]
-			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, resourceName)
+			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
 			if err != nil {
 				c.logger.Error(err.Error())
 				continue
 			}
-			if plan.OldNamespaceName == nil {
+			if currentPlan.OldNamespace == nil {
 				c.logger.Error(fmt.Sprintf("old namespace on resource %s could not be nil", resourceSpec.Name))
 				continue
 			}
@@ -524,16 +546,16 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 			}
 			resourcesToBeMigrated = append(resourcesToBeMigrated, &pb.ChangeResourceNamespaceRequest{
 				ProjectName:      c.config.Project.Name,
-				NamespaceName:    *plan.OldNamespaceName,
-				NewNamespaceName: plan.NamespaceName,
+				NamespaceName:    *currentPlan.OldNamespace,
+				NewNamespaceName: namespace.Name,
 				ResourceName:     resourceSpec.Name,
-				DatastoreName:    datastoreName,
+				DatastoreName:    currentPlan.Datastore,
 			})
 			resourcesToBeUpdated = append(resourcesToBeUpdated, &pb.UpdateResourceRequest{
 				ProjectName:   c.config.Project.Name,
-				NamespaceName: plan.NamespaceName,
+				NamespaceName: namespace.Name,
 				Resource:      resourceSpecProto,
-				DatastoreName: datastoreName,
+				DatastoreName: currentPlan.Datastore,
 			})
 		}
 	}
@@ -541,32 +563,32 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 	return resourcesToBeMigrated, resourcesToBeUpdated
 }
 
-func (c *applyCommand) getPlans() (plan.Plans, error) {
-	var plans plan.Plans = []*plan.Plan{}
+func (c *applyCommand) getPlans() (plan.Plan, error) {
+	plans := plan.Plan{}
 	for _, source := range c.sources {
 		f, err := os.OpenFile(source, os.O_RDONLY, os.ModePerm)
 		if err != nil {
 			f.Close()
-			return nil, err
+			return plans, err
 		}
 
 		content, err := io.ReadAll(f)
 		if err != nil {
 			f.Close()
-			return nil, err
+			return plans, err
 		}
 		f.Close()
 
-		currentPlans := []*plan.Plan{}
+		currentPlans := plan.Plan{}
 		if err := json.Unmarshal(content, &currentPlans); err != nil {
-			return nil, err
+			return plans, err
 		}
-		plans = append(plans, currentPlans...)
+		plans = plans.Merge(currentPlans)
 	}
 	return plans, nil
 }
 
-func (c *applyCommand) savePlans(plans plan.Plans) error {
+func (c *applyCommand) savePlans(plans plan.Plan) error {
 	f, err := os.OpenFile(c.output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err

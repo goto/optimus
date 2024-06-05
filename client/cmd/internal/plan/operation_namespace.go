@@ -99,6 +99,24 @@ func (o OperationByNamespaces[kind]) GetAllNamespaces() []string {
 	return namespaces
 }
 
+func (o OperationByNamespaces[Kind]) merge(other OperationByNamespaces[Kind]) OperationByNamespaces[Kind] {
+	for _, namespaceName := range other.GetAllNamespaces() {
+		for _, k := range other.Create.GetByNamespace(namespaceName) {
+			o.Create.Append(namespaceName, k)
+		}
+		for _, k := range other.Update.GetByNamespace(namespaceName) {
+			o.Update.Append(namespaceName, k)
+		}
+		for _, k := range other.Delete.GetByNamespace(namespaceName) {
+			o.Delete.Append(namespaceName, k)
+		}
+		for _, k := range other.Migrate.GetByNamespace(namespaceName) {
+			o.Migrate.Append(namespaceName, k)
+		}
+	}
+	return o
+}
+
 func NewOperationByNamespace[T Kind]() OperationByNamespaces[T] {
 	return OperationByNamespaces[T]{
 		Create:  NewListByNamespace[T](),

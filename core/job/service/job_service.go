@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	//get_changelog_total : shall be deleted later on,
+
 	// right now this is done to capture the feature adoption
 	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_changelog_total",

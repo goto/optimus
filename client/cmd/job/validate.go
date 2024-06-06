@@ -100,6 +100,10 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		return v.runValidateUsingPlan(v.jobPlan)
 	}
 
+	if v.namespaceName == "" {
+		return errors.New("namespace flag is required on validate using non plan")
+	}
+
 	if v.forDelete && !v.fromServer {
 		return errors.New("for-delete flag is only valid with from-server flag")
 	}

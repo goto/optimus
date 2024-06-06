@@ -169,37 +169,29 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	countExecuted := 0
 	for _, namespace := range c.config.Namespaces {
 		createJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Create.GetByNamespace(namespace.Name)).GetNames()
-		createJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Create.GetByNamespace(namespace.Name)).GetNames()
 		deleteJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Delete.GetByNamespace(namespace.Name)).GetNames()
-		deleteJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Delete.GetByNamespace(namespace.Name)).GetNames()
 		updateJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Update.GetByNamespace(namespace.Name)).GetNames()
-		updateJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Update.GetByNamespace(namespace.Name)).GetNames()
 		migrateJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Migrate.GetByNamespace(namespace.Name)).GetNames()
-		migrateJobSuccess := plan.KindList[*plan.JobPlan](plans.Job.Migrate.GetByNamespace(namespace.Name)).GetNames()
 
 		createResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Create.GetByNamespace(namespace.Name)).GetNames()
-		createResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Create.GetByNamespace(namespace.Name)).GetNames()
 		deleteResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Delete.GetByNamespace(namespace.Name)).GetNames()
-		deleteResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Delete.GetByNamespace(namespace.Name)).GetNames()
 		updateResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Update.GetByNamespace(namespace.Name)).GetNames()
-		updateResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Update.GetByNamespace(namespace.Name)).GetNames()
 		migrateResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Migrate.GetByNamespace(namespace.Name)).GetNames()
-		migrateResourceSuccess := plan.KindList[*plan.ResourcePlan](plans.Resource.Migrate.GetByNamespace(namespace.Name)).GetNames()
 
-		c.printSummary(namespace.Name, "create", "job", createJobAll, createJobSuccess)
-		c.printSummary(namespace.Name, "delete", "job", deleteJobAll, deleteJobSuccess)
-		c.printSummary(namespace.Name, "update", "job", updateJobAll, updateJobSuccess)
-		c.printSummary(namespace.Name, "migrate", "job", migrateJobAll, migrateJobSuccess)
+		c.printSummary(namespace.Name, "create", "job", createJobAll, addedJobs)
+		c.printSummary(namespace.Name, "delete", "job", deleteJobAll, deletedJobs)
+		c.printSummary(namespace.Name, "update", "job", updateJobAll, updatedJobs)
+		c.printSummary(namespace.Name, "migrate", "job", migrateJobAll, migratedJobs)
 
-		c.printSummary(namespace.Name, "create", "resource", createResourceAll, createResourceSuccess)
-		c.printSummary(namespace.Name, "delete", "resource", deleteResourceAll, deleteResourceSuccess)
-		c.printSummary(namespace.Name, "update", "resource", updateResourceAll, updateResourceSuccess)
-		c.printSummary(namespace.Name, "migrate", "resource", migrateResourceAll, migrateResourceSuccess)
+		c.printSummary(namespace.Name, "create", "resource", createResourceAll, addedResources)
+		c.printSummary(namespace.Name, "delete", "resource", deleteResourceAll, deletedResources)
+		c.printSummary(namespace.Name, "update", "resource", updateResourceAll, updatedResources)
+		c.printSummary(namespace.Name, "migrate", "resource", migrateResourceAll, migratedResources)
 
 		countTotal += len(createJobAll) + len(deleteJobAll) + len(updateJobAll) + len(migrateJobAll)
 		countTotal += len(createResourceAll) + len(deleteResourceAll) + len(updateResourceAll) + len(migrateResourceAll)
-		countExecuted += len(createJobSuccess) + len(deleteJobSuccess) + len(updateJobSuccess) + len(migrateJobSuccess)
-		countExecuted += len(createResourceSuccess) + len(deleteResourceSuccess) + len(updateResourceSuccess) + len(migrateResourceSuccess)
+		countExecuted += len(addedJobs) + len(deletedJobs) + len(updatedJobs) + len(migratedJobs)
+		countExecuted += len(addedResources) + len(deletedResources) + len(updatedResources) + len(migratedResources)
 	}
 
 	if countTotal > countExecuted {
@@ -564,7 +556,7 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 }
 
 func (c *applyCommand) getPlans() (plan.Plan, error) {
-	plans := plan.Plan{}
+	var plans plan.Plan
 	for _, source := range c.sources {
 		f, err := os.OpenFile(source, os.O_RDONLY, os.ModePerm)
 		if err != nil {
@@ -582,6 +574,9 @@ func (c *applyCommand) getPlans() (plan.Plan, error) {
 		currentPlans := plan.Plan{}
 		if err := json.Unmarshal(content, &currentPlans); err != nil {
 			return plans, err
+		}
+		if plans.IsEmpty() {
+			plans = plan.NewPlan(currentPlans.ProjectName)
 		}
 		plans = plans.Merge(currentPlans)
 	}

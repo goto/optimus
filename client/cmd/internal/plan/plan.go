@@ -15,13 +15,14 @@ func (p Plan) GetResult() Plan {
 }
 
 func (p Plan) Merge(otherPlan Plan) Plan {
-	if !p.SameProjectName(otherPlan) {
-		return p
-	}
 	newPlan := NewPlan(p.ProjectName)
 	newPlan.Job = p.Job.merge(otherPlan.Job)
 	newPlan.Resource = p.Resource.merge(otherPlan.Resource)
 	return newPlan
+}
+
+func (p Plan) IsEmpty() bool {
+	return p.ProjectName == "" && p.Job.IsZero() && p.Resource.IsZero()
 }
 
 func (p Plan) SameProjectName(compare Plan) bool { return p.ProjectName == compare.ProjectName }

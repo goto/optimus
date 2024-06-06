@@ -151,6 +151,12 @@ func (r *replaceAllCommand) sendNamespaceJobRequest(
 		return err
 	}
 	if err := stream.Send(request); err != nil {
+		if errors.Is(err, io.EOF) {
+			_, errSend := stream.Recv()
+			if errSend != nil {
+				r.logger.Error("stream.Send got EOF, cause: %v", errSend)
+			}
+		}
 		return fmt.Errorf("replacing jobs in namespace [%s] failed: %w", namespace.Name, err)
 	}
 	progressFn(len(request.GetJobs()))

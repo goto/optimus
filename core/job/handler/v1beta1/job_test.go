@@ -2076,6 +2076,14 @@ func (_m *JobService) GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tena
 	return r0, r1
 }
 
+func (_m *JobService) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
+	args := _m.Called(ctx, projectName, jobName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*job.ChangeLog), args.Error(1)
+}
+
 // GetTaskInfo provides a mock function with given fields: ctx, task
 func (_m *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error) {
 	ret := _m.Called(ctx, task)

@@ -381,6 +381,20 @@ func toStorageMetadata(metadataSpec *job.Metadata) ([]byte, error) {
 	return json.Marshal(metadata)
 }
 
+func fromStorageChangelog(changeLog *ChangeLog) *job.ChangeLog {
+	jobChangeLog := job.ChangeLog{
+		Type: changeLog.Type,
+		Time: changeLog.Time,
+	}
+
+	jobChangeLog.Change = make([]job.Change, len(changeLog.Change))
+	for i, change := range changeLog.Change {
+		jobChangeLog.Change[i].Property = change.Property
+		jobChangeLog.Change[i].Diff = change.Diff
+	}
+	return &jobChangeLog
+}
+
 func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 	version := jobSpec.Version
 

@@ -41,7 +41,7 @@ type JobSpecificationServiceClient interface {
 	// GetJobSpecifications read a job spec for provided filters
 	GetJobSpecifications(ctx context.Context, in *GetJobSpecificationsRequest, opts ...grpc.CallOption) (*GetJobSpecificationsResponse, error)
 	// GetJobChangelog get all the changes done on a job
-	GetJobChangelog(ctx context.Context, in *GetJobSpecificationsRequest, opts ...grpc.CallOption) (*GetJobSpecificationsResponse, error)
+	GetJobChangelog(ctx context.Context, in *GetJobChangelogRequest, opts ...grpc.CallOption) (*GetJobChangelogResponse, error)
 	// DeleteJobSpecification deletes a job spec of a namespace
 	DeleteJobSpecification(ctx context.Context, in *DeleteJobSpecificationRequest, opts ...grpc.CallOption) (*DeleteJobSpecificationResponse, error)
 	// ChangeJobNamespace move a job spec from one namespace to another
@@ -169,8 +169,8 @@ func (c *jobSpecificationServiceClient) GetJobSpecifications(ctx context.Context
 	return out, nil
 }
 
-func (c *jobSpecificationServiceClient) GetJobChangelog(ctx context.Context, in *GetJobSpecificationsRequest, opts ...grpc.CallOption) (*GetJobSpecificationsResponse, error) {
-	out := new(GetJobSpecificationsResponse)
+func (c *jobSpecificationServiceClient) GetJobChangelog(ctx context.Context, in *GetJobChangelogRequest, opts ...grpc.CallOption) (*GetJobChangelogResponse, error) {
+	out := new(GetJobChangelogResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -389,7 +389,7 @@ type JobSpecificationServiceServer interface {
 	// GetJobSpecifications read a job spec for provided filters
 	GetJobSpecifications(context.Context, *GetJobSpecificationsRequest) (*GetJobSpecificationsResponse, error)
 	// GetJobChangelog get all the changes done on a job
-	GetJobChangelog(context.Context, *GetJobSpecificationsRequest) (*GetJobSpecificationsResponse, error)
+	GetJobChangelog(context.Context, *GetJobChangelogRequest) (*GetJobChangelogResponse, error)
 	// DeleteJobSpecification deletes a job spec of a namespace
 	DeleteJobSpecification(context.Context, *DeleteJobSpecificationRequest) (*DeleteJobSpecificationResponse, error)
 	// ChangeJobNamespace move a job spec from one namespace to another
@@ -450,7 +450,7 @@ func (UnimplementedJobSpecificationServiceServer) GetJobSpecification(context.Co
 func (UnimplementedJobSpecificationServiceServer) GetJobSpecifications(context.Context, *GetJobSpecificationsRequest) (*GetJobSpecificationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobSpecifications not implemented")
 }
-func (UnimplementedJobSpecificationServiceServer) GetJobChangelog(context.Context, *GetJobSpecificationsRequest) (*GetJobSpecificationsResponse, error) {
+func (UnimplementedJobSpecificationServiceServer) GetJobChangelog(context.Context, *GetJobChangelogRequest) (*GetJobChangelogResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobChangelog not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) DeleteJobSpecification(context.Context, *DeleteJobSpecificationRequest) (*DeleteJobSpecificationResponse, error) {
@@ -641,7 +641,7 @@ func _JobSpecificationService_GetJobSpecifications_Handler(srv interface{}, ctx 
 }
 
 func _JobSpecificationService_GetJobChangelog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetJobSpecificationsRequest)
+	in := new(GetJobChangelogRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -653,7 +653,7 @@ func _JobSpecificationService_GetJobChangelog_Handler(srv interface{}, ctx conte
 		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobSpecificationServiceServer).GetJobChangelog(ctx, req.(*GetJobSpecificationsRequest))
+		return srv.(JobSpecificationServiceServer).GetJobChangelog(ctx, req.(*GetJobChangelogRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

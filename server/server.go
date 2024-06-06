@@ -38,6 +38,8 @@ const (
 
 	DialTimeout      = time.Second * 5
 	BootstrapTimeout = time.Second * 10
+
+	GRPCKeepaliveMinTime = 2 * time.Minute
 )
 
 func checkRequiredConfigs(conf config.Serve) error {
@@ -95,8 +97,8 @@ func setupGRPCServer(l log.Logger) (*grpc.Server, error) {
 		grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize),
 		grpc.MaxSendMsgSize(GRPCMaxSendMsgSize),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-			MinTime:             2 * time.Minute, // MinTime client should wait until next ping as in client side send ping every 1 Minute
-			PermitWithoutStream: true,            // PermitWithoutStream send ping even without active stream
+			MinTime:             GRPCKeepaliveMinTime, // MinTime client should wait until next ping as in client side send ping every 1 Minute
+			PermitWithoutStream: true,                 // PermitWithoutStream send ping even without active stream
 		}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			Time:    1 * time.Minute, // Ping the client if it is idle for 1 minute to ensure the connection is still active

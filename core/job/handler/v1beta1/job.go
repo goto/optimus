@@ -28,16 +28,18 @@ const (
 )
 
 type JobHandler struct {
-	l          log.Logger
-	jobService JobService
+	l                log.Logger
+	jobService       JobService
+	changeLogService ChangeLogService
 
 	pb.UnimplementedJobSpecificationServiceServer
 }
 
-func NewJobHandler(jobService JobService, logger log.Logger) *JobHandler {
+func NewJobHandler(jobService JobService, changeLogService ChangeLogService, logger log.Logger) *JobHandler {
 	return &JobHandler{
-		jobService: jobService,
-		l:          logger,
+		jobService:       jobService,
+		changeLogService: changeLogService,
+		l:                logger,
 	}
 }
 
@@ -49,7 +51,6 @@ type JobService interface {
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
 	Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (jobSpec *job.Job, err error)
-	GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error)
 	GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error)
 	GetByFilter(ctx context.Context, filters ...filter.FilterOpt) (jobSpecs []*job.Job, err error)
 	ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error
@@ -59,6 +60,10 @@ type JobService interface {
 	GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, spec *job.Spec) (*job.Job, writer.BufferedLogger)
 	GetUpstreamsToInspect(ctx context.Context, subjectJob *job.Job, localJob bool) ([]*job.Upstream, error)
 	GetDownstream(ctx context.Context, job *job.Job, localJob bool) ([]*job.Downstream, error)
+}
+
+type ChangeLogService interface {
+	GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error)
 }
 
 func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *pb.AddJobSpecificationsRequest) (*pb.AddJobSpecificationsResponse, error) {
@@ -248,7 +253,7 @@ func (jh *JobHandler) GetJobChangelog(ctx context.Context, req *pb.GetJobChangel
 		return nil, err
 	}
 
-	changeLog, err := jh.jobService.GetChangelog(ctx, projectName, jobName)
+	changeLog, err := jh.changeLogService.GetChangelog(ctx, projectName, jobName)
 	if err != nil && !errors.IsErrorType(err, errors.ErrNotFound) {
 		errorMsg := "failed to get job specification"
 		jh.l.Error(fmt.Sprintf("%s: %s", err.Error(), errorMsg))

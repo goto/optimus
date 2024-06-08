@@ -116,7 +116,6 @@ type JobDeploymentService interface {
 }
 
 type JobRepository interface {
-	// TODO: remove `savedJobs` since the method's main purpose is to add, not to get
 	Add(context.Context, []*job.Job) (addedJobs []*job.Job, err error)
 	Update(context.Context, []*job.Job) (updatedJobs []*job.Job, err error)
 	Delete(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, cleanHistory bool) error

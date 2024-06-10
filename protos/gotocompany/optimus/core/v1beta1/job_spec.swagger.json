@@ -21,43 +21,6 @@
     "application/json"
   ],
   "paths": {
-    "/v1beta1/job/changelog/{projectName}/{jobName}": {
-      "get": {
-        "summary": "GetJobChangelog get all the changes done on a job",
-        "operationId": "JobSpecificationService_GetJobChangelog",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1GetJobChangelogResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "jobName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "JobSpecificationService"
-        ]
-      }
-    },
     "/v1beta1/jobs": {
       "get": {
         "summary": "GetJobSpecifications read a job spec for provided filters",
@@ -184,6 +147,43 @@
         "parameters": [
           {
             "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "JobSpecificationService"
+        ]
+      }
+    },
+    "/v1beta1/project/{projectName}/job/{jobName}/changelog": {
+      "get": {
+        "summary": "GetJobChangelog get all the changes done on a job",
+        "operationId": "JobSpecificationService_GetJobChangelog",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetJobChangelogResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
             "in": "path",
             "required": true,
             "type": "string"

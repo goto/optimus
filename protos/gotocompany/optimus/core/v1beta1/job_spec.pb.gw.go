@@ -1463,7 +1463,7 @@ func RegisterJobSpecificationServiceHandlerServer(ctx context.Context, mux *runt
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog", runtime.WithHTTPPathPattern("/v1beta1/job/changelog/{project_name}/{job_name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog", runtime.WithHTTPPathPattern("/v1beta1/project/{project_name}/job/{job_name}/changelog"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1852,7 +1852,7 @@ func RegisterJobSpecificationServiceHandlerClient(ctx context.Context, mux *runt
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog", runtime.WithHTTPPathPattern("/v1beta1/job/changelog/{project_name}/{job_name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog", runtime.WithHTTPPathPattern("/v1beta1/project/{project_name}/job/{job_name}/changelog"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2064,7 +2064,7 @@ var (
 
 	pattern_JobSpecificationService_GetJobSpecifications_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1beta1", "jobs"}, ""))
 
-	pattern_JobSpecificationService_GetJobChangelog_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"v1beta1", "job", "changelog", "project_name", "job_name"}, ""))
+	pattern_JobSpecificationService_GetJobChangelog_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1beta1", "project", "project_name", "job", "job_name", "changelog"}, ""))
 
 	pattern_JobSpecificationService_DeleteJobSpecification_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5, 1, 0, 4, 1, 5, 6}, []string{"v1beta1", "project", "project_name", "namespace", "namespace_name", "job", "job_name"}, ""))
 

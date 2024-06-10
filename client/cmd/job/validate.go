@@ -412,7 +412,9 @@ func (v *validateCommand) invalidPlanFlag() bool {
 func (v *validateCommand) runValidateUsingPlan(jobPlan *plan.Plan) error {
 	v.logger.Info("Validating job specifications for namespaces %s\n", jobPlan.Job.GetAllNamespaces())
 	start := time.Now()
-	defer v.logger.Info("Validation is finished, took %s", time.Since(start).Round(time.Second))
+	defer func(startTime time.Time) {
+		v.logger.Info("Validation is finished, took %s", time.Since(startTime).Round(time.Second))
+	}(start)
 
 	if err := v.executeLocalValidation(); err != nil {
 		return err

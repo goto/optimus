@@ -361,6 +361,8 @@ func (s *OptimusServer) setupHandlers() error {
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
 	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, pluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
 
+	jchangeLogService := jService.NewChangeLogService(jJobRepo)
+
 	// Resource Bounded Context
 	resourceRepository := resource.NewRepository(s.dbPool)
 	backupRepository := resource.NewBackupRepository(s.dbPool)
@@ -390,7 +392,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterRuntimeServiceServer(s.grpcServer, oHandler.NewVersionHandler(s.logger, config.BuildVersion))
 
 	// Core Job Handler
-	pb.RegisterJobSpecificationServiceServer(s.grpcServer, jHandler.NewJobHandler(jJobService, s.logger))
+	pb.RegisterJobSpecificationServiceServer(s.grpcServer, jHandler.NewJobHandler(jJobService, jchangeLogService, s.logger))
 
 	pb.RegisterReplayServiceServer(s.grpcServer, schedulerHandler.NewReplayHandler(s.logger, replayService))
 

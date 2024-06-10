@@ -11,9 +11,9 @@ func GetValidJobDirectory(directories []string) []string {
 		jobParser      = new(JobPlan)
 	)
 
-	for i := range directories {
-		if jobParser.ValidDirectory(directories[i]) {
-			jobDirectories = append(jobDirectories, jobParser.ParseDirectory(directories[i]))
+	for _, directory := range directories {
+		if jobParser.ValidDirectory(directory) {
+			jobDirectories = append(jobDirectories, jobParser.ParseDirectory(directory))
 		}
 	}
 
@@ -26,9 +26,9 @@ func GetValidResourceDirectory(directories []string) []string {
 		resourceParser       = new(ResourcePlan)
 	)
 
-	for i := range directories {
-		if resourceParser.ValidDirectory(directories[i]) {
-			resourcesDirectories = append(resourcesDirectories, resourceParser.ParseDirectory(directories[i]))
+	for _, directory := range directories {
+		if resourceParser.ValidDirectory(directory) {
+			resourcesDirectories = append(resourcesDirectories, resourceParser.ParseDirectory(directory))
 		}
 	}
 
@@ -38,12 +38,12 @@ func GetValidResourceDirectory(directories []string) []string {
 func DistinctDirectory(directories []string) []string {
 	directoryDictionary := make(map[string]bool)
 	res := make([]string, 0)
-	for i := range directories {
-		if directoryDictionary[directories[i]] {
+	for _, directory := range directories {
+		if _, exists := directoryDictionary[directory]; exists {
 			continue
 		}
-		directoryDictionary[directories[i]] = true
-		res = append(res, directories[i])
+		directoryDictionary[directory] = true
+		res = append(res, directory)
 	}
 	return res
 }

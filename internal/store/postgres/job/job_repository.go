@@ -257,7 +257,7 @@ func (j JobRepository) preCheckUpdate(ctx context.Context, jobEntity *job.Job) e
 	return nil
 }
 
-func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) (ChangeLog, error) {
+func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) ([]Change, error) {
 	toIgnore := map[string]struct{}{
 		"ID":        {},
 		"CreatedAt": {},
@@ -286,7 +286,7 @@ func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) (ChangeLog, error) 
 	return changelog, nil
 }
 
-func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, projectName tenant.ProjectName, changeLog ChangeLog) error {
+func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, projectName tenant.ProjectName, changeLog []Change) error {
 	changeLogBytes, err := json.Marshal(changeLog)
 	if err != nil {
 		return err
@@ -303,6 +303,30 @@ func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, pr
 		return errors.InternalError(job.EntityJobChangeLog, "unable to insert job changelog, rows affected 0", nil)
 	}
 	return err
+}
+
+func (j JobRepository) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
+	me := errors.NewMultiError("get change log errors")
+
+	getChangeLogQuery := `select changes, change_type, created_at from changeLog where project_name = $1 and name = $2;`
+
+	rows, err := j.db.Query(ctx, getChangeLogQuery, projectName, jobName)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "error while changeLog for job: "+projectName.String()+"/"+jobName.String(), err)
+	}
+	defer rows.Close()
+
+	var changeLog []*job.ChangeLog
+	for rows.Next() {
+		log, err := FromChangelogRow(rows)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		changeLog = append(changeLog, fromStorageChangelog(log))
+	}
+
+	return changeLog, me.ToErr()
 }
 
 func (j JobRepository) computeAndPersistChangeLog(ctx context.Context, existingJob *Spec, incomingJobEntity *job.Job) error {

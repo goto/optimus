@@ -202,11 +202,11 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
 	}
 
-	jobSuccess := make([]job.Name, len(addedJobs))
-	for i, addedJob := range addedJobs {
-		jobSuccess[i] = addedJob.Spec().Name()
+	if addedJobs == nil {
+		return nil, me.ToErr()
 	}
-	return jobSuccess, me.ToErr()
+
+	return job.Jobs(addedJobs).GetJobNames(), me.ToErr()
 }
 
 func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
@@ -255,11 +255,11 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
 	}
 
-	jobSuccess := make([]job.Name, len(updatedJobs))
-	for i, updatedJob := range updatedJobs {
-		jobSuccess[i] = updatedJob.Spec().Name()
+	if updatedJobs == nil {
+		return nil, me.ToErr()
 	}
-	return jobSuccess, me.ToErr()
+
+	return job.Jobs(updatedJobs).GetJobNames(), me.ToErr()
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {

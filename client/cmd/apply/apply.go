@@ -25,7 +25,7 @@ import (
 
 const (
 	applyTimeout     = time.Minute * 5
-	executedPlanFile = "plan_apply.csv"
+	executedPlanFile = "plan_apply.json"
 )
 
 type applyCommand struct {

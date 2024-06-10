@@ -197,9 +197,7 @@ func (rh ResourceHandler) CreateResource(ctx context.Context, req *pb.CreateReso
 		return nil, errors.GRPCErr(err, "failed to create resource "+res.FullName())
 	}
 
-	return &pb.CreateResourceResponse{
-		Success: true,
-	}, nil
+	return &pb.CreateResourceResponse{}, nil
 }
 
 func (rh ResourceHandler) ReadResource(ctx context.Context, req *pb.ReadResourceRequest) (*pb.ReadResourceResponse, error) {

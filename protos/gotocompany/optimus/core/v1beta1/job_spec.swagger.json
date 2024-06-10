@@ -1101,11 +1101,22 @@
       "properties": {
         "log": {
           "type": "string"
+        },
+        "jobNameSuccesses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
     "v1beta1ChangeJobNamespaceResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        }
+      }
     },
     "v1beta1CheckJobSpecificationResponse": {
       "type": "object",
@@ -1611,6 +1622,12 @@
       "properties": {
         "log": {
           "type": "string"
+        },
+        "jobNameSuccesses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

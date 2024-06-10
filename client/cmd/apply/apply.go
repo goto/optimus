@@ -35,6 +35,7 @@ type applyCommand struct {
 	jobSpecReadWriter      local.SpecReadWriter[*model.JobSpec]
 	resourceSpecReadWriter local.SpecReadWriter[*model.ResourceSpec]
 	verbose                bool
+	isOperationFail        bool
 
 	configFilePath string
 	sources        []string
@@ -84,6 +85,7 @@ func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("couldn't instantiate resource spec reader")
 	}
 	c.logger = logger.NewClientLogger()
+	c.isOperationFail = false
 	c.connection = connection.New(c.logger, conf)
 	c.jobSpecReadWriter = jobSpecReadWriter
 	c.resourceSpecReadWriter = resourceSpecReadWriter
@@ -164,72 +166,34 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// log summary
-	countTotal := 0
-	countExecuted := 0
-	for _, namespace := range c.config.Namespaces {
-		createJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Create.GetByNamespace(namespace.Name)).GetNames()
-		deleteJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Delete.GetByNamespace(namespace.Name)).GetNames()
-		updateJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Update.GetByNamespace(namespace.Name)).GetNames()
-		migrateJobAll := plan.KindList[*plan.JobPlan](basePlans.Job.Migrate.GetByNamespace(namespace.Name)).GetNames()
-
-		createResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Create.GetByNamespace(namespace.Name)).GetNames()
-		deleteResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Delete.GetByNamespace(namespace.Name)).GetNames()
-		updateResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Update.GetByNamespace(namespace.Name)).GetNames()
-		migrateResourceAll := plan.KindList[*plan.ResourcePlan](basePlans.Resource.Migrate.GetByNamespace(namespace.Name)).GetNames()
-
-		c.printSummary(namespace.Name, "create", "job", createJobAll, addedJobs)
-		c.printSummary(namespace.Name, "delete", "job", deleteJobAll, deletedJobs)
-		c.printSummary(namespace.Name, "update", "job", updateJobAll, updatedJobs)
-		c.printSummary(namespace.Name, "migrate", "job", migrateJobAll, migratedJobs)
-
-		c.printSummary(namespace.Name, "create", "resource", createResourceAll, addedResources)
-		c.printSummary(namespace.Name, "delete", "resource", deleteResourceAll, deletedResources)
-		c.printSummary(namespace.Name, "update", "resource", updateResourceAll, updatedResources)
-		c.printSummary(namespace.Name, "migrate", "resource", migrateResourceAll, migratedResources)
-
-		countTotal += len(createJobAll) + len(deleteJobAll) + len(updateJobAll) + len(migrateJobAll)
-		countTotal += len(createResourceAll) + len(deleteResourceAll) + len(updateResourceAll) + len(migrateResourceAll)
-		countExecuted += len(addedJobs) + len(deletedJobs) + len(updatedJobs) + len(migratedJobs)
-		countExecuted += len(addedResources) + len(deletedResources) + len(updatedResources) + len(migratedResources)
-	}
-
-	if countTotal > countExecuted {
+	if c.isOperationFail {
 		return fmt.Errorf("some operations couldn't be proceed")
 	}
 
 	return nil
 }
 
-func (c *applyCommand) printSummary(namespaceName, operation, kind string, all, success []string) {
-	isSucccess := map[string]bool{}
-	for _, name := range success {
-		isSucccess[name] = true
-	}
+func (c *applyCommand) printSuccess(namespaceName, operation, kind, name string) {
+	c.logger.Info("[%s] %s: %s %s ✅", namespaceName, operation, kind, name)
+}
 
-	for _, name := range all {
-		if _, ok := isSucccess[name]; ok {
-			c.logger.Info("[%s] %s: %s %s ✅", namespaceName, operation, kind, name)
-		} else {
-			c.logger.Error("[%s] %s: %s %s ❌", namespaceName, operation, kind, name)
-		}
+func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause string) {
+	c.logger.Error("[%s] %s: %s %s ❌", namespaceName, operation, kind, name)
+	if c.verbose && cause != "" {
+		c.logger.Error(cause)
 	}
+	c.isOperationFail = true
 }
 
 func (c *applyCommand) executeJobDelete(ctx context.Context, client pb.JobSpecificationServiceClient, requests []*pb.DeleteJobSpecificationRequest) []string {
 	deletedJobs := []string{}
 	for _, request := range requests {
-		response, err := client.DeleteJobSpecification(ctx, request)
-		if c.verbose {
-			c.logger.Info(response.GetMessage())
-		}
+		_, err := client.DeleteJobSpecification(ctx, request)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.printFailed(request.NamespaceName, "delete", "job", request.GetJobName(), err.Error())
 			continue
 		}
-		if response.GetSuccess() {
-			deletedJobs = append(deletedJobs, request.GetJobName())
-		}
+		c.printSuccess(request.NamespaceName, "delete", "job", request.GetJobName())
 	}
 	return deletedJobs
 }
@@ -238,12 +202,27 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 	addedJobs := []string{}
 	for _, request := range requests {
 		response, err := client.AddJobSpecifications(ctx, request)
-		if c.verbose {
-			c.logger.Info(response.GetLog())
-		}
 		if err != nil {
-			c.logger.Error(err.Error())
+			for _, spec := range request.GetSpecs() {
+				c.printFailed(request.NamespaceName, "create", "job", spec.GetName(), "")
+			}
+			if c.verbose {
+				c.logger.Error(err.Error())
+			}
 			continue
+		}
+		isJobSuccess := map[string]bool{}
+		for _, jobName := range response.GetJobNameSuccesses() {
+			c.printSuccess(request.NamespaceName, "create", "job", jobName)
+			isJobSuccess[jobName] = true
+		}
+		for _, spec := range request.GetSpecs() {
+			if _, ok := isJobSuccess[spec.GetName()]; !ok {
+				c.printFailed(request.NamespaceName, "create", "job", spec.GetName(), "")
+			}
+		}
+		if c.verbose {
+			c.logger.Warn(response.GetLog())
 		}
 		addedJobs = append(addedJobs, response.GetJobNameSuccesses()...)
 	}
@@ -253,17 +232,12 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 func (c *applyCommand) executeJobMigrate(ctx context.Context, client pb.JobSpecificationServiceClient, requests []*pb.ChangeJobNamespaceRequest) []string {
 	migratedJobs := []string{}
 	for _, request := range requests {
-		response, err := client.ChangeJobNamespace(ctx, request)
+		_, err := client.ChangeJobNamespace(ctx, request)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.printFailed(request.NamespaceName, "migrate", "job", request.GetJobName(), err.Error())
 			continue
 		}
-		if c.verbose {
-			c.logger.Info("job %s successfully migrated", request.GetJobName())
-		}
-		if response.GetSuccess() {
-			migratedJobs = append(migratedJobs, request.GetJobName())
-		}
+		c.printSuccess(request.NamespaceName, "migrate", "job", request.GetJobName())
 	}
 	return migratedJobs
 }
@@ -276,8 +250,26 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 			c.logger.Info(response.GetLog())
 		}
 		if err != nil {
-			c.logger.Error(err.Error())
+			for _, spec := range request.GetSpecs() {
+				c.printFailed(request.NamespaceName, "update", "job", spec.GetName(), "")
+			}
+			if c.verbose {
+				c.logger.Error(err.Error())
+			}
 			continue
+		}
+		isJobSuccess := map[string]bool{}
+		for _, jobName := range response.GetJobNameSuccesses() {
+			c.printSuccess(request.NamespaceName, "update", "job", jobName)
+			isJobSuccess[jobName] = true
+		}
+		for _, spec := range request.GetSpecs() {
+			if _, ok := isJobSuccess[spec.GetName()]; !ok {
+				c.printFailed(request.NamespaceName, "update", "job", spec.GetName(), "")
+			}
+		}
+		if c.verbose {
+			c.logger.Warn(response.GetLog())
 		}
 		updatedJobs = append(updatedJobs, response.GetJobNameSuccesses()...)
 	}
@@ -289,12 +281,10 @@ func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.Reso
 	for _, request := range requests {
 		_, err := client.DeleteResource(ctx, request)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.printFailed(request.NamespaceName, "delete", "resource", request.GetResourceName(), err.Error())
 			continue
 		}
-		if c.verbose {
-			c.logger.Info("resource %s successfully deleted", request.GetResourceName())
-		}
+		c.printSuccess(request.NamespaceName, "delete", "resource", request.GetResourceName())
 		deletedResources = append(deletedResources, request.GetResourceName())
 	}
 	return deletedResources
@@ -303,17 +293,13 @@ func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.Reso
 func (c *applyCommand) executeResourceAdd(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.CreateResourceRequest) []string {
 	addedResources := []string{}
 	for _, request := range requests {
-		response, err := client.CreateResource(ctx, request)
-		if c.verbose {
-			c.logger.Info(response.GetMessage())
-		}
+		_, err := client.CreateResource(ctx, request)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.printFailed(request.NamespaceName, "add", "resource", request.GetResource().GetName(), err.Error())
 			continue
 		}
-		if response.GetSuccess() {
-			addedResources = append(addedResources, request.GetResource().GetName())
-		}
+		c.printSuccess(request.NamespaceName, "add", "resource", request.GetResource().GetName())
+		addedResources = append(addedResources, request.GetResource().GetName())
 	}
 	return addedResources
 }
@@ -321,17 +307,13 @@ func (c *applyCommand) executeResourceAdd(ctx context.Context, client pb.Resourc
 func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.ChangeResourceNamespaceRequest) []string {
 	migratedResources := []string{}
 	for _, request := range requests {
-		response, err := client.ChangeResourceNamespace(ctx, request)
+		_, err := client.ChangeResourceNamespace(ctx, request)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.printFailed(request.NamespaceName, "migrate", "resource", request.GetResourceName(), err.Error())
 			continue
 		}
-		if c.verbose {
-			c.logger.Info("resource %s successfully migrated", request.GetResourceName())
-		}
-		if response.GetSuccess() {
-			migratedResources = append(migratedResources, request.GetResourceName())
-		}
+		c.printSuccess(request.NamespaceName, "migrate", "resource", request.GetResourceName())
+		migratedResources = append(migratedResources, request.GetResourceName())
 	}
 	return migratedResources
 }
@@ -339,17 +321,13 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.UpdateResourceRequest) []string {
 	updatedResources := []string{}
 	for _, request := range requests {
-		response, err := client.UpdateResource(ctx, request)
-		if c.verbose {
-			c.logger.Info(response.GetMessage())
-		}
+		_, err := client.UpdateResource(ctx, request)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.printFailed(request.NamespaceName, "update", "resource", request.GetResource().GetName(), err.Error())
 			continue
 		}
-		if response.GetSuccess() {
-			updatedResources = append(updatedResources, request.GetResource().GetName())
-		}
+		c.printSuccess(request.NamespaceName, "update", "resource", request.GetResource().GetName())
+		updatedResources = append(updatedResources, request.GetResource().GetName())
 	}
 	return updatedResources
 }

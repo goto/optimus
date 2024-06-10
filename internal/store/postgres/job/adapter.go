@@ -56,6 +56,12 @@ type Spec struct {
 	IsDirty bool
 }
 
+type Change struct {
+	Property string `json:"attribute_name"`
+	Diff     string `json:"diff"`
+}
+type ChangeLog []Change
+
 type Schedule struct {
 	StartDate     time.Time
 	EndDate       *time.Time `json:",omitempty"`
@@ -77,7 +83,7 @@ type Window struct {
 
 type Retry struct {
 	Count              int
-	Delay              int32
+	Delay              int64
 	ExponentialBackoff bool
 }
 
@@ -314,7 +320,7 @@ func toStorageSchedule(scheduleSpec *job.Schedule) ([]byte, error) {
 	if scheduleSpec.Retry() != nil {
 		retry = &Retry{
 			Count:              scheduleSpec.Retry().Count(),
-			Delay:              scheduleSpec.Retry().Delay(),
+			Delay:              scheduleSpec.Retry().DelayInSeconds(),
 			ExponentialBackoff: scheduleSpec.Retry().ExponentialBackoff(),
 		}
 	}

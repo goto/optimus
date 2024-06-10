@@ -253,7 +253,7 @@ func toRetry(protoRetry *pb.JobSpecification_Behavior_Retry) *job.Retry {
 	if protoRetry == nil {
 		return nil
 	}
-	return job.NewRetry(int(protoRetry.Count), protoRetry.Delay.GetNanos(), protoRetry.ExponentialBackoff)
+	return job.NewRetry(int(protoRetry.Count), protoRetry.Delay.GetSeconds(), protoRetry.ExponentialBackoff)
 }
 
 func fromRetry(jobRetry *job.Retry) *pb.JobSpecification_Behavior_Retry {
@@ -262,7 +262,7 @@ func fromRetry(jobRetry *job.Retry) *pb.JobSpecification_Behavior_Retry {
 	}
 	return &pb.JobSpecification_Behavior_Retry{
 		Count:              int32(jobRetry.Count()),
-		Delay:              &durationpb.Duration{Nanos: jobRetry.Delay()},
+		Delay:              &durationpb.Duration{Seconds: jobRetry.DelayInSeconds()},
 		ExponentialBackoff: jobRetry.ExponentialBackoff(),
 	}
 }

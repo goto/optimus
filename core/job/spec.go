@@ -2,6 +2,7 @@ package job
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -36,6 +37,22 @@ type Spec struct {
 
 func (s *Spec) Version() int {
 	return s.version
+}
+
+func (s *Spec) DiffBehaviorally(incoming *Spec) bool {
+	if s.schedule.interval != incoming.schedule.interval {
+		return true
+	}
+	if !reflect.DeepEqual(s.windowConfig, incoming.windowConfig) {
+		return true
+	}
+	if !reflect.DeepEqual(s.task, incoming.task) {
+		return true
+	}
+	if !reflect.DeepEqual(s.asset, incoming.asset) {
+		return true
+	}
+	return false
 }
 
 func (s *Spec) Name() Name {
@@ -265,7 +282,7 @@ func (s ScheduleDate) String() string {
 
 type Retry struct {
 	count              int
-	delay              int32
+	delayInSeconds     int64
 	exponentialBackoff bool
 }
 
@@ -273,16 +290,16 @@ func (r Retry) Count() int {
 	return r.count
 }
 
-func (r Retry) Delay() int32 {
-	return r.delay
+func (r Retry) DelayInSeconds() int64 {
+	return r.delayInSeconds
 }
 
 func (r Retry) ExponentialBackoff() bool {
 	return r.exponentialBackoff
 }
 
-func NewRetry(count int, delay int32, exponentialBackoff bool) *Retry {
-	return &Retry{count: count, delay: delay, exponentialBackoff: exponentialBackoff}
+func NewRetry(count int, delay int64, exponentialBackoff bool) *Retry {
+	return &Retry{count: count, delayInSeconds: delay, exponentialBackoff: exponentialBackoff}
 }
 
 type Schedule struct {

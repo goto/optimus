@@ -16,7 +16,7 @@ func TestEntitySpec(t *testing.T) {
 	jobVersion := 1
 	startDate, _ := job.ScheduleDateFrom("2022-10-01")
 	endDate, _ := job.ScheduleDateFrom("2022-10-02")
-	retry := job.NewRetry(0, int32(0), false)
+	retry := job.NewRetry(0, int64(0), false)
 	jobSchedule, _ := job.NewScheduleBuilder(startDate).
 		WithEndDate(endDate).
 		WithInterval("0 2 * * *").
@@ -65,7 +65,7 @@ func TestEntitySpec(t *testing.T) {
 
 			assert.Equal(t, jobSchedule, specA.Schedule())
 			assert.Equal(t, jobSchedule.Retry(), specA.Schedule().Retry())
-			assert.Equal(t, jobSchedule.Retry().Delay(), specA.Schedule().Retry().Delay())
+			assert.Equal(t, jobSchedule.Retry().DelayInSeconds(), specA.Schedule().Retry().DelayInSeconds())
 			assert.Equal(t, jobSchedule.Retry().Count(), specA.Schedule().Retry().Count())
 			assert.Equal(t, jobSchedule.Retry().ExponentialBackoff(), specA.Schedule().Retry().ExponentialBackoff())
 			assert.Equal(t, jobSchedule.EndDate(), specA.Schedule().EndDate())

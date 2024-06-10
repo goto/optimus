@@ -18,6 +18,8 @@ const (
 	getReplaysDayLimit = 30 // TODO: make it configurable via cli
 
 	metricJobReplay = "jobrun_replay_requests_total"
+
+	tenantReplayExecutionProjectConfigKey = "REPLAY_EXECUTION_PROJECT"
 )
 
 type SchedulerRunGetter interface {
@@ -32,6 +34,10 @@ type ReplayRepository interface {
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
+}
+
+type TenantGetter interface {
+	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 }
 
 type ReplayValidator interface {
@@ -50,7 +56,14 @@ type ReplayService struct {
 	validator ReplayValidator
 	executor  ReplayExecutor
 
+	tenantGetter TenantGetter
+
 	logger log.Logger
+
+	// stores mapping of task names (optimus plugin names) to its respective execution project config names.
+	// this mapping is needed because our bq plugins supporting execution project uses different config names inside the plugins.
+	// after the config naming is standardized, this map can be omitted
+	pluginToExecutionProjectKeyMap map[string]string
 }
 
 func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
@@ -59,6 +72,13 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return uuid.Nil, err
 	}
+
+	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, tenant, jobName, config)
+	if err != nil {
+		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
+		return uuid.Nil, err
+	}
+	config.JobConfig = newConfig
 
 	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
 	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
@@ -82,6 +102,41 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
+}
+
+func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
+	// copy ReplayConfig to a new map to mutate it
+	newConfig := map[string]string{}
+	for cfgKey, cfgVal := range config.JobConfig {
+		newConfig[cfgKey] = cfgVal
+	}
+
+	// get tenant (project & namespace) configuration to obtain the execution project specifically for replay.
+	// note that the current behavior of GetDetails in the implementing struct prioritized namespace config over project config.
+	tenantWithDetails, err := r.tenantGetter.GetDetails(ctx, tnnt)
+	if err != nil {
+		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("failed to get tenant details for project [%s], namespace [%s]",
+				tnnt.ProjectName(), tnnt.NamespaceName()))
+	}
+
+	job, err := r.jobRepo.GetJob(ctx, tnnt.ProjectName(), jobName)
+	if err != nil {
+		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("failed to get job for job name [%s]", jobName))
+	}
+
+	tenantConfig := tenantWithDetails.GetConfigs()
+
+	// override the default execution project with the one in tenant config.
+	// only inject tenant-level config if execution project is not provided in ReplayConfig
+	overridedConfigKey, isSupported := r.pluginToExecutionProjectKeyMap[job.Task.Name]
+	tenantExecutionProject := tenantConfig[tenantReplayExecutionProjectConfigKey]
+	if isSupported && tenantExecutionProject != "" {
+		newConfig[overridedConfigKey] = tenantExecutionProject
+	}
+
+	return newConfig, nil
 }
 
 func (r *ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
@@ -130,8 +185,26 @@ func (r *ReplayService) CancelReplay(ctx context.Context, replayWithRun *schedul
 	return r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
 }
 
-func NewReplayService(replayRepo ReplayRepository, jobRepo JobRepository, validator ReplayValidator, worker ReplayExecutor, runGetter SchedulerRunGetter, logger log.Logger) *ReplayService {
-	return &ReplayService{replayRepo: replayRepo, jobRepo: jobRepo, validator: validator, executor: worker, runGetter: runGetter, logger: logger}
+func NewReplayService(
+	replayRepo ReplayRepository,
+	jobRepo JobRepository,
+	tenantGetter TenantGetter,
+	validator ReplayValidator,
+	worker ReplayExecutor,
+	runGetter SchedulerRunGetter,
+	logger log.Logger,
+	pluginToExecutionProjectKeyMap map[string]string,
+) *ReplayService {
+	return &ReplayService{
+		replayRepo:                     replayRepo,
+		jobRepo:                        jobRepo,
+		tenantGetter:                   tenantGetter,
+		validator:                      validator,
+		executor:                       worker,
+		runGetter:                      runGetter,
+		logger:                         logger,
+		pluginToExecutionProjectKeyMap: pluginToExecutionProjectKeyMap,
+	}
 }
 
 func getJobCron(ctx context.Context, l log.Logger, jobRepo JobRepository, tnnt tenant.Tenant, jobName scheduler.JobName) (*cron.ScheduleSpec, error) {

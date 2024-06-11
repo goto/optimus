@@ -1,8 +1,11 @@
-package plan
+package plan_test
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/client/cmd/internal/plan"
 )
 
 func TestGetValidJobDirectory(t *testing.T) {
@@ -39,7 +42,7 @@ func TestGetValidJobDirectory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, GetValidJobDirectory(tt.args.directories), "GetValidJobDirectory(%v)", tt.args.directories)
+			assert.Equalf(t, tt.want, plan.GetValidJobDirectory(tt.args.directories), "GetValidJobDirectory(%v)", tt.args.directories)
 		})
 	}
 }
@@ -76,7 +79,7 @@ func TestGetValidResourceDirectory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, GetValidResourceDirectory(tt.args.directories), "GetValidResourceDirectory(%v)", tt.args.directories)
+			assert.Equalf(t, tt.want, plan.GetValidResourceDirectory(tt.args.directories), "GetValidResourceDirectory(%v)", tt.args.directories)
 		})
 	}
 }
@@ -114,7 +117,7 @@ func TestDistinctDirectory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, DistinctDirectory(tt.args.directories), "DistinctDirectory(%v)", tt.args.directories)
+			assert.Equalf(t, tt.want, plan.DistinctDirectory(tt.args.directories), "DistinctDirectory(%v)", tt.args.directories)
 		})
 	}
 }

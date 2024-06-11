@@ -13,7 +13,11 @@ func GetValidJobDirectory(directories []string) []string {
 
 	for _, directory := range directories {
 		if jobParser.ValidDirectory(directory) {
-			jobDirectories = append(jobDirectories, jobParser.ParseDirectory(directory))
+			jobDirectory := jobParser.ParseDirectory(directory)
+			if jobDirectory == "" {
+				continue
+			}
+			jobDirectories = append(jobDirectories, jobDirectory)
 		}
 	}
 

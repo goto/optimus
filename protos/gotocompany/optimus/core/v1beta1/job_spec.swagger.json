@@ -1139,7 +1139,7 @@
         "log": {
           "type": "string"
         },
-        "jobNameSuccesses": {
+        "successfulJobNames": {
           "type": "array",
           "items": {
             "type": "string"
@@ -1694,7 +1694,7 @@
         "log": {
           "type": "string"
         },
-        "jobNameSuccesses": {
+        "successfulJobNames": {
           "type": "array",
           "items": {
             "type": "string"

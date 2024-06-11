@@ -17,14 +17,18 @@ func (JobPlan) FileSuffix() string { return "/job.yaml" }
 
 func (p JobPlan) ValidDirectory(directory string) bool {
 	index := strings.Index(directory, "/assets")
-	return strings.HasSuffix(directory, p.FileSuffix()) && index < 1
+	return strings.HasSuffix(directory, p.FileSuffix()) || index > 0
 }
 
 func (p JobPlan) ParseDirectory(directory string) string {
-	index := strings.Index(directory, "/assets")
-	directory = strings.TrimSuffix(directory, p.FileSuffix())
-	if index > 0 {
-		directory = directory[:index]
+	if strings.HasSuffix(directory, p.FileSuffix()) {
+		return strings.TrimSuffix(directory, p.FileSuffix())
 	}
-	return directory
+
+	index := strings.Index(directory, "/assets")
+	if index > 0 {
+		return directory[:index]
+	}
+
+	return ""
 }

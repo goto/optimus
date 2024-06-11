@@ -326,9 +326,7 @@ func (rh ResourceHandler) ChangeResourceNamespace(ctx context.Context, req *pb.C
 		"namespace_destination": newTnnt.NamespaceName().String(),
 	}).Inc()
 
-	return &pb.ChangeResourceNamespaceResponse{
-		Success: true,
-	}, nil
+	return &pb.ChangeResourceNamespaceResponse{}, nil
 }
 
 func (rh ResourceHandler) ApplyResources(ctx context.Context, req *pb.ApplyResourcesRequest) (*pb.ApplyResourcesResponse, error) {

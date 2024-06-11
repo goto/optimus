@@ -213,7 +213,7 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 			continue
 		}
 		isJobSuccess := map[string]bool{}
-		for _, jobName := range response.GetJobNameSuccesses() {
+		for _, jobName := range response.GetSuccessfulJobNames() {
 			c.printSuccess(request.NamespaceName, "create", "job", jobName)
 			isJobSuccess[jobName] = true
 		}
@@ -225,7 +225,7 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 		if c.verbose {
 			c.logger.Warn(response.GetLog())
 		}
-		addedJobs = append(addedJobs, response.GetJobNameSuccesses()...)
+		addedJobs = append(addedJobs, response.GetSuccessfulJobNames()...)
 	}
 	return addedJobs
 }
@@ -261,7 +261,7 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 			continue
 		}
 		isJobSuccess := map[string]bool{}
-		for _, jobName := range response.GetJobNameSuccesses() {
+		for _, jobName := range response.GetSuccessfulJobNames() {
 			c.printSuccess(request.NamespaceName, "update", "job", jobName)
 			isJobSuccess[jobName] = true
 		}
@@ -273,7 +273,7 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 		if c.verbose {
 			c.logger.Warn(response.GetLog())
 		}
-		updatedJobs = append(updatedJobs, response.GetJobNameSuccesses()...)
+		updatedJobs = append(updatedJobs, response.GetSuccessfulJobNames()...)
 	}
 	return updatedJobs
 }

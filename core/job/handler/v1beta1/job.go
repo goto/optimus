@@ -107,8 +107,8 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		jobSuccesses[i] = jobName.String()
 	}
 	return &pb.AddJobSpecificationsResponse{
-		Log:              responseLog,
-		JobNameSuccesses: jobSuccesses,
+		Log:                responseLog,
+		SuccessfulJobNames: jobSuccesses,
 	}, nil
 }
 
@@ -223,8 +223,8 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 		jobSuccesses[i] = jobName.String()
 	}
 	return &pb.UpdateJobSpecificationsResponse{
-		Log:              responseLog,
-		JobNameSuccesses: jobSuccesses,
+		Log:                responseLog,
+		SuccessfulJobNames: jobSuccesses,
 	}, nil
 }
 

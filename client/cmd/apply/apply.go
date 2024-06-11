@@ -194,6 +194,7 @@ func (c *applyCommand) executeJobDelete(ctx context.Context, client pb.JobSpecif
 			continue
 		}
 		c.printSuccess(request.NamespaceName, "delete", "job", request.GetJobName())
+		deletedJobs = append(deletedJobs, request.GetJobName())
 	}
 	return deletedJobs
 }
@@ -238,6 +239,7 @@ func (c *applyCommand) executeJobMigrate(ctx context.Context, client pb.JobSpeci
 			continue
 		}
 		c.printSuccess(request.NamespaceName, "migrate", "job", request.GetJobName())
+		migratedJobs = append(migratedJobs, request.GetJobName())
 	}
 	return migratedJobs
 }

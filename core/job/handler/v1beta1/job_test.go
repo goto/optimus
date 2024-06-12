@@ -1450,6 +1450,7 @@ func TestNewJobHandler(t *testing.T) {
 	t.Run("CheckJobSpecifications", func(t *testing.T) {
 		t.Run("return error when creating tenant failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			stream := new(CheckJobSpecificationsServer)
@@ -1457,13 +1458,14 @@ func TestNewJobHandler(t *testing.T) {
 
 			request := &pb.CheckJobSpecificationsRequest{}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			err := jobHandler.CheckJobSpecifications(request, stream)
 			assert.Error(t, err)
 			assert.Equal(t, "invalid argument for entity project: project name is empty", err.Error())
 		})
 		t.Run("return error when job proto conversion failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			stream := new(CheckJobSpecificationsServer)
@@ -1492,13 +1494,14 @@ func TestNewJobHandler(t *testing.T) {
 				Jobs:          jobProtos,
 			}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			err := jobHandler.CheckJobSpecifications(request, stream)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "invalid argument for entity job: name is empty")
 		})
 		t.Run("return error when service validate job is failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			stream := new(CheckJobSpecificationsServer)
@@ -1527,13 +1530,14 @@ func TestNewJobHandler(t *testing.T) {
 				Jobs:          jobProtos,
 			}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			err := jobHandler.CheckJobSpecifications(request, stream)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "error encountered")
 		})
 		t.Run("return success", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			stream := new(CheckJobSpecificationsServer)
@@ -1562,7 +1566,7 @@ func TestNewJobHandler(t *testing.T) {
 				Jobs:          jobProtos,
 			}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			err := jobHandler.CheckJobSpecifications(request, stream)
 			assert.NoError(t, err)
 		})

@@ -69,12 +69,3 @@ log:
 #     batch_interval_second: 1
 #     broker_urls:
 #       - localhost:9092
-
-# replay:
-#   plugin_execution_project_config_names:
-#     bq2bq: EXECUTION_PROJECT
-#     bq2pg: BQ_EXECUTION_PROJECT
-#     pg2bq: BQ_EXECUTION_PROJECT
-#     bq2api: EXECUTION_PROJECT
-#     clevertap: EXECUTION_PROJECT
-#     transporterTask: EXECUTION_PROJECT

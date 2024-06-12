@@ -56,17 +56,6 @@ type Spec struct {
 	IsDirty bool
 }
 
-type Change struct {
-	Property string `json:"attribute_name"`
-	Diff     string `json:"diff"`
-}
-
-type ChangeLog struct {
-	Change []Change
-	Type   string
-	Time   time.Time
-}
-
 type Schedule struct {
 	StartDate     time.Time
 	EndDate       *time.Time `json:",omitempty"`
@@ -381,20 +370,6 @@ func toStorageMetadata(metadataSpec *job.Metadata) ([]byte, error) {
 	return json.Marshal(metadata)
 }
 
-func fromStorageChangelog(changeLog *ChangeLog) *job.ChangeLog {
-	jobChangeLog := job.ChangeLog{
-		Type: changeLog.Type,
-		Time: changeLog.Time,
-	}
-
-	jobChangeLog.Change = make([]job.Change, len(changeLog.Change))
-	for i, change := range changeLog.Change {
-		jobChangeLog.Change[i].Property = change.Property
-		jobChangeLog.Change[i].Diff = change.Diff
-	}
-	return &jobChangeLog
-}
-
 func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 	version := jobSpec.Version
 
@@ -675,18 +650,6 @@ func fromStorageWebhook(raw []byte) ([]*job.WebhookSpec, error) {
 	}
 
 	return webhookSpecs, nil
-}
-
-func FromChangelogRow(row pgx.Row) (*ChangeLog, error) {
-	var cl ChangeLog
-	err := row.Scan(&cl.Change, &cl.Type, &cl.Time)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errors.NotFound(job.EntityJobChangeLog, "changelog not found")
-		}
-		return nil, errors.Wrap(job.EntityJob, "error in reading row for changelog", err)
-	}
-	return &cl, nil
 }
 
 func FromRow(row pgx.Row) (*Spec, error) {

@@ -3882,14 +3882,6 @@ func (_m *JobRepository) Add(_a0 context.Context, _a1 []*job.Job) ([]*job.Job, e
 	return r0, r1
 }
 
-func (_m *JobRepository) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
-	args := _m.Called(ctx, projectName, jobName)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*job.ChangeLog), args.Error(1)
-}
-
 // Delete provides a mock function with given fields: ctx, projectName, jobName, cleanHistory
 func (_m *JobRepository) Delete(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, cleanHistory bool) error {
 	ret := _m.Called(ctx, projectName, jobName, cleanHistory)

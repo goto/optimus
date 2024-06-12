@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	EntityJob = "job"
+	EntityJob          = "job"
+	EntityJobChangeLog = "job_change_log"
 
 	UpstreamTypeStatic   UpstreamType = "static"
 	UpstreamTypeInferred UpstreamType = "inferred"

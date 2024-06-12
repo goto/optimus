@@ -338,7 +338,11 @@ func (s *OptimusServer) setupHandlers() error {
 	replayRepository := schedulerRepo.NewReplayRepository(s.dbPool)
 	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay)
 	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
-	replayService := schedulerService.NewReplayService(replayRepository, jobProviderRepo, replayValidator, replayWorker, newScheduler, s.logger)
+	replayService := schedulerService.NewReplayService(
+		replayRepository, jobProviderRepo, tenantService,
+		replayValidator, replayWorker, newScheduler,
+		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames,
+	)
 
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
@@ -356,6 +360,8 @@ func (s *OptimusServer) setupHandlers() error {
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
 	jJobService := jService.NewJobService(jJobRepo, jJobRepo, jJobRepo, pluginService, jUpstreamResolver, tenantService, s.eventHandler, s.logger, newJobRunService, newEngine)
+
+	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
 	// Resource Bounded Context
 	resourceRepository := resource.NewRepository(s.dbPool)
@@ -386,7 +392,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterRuntimeServiceServer(s.grpcServer, oHandler.NewVersionHandler(s.logger, config.BuildVersion))
 
 	// Core Job Handler
-	pb.RegisterJobSpecificationServiceServer(s.grpcServer, jHandler.NewJobHandler(jJobService, s.logger))
+	pb.RegisterJobSpecificationServiceServer(s.grpcServer, jHandler.NewJobHandler(jJobService, jchangeLogService, s.logger))
 
 	pb.RegisterReplayServiceServer(s.grpcServer, schedulerHandler.NewReplayHandler(s.logger, replayService))
 

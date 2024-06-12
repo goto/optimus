@@ -601,17 +601,6 @@ type SpecHTTPUpstream struct {
 	params  map[string]string
 }
 
-type Change struct {
-	Property string
-	Diff     string
-}
-
-type ChangeLog struct {
-	Change []Change
-	Type   string
-	Time   time.Time
-}
-
 func (s SpecHTTPUpstream) Name() string {
 	return s.name
 }

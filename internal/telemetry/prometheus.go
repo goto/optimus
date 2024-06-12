@@ -18,17 +18,9 @@ var (
 	gaugeMetricMutex = sync.Mutex{}
 
 	MetricServer string
-
-	panicMetric = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "panics_recovered",
-	}, []string{"entity", "msg"})
 )
 
 const metricsPushJob = "optimus_push"
-
-func LogPanic(entity, message string) {
-	panicMetric.WithLabelValues(entity, message).Inc()
-}
 
 func getKey(metric string, labels map[string]string) string {
 	eventMetricKey := metric

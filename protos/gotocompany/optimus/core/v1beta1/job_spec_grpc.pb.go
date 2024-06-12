@@ -40,8 +40,6 @@ type JobSpecificationServiceClient interface {
 	GetJobSpecification(ctx context.Context, in *GetJobSpecificationRequest, opts ...grpc.CallOption) (*GetJobSpecificationResponse, error)
 	// GetJobSpecifications read a job spec for provided filters
 	GetJobSpecifications(ctx context.Context, in *GetJobSpecificationsRequest, opts ...grpc.CallOption) (*GetJobSpecificationsResponse, error)
-	// GetJobChangelog get all the changes done on a job
-	GetJobChangelog(ctx context.Context, in *GetJobChangelogRequest, opts ...grpc.CallOption) (*GetJobChangelogResponse, error)
 	// DeleteJobSpecification deletes a job spec of a namespace
 	DeleteJobSpecification(ctx context.Context, in *DeleteJobSpecificationRequest, opts ...grpc.CallOption) (*DeleteJobSpecificationResponse, error)
 	// ChangeJobNamespace move a job spec from one namespace to another
@@ -163,15 +161,6 @@ func (c *jobSpecificationServiceClient) GetJobSpecification(ctx context.Context,
 func (c *jobSpecificationServiceClient) GetJobSpecifications(ctx context.Context, in *GetJobSpecificationsRequest, opts ...grpc.CallOption) (*GetJobSpecificationsResponse, error) {
 	out := new(GetJobSpecificationsResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobSpecifications", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *jobSpecificationServiceClient) GetJobChangelog(ctx context.Context, in *GetJobChangelogRequest, opts ...grpc.CallOption) (*GetJobChangelogResponse, error) {
-	out := new(GetJobChangelogResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -388,8 +377,6 @@ type JobSpecificationServiceServer interface {
 	GetJobSpecification(context.Context, *GetJobSpecificationRequest) (*GetJobSpecificationResponse, error)
 	// GetJobSpecifications read a job spec for provided filters
 	GetJobSpecifications(context.Context, *GetJobSpecificationsRequest) (*GetJobSpecificationsResponse, error)
-	// GetJobChangelog get all the changes done on a job
-	GetJobChangelog(context.Context, *GetJobChangelogRequest) (*GetJobChangelogResponse, error)
 	// DeleteJobSpecification deletes a job spec of a namespace
 	DeleteJobSpecification(context.Context, *DeleteJobSpecificationRequest) (*DeleteJobSpecificationResponse, error)
 	// ChangeJobNamespace move a job spec from one namespace to another
@@ -449,9 +436,6 @@ func (UnimplementedJobSpecificationServiceServer) GetJobSpecification(context.Co
 }
 func (UnimplementedJobSpecificationServiceServer) GetJobSpecifications(context.Context, *GetJobSpecificationsRequest) (*GetJobSpecificationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobSpecifications not implemented")
-}
-func (UnimplementedJobSpecificationServiceServer) GetJobChangelog(context.Context, *GetJobChangelogRequest) (*GetJobChangelogResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetJobChangelog not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) DeleteJobSpecification(context.Context, *DeleteJobSpecificationRequest) (*DeleteJobSpecificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteJobSpecification not implemented")
@@ -636,24 +620,6 @@ func _JobSpecificationService_GetJobSpecifications_Handler(srv interface{}, ctx 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(JobSpecificationServiceServer).GetJobSpecifications(ctx, req.(*GetJobSpecificationsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _JobSpecificationService_GetJobChangelog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetJobChangelogRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(JobSpecificationServiceServer).GetJobChangelog(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/GetJobChangelog",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobSpecificationServiceServer).GetJobChangelog(ctx, req.(*GetJobChangelogRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -936,10 +902,6 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetJobSpecifications",
 			Handler:    _JobSpecificationService_GetJobSpecifications_Handler,
-		},
-		{
-			MethodName: "GetJobChangelog",
-			Handler:    _JobSpecificationService_GetJobChangelog_Handler,
 		},
 		{
 			MethodName: "DeleteJobSpecification",

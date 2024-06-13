@@ -54,6 +54,45 @@ func (j JobRepository) Add(ctx context.Context, jobs []*job.Job) ([]*job.Job, er
 	return storedJobs, me.ToErr()
 }
 
+func (j JobRepository) Upsert(ctx context.Context, jobs []*job.Job) ([]*job.Job, []*job.Job, error) {
+	me := errors.NewMultiError("upsert jobs errors")
+	var addedJobs []*job.Job
+	var updatedJobs []*job.Job
+	for _, jobEntity := range jobs {
+		existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
+		if err != nil && errors.IsErrorType(err, errors.ErrNotFound) {
+			if err := j.triggerInsert(ctx, jobEntity); err != nil {
+				me.Append(err)
+				continue
+			}
+			addedJobs = append(addedJobs, jobEntity)
+			continue
+		}
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		if err := j.preCheckUpdate(jobEntity, existingJob, true); err != nil {
+			me.Append(err)
+			continue
+		}
+		if err := j.triggerUpdate(ctx, jobEntity); err != nil {
+			me.Append(err)
+			continue
+		}
+		if err = j.computeAndPersistChangeLog(ctx, existingJob, jobEntity); err != nil {
+			changelogMetrics.WithLabelValues(
+				jobEntity.ProjectName().String(),
+				jobEntity.Tenant().NamespaceName().String(),
+				jobEntity.GetName(),
+				err.Error(),
+			).Inc()
+		}
+		updatedJobs = append(updatedJobs, jobEntity)
+	}
+	return addedJobs, updatedJobs, me.ToErr()
+}
+
 func (j JobRepository) insertJobSpec(ctx context.Context, jobEntity *job.Job) error {
 	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
 	if err != nil {
@@ -64,7 +103,7 @@ func (j JobRepository) insertJobSpec(ctx context.Context, jobEntity *job.Job) er
 	}
 	if existingJob.DeletedAt.Valid {
 		if existingJob.NamespaceName == jobEntity.Tenant().NamespaceName().String() {
-			return j.updateAndPersistChangelog(ctx, jobEntity)
+			return j.updateAndPersistChangelog(ctx, jobEntity, existingJob)
 		}
 		errorMsg := fmt.Sprintf("job %s already exists and soft deleted in namespace %s. consider hard delete the job before inserting to this namespace.", existingJob.Name, existingJob.NamespaceName)
 		return errors.NewError(errors.ErrAlreadyExists, job.EntityJob, errorMsg)
@@ -102,11 +141,20 @@ func (j JobRepository) Update(ctx context.Context, jobs []*job.Job) ([]*job.Job,
 	me := errors.NewMultiError("update jobs errors")
 	var storedJobs []*job.Job
 	for _, jobEntity := range jobs {
-		if err := j.preCheckUpdate(ctx, jobEntity); err != nil {
+		existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
+		if err != nil && errors.IsErrorType(err, errors.ErrNotFound) {
+			me.Append(errors.NewError(errors.ErrNotFound, job.EntityJob, fmt.Sprintf("job %s not exists yet", jobEntity.Spec().Name())))
+			continue
+		}
+		if err != nil {
+			me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, fmt.Sprintf("failed to check job %s in db: %s", jobEntity.Spec().Name().String(), err.Error())))
+			continue
+		}
+		if err := j.preCheckUpdate(jobEntity, existingJob, false); err != nil {
 			me.Append(err)
 			continue
 		}
-		if err := j.updateAndPersistChangelog(ctx, jobEntity); err != nil {
+		if err := j.updateAndPersistChangelog(ctx, jobEntity, existingJob); err != nil {
 			me.Append(err)
 			continue
 		}
@@ -234,23 +282,16 @@ WHERE
 	return nil
 }
 
-func (j JobRepository) preCheckUpdate(ctx context.Context, jobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
-	if err != nil && errors.IsErrorType(err, errors.ErrNotFound) {
-		return errors.NewError(errors.ErrNotFound, job.EntityJob, fmt.Sprintf("job %s not exists yet", jobEntity.Spec().Name()))
-	}
-	if err != nil {
-		return errors.NewError(errors.ErrInternalError, job.EntityJob, fmt.Sprintf("failed to check job %s in db: %s", jobEntity.Spec().Name().String(), err.Error()))
-	}
-	if existingJob.NamespaceName != jobEntity.Tenant().NamespaceName().String() && existingJob.DeletedAt.Valid {
+func (j JobRepository) preCheckUpdate(incomingJob *job.Job, existingJob *Spec, allowJobReactivate bool) error {
+	if existingJob.NamespaceName != incomingJob.Tenant().NamespaceName().String() && existingJob.DeletedAt.Valid {
 		errorMsg := fmt.Sprintf("job %s already exists and soft deleted in namespace %s.", existingJob.Name, existingJob.NamespaceName)
 		return errors.NewError(errors.ErrAlreadyExists, job.EntityJob, errorMsg)
 	}
-	if existingJob.NamespaceName != jobEntity.Tenant().NamespaceName().String() && !existingJob.DeletedAt.Valid {
+	if existingJob.NamespaceName != incomingJob.Tenant().NamespaceName().String() && !existingJob.DeletedAt.Valid {
 		errorMsg := fmt.Sprintf("job %s already exists in namespace %s.", existingJob.Name, existingJob.NamespaceName)
 		return errors.NewError(errors.ErrAlreadyExists, job.EntityJob, errorMsg)
 	}
-	if existingJob.DeletedAt.Valid {
+	if existingJob.DeletedAt.Valid && !allowJobReactivate {
 		errorMsg := fmt.Sprintf("update is not allowed as job %s has been soft deleted. please re-add the job before updating.", existingJob.Name)
 		return errors.NewError(errors.ErrAlreadyExists, job.EntityJob, errorMsg)
 	}
@@ -337,17 +378,12 @@ func (j JobRepository) computeAndPersistChangeLog(ctx context.Context, existingJ
 	return j.insertChangelog(ctx, incomingJobEntity.Spec().Name(), incomingJobEntity.Tenant().ProjectName(), changeLog)
 }
 
-func (j JobRepository) updateAndPersistChangelog(ctx context.Context, incomingJobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, incomingJobEntity.ProjectName(), incomingJobEntity.Spec().Name(), false)
-	if err != nil {
-		return err
-	}
-
+func (j JobRepository) updateAndPersistChangelog(ctx context.Context, incomingJobEntity *job.Job, existingSpec *Spec) error {
 	if err := j.triggerUpdate(ctx, incomingJobEntity); err != nil {
 		return err
 	}
 
-	if err = j.computeAndPersistChangeLog(ctx, existingJob, incomingJobEntity); err != nil {
+	if err := j.computeAndPersistChangeLog(ctx, existingSpec, incomingJobEntity); err != nil {
 		changelogMetrics.WithLabelValues(
 			incomingJobEntity.ProjectName().String(),
 			incomingJobEntity.Tenant().NamespaceName().String(),

@@ -184,6 +184,74 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 	return nil
 }
 
+func (rs ResourceService) Upsert(ctx context.Context, incoming *resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
+	if err := rs.mgr.Validate(incoming); err != nil {
+		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
+		return err
+	}
+	incoming.MarkValidationSuccess()
+
+	urn, err := rs.mgr.GetURN(incoming)
+	if err != nil {
+		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
+		return err
+	}
+
+	err = incoming.UpdateURN(urn)
+	if err != nil {
+		rs.logger.Error("error updating urn of resource [%s]: %s", incoming.FullName(), err)
+		return err
+	}
+
+	if existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName(), false); err != nil {
+		if !errors.IsErrorType(err, errors.ErrNotFound) {
+			rs.logger.Error("error getting resource [%s]: %s", incoming.FullName(), err)
+			return err
+		}
+		incoming.MarkToCreate()
+
+		if err := rs.repo.Create(ctx, incoming); err != nil {
+			rs.logger.Error("error creating resource [%s] to db: %s", incoming.FullName(), err)
+			return err
+		}
+
+		if err := rs.mgr.CreateResource(ctx, incoming); err != nil {
+			rs.logger.Error("error creating resource [%s] to manager: %s", incoming.FullName(), err)
+			return err
+		}
+		rs.raiseCreateEvent(incoming)
+	} else {
+		if !(resource.StatusForToUpdate(existing.Status())) {
+			msg := fmt.Sprintf("cannot update resource [%s] with existing status [%s]", incoming.FullName(), existing.Status())
+			rs.logger.Error(msg)
+			return errors.InvalidArgument(resource.EntityResource, msg)
+		}
+		incoming.MarkToUpdate()
+
+		if err := rs.repo.Update(ctx, incoming); err != nil {
+			rs.logger.Error("error updating stored resource [%s]: %s", incoming.FullName(), err)
+			return err
+		}
+
+		if err := rs.mgr.UpdateResource(ctx, incoming); err != nil {
+			rs.logger.Error("error updating resource [%s] to manager: %s", incoming.FullName(), err)
+			return err
+		}
+
+		rs.raiseUpdateEvent(incoming, existing.GetUpdateImpact(incoming))
+		if err = rs.handleRefreshDownstream(ctx,
+			[]*resource.Resource{incoming},
+			map[string]*resource.Resource{existing.FullName(): existing},
+			logWriter,
+		); err != nil {
+			rs.logger.Error("error refreshing downstream for resource [%s]: %s", incoming.FullName(), err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResponse, error) {
 	existing, err := rs.Get(ctx, req.Tenant, req.Datastore, req.FullName)
 	if err != nil {

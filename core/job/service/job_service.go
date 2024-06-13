@@ -277,20 +277,27 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 				continue
 			}
 			jobsToAdd = append(jobsToAdd, jobToUpsert)
+			continue
 		}
 		jobsToUpdate = append(jobsToUpdate, jobToUpsert)
 		existingJobs[jobToUpsert.Spec().Name()] = existingJob
 	}
 
-	var upsertedJobs []*job.Job
+	var upsertedJobs, addedJobs, updatedJobs []*job.Job
+	if len(jobsToAdd) > 0 {
+		addedJobs, err = j.jobRepo.Add(ctx, jobsToAdd)
+		upsertedJobs = append(upsertedJobs, addedJobs...)
+		me.Append(err)
+	}
+	if len(jobsToUpdate) > 0 {
+		updatedJobs, err = j.jobRepo.Update(ctx, jobsToUpdate)
+		upsertedJobs = append(upsertedJobs, updatedJobs...)
+		me.Append(err)
+	}
 
-	addedJobs, err := j.jobRepo.Add(ctx, jobs)
-	upsertedJobs = append(upsertedJobs, addedJobs...)
-	me.Append(err)
-
-	updatedJobs, err := j.jobRepo.Update(ctx, jobs)
-	upsertedJobs = append(upsertedJobs, updatedJobs...)
-	me.Append(err)
+	if len(upsertedJobs) == 0 {
+		return me.ToErr()
+	}
 
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), upsertedJobs, logWriter)
 	me.Append(err)
@@ -310,14 +317,14 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 				logWriter.Write(writer.LogLevelWarning, msg)
 			}
 		}
-		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(updatedJobs))
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
 	}
 
 	if len(updatedJobs) > 0 {
 		for _, updatedJob := range updatedJobs {
 			j.raiseUpdateEvent(updatedJob, getUpdateImpactType(existingJobs[updatedJob.Spec().Name()], updatedJob))
 		}
-		raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(updatedJobs))
 	}
 
 	if len(upsertedJobs) < len(specs) {

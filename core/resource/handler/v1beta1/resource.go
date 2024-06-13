@@ -26,6 +26,7 @@ const (
 type ResourceService interface {
 	Create(ctx context.Context, res *resource.Resource) error
 	Update(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error
+	Upsert(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error
 	Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResponse, error)
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
@@ -264,6 +265,37 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 	}
 
 	return &pb.UpdateResourceResponse{}, nil
+}
+
+func (rh ResourceHandler) UpsertResource(ctx context.Context, req *pb.UpsertResourceRequest) (*pb.UpsertResourceResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "failed to upsert resource")
+	}
+
+	store, err := resource.FromStringToStore(req.GetDatastoreName())
+	if err != nil {
+		rh.l.Error("invalid datastore name [%s]: %s", req.GetDatastoreName(), err)
+		return nil, errors.GRPCErr(err, "invalid upsert resource request")
+	}
+
+	incomingResource, err := fromResourceProto(req.Resource, tnnt, store)
+	if err != nil {
+		rh.l.Error("error adapting resource [%s]: %s", req.GetResource().GetName(), err)
+		return nil, errors.GRPCErr(err, "failed to upsert resource")
+	}
+
+	logWriter := writer.NewLogWriter(rh.l)
+
+	if err = rh.service.Upsert(ctx, incomingResource, logWriter); err != nil {
+		rh.l.Error("error applying upsert operation in resource [%s]: %s", incomingResource.FullName(), err)
+		return nil, errors.GRPCErr(err, "failed to upsert resource "+incomingResource.FullName())
+	}
+
+	raiseResourceDatastoreEventMetric(tnnt, incomingResource.Store().String(), incomingResource.Kind(), incomingResource.Status().String())
+
+	return &pb.UpsertResourceResponse{}, nil
 }
 
 func (rh ResourceHandler) DeleteResource(ctx context.Context, req *pb.DeleteResourceRequest) (*pb.DeleteResourceResponse, error) {

@@ -713,6 +713,125 @@ func TestResourceHandler(t *testing.T) {
 			assert.Nil(t, err)
 		})
 	})
+	t.Run("UpsertResource", func(t *testing.T) {
+		t.Run("returns error when tenant is invalid", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "",
+				DatastoreName: "bigquery",
+				Resource:      nil,
+				NamespaceName: "",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
+				"project: project name is empty: failed to upsert resource")
+		})
+		t.Run("returns error when store is invalid", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "",
+				Resource:      nil,
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
+				"resource: unknown store : invalid upsert resource request")
+		})
+		t.Run("returns error when resource is nil", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resource:      nil,
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
+				"resource: empty resource: failed to upsert resource")
+		})
+		t.Run("returns error when kind is empty", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resource: &pb.ResourceSpecification{
+					Name:    "proj.ds.table1",
+					Version: 0,
+					Type:    "",
+					Spec:    spec,
+				},
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "empty resource type for proj.ds.table1")
+		})
+		t.Run("returns error when service returns error", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(errors.New("validation failure"))
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resource: &pb.ResourceSpecification{
+					Version: 0,
+					Name:    "proj.set.table",
+					Type:    "table",
+					Spec:    spec,
+				},
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = Internal desc = validation failure: failed to "+
+				"upsert resource proj.set.table")
+		})
+		t.Run("upsert the resource successfully", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"description": "test"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resource: &pb.ResourceSpecification{
+					Version: 0,
+					Name:    "proj.set.table",
+					Type:    "table",
+					Spec:    spec,
+				},
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+		})
+	})
 	t.Run("ApplyResource", func(t *testing.T) {
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
 			service := new(resourceService)
@@ -948,6 +1067,11 @@ func (r *resourceService) Create(ctx context.Context, res *resource.Resource) er
 }
 
 func (r *resourceService) Update(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error {
+	args := r.Called(ctx, res, logWriter)
+	return args.Error(0)
+}
+
+func (r *resourceService) Upsert(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error {
 	args := r.Called(ctx, res, logWriter)
 	return args.Error(0)
 }

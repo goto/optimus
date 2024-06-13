@@ -131,7 +131,7 @@ func (e *deployCommand) executeJobUpsert(ctx context.Context, jobSpecificationSe
 		return err
 	}
 	for _, spec := range jobSpecsToUpsert {
-		e.logger.Info("Added/modified %s job", spec.Name)
+		e.logger.Info("Deployed %s job", spec.Name)
 	}
 	return nil
 }

@@ -1272,7 +1272,6 @@ func TestJobService(t *testing.T) {
 			err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "internal error")
 		})
-
 	})
 
 	t.Run("ChangeNamespace", func(t *testing.T) {

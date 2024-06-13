@@ -1693,6 +1693,14 @@
     "v1beta1UpdateJobsStateResponse": {
       "type": "object"
     },
+    "v1beta1UpsertJobSpecificationsResponse": {
+      "type": "object",
+      "properties": {
+        "log": {
+          "type": "string"
+        }
+      }
+    },
     "v1beta1ValidateResponse": {
       "type": "object",
       "properties": {

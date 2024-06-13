@@ -46,6 +46,7 @@ func NewJobHandler(jobService JobService, changeLogService ChangeLogService, log
 type JobService interface {
 	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
+	Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
@@ -212,6 +213,45 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 	}
 
 	return &pb.UpdateJobSpecificationsResponse{
+		Log: responseLog,
+	}, nil
+}
+
+func (jh *JobHandler) UpsertJobSpecifications(ctx context.Context, jobSpecRequest *pb.UpsertJobSpecificationsRequest) (*pb.UpsertJobSpecificationsResponse, error) {
+	jobTenant, err := tenant.NewTenant(jobSpecRequest.ProjectName, jobSpecRequest.NamespaceName)
+	if err != nil {
+		errorMsg := "failed to adapt tenant when trying to do upsert job specifications"
+		jh.l.Error(fmt.Sprintf("%s: %s", errorMsg, err.Error()))
+		return nil, errors.GRPCErr(err, errorMsg)
+	}
+
+	me := errors.NewMultiError("upsert specs errors")
+	jobSpecs, invalidSpecs, err := fromJobProtos(jobSpecRequest.Specs)
+	if err != nil {
+		errorMsg := fmt.Sprintf("failure when adapting job specifications: %s", err.Error())
+		jh.l.Error(errorMsg)
+		me.Append(err)
+	}
+	raiseJobEventMetric(jobTenant, job.MetricJobEventStateValidationFailed, len(invalidSpecs))
+
+	if len(jobSpecs) == 0 {
+		me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, "no jobs to be processed"))
+		return nil, me.ToErr()
+	}
+
+	if err = jh.jobService.Upsert(ctx, jobTenant, jobSpecs); err != nil {
+		jh.l.Error(fmt.Sprintf("%s: %s", "failed to upsert job specifications", err.Error()))
+		me.Append(err)
+	}
+
+	var responseLog string
+	if len(me.Errors) > 0 {
+		responseLog = fmt.Sprintf("upsert jobs finished with error: %s", me.ToErr())
+	} else {
+		responseLog = "jobs are successfully added/modified"
+	}
+
+	return &pb.UpsertJobSpecificationsResponse{
 		Log: responseLog,
 	}, nil
 }

@@ -978,6 +978,83 @@ func TestJobService(t *testing.T) {
 		})
 	})
 
+	t.Run("Upsert", func(t *testing.T) {
+		t.Run("update and insert jobs", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			upstreamRepo := new(UpstreamRepository)
+			defer upstreamRepo.AssertExpectations(t)
+
+			downstreamRepo := new(DownstreamRepository)
+			defer downstreamRepo.AssertExpectations(t)
+
+			pluginService := NewPluginService(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			jobDeploymentService := new(JobDeploymentService)
+			defer jobDeploymentService.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
+
+			specAToUpdate, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			specBToAdd, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			specs := []*job.Spec{specAToUpdate, specBToAdd}
+
+			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+			jobADestination := resourceURNA
+			pluginService.On("ConstructDestinationURN", ctx, specAToUpdate.Task().Name().String(), mock.Anything).Return(jobADestination, nil)
+
+			jobAUpstreamName := []resource.URN{resourceURNB}
+			pluginService.On("IdentifyUpstreams", ctx, specAToUpdate.Task().Name().String(), mock.Anything, mock.Anything).Return(jobAUpstreamName, nil)
+
+			jobAToUpdate := job.NewJob(sampleTenant, specAToUpdate, jobADestination, jobAUpstreamName, false)
+
+			jobBDestination := resourceURNB
+			pluginService.On("ConstructDestinationURN", ctx, specBToAdd.Task().Name().String(), mock.Anything).Return(jobBDestination, nil)
+
+			jobBUpstreamName := []resource.URN{resourceURNC}
+			pluginService.On("IdentifyUpstreams", ctx, specAToUpdate.Task().Name().String(), mock.Anything, mock.Anything).Return(jobBUpstreamName, nil)
+
+			jobBToadd := job.NewJob(sampleTenant, specBToAdd, jobBDestination, jobBUpstreamName, false)
+
+			jobsToUpdate := []*job.Job{jobAToUpdate}
+			jobRepo.On("Update", ctx, mock.Anything).Return(jobsToUpdate, nil, nil)
+
+			jobsToAdd := []*job.Job{jobBToadd}
+			jobRepo.On("Add", ctx, mock.Anything).Return(jobsToAdd, nil, nil)
+
+			jobRepo.On("GetByJobName", ctx, project.Name(), specAToUpdate.Name()).Return(jobAToUpdate, nil)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specBToAdd.Name()).Return(nil, nil)
+
+			upstreamB := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
+			jobAWithUpstream := job.NewWithUpstream(jobAToUpdate, []*job.Upstream{upstreamB})
+
+			upstreamC := job.NewUpstreamResolved("job-C", "", resourceURNC, sampleTenant, "static", taskName, false)
+			jobBWithUpstream := job.NewWithUpstream(jobBToadd, []*job.Upstream{upstreamC})
+
+			jobsToUpsert := []*job.Job{jobBToadd, jobAToUpdate}
+			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobsToUpsert, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil, nil)
+
+			upstreamRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}).Return(nil)
+
+			jobNamesToUpload := []string{jobBToadd.GetName(), jobAToUpdate.GetName()}
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, jobNamesToUpload, emptyJobNames).Return(nil)
+
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
+
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
+			err := jobService.Upsert(ctx, sampleTenant, specs)
+			assert.NoError(t, err)
+		})
+	})
+
 	t.Run("ChangeNamespace", func(t *testing.T) {
 		newNamespaceName := "newNamespace"
 		newTenant, _ := tenant.NewTenant(project.Name().String(), newNamespaceName)

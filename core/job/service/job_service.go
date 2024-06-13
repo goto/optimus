@@ -254,6 +254,80 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	return me.ToErr()
 }
 
+func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
+	logWriter := writer.NewLogWriter(j.logger)
+	me := errors.NewMultiError("upsert specs errors")
+
+	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
+	if err != nil {
+		j.logger.Error("error getting tenant details: %s", err)
+		return err
+	}
+
+	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
+	me.Append(err)
+
+	existingJobs := make(map[job.Name]*job.Job)
+	var jobsToAdd, jobsToUpdate []*job.Job
+	for _, jobToUpsert := range jobs {
+		existingJob, err := j.jobRepo.GetByJobName(ctx, jobTenant.ProjectName(), jobToUpsert.Spec().Name())
+		if err != nil {
+			if !errors.IsErrorType(err, errors.ErrNotFound) {
+				me.Append(err)
+				continue
+			}
+			jobsToAdd = append(jobsToAdd, jobToUpsert)
+		}
+		jobsToUpdate = append(jobsToUpdate, jobToUpsert)
+		existingJobs[jobToUpsert.Spec().Name()] = existingJob
+	}
+
+	var upsertedJobs []*job.Job
+
+	addedJobs, err := j.jobRepo.Add(ctx, jobs)
+	upsertedJobs = append(upsertedJobs, addedJobs...)
+	me.Append(err)
+
+	updatedJobs, err := j.jobRepo.Update(ctx, jobs)
+	upsertedJobs = append(upsertedJobs, updatedJobs...)
+	me.Append(err)
+
+	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), upsertedJobs, logWriter)
+	me.Append(err)
+
+	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
+	me.Append(err)
+
+	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil)
+	me.Append(err)
+
+	if len(addedJobs) > 0 {
+		for _, addedJob := range addedJobs {
+			j.raiseCreateEvent(addedJob)
+			if addedJob.Spec().Schedule().CatchUp() {
+				msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
+				j.logger.Warn(msg)
+				logWriter.Write(writer.LogLevelWarning, msg)
+			}
+		}
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(updatedJobs))
+	}
+
+	if len(updatedJobs) > 0 {
+		for _, updatedJob := range updatedJobs {
+			j.raiseUpdateEvent(updatedJob, getUpdateImpactType(existingJobs[updatedJob.Spec().Name()], updatedJob))
+		}
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
+	}
+
+	if len(upsertedJobs) < len(specs) {
+		totalFailed := len(specs) - len(upsertedJobs)
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
+	}
+
+	return me.ToErr()
+}
+
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
 	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant, jobNames, jobState.String())
 	if err != nil {

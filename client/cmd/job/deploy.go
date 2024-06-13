@@ -111,80 +111,27 @@ func (e *deployCommand) deployJobSpecifications(namespacePath string) error {
 		return err
 	}
 
-	jobSpecsToAdd, jobSpecsToUpdate, err := e.differentiateJobSpecsAction(ctx, jobSpecificationServiceClient, jobSpecs)
-	if err != nil {
-		return err
-	}
-
-	err = e.executeJobAdd(ctx, jobSpecificationServiceClient, jobSpecsToAdd)
-	if err != nil {
-		return err
-	}
-
-	return e.executeJobUpdate(ctx, jobSpecificationServiceClient, jobSpecsToUpdate)
+	return e.executeJobUpsert(ctx, jobSpecificationServiceClient, jobSpecs)
 }
 
-func (e *deployCommand) differentiateJobSpecsAction(ctx context.Context, jobSpecificationServiceClient pb.JobSpecificationServiceClient, jobSpecs []*model.JobSpec) ([]*model.JobSpec, []*model.JobSpec, error) {
-	jobSpecsToAdd := make([]*model.JobSpec, 0)
-	jobSpecsToUpdate := make([]*model.JobSpec, 0)
-	for _, jobSpec := range jobSpecs {
-		response, err := jobSpecificationServiceClient.GetJobSpecifications(ctx, &pb.GetJobSpecificationsRequest{
-			ProjectName:   e.projectName,
-			NamespaceName: e.namespaceName,
-			JobName:       jobSpec.Name,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		if len(response.GetJobSpecificationResponses()) == 0 {
-			jobSpecsToAdd = append(jobSpecsToAdd, jobSpec)
-		} else {
-			jobSpecsToUpdate = append(jobSpecsToUpdate, jobSpec)
-		}
-	}
-	return jobSpecsToAdd, jobSpecsToUpdate, nil
-}
-
-func (e *deployCommand) executeJobAdd(ctx context.Context, jobSpecificationServiceClient pb.JobSpecificationServiceClient, jobSpecsToAdd []*model.JobSpec) error {
-	if len(jobSpecsToAdd) == 0 {
+func (e *deployCommand) executeJobUpsert(ctx context.Context, jobSpecificationServiceClient pb.JobSpecificationServiceClient, jobSpecsToUpsert []*model.JobSpec) error {
+	if len(jobSpecsToUpsert) == 0 {
 		return nil
 	}
-	specsToAddProto := make([]*pb.JobSpecification, len(jobSpecsToAdd))
-	for i, jobSpec := range jobSpecsToAdd {
-		specsToAddProto[i] = jobSpec.ToProto()
+	specsToUpsertProto := make([]*pb.JobSpecification, len(jobSpecsToUpsert))
+	for i, jobSpec := range jobSpecsToUpsert {
+		specsToUpsertProto[i] = jobSpec.ToProto()
 	}
-	_, err := jobSpecificationServiceClient.AddJobSpecifications(ctx, &pb.AddJobSpecificationsRequest{
+	_, err := jobSpecificationServiceClient.UpsertJobSpecifications(ctx, &pb.UpsertJobSpecificationsRequest{
 		ProjectName:   e.projectName,
 		NamespaceName: e.namespaceName,
-		Specs:         specsToAddProto,
+		Specs:         specsToUpsertProto,
 	})
 	if err != nil {
 		return err
 	}
-	for _, spec := range jobSpecsToAdd {
-		e.logger.Info("Added %s job", spec.Name)
-	}
-	return nil
-}
-
-func (e *deployCommand) executeJobUpdate(ctx context.Context, jobSpecificationServiceClient pb.JobSpecificationServiceClient, jobSpecsToUpdate []*model.JobSpec) error {
-	if len(jobSpecsToUpdate) == 0 {
-		return nil
-	}
-	specsToUpdateProto := make([]*pb.JobSpecification, len(jobSpecsToUpdate))
-	for i, jobSpec := range jobSpecsToUpdate {
-		specsToUpdateProto[i] = jobSpec.ToProto()
-	}
-	_, err := jobSpecificationServiceClient.UpdateJobSpecifications(ctx, &pb.UpdateJobSpecificationsRequest{
-		ProjectName:   e.projectName,
-		NamespaceName: e.namespaceName,
-		Specs:         specsToUpdateProto,
-	})
-	if err != nil {
-		return err
-	}
-	for _, spec := range jobSpecsToUpdate {
-		e.logger.Info("Updated %s job", spec.Name)
+	for _, spec := range jobSpecsToUpsert {
+		e.logger.Info("Added/modified %s job", spec.Name)
 	}
 	return nil
 }

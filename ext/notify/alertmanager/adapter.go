@@ -21,27 +21,33 @@ const (
 	successNotificationTemplate = "optimus-job-success"
 )
 
+func (a *AlertManager) getJobConsoleLink(project, job string) string {
+	return fmt.Sprintf("%s/%s/%s:%s", a.dataConsole, "optimus", project, job)
+}
+
 func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
+	projectName := e.JobEvent.Tenant.ProjectName().String()
+	jobName := e.JobEvent.JobName.String()
 	dashURL, _ := url.Parse(a.dashboard)
 	q := dashURL.Query()
-	q.Set("var-project", e.JobEvent.Tenant.ProjectName().String())
+	q.Set("var-project", projectName)
 	q.Set("var-namespace", e.JobEvent.Tenant.NamespaceName().String())
-	q.Set("var-job", e.JobEvent.JobName.String())
+	q.Set("var-job", jobName)
 	q.Set("var-schedule_time", e.JobEvent.JobScheduledAt.Format(radarTimeFormat))
 	dashURL.RawQuery = q.Encode()
 	templateContext := map[string]string{
-		"project":      e.JobEvent.Tenant.ProjectName().String(),
+		"project":      projectName,
 		"namespace":    e.JobEvent.Tenant.NamespaceName().String(),
-		"job_name":     e.JobEvent.JobName.String(),
+		"job_name":     jobName,
 		"owner":        e.Owner,
 		"scheduled_at": e.JobEvent.JobScheduledAt.Format(radarTimeFormat),
-		"console_link": fmt.Sprintf("%s/%s/%s", a.dataConsole, "optimus", e.JobEvent.JobName),
+		"console_link": a.getJobConsoleLink(projectName, jobName),
 		"dashboard":    dashURL.String(),
 	}
 
 	httpRegex := regexp.MustCompile(`^(http|https)://`)
 	if httpRegex.MatchString(e.SchedulerHost) {
-		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, e.JobEvent.JobName)
+		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, jobName)
 	}
 
 	var template string
@@ -58,8 +64,8 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 	}
 
 	a.relay(&AlertPayload{
-		Project:  e.JobEvent.Tenant.ProjectName().String(),
-		LogTag:   e.JobEvent.JobName.String(),
+		Project:  projectName,
+		LogTag:   e.JobURN,
 		Data:     templateContext,
 		Template: template,
 		Labels: map[string]string{
@@ -70,16 +76,18 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 }
 
 func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
+	projectName := attr.Tenant.ProjectName().String()
+	jobName := attr.Name.String()
 	a.relay(&AlertPayload{
-		Project: attr.Tenant.ProjectName().String(),
-		LogTag:  attr.Name.String(),
+		Project: projectName,
+		LogTag:  attr.URN,
 		Data: map[string]string{
-			"project":      attr.Tenant.ProjectName().String(),
+			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
-			"job_name":     attr.Name.String(),
+			"job_name":     jobName,
 			"entity_type":  "Job",
 			"change_type":  attr.EventType.String(),
-			"console_link": fmt.Sprintf("%s/%s/%s", a.dataConsole, "optimus", attr.Name.String()),
+			"console_link": a.getJobConsoleLink(projectName, jobName),
 		},
 		Template: optimusChangeTemplate,
 		Labels: map[string]string{
@@ -90,14 +98,15 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 }
 
 func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
+	projectName := attr.Tenant.ProjectName().String()
 	a.relay(&AlertPayload{
-		Project: attr.Tenant.ProjectName().String(),
+		Project: projectName,
 		LogTag:  attr.JobURN,
 		Data: map[string]string{
 			"job_name":     attr.JobName,
-			"project":      attr.Tenant.ProjectName().String(),
+			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
-			"console_link": fmt.Sprintf("%s/%s/%s", a.dataConsole, "optimus", attr.JobName),
+			"console_link": a.getJobConsoleLink(projectName, attr.JobName),
 		},
 		Template: replayTemplate,
 		Labels: map[string]string{
@@ -108,16 +117,19 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 }
 
 func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
+	projectName := attr.Tenant.ProjectName().String()
+	resourceName := attr.Name.String()
+
 	a.relay(&AlertPayload{
-		Project: attr.Tenant.ProjectName().String(),
-		LogTag:  attr.Name.String(),
+		Project: projectName,
+		LogTag:  attr.URN,
 		Data: map[string]string{
-			"project":      attr.Tenant.ProjectName().String(),
+			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
-			"job_name":     attr.Name.String(),
+			"job_name":     resourceName,
 			"entity_type":  "Resource",
 			"change_type":  attr.EventType.String(),
-			"console_link": fmt.Sprintf("%s/%s/%s", a.dataConsole, "tables", attr.URN),
+			"console_link": a.getJobConsoleLink(projectName, resourceName),
 		},
 		Template: optimusChangeTemplate,
 		Labels: map[string]string{

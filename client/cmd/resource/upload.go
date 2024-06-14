@@ -103,10 +103,12 @@ func (u *uploadCommand) upload(namespace *config.Namespace) error {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), uploadTimeout)
 	defer cancelFunc()
 
+	isFailed := false
 	for _, ds := range namespace.Datastore {
 		resourceSpecs, err := u.getResourceSpecs(ds.Path)
 		if err != nil {
 			u.logger.Error(err.Error())
+			isFailed = true
 			continue
 		}
 
@@ -115,6 +117,7 @@ func (u *uploadCommand) upload(namespace *config.Namespace) error {
 			resourceProto, err := resourceSpec.ToProto()
 			if err != nil {
 				u.logger.Error(err.Error())
+				isFailed = true
 				continue
 			}
 			resourceProtos = append(resourceProtos, resourceProto)
@@ -137,6 +140,7 @@ func (u *uploadCommand) upload(namespace *config.Namespace) error {
 			resp, err := resourceClient.UpsertResource(ctx, upsertRequest)
 			if err != nil {
 				u.logger.Error("Unable to upload resource of namespace %s, err: %s", u.namespaceName, err)
+				isFailed = true
 			}
 			for _, result := range resp.Results {
 				message := result.Message
@@ -145,14 +149,17 @@ func (u *uploadCommand) upload(namespace *config.Namespace) error {
 				}
 				if result.Status == resource.StatusFailure.String() {
 					u.logger.Error("[%s] %s %s", result.Status, result.ResourceName, message)
+					isFailed = true
 					continue
 				}
 				u.logger.Info("[%s] %s %s", result.Status, result.ResourceName, message)
 			}
 		}
 	}
+	if isFailed {
+		return fmt.Errorf("upload resource specifications to namespace %s failed", u.namespaceName)
+	}
 	u.logger.Info("finished uploading resource specifications to server\n")
-
 	return nil
 }
 

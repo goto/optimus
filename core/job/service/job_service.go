@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -45,6 +46,8 @@ type JobService struct {
 	upstreamResolver UpstreamResolver
 	eventHandler     EventHandler
 
+	alertHandler AlertManager
+
 	tenantDetailsGetter TenantDetailsGetter
 
 	jobDeploymentService JobDeploymentService
@@ -56,12 +59,18 @@ type JobService struct {
 	logger log.Logger
 }
 
+type AlertManager interface {
+	io.Closer
+	SendJobEvent(attr *job.AlertAttrs)
+}
+
 func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
 	jobDeploymentService JobDeploymentService, engine Engine,
 	jobInputCompiler JobRunInputCompiler, resourceChecker ResourceExistenceChecker,
+	alertHandler AlertManager,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -76,6 +85,7 @@ func NewJobService(
 		engine:               engine,
 		jobRunInputCompiler:  jobInputCompiler,
 		resourceChecker:      resourceChecker,
+		alertHandler:         alertHandler,
 	}
 }
 
@@ -1131,10 +1141,17 @@ func (j *JobService) raiseCreateEvent(job *job.Job) {
 	j.eventHandler.HandleEvent(jobEvent)
 }
 
-func (j *JobService) raiseUpdateEvent(job *job.Job, impactType job.UpdateImpact) {
-	jobEvent, err := event.NewJobUpdateEvent(job, impactType)
+func (j *JobService) raiseUpdateEvent(incomingJob *job.Job, impactType job.UpdateImpact) {
+	j.alertHandler.SendJobEvent(&job.AlertAttrs{
+		Name:      incomingJob.Spec().Name(),
+		URN:       incomingJob.GetConsoleURN(),
+		Tenant:    incomingJob.Tenant(),
+		EventTime: time.Now(),
+		EventType: job.ChangeTypeUpdate,
+	})
+	jobEvent, err := event.NewJobUpdateEvent(incomingJob, impactType)
 	if err != nil {
-		j.logger.Error("error creating event for job update: %s", err)
+		j.logger.Error("error creating event for incomingJob update: %s", err)
 		return
 	}
 	j.eventHandler.HandleEvent(jobEvent)
@@ -1150,6 +1167,13 @@ func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name,
 }
 
 func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
+	j.alertHandler.SendJobEvent(&job.AlertAttrs{
+		Name:      jobName,
+		URN:       jobName.GetConsoleURN(tnnt),
+		Tenant:    tnnt,
+		EventTime: time.Now(),
+		EventType: job.ChangeTypeDelete,
+	})
 	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName)
 	if err != nil {
 		j.logger.Error("error creating event for job delete: %s", err)

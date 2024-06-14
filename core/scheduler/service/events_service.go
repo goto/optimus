@@ -32,7 +32,8 @@ type Webhook interface {
 
 type AlertManager interface {
 	io.Closer
-	Relay(attr *scheduler.AlertAttrs)
+	SendJobRunEvent(attr *scheduler.AlertAttrs)
+	SendReplayEvent(attr *scheduler.ReplayNotificationAttrs)
 }
 
 type EventsService struct {
@@ -65,7 +66,7 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 	} else {
 		status = scheduler.StatusResolved
 	}
-	e.alertManager.Relay(&scheduler.AlertAttrs{
+	e.alertManager.SendJobRunEvent(&scheduler.AlertAttrs{
 		Owner:         jobDetails.JobMetadata.Owner,
 		JobURN:        jobDetails.Job.URN(),
 		Title:         "Optimus Job Alert",

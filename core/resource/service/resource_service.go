@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/salt/log"
 
@@ -57,12 +59,18 @@ type ResourceService struct {
 
 	logger       log.Logger
 	eventHandler EventHandler
+	alertHandler AlertManager
+}
+
+type AlertManager interface {
+	io.Closer
+	SendResourceEvent(attr *resource.AlertAttrs)
 }
 
 func NewResourceService(
 	logger log.Logger,
 	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
-	eventHandler EventHandler, downstreamResolver DownstreamResolver,
+	eventHandler EventHandler, downstreamResolver DownstreamResolver, alertManager AlertManager,
 ) *ResourceService {
 	return &ResourceService{
 		repo:               repo,
@@ -71,6 +79,7 @@ func NewResourceService(
 		downstreamResolver: downstreamResolver,
 		logger:             logger,
 		eventHandler:       eventHandler,
+		alertHandler:       alertManager,
 	}
 }
 
@@ -215,6 +224,8 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 	if strings.TrimSpace(jobNames) != "" {
 		res.DownstreamJobs = strings.Split(jobNames, ", ")
 	}
+
+	rs.raiseDeleteEvent(existing)
 
 	return res, nil
 }
@@ -429,11 +440,30 @@ func (rs ResourceService) raiseCreateEvent(res *resource.Resource) { // nolint:g
 	rs.eventHandler.HandleEvent(ev)
 }
 
+func (rs ResourceService) raiseDeleteEvent(res *resource.Resource) { // nolint:gocritic
+	if res.Status() != resource.StatusDeleted {
+		return
+	}
+	rs.alertHandler.SendResourceEvent(&resource.AlertAttrs{
+		Name:      res.Name(),
+		URN:       res.ConsoleURN(),
+		Tenant:    res.Tenant(),
+		EventTime: time.Now(),
+		EventType: resource.ChangeTypeDelete,
+	})
+}
+
 func (rs ResourceService) raiseUpdateEvent(res *resource.Resource, impact resource.UpdateImpact) { // nolint:gocritic
 	if res.Status() != resource.StatusSuccess {
 		return
 	}
-
+	rs.alertHandler.SendResourceEvent(&resource.AlertAttrs{
+		Name:      res.Name(),
+		URN:       res.ConsoleURN(),
+		Tenant:    res.Tenant(),
+		EventTime: time.Now(),
+		EventType: resource.ChangeTypeUpdate,
+	})
 	ev, err := event.NewResourceUpdatedEvent(res, impact)
 	if err != nil {
 		rs.logger.Error("error creating event for resource update: %s", err)

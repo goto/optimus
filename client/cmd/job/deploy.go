@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	deployTimeout = time.Minute * 30
+	deployTimeout    = time.Minute * 30
+	defaultBatchSize = 10
 )
 
 type deployCommand struct {
@@ -33,7 +34,8 @@ type deployCommand struct {
 
 	clientConfig *config.ClientConfig
 
-	jobNames []string
+	jobNames  []string
+	batchSize int
 }
 
 // NewDeployCommand initializes command for deploying job specifications
@@ -54,8 +56,8 @@ func NewDeployCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&deploy.namespaceName, "namespace", "n", deploy.namespaceName, "Namespace name in which the job resides")
 	cmd.Flags().StringSliceVarP(&deploy.jobNames, "jobs", "J", nil, "Job names")
+	cmd.Flags().IntVarP(&deploy.batchSize, "batch-size", "b", defaultBatchSize, "Number of jobs to be deployed in a batch")
 
-	cmd.MarkFlagRequired("jobs")
 	cmd.MarkFlagRequired("namespace")
 	return cmd
 }
@@ -106,7 +108,7 @@ func (e *deployCommand) deployJobSpecifications(namespacePath string) error {
 	ctx, dialCancel := context.WithTimeout(context.Background(), deployTimeout)
 	defer dialCancel()
 
-	jobSpecs, err := e.getJobSpecByNames(namespacePath)
+	jobSpecs, err := e.getJobSpecs(namespacePath)
 	if err != nil {
 		return err
 	}
@@ -122,21 +124,26 @@ func (e *deployCommand) executeJobUpsert(ctx context.Context, jobSpecificationSe
 	for i, jobSpec := range jobSpecsToUpsert {
 		specsToUpsertProto[i] = jobSpec.ToProto()
 	}
-	_, err := jobSpecificationServiceClient.UpsertJobSpecifications(ctx, &pb.UpsertJobSpecificationsRequest{
-		ProjectName:   e.projectName,
-		NamespaceName: e.namespaceName,
-		Specs:         specsToUpsertProto,
-	})
-	if err != nil {
-		return err
-	}
-	for _, spec := range jobSpecsToUpsert {
-		e.logger.Info("Deployed %s job", spec.Name)
+
+	countJobs := len(specsToUpsertProto)
+	for i := 0; i < countJobs; i += e.batchSize {
+		endIndex := i + e.batchSize
+		if countJobs < endIndex {
+			endIndex = countJobs
+		}
+		_, err := jobSpecificationServiceClient.UpsertJobSpecifications(ctx, &pb.UpsertJobSpecificationsRequest{
+			ProjectName:   e.projectName,
+			NamespaceName: e.namespaceName,
+			Specs:         specsToUpsertProto[i:endIndex],
+		})
+		if err != nil {
+			e.logger.Error("failure in job deploy", err)
+		}
 	}
 	return nil
 }
 
-func (e *deployCommand) getJobSpecByNames(namespaceJobPath string) ([]*model.JobSpec, error) {
+func (e *deployCommand) getJobSpecs(namespaceJobPath string) ([]*model.JobSpec, error) {
 	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs(), specio.WithJobSpecParentReading())
 	if err != nil {
 		return nil, err
@@ -149,7 +156,15 @@ func (e *deployCommand) getJobSpecByNames(namespaceJobPath string) ([]*model.Job
 	for _, spec := range allJobSpecsInNamespace {
 		jobNameToSpecMap[spec.Name] = spec
 	}
+
 	jobSpecs := make([]*model.JobSpec, 0)
+	if len(e.jobNames) == 0 {
+		for _, spec := range jobNameToSpecMap {
+			jobSpecs = append(jobSpecs, spec)
+		}
+		return jobSpecs, nil
+	}
+
 	for _, jobName := range e.jobNames {
 		jobSpec, ok := jobNameToSpecMap[jobName]
 		if !ok {

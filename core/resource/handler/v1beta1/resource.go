@@ -263,9 +263,7 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 		return nil, errors.GRPCErr(err, "failed to update resource "+res.FullName())
 	}
 
-	return &pb.UpdateResourceResponse{
-		Success: true,
-	}, nil
+	return &pb.UpdateResourceResponse{}, nil
 }
 
 func (rh ResourceHandler) DeleteResource(ctx context.Context, req *pb.DeleteResourceRequest) (*pb.DeleteResourceResponse, error) {

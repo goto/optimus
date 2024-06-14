@@ -1192,7 +1192,7 @@ func (j *JobService) raiseUpdateEvent(incomingJob *job.Job, impactType job.Updat
 	})
 	jobEvent, err := event.NewJobUpdateEvent(incomingJob, impactType)
 	if err != nil {
-		j.logger.Error("error creating event for incomingJob update: %s", err)
+		j.logger.Error("error creating event for job update: %s", err)
 		return
 	}
 	j.eventHandler.HandleEvent(jobEvent)

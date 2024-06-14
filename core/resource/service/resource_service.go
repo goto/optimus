@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -63,7 +62,6 @@ type ResourceService struct {
 }
 
 type AlertManager interface {
-	io.Closer
 	SendResourceEvent(attr *resource.AlertAttrs)
 }
 

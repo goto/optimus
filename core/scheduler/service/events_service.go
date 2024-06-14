@@ -31,7 +31,6 @@ type Webhook interface {
 }
 
 type AlertManager interface {
-	io.Closer
 	SendJobRunEvent(attr *scheduler.AlertAttrs)
 	SendReplayEvent(attr *scheduler.ReplayNotificationAttrs)
 }

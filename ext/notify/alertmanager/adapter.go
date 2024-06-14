@@ -86,13 +86,13 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 			"namespace":    attr.Tenant.NamespaceName().String(),
 			"job_name":     jobName,
 			"entity_type":  "Job",
-			"change_type":  attr.EventType.String(),
+			"change_type":  attr.ChangeType.String(),
 			"console_link": a.getJobConsoleLink(projectName, jobName),
 		},
 		Template: optimusChangeTemplate,
 		Labels: map[string]string{
 			"identifier": attr.URN,
-			"event_type": strings.ToLower(attr.EventType.String()),
+			"event_type": strings.ToLower(attr.ChangeType.String()),
 		},
 	})
 }

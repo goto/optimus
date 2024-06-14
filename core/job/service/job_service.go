@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -76,7 +75,6 @@ type JobService struct {
 }
 
 type AlertManager interface {
-	io.Closer
 	SendJobEvent(attr *job.AlertAttrs)
 }
 
@@ -1184,11 +1182,11 @@ func (j *JobService) raiseCreateEvent(job *job.Job) {
 
 func (j *JobService) raiseUpdateEvent(incomingJob *job.Job, impactType job.UpdateImpact) {
 	j.alertHandler.SendJobEvent(&job.AlertAttrs{
-		Name:      incomingJob.Spec().Name(),
-		URN:       incomingJob.GetConsoleURN(),
-		Tenant:    incomingJob.Tenant(),
-		EventTime: time.Now(),
-		EventType: job.ChangeTypeUpdate,
+		Name:       incomingJob.Spec().Name(),
+		URN:        incomingJob.GetConsoleURN(),
+		Tenant:     incomingJob.Tenant(),
+		EventTime:  time.Now(),
+		ChangeType: job.ChangeTypeUpdate,
 	})
 	jobEvent, err := event.NewJobUpdateEvent(incomingJob, impactType)
 	if err != nil {
@@ -1209,11 +1207,11 @@ func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name,
 
 func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
 	j.alertHandler.SendJobEvent(&job.AlertAttrs{
-		Name:      jobName,
-		URN:       jobName.GetConsoleURN(tnnt),
-		Tenant:    tnnt,
-		EventTime: time.Now(),
-		EventType: job.ChangeTypeDelete,
+		Name:       jobName,
+		URN:        jobName.GetConsoleURN(tnnt),
+		Tenant:     tnnt,
+		EventTime:  time.Now(),
+		ChangeType: job.ChangeTypeDelete,
 	})
 	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName)
 	if err != nil {

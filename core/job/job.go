@@ -138,11 +138,11 @@ func (j ChangeType) String() string {
 }
 
 type AlertAttrs struct {
-	Name      Name
-	URN       string
-	Tenant    tenant.Tenant
-	EventTime time.Time
-	EventType ChangeType
+	Name       Name
+	URN        string
+	Tenant     tenant.Tenant
+	EventTime  time.Time
+	ChangeType ChangeType
 }
 
 type UpdateImpact string

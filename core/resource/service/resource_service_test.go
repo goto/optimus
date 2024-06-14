@@ -240,8 +240,8 @@ func TestResourceService(t *testing.T) {
 			mgr.On("CreateResource", ctx, incoming).Return(nil)
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
 
 			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, nil)
 
@@ -418,13 +418,13 @@ func TestResourceService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 			eventHandler.On("HandleEvent", mock.Anything)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
 
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertmanager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
 
 			actualError := rscService.Update(ctx, resourceToUpdate, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -450,8 +450,8 @@ func TestResourceService(t *testing.T) {
 			mgr.On("UpdateResource", ctx, mock.Anything).Return(nil)
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
 
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
@@ -666,10 +666,10 @@ func TestResourceService(t *testing.T) {
 			mgr.On("GetURN", mock.Anything).Return(datasetURN, nil)
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertmanager)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 
@@ -698,9 +698,9 @@ func TestResourceService(t *testing.T) {
 			mgr.On("GetURN", mock.Anything).Return(urn, nil)
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertmanager)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 
@@ -730,9 +730,9 @@ func TestResourceService(t *testing.T) {
 			mgr.On("BatchUpdate", ctx, resource.Bigquery, mock.Anything).Return(errors.New("unknown error"))
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertmanager)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -764,9 +764,9 @@ func TestResourceService(t *testing.T) {
 			mgr.On("BatchUpdate", ctx, resource.Bigquery, mock.Anything).Return(errors.New("unknown error"))
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertmanager)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -809,8 +809,8 @@ func TestResourceService(t *testing.T) {
 			}).Return(nil)
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
 			argMatcher := mock.MatchedBy(func(ev moderator.Event) bool {
 				return ev != nil
 			})
@@ -819,7 +819,7 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertmanager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
 
 			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting}
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
@@ -863,8 +863,8 @@ func TestResourceService(t *testing.T) {
 			}).Return(nil)
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
 			argMatcher := mock.MatchedBy(func(ev moderator.Event) bool {
 				return ev != nil
 			})
@@ -873,7 +873,7 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertmanager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
 
 			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting}
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
@@ -927,8 +927,8 @@ func TestResourceService(t *testing.T) {
 				Return(nil)
 
 			eventHandler := newEventHandler(t)
-			alertmanager := new(mockAlertManager)
-			alertmanager.On("SendResourceEvent", mock.Anything)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
 			argMatcher := mock.MatchedBy(func(ev moderator.Event) bool {
 				return ev != nil
 			})
@@ -937,7 +937,7 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertmanager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
 
 			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting, incomingToRecreate}
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
@@ -1442,11 +1442,6 @@ func (m *mockDownstreamResolver) GetDownstreamByResourceURN(ctx context.Context,
 
 type mockAlertManager struct {
 	mock.Mock
-}
-
-func (m *mockAlertManager) Close() error {
-	args := m.Called()
-	return args.Error(0)
 }
 
 func (m *mockAlertManager) SendResourceEvent(attr *resource.AlertAttrs) {

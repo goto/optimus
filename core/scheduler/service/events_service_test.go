@@ -346,7 +346,6 @@ func (m *mockWebhookChanel) Close() error {
 }
 
 type mockAlertManager struct {
-	io.Closer
 	mock.Mock
 }
 
@@ -356,9 +355,4 @@ func (m *mockAlertManager) SendJobRunEvent(attr *scheduler.AlertAttrs) {
 
 func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
 	m.Called(attr)
-}
-
-func (m *mockAlertManager) Close() error {
-	args := m.Called()
-	return args.Error(0)
 }

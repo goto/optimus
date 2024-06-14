@@ -809,8 +809,6 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
-			alertmanager := new(AlertManager)
-			alertmanager.On("SendJobEvent", mock.Anything)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -943,9 +941,9 @@ func TestJobService(t *testing.T) {
 			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, jobNamesToUpload, emptyJobNames).Return(nil)
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
-			alertmanager := new(AlertManager)
-			alertmanager.On("SendJobEvent", mock.Anything)
-			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertmanager)
+			alertManager := new(AlertManager)
+			alertManager.On("SendJobEvent", mock.Anything)
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertManager)
 			updatedJobs, err := jobService.Update(ctx, sampleTenant, specs)
 			assert.Error(t, err)
 			assert.Len(t, updatedJobs, 1)
@@ -999,9 +997,9 @@ func TestJobService(t *testing.T) {
 			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, mock.Anything, emptyJobNames).Return(errors.New(errorMsg))
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
-			alertmanager := new(AlertManager)
-			alertmanager.On("SendJobEvent", mock.Anything)
-			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertmanager)
+			alertManager := new(AlertManager)
+			alertManager.On("SendJobEvent", mock.Anything)
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertManager)
 			updatedJobs, err := jobService.Update(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, errorMsg)
 			assert.Len(t, updatedJobs, 1)
@@ -1085,9 +1083,9 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 			defer eventHandler.AssertExpectations(t)
 
-			alertmanager := new(AlertManager)
-			alertmanager.On("SendJobEvent", mock.Anything)
-			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, eventHandler, nil, jobDeploymentService, nil, nil, nil, alertmanager)
+			alertManager := new(AlertManager)
+			alertManager.On("SendJobEvent", mock.Anything)
+			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, eventHandler, nil, jobDeploymentService, nil, nil, nil, alertManager)
 			err := jobService.ChangeNamespace(ctx, sampleTenant, newTenant, specA.Name())
 			assert.NoError(t, err)
 		})
@@ -1119,10 +1117,10 @@ func TestJobService(t *testing.T) {
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
-			alertmanager := new(AlertManager)
-			alertmanager.On("SendJobEvent", mock.Anything)
+			alertManager := new(AlertManager)
+			alertManager.On("SendJobEvent", mock.Anything)
 
-			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, nil, nil, eventHandler, log, jobDeploymentService, nil, nil, nil, alertmanager)
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, nil, nil, eventHandler, log, jobDeploymentService, nil, nil, nil, alertManager)
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, false)
 			assert.NoError(t, err)
 			assert.Empty(t, affectedDownstream)
@@ -1158,9 +1156,9 @@ func TestJobService(t *testing.T) {
 			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, emptyJobNames, jobNamesToRemove).Return(nil)
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
-			alertmanager := new(AlertManager)
-			alertmanager.On("SendJobEvent", mock.Anything)
-			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, nil, nil, eventHandler, log, jobDeploymentService, nil, nil, nil, alertmanager)
+			alertManager := new(AlertManager)
+			alertManager.On("SendJobEvent", mock.Anything)
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, nil, nil, eventHandler, log, jobDeploymentService, nil, nil, nil, alertManager)
 
 			affectedDownstream, err := jobService.Delete(ctx, sampleTenant, specA.Name(), false, true)
 			assert.NoError(t, err)
@@ -4944,11 +4942,6 @@ type AlertManager struct {
 
 func (_m *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 	_m.Called(attr)
-}
-
-func (_m *AlertManager) Close() error {
-	args := _m.Called()
-	return args.Error(0)
 }
 
 // NewJobRunInputCompiler creates a new instance of JobRunInputCompiler. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

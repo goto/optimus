@@ -385,6 +385,65 @@
           "ResourceService"
         ]
       }
+    },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/datastore/{datastoreName}/resources-upsert": {
+      "post": {
+        "summary": "UpsertResource updates/inserts a resource specification of a datastore in project",
+        "operationId": "ResourceService_UpsertResource",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1UpsertResourceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "datastoreName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "resources": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/v1beta1ResourceSpecification"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "ResourceService"
+        ]
+      }
     }
   },
   "definitions": {

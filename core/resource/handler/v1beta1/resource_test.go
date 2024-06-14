@@ -721,7 +721,7 @@ func TestResourceHandler(t *testing.T) {
 			req := &pb.UpsertResourceRequest{
 				ProjectName:   "",
 				DatastoreName: "bigquery",
-				Resource:      nil,
+				Resources:     nil,
 				NamespaceName: "",
 			}
 
@@ -737,7 +737,7 @@ func TestResourceHandler(t *testing.T) {
 			req := &pb.UpsertResourceRequest{
 				ProjectName:   "proj",
 				DatastoreName: "",
-				Resource:      nil,
+				Resources:     nil,
 				NamespaceName: "ns",
 			}
 
@@ -753,14 +753,13 @@ func TestResourceHandler(t *testing.T) {
 			req := &pb.UpsertResourceRequest{
 				ProjectName:   "proj",
 				DatastoreName: "bigquery",
-				Resource:      nil,
+				Resources:     nil,
 				NamespaceName: "ns",
 			}
 
 			_, err := handler.UpsertResource(ctx, req)
 			assert.NotNil(t, err)
-			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
-				"resource: empty resource: failed to upsert resource")
+			assert.ErrorContains(t, err, "empty resource")
 		})
 		t.Run("returns error when kind is empty", func(t *testing.T) {
 			service := new(resourceService)
@@ -770,11 +769,13 @@ func TestResourceHandler(t *testing.T) {
 			req := &pb.UpsertResourceRequest{
 				ProjectName:   "proj",
 				DatastoreName: "bigquery",
-				Resource: &pb.ResourceSpecification{
-					Name:    "proj.ds.table1",
-					Version: 0,
-					Type:    "",
-					Spec:    spec,
+				Resources: []*pb.ResourceSpecification{
+					{
+						Name:    "proj.ds.table1",
+						Version: 0,
+						Type:    "",
+						Spec:    spec,
+					},
 				},
 				NamespaceName: "ns",
 			}
@@ -794,21 +795,54 @@ func TestResourceHandler(t *testing.T) {
 			req := &pb.UpsertResourceRequest{
 				ProjectName:   "proj",
 				DatastoreName: "bigquery",
-				Resource: &pb.ResourceSpecification{
-					Version: 0,
-					Name:    "proj.set.table",
-					Type:    "table",
-					Spec:    spec,
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table",
+						Type:    "table",
+						Spec:    spec,
+					},
 				},
 				NamespaceName: "ns",
 			}
 
 			_, err := handler.UpsertResource(ctx, req)
 			assert.NotNil(t, err)
-			assert.EqualError(t, err, "rpc error: code = Internal desc = validation failure: failed to "+
-				"upsert resource proj.set.table")
+			assert.ErrorContains(t, err, "validation failure")
 		})
-		t.Run("upsert the resource successfully", func(t *testing.T) {
+		t.Run("skip invalid resource, proceed other resource, and return error in overall", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil).Once()
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table1",
+						Type:    "",
+						Spec:    spec,
+					},
+					{
+						Version: 0,
+						Name:    "proj.set.table2",
+						Type:    "table",
+						Spec:    spec,
+					},
+				},
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "empty resource type for proj.set.table1")
+		})
+		t.Run("upsert a single resource successfully", func(t *testing.T) {
 			service := new(resourceService)
 			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil)
 			defer service.AssertExpectations(t)
@@ -819,11 +853,44 @@ func TestResourceHandler(t *testing.T) {
 			req := &pb.UpsertResourceRequest{
 				ProjectName:   "proj",
 				DatastoreName: "bigquery",
-				Resource: &pb.ResourceSpecification{
-					Version: 0,
-					Name:    "proj.set.table",
-					Type:    "table",
-					Spec:    spec,
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table",
+						Type:    "table",
+						Spec:    spec,
+					},
+				},
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+		})
+		t.Run("upsert a multiple resource successfully", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil).Twice()
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"description": "test"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table",
+						Type:    "table",
+						Spec:    spec,
+					},
+					{
+						Version: 0,
+						Name:    "proj.set.table2",
+						Type:    "table",
+						Spec:    spec,
+					},
 				},
 				NamespaceName: "ns",
 			}

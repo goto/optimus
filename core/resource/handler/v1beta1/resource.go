@@ -280,21 +280,27 @@ func (rh ResourceHandler) UpsertResource(ctx context.Context, req *pb.UpsertReso
 		return nil, errors.GRPCErr(err, "invalid upsert resource request")
 	}
 
-	incomingResource, err := fromResourceProto(req.Resource, tnnt, store)
-	if err != nil {
-		rh.l.Error("error adapting resource [%s]: %s", req.GetResource().GetName(), err)
-		return nil, errors.GRPCErr(err, "failed to upsert resource")
+	if len(req.Resources) == 0 {
+		return nil, errors.InvalidArgument(resource.EntityResource, "empty resource")
 	}
 
 	logWriter := writer.NewLogWriter(rh.l)
-
-	if err = rh.service.Upsert(ctx, incomingResource, logWriter); err != nil {
-		rh.l.Error("error applying upsert operation in resource [%s]: %s", incomingResource.FullName(), err)
-		return nil, errors.GRPCErr(err, "failed to upsert resource "+incomingResource.FullName())
+	me := errors.NewMultiError("upsert resource errors")
+	for _, reqResource := range req.Resources {
+		incomingResource, err := fromResourceProto(reqResource, tnnt, store)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		if err = rh.service.Upsert(ctx, incomingResource, logWriter); err != nil {
+			me.Append(err)
+			continue
+		}
+		raiseResourceDatastoreEventMetric(tnnt, incomingResource.Store().String(), incomingResource.Kind(), incomingResource.Status().String())
 	}
-
-	raiseResourceDatastoreEventMetric(tnnt, incomingResource.Store().String(), incomingResource.Kind(), incomingResource.Status().String())
-
+	if len(me.Errors) > 0 {
+		return nil, errors.GRPCErr(me.ToErr(), fmt.Sprintf("failed to do upsert operation in namespace %s", req.GetNamespaceName()))
+	}
 	return &pb.UpsertResourceResponse{}, nil
 }
 

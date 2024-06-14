@@ -44,6 +44,23 @@ func (p *ListByNamespace[Kind]) GetAllNamespaces() []string {
 	return res
 }
 
+func (p ListByNamespace[Kind]) DeletePlansByNames(names ...string) ListByNamespace[Kind] {
+	newListByNamespace := ListByNamespace[Kind]{}
+	isDelete := map[string]bool{}
+	for _, name := range names {
+		isDelete[name] = true
+	}
+
+	for namespace, kinds := range p {
+		for _, kind := range kinds {
+			if _, ok := isDelete[kind.GetName()]; !ok {
+				newListByNamespace.Append(namespace, kind)
+			}
+		}
+	}
+	return newListByNamespace
+}
+
 func (p *ListByNamespace[Kind]) getMapByNameAndNamespace() map[string]map[string]Kind {
 	planByNameAndNamespace := make(map[string]map[string]Kind)
 	for namespace, plans := range *p {

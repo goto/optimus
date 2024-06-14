@@ -1138,6 +1138,12 @@
       "properties": {
         "log": {
           "type": "string"
+        },
+        "successfulJobNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -1687,6 +1693,12 @@
       "properties": {
         "log": {
           "type": "string"
+        },
+        "successfulJobNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

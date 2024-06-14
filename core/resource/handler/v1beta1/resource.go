@@ -285,23 +285,39 @@ func (rh ResourceHandler) UpsertResource(ctx context.Context, req *pb.UpsertReso
 	}
 
 	logWriter := writer.NewLogWriter(rh.l)
-	me := errors.NewMultiError("upsert resource errors")
+	result := make([]*pb.ResourceStatus, 0)
+
 	for _, reqResource := range req.Resources {
-		incomingResource, err := fromResourceProto(reqResource, tnnt, store)
+		resourceSpec, err := fromResourceProto(reqResource, tnnt, store)
 		if err != nil {
-			me.Append(err)
+			errMsg := fmt.Sprintf("error adapting resource [%s]: %s", reqResource.GetName(), err)
+			logWriter.Write(writer.LogLevelError, errMsg)
+			result = append(result, rh.newResourceStatus(reqResource.GetName(), resource.StatusFailure.String(), errMsg))
 			continue
 		}
-		if err = rh.service.Upsert(ctx, incomingResource, logWriter); err != nil {
-			me.Append(err)
+
+		if err = rh.service.Upsert(ctx, resourceSpec, logWriter); err != nil {
+			errMsg := fmt.Sprintf("error deploying resource [%s]: %s", reqResource.GetName(), err)
+			logWriter.Write(writer.LogLevelError, errMsg)
+			result = append(result, rh.newResourceStatus(reqResource.GetName(), resource.StatusFailure.String(), errMsg))
 			continue
 		}
-		raiseResourceDatastoreEventMetric(tnnt, incomingResource.Store().String(), incomingResource.Kind(), incomingResource.Status().String())
+
+		result = append(result, rh.newResourceStatus(resourceSpec.FullName(), resourceSpec.Status().String(), ""))
+		raiseResourceDatastoreEventMetric(tnnt, resourceSpec.Store().String(), resourceSpec.Kind(), resourceSpec.Status().String())
 	}
-	if len(me.Errors) > 0 {
-		return nil, errors.GRPCErr(me.ToErr(), fmt.Sprintf("failed to do upsert operation in namespace %s", req.GetNamespaceName()))
+
+	return &pb.UpsertResourceResponse{
+		Results: result,
+	}, nil
+}
+
+func (ResourceHandler) newResourceStatus(name, status, message string) *pb.ResourceStatus {
+	return &pb.ResourceStatus{
+		ResourceName: name,
+		Status:       status,
+		Message:      message,
 	}
-	return &pb.UpsertResourceResponse{}, nil
 }
 
 func (rh ResourceHandler) DeleteResource(ctx context.Context, req *pb.DeleteResourceRequest) (*pb.DeleteResourceResponse, error) {

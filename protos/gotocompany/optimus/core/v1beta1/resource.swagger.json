@@ -388,7 +388,7 @@
     }
   },
   "definitions": {
-    "ApplyResourcesResponseResourceStatus": {
+    "corev1beta1ResourceStatus": {
       "type": "object",
       "properties": {
         "resourceName": {
@@ -397,7 +397,7 @@
         "status": {
           "type": "string"
         },
-        "reason": {
+        "message": {
           "type": "string"
         }
       }
@@ -446,8 +446,22 @@
         "statuses": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/ApplyResourcesResponseResourceStatus"
+            "$ref": "#/definitions/v1beta1ApplyResourcesResponseResourceStatus"
           }
+        }
+      }
+    },
+    "v1beta1ApplyResourcesResponseResourceStatus": {
+      "type": "object",
+      "properties": {
+        "resourceName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
         }
       }
     },
@@ -583,6 +597,12 @@
         },
         "message": {
           "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/corev1beta1ResourceStatus"
+          }
         }
       }
     }

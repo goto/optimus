@@ -16,11 +16,13 @@ import (
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/resource"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
 const (
-	uploadTimeout = time.Minute * 30
+	uploadTimeout    = time.Minute * 30
+	defaultBatchSize = 10
 )
 
 type uploadCommand struct {
@@ -32,6 +34,7 @@ type uploadCommand struct {
 
 	namespaceName string
 	resourceNames []string
+	batchSize     int
 
 	resourceSpecReadWriter local.SpecReadWriter[*model.ResourceSpec]
 }
@@ -45,8 +48,8 @@ func NewUploadCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "upload",
 		Short:   "Upload a resource to server",
-		Long:    heredoc.Doc(`Apply local changes to destination server which includes creating/updating a resource`),
-		Example: "optimus resource upload -R [resource1,resource2]",
+		Long:    heredoc.Doc(`Apply local changes to destination server which includes creating/updating resources`),
+		Example: "optimus resource upload -R [resource1,resource2] -n []",
 		Annotations: map[string]string{
 			"group:core": "true",
 		},
@@ -54,8 +57,11 @@ func NewUploadCommand() *cobra.Command {
 		PreRunE: uploadCmd.PreRunE,
 	}
 	cmd.Flags().StringVarP(&uploadCmd.configFilePath, "config", "c", uploadCmd.configFilePath, "File path for client configuration")
-	cmd.Flags().StringVarP(&uploadCmd.namespaceName, "namespace-name", "n", "", "Namespace name in which the resource resides")
+	cmd.Flags().StringVarP(&uploadCmd.namespaceName, "namespace", "n", "", "Namespace name in which the resource resides")
 	cmd.Flags().StringSliceVarP(&uploadCmd.resourceNames, "resources", "R", nil, "Resource names")
+	cmd.Flags().IntVarP(&uploadCmd.batchSize, "batch-size", "b", defaultBatchSize, "Number of resources to upload in a batch")
+
+	cmd.MarkFlagRequired("namespace")
 	return cmd
 }
 
@@ -98,7 +104,7 @@ func (u *uploadCommand) upload(namespace *config.Namespace) error {
 	defer cancelFunc()
 
 	for _, ds := range namespace.Datastore {
-		resourceSpecs, err := u.getResourceSpecsByName(ds.Path)
+		resourceSpecs, err := u.getResourceSpecs(ds.Path)
 		if err != nil {
 			u.logger.Error(err.Error())
 			continue
@@ -113,26 +119,44 @@ func (u *uploadCommand) upload(namespace *config.Namespace) error {
 			}
 			resourceProtos = append(resourceProtos, resourceProto)
 		}
-		upsertRequest := &pb.UpsertResourceRequest{
-			ProjectName:   u.clientConfig.Project.Name,
-			NamespaceName: namespace.Name,
-			DatastoreName: ds.Type,
-			Resources:     resourceProtos,
-		}
 
-		_, err = resourceClient.UpsertResource(ctx, upsertRequest)
-		if err != nil {
-			u.logger.Error("Unable to upload resource of namespace %s, err: %s", u.namespaceName, err)
-			continue
+		countResources := len(resourceProtos)
+		for i := 0; i < countResources; i += u.batchSize {
+			endIndex := i + u.batchSize
+			if countResources < endIndex {
+				endIndex = countResources
+			}
+
+			upsertRequest := &pb.UpsertResourceRequest{
+				ProjectName:   u.clientConfig.Project.Name,
+				NamespaceName: namespace.Name,
+				DatastoreName: ds.Type,
+				Resources:     resourceProtos[i:endIndex],
+			}
+
+			resp, err := resourceClient.UpsertResource(ctx, upsertRequest)
+			if err != nil {
+				u.logger.Error("Unable to upload resource of namespace %s, err: %s", u.namespaceName, err)
+			}
+			for _, result := range resp.Results {
+				message := result.Message
+				if message != "" {
+					message = fmt.Sprintf("(%s)", message)
+				}
+				if result.Status == resource.StatusFailure.String() {
+					u.logger.Error("[%s] %s %s", result.Status, result.ResourceName, message)
+					continue
+				}
+				u.logger.Info("[%s] %s %s", result.Status, result.ResourceName, message)
+			}
 		}
-		u.logger.Error("Upload resource of namespace %s successful", u.namespaceName)
 	}
-	u.logger.Info("finished uploading resource specification to server!\n")
+	u.logger.Info("finished uploading resource specifications to server\n")
 
 	return nil
 }
 
-func (u *uploadCommand) getResourceSpecsByName(namespaceResourcePath string) ([]*model.ResourceSpec, error) {
+func (u *uploadCommand) getResourceSpecs(namespaceResourcePath string) ([]*model.ResourceSpec, error) {
 	allResourcesInNamespace, err := u.resourceSpecReadWriter.ReadAll(namespaceResourcePath)
 	if err != nil {
 		return nil, err
@@ -141,7 +165,16 @@ func (u *uploadCommand) getResourceSpecsByName(namespaceResourcePath string) ([]
 	for _, spec := range allResourcesInNamespace {
 		resourceNameToSpecMap[spec.Name] = spec
 	}
+
 	resourceSpecs := make([]*model.ResourceSpec, 0)
+
+	if len(u.resourceNames) == 0 {
+		for _, spec := range resourceNameToSpecMap {
+			resourceSpecs = append(resourceSpecs, spec)
+		}
+		return resourceSpecs, nil
+	}
+
 	for _, resourceName := range u.resourceNames {
 		resourceSpec, ok := resourceNameToSpecMap[resourceName]
 		if !ok {

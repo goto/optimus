@@ -90,8 +90,9 @@ func TestNewJobHandler(t *testing.T) {
 	t.Run("AddJobSpecifications", func(t *testing.T) {
 		t.Run("adds job", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProto := &pb.JobSpecification{
 				Version:          int32(jobVersion),
@@ -111,19 +112,22 @@ func TestNewJobHandler(t *testing.T) {
 				NamespaceName: namespace.Name().String(),
 				Specs:         jobProtos,
 			}
+			jobSuccesses := []job.Name{job.Name(jobSpecProto.Name)}
 
-			jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(jobSuccesses, nil)
 
 			resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.AddJobSpecificationsResponse{
-				Log: "jobs are successfully created",
+				Log:                "jobs are successfully created",
+				SuccessfulJobNames: []string{jobSpecProto.Name},
 			}, resp)
 		})
 		t.Run("adds complete job", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProto := &pb.JobSpecification{
 				Version:          int32(jobVersion),
@@ -146,19 +150,22 @@ func TestNewJobHandler(t *testing.T) {
 				NamespaceName: namespace.Name().String(),
 				Specs:         jobProtos,
 			}
+			jobSuccesses := []job.Name{job.Name(jobSpecProto.Name)}
 
-			jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(jobSuccesses, nil)
 
 			resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.AddJobSpecificationsResponse{
-				Log: "jobs are successfully created",
+				Log:                "jobs are successfully created",
+				SuccessfulJobNames: []string{jobSpecProto.Name},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			request := pb.AddJobSpecificationsRequest{
 				NamespaceName: namespace.Name().String(),
@@ -171,8 +178,9 @@ func TestNewJobHandler(t *testing.T) {
 		t.Run("skips job if unable to parse from proto", func(t *testing.T) {
 			t.Run("due to empty owner", func(t *testing.T) {
 				jobService := new(JobService)
+				changeLogService := new(ChangeLogService)
 
-				jobHandler := v1beta1.NewJobHandler(jobService, log)
+				jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 				jobSpecProtos := []*pb.JobSpecification{
 					{
@@ -205,7 +213,12 @@ func TestNewJobHandler(t *testing.T) {
 					Specs:         jobSpecProtos,
 				}
 
-				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(nil)
+				jobSuccesses := []job.Name{
+					job.Name(jobSpecProtos[0].Name),
+					job.Name(jobSpecProtos[1].Name),
+				}
+
+				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(jobSuccesses, nil)
 
 				resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 				assert.Nil(t, err)
@@ -213,8 +226,9 @@ func TestNewJobHandler(t *testing.T) {
 			})
 			t.Run("due to invalid start date", func(t *testing.T) {
 				jobService := new(JobService)
+				changeLogService := new(ChangeLogService)
 
-				jobHandler := v1beta1.NewJobHandler(jobService, log)
+				jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 				jobSpecProtos := []*pb.JobSpecification{
 					{
@@ -247,8 +261,12 @@ func TestNewJobHandler(t *testing.T) {
 					NamespaceName: namespace.Name().String(),
 					Specs:         jobSpecProtos,
 				}
+				jobSuccesses := []job.Name{
+					job.Name(jobSpecProtos[0].Name),
+					job.Name(jobSpecProtos[1].Name),
+				}
 
-				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(nil)
+				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(jobSuccesses, nil)
 
 				resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 				assert.Nil(t, err)
@@ -256,8 +274,9 @@ func TestNewJobHandler(t *testing.T) {
 			})
 			t.Run("due to invalid end date", func(t *testing.T) {
 				jobService := new(JobService)
+				changeLogService := new(ChangeLogService)
 
-				jobHandler := v1beta1.NewJobHandler(jobService, log)
+				jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 				jobSpecProtos := []*pb.JobSpecification{
 					{
@@ -290,8 +309,12 @@ func TestNewJobHandler(t *testing.T) {
 					NamespaceName: namespace.Name().String(),
 					Specs:         jobSpecProtos,
 				}
+				jobSuccesses := []job.Name{
+					job.Name(jobSpecProtos[0].Name),
+					job.Name(jobSpecProtos[1].Name),
+				}
 
-				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(nil)
+				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(jobSuccesses, nil)
 
 				resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 				assert.Nil(t, err)
@@ -299,8 +322,9 @@ func TestNewJobHandler(t *testing.T) {
 			})
 			t.Run("due to invalid alert configuration", func(t *testing.T) {
 				jobService := new(JobService)
+				changeLogService := new(ChangeLogService)
 
-				jobHandler := v1beta1.NewJobHandler(jobService, log)
+				jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 				behaviorWithInvalidAlertConf := &pb.JobSpecification_Behavior{
 					Retry: &pb.JobSpecification_Behavior_Retry{ExponentialBackoff: false},
@@ -341,8 +365,12 @@ func TestNewJobHandler(t *testing.T) {
 					NamespaceName: namespace.Name().String(),
 					Specs:         jobSpecProtos,
 				}
+				jobSuccesses := []job.Name{
+					job.Name(jobSpecProtos[0].Name),
+					job.Name(jobSpecProtos[1].Name),
+				}
 
-				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(nil)
+				jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(jobSuccesses, nil)
 
 				resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 				assert.Nil(t, err)
@@ -351,8 +379,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("returns error when all jobs failed to be added", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProtos := []*pb.JobSpecification{
 				{
@@ -379,8 +408,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("returns response with job errors log when some jobs failed to be added", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProtos := []*pb.JobSpecification{
 				{
@@ -413,7 +443,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(errors.New("internal error"))
+			jobService.On("Add", ctx, sampleTenant, mock.Anything).Return(nil, errors.New("internal error"))
 
 			resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
@@ -423,8 +453,9 @@ func TestNewJobHandler(t *testing.T) {
 	t.Run("UpdateJobSpecifications", func(t *testing.T) {
 		t.Run("update jobs", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProto := &pb.JobSpecification{
 				Version:          int32(jobVersion),
@@ -445,18 +476,20 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpdateJobSpecificationsResponse{
-				Log: "jobs are successfully updated",
+				Log:                "jobs are successfully updated",
+				SuccessfulJobNames: []string{"job-A"},
 			}, resp)
 		})
 		t.Run("update complete jobs", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProto := &pb.JobSpecification{
 				Version:          int32(jobVersion),
@@ -480,18 +513,20 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpdateJobSpecificationsResponse{
-				Log: "jobs are successfully updated",
+				Log:                "jobs are successfully updated",
+				SuccessfulJobNames: []string{"job-A"},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			request := pb.UpdateJobSpecificationsRequest{
 				NamespaceName: namespace.Name().String(),
@@ -503,8 +538,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("skips job if unable to parse from proto", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProtos := []*pb.JobSpecification{
 				{
@@ -537,7 +573,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-B"}, nil)
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
@@ -545,8 +581,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("returns error when all jobs failed to be updated", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProtos := []*pb.JobSpecification{
 				{
@@ -567,7 +604,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(errors.New("internal error"))
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{}, errors.New("internal error"))
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.ErrorContains(t, err, "no jobs to be processed")
@@ -575,8 +612,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("returns response with job errors log when some jobs failed to be updated", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobSpecProtos := []*pb.JobSpecification{
 				{
@@ -609,7 +647,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return(errors.New("internal error"))
+			jobService.On("Update", ctx, sampleTenant, mock.Anything).Return([]job.Name{}, errors.New("internal error"))
 
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
@@ -622,6 +660,7 @@ func TestNewJobHandler(t *testing.T) {
 		t.Run("fail if invalid params", func(t *testing.T) {
 			t.Run("invalid source namespace", func(t *testing.T) {
 				jobService := new(JobService)
+				changeLogService := new(ChangeLogService)
 				defer jobService.AssertExpectations(t)
 				jobAName, _ := job.NameFrom("job-A")
 				request := &pb.ChangeJobNamespaceRequest{
@@ -630,12 +669,13 @@ func TestNewJobHandler(t *testing.T) {
 					JobName:          jobAName.String(),
 					NewNamespaceName: newNamespaceName,
 				}
-				jobHandler := v1beta1.NewJobHandler(jobService, log)
+				jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 				_, err := jobHandler.ChangeJobNamespace(ctx, request)
 				assert.ErrorContains(t, err, "failed to adapt source tenant when changing job namespace")
 			})
 			t.Run("invalid new namespace", func(t *testing.T) {
 				jobService := new(JobService)
+				changeLogService := new(ChangeLogService)
 				defer jobService.AssertExpectations(t)
 
 				jobAName, _ := job.NameFrom("job-A")
@@ -645,12 +685,13 @@ func TestNewJobHandler(t *testing.T) {
 					JobName:          jobAName.String(),
 					NewNamespaceName: "",
 				}
-				jobHandler := v1beta1.NewJobHandler(jobService, log)
+				jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 				_, err := jobHandler.ChangeJobNamespace(ctx, request)
 				assert.ErrorContains(t, err, "failed to adapt new tenant when changing job namespace")
 			})
 			t.Run("invalid job name", func(t *testing.T) {
 				jobService := new(JobService)
+				changeLogService := new(ChangeLogService)
 				defer jobService.AssertExpectations(t)
 
 				request := &pb.ChangeJobNamespaceRequest{
@@ -659,7 +700,7 @@ func TestNewJobHandler(t *testing.T) {
 					JobName:          "",
 					NewNamespaceName: newNamespaceName,
 				}
-				jobHandler := v1beta1.NewJobHandler(jobService, log)
+				jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 				_, err := jobHandler.ChangeJobNamespace(ctx, request)
 				assert.ErrorContains(t, err, "failed to adapt job name when changing job specification")
 			})
@@ -667,6 +708,7 @@ func TestNewJobHandler(t *testing.T) {
 
 		t.Run("Change job namespace successfully", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			jobAName, _ := job.NameFrom("job-A")
 			request := &pb.ChangeJobNamespaceRequest{
@@ -678,12 +720,13 @@ func TestNewJobHandler(t *testing.T) {
 			newTenant, _ := tenant.NewTenant(project.Name().String(), newNamespaceName)
 			jobService.On("ChangeNamespace", ctx, sampleTenant, newTenant, jobAName).Return(nil)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			_, err := jobHandler.ChangeJobNamespace(ctx, request)
 			assert.NoError(t, err)
 		})
 		t.Run("fail to Change job namespace", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			jobAName, _ := job.NameFrom("job-A")
 			request := &pb.ChangeJobNamespaceRequest{
@@ -695,7 +738,7 @@ func TestNewJobHandler(t *testing.T) {
 			newTenant, _ := tenant.NewTenant(project.Name().String(), newNamespaceName)
 			jobService.On("ChangeNamespace", ctx, sampleTenant, newTenant, jobAName).Return(errors.New("error in changing namespace"))
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			_, err := jobHandler.ChangeJobNamespace(ctx, request)
 			assert.ErrorContains(t, err, "error in changing namespace: failed to change job namespace")
 		})
@@ -712,7 +755,7 @@ func TestNewJobHandler(t *testing.T) {
 				JobNames:      []string{jobAName.String()},
 			}
 
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "namespace name is empty")
 		})
@@ -725,7 +768,7 @@ func TestNewJobHandler(t *testing.T) {
 				JobNames:      []string{""},
 			}
 
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "name is empty")
 		})
@@ -737,7 +780,7 @@ func TestNewJobHandler(t *testing.T) {
 				Remark:        updateRemark,
 				JobNames:      []string{jobAName.String()},
 			}
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "invalid state")
 		})
@@ -750,7 +793,7 @@ func TestNewJobHandler(t *testing.T) {
 				Remark:        "",
 			}
 
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 			_, err := jobHandler.UpdateJobsState(ctx, request)
 			assert.ErrorContains(t, err, "can not update job state without a valid remark")
 		})
@@ -758,6 +801,7 @@ func TestNewJobHandler(t *testing.T) {
 	t.Run("DeleteJobSpecification", func(t *testing.T) {
 		t.Run("deletes job successfully", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			jobAName, _ := job.NameFrom("job-A")
 			request := &pb.DeleteJobSpecificationRequest{
@@ -770,13 +814,14 @@ func TestNewJobHandler(t *testing.T) {
 
 			jobService.On("Delete", ctx, sampleTenant, jobAName, false, false).Return(nil, nil)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.DeleteJobSpecification(ctx, request)
 			assert.NoError(t, err)
 			assert.NotContains(t, resp.Message, "these downstream will be affected")
 		})
 		t.Run("force deletes job with downstream successfully", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			jobAName, _ := job.NameFrom("job-A")
 			request := &pb.DeleteJobSpecificationRequest{
@@ -790,13 +835,14 @@ func TestNewJobHandler(t *testing.T) {
 			downstreamNames := []job.FullName{"job-B"}
 			jobService.On("Delete", ctx, sampleTenant, jobAName, false, true).Return(downstreamNames, nil)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.DeleteJobSpecification(ctx, request)
 			assert.NoError(t, err)
 			assert.Contains(t, resp.Message, "these downstream will be affected")
 		})
 		t.Run("returns error if unable to construct tenant", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			jobAName, _ := job.NameFrom("job-A")
 			request := &pb.DeleteJobSpecificationRequest{
@@ -806,13 +852,14 @@ func TestNewJobHandler(t *testing.T) {
 				Force:         true,
 			}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.DeleteJobSpecification(ctx, request)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
 		})
 		t.Run("returns error if job name is not found", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			request := &pb.DeleteJobSpecificationRequest{
 				ProjectName:   project.Name().String(),
@@ -821,13 +868,14 @@ func TestNewJobHandler(t *testing.T) {
 				Force:         true,
 			}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.DeleteJobSpecification(ctx, request)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
 		})
 		t.Run("returns error if unable to delete job", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			jobAName, _ := job.NameFrom("job-A")
 			request := &pb.DeleteJobSpecificationRequest{
@@ -840,7 +888,7 @@ func TestNewJobHandler(t *testing.T) {
 
 			jobService.On("Delete", ctx, sampleTenant, jobAName, false, true).Return(nil, errors.New("internal error"))
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.DeleteJobSpecification(ctx, request)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
@@ -851,7 +899,7 @@ func TestNewJobHandler(t *testing.T) {
 			req := &pb.GetWindowRequest{
 				ScheduledAt: nil,
 			}
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 
 			resp, err := jobHandler.GetWindow(ctx, req)
 			assert.Error(t, err)
@@ -862,7 +910,7 @@ func TestNewJobHandler(t *testing.T) {
 				Version:     3,
 				ScheduledAt: timestamppb.New(time.Date(2022, 11, 18, 13, 0, 0, 0, time.UTC)),
 			}
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 
 			resp, err := jobHandler.GetWindow(ctx, req)
 			assert.Error(t, err)
@@ -874,7 +922,7 @@ func TestNewJobHandler(t *testing.T) {
 				ScheduledAt: timestamppb.New(time.Date(2022, 11, 18, 13, 0, 0, 0, time.UTC)),
 				Size:        "1",
 			}
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 
 			resp, err := jobHandler.GetWindow(ctx, req)
 			assert.Error(t, err)
@@ -888,7 +936,7 @@ func TestNewJobHandler(t *testing.T) {
 				Offset:      "0",
 				TruncateTo:  "d",
 			}
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 
 			resp, err := jobHandler.GetWindow(ctx, req)
 			assert.NoError(t, err)
@@ -901,7 +949,7 @@ func TestNewJobHandler(t *testing.T) {
 				Offset:      "0",
 				TruncateTo:  "d",
 			}
-			jobHandler := v1beta1.NewJobHandler(nil, log)
+			jobHandler := v1beta1.NewJobHandler(nil, nil, log)
 
 			resp, err := jobHandler.GetWindow(ctx, req)
 			assert.NoError(t, err)
@@ -912,8 +960,9 @@ func TestNewJobHandler(t *testing.T) {
 		var jobNamesWithInvalidSpec []job.Name
 		t.Run("replaces all job specifications of a tenant", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobProtos := []*pb.JobSpecification{
 				{
@@ -978,8 +1027,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("replaces all job specifications given multiple tenant", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobProtos := []*pb.JobSpecification{
 				{
@@ -1024,8 +1074,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("skips a job if the proto is invalid", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobProtos := []*pb.JobSpecification{
 				{
@@ -1066,8 +1117,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("skips operation for a namespace if the tenant is invalid", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobProtos := []*pb.JobSpecification{
 				{
@@ -1117,8 +1169,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("marks operation for this namespace to failed if unable to successfully do replace all", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			jobProtos := []*pb.JobSpecification{
 				{
@@ -1168,8 +1221,9 @@ func TestNewJobHandler(t *testing.T) {
 	t.Run("RefreshJobs", func(t *testing.T) {
 		t.Run("do refresh for the requested jobs", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			request := &pb.RefreshJobsRequest{
 				ProjectName:    project.Name().String(),
@@ -1188,8 +1242,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("returns error if project name is invalid", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			request := &pb.RefreshJobsRequest{
 				NamespaceNames: []string{namespace.Name().String()},
@@ -1205,8 +1260,9 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("returns error if unable to successfully run refresh", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
 			request := &pb.RefreshJobsRequest{
 				ProjectName:    project.Name().String(),
@@ -1227,17 +1283,19 @@ func TestNewJobHandler(t *testing.T) {
 	t.Run("GetJobSpecification", func(t *testing.T) {
 		t.Run("return error when tenant creation failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.GetJobSpecificationRequest{}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecification(ctx, &request)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
 		})
 		t.Run("return error when job name is empty", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.GetJobSpecificationRequest{
@@ -1245,13 +1303,14 @@ func TestNewJobHandler(t *testing.T) {
 				NamespaceName: sampleTenant.NamespaceName().String(),
 			}
 
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecification(ctx, &request)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
 		})
 		t.Run("return error when service get failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.GetJobSpecificationRequest{
@@ -1261,13 +1320,14 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			jobService.On("Get", ctx, sampleTenant, job.Name("job-A")).Return(nil, errors.New("error encountered"))
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecification(ctx, &request)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
 		})
 		t.Run("return success", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
@@ -1280,7 +1340,7 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			jobService.On("Get", ctx, sampleTenant, jobA.Spec().Name()).Return(jobA, nil)
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecification(ctx, &request)
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
@@ -1292,12 +1352,13 @@ func TestNewJobHandler(t *testing.T) {
 		}
 		t.Run("return error when service get by filter is failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.GetJobSpecificationsRequest{}
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("error encountered"))
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecifications(ctx, &request)
 			assert.Error(t, err)
 			assert.NotNil(t, resp)
@@ -1305,6 +1366,7 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("return success", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.GetJobSpecificationsRequest{}
@@ -1315,7 +1377,7 @@ func TestNewJobHandler(t *testing.T) {
 			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecifications(ctx, &request)
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
@@ -1326,6 +1388,7 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("return success without asset", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.GetJobSpecificationsRequest{
@@ -1338,7 +1401,7 @@ func TestNewJobHandler(t *testing.T) {
 			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecifications(ctx, &request)
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
@@ -1354,12 +1417,13 @@ func TestNewJobHandler(t *testing.T) {
 		}
 		t.Run("return error when service get by filter failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.ListJobSpecificationRequest{}
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything).Return(nil, errors.New("error encountered"))
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.ListJobSpecification(ctx, &request)
 			assert.Error(t, err)
 			assert.NotNil(t, resp)
@@ -1367,6 +1431,7 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("return success", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.ListJobSpecificationRequest{
@@ -1380,7 +1445,7 @@ func TestNewJobHandler(t *testing.T) {
 			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.ListJobSpecification(ctx, &request)
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
@@ -1391,6 +1456,7 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("return success without asset", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			request := pb.ListJobSpecificationRequest{
@@ -1405,7 +1471,7 @@ func TestNewJobHandler(t *testing.T) {
 			jobB := job.NewJob(sampleTenant, specB, resourceURNB, []resource.URN{resourceURNC}, false)
 
 			jobService.On("GetByFilter", ctx, mock.Anything, mock.Anything).Return([]*job.Job{jobA, jobB}, nil)
-			jobHandler := v1beta1.NewJobHandler(jobService, log)
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.ListJobSpecification(ctx, &request)
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
@@ -1424,6 +1490,7 @@ func TestNewJobHandler(t *testing.T) {
 		}
 		t.Run("should return basic info, upstream, downstream of an existing job", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			httpUpstream, _ := job.NewSpecHTTPUpstreamBuilder("sample-upstream", "sample-url").Build()
 			upstreamSpec, _ := job.NewSpecUpstreamBuilder().WithSpecHTTPUpstream([]*job.SpecHTTPUpstream{httpUpstream}).Build()
@@ -1522,13 +1589,14 @@ func TestNewJobHandler(t *testing.T) {
 				},
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			result, err := handler.JobInspect(ctx, req)
 			assert.NoError(t, err)
 			assert.Equal(t, resp, result)
 		})
 		t.Run("should return basic info, upstream, downstream of a user given job spec", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			httpUpstream, _ := job.NewSpecHTTPUpstreamBuilder("sample-upstream", "sample-url").Build()
 			upstreamSpec, _ := job.NewSpecUpstreamBuilder().
@@ -1658,39 +1726,42 @@ func TestNewJobHandler(t *testing.T) {
 				},
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			result, err := handler.JobInspect(ctx, req)
 			assert.NoError(t, err)
 			assert.Equal(t, resp, result)
 		})
 		t.Run("should return error if tenant is invalid", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			req := &pb.JobInspectRequest{
 				ProjectName: project.Name().String(),
 				JobName:     "job-A",
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			result, err := handler.JobInspect(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, result)
 		})
 		t.Run("should return error if job name and spec are not provided", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			req := &pb.JobInspectRequest{
 				ProjectName:   project.Name().String(),
 				NamespaceName: namespace.Name().String(),
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			result, err := handler.JobInspect(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, result)
 		})
 		t.Run("should return error if job spec proto is invalid", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			jobSpecProto := &pb.JobSpecification{
 				Name: "job-A",
@@ -1701,13 +1772,14 @@ func TestNewJobHandler(t *testing.T) {
 				Spec:          jobSpecProto,
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			result, err := handler.JobInspect(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, result)
 		})
 		t.Run("should return downstream and upstream error log messages if exist", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
 			jobA := job.NewJob(sampleTenant, specA, resourceURNA, nil, false)
@@ -1795,13 +1867,14 @@ func TestNewJobHandler(t *testing.T) {
 				},
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			result, err := handler.JobInspect(ctx, req)
 			assert.NoError(t, err)
 			assert.Equal(t, resp, result)
 		})
 		t.Run("should return error if job basic info is not found", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 
 			httpUpstream, _ := job.NewSpecHTTPUpstreamBuilder("sample-upstream", "sample-url").Build()
 			upstreamSpec, _ := job.NewSpecUpstreamBuilder().WithSpecHTTPUpstream([]*job.SpecHTTPUpstream{httpUpstream}).Build()
@@ -1818,7 +1891,7 @@ func TestNewJobHandler(t *testing.T) {
 				JobName:       specA.Name().String(),
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			result, err := handler.JobInspect(ctx, req)
 			assert.Nil(t, result)
 			assert.ErrorContains(t, err, "not found")
@@ -1827,11 +1900,12 @@ func TestNewJobHandler(t *testing.T) {
 	t.Run("GetJobTask", func(t *testing.T) {
 		t.Run("return error when create tenant failed", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			req := &pb.GetJobTaskRequest{}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := handler.GetJobTask(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
@@ -1839,6 +1913,7 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("return error when job name is empty", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			req := &pb.GetJobTaskRequest{
@@ -1846,7 +1921,7 @@ func TestNewJobHandler(t *testing.T) {
 				NamespaceName: sampleTenant.NamespaceName().String(),
 			}
 
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := handler.GetJobTask(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
@@ -1854,6 +1929,7 @@ func TestNewJobHandler(t *testing.T) {
 		})
 		t.Run("return error when service get job eror", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			req := &pb.GetJobTaskRequest{
@@ -1863,13 +1939,14 @@ func TestNewJobHandler(t *testing.T) {
 			}
 
 			jobService.On("Get", ctx, sampleTenant, job.Name("job-A")).Return(nil, errors.New("error encountered"))
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := handler.GetJobTask(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
 		})
 		t.Run("return error when service get task info error", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
@@ -1883,13 +1960,14 @@ func TestNewJobHandler(t *testing.T) {
 
 			jobService.On("Get", ctx, sampleTenant, jobA.Spec().Name()).Return(jobA, nil)
 			jobService.On("GetTaskInfo", ctx, jobA.Spec().Task()).Return(nil, errors.New("error encountered"))
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := handler.GetJobTask(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, resp)
 		})
 		t.Run("return success", func(t *testing.T) {
 			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
 			defer jobService.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).Build()
@@ -1908,7 +1986,7 @@ func TestNewJobHandler(t *testing.T) {
 			}
 			jobService.On("Get", ctx, sampleTenant, jobA.Spec().Name()).Return(jobA, nil)
 			jobService.On("GetTaskInfo", ctx, jobA.Spec().Task()).Return(taskInfo, nil)
-			handler := v1beta1.NewJobHandler(jobService, log)
+			handler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := handler.GetJobTask(ctx, req)
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
@@ -1917,23 +1995,52 @@ func TestNewJobHandler(t *testing.T) {
 	})
 }
 
+// ChangeLogService is an autogenerated mock type for the JobService type
+type ChangeLogService struct {
+	mock.Mock
+}
+
+func (_m *ChangeLogService) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
+	args := _m.Called(ctx, projectName, jobName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*job.ChangeLog), args.Error(1)
+}
+
 // JobService is an autogenerated mock type for the JobService type
 type JobService struct {
 	mock.Mock
 }
 
 // Add provides a mock function with given fields: ctx, jobTenant, jobs
-func (_m *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error {
+func (_m *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error) {
 	ret := _m.Called(ctx, jobTenant, jobs)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
-		r0 = rf(ctx, jobTenant, jobs)
-	} else {
-		r0 = ret.Error(0)
+	if len(ret) == 0 {
+		panic("no return value specified for Add")
 	}
 
-	return r0
+	var r0 []job.Name
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) ([]job.Name, error)); ok {
+		return rf(ctx, jobTenant, jobs)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) []job.Name); ok {
+		r0 = rf(ctx, jobTenant, jobs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]job.Name)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
+		r1 = rf(ctx, jobTenant, jobs)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Delete provides a mock function with given fields: ctx, jobTenant, jobName, cleanFlag, forceFlag
@@ -2076,6 +2183,14 @@ func (_m *JobService) GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tena
 	return r0, r1
 }
 
+func (_m *JobService) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
+	args := _m.Called(ctx, projectName, jobName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*job.ChangeLog), args.Error(1)
+}
+
 // GetTaskInfo provides a mock function with given fields: ctx, task
 func (_m *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error) {
 	ret := _m.Called(ctx, task)
@@ -2151,17 +2266,33 @@ func (_m *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, j
 }
 
 // Update provides a mock function with given fields: ctx, jobTenant, jobs
-func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error {
+func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error) {
 	ret := _m.Called(ctx, jobTenant, jobs)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
-		r0 = rf(ctx, jobTenant, jobs)
-	} else {
-		r0 = ret.Error(0)
+	if len(ret) == 0 {
+		panic("no return value specified for Update")
 	}
 
-	return r0
+	var r0 []job.Name
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) ([]job.Name, error)); ok {
+		return rf(ctx, jobTenant, jobs)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) []job.Name); ok {
+		r0 = rf(ctx, jobTenant, jobs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]job.Name)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
+		r1 = rf(ctx, jobTenant, jobs)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Validate provides a mock function with given fields: ctx, request

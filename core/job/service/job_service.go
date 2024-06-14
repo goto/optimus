@@ -10,6 +10,8 @@ import (
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
@@ -35,6 +37,20 @@ const (
 	// projectConfigPrefix will be used to prefix all the config variables of
 	// a project, i.e. registered entities
 	projectConfigPrefix = "GLOBAL__"
+)
+
+var (
+
+	// right now this is done to capture the feature adoption
+	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "get_changelog_total",
+		Help: "number of requests received for viewing changelog",
+	}, []string{"project", "job"})
+
+	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "get_changelog_errors",
+		Help: "errors occurred in get changelog",
+	}, []string{"project", "job", "error"})
 )
 
 type JobService struct {
@@ -110,13 +126,13 @@ type JobDeploymentService interface {
 }
 
 type JobRepository interface {
-	// TODO: remove `savedJobs` since the method's main purpose is to add, not to get
 	Add(context.Context, []*job.Job) (addedJobs []*job.Job, err error)
 	Update(context.Context, []*job.Job) (updatedJobs []*job.Job, err error)
 	Delete(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, cleanHistory bool) error
 	SetDirty(ctx context.Context, jobsTenant tenant.Tenant, jobNames []job.Name, isDirty bool) error
 	ChangeJobNamespace(ctx context.Context, jobName job.Name, tenant, newTenant tenant.Tenant) error
 
+	GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error)
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 	GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error)
 	GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error)
@@ -156,14 +172,14 @@ type ResourceExistenceChecker interface {
 	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
-func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
+func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
 	logWriter := writer.NewLogWriter(j.logger)
 	me := errors.NewMultiError("add specs errors")
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
-		return err
+		return []job.Name{}, err
 	}
 
 	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
@@ -196,17 +212,21 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
 	}
 
-	return me.ToErr()
+	if addedJobs == nil {
+		return nil, me.ToErr()
+	}
+
+	return job.Jobs(addedJobs).GetJobNames(), me.ToErr()
 }
 
-func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
+func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
 	logWriter := writer.NewLogWriter(j.logger)
 	me := errors.NewMultiError("update specs errors")
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
-		return err
+		return []job.Name{}, err
 	}
 	existingJobs := make(map[job.Name]*job.Job)
 	for _, spec := range specs {
@@ -245,7 +265,11 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
 	}
 
-	return me.ToErr()
+	if updatedJobs == nil {
+		return nil, me.ToErr()
+	}
+
+	return job.Jobs(updatedJobs).GetJobNames(), me.ToErr()
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
@@ -338,6 +362,23 @@ func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenan
 	}
 	j.raiseUpdateEvent(newJobSpec, job.UnspecifiedImpactChange)
 	return nil
+}
+
+func (j *JobService) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
+	changelog, err := j.jobRepo.GetChangelog(ctx, projectName, jobName)
+	if err != nil {
+		getChangelogFailures.WithLabelValues(
+			projectName.String(),
+			jobName.String(),
+			err.Error(),
+		).Inc()
+	}
+	getChangelogFeatureAdoption.WithLabelValues(
+		projectName.String(),
+		jobName.String(),
+	).Inc()
+
+	return changelog, err
 }
 
 func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (*job.Job, error) {

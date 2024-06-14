@@ -2,8 +2,10 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
+	"github.com/goto/optimus/client/cmd/internal/plan"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
@@ -36,6 +39,10 @@ type validateCommand struct {
 	verbose    bool
 
 	clientConfig *config.ClientConfig
+
+	usePlan      bool
+	planFilePath string
+	jobPlan      *plan.Plan
 }
 
 // NewValidateCommand initializes command for validating job specification
@@ -51,20 +58,20 @@ func NewValidateCommand() *cobra.Command {
 		Example: `... --namespace <namespace_name>   # upload all jobs within namespace to be validated
 ... --jobs <job_name1,job_name2> -n <namespace_name>   # upload the selected jobs within namespace to be validated
 ... -j <job_name1,job_name2> -n <namespace_name> --from-server   # validate existing jobs in the server, no upload will be done
-... -j <job_name1,job_name2> -n <namespace_name> -s --for-delete   # validation is for delete purpose, no actual deletion`,
+... -j <job_name1,job_name2> -n <namespace_name> -s --for-delete   # validation is for delete purpose, no actual deletion
+... --plan <plan_file_path>   # validate job based on job plan command output`,
 		RunE:    validate.RunE,
 		PreRunE: validate.PreRunE,
 	}
 
 	cmd.Flags().StringVarP(&validate.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
+	cmd.Flags().StringVarP(&validate.planFilePath, "plan", "p", config.EmptyPath, "File path for plan output")
 	cmd.Flags().StringVarP(&validate.namespaceName, "namespace", "n", validate.namespaceName, "Namespace name in which the job resides")
 	cmd.Flags().StringSliceVarP(&validate.jobNames, "jobs", "j", nil, "Selected job names, comma separated without any whitespace if more than one")
 
 	cmd.Flags().BoolVarP(&validate.fromServer, "from-server", "s", false, "Determines whether to upload jobs from local or to use existing from the server")
 	cmd.Flags().BoolVarP(&validate.forDelete, "for-delete", "d", false, "Determines whether the validation is for delete purpose or not, only valid with from-server flag")
 	cmd.Flags().BoolVarP(&validate.verbose, "verbose", "v", false, "Determines whether to show the complete message or just the summary")
-
-	cmd.MarkFlagRequired("namespace")
 
 	return cmd
 }
@@ -76,11 +83,27 @@ func (v *validateCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	}
 	v.clientConfig = conf
 
+	err = v.storeJobPlan()
+	if err != nil {
+		return err
+	}
+
 	v.connection = connection.New(v.logger, conf)
 	return nil
 }
 
 func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
+	if v.usePlan {
+		if v.invalidPlanFlag() {
+			return errors.New("[for-delete,from-server,namespace,jobs] flag should not be send when validate using plan")
+		}
+		return v.runValidateUsingPlan(v.jobPlan)
+	}
+
+	if v.namespaceName == "" {
+		return errors.New("namespace flag is required on validate using non plan")
+	}
+
 	if v.forDelete && !v.fromServer {
 		return errors.New("for-delete flag is only valid with from-server flag")
 	}
@@ -102,7 +125,7 @@ func (v *validateCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if err := v.executeServerValidation(namespace); err != nil {
+	if err := v.executeServerValidation(namespace, v.jobNames, v.fromServer); err != nil {
 		v.logger.Info("Validation is finished, took %s", time.Since(start).Round(time.Second))
 		return err
 	}
@@ -161,16 +184,16 @@ func (*validateCommand) deduplicate(input []string) []string {
 	return output
 }
 
-func (v *validateCommand) executeServerValidation(namespace *config.Namespace) error {
+func (v *validateCommand) executeServerValidation(namespace *config.Namespace, jobNames []string, fromServer bool) error {
 	var (
 		request *pb.ValidateRequest
 		err     error
 	)
 
-	if v.fromServer {
-		request = v.getRequestForJobNames()
+	if fromServer {
+		request = v.getRequestForJobNames(namespace, jobNames)
 	} else {
-		request, err = v.getRequestForJobSpecs(namespace)
+		request, err = v.getRequestForJobSpecs(namespace, jobNames)
 	}
 
 	if err != nil {
@@ -303,20 +326,20 @@ func (v *validateCommand) executeValidation(request *pb.ValidateRequest) (*pb.Va
 	return client.Validate(ctx, request)
 }
 
-func (v *validateCommand) getRequestForJobNames() *pb.ValidateRequest {
+func (v *validateCommand) getRequestForJobNames(namespace *config.Namespace, jobNames []string) *pb.ValidateRequest {
 	return &pb.ValidateRequest{
 		ProjectName:   v.clientConfig.Project.Name,
-		NamespaceName: v.namespaceName,
+		NamespaceName: namespace.Name,
 		Payload: &pb.ValidateRequest_FromServer_{
 			FromServer: &pb.ValidateRequest_FromServer{
-				JobNames:     v.jobNames,
+				JobNames:     jobNames,
 				DeletionMode: v.forDelete,
 			},
 		},
 	}
 }
 
-func (v *validateCommand) getRequestForJobSpecs(namespace *config.Namespace) (*pb.ValidateRequest, error) {
+func (v *validateCommand) getRequestForJobSpecs(namespace *config.Namespace, jobNames []string) (*pb.ValidateRequest, error) {
 	jobSpecReadWriter, err := specio.NewJobSpecReadWriter(afero.NewOsFs(), specio.WithJobSpecParentReading())
 	if err != nil {
 		return nil, err
@@ -327,14 +350,14 @@ func (v *validateCommand) getRequestForJobSpecs(namespace *config.Namespace) (*p
 		return nil, err
 	}
 
-	if len(v.jobNames) > 0 {
+	if len(jobNames) > 0 {
 		specByName := make(map[string]*model.JobSpec)
 		for _, spec := range jobSpecs {
 			specByName[spec.Name] = spec
 		}
 
 		var specsToValidate []*model.JobSpec
-		for _, name := range v.jobNames {
+		for _, name := range jobNames {
 			spec, ok := specByName[name]
 			if !ok {
 				return nil, fmt.Errorf("spec for job [%s] is not found in local namespace [%s]", name, v.namespaceName)
@@ -360,4 +383,62 @@ func (v *validateCommand) getRequestForJobSpecs(namespace *config.Namespace) (*p
 			},
 		},
 	}, nil
+}
+
+func (v *validateCommand) storeJobPlan() error {
+	if v.planFilePath == "" {
+		return nil
+	}
+
+	v.usePlan = true
+	file, err := os.Open(v.planFilePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(bytes, &v.jobPlan)
+}
+
+func (v *validateCommand) invalidPlanFlag() bool {
+	return v.forDelete || v.fromServer || v.namespaceName != "" || len(v.jobNames) > 0
+}
+
+func (v *validateCommand) runValidateUsingPlan(jobPlan *plan.Plan) error {
+	v.logger.Info("Validating job specifications for namespaces %s\n", jobPlan.Job.GetAllNamespaces())
+	start := time.Now()
+	defer func(startTime time.Time) {
+		v.logger.Info("Validation is finished, took %s", time.Since(startTime).Round(time.Second))
+	}(start)
+
+	if err := v.executeLocalValidation(); err != nil {
+		return err
+	}
+
+	if err := v.executeServerValidationByNamespaces(jobPlan.Job.Create.GetPlansByNamespaceName(), false); err != nil {
+		return err
+	}
+	if err := v.executeServerValidationByNamespaces(jobPlan.Job.Update.GetPlansByNamespaceName(), false); err != nil {
+		return err
+	}
+	return v.executeServerValidationByNamespaces(jobPlan.Job.Delete.GetPlansByNamespaceName(), true)
+}
+
+func (v *validateCommand) executeServerValidationByNamespaces(jobNamesByNamespace map[string][]string, fromServer bool) error {
+	for namespace, jobNames := range jobNamesByNamespace {
+		namespaceConfig, err := v.clientConfig.GetNamespaceByName(namespace)
+		if err != nil {
+			return err
+		}
+
+		if err := v.executeServerValidation(namespaceConfig, jobNames, fromServer); err != nil {
+			return err
+		}
+	}
+	return nil
 }

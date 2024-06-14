@@ -28,22 +28,24 @@ const (
 )
 
 type JobHandler struct {
-	l          log.Logger
-	jobService JobService
+	l                log.Logger
+	jobService       JobService
+	changeLogService ChangeLogService
 
 	pb.UnimplementedJobSpecificationServiceServer
 }
 
-func NewJobHandler(jobService JobService, logger log.Logger) *JobHandler {
+func NewJobHandler(jobService JobService, changeLogService ChangeLogService, logger log.Logger) *JobHandler {
 	return &JobHandler{
-		jobService: jobService,
-		l:          logger,
+		jobService:       jobService,
+		changeLogService: changeLogService,
+		l:                logger,
 	}
 }
 
 type JobService interface {
-	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
-	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
+	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
+	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
@@ -58,6 +60,10 @@ type JobService interface {
 	GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, spec *job.Spec) (*job.Job, writer.BufferedLogger)
 	GetUpstreamsToInspect(ctx context.Context, subjectJob *job.Job, localJob bool) ([]*job.Upstream, error)
 	GetDownstream(ctx context.Context, job *job.Job, localJob bool) ([]*job.Downstream, error)
+}
+
+type ChangeLogService interface {
+	GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error)
 }
 
 func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *pb.AddJobSpecificationsRequest) (*pb.AddJobSpecificationsResponse, error) {
@@ -83,7 +89,8 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		return nil, me.ToErr()
 	}
 
-	if err = jh.jobService.Add(ctx, jobTenant, jobSpecs); err != nil {
+	addedJobs, err := jh.jobService.Add(ctx, jobTenant, jobSpecs)
+	if err != nil {
 		jh.l.Error("failure found when adding job specifications: %s", err)
 		me.Append(err)
 	}
@@ -95,8 +102,13 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		responseLog = "jobs are successfully created"
 	}
 
+	jobSuccesses := make([]string, len(addedJobs))
+	for i, jobName := range addedJobs {
+		jobSuccesses[i] = jobName.String()
+	}
 	return &pb.AddJobSpecificationsResponse{
-		Log: responseLog,
+		Log:                responseLog,
+		SuccessfulJobNames: jobSuccesses,
 	}, nil
 }
 
@@ -193,7 +205,8 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 		return nil, me.ToErr()
 	}
 
-	if err = jh.jobService.Update(ctx, jobTenant, jobSpecs); err != nil {
+	updatedJobs, err := jh.jobService.Update(ctx, jobTenant, jobSpecs)
+	if err != nil {
 		jh.l.Error(fmt.Sprintf("%s: %s", "failed to update job specifications", err.Error()))
 		me.Append(err)
 	}
@@ -205,8 +218,13 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 		responseLog = "jobs are successfully updated"
 	}
 
+	jobSuccesses := make([]string, len(updatedJobs))
+	for i, jobName := range updatedJobs {
+		jobSuccesses[i] = jobName.String()
+	}
 	return &pb.UpdateJobSpecificationsResponse{
-		Log: responseLog,
+		Log:                responseLog,
+		SuccessfulJobNames: jobSuccesses,
 	}, nil
 }
 
@@ -218,7 +236,7 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 	}
 	jobName, err := job.NameFrom(req.GetJobName())
 	if err != nil {
-		jh.l.Error("error adapating job name [%s]: %s", req.GetJobName(), err)
+		jh.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, err
 	}
 
@@ -232,6 +250,34 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 	// TODO: return 404 if job is not found
 	return &pb.GetJobSpecificationResponse{
 		Spec: ToJobProto(jobSpec),
+	}, nil
+}
+
+func (jh *JobHandler) GetJobChangelog(ctx context.Context, req *pb.GetJobChangelogRequest) (*pb.GetJobChangelogResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		jh.l.Error("invalid project information request project [%s]: %s", req.GetProjectName(), err)
+		return nil, err
+	}
+	jobName, err := job.NameFrom(req.GetJobName())
+	if err != nil {
+		jh.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, err
+	}
+
+	changeLog, err := jh.changeLogService.GetChangelog(ctx, projectName, jobName)
+	if err != nil && !errors.IsErrorType(err, errors.ErrNotFound) {
+		errorMsg := "failed to get job specification"
+		jh.l.Error(fmt.Sprintf("%s: %s", err.Error(), errorMsg))
+		return nil, errors.GRPCErr(err, errorMsg)
+	}
+	history := make([]*pb.JobChangelog, len(changeLog))
+	for i, clog := range changeLog {
+		history[i] = toJobChangeLogProto(clog)
+	}
+
+	return &pb.GetJobChangelogResponse{
+		History: history,
 	}, nil
 }
 

@@ -119,8 +119,8 @@ func TestNewJobHandler(t *testing.T) {
 			resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.AddJobSpecificationsResponse{
-				Log:              "jobs are successfully created",
-				JobNameSuccesses: []string{jobSpecProto.Name},
+				Log:                "jobs are successfully created",
+				SuccessfulJobNames: []string{jobSpecProto.Name},
 			}, resp)
 		})
 		t.Run("adds complete job", func(t *testing.T) {
@@ -157,8 +157,8 @@ func TestNewJobHandler(t *testing.T) {
 			resp, err := jobHandler.AddJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.AddJobSpecificationsResponse{
-				Log:              "jobs are successfully created",
-				JobNameSuccesses: []string{jobSpecProto.Name},
+				Log:                "jobs are successfully created",
+				SuccessfulJobNames: []string{jobSpecProto.Name},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
@@ -481,8 +481,8 @@ func TestNewJobHandler(t *testing.T) {
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpdateJobSpecificationsResponse{
-				Log:              "jobs are successfully updated",
-				JobNameSuccesses: []string{"job-A"},
+				Log:                "jobs are successfully updated",
+				SuccessfulJobNames: []string{"job-A"},
 			}, resp)
 		})
 		t.Run("update complete jobs", func(t *testing.T) {
@@ -518,8 +518,8 @@ func TestNewJobHandler(t *testing.T) {
 			resp, err := jobHandler.UpdateJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpdateJobSpecificationsResponse{
-				Log:              "jobs are successfully updated",
-				JobNameSuccesses: []string{"job-A"},
+				Log:                "jobs are successfully updated",
+				SuccessfulJobNames: []string{"job-A"},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {

@@ -541,6 +541,21 @@ func toUpstreamProtos(upstreams []*job.Upstream, upstreamSpec *job.UpstreamSpec,
 	}
 }
 
+func toJobChangeLogProto(changeLog *job.ChangeLog) *pb.JobChangelog {
+	pbChange := &pb.JobChangelog{
+		EventType: changeLog.Type,
+		Timestamp: changeLog.Time.String(),
+	}
+	pbChange.Change = make([]*pb.JobChange, len(changeLog.Change))
+	for i, change := range changeLog.Change {
+		pbChange.Change[i] = &pb.JobChange{
+			AttributeName: change.Property,
+			Diff:          change.Diff,
+		}
+	}
+	return pbChange
+}
+
 func toHTTPUpstreamProtos(httpUpstreamSpecs []*job.SpecHTTPUpstream) []*pb.HttpDependency {
 	var httpUpstreamProtos []*pb.HttpDependency
 	for _, httpUpstream := range httpUpstreamSpecs {

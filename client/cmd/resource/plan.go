@@ -142,8 +142,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 		plans.Resource.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.ResourcePlan{Datastore: datastore})
 	}
 
-	plans = plans.GetResult()
-	return plans, nil
+	return plans.GetResult(), nil
 }
 
 func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error) {
@@ -152,8 +151,8 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 		return nil, err
 	}
 
-	twice := 2
-	affectedDirectories := make([]string, 0, len(diffs)*twice)
+	totalPathEachDiff := 2
+	affectedDirectories := make([]string, 0, len(diffs)*totalPathEachDiff)
 	for i := range diffs {
 		affectedDirectories = append(affectedDirectories, diffs[i].OldPath, diffs[i].NewPath)
 	}

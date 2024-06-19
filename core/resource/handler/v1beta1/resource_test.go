@@ -761,7 +761,7 @@ func TestResourceHandler(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "empty resource")
 		})
-		t.Run("returns error when kind is empty", func(t *testing.T) {
+		t.Run("not process a resource when kind is empty", func(t *testing.T) {
 			service := new(resourceService)
 			handler := v1beta1.NewResourceHandler(logger, service)
 
@@ -780,9 +780,9 @@ func TestResourceHandler(t *testing.T) {
 				NamespaceName: "ns",
 			}
 
-			_, err := handler.UpsertResource(ctx, req)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "empty resource type for proj.ds.table1")
+			resp, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Results[0].Message, "empty resource type for proj.ds.table1")
 		})
 		t.Run("returns error when service returns error", func(t *testing.T) {
 			service := new(resourceService)
@@ -806,11 +806,11 @@ func TestResourceHandler(t *testing.T) {
 				NamespaceName: "ns",
 			}
 
-			_, err := handler.UpsertResource(ctx, req)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "validation failure")
+			resp, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Results[0].Message, "validation failure")
 		})
-		t.Run("skip invalid resource, proceed other resource, and return error in overall", func(t *testing.T) {
+		t.Run("skip invalid resource and proceed other resource", func(t *testing.T) {
 			service := new(resourceService)
 			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil).Once()
 			defer service.AssertExpectations(t)
@@ -838,9 +838,9 @@ func TestResourceHandler(t *testing.T) {
 				NamespaceName: "ns",
 			}
 
-			_, err := handler.UpsertResource(ctx, req)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "empty resource type for proj.set.table1")
+			resp, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Results[0].Message, "empty resource type for proj.set.table1")
 		})
 		t.Run("upsert a single resource successfully", func(t *testing.T) {
 			service := new(resourceService)

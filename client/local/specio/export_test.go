@@ -14,6 +14,7 @@ func NewTestJobSpecReadWriter(specFS afero.Fs) local.SpecReadWriter[*model.JobSp
 		referenceAssetDirName:   "assets",
 		specFS:                  specFS,
 		withParentReading:       true,
+		pathToSpecsCache:        map[string][]*model.JobSpec{},
 	}
 }
 

@@ -1066,9 +1066,10 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 			return func() (interface{}, error) {
 				generatedJob, err := j.generateJob(ctx, tenantWithDetails, currentSpec)
 				if err != nil {
-					j.logger.Error("error generating job [%s]: %s", currentSpec.Name(), err)
+					errorMsg := fmt.Sprintf("error generating job [%s]: %s", spec.Name().String(), err.Error())
+					j.logger.Error(errorMsg)
 					lw.Write(writer.LogLevelError, fmt.Sprintf("[%s] unable to generate job %s: %s", tenantWithDetails.Namespace().Name().String(), currentSpec.Name().String(), err.Error()))
-					return nil, err
+					return nil, fmt.Errorf(errorMsg)
 				}
 				lw.Write(writer.LogLevelDebug, fmt.Sprintf("[%s] processing job %s", tenantWithDetails.Namespace().Name().String(), currentSpec.Name().String()))
 				return generatedJob, nil

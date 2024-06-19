@@ -1758,30 +1758,16 @@
     "v1beta1UpdateJobsStateResponse": {
       "type": "object"
     },
-    "v1beta1UpsertJobResult": {
-      "type": "object",
-      "properties": {
-        "jobName": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      }
-    },
     "v1beta1UpsertJobSpecificationsResponse": {
       "type": "object",
       "properties": {
         "log": {
           "type": "string"
         },
-        "results": {
+        "successfulJobNames": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/v1beta1UpsertJobResult"
+            "type": "string"
           }
         }
       }

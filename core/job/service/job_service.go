@@ -262,14 +262,14 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	return job.Jobs(updatedJobs).GetJobNames(), me.ToErr()
 }
 
-func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) error {
+func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
 	logWriter := writer.NewLogWriter(j.logger)
 	me := errors.NewMultiError("upsert specs errors")
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
-		return err
+		return []job.Name{}, err
 	}
 
 	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
@@ -306,7 +306,7 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	}
 
 	if len(upsertedJobs) == 0 {
-		return me.ToErr()
+		return []job.Name{}, err
 	}
 
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), upsertedJobs, logWriter)
@@ -342,7 +342,7 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
 	}
 
-	return me.ToErr()
+	return job.Jobs(upsertedJobs).GetJobNames(), me.ToErr()
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {

@@ -1062,8 +1062,9 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(2)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
-			err := jobService.Upsert(ctx, sampleTenant, specs)
+			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.NoError(t, err)
+			assert.Equal(t, 2, len(actual))
 		})
 		t.Run("return error if unable to get detailed tenant", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -1089,8 +1090,9 @@ func TestJobService(t *testing.T) {
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(&tenant.WithDetails{}, errors.New("internal error"))
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), nil, nil)
-			err := jobService.Upsert(ctx, sampleTenant, specs)
+			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "internal error")
+			assert.Equal(t, 0, len(actual))
 		})
 		t.Run("return error if unable to get generate the upstream", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -1124,8 +1126,9 @@ func TestJobService(t *testing.T) {
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(specADestination, errors.New("unable to generate destination")).Once()
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
-			err := jobService.Upsert(ctx, sampleTenant, specs)
+			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "unable to generate destination")
+			assert.Equal(t, 0, len(actual))
 		})
 		t.Run("should not skip nor return error if job is not bq2bq", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -1175,8 +1178,9 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
-			err := jobService.Upsert(ctx, sampleTenant, specs)
+			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.NoError(t, err)
+			assert.Equal(t, 1, len(actual))
 		})
 		t.Run("return error when all jobs failed to be updated to db", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -1214,8 +1218,9 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), nil, nil)
-			err := jobService.Upsert(ctx, sampleTenant, specs)
+			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "unable to update job A")
+			assert.Equal(t, 0, len(actual))
 		})
 		t.Run("skip job that has issue when checking its existence and return error", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -1280,8 +1285,9 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
-			err := jobService.Upsert(ctx, sampleTenant, specs)
+			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "internal error")
+			assert.Equal(t, 1, len(actual))
 		})
 	})
 

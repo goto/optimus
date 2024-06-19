@@ -680,12 +680,12 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
-				Log: "jobs are successfully added/modified",
+				SuccessfulJobNames: []string{jobSpecProto.Name},
 			}, resp)
 		})
 		t.Run("upsert a job with complete configuration", func(t *testing.T) {
@@ -716,12 +716,12 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
-				Log: "jobs are successfully added/modified",
+				SuccessfulJobNames: []string{jobSpecProto.Name},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
@@ -775,11 +775,12 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(nil)
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-B"}, nil)
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Contains(t, resp.Log, "error")
+			assert.Equal(t, resp.SuccessfulJobNames, []string{"job-B"})
 		})
 		t.Run("returns error when all jobs failed in upsert process", func(t *testing.T) {
 			jobService := new(JobService)
@@ -806,7 +807,7 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(errors.New("internal error"))
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(nil, errors.New("internal error"))
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.ErrorContains(t, err, "no jobs to be processed")
@@ -849,11 +850,12 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(errors.New("internal error"))
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, errors.New("internal error"))
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Contains(t, resp.Log, "error")
+			assert.Equal(t, []string{"job-A"}, resp.SuccessfulJobNames)
 		})
 	})
 	t.Run("ChangeJobNamespace", func(t *testing.T) {
@@ -2498,17 +2500,33 @@ func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs 
 }
 
 // Upsert provides a mock function with given fields: ctx, jobTenant, jobs
-func (_m *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error {
+func (_m *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error) {
 	ret := _m.Called(ctx, jobTenant, jobs)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
-		r0 = rf(ctx, jobTenant, jobs)
-	} else {
-		r0 = ret.Error(0)
+	if len(ret) == 0 {
+		panic("no return value specified for Upsert")
 	}
 
-	return r0
+	var r0 []job.Name
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) ([]job.Name, error)); ok {
+		return rf(ctx, jobTenant, jobs)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) []job.Name); ok {
+		r0 = rf(ctx, jobTenant, jobs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]job.Name)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
+		r1 = rf(ctx, jobTenant, jobs)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Validate provides a mock function with given fields: ctx, request

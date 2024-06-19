@@ -125,20 +125,32 @@ func (e *deployCommand) executeJobUpsert(ctx context.Context, jobSpecificationSe
 		specsToUpsertProto[i] = jobSpec.ToProto()
 	}
 
-	countJobs := len(specsToUpsertProto)
-	for i := 0; i < countJobs; i += e.batchSize {
+	countJobsToProcess := len(specsToUpsertProto)
+	countJobsSuccess := 0
+	for i := 0; i < countJobsToProcess; i += e.batchSize {
 		endIndex := i + e.batchSize
-		if countJobs < endIndex {
-			endIndex = countJobs
+		if countJobsToProcess < endIndex {
+			endIndex = countJobsToProcess
 		}
-		_, err := jobSpecificationServiceClient.UpsertJobSpecifications(ctx, &pb.UpsertJobSpecificationsRequest{
+		resp, err := jobSpecificationServiceClient.UpsertJobSpecifications(ctx, &pb.UpsertJobSpecificationsRequest{
 			ProjectName:   e.projectName,
 			NamespaceName: e.namespaceName,
 			Specs:         specsToUpsertProto[i:endIndex],
 		})
 		if err != nil {
 			e.logger.Error("failure in job deploy", err)
+			continue
 		}
+		for _, successfulJobName := range resp.SuccessfulJobNames {
+			e.logger.Info("[%s] job %s deployed", e.namespaceName, successfulJobName)
+			countJobsSuccess++
+		}
+		if resp.GetLog() != "" {
+			e.logger.Warn(resp.GetLog())
+		}
+	}
+	if countJobsSuccess < countJobsToProcess {
+		return fmt.Errorf("failed to deploy %d out of %d jobs", countJobsToProcess-countJobsSuccess, countJobsToProcess)
 	}
 	return nil
 }

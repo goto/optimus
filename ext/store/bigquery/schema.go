@@ -19,6 +19,7 @@ const (
 	KindTable         string = "table"
 	KindView          string = "view"
 	KindExternalTable string = "external_table"
+	KindFunction      string = "function"
 )
 
 type Schema []Field

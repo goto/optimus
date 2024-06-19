@@ -43,6 +43,7 @@ type Client interface {
 	TableHandleFrom(dataset Dataset, name string) TableResourceHandle
 	ExternalTableHandleFrom(dataset Dataset, name string) ResourceHandle
 	ViewHandleFrom(dataset Dataset, name string) ResourceHandle
+	RoutineHandleFrom(ds Dataset, name string) ResourceHandle
 	BulkGetDDLView(ctx context.Context, dataset ProjectDataset, names []string) (map[ResourceURN]string, error)
 	Close() error
 }
@@ -289,6 +290,7 @@ func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) 
 		},
 		KindExternalTable: client.ExternalTableHandleFrom,
 		KindView:          client.ViewHandleFrom,
+		KindFunction:      client.RoutineHandleFrom,
 	}
 
 	for kind, resourceHandleFn := range kindToHandleFn {

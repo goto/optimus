@@ -44,8 +44,8 @@ func NewJobHandler(jobService JobService, changeLogService ChangeLogService, log
 }
 
 type JobService interface {
-	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
-	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) error
+	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
+	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
@@ -89,7 +89,8 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		return nil, me.ToErr()
 	}
 
-	if err = jh.jobService.Add(ctx, jobTenant, jobSpecs); err != nil {
+	addedJobs, err := jh.jobService.Add(ctx, jobTenant, jobSpecs)
+	if err != nil {
 		jh.l.Error("failure found when adding job specifications: %s", err)
 		me.Append(err)
 	}
@@ -101,8 +102,13 @@ func (jh *JobHandler) AddJobSpecifications(ctx context.Context, jobSpecRequest *
 		responseLog = "jobs are successfully created"
 	}
 
+	jobSuccesses := make([]string, len(addedJobs))
+	for i, jobName := range addedJobs {
+		jobSuccesses[i] = jobName.String()
+	}
 	return &pb.AddJobSpecificationsResponse{
-		Log: responseLog,
+		Log:                responseLog,
+		SuccessfulJobNames: jobSuccesses,
 	}, nil
 }
 
@@ -199,7 +205,8 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 		return nil, me.ToErr()
 	}
 
-	if err = jh.jobService.Update(ctx, jobTenant, jobSpecs); err != nil {
+	updatedJobs, err := jh.jobService.Update(ctx, jobTenant, jobSpecs)
+	if err != nil {
 		jh.l.Error(fmt.Sprintf("%s: %s", "failed to update job specifications", err.Error()))
 		me.Append(err)
 	}
@@ -211,8 +218,13 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 		responseLog = "jobs are successfully updated"
 	}
 
+	jobSuccesses := make([]string, len(updatedJobs))
+	for i, jobName := range updatedJobs {
+		jobSuccesses[i] = jobName.String()
+	}
 	return &pb.UpdateJobSpecificationsResponse{
-		Log: responseLog,
+		Log:                responseLog,
+		SuccessfulJobNames: jobSuccesses,
 	}, nil
 }
 

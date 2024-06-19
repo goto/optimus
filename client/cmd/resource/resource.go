@@ -21,5 +21,6 @@ func NewResourceCommand() *cobra.Command {
 	cmd.AddCommand(NewApplyCommand())
 	cmd.AddCommand(NewDeleteCommand())
 	cmd.AddCommand(NewUploadCommand())
+	cmd.AddCommand(NewPlanCommand())
 	return cmd
 }

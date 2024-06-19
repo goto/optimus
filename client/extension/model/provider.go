@@ -20,3 +20,11 @@ type Client interface {
 	// Each provider can defines what this parameter is.
 	DownloadAsset(context.Context, string) ([]byte, error)
 }
+
+// RepositoryAPI is contract defined by each provider to control repository via provider API
+type RepositoryAPI interface {
+	// CompareDiff get diff between two references.
+	CompareDiff(ctx context.Context, projectID any, target, source string) ([]*Diff, error)
+	// GetFileContent fetch file content from specific file path
+	GetFileContent(ctx context.Context, projectID any, ref, filePath string) ([]byte, error)
+}

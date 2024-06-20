@@ -29,7 +29,7 @@ func TestRoutineHandle(t *testing.T) {
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("return error, not supported", func(t *testing.T) {
-			v := new(mockBigQueryRoutine)
+			v := NewMockBigQueryRoutine(t)
 			handle := storebigquery.NewRoutineHandle(v)
 
 			err := handle.Create(ctx, res)
@@ -39,7 +39,7 @@ func TestRoutineHandle(t *testing.T) {
 
 	t.Run("Update", func(t *testing.T) {
 		t.Run("return error, not supported", func(t *testing.T) {
-			v := new(mockBigQueryRoutine)
+			v := NewMockBigQueryRoutine(t)
 			handle := storebigquery.NewRoutineHandle(v)
 
 			err := handle.Update(ctx, res)
@@ -49,7 +49,7 @@ func TestRoutineHandle(t *testing.T) {
 
 	t.Run("Exists", func(t *testing.T) {
 		t.Run("return true, routine exists", func(t *testing.T) {
-			v := new(mockBigQueryRoutine)
+			v := NewMockBigQueryRoutine(t)
 			handle := storebigquery.NewRoutineHandle(v)
 
 			v.On("Metadata", ctx).Return(nil, nil)
@@ -59,7 +59,7 @@ func TestRoutineHandle(t *testing.T) {
 		})
 
 		t.Run("return false, routine not exists", func(t *testing.T) {
-			v := new(mockBigQueryRoutine)
+			v := NewMockBigQueryRoutine(t)
 			handle := storebigquery.NewRoutineHandle(v)
 
 			v.On("Metadata", ctx).Return(nil, errors.New("some error"))
@@ -69,7 +69,7 @@ func TestRoutineHandle(t *testing.T) {
 		})
 
 		t.Run("return false, connection error", func(t *testing.T) {
-			v := new(mockBigQueryRoutine)
+			v := NewMockBigQueryRoutine(t)
 			handle := storebigquery.NewRoutineHandle(v)
 
 			v.On("Metadata", ctx).Return(nil, context.DeadlineExceeded)
@@ -159,7 +159,7 @@ func (_m *mockBigQueryRoutine) Update(ctx context.Context, upd *bigquery.Routine
 	return r0, r1
 }
 
-func NewBqRoutine(t interface {
+func NewMockBigQueryRoutine(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *mockBigQueryRoutine {

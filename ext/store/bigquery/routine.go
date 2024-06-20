@@ -11,7 +11,7 @@ import (
 
 const EntityRoutine = "routines"
 
-// BqRoutine is including UDF, Store Procedure, Table Function, Reference: https://cloud.google.com/bigquery/docs/routines#:~:text=In%20BigQuery%2C%20routines%20are%20a,Table%20functions.
+// BqRoutine is including UDF, Store Procedure, Table Function
 type BqRoutine interface {
 	Create(ctx context.Context, rm *bigquery.RoutineMetadata) (err error)
 	Update(ctx context.Context, upd *bigquery.RoutineMetadataToUpdate, etag string) (rm *bigquery.RoutineMetadata, err error)

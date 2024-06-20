@@ -189,11 +189,6 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 
 	for _, addedJob := range addedJobs {
 		j.raiseCreateEvent(addedJob)
-		if addedJob.Spec().Schedule().CatchUp() {
-			msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
-			j.logger.Warn(msg)
-			logWriter.Write(writer.LogLevelWarning, msg)
-		}
 	}
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
 
@@ -320,10 +315,6 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 		logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] added %d jobs", tenantWithDetails.Namespace().Name().String(), len(addedJobs)))
 		for _, addedJob := range addedJobs {
 			j.raiseCreateEvent(addedJob)
-			if addedJob.Spec().Schedule().CatchUp() {
-				msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
-				logWriter.Write(writer.LogLevelWarning, msg)
-			}
 		}
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
 	}

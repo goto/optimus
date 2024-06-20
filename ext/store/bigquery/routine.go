@@ -22,11 +22,11 @@ type RoutineHandle struct {
 	bqRoutine BqRoutine
 }
 
-func (r RoutineHandle) Create(_ context.Context, _ *resource.Resource) error {
+func (RoutineHandle) Create(_ context.Context, _ *resource.Resource) error {
 	return errors.FailedPrecondition(EntityRoutine, "create is not supported")
 }
 
-func (r RoutineHandle) Update(_ context.Context, _ *resource.Resource) error {
+func (RoutineHandle) Update(_ context.Context, _ *resource.Resource) error {
 	return errors.FailedPrecondition(EntityRoutine, "update is not supported")
 }
 

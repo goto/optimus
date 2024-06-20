@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"cloud.google.com/go/bigquery"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	storebigquery "github.com/goto/optimus/ext/store/bigquery"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 func TestRoutineHandle(t *testing.T) {
@@ -162,7 +162,8 @@ func (_m *mockBigQueryRoutine) Update(ctx context.Context, upd *bigquery.Routine
 func NewMockBigQueryRoutine(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *mockBigQueryRoutine {
+},
+) *mockBigQueryRoutine {
 	mock := &mockBigQueryRoutine{}
 	mock.Mock.Test(t)
 

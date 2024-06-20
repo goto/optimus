@@ -125,6 +125,8 @@ func TestJobService(t *testing.T) {
 			jobs := []*job.Job{jobA}
 			jobRepo.On("Add", ctx, mock.Anything).Return(jobs, nil, nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, jobADestination).Return([]*job.Downstream{}, nil)
+
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
@@ -362,6 +364,8 @@ func TestJobService(t *testing.T) {
 			savedJobs := []*job.Job{jobB}
 			jobRepo.On("Add", ctx, mock.Anything).Return(savedJobs, errors.New("unable to save job A"))
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			jobWithUpstreamB := job.NewWithUpstream(jobB, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), savedJobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamB}, nil, nil)
 
@@ -398,6 +402,8 @@ func TestJobService(t *testing.T) {
 			specs := []*job.Spec{specA}
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -454,6 +460,8 @@ func TestJobService(t *testing.T) {
 
 			jobRepo.On("Add", ctx, mock.Anything).Return(jobs, nil, nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			jobWithUpstreamA := job.NewWithUpstream(jobA, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamA}, nil, nil)
 
@@ -506,6 +514,8 @@ func TestJobService(t *testing.T) {
 			jobs := []*job.Job{jobA}
 			jobRepo.On("Add", ctx, mock.Anything).Return(jobs, nil, nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
@@ -556,6 +566,8 @@ func TestJobService(t *testing.T) {
 
 			jobAUpstreamName := []resource.URN{resourceURNB}
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobAUpstreamName, nil)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreamName, false)
 			jobs := []*job.Job{jobA}
@@ -659,6 +671,8 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("GetByJobName", ctx, project.Name(), specB.Name()).Return(jobB, nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specC.Name()).Return(jobC, nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
@@ -702,6 +716,8 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("Update", ctx, mock.Anything).Return(nil, nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specB.Name()).Return(jobB, nil)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -819,6 +835,8 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specB.Name()).Return(jobB, nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			jobWithUpstreamB := job.NewWithUpstream(jobB, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), savedJobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamB}, nil, nil)
 
@@ -856,6 +874,8 @@ func TestJobService(t *testing.T) {
 			specs := []*job.Spec{specA}
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -917,6 +937,8 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			jobWithUpstreamA := job.NewWithUpstream(jobA, nil)
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), jobs, mock.Anything).Return([]*job.WithUpstream{jobWithUpstreamA}, nil, nil)
 
@@ -970,6 +992,8 @@ func TestJobService(t *testing.T) {
 			jobs := []*job.Job{jobA}
 			jobRepo.On("Update", ctx, mock.Anything).Return(jobs, nil, nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
@@ -1644,6 +1668,8 @@ func TestJobService(t *testing.T) {
 
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), []*job.Job{jobA}, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
 
@@ -1712,6 +1738,8 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), []*job.Job{jobA}, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
@@ -1913,6 +1941,8 @@ func TestJobService(t *testing.T) {
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), existingSpecC.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), existingSpecC.Name(), false).Return(nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), []*job.Job{jobA, jobB}, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)
@@ -1996,6 +2026,8 @@ func TestJobService(t *testing.T) {
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), existingSpecC.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), existingSpecC.Name(), false).Return(nil)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
@@ -2563,6 +2595,8 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("SetDirty", ctx, sampleTenant, []job.Name{jobA.Spec().Name()}, true).Return(nil)
 
 			upstream := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "static", taskName, false)
+
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
 
 			jobWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstream})
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), []*job.Job{jobA}, mock.Anything).Return([]*job.WithUpstream{jobWithUpstream}, nil, nil)

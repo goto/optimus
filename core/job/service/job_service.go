@@ -178,13 +178,19 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	addedJobs, err := j.jobRepo.Add(ctx, jobs)
 	me.Append(err)
 
-	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), addedJobs, logWriter)
+	downstreamJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), jobs)
+	me.Append(err)
+
+	jobsToBeResolved := []*job.Job{}
+	jobsToBeResolved = append(jobsToBeResolved, addedJobs...)
+	jobsToBeResolved = append(jobsToBeResolved, downstreamJobs...)
+	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), jobsToBeResolved, logWriter)
 	me.Append(err)
 
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
-	err = j.uploadJobs(ctx, jobTenant, addedJobs, nil, nil)
+	err = j.uploadJobs(ctx, jobTenant, addedJobs, downstreamJobs, nil)
 	me.Append(err)
 
 	for _, addedJob := range addedJobs {
@@ -213,15 +219,20 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 		j.logger.Error("error getting tenant details: %s", err)
 		return []job.Name{}, err
 	}
-	existingJobs := make(map[job.Name]*job.Job)
+	existingJobs := []*job.Job{}
+	existingJobsMap := make(map[job.Name]*job.Job)
 	for _, spec := range specs {
 		existingJob, err := j.jobRepo.GetByJobName(ctx, jobTenant.ProjectName(), spec.Name())
 		if err != nil {
 			me.Append(err)
 			continue
 		}
-		existingJobs[spec.Name()] = existingJob
+		existingJobsMap[spec.Name()] = existingJob
+		existingJobs = append(existingJobs, existingJob)
 	}
+
+	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), existingJobs)
+	me.Append(err)
 
 	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
 	me.Append(err)
@@ -229,18 +240,25 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	updatedJobs, err := j.jobRepo.Update(ctx, jobs)
 	me.Append(err)
 
-	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), updatedJobs, logWriter)
+	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), updatedJobs)
+	me.Append(err)
+
+	jobsToBeResolved := []*job.Job{}
+	jobsToBeResolved = append(jobsToBeResolved, updatedJobs...)
+	jobsToBeResolved = append(jobsToBeResolved, downstreamExistingJobs...)
+	jobsToBeResolved = append(jobsToBeResolved, downstreamUpdatedJobs...)
+	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), jobsToBeResolved, logWriter)
 	me.Append(err)
 
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
-	err = j.uploadJobs(ctx, jobTenant, nil, updatedJobs, nil)
+	err = j.uploadJobs(ctx, jobTenant, nil, jobsToBeResolved, nil)
 	me.Append(err)
 
 	if len(updatedJobs) > 0 {
 		for _, updatedJob := range updatedJobs {
-			j.raiseUpdateEvent(updatedJob, getUpdateImpactType(existingJobs[updatedJob.Spec().Name()], updatedJob))
+			j.raiseUpdateEvent(updatedJob, getUpdateImpactType(existingJobsMap[updatedJob.Spec().Name()], updatedJob))
 		}
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(updatedJobs))
 	}
@@ -648,6 +666,10 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		j.logger.Error("error getting all jobs for tenant: %s/%s, details: %s", jobTenant.ProjectName(), jobTenant.NamespaceName(), err)
 		return err
 	}
+	existingJobsMap := make(map[job.Name]*job.Job, len(existingJobs))
+	for _, existingJob := range existingJobs {
+		existingJobsMap[existingJob.Spec().Name()] = existingJob
+	}
 
 	toAdd, toUpdate, toDelete, _, unmodifiedDirtySpecs := j.differentiateSpecs(jobTenant, existingJobs, specs, jobNamesWithInvalidSpec)
 	logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] found %d new, %d modified, and %d deleted job specs", jobTenant.NamespaceName().String(), len(toAdd), len(toUpdate), len(toDelete)))
@@ -673,11 +695,28 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		return err
 	}
 
-	if err := j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs); err != nil {
+	toUpdateJobs := []*job.Job{}
+	for _, spec := range toUpdate {
+		if currentJob, ok := existingJobsMap[spec.Name()]; ok {
+			toUpdateJobs = append(toUpdateJobs, currentJob)
+		}
+	}
+	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), toUpdateJobs)
+	me.Append(err)
+	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), updatedJobs)
+	me.Append(err)
+	downstreamAddedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), addedJobs)
+	me.Append(err)
+
+	downstreamToBeResolved := []*job.Job{}
+	downstreamToBeResolved = append(downstreamToBeResolved, downstreamExistingJobs...)
+	downstreamToBeResolved = append(downstreamToBeResolved, downstreamUpdatedJobs...)
+	downstreamToBeResolved = append(downstreamToBeResolved, downstreamAddedJobs...)
+	if err := j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs, downstreamToBeResolved); err != nil {
 		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", err)
 	}
 
-	if err := j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil); err != nil {
+	if err := j.uploadJobs(ctx, jobTenant, addedJobs, append(updatedJobs, downstreamToBeResolved...), nil); err != nil {
 		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", err)
 	}
 
@@ -1914,4 +1953,28 @@ func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant
 	}
 
 	return dependentJobs, nil
+}
+
+func (j *JobService) getDownstreamJobs(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job) ([]*job.Job, error) {
+	me := errors.NewMultiError("get downstream jobs errors")
+	downstreamJobs := []*job.Job{}
+	for _, currentJob := range jobs {
+		if currentJob.Destination() == resource.ZeroURN() {
+			continue
+		}
+		downstreams, err := j.downstreamRepo.GetDownstreamByDestination(ctx, projectName, currentJob.Destination())
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		for _, d := range downstreams {
+			downstreamJob, err := j.jobRepo.GetByJobName(ctx, projectName, d.Name())
+			if err != nil {
+				me.Append(err)
+				continue
+			}
+			downstreamJobs = append(downstreamJobs, downstreamJob)
+		}
+	}
+	return downstreamJobs, me.ToErr()
 }

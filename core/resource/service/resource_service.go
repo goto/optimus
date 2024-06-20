@@ -203,52 +203,41 @@ func (rs ResourceService) Upsert(ctx context.Context, incoming *resource.Resourc
 		return err
 	}
 
-	if existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName(), false); err != nil {
+	existing, err := rs.repo.ReadByFullName(ctx, incoming.Tenant(), incoming.Store(), incoming.FullName(), false)
+	if err != nil {
 		if !errors.IsErrorType(err, errors.ErrNotFound) {
 			rs.logger.Error("error getting resource [%s]: %s", incoming.FullName(), err)
 			return err
 		}
-		incoming.MarkToCreate()
+	}
 
-		if err := rs.repo.Create(ctx, incoming); err != nil {
-			rs.logger.Error("error creating resource [%s] to db: %s", incoming.FullName(), err)
-			return err
-		}
+	if err := rs.identifyResourceToUpdateOnStore(ctx, incoming, existing); err != nil {
+		rs.logger.Error("error identifying resource [%s] before updating on store : %s", incoming.FullName(), err)
+		return err
+	}
 
+	switch incoming.Status() {
+	case resource.StatusToCreate:
 		if err := rs.mgr.CreateResource(ctx, incoming); err != nil {
 			rs.logger.Error("error creating resource [%s] to manager: %s", incoming.FullName(), err)
 			return err
 		}
 		rs.raiseCreateEvent(incoming)
-	} else {
-		if !(resource.StatusForToUpdate(existing.Status())) {
-			msg := fmt.Sprintf("cannot update resource [%s] with existing status [%s]", incoming.FullName(), existing.Status())
-			rs.logger.Error(msg)
-			return errors.InvalidArgument(resource.EntityResource, msg)
-		}
-		incoming.MarkToUpdate()
-
-		if err := rs.repo.Update(ctx, incoming); err != nil {
-			rs.logger.Error("error updating stored resource [%s]: %s", incoming.FullName(), err)
-			return err
-		}
-
+	case resource.StatusToUpdate:
 		if err := rs.mgr.UpdateResource(ctx, incoming); err != nil {
 			rs.logger.Error("error updating resource [%s] to manager: %s", incoming.FullName(), err)
 			return err
 		}
-
 		rs.raiseUpdateEvent(incoming, existing.GetUpdateImpact(incoming))
 		if err = rs.handleRefreshDownstream(ctx,
 			[]*resource.Resource{incoming},
 			map[string]*resource.Resource{existing.FullName(): existing},
 			logWriter,
 		); err != nil {
-			rs.logger.Error("error refreshing downstream for resource [%s]: %s", incoming.FullName(), err)
+			rs.logger.Error("error refreshing downstream for resource [%s]: %s", existing.FullName(), err)
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -447,41 +436,42 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 	me := errors.NewMultiError("error in resources to batch update")
 
 	for _, incoming := range incomings {
-		if incoming.Status() != resource.StatusValidationSuccess {
-			continue
-		}
-
-		existing, ok := existingMappedByFullName[incoming.FullName()]
-		if !ok {
-			_ = incoming.MarkToCreate()
-			err := rs.repo.Create(ctx, incoming)
-			if err == nil {
-				toUpdateOnStore = append(toUpdateOnStore, incoming)
-			}
+		err := rs.identifyResourceToUpdateOnStore(ctx, incoming, existingMappedByFullName[incoming.FullName()])
+		if err != nil {
 			me.Append(err)
 			continue
 		}
-
-		if resource.StatusIsSuccess(existing.Status()) && incoming.Equal(existing) {
-			_ = incoming.MarkSkipped()
-			rs.logger.Warn("resource [%s] is skipped because it has no changes", existing.FullName())
-			continue
-		}
-
-		if resource.StatusForToCreate(existing.Status()) {
-			_ = incoming.MarkToCreate()
-		} else if resource.StatusForToUpdate(existing.Status()) {
-			_ = incoming.MarkToUpdate()
-		}
-
-		err := rs.repo.Update(ctx, incoming)
-		if err == nil {
+		if incoming.Status() == resource.StatusToCreate || incoming.Status() == resource.StatusToUpdate {
 			toUpdateOnStore = append(toUpdateOnStore, incoming)
 		}
-		me.Append(err)
 	}
 
 	return toUpdateOnStore, me.ToErr()
+}
+
+func (rs ResourceService) identifyResourceToUpdateOnStore(ctx context.Context, incoming, existing *resource.Resource) error {
+	if incoming.Status() != resource.StatusValidationSuccess {
+		return nil
+	}
+
+	if existing == nil {
+		_ = incoming.MarkToCreate()
+		return rs.repo.Create(ctx, incoming)
+	}
+
+	if resource.StatusIsSuccess(existing.Status()) && incoming.Equal(existing) {
+		_ = incoming.MarkSkipped()
+		rs.logger.Warn("resource [%s] is skipped because it has no changes", existing.FullName())
+		return nil
+	}
+
+	if resource.StatusForToCreate(existing.Status()) {
+		_ = incoming.MarkToCreate()
+	} else {
+		_ = incoming.MarkToUpdate()
+	}
+
+	return rs.repo.Update(ctx, incoming)
 }
 
 func (rs ResourceService) raiseCreateEvent(res *resource.Resource) { // nolint:gocritic

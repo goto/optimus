@@ -583,39 +583,6 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("resource already exists in repository", func(t *testing.T) {
-			t.Run("returns error if status is not one of valid status for update", func(t *testing.T) {
-				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
-				assert.NoError(t, err)
-
-				mgr := NewResourceManager(t)
-				mgr.On("Validate", mock.Anything).Return(nil)
-				mgr.On("GetURN", mock.Anything).Return(datasetURN, nil)
-
-				repo := newResourceRepository(t)
-				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil)
-
-				unacceptableStatuses := []resource.Status{
-					resource.StatusUnknown,
-					resource.StatusValidationFailure,
-					resource.StatusValidationSuccess,
-					resource.StatusToCreate,
-					resource.StatusSkipped,
-					resource.StatusCreateFailure,
-				}
-
-				for _, status := range unacceptableStatuses {
-					resourceToUpdate, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
-					assert.NoError(t, err)
-
-					existingWithStatus := resource.FromExisting(existing, resource.ReplaceStatus(status))
-
-					repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, resourceToUpdate.FullName(), onlyActive).Return(existingWithStatus, nil)
-
-					actualError := rscService.Upsert(ctx, resourceToUpdate, logWriter)
-					assert.ErrorContains(t, actualError, "cannot update resource")
-				}
-			})
-
 			t.Run("returns error if error is encountered when updating to repo", func(t *testing.T) {
 				fullName := "project.dataset"
 				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
@@ -1013,7 +980,12 @@ func TestResourceService(t *testing.T) {
 
 			repo := newResourceRepository(t)
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{existingResource}, nil)
-			repo.On("Update", ctx, incomingResourceToUpdate).Return(nil)
+			repo.On("Update", ctx, incomingResourceToUpdate).Run(func(args mock.Arguments) {
+				res, ok := args[1].(*resource.Resource)
+				if ok {
+					res.MarkToUpdate()
+				}
+			}).Return(nil)
 
 			urn, err := resource.ParseURN("bigquery://project:dataset.view1")
 			assert.NoError(t, err)

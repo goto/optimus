@@ -295,13 +295,11 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	if len(jobsToAdd) > 0 {
 		addedJobs, err = j.jobRepo.Add(ctx, jobsToAdd)
 		upsertedJobs = append(upsertedJobs, addedJobs...)
-		logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] added %d jobs", tenantWithDetails.Namespace().Name().String(), len(addedJobs)))
 		me.Append(err)
 	}
 	if len(jobsToUpdate) > 0 {
 		updatedJobs, err = j.jobRepo.Update(ctx, jobsToUpdate)
 		upsertedJobs = append(upsertedJobs, updatedJobs...)
-		logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] updated %d jobs", tenantWithDetails.Namespace().Name().String(), len(updatedJobs)))
 		me.Append(err)
 	}
 
@@ -319,11 +317,11 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	me.Append(err)
 
 	if len(addedJobs) > 0 {
+		logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] added %d jobs", tenantWithDetails.Namespace().Name().String(), len(addedJobs)))
 		for _, addedJob := range addedJobs {
 			j.raiseCreateEvent(addedJob)
 			if addedJob.Spec().Schedule().CatchUp() {
 				msg := fmt.Sprintf("catchup for job %s is enabled", addedJob.GetName())
-				j.logger.Warn(msg)
 				logWriter.Write(writer.LogLevelWarning, msg)
 			}
 		}
@@ -331,6 +329,7 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	}
 
 	if len(updatedJobs) > 0 {
+		logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] updated %d jobs", tenantWithDetails.Namespace().Name().String(), len(updatedJobs)))
 		for _, updatedJob := range updatedJobs {
 			j.raiseUpdateEvent(updatedJob, getUpdateImpactType(existingJobs[updatedJob.Spec().Name()], updatedJob))
 		}

@@ -9,7 +9,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-const EntityRoutine = "routines"
+const EntityRoutine = "resource_routine"
 
 // BqRoutine is including UDF, Store Procedure, Table Function
 type BqRoutine interface {

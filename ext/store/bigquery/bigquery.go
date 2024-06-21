@@ -290,7 +290,7 @@ func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) 
 		},
 		KindExternalTable: client.ExternalTableHandleFrom,
 		KindView:          client.ViewHandleFrom,
-		KindFunction:      client.RoutineHandleFrom,
+		KindRoutine:       client.RoutineHandleFrom,
 	}
 
 	for kind, resourceHandleFn := range kindToHandleFn {

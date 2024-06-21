@@ -946,9 +946,6 @@ func TestBigqueryStore(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
 			defer secretProvider.AssertExpectations(t)
 
-			extTableHandle := new(mockTableResourceHandle)
-			defer extTableHandle.AssertExpectations(t)
-
 			client := new(mockClient)
 			defer client.AssertExpectations(t)
 
@@ -996,6 +993,60 @@ func TestBigqueryStore(t *testing.T) {
 			actualExist, actualError := bqStore.Exist(ctx, tnnt, urn)
 
 			assert.True(t, actualExist)
+			assert.NoError(t, actualError)
+		})
+
+		t.Run("returns false and error if dataset exists and underlying routine does not exist", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			defer clientProvider.AssertExpectations(t)
+
+			dataSetHandle := new(mockTableResourceHandle)
+			tableHandle := new(mockTableResourceHandle)
+			externalTableHandle := new(mockTableResourceHandle)
+			viewHandle := new(mockTableResourceHandle)
+			routineHandle := new(mockTableResourceHandle)
+			defer func() {
+				dataSetHandle.AssertExpectations(t)
+				tableHandle.AssertExpectations(t)
+				externalTableHandle.AssertExpectations(t)
+				viewHandle.AssertExpectations(t)
+				routineHandle.AssertExpectations(t)
+			}()
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("bigquery", "project.dataset.routine")
+			assert.NoError(t, err)
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").Return(pts, nil)
+
+			clientProvider.On("Get", mock.Anything, pts.Value()).Return(client, nil)
+
+			client.On("Close").Return(nil)
+
+			client.On("DatasetHandleFrom", mock.Anything, mock.Anything).Return(dataSetHandle)
+			dataSetHandle.On("Exists", mock.Anything).Return(true)
+
+			client.On("TableHandleFrom", mock.Anything, mock.Anything).Return(tableHandle).Maybe()
+			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(externalTableHandle).Maybe()
+			externalTableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ViewHandleFrom", mock.Anything, mock.Anything).Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
+
+			client.On("RoutineHandleFrom", mock.Anything, mock.Anything).Return(routineHandle)
+			routineHandle.On("Exists", mock.Anything).Return(false)
+
+			actualExist, actualError := bqStore.Exist(ctx, tnnt, urn)
+
+			assert.False(t, actualExist)
 			assert.NoError(t, actualError)
 		})
 

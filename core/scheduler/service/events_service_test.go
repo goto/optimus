@@ -135,7 +135,7 @@ func TestNotificationService(t *testing.T) {
 				defer jobRepo.AssertExpectations(t)
 
 				alertManager := new(mockAlertManager)
-				alertManager.On("Relay", &scheduler.AlertAttrs{
+				alertManager.On("SendJobRunEvent", &scheduler.AlertAttrs{
 					Owner:         "jobOwnerName",
 					JobURN:        job.URN(),
 					Title:         "Optimus Job Alert",
@@ -346,15 +346,13 @@ func (m *mockWebhookChanel) Close() error {
 }
 
 type mockAlertManager struct {
-	io.Closer
 	mock.Mock
 }
 
-func (m *mockAlertManager) Relay(attr *scheduler.AlertAttrs) {
+func (m *mockAlertManager) SendJobRunEvent(attr *scheduler.AlertAttrs) {
 	m.Called(attr)
 }
 
-func (m *mockAlertManager) Close() error {
-	args := m.Called()
-	return args.Error(0)
+func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
+	m.Called(attr)
 }

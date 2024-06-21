@@ -79,6 +79,14 @@ type AlertAttrs struct {
 	JobEvent      *Event
 }
 
+type ReplayNotificationAttrs struct {
+	JobName   string
+	ReplayID  string
+	Tenant    tenant.Tenant
+	JobURN    string
+	EventType ReplayEventType
+}
+
 type WebhookAttrs struct {
 	Owner    string
 	JobEvent *Event

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -24,6 +25,25 @@ type Metadata struct {
 	Version     int32
 	Description string
 	Labels      labels.Labels
+}
+
+type ChangeType string
+
+const (
+	ChangeTypeUpdate ChangeType = "Modified"
+	ChangeTypeDelete ChangeType = "Deleted"
+)
+
+func (j ChangeType) String() string {
+	return string(j)
+}
+
+type AlertAttrs struct {
+	Name      Name
+	URN       string
+	Tenant    tenant.Tenant
+	EventTime time.Time
+	EventType ChangeType
 }
 
 func (m *Metadata) Validate() error {
@@ -115,6 +135,11 @@ func (r *Resource) Name() Name {
 
 func (r *Resource) FullName() string {
 	return r.name.String()
+}
+
+func (r *Resource) ConsoleURN() string {
+	resourceProject := strings.Split(r.urn.name, ":")[0]
+	return fmt.Sprintf("urn:%s:%s:%s:%s", r.store.String(), resourceProject, r.kind, r.urn.name)
 }
 
 func (r *Resource) URN() URN {

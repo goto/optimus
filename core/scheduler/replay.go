@@ -11,6 +11,9 @@ import (
 )
 
 const (
+	// ReplayCreated is an event which indicates the replay has been created but not picked up yet
+	ReplayCreated ReplayEventType = "replay_created"
+
 	// ReplayStateCreated is an initial state which indicates the replay has been created but not picked up yet
 	ReplayStateCreated ReplayState = "created"
 
@@ -35,6 +38,7 @@ var (
 )
 
 type (
+	ReplayEventType string
 	ReplayState     string // contract status for business layer
 	ReplayUserState string // contract status for presentation layer
 )
@@ -54,6 +58,10 @@ func ReplayStateFromString(state string) (ReplayState, error) {
 	default:
 		return "", errors.InvalidArgument(EntityJobRun, "invalid state for replay "+state)
 	}
+}
+
+func (j ReplayEventType) String() string {
+	return string(j)
 }
 
 func (j ReplayState) String() string {

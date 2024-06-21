@@ -934,10 +934,119 @@ func TestBigqueryStore(t *testing.T) {
 			client.On("TableHandleFrom", mock.Anything, mock.Anything).Return(handle).Maybe()
 			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(handle).Maybe()
 			client.On("ViewHandleFrom", mock.Anything, mock.Anything).Return(handle).Maybe()
+			client.On("RoutineHandleFrom", mock.Anything, mock.Anything).Return(handle).Maybe()
 
 			actualExist, actualError := bqStore.Exist(ctx, tnnt, urn)
 
 			assert.True(t, actualExist)
+			assert.NoError(t, actualError)
+		})
+
+		t.Run("returns true and nil if dataset exists and underlying routine does exist", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			defer clientProvider.AssertExpectations(t)
+
+			dataSetHandle := new(mockTableResourceHandle)
+			tableHandle := new(mockTableResourceHandle)
+			externalTableHandle := new(mockTableResourceHandle)
+			viewHandle := new(mockTableResourceHandle)
+			routineHandle := new(mockTableResourceHandle)
+			defer func() {
+				dataSetHandle.AssertExpectations(t)
+				tableHandle.AssertExpectations(t)
+				externalTableHandle.AssertExpectations(t)
+				viewHandle.AssertExpectations(t)
+				routineHandle.AssertExpectations(t)
+			}()
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("bigquery", "project.dataset.routine")
+			assert.NoError(t, err)
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").Return(pts, nil)
+
+			clientProvider.On("Get", mock.Anything, pts.Value()).Return(client, nil)
+
+			client.On("Close").Return(nil)
+
+			client.On("DatasetHandleFrom", mock.Anything, mock.Anything).Return(dataSetHandle)
+			dataSetHandle.On("Exists", mock.Anything).Return(true)
+
+			client.On("TableHandleFrom", mock.Anything, mock.Anything).Return(tableHandle).Maybe()
+			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(externalTableHandle).Maybe()
+			externalTableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ViewHandleFrom", mock.Anything, mock.Anything).Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
+
+			client.On("RoutineHandleFrom", mock.Anything, mock.Anything).Return(routineHandle)
+			routineHandle.On("Exists", mock.Anything).Return(true)
+
+			actualExist, actualError := bqStore.Exist(ctx, tnnt, urn)
+
+			assert.True(t, actualExist)
+			assert.NoError(t, actualError)
+		})
+
+		t.Run("returns false and nil error if dataset exists and underlying routine does not exist", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			defer clientProvider.AssertExpectations(t)
+
+			dataSetHandle := new(mockTableResourceHandle)
+			tableHandle := new(mockTableResourceHandle)
+			externalTableHandle := new(mockTableResourceHandle)
+			viewHandle := new(mockTableResourceHandle)
+			routineHandle := new(mockTableResourceHandle)
+			defer func() {
+				dataSetHandle.AssertExpectations(t)
+				tableHandle.AssertExpectations(t)
+				externalTableHandle.AssertExpectations(t)
+				viewHandle.AssertExpectations(t)
+				routineHandle.AssertExpectations(t)
+			}()
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("bigquery", "project.dataset.routine")
+			assert.NoError(t, err)
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").Return(pts, nil)
+
+			clientProvider.On("Get", mock.Anything, pts.Value()).Return(client, nil)
+
+			client.On("Close").Return(nil)
+
+			client.On("DatasetHandleFrom", mock.Anything, mock.Anything).Return(dataSetHandle)
+			dataSetHandle.On("Exists", mock.Anything).Return(true)
+
+			client.On("TableHandleFrom", mock.Anything, mock.Anything).Return(tableHandle).Maybe()
+			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(externalTableHandle).Maybe()
+			externalTableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ViewHandleFrom", mock.Anything, mock.Anything).Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
+
+			client.On("RoutineHandleFrom", mock.Anything, mock.Anything).Return(routineHandle)
+			routineHandle.On("Exists", mock.Anything).Return(false)
+
+			actualExist, actualError := bqStore.Exist(ctx, tnnt, urn)
+
+			assert.False(t, actualExist)
 			assert.NoError(t, actualError)
 		})
 
@@ -970,12 +1079,13 @@ func TestBigqueryStore(t *testing.T) {
 			client.On("Close").Return(nil)
 
 			handle.On("Exists", mock.Anything).Return(true).Once()
-			handle.On("Exists", mock.Anything).Return(false).Times(3)
+			handle.On("Exists", mock.Anything).Return(false).Times(4)
 
 			client.On("DatasetHandleFrom", mock.Anything, mock.Anything).Return(handle)
 			client.On("TableHandleFrom", mock.Anything, mock.Anything).Return(handle)
 			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(handle)
 			client.On("ViewHandleFrom", mock.Anything, mock.Anything).Return(handle)
+			client.On("RoutineHandleFrom", mock.Anything, mock.Anything).Return(handle)
 
 			actualExist, actualError := bqStore.Exist(ctx, tnnt, urn)
 
@@ -1027,6 +1137,11 @@ func (m *mockClient) ExternalTableHandleFrom(ds bigquery.Dataset, name string) b
 func (m *mockClient) TableHandleFrom(ds bigquery.Dataset, name string) bigquery.TableResourceHandle {
 	args := m.Called(ds, name)
 	return args.Get(0).(bigquery.TableResourceHandle)
+}
+
+func (m *mockClient) RoutineHandleFrom(ds bigquery.Dataset, name string) bigquery.ResourceHandle {
+	args := m.Called(ds, name)
+	return args.Get(0).(bigquery.ResourceHandle)
 }
 
 func (m *mockClient) ViewHandleFrom(ds bigquery.Dataset, name string) bigquery.ResourceHandle {

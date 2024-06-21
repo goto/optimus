@@ -49,7 +49,7 @@ func NewUploadCommand() *cobra.Command {
 		Use:     "upload",
 		Short:   "Upload a resource to server",
 		Long:    heredoc.Doc(`Apply local changes to destination server which includes creating/updating resources`),
-		Example: "optimus resource upload -R [resource1,resource2] -n []",
+		Example: "optimus resource upload -R <resource-1,resource-2> -n <namespace>",
 		Annotations: map[string]string{
 			"group:core": "true",
 		},
@@ -57,7 +57,7 @@ func NewUploadCommand() *cobra.Command {
 		PreRunE: uploadCmd.PreRunE,
 	}
 	cmd.Flags().StringVarP(&uploadCmd.configFilePath, "config", "c", uploadCmd.configFilePath, "File path for client configuration")
-	cmd.Flags().StringVarP(&uploadCmd.namespaceName, "namespace", "n", "", "Namespace name in which the resource resides")
+	cmd.Flags().StringVarP(&uploadCmd.namespaceName, "namespace", "n", "", "Namespace name in which the resources resides")
 	cmd.Flags().StringSliceVarP(&uploadCmd.resourceNames, "resources", "R", nil, "Resource names")
 	cmd.Flags().IntVarP(&uploadCmd.batchSize, "batch-size", "b", defaultBatchSize, "Number of resources to upload in a batch")
 

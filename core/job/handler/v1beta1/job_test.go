@@ -683,16 +683,14 @@ func TestNewJobHandler(t *testing.T) {
 			jobAName := job.Name("job-A")
 			upsertResult := dto.UpsertResult{
 				JobName: jobAName,
-				Status:  job.DeployStateUpdated,
+				Status:  job.DeployStateSuccess,
 			}
 			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
-				Results: []*pb.UpsertJobStatus{
-					{JobName: "job-A", Status: job.DeployStateUpdated.String()},
-				},
+				SuccessfulJobNames: []string{jobAName.String()},
 			}, resp)
 		})
 		t.Run("upsert a job with complete configuration", func(t *testing.T) {
@@ -726,7 +724,7 @@ func TestNewJobHandler(t *testing.T) {
 			jobAName := job.Name("job-A")
 			upsertResult := dto.UpsertResult{
 				JobName: jobAName,
-				Status:  job.DeployStateUpdated,
+				Status:  job.DeployStateSuccess,
 			}
 
 			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
@@ -734,9 +732,7 @@ func TestNewJobHandler(t *testing.T) {
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
-				Results: []*pb.UpsertJobStatus{
-					{JobName: "job-A", Status: job.DeployStateUpdated.String()},
-				},
+				SuccessfulJobNames: []string{jobAName.String()},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
@@ -795,18 +791,15 @@ func TestNewJobHandler(t *testing.T) {
 
 			upsertResult := dto.UpsertResult{
 				JobName: jobBName,
-				Status:  job.DeployStateUpdated,
+				Status:  job.DeployStateSuccess,
 			}
 			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
 
-			expectedResult := []*pb.UpsertJobStatus{
-				{JobName: jobBName.String(), Status: job.DeployStateUpdated.String()},
-				{JobName: jobAName.String(), Status: job.DeployStateFailed.String()},
-			}
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Contains(t, resp.Log, "error")
-			assert.ElementsMatch(t, expectedResult, resp.Results)
+			assert.ElementsMatch(t, []string{jobAName.String()}, resp.FailedJobNames)
+			assert.ElementsMatch(t, []string{jobBName.String()}, resp.SuccessfulJobNames)
 		})
 		t.Run("returns error when all jobs failed in upsert process", func(t *testing.T) {
 			jobService := new(JobService)
@@ -882,7 +875,7 @@ func TestNewJobHandler(t *testing.T) {
 			upsertResults := []dto.UpsertResult{
 				{
 					JobName: jobAName,
-					Status:  job.DeployStateUpdated,
+					Status:  job.DeployStateSuccess,
 				},
 				{
 					JobName: jobBName,
@@ -892,15 +885,11 @@ func TestNewJobHandler(t *testing.T) {
 
 			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(upsertResults, errors.New("internal error"))
 
-			expectedResult := []*pb.UpsertJobStatus{
-				{JobName: jobAName.String(), Status: job.DeployStateUpdated.String()},
-				{JobName: jobBName.String(), Status: job.DeployStateFailed.String()},
-			}
-
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Contains(t, resp.Log, "error")
-			assert.ElementsMatch(t, expectedResult, resp.Results)
+			assert.ElementsMatch(t, []string{jobAName.String()}, resp.SuccessfulJobNames)
+			assert.ElementsMatch(t, []string{jobBName.String()}, resp.FailedJobNames)
 		})
 	})
 	t.Run("ChangeJobNamespace", func(t *testing.T) {

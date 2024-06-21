@@ -268,18 +268,20 @@ func (jh *JobHandler) UpsertJobSpecifications(ctx context.Context, jobSpecReques
 		me.Append(err)
 	}
 
-	var upsertJobStatusList []*pb.UpsertJobStatus
+	var successfulJobNames, skippedJobNames, failedJobNames []string
 	for _, result := range results {
-		upsertJobStatusList = append(upsertJobStatusList, &pb.UpsertJobStatus{
-			JobName: result.JobName.String(),
-			Status:  result.Status.String(),
-		})
+		switch result.Status {
+		case job.DeployStateSuccess:
+			successfulJobNames = append(successfulJobNames, result.JobName.String())
+		case job.DeployStateSkipped:
+			skippedJobNames = append(skippedJobNames, result.JobName.String())
+		case job.DeployStateFailed:
+			failedJobNames = append(failedJobNames, result.JobName.String())
+		}
 	}
+
 	for _, invalidSpecName := range invalidSpecs {
-		upsertJobStatusList = append(upsertJobStatusList, &pb.UpsertJobStatus{
-			JobName: invalidSpecName.String(),
-			Status:  job.DeployStateFailed.String(),
-		})
+		failedJobNames = append(failedJobNames, invalidSpecName.String())
 	}
 
 	var errorMsg string
@@ -288,8 +290,10 @@ func (jh *JobHandler) UpsertJobSpecifications(ctx context.Context, jobSpecReques
 	}
 
 	return &pb.UpsertJobSpecificationsResponse{
-		Log:     errorMsg,
-		Results: upsertJobStatusList,
+		Log:                errorMsg,
+		SuccessfulJobNames: successfulJobNames,
+		SkippedJobNames:    skippedJobNames,
+		FailedJobNames:     failedJobNames,
 	}, nil
 }
 

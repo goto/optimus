@@ -1064,8 +1064,8 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(2)
 
 			expected := []dto.UpsertResult{
-				{JobName: jobBToadd.Spec().Name(), Status: job.DeployStateCreated},
-				{JobName: jobAToUpdate.Spec().Name(), Status: job.DeployStateUpdated},
+				{JobName: jobBToadd.Spec().Name(), Status: job.DeployStateSuccess},
+				{JobName: jobAToUpdate.Spec().Name(), Status: job.DeployStateSuccess},
 			}
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
 			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
@@ -1190,7 +1190,7 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			expected := []dto.UpsertResult{
-				{JobName: specA.Name(), Status: job.DeployStateCreated},
+				{JobName: specA.Name(), Status: job.DeployStateSuccess},
 			}
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
@@ -1261,7 +1261,7 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			expected := []dto.UpsertResult{
-				{JobName: specA.Name(), Status: job.DeployStateCreated},
+				{JobName: specA.Name(), Status: job.DeployStateSuccess},
 				{JobName: specB.Name(), Status: job.DeployStateFailed},
 				{JobName: specC.Name(), Status: job.DeployStateFailed},
 			}
@@ -1338,7 +1338,7 @@ func TestJobService(t *testing.T) {
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
 			expected := []dto.UpsertResult{
-				{JobName: specAToUpdate.Name(), Status: job.DeployStateUpdated},
+				{JobName: specAToUpdate.Name(), Status: job.DeployStateSuccess},
 				{JobName: specBToUpdate.Name(), Status: job.DeployStateSkipped},
 			}
 

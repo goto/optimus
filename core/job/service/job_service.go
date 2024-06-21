@@ -304,19 +304,16 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	totalFailures := len(specs) - len(addedJobs) - len(updatedJobs) - len(specsUnmodified)
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailures)
 
-	return j.getUpsertResults(specsUnmodified, addedJobs, updatedJobs, specs), me.ToErr()
+	return j.getUpsertResults(specsUnmodified, upsertedJobs, specs), me.ToErr()
 }
 
-func (*JobService) getUpsertResults(specsUnmodified []*job.Spec, addedJobs, updatedJobs []*job.Job, specs []*job.Spec) []dto.UpsertResult {
+func (*JobService) getUpsertResults(specsUnmodified []*job.Spec, upsertedJobs []*job.Job, specs []*job.Spec) []dto.UpsertResult {
 	jobNameStatusMap := make(map[job.Name]job.DeployState)
 	for _, spec := range specsUnmodified {
 		jobNameStatusMap[spec.Name()] = job.DeployStateSkipped
 	}
-	for _, addedJob := range addedJobs {
-		jobNameStatusMap[addedJob.Spec().Name()] = job.DeployStateCreated
-	}
-	for _, updatedJob := range updatedJobs {
-		jobNameStatusMap[updatedJob.Spec().Name()] = job.DeployStateUpdated
+	for _, upsertedJob := range upsertedJobs {
+		jobNameStatusMap[upsertedJob.Spec().Name()] = job.DeployStateSuccess
 	}
 	for _, spec := range specs {
 		_, ok := jobNameStatusMap[spec.Name()]

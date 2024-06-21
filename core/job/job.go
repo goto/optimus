@@ -38,8 +38,7 @@ const (
 	JobInternalImpact       UpdateImpact = "internal_impact"
 	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
 
-	DeployStateCreated DeployState = "created"
-	DeployStateUpdated DeployState = "updated"
+	DeployStateSuccess DeployState = "success"
 	DeployStateSkipped DeployState = "skipped"
 	DeployStateFailed  DeployState = "failed"
 )

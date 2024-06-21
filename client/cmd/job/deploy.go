@@ -14,7 +14,6 @@ import (
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
-	"github.com/goto/optimus/core/job"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -142,13 +141,14 @@ func (e *deployCommand) executeJobUpsert(ctx context.Context, jobSpecificationSe
 			e.logger.Error("failure in job deploy", err)
 			continue
 		}
-		for _, result := range resp.Results {
-			if result.Status == job.DeployStateFailed.String() {
-				e.logger.Error("[%s] %s", result.Status, result.JobName)
-				countJobsFailed++
-				continue
-			}
-			e.logger.Info("[%s] %s", result.Status, result.JobName)
+		for _, name := range resp.SuccessfulJobNames {
+			e.logger.Info("[success] %s", name)
+		}
+		for _, name := range resp.SkippedJobNames {
+			e.logger.Info("[skipped] %s", name)
+		}
+		for _, name := range resp.FailedJobNames {
+			e.logger.Error("[failed] %s", name)
 		}
 		if resp.GetLog() != "" {
 			e.logger.Warn(resp.GetLog())

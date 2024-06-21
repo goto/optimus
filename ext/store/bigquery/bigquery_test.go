@@ -996,7 +996,7 @@ func TestBigqueryStore(t *testing.T) {
 			assert.NoError(t, actualError)
 		})
 
-		t.Run("returns false and error if dataset exists and underlying routine does not exist", func(t *testing.T) {
+		t.Run("returns false and nil error if dataset exists and underlying routine does not exist", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
 			defer secretProvider.AssertExpectations(t)
 

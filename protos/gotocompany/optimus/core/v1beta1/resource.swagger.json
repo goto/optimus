@@ -662,6 +662,12 @@
           "items": {
             "$ref": "#/definitions/corev1beta1ResourceStatus"
           }
+        },
+        "successfulResourceNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

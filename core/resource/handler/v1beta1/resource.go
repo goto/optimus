@@ -287,6 +287,7 @@ func (rh ResourceHandler) UpsertResource(ctx context.Context, req *pb.UpsertReso
 	logWriter := writer.NewLogWriter(rh.l)
 	result := make([]*pb.ResourceStatus, 0)
 
+	var successfulResourceNames []string
 	for _, reqResource := range req.Resources {
 		resourceSpec, err := fromResourceProto(reqResource, tnnt, store)
 		if err != nil {
@@ -305,10 +306,15 @@ func (rh ResourceHandler) UpsertResource(ctx context.Context, req *pb.UpsertReso
 
 		result = append(result, rh.newResourceStatus(resourceSpec.FullName(), resourceSpec.Status().String(), ""))
 		raiseResourceDatastoreEventMetric(tnnt, resourceSpec.Store().String(), resourceSpec.Kind(), resourceSpec.Status().String())
+
+		if resourceSpec.Status() == resource.StatusSuccess {
+			successfulResourceNames = append(successfulResourceNames, resourceSpec.FullName())
+		}
 	}
 
 	return &pb.UpsertResourceResponse{
-		Results: result,
+		Results:                 result,
+		SuccessfulResourceNames: successfulResourceNames,
 	}, nil
 }
 

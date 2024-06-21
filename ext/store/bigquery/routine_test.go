@@ -33,7 +33,7 @@ func TestRoutineHandle(t *testing.T) {
 			handle := storebigquery.NewRoutineHandle(v)
 
 			err := handle.Create(ctx, res)
-			assert.EqualError(t, err, "failed precondition for entity routines: create is not supported")
+			assert.EqualError(t, err, "failed precondition for entity resource_routine: create is not supported")
 		})
 	})
 
@@ -43,7 +43,7 @@ func TestRoutineHandle(t *testing.T) {
 			handle := storebigquery.NewRoutineHandle(v)
 
 			err := handle.Update(ctx, res)
-			assert.EqualError(t, err, "failed precondition for entity routines: update is not supported")
+			assert.EqualError(t, err, "failed precondition for entity resource_routine: update is not supported")
 		})
 	})
 

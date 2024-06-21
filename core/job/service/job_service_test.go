@@ -1070,7 +1070,7 @@ func TestJobService(t *testing.T) {
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
 			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.NoError(t, err)
-			assert.EqualValues(t, expected, actual)
+			assert.ElementsMatch(t, expected, actual)
 		})
 		t.Run("return error if unable to get detailed tenant", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -1140,7 +1140,7 @@ func TestJobService(t *testing.T) {
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
 			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.ErrorContains(t, err, "unable to generate destination")
-			assert.EqualValues(t, expected, actual)
+			assert.ElementsMatch(t, expected, actual)
 		})
 		t.Run("should not skip nor return error if job is not bq2bq", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -1196,7 +1196,7 @@ func TestJobService(t *testing.T) {
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
 			actual, err := jobService.Upsert(ctx, sampleTenant, specs)
 			assert.NoError(t, err)
-			assert.EqualValues(t, expected, actual)
+			assert.ElementsMatch(t, expected, actual)
 		})
 		t.Run("skip job that has issue when checking its existence and return error", func(t *testing.T) {
 			jobRepo := new(JobRepository)

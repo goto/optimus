@@ -680,12 +680,19 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
+			jobAName := job.Name("job-A")
+			upsertResult := dto.UpsertResult{
+				JobName: jobAName,
+				Status:  job.DeployStateUpdated,
+			}
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
-				SuccessfulJobNames: []string{jobSpecProto.Name},
+				Results: []*pb.UpsertJobStatus{
+					{JobName: "job-A", Status: job.DeployStateUpdated.String()},
+				},
 			}, resp)
 		})
 		t.Run("upsert a job with complete configuration", func(t *testing.T) {
@@ -716,12 +723,20 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, nil)
+			jobAName := job.Name("job-A")
+			upsertResult := dto.UpsertResult{
+				JobName: jobAName,
+				Status:  job.DeployStateUpdated,
+			}
+
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
-				SuccessfulJobNames: []string{jobSpecProto.Name},
+				Results: []*pb.UpsertJobStatus{
+					{JobName: "job-A", Status: job.DeployStateUpdated.String()},
+				},
 			}, resp)
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
@@ -744,10 +759,13 @@ func TestNewJobHandler(t *testing.T) {
 
 			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
+			jobAName := job.Name("job-A")
+			jobBName := job.Name("job-B")
+
 			jobSpecProtos := []*pb.JobSpecification{
 				{
 					Version:          int32(0),
-					Name:             "job-A",
+					Name:             jobAName.String(),
 					StartDate:        jobSchedule.StartDate().String(),
 					EndDate:          jobSchedule.EndDate().String(),
 					Interval:         jobSchedule.Interval(),
@@ -758,7 +776,7 @@ func TestNewJobHandler(t *testing.T) {
 				},
 				{
 					Version:          int32(jobVersion),
-					Name:             "job-B",
+					Name:             jobBName.String(),
 					Owner:            sampleOwner,
 					StartDate:        jobSchedule.StartDate().String(),
 					EndDate:          jobSchedule.EndDate().String(),
@@ -775,12 +793,20 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-B"}, nil)
+			upsertResult := dto.UpsertResult{
+				JobName: jobBName,
+				Status:  job.DeployStateUpdated,
+			}
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
 
+			expectedResult := []*pb.UpsertJobStatus{
+				{JobName: jobBName.String(), Status: job.DeployStateUpdated.String()},
+				{JobName: jobAName.String(), Status: job.DeployStateFailed.String()},
+			}
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Contains(t, resp.Log, "error")
-			assert.Equal(t, resp.SuccessfulJobNames, []string{"job-B"})
+			assert.ElementsMatch(t, expectedResult, resp.Results)
 		})
 		t.Run("returns error when all jobs failed in upsert process", func(t *testing.T) {
 			jobService := new(JobService)
@@ -819,10 +845,12 @@ func TestNewJobHandler(t *testing.T) {
 
 			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 
+			jobAName := job.Name("job-A")
+			jobBName := job.Name("job-B")
 			jobSpecProtos := []*pb.JobSpecification{
 				{
 					Version:          int32(jobVersion),
-					Name:             "job-A",
+					Name:             jobAName.String(),
 					Owner:            sampleOwner,
 					StartDate:        jobSchedule.StartDate().String(),
 					EndDate:          jobSchedule.EndDate().String(),
@@ -834,7 +862,8 @@ func TestNewJobHandler(t *testing.T) {
 				},
 				{
 					Version:          int32(jobVersion),
-					Name:             "job-B",
+					Name:             jobBName.String(),
+					Owner:            sampleOwner,
 					StartDate:        jobSchedule.StartDate().String(),
 					EndDate:          jobSchedule.EndDate().String(),
 					Interval:         jobSchedule.Interval(),
@@ -850,12 +879,28 @@ func TestNewJobHandler(t *testing.T) {
 				Specs:         jobSpecProtos,
 			}
 
-			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]job.Name{"job-A"}, errors.New("internal error"))
+			upsertResults := []dto.UpsertResult{
+				{
+					JobName: jobAName,
+					Status:  job.DeployStateUpdated,
+				},
+				{
+					JobName: jobBName,
+					Status:  job.DeployStateFailed,
+				},
+			}
+
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(upsertResults, errors.New("internal error"))
+
+			expectedResult := []*pb.UpsertJobStatus{
+				{JobName: jobAName.String(), Status: job.DeployStateUpdated.String()},
+				{JobName: jobBName.String(), Status: job.DeployStateFailed.String()},
+			}
 
 			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
 			assert.Nil(t, err)
 			assert.Contains(t, resp.Log, "error")
-			assert.Equal(t, []string{"job-A"}, resp.SuccessfulJobNames)
+			assert.ElementsMatch(t, expectedResult, resp.Results)
 		})
 	})
 	t.Run("ChangeJobNamespace", func(t *testing.T) {
@@ -2500,23 +2545,19 @@ func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs 
 }
 
 // Upsert provides a mock function with given fields: ctx, jobTenant, jobs
-func (_m *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error) {
+func (_m *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]dto.UpsertResult, error) {
 	ret := _m.Called(ctx, jobTenant, jobs)
 
-	if len(ret) == 0 {
-		panic("no return value specified for Upsert")
-	}
-
-	var r0 []job.Name
+	var r0 []dto.UpsertResult
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) ([]job.Name, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) ([]dto.UpsertResult, error)); ok {
 		return rf(ctx, jobTenant, jobs)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) []job.Name); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) []dto.UpsertResult); ok {
 		r0 = rf(ctx, jobTenant, jobs)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]job.Name)
+			r0 = ret.Get(0).([]dto.UpsertResult)
 		}
 	}
 

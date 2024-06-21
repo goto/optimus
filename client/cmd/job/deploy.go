@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/job"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -126,7 +127,7 @@ func (e *deployCommand) executeJobUpsert(ctx context.Context, jobSpecificationSe
 	}
 
 	countJobsToProcess := len(specsToUpsertProto)
-	countJobsSuccess := 0
+	countJobsFailed := 0
 	for i := 0; i < countJobsToProcess; i += e.batchSize {
 		endIndex := i + e.batchSize
 		if countJobsToProcess < endIndex {
@@ -141,16 +142,20 @@ func (e *deployCommand) executeJobUpsert(ctx context.Context, jobSpecificationSe
 			e.logger.Error("failure in job deploy", err)
 			continue
 		}
-		for _, successfulJobName := range resp.SuccessfulJobNames {
-			e.logger.Info("[%s] job %s deployed", e.namespaceName, successfulJobName)
-			countJobsSuccess++
+		for _, result := range resp.Results {
+			if result.Status == job.DeployStateFailed.String() {
+				e.logger.Error("[%s] %s", result.Status, result.JobName)
+				countJobsFailed++
+				continue
+			}
+			e.logger.Info("[%s] %s", result.Status, result.JobName)
 		}
 		if resp.GetLog() != "" {
 			e.logger.Warn(resp.GetLog())
 		}
 	}
-	if countJobsSuccess < countJobsToProcess {
-		return fmt.Errorf("failed to deploy %d out of %d jobs", countJobsToProcess-countJobsSuccess, countJobsToProcess)
+	if countJobsFailed > 0 {
+		return fmt.Errorf("failed to deploy %d jobs", countJobsFailed)
 	}
 	return nil
 }

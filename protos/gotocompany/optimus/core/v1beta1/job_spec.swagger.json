@@ -1764,11 +1764,22 @@
         "log": {
           "type": "string"
         },
-        "successfulJobNames": {
+        "results": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/v1beta1UpsertJobStatus"
           }
+        }
+      }
+    },
+    "v1beta1UpsertJobStatus": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
         }
       }
     },

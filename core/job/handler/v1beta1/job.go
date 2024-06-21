@@ -46,7 +46,7 @@ func NewJobHandler(jobService JobService, changeLogService ChangeLogService, log
 type JobService interface {
 	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
-	Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
+	Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]dto.UpsertResult, error)
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
@@ -251,19 +251,24 @@ func (jh *JobHandler) UpsertJobSpecifications(ctx context.Context, jobSpecReques
 		return nil, me.ToErr()
 	}
 
-	upsertedJobNames, err := jh.jobService.Upsert(ctx, jobTenant, jobSpecs)
+	results, err := jh.jobService.Upsert(ctx, jobTenant, jobSpecs)
 	if err != nil {
 		jh.l.Error(fmt.Sprintf("%s: %s", "failed to upsert job specifications", err.Error()))
 		me.Append(err)
 	}
 
-	if len(upsertedJobNames) == 0 {
-		return nil, me.ToErr()
+	var upsertJobStatusList []*pb.UpsertJobStatus
+	for _, result := range results {
+		upsertJobStatusList = append(upsertJobStatusList, &pb.UpsertJobStatus{
+			JobName: result.JobName.String(),
+			Status:  result.Status.String(),
+		})
 	}
-
-	jobSuccesses := make([]string, len(upsertedJobNames))
-	for i, jobName := range upsertedJobNames {
-		jobSuccesses[i] = jobName.String()
+	for _, invalidSpecName := range invalidSpecs {
+		upsertJobStatusList = append(upsertJobStatusList, &pb.UpsertJobStatus{
+			JobName: invalidSpecName.String(),
+			Status:  job.DeployStateFailed.String(),
+		})
 	}
 
 	var errorMsg string
@@ -272,8 +277,8 @@ func (jh *JobHandler) UpsertJobSpecifications(ctx context.Context, jobSpecReques
 	}
 
 	return &pb.UpsertJobSpecificationsResponse{
-		Log:                errorMsg,
-		SuccessfulJobNames: jobSuccesses,
+		Log:     errorMsg,
+		Results: upsertJobStatusList,
 	}, nil
 }
 

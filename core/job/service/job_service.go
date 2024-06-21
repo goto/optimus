@@ -257,82 +257,82 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	return job.Jobs(updatedJobs).GetJobNames(), me.ToErr()
 }
 
-func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
+func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]dto.UpsertResult, error) {
 	logWriter := writer.NewLogWriter(j.logger)
 	me := errors.NewMultiError("upsert specs errors")
 
 	tenantWithDetails, err := j.tenantDetailsGetter.GetDetails(ctx, jobTenant)
 	if err != nil {
 		j.logger.Error("error getting tenant details: %s", err)
-		return []job.Name{}, err
+		return nil, err
 	}
 
-	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
-	me.Append(err)
-
-	existingJobs := make(map[job.Name]*job.Job)
-	var jobsToAdd, jobsToUpdate []*job.Job
-	for _, jobToUpsert := range jobs {
-		existingJob, err := j.jobRepo.GetByJobName(ctx, jobTenant.ProjectName(), jobToUpsert.Spec().Name())
+	existingJobs := make([]*job.Job, 0)
+	for _, jobToUpsert := range specs {
+		existingJob, err := j.jobRepo.GetByJobName(ctx, jobTenant.ProjectName(), jobToUpsert.Name())
 		if err != nil {
 			if !errors.IsErrorType(err, errors.ErrNotFound) {
 				me.Append(err)
-				continue
 			}
-			jobsToAdd = append(jobsToAdd, jobToUpsert)
 			continue
 		}
-		jobsToUpdate = append(jobsToUpdate, jobToUpsert)
-		existingJobs[jobToUpsert.Spec().Name()] = existingJob
+		existingJobs = append(existingJobs, existingJob)
 	}
 
-	var upsertedJobs, addedJobs, updatedJobs []*job.Job
-	if len(jobsToAdd) > 0 {
-		addedJobs, err = j.jobRepo.Add(ctx, jobsToAdd)
-		upsertedJobs = append(upsertedJobs, addedJobs...)
+	specsToAdd, specsToUpdate, _, specsUnmodified, specsDirty := j.differentiateSpecs(tenantWithDetails.ToTenant(), existingJobs, specs, nil)
+	specsToUpdate = append(specsToUpdate, specsDirty...)
+
+	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, specsToAdd, specsToUpdate, logWriter)
+	me.Append(err)
+	j.raiseUpdateEvents(existingJobs, addedJobs, updatedJobs)
+
+	var upsertedJobs []*job.Job
+	upsertedJobs = append(upsertedJobs, addedJobs...)
+	upsertedJobs = append(upsertedJobs, updatedJobs...)
+
+	if len(upsertedJobs) > 0 {
+		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), upsertedJobs, logWriter)
+		me.Append(err)
+
+		err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
+		me.Append(err)
+
+		err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil)
 		me.Append(err)
 	}
-	if len(jobsToUpdate) > 0 {
-		updatedJobs, err = j.jobRepo.Update(ctx, jobsToUpdate)
-		upsertedJobs = append(upsertedJobs, updatedJobs...)
-		me.Append(err)
+
+	totalFailures := len(specs) - len(addedJobs) - len(updatedJobs) - len(specsUnmodified)
+	raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailures)
+
+	return j.getUpsertResults(specsUnmodified, addedJobs, updatedJobs, specs), me.ToErr()
+}
+
+func (*JobService) getUpsertResults(specsUnmodified []*job.Spec, addedJobs, updatedJobs []*job.Job, specs []*job.Spec) []dto.UpsertResult {
+	jobNameStatusMap := make(map[job.Name]job.DeployState)
+	for _, spec := range specsUnmodified {
+		jobNameStatusMap[spec.Name()] = job.DeployStateSkipped
 	}
-
-	if len(upsertedJobs) == 0 {
-		return []job.Name{}, err
+	for _, addedJob := range addedJobs {
+		jobNameStatusMap[addedJob.Spec().Name()] = job.DeployStateCreated
 	}
-
-	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), upsertedJobs, logWriter)
-	me.Append(err)
-
-	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
-	me.Append(err)
-
-	err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil)
-	me.Append(err)
-
-	if len(addedJobs) > 0 {
-		logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] added %d jobs", tenantWithDetails.Namespace().Name().String(), len(addedJobs)))
-		for _, addedJob := range addedJobs {
-			j.raiseCreateEvent(addedJob)
+	for _, updatedJob := range updatedJobs {
+		jobNameStatusMap[updatedJob.Spec().Name()] = job.DeployStateUpdated
+	}
+	for _, spec := range specs {
+		_, ok := jobNameStatusMap[spec.Name()]
+		if !ok {
+			jobNameStatusMap[spec.Name()] = job.DeployStateFailed
 		}
-		raiseJobEventMetric(jobTenant, job.MetricJobEventStateAdded, len(addedJobs))
 	}
 
-	if len(updatedJobs) > 0 {
-		logWriter.Write(writer.LogLevelInfo, fmt.Sprintf("[%s] updated %d jobs", tenantWithDetails.Namespace().Name().String(), len(updatedJobs)))
-		for _, updatedJob := range updatedJobs {
-			j.raiseUpdateEvent(updatedJob, getUpdateImpactType(existingJobs[updatedJob.Spec().Name()], updatedJob))
-		}
-		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(updatedJobs))
+	var results []dto.UpsertResult
+	for name, state := range jobNameStatusMap {
+		results = append(results, dto.UpsertResult{
+			JobName: name,
+			Status:  state,
+		})
 	}
-
-	if len(upsertedJobs) < len(specs) {
-		totalFailed := len(specs) - len(upsertedJobs)
-		raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpsertFailed, totalFailed)
-	}
-
-	return job.Jobs(upsertedJobs).GetJobNames(), me.ToErr()
+	return results
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
@@ -580,7 +580,7 @@ func (j *JobService) bulkJobCleanup(ctx context.Context, jobTenant tenant.Tenant
 }
 
 func (j *JobService) bulkJobPersist(ctx context.Context, tenantWithDetails *tenant.WithDetails, toAdd, toUpdate []*job.Spec, logWriter writer.LogWriter) ([]*job.Job, []*job.Job, error) {
-	me := errors.NewMultiError("replace all specs errors")
+	me := errors.NewMultiError("persist job specs errors")
 	addedJobs, err := j.bulkAdd(ctx, tenantWithDetails, toAdd, logWriter)
 	me.Append(err)
 	failedToAdd := len(toAdd) - len(addedJobs)

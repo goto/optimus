@@ -654,6 +654,244 @@ func TestNewJobHandler(t *testing.T) {
 			assert.Contains(t, resp.Log, "error")
 		})
 	})
+	t.Run("UpsertJobSpecifications", func(t *testing.T) {
+		t.Run("upsert jobs", func(t *testing.T) {
+			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
+
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
+
+			jobSpecProto := &pb.JobSpecification{
+				Version:          int32(jobVersion),
+				Name:             "job-A",
+				Owner:            sampleOwner,
+				StartDate:        jobSchedule.StartDate().String(),
+				EndDate:          jobSchedule.EndDate().String(),
+				Interval:         jobSchedule.Interval(),
+				TaskName:         jobTask.Name().String(),
+				WindowSize:       jobWindow.GetSize(),
+				WindowOffset:     jobWindow.GetOffset(),
+				WindowTruncateTo: jobWindow.GetTruncateTo(),
+			}
+			jobProtos := []*pb.JobSpecification{jobSpecProto}
+			request := pb.UpsertJobSpecificationsRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				Specs:         jobProtos,
+			}
+
+			jobAName := job.Name("job-A")
+			upsertResult := dto.UpsertResult{
+				JobName: jobAName,
+				Status:  job.DeployStateSuccess,
+			}
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
+
+			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
+			assert.Nil(t, err)
+			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
+				SuccessfulJobNames: []string{jobAName.String()},
+			}, resp)
+		})
+		t.Run("upsert a job with complete configuration", func(t *testing.T) {
+			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
+
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
+
+			jobSpecProto := &pb.JobSpecification{
+				Version:          int32(jobVersion),
+				Name:             "job-A",
+				Owner:            sampleOwner,
+				StartDate:        jobSchedule.StartDate().String(),
+				EndDate:          jobSchedule.EndDate().String(),
+				Interval:         jobSchedule.Interval(),
+				TaskName:         jobTask.Name().String(),
+				WindowSize:       jobWindow.GetSize(),
+				WindowOffset:     jobWindow.GetOffset(),
+				WindowTruncateTo: jobWindow.GetTruncateTo(),
+				Behavior:         jobBehavior,
+				Dependencies:     jobDependencies,
+				Metadata:         jobMetadata,
+			}
+			jobProtos := []*pb.JobSpecification{jobSpecProto}
+			request := pb.UpsertJobSpecificationsRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				Specs:         jobProtos,
+			}
+
+			jobAName := job.Name("job-A")
+			upsertResult := dto.UpsertResult{
+				JobName: jobAName,
+				Status:  job.DeployStateSuccess,
+			}
+
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
+
+			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
+			assert.Nil(t, err)
+			assert.Equal(t, &pb.UpsertJobSpecificationsResponse{
+				SuccessfulJobNames: []string{jobAName.String()},
+			}, resp)
+		})
+		t.Run("returns error when unable to create tenant", func(t *testing.T) {
+			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
+
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
+
+			request := pb.UpsertJobSpecificationsRequest{
+				NamespaceName: namespace.Name().String(),
+			}
+
+			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
+			assert.NotNil(t, err)
+			assert.Nil(t, resp)
+		})
+		t.Run("skips job if unable to parse from proto", func(t *testing.T) {
+			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
+
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
+
+			jobAName := job.Name("job-A")
+			jobBName := job.Name("job-B")
+
+			jobSpecProtos := []*pb.JobSpecification{
+				{
+					Version:          int32(0),
+					Name:             jobAName.String(),
+					StartDate:        jobSchedule.StartDate().String(),
+					EndDate:          jobSchedule.EndDate().String(),
+					Interval:         jobSchedule.Interval(),
+					TaskName:         jobTask.Name().String(),
+					WindowSize:       jobWindow.GetSize(),
+					WindowOffset:     jobWindow.GetOffset(),
+					WindowTruncateTo: jobWindow.GetTruncateTo(),
+				},
+				{
+					Version:          int32(jobVersion),
+					Name:             jobBName.String(),
+					Owner:            sampleOwner,
+					StartDate:        jobSchedule.StartDate().String(),
+					EndDate:          jobSchedule.EndDate().String(),
+					Interval:         jobSchedule.Interval(),
+					TaskName:         jobTask.Name().String(),
+					WindowSize:       jobWindow.GetSize(),
+					WindowOffset:     jobWindow.GetOffset(),
+					WindowTruncateTo: jobWindow.GetTruncateTo(),
+				},
+			}
+			request := pb.UpsertJobSpecificationsRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				Specs:         jobSpecProtos,
+			}
+
+			upsertResult := dto.UpsertResult{
+				JobName: jobBName,
+				Status:  job.DeployStateSuccess,
+			}
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return([]dto.UpsertResult{upsertResult}, nil)
+
+			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Log, "error")
+			assert.ElementsMatch(t, []string{jobAName.String()}, resp.FailedJobNames)
+			assert.ElementsMatch(t, []string{jobBName.String()}, resp.SuccessfulJobNames)
+		})
+		t.Run("returns error when all jobs failed in upsert process", func(t *testing.T) {
+			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
+
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
+
+			jobSpecProtos := []*pb.JobSpecification{
+				{
+					Version:          int32(0),
+					Name:             "job-A",
+					StartDate:        jobSchedule.StartDate().String(),
+					EndDate:          jobSchedule.EndDate().String(),
+					Interval:         jobSchedule.Interval(),
+					TaskName:         jobTask.Name().String(),
+					WindowSize:       jobWindow.GetSize(),
+					WindowOffset:     jobWindow.GetOffset(),
+					WindowTruncateTo: jobWindow.GetTruncateTo(),
+				},
+			}
+			request := pb.UpsertJobSpecificationsRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				Specs:         jobSpecProtos,
+			}
+
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(nil, errors.New("internal error"))
+
+			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
+			assert.ErrorContains(t, err, "no jobs to be processed")
+			assert.Nil(t, resp)
+		})
+		t.Run("returns response with job errors log when some jobs failed in upsert process", func(t *testing.T) {
+			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
+
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
+
+			jobAName := job.Name("job-A")
+			jobBName := job.Name("job-B")
+			jobSpecProtos := []*pb.JobSpecification{
+				{
+					Version:          int32(jobVersion),
+					Name:             jobAName.String(),
+					Owner:            sampleOwner,
+					StartDate:        jobSchedule.StartDate().String(),
+					EndDate:          jobSchedule.EndDate().String(),
+					Interval:         jobSchedule.Interval(),
+					TaskName:         jobTask.Name().String(),
+					WindowSize:       jobWindow.GetSize(),
+					WindowOffset:     jobWindow.GetOffset(),
+					WindowTruncateTo: jobWindow.GetTruncateTo(),
+				},
+				{
+					Version:          int32(jobVersion),
+					Name:             jobBName.String(),
+					Owner:            sampleOwner,
+					StartDate:        jobSchedule.StartDate().String(),
+					EndDate:          jobSchedule.EndDate().String(),
+					Interval:         jobSchedule.Interval(),
+					TaskName:         jobTask.Name().String(),
+					WindowSize:       jobWindow.GetSize(),
+					WindowOffset:     jobWindow.GetOffset(),
+					WindowTruncateTo: jobWindow.GetTruncateTo(),
+				},
+			}
+			request := pb.UpsertJobSpecificationsRequest{
+				ProjectName:   project.Name().String(),
+				NamespaceName: namespace.Name().String(),
+				Specs:         jobSpecProtos,
+			}
+
+			upsertResults := []dto.UpsertResult{
+				{
+					JobName: jobAName,
+					Status:  job.DeployStateSuccess,
+				},
+				{
+					JobName: jobBName,
+					Status:  job.DeployStateFailed,
+				},
+			}
+
+			jobService.On("Upsert", ctx, sampleTenant, mock.Anything).Return(upsertResults, errors.New("internal error"))
+
+			resp, err := jobHandler.UpsertJobSpecifications(ctx, &request)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Log, "error")
+			assert.ElementsMatch(t, []string{jobAName.String()}, resp.SuccessfulJobNames)
+			assert.ElementsMatch(t, []string{jobBName.String()}, resp.FailedJobNames)
+		})
+	})
 	t.Run("ChangeJobNamespace", func(t *testing.T) {
 		newNamespaceName := "newNamespace"
 
@@ -2283,6 +2521,32 @@ func (_m *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, jobs 
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]job.Name)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, []*job.Spec) error); ok {
+		r1 = rf(ctx, jobTenant, jobs)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Upsert provides a mock function with given fields: ctx, jobTenant, jobs
+func (_m *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]dto.UpsertResult, error) {
+	ret := _m.Called(ctx, jobTenant, jobs)
+
+	var r0 []dto.UpsertResult
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) ([]dto.UpsertResult, error)); ok {
+		return rf(ctx, jobTenant, jobs)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, []*job.Spec) []dto.UpsertResult); ok {
+		r0 = rf(ctx, jobTenant, jobs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]dto.UpsertResult)
 		}
 	}
 

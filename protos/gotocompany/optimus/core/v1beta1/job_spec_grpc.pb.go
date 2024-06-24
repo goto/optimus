@@ -36,6 +36,8 @@ type JobSpecificationServiceClient interface {
 	AddJobSpecifications(ctx context.Context, in *AddJobSpecificationsRequest, opts ...grpc.CallOption) (*AddJobSpecificationsResponse, error)
 	// UpdateJobSpecifications modify jobs for a namespace which belongs to the given project
 	UpdateJobSpecifications(ctx context.Context, in *UpdateJobSpecificationsRequest, opts ...grpc.CallOption) (*UpdateJobSpecificationsResponse, error)
+	// UpsertJobSpecifications update or add jobs for a namespace which belongs to the given project
+	UpsertJobSpecifications(ctx context.Context, in *UpsertJobSpecificationsRequest, opts ...grpc.CallOption) (*UpsertJobSpecificationsResponse, error)
 	// GetJobSpecification reads a provided job spec of a namespace
 	GetJobSpecification(ctx context.Context, in *GetJobSpecificationRequest, opts ...grpc.CallOption) (*GetJobSpecificationResponse, error)
 	// GetJobSpecifications read a job spec for provided filters
@@ -145,6 +147,15 @@ func (c *jobSpecificationServiceClient) AddJobSpecifications(ctx context.Context
 func (c *jobSpecificationServiceClient) UpdateJobSpecifications(ctx context.Context, in *UpdateJobSpecificationsRequest, opts ...grpc.CallOption) (*UpdateJobSpecificationsResponse, error) {
 	out := new(UpdateJobSpecificationsResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobSpecifications", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *jobSpecificationServiceClient) UpsertJobSpecifications(ctx context.Context, in *UpsertJobSpecificationsRequest, opts ...grpc.CallOption) (*UpsertJobSpecificationsResponse, error) {
+	out := new(UpsertJobSpecificationsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpsertJobSpecifications", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -384,6 +395,8 @@ type JobSpecificationServiceServer interface {
 	AddJobSpecifications(context.Context, *AddJobSpecificationsRequest) (*AddJobSpecificationsResponse, error)
 	// UpdateJobSpecifications modify jobs for a namespace which belongs to the given project
 	UpdateJobSpecifications(context.Context, *UpdateJobSpecificationsRequest) (*UpdateJobSpecificationsResponse, error)
+	// UpsertJobSpecifications update or add jobs for a namespace which belongs to the given project
+	UpsertJobSpecifications(context.Context, *UpsertJobSpecificationsRequest) (*UpsertJobSpecificationsResponse, error)
 	// GetJobSpecification reads a provided job spec of a namespace
 	GetJobSpecification(context.Context, *GetJobSpecificationRequest) (*GetJobSpecificationResponse, error)
 	// GetJobSpecifications read a job spec for provided filters
@@ -443,6 +456,9 @@ func (UnimplementedJobSpecificationServiceServer) AddJobSpecifications(context.C
 }
 func (UnimplementedJobSpecificationServiceServer) UpdateJobSpecifications(context.Context, *UpdateJobSpecificationsRequest) (*UpdateJobSpecificationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateJobSpecifications not implemented")
+}
+func (UnimplementedJobSpecificationServiceServer) UpsertJobSpecifications(context.Context, *UpsertJobSpecificationsRequest) (*UpsertJobSpecificationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpsertJobSpecifications not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) GetJobSpecification(context.Context, *GetJobSpecificationRequest) (*GetJobSpecificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobSpecification not implemented")
@@ -600,6 +616,24 @@ func _JobSpecificationService_UpdateJobSpecifications_Handler(srv interface{}, c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(JobSpecificationServiceServer).UpdateJobSpecifications(ctx, req.(*UpdateJobSpecificationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _JobSpecificationService_UpsertJobSpecifications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertJobSpecificationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobSpecificationServiceServer).UpsertJobSpecifications(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpsertJobSpecifications",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobSpecificationServiceServer).UpsertJobSpecifications(ctx, req.(*UpsertJobSpecificationsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -928,6 +962,10 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateJobSpecifications",
 			Handler:    _JobSpecificationService_UpdateJobSpecifications_Handler,
+		},
+		{
+			MethodName: "UpsertJobSpecifications",
+			Handler:    _JobSpecificationService_UpsertJobSpecifications_Handler,
 		},
 		{
 			MethodName: "GetJobSpecification",

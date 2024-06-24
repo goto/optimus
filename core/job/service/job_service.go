@@ -181,10 +181,7 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	downstreamJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), jobs)
 	me.Append(err)
 
-	jobsToBeResolved := []*job.Job{}
-	jobsToBeResolved = append(jobsToBeResolved, addedJobs...)
-	jobsToBeResolved = append(jobsToBeResolved, downstreamJobs...)
-	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), jobsToBeResolved, logWriter)
+	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), append(addedJobs, downstreamJobs...), logWriter)
 	me.Append(err)
 
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)

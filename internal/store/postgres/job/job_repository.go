@@ -334,6 +334,9 @@ func (j JobRepository) computeAndPersistChangeLog(ctx context.Context, existingJ
 	if err != nil {
 		return err
 	}
+	if changeLog == nil {
+		return nil
+	}
 	return j.insertChangelog(ctx, incomingJobEntity.Spec().Name(), incomingJobEntity.Tenant().ProjectName(), changeLog)
 }
 

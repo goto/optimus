@@ -37,6 +37,10 @@ const (
 	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
 	JobInternalImpact       UpdateImpact = "internal_impact"
 	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
+
+	DeployStateSuccess DeployState = "success"
+	DeployStateSkipped DeployState = "skipped"
+	DeployStateFailed  DeployState = "failed"
 )
 
 type Job struct {
@@ -549,4 +553,10 @@ func (d DownstreamList) GetDownstreamFullNames() FullNames {
 		fullNames = append(fullNames, downstream.FullName())
 	}
 	return fullNames
+}
+
+type DeployState string
+
+func (d DeployState) String() string {
+	return string(d)
 }

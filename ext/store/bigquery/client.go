@@ -51,6 +51,11 @@ func (c *BqClient) TableHandleFrom(ds Dataset, name string) TableResourceHandle 
 	return NewTableHandle(t)
 }
 
+func (c *BqClient) RoutineHandleFrom(ds Dataset, name string) ResourceHandle {
+	t := c.DatasetInProject(ds.Project, ds.DatasetName).Routine(name)
+	return NewRoutineHandle(t)
+}
+
 func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHandle {
 	t := c.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
 	return NewExternalTableHandle(t)

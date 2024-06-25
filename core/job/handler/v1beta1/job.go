@@ -43,23 +43,35 @@ func NewJobHandler(jobService JobService, changeLogService ChangeLogService, log
 	}
 }
 
-type JobService interface {
+type JobModificationService interface {
 	Add(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
 	Update(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]job.Name, error)
-	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
-	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
-	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
+	Upsert(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec) ([]dto.UpsertResult, error)
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
+	ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error
+	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
+}
+
+type JobQueryService interface {
 	Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (jobSpec *job.Job, err error)
 	GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error)
-	GetByFilter(ctx context.Context, filters ...filter.FilterOpt) (jobSpecs []*job.Job, err error)
-	ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error
-	Refresh(ctx context.Context, projectName tenant.ProjectName, namespaceNames, jobNames []string, logWriter writer.LogWriter) error
-	Validate(context.Context, dto.ValidateRequest) (map[job.Name][]dto.ValidateResult, error)
-
 	GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, spec *job.Spec) (*job.Job, writer.BufferedLogger)
+	GetByFilter(ctx context.Context, filters ...filter.FilterOpt) (jobSpecs []*job.Job, err error)
 	GetUpstreamsToInspect(ctx context.Context, subjectJob *job.Job, localJob bool) ([]*job.Upstream, error)
 	GetDownstream(ctx context.Context, job *job.Job, localJob bool) ([]*job.Downstream, error)
+}
+
+type JobStatusService interface {
+	Refresh(ctx context.Context, projectName tenant.ProjectName, namespaceNames, jobNames []string, logWriter writer.LogWriter) error
+	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
+	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
+	Validate(context.Context, dto.ValidateRequest) (map[job.Name][]dto.ValidateResult, error)
+}
+
+type JobService interface {
+	JobQueryService
+	JobModificationService
+	JobStatusService
 }
 
 type ChangeLogService interface {
@@ -225,6 +237,63 @@ func (jh *JobHandler) UpdateJobSpecifications(ctx context.Context, jobSpecReques
 	return &pb.UpdateJobSpecificationsResponse{
 		Log:                responseLog,
 		SuccessfulJobNames: jobSuccesses,
+	}, nil
+}
+
+func (jh *JobHandler) UpsertJobSpecifications(ctx context.Context, jobSpecRequest *pb.UpsertJobSpecificationsRequest) (*pb.UpsertJobSpecificationsResponse, error) {
+	jobTenant, err := tenant.NewTenant(jobSpecRequest.ProjectName, jobSpecRequest.NamespaceName)
+	if err != nil {
+		errorMsg := "failed to adapt tenant when trying to do upsert job specifications"
+		jh.l.Error(fmt.Sprintf("%s: %s", errorMsg, err.Error()))
+		return nil, errors.GRPCErr(err, errorMsg)
+	}
+
+	me := errors.NewMultiError("deploy specs errors")
+	jobSpecs, invalidSpecs, err := fromJobProtos(jobSpecRequest.Specs)
+	if err != nil {
+		errorMsg := fmt.Sprintf("failure when adapting job specifications: %s", err.Error())
+		jh.l.Error(errorMsg)
+		me.Append(err)
+	}
+	raiseJobEventMetric(jobTenant, job.MetricJobEventStateValidationFailed, len(invalidSpecs))
+
+	if len(jobSpecs) == 0 {
+		me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, "no jobs to be processed"))
+		return nil, me.ToErr()
+	}
+
+	results, err := jh.jobService.Upsert(ctx, jobTenant, jobSpecs)
+	if err != nil {
+		jh.l.Error(fmt.Sprintf("%s: %s", "failed to upsert job specifications", err.Error()))
+		me.Append(err)
+	}
+
+	var successfulJobNames, skippedJobNames, failedJobNames []string
+	for _, result := range results {
+		switch result.Status {
+		case job.DeployStateSuccess:
+			successfulJobNames = append(successfulJobNames, result.JobName.String())
+		case job.DeployStateSkipped:
+			skippedJobNames = append(skippedJobNames, result.JobName.String())
+		case job.DeployStateFailed:
+			failedJobNames = append(failedJobNames, result.JobName.String())
+		}
+	}
+
+	for _, invalidSpecName := range invalidSpecs {
+		failedJobNames = append(failedJobNames, invalidSpecName.String())
+	}
+
+	var errorMsg string
+	if len(me.Errors) > 0 {
+		errorMsg = me.Error()
+	}
+
+	return &pb.UpsertJobSpecificationsResponse{
+		Log:                errorMsg,
+		SuccessfulJobNames: successfulJobNames,
+		SkippedJobNames:    skippedJobNames,
+		FailedJobNames:     failedJobNames,
 	}, nil
 }
 

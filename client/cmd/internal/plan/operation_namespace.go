@@ -47,6 +47,10 @@ func (o *OperationByNamespaces[Kind]) getResult() OperationByNamespaces[Kind] {
 			}
 
 			for oldNamespace := range deletePlans {
+				if oldNamespace == namespace {
+					delete(deletePlans, oldNamespace)
+					continue
+				}
 				migratePlan := createPlan
 				migratePlan.SetOldNamespace(oldNamespace)
 				migrateOperation.Append(namespace, migratePlan)

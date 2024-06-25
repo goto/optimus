@@ -152,6 +152,16 @@ func TestPlanGetResult(t *testing.T) {
 		assertMapPlanMatch(t, actual.Job.Migrate, expected.Job.Migrate)
 	})
 
+	t.Run("return empty plan when create and delete job on same namespace", func(t *testing.T) {
+		plans := plan.NewPlan(projectName)
+		plans.Job.Delete.Append(namespace1, &plan.JobPlan{Name: "job-1"})
+		plans.Job.Create.Append(namespace1, &plan.JobPlan{Name: "job-1"})
+
+		actual := plans.GetResult()
+		assert.True(t, actual.Job.IsZero())
+		assert.True(t, actual.Resource.IsZero())
+	})
+
 	t.Run("case multiple migration on multiple namespace", func(t *testing.T) {
 		namespace3, namespace4, namespace5 := "n-optimus-3", "n-optimus-4", "n-optimus-5"
 		plans := plan.NewPlan(projectName)

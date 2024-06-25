@@ -162,6 +162,33 @@ func TestPlanGetResult(t *testing.T) {
 		assert.True(t, actual.Resource.IsZero())
 	})
 
+	t.Run("return empty plan when create and delete job on same namespace with multiple namespace", func(t *testing.T) {
+		plans := plan.NewPlan(projectName)
+		plans.Job.Delete.Append(namespace1, &plan.JobPlan{Name: "job-1"})
+		plans.Job.Delete.Append(namespace2, &plan.JobPlan{Name: "job-1"})
+		plans.Job.Create.Append(namespace1, &plan.JobPlan{Name: "job-1"})
+		plans.Job.Create.Append(namespace2, &plan.JobPlan{Name: "job-1"})
+
+		expected := plan.Plan{
+			ProjectName: projectName,
+			Job: plan.OperationByNamespaces[*plan.JobPlan]{
+				Create: plan.ListByNamespace[*plan.JobPlan]{},
+				Update: plan.ListByNamespace[*plan.JobPlan]{
+					namespace1: {{Name: "job-1", OldNamespace: nil}},
+					namespace2: {{Name: "job-1", OldNamespace: nil}},
+				},
+				Delete:  plan.ListByNamespace[*plan.JobPlan]{},
+				Migrate: plan.ListByNamespace[*plan.JobPlan]{},
+			},
+			Resource: plan.OperationByNamespaces[*plan.ResourcePlan]{},
+		}
+
+		actual := plans.GetResult()
+		assert.False(t, actual.Job.IsZero())
+		assert.True(t, actual.Resource.IsZero())
+		assert.ElementsMatch(t, actual.Job.Update.GetAll(), expected.Job.Update.GetAll())
+	})
+
 	t.Run("case multiple migration on multiple namespace", func(t *testing.T) {
 		namespace3, namespace4, namespace5 := "n-optimus-3", "n-optimus-4", "n-optimus-5"
 		plans := plan.NewPlan(projectName)

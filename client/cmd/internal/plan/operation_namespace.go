@@ -46,11 +46,14 @@ func (o *OperationByNamespaces[Kind]) getResult() OperationByNamespaces[Kind] {
 				continue
 			}
 
+			// Handle move directory with same namespace, marking as UPDATE (there are possibilities spec changes)
+			if _, foundSameNamespace := deletePlans[namespace]; foundSameNamespace {
+				result.Update.Append(namespace, createPlan)
+				delete(deletePlans, namespace)
+				continue
+			}
+
 			for oldNamespace := range deletePlans {
-				if oldNamespace == namespace {
-					delete(deletePlans, oldNamespace)
-					continue
-				}
 				migratePlan := createPlan
 				migratePlan.SetOldNamespace(oldNamespace)
 				migrateOperation.Append(namespace, migratePlan)

@@ -385,10 +385,69 @@
           "ResourceService"
         ]
       }
+    },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/datastore/{datastoreName}/resources-upsert": {
+      "post": {
+        "summary": "UpsertResource updates/inserts a resource specification of a datastore in project",
+        "operationId": "ResourceService_UpsertResource",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1UpsertResourceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "datastoreName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "resources": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/v1beta1ResourceSpecification"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "ResourceService"
+        ]
+      }
     }
   },
   "definitions": {
-    "ApplyResourcesResponseResourceStatus": {
+    "corev1beta1ResourceStatus": {
       "type": "object",
       "properties": {
         "resourceName": {
@@ -397,7 +456,7 @@
         "status": {
           "type": "string"
         },
-        "reason": {
+        "message": {
           "type": "string"
         }
       }
@@ -446,8 +505,22 @@
         "statuses": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/ApplyResourcesResponseResourceStatus"
+            "$ref": "#/definitions/v1beta1ApplyResourcesResponseResourceStatus"
           }
+        }
+      }
+    },
+    "v1beta1ApplyResourcesResponseResourceStatus": {
+      "type": "object",
+      "properties": {
+        "resourceName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
         }
       }
     },
@@ -572,6 +645,29 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1beta1UpsertResourceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/corev1beta1ResourceStatus"
+          }
+        },
+        "successfulResourceNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

@@ -26,6 +26,7 @@ const (
 type ResourceService interface {
 	Create(ctx context.Context, res *resource.Resource) error
 	Update(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error
+	Upsert(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error
 	Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResponse, error)
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
@@ -264,6 +265,65 @@ func (rh ResourceHandler) UpdateResource(ctx context.Context, req *pb.UpdateReso
 	}
 
 	return &pb.UpdateResourceResponse{}, nil
+}
+
+func (rh ResourceHandler) UpsertResource(ctx context.Context, req *pb.UpsertResourceRequest) (*pb.UpsertResourceResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "failed to upsert resource")
+	}
+
+	store, err := resource.FromStringToStore(req.GetDatastoreName())
+	if err != nil {
+		rh.l.Error("invalid datastore name [%s]: %s", req.GetDatastoreName(), err)
+		return nil, errors.GRPCErr(err, "invalid upsert resource request")
+	}
+
+	if len(req.Resources) == 0 {
+		return nil, errors.InvalidArgument(resource.EntityResource, "empty resource")
+	}
+
+	logWriter := writer.NewLogWriter(rh.l)
+	result := make([]*pb.ResourceStatus, 0)
+
+	var successfulResourceNames []string
+	for _, reqResource := range req.Resources {
+		resourceSpec, err := fromResourceProto(reqResource, tnnt, store)
+		if err != nil {
+			errMsg := fmt.Sprintf("error adapting resource [%s]: %s", reqResource.GetName(), err)
+			logWriter.Write(writer.LogLevelError, errMsg)
+			result = append(result, rh.newResourceStatus(reqResource.GetName(), resource.StatusFailure.String(), errMsg))
+			continue
+		}
+
+		if err = rh.service.Upsert(ctx, resourceSpec, logWriter); err != nil {
+			errMsg := fmt.Sprintf("error deploying resource [%s]: %s", reqResource.GetName(), err)
+			logWriter.Write(writer.LogLevelError, errMsg)
+			result = append(result, rh.newResourceStatus(reqResource.GetName(), resource.StatusFailure.String(), errMsg))
+			continue
+		}
+
+		result = append(result, rh.newResourceStatus(resourceSpec.FullName(), resourceSpec.Status().String(), ""))
+		raiseResourceDatastoreEventMetric(tnnt, resourceSpec.Store().String(), resourceSpec.Kind(), resourceSpec.Status().String())
+
+		if resourceSpec.Status() == resource.StatusSuccess {
+			successfulResourceNames = append(successfulResourceNames, resourceSpec.FullName())
+		}
+	}
+
+	return &pb.UpsertResourceResponse{
+		Results:                 result,
+		SuccessfulResourceNames: successfulResourceNames,
+	}, nil
+}
+
+func (ResourceHandler) newResourceStatus(name, status, message string) *pb.ResourceStatus {
+	return &pb.ResourceStatus{
+		ResourceName: name,
+		Status:       status,
+		Message:      message,
+	}
 }
 
 func (rh ResourceHandler) DeleteResource(ctx context.Context, req *pb.DeleteResourceRequest) (*pb.DeleteResourceResponse, error) {

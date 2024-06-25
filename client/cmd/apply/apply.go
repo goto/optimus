@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	applyTimeout     = time.Minute * 5
+	applyTimeout     = time.Minute * 60
 	executedPlanFile = "plan_apply.json"
 )
 

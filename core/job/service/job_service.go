@@ -688,6 +688,14 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	me := errors.NewMultiError("persist job error")
 
 	toUpdate = append(toUpdate, unmodifiedDirtySpecs...)
+	toUpdateJobs := []*job.Job{}
+	for _, spec := range toUpdate {
+		if currentJob, ok := existingJobsMap[spec.Name()]; ok {
+			toUpdateJobs = append(toUpdateJobs, currentJob)
+		}
+	}
+	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), toUpdateJobs)
+	me.Append(err)
 
 	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, toAdd, toUpdate, logWriter)
 	j.raiseUpdateEvents(existingJobs, addedJobs, updatedJobs)
@@ -703,14 +711,6 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		return err
 	}
 
-	toUpdateJobs := []*job.Job{}
-	for _, spec := range toUpdate {
-		if currentJob, ok := existingJobsMap[spec.Name()]; ok {
-			toUpdateJobs = append(toUpdateJobs, currentJob)
-		}
-	}
-	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), toUpdateJobs)
-	me.Append(err)
 	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), updatedJobs)
 	me.Append(err)
 	downstreamAddedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), addedJobs)

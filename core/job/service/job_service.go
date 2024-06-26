@@ -293,6 +293,8 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 		}
 		existingJobs = append(existingJobs, existingJob)
 	}
+	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), existingJobs)
+	me.Append(err)
 
 	specsToAdd, specsToUpdate, _, specsUnmodified, specsDirty := j.differentiateSpecs(tenantWithDetails.ToTenant(), existingJobs, specs, nil)
 	specsToUpdate = append(specsToUpdate, specsDirty...)
@@ -301,18 +303,27 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	me.Append(err)
 	j.raiseUpdateEvents(existingJobs, addedJobs, updatedJobs)
 
+	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), updatedJobs)
+	me.Append(err)
+	downstreamAddedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), addedJobs)
+	me.Append(err)
+
 	var upsertedJobs []*job.Job
 	upsertedJobs = append(upsertedJobs, addedJobs...)
 	upsertedJobs = append(upsertedJobs, updatedJobs...)
+	downstreamToBeResolved := []*job.Job{}
+	downstreamToBeResolved = append(downstreamToBeResolved, downstreamExistingJobs...)
+	downstreamToBeResolved = append(downstreamToBeResolved, downstreamUpdatedJobs...)
+	downstreamToBeResolved = append(downstreamToBeResolved, downstreamAddedJobs...)
 
 	if len(upsertedJobs) > 0 {
-		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), upsertedJobs, logWriter)
+		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), append(upsertedJobs, downstreamToBeResolved...), logWriter)
 		me.Append(err)
 
 		err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 		me.Append(err)
 
-		err = j.uploadJobs(ctx, jobTenant, addedJobs, updatedJobs, nil)
+		err = j.uploadJobs(ctx, jobTenant, addedJobs, append(updatedJobs, downstreamToBeResolved...), nil)
 		me.Append(err)
 	}
 

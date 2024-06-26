@@ -1,6 +1,9 @@
 package plan
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type ResourcePlan struct {
 	Name         string  `json:"name"`
@@ -8,7 +11,7 @@ type ResourcePlan struct {
 	OldNamespace *string `json:"old_namespace"` // OldNamespace will be used on migrate operation
 }
 
-func (p ResourcePlan) GetName() string { return p.Name }
+func (p ResourcePlan) GetName() string { return fmt.Sprintf("%s://%s", p.Datastore, p.Name) }
 
 func (p *ResourcePlan) SetName(name string) { p.Name = name }
 

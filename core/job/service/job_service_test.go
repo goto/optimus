@@ -2485,6 +2485,8 @@ func TestJobService(t *testing.T) {
 			pluginService.On("ConstructDestinationURN", ctx, specA.Task().Name().String(), mock.Anything).Return(jobADestination, nil).Once()
 			pluginService.On("IdentifyUpstreams", ctx, specA.Task().Name().String(), mock.Anything, mock.Anything).Return(jobAUpstreamName, nil)
 
+			downstreamRepo.On("GetDownstreamByDestination", ctx, mock.Anything, mock.Anything).Return([]*job.Downstream{}, nil)
+
 			jobRepo.On("Update", ctx, mock.Anything).Return([]*job.Job{}, errors.New("internal error"))
 
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)

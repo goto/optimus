@@ -793,12 +793,20 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 	return me.ToErr()
 }
 
-func validateDeleteJob(jobTenant tenant.Tenant, downstreams []*job.Downstream, toDeleteMap map[job.FullName]*job.Spec, jobToDelete *job.Spec, logWriter writer.LogWriter, me *errors.MultiError) bool {
-	notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, job.DownstreamList(downstreams).GetDownstreamFullNames())
+func validateDeleteJob(jobTenant tenant.Tenant, downstreamWithHierarchies job.DownstreamWithHierarchyList, toDeleteMap map[job.FullName]*job.Spec, jobToDelete *job.Spec, logWriter writer.LogWriter, me *errors.MultiError) bool {
+	notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, downstreamWithHierarchies)
 
 	if !safeToDelete {
+		// only show direct downstreams that is not deleted in the error.
+		// if all direct downstreams are to be deleted, show all of them
+		directDownstreams := notDeleted.GetUpToLevel(1)
+		if len(directDownstreams) == 0 {
+			directDownstreams = downstreamWithHierarchies.GetUpToLevel(1)
+		}
+
 		// TODO: refactor to put the log writer outside
-		errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), job.FullNames(notDeleted).String())
+		jobFullNames := directDownstreams.ToDownstreamList().GetDownstreamFullNames()
+		errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), jobFullNames.String())
 		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] %s", jobTenant.NamespaceName().String(), errorMsg))
 		me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg))
 		return false
@@ -807,20 +815,21 @@ func validateDeleteJob(jobTenant tenant.Tenant, downstreams []*job.Downstream, t
 	return true
 }
 
-func isJobSafeToDelete(toDeleteMap map[job.FullName]*job.Spec, downstreamFullNames []job.FullName) ([]job.FullName, bool) {
-	notDeleted := []job.FullName{}
-	for _, downstreamFullName := range downstreamFullNames {
+func isJobSafeToDelete(toDeleteMap map[job.FullName]*job.Spec, downstreamWithHierarchies job.DownstreamWithHierarchyList) (job.DownstreamWithHierarchyList, bool) {
+	notDeleted := job.DownstreamWithHierarchyList{}
+	for _, downstream := range downstreamWithHierarchies {
+		downstreamFullName := downstream.Downstream().FullName()
 		if _, ok := toDeleteMap[downstreamFullName]; !ok {
-			notDeleted = append(notDeleted, downstreamFullName)
+			notDeleted = append(notDeleted, downstream)
 		}
 	}
 
 	return notDeleted, len(notDeleted) == 0
 }
 
-func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, visited map[job.FullName]bool) ([]*job.Downstream, error) {
+func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, visited map[job.FullName]bool, level int) (job.DownstreamWithHierarchyList, error) {
 	currentJobFullName := job.FullNameFrom(projectName, jobName)
-	downstreams := []*job.Downstream{}
+	downstreams := job.DownstreamWithHierarchyList{}
 	visited[currentJobFullName] = true
 	childJobs, err := j.downstreamRepo.GetDownstreamByJobName(ctx, projectName, jobName)
 	if err != nil {
@@ -828,11 +837,11 @@ func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.P
 		return nil, err
 	}
 	for _, childJob := range childJobs {
-		downstreams = append(downstreams, childJob)
+		downstreams = append(downstreams, job.NewDownstreamWithHierarchy(childJob, level))
 		if visited[childJob.FullName()] {
 			continue
 		}
-		childDownstreams, err := j.getAllDownstreams(ctx, childJob.ProjectName(), childJob.Name(), visited)
+		childDownstreams, err := j.getAllDownstreams(ctx, childJob.ProjectName(), childJob.Name(), visited, level+1)
 		if err != nil {
 			j.logger.Error("error getting all downstreams for job [%s]: %s", childJob.Name(), err)
 			return nil, err
@@ -947,7 +956,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 	for _, spec := range toDelete {
 		// TODO: reuse Delete method and pass forceFlag as false
 		fullName := job.FullNameFrom(jobTenant.ProjectName(), spec.Name())
-		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), map[job.FullName]bool{})
+		downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), map[job.FullName]bool{}, 1)
 		if err != nil {
 			j.logger.Error("error getting downstreams for job [%s]: %s", spec.Name(), err)
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] pre-delete check for job %s failed: %s", jobTenant.NamespaceName().String(), spec.Name().String(), err.Error()))
@@ -965,19 +974,20 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 
 		isDeletionFail := false
 		for i := len(downstreams) - 1; i >= 0 && !isDeletionFail; i-- {
-			if alreadyDeleted[downstreams[i].FullName()] {
+			downstream := downstreams[i].Downstream()
+			if alreadyDeleted[downstream.FullName()] {
 				continue
 			}
-			if err = j.jobRepo.Delete(ctx, downstreams[i].ProjectName(), downstreams[i].Name(), false); err != nil {
-				j.logger.Error("error deleting [%s] as downstream of [%s]", downstreams[i].Name(), spec.Name())
-				logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deleting job %s failed: %s", downstreams[i].NamespaceName().String(), downstreams[i].Name().String(), err.Error()))
+			if err = j.jobRepo.Delete(ctx, downstream.ProjectName(), downstream.Name(), false); err != nil {
+				j.logger.Error("error deleting [%s] as downstream of [%s]", downstream.Name(), spec.Name())
+				logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deleting job %s failed: %s", downstream.NamespaceName().String(), downstream.Name().String(), err.Error()))
 				me.Append(err)
 				isDeletionFail = true
 			} else {
-				alreadyDeleted[downstreams[i].FullName()] = true
+				alreadyDeleted[downstream.FullName()] = true
 				j.raiseDeleteEvent(jobTenant, spec.Name())
 				raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
-				deletedJobNames = append(deletedJobNames, downstreams[i].Name())
+				deletedJobNames = append(deletedJobNames, downstream.Name())
 			}
 		}
 
@@ -1435,7 +1445,7 @@ func (j *JobService) validateOneJobForDeletion(
 	jobTenant tenant.Tenant, spec *job.Spec,
 	specByFullName map[job.FullName]*job.Spec,
 ) []dto.ValidateResult {
-	downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), make(map[job.FullName]bool))
+	downstreams, err := j.getAllDownstreams(ctx, jobTenant.ProjectName(), spec.Name(), make(map[job.FullName]bool), 1)
 	if err != nil {
 		result := dto.ValidateResult{
 			Stage: dto.StageDeletionValidation,

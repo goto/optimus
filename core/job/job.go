@@ -560,3 +560,45 @@ type DeployState string
 func (d DeployState) String() string {
 	return string(d)
 }
+
+type DownstreamWithHierarchy struct {
+	downstream *Downstream
+	level      int
+}
+
+func NewDownstreamWithHierarchy(downstream *Downstream, level int) *DownstreamWithHierarchy {
+	return &DownstreamWithHierarchy{
+		downstream: downstream,
+		level:      level,
+	}
+}
+
+func (dh DownstreamWithHierarchy) Downstream() *Downstream {
+	return dh.downstream
+}
+
+func (dh DownstreamWithHierarchy) Level() int {
+	return dh.level
+}
+
+type DownstreamWithHierarchyList []*DownstreamWithHierarchy
+
+func (dhl DownstreamWithHierarchyList) GetUpToLevel(level int) DownstreamWithHierarchyList {
+	downstreams := DownstreamWithHierarchyList{}
+	for _, downstream := range dhl {
+		if downstream.Level() <= level {
+			downstreams = append(downstreams, downstream)
+		}
+	}
+
+	return downstreams
+}
+
+func (dhl DownstreamWithHierarchyList) ToDownstreamList() DownstreamList {
+	downstreams := DownstreamList{}
+	for _, downstream := range dhl {
+		downstreams = append(downstreams, downstream.Downstream())
+	}
+
+	return downstreams
+}

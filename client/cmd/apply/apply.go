@@ -282,12 +282,13 @@ func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.Reso
 	deletedResources := []string{}
 	for _, request := range requests {
 		_, err := client.DeleteResource(ctx, request)
+		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResourceName())
 		if err != nil {
-			c.printFailed(request.NamespaceName, "delete", "resource", request.GetResourceName(), err.Error())
+			c.printFailed(request.NamespaceName, "delete", "resource", resourceName, err.Error())
 			continue
 		}
-		c.printSuccess(request.NamespaceName, "delete", "resource", request.GetResourceName())
-		deletedResources = append(deletedResources, request.GetResourceName())
+		c.printSuccess(request.NamespaceName, "delete", "resource", resourceName)
+		deletedResources = append(deletedResources, resourceName)
 	}
 	return deletedResources
 }
@@ -296,12 +297,13 @@ func (c *applyCommand) executeResourceAdd(ctx context.Context, client pb.Resourc
 	addedResources := []string{}
 	for _, request := range requests {
 		_, err := client.CreateResource(ctx, request)
+		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResource().GetName())
 		if err != nil {
-			c.printFailed(request.NamespaceName, "add", "resource", request.GetResource().GetName(), err.Error())
+			c.printFailed(request.NamespaceName, "add", "resource", resourceName, err.Error())
 			continue
 		}
-		c.printSuccess(request.NamespaceName, "add", "resource", request.GetResource().GetName())
-		addedResources = append(addedResources, request.GetResource().GetName())
+		c.printSuccess(request.NamespaceName, "add", "resource", resourceName)
+		addedResources = append(addedResources, resourceName)
 	}
 	return addedResources
 }
@@ -310,12 +312,13 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 	migratedResources := []string{}
 	for _, request := range requests {
 		_, err := client.ChangeResourceNamespace(ctx, request)
+		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResourceName())
 		if err != nil {
-			c.printFailed(request.NamespaceName, "migrate", "resource", request.GetResourceName(), err.Error())
+			c.printFailed(request.NamespaceName, "migrate", "resource", resourceName, err.Error())
 			continue
 		}
-		c.printSuccess(request.NamespaceName, "migrate", "resource", request.GetResourceName())
-		migratedResources = append(migratedResources, request.GetResourceName())
+		c.printSuccess(request.NamespaceName, "migrate", "resource", resourceName)
+		migratedResources = append(migratedResources, resourceName)
 	}
 	return migratedResources
 }
@@ -324,12 +327,13 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 	updatedResources := []string{}
 	for _, request := range requests {
 		_, err := client.UpdateResource(ctx, request)
+		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResource().GetName())
 		if err != nil {
-			c.printFailed(request.NamespaceName, "update", "resource", request.GetResource().GetName(), err.Error())
+			c.printFailed(request.NamespaceName, "update", "resource", resourceName, err.Error())
 			continue
 		}
-		c.printSuccess(request.NamespaceName, "update", "resource", request.GetResource().GetName())
-		updatedResources = append(updatedResources, request.GetResource().GetName())
+		c.printSuccess(request.NamespaceName, "update", "resource", resourceName)
+		updatedResources = append(updatedResources, resourceName)
 	}
 	return updatedResources
 }

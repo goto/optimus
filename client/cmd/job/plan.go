@@ -206,7 +206,7 @@ func (p *planCommand) printPlan(plans plan.Plan) {
 		p.logger.Info(msg)
 	}
 
-	for namespace, planList := range plans.Resource.Migrate {
+	for namespace, planList := range plans.Job.Migrate {
 		for i := range planList {
 			msg := fmt.Sprintf("[%s] plan migrate job %v from old_namespace: %s", namespace, planList[i].GetName(), *planList[i].OldNamespace)
 			p.logger.Info(msg)

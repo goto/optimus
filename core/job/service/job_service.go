@@ -244,6 +244,8 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	jobsToBeResolved = append(jobsToBeResolved, updatedJobs...)
 	jobsToBeResolved = append(jobsToBeResolved, downstreamExistingJobs...)
 	jobsToBeResolved = append(jobsToBeResolved, downstreamUpdatedJobs...)
+	jobsToBeResolved = job.Jobs(jobsToBeResolved).Deduplicate()
+
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), jobsToBeResolved, logWriter)
 	me.Append(err)
 
@@ -315,6 +317,7 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	downstreamToBeResolved = append(downstreamToBeResolved, downstreamExistingJobs...)
 	downstreamToBeResolved = append(downstreamToBeResolved, downstreamUpdatedJobs...)
 	downstreamToBeResolved = append(downstreamToBeResolved, downstreamAddedJobs...)
+	downstreamToBeResolved = job.Jobs(downstreamToBeResolved).Deduplicate()
 
 	if len(upsertedJobs) > 0 {
 		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), append(upsertedJobs, downstreamToBeResolved...), logWriter)
@@ -720,6 +723,8 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	downstreamToBeResolved = append(downstreamToBeResolved, downstreamExistingJobs...)
 	downstreamToBeResolved = append(downstreamToBeResolved, downstreamUpdatedJobs...)
 	downstreamToBeResolved = append(downstreamToBeResolved, downstreamAddedJobs...)
+	downstreamToBeResolved = job.Jobs(downstreamToBeResolved).Deduplicate()
+
 	if err := j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, addedJobs, updatedJobs, downstreamToBeResolved); err != nil {
 		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", err)
 	}

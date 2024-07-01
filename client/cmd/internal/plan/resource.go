@@ -11,7 +11,7 @@ type ResourcePlan struct {
 	OldNamespace *string `json:"old_namespace"` // OldNamespace will be used on migrate operation
 }
 
-func (p ResourcePlan) GetName() string { return fmt.Sprintf("%s://%s", p.Datastore, p.Name) }
+func (p ResourcePlan) GetName() string { return ConstructResourceName(p.Datastore, p.Name) }
 
 func (p *ResourcePlan) SetName(name string) { p.Name = name }
 
@@ -25,4 +25,8 @@ func (p ResourcePlan) ValidDirectory(directory string) bool {
 
 func (p ResourcePlan) ParseDirectory(directory string) string {
 	return strings.TrimSuffix(directory, p.FileSuffix())
+}
+
+func ConstructResourceName(datastore, name string) string {
+	return fmt.Sprintf("%s://%s", datastore, name)
 }

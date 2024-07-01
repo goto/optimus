@@ -252,6 +252,20 @@ func (j Jobs) GetJobsWithUnresolvedStaticUpstreams() ([]*WithUpstream, error) {
 	return jobsWithUnresolvedUpstream, me.ToErr()
 }
 
+func (j Jobs) Deduplicate() []*Job {
+	jobByName := map[string]*Job{}
+	for _, subjectJob := range j {
+		jobByName[subjectJob.FullName()] = subjectJob
+	}
+	deduplicatedJobs := make([]*Job, len(jobByName))
+	i := 0
+	for _, subjectJob := range jobByName {
+		deduplicatedJobs[i] = subjectJob
+		i++
+	}
+	return deduplicatedJobs
+}
+
 type WithUpstream struct {
 	job       *Job
 	upstreams []*Upstream

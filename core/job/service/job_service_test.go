@@ -199,7 +199,9 @@ func TestJobService(t *testing.T) {
 			upstreamRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}).Return(nil)
 
 			jobNamesToUpload := []string{jobA.GetName(), jobB.GetName()}
-			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, jobNamesToUpload, emptyJobNames).Return(nil)
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, mock.MatchedBy(func(elems []string) bool {
+				return assert.ElementsMatch(t, elems, jobNamesToUpload)
+			}), emptyJobNames).Return(nil)
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 
@@ -722,7 +724,9 @@ func TestJobService(t *testing.T) {
 			upstreamRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream, jobCWithUpstream}).Return(nil)
 
 			jobNamesToUpload := []string{jobA.GetName(), jobB.GetName(), jobC.GetName()}
-			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, jobNamesToUpload, emptyJobNames).Return(nil)
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, mock.MatchedBy(func(elems []string) bool {
+				return assert.ElementsMatch(t, elems, jobNamesToUpload)
+			}), emptyJobNames).Return(nil)
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 

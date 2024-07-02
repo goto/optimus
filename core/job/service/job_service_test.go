@@ -192,7 +192,9 @@ func TestJobService(t *testing.T) {
 			upstream := job.NewUpstreamResolved("job-A", "", resourceURNA, sampleTenant, "static", taskName, false)
 			jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{})
 			jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{upstream})
-			upstreamResolver.On("BulkResolve", ctx, project.Name(), append(jobs, jobB), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil, nil)
+			upstreamResolver.On("BulkResolve", ctx, project.Name(), mock.MatchedBy(func(elems []*job.Job) bool {
+				return assert.ElementsMatch(t, elems, append(jobs, jobB))
+			}), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil, nil)
 
 			upstreamRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}).Return(nil)
 
@@ -713,7 +715,9 @@ func TestJobService(t *testing.T) {
 			jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{})
 			jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
 			jobCWithUpstream := job.NewWithUpstream(jobC, []*job.Upstream{upstream})
-			upstreamResolver.On("BulkResolve", ctx, project.Name(), append(jobs, jobB, jobC), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream, jobCWithUpstream}, nil, nil)
+			upstreamResolver.On("BulkResolve", ctx, project.Name(), mock.MatchedBy(func(elems []*job.Job) bool {
+				return assert.ElementsMatch(t, elems, append(jobs, jobB, jobC))
+			}), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream, jobCWithUpstream}, nil, nil)
 
 			upstreamRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobAWithUpstream, jobBWithUpstream, jobCWithUpstream}).Return(nil)
 

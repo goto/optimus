@@ -495,4 +495,17 @@ func TestEntityJob(t *testing.T) {
 			assert.Len(t, jobsWithUpstreams, 2)
 		})
 	})
+	t.Run("JobsDeduplicate", func(t *testing.T) {
+		t.Run("should return deduplicate jobs when there's duplication", func(t *testing.T) {
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
+			jobB := job.NewJob(sampleTenant, specB, jobADestination, jobASources, false)
+
+			jobs := []*job.Job{jobA, jobB, jobB, jobA}
+			deduplicated := job.Jobs(jobs).Deduplicate()
+			assert.Len(t, deduplicated, 2)
+			assert.ElementsMatch(t, deduplicated, []*job.Job{jobA, jobB})
+		})
+	})
 }

@@ -3843,6 +3843,134 @@ func TestJobService(t *testing.T) {
 				assert.EqualValues(t, expectedResult["job2"], actualResult["job2"])
 				assert.NoError(t, actualError)
 			})
+
+			t.Run("show only job's direct dependencies when the job has multiple-level dependencies", func(t *testing.T) {
+				// testcase for case A -> B -> C, and A & B are the jobs to be deleted
+				// when showing direct downstream,
+				tenantDetailsGetter := new(TenantDetailsGetter)
+				defer tenantDetailsGetter.AssertExpectations(t)
+
+				jobRepo := new(JobRepository)
+				defer jobRepo.AssertExpectations(t)
+
+				downstreamRepo := new(DownstreamRepository)
+				defer downstreamRepo.AssertExpectations(t)
+
+				jobRunInputCompiler := NewJobRunInputCompiler(t)
+				resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+				jobService := service.NewJobService(jobRepo, nil, downstreamRepo, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+				jobSpec1, err := job.NewSpecBuilder(1, "job1", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+				assert.NoError(t, err)
+				jobSpec2, err := job.NewSpecBuilder(1, "job2", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+				assert.NoError(t, err)
+				jobSpec3, err := job.NewSpecBuilder(1, "job3", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+				assert.NoError(t, err)
+
+				job1 := job.NewJob(sampleTenant, jobSpec1, resource.ZeroURN(), nil, false)
+				job1Downstream := job.NewDownstream(jobSpec2.Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), taskName)
+				job2Downstream := job.NewDownstream(jobSpec3.Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), taskName)
+
+				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("job1")).Return(job1, nil)
+
+				tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+				downstreamRepo.On("GetDownstreamByJobName", ctx, sampleTenant.ProjectName(), jobSpec1.Name()).Return([]*job.Downstream{job1Downstream}, nil)
+				downstreamRepo.On("GetDownstreamByJobName", ctx, sampleTenant.ProjectName(), jobSpec2.Name()).Return([]*job.Downstream{job2Downstream}, nil)
+				downstreamRepo.On("GetDownstreamByJobName", ctx, sampleTenant.ProjectName(), jobSpec3.Name()).Return([]*job.Downstream{}, nil)
+
+				request := dto.ValidateRequest{
+					Tenant:       sampleTenant,
+					JobSpecs:     nil,
+					JobNames:     []string{"job1"},
+					DeletionMode: true,
+				}
+
+				expectedResult := map[job.Name][]dto.ValidateResult{
+					"job1": {
+						{
+							Stage:    "validation for deletion",
+							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job1 will fail. job is being used by test-proj/job2"},
+							Success:  false,
+						},
+					},
+				}
+
+				actualResult, actualError := jobService.Validate(ctx, request)
+
+				assert.EqualValues(t, expectedResult["job1"], actualResult["job1"])
+				assert.NoError(t, actualError)
+			})
+
+			t.Run("show each deleted jobs' direct downstream if 2 jobs to be deleted has a common remaining dependency", func(t *testing.T) {
+				// testcase for case A -> B -> C, and A & B are the jobs to be deleted
+				// when showing direct downstream,
+				tenantDetailsGetter := new(TenantDetailsGetter)
+				defer tenantDetailsGetter.AssertExpectations(t)
+
+				jobRepo := new(JobRepository)
+				defer jobRepo.AssertExpectations(t)
+
+				downstreamRepo := new(DownstreamRepository)
+				defer downstreamRepo.AssertExpectations(t)
+
+				jobRunInputCompiler := NewJobRunInputCompiler(t)
+				resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+				jobService := service.NewJobService(jobRepo, nil, downstreamRepo, nil, nil, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker)
+
+				jobSpec1, err := job.NewSpecBuilder(1, "job1", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+				assert.NoError(t, err)
+				jobSpec2, err := job.NewSpecBuilder(1, "job2", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+				assert.NoError(t, err)
+				jobSpec3, err := job.NewSpecBuilder(1, "job3", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+				assert.NoError(t, err)
+
+				job1 := job.NewJob(sampleTenant, jobSpec1, resource.ZeroURN(), nil, false)
+				job2 := job.NewJob(sampleTenant, jobSpec2, resource.ZeroURN(), nil, false)
+				job1Downstream := job.NewDownstream(jobSpec2.Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), taskName)
+				job2Downstream := job.NewDownstream(jobSpec3.Name(), sampleTenant.ProjectName(), sampleTenant.NamespaceName(), taskName)
+
+				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("job1")).Return(job1, nil)
+				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("job2")).Return(job2, nil)
+
+				tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+				downstreamRepo.On("GetDownstreamByJobName", ctx, sampleTenant.ProjectName(), jobSpec1.Name()).Return([]*job.Downstream{job1Downstream}, nil)
+				downstreamRepo.On("GetDownstreamByJobName", ctx, sampleTenant.ProjectName(), jobSpec2.Name()).Return([]*job.Downstream{job2Downstream}, nil)
+				downstreamRepo.On("GetDownstreamByJobName", ctx, sampleTenant.ProjectName(), jobSpec3.Name()).Return([]*job.Downstream{}, nil)
+
+				request := dto.ValidateRequest{
+					Tenant:       sampleTenant,
+					JobSpecs:     nil,
+					JobNames:     []string{"job1", "job2"},
+					DeletionMode: true,
+				}
+
+				expectedResult := map[job.Name][]dto.ValidateResult{
+					"job1": {
+						{
+							Stage:    "validation for deletion",
+							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job1 will fail. job is being used by test-proj/job2"},
+							Success:  false,
+						},
+					},
+					"job2": {
+						{
+							Stage:    "validation for deletion",
+							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job2 will fail. job is being used by test-proj/job3"},
+							Success:  false,
+						},
+					},
+				}
+
+				actualResult, actualError := jobService.Validate(ctx, request)
+
+				assert.EqualValues(t, expectedResult["job1"], actualResult["job1"])
+				assert.EqualValues(t, expectedResult["job2"], actualResult["job2"])
+				assert.NoError(t, actualError)
+			})
 		})
 
 		t.Run("non-deletion mode validation", func(t *testing.T) {

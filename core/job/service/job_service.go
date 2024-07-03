@@ -857,7 +857,7 @@ func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.P
 		}
 		for i, lr := range childDownstreamsPerLevel {
 			if len(downstreamsPerLevel) <= i {
-				downstreamsPerLevel = append(downstreamsPerLevel, []*job.Downstream{})
+				downstreamsPerLevel = append(downstreamsPerLevel, []*job.Downstream{}) //nolint:makezero
 			}
 			downstreamsPerLevel[i] = append(downstreamsPerLevel[i], lr...)
 		}

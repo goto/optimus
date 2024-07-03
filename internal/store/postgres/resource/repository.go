@@ -223,3 +223,34 @@ func (r Repository) UpdateStatus(ctx context.Context, resources ...*resource.Res
 
 	return multiErr.ToErr()
 }
+
+func (r Repository) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {
+	getChangeLogQuery := `
+		SELECT
+			changes, change_type, created_at
+		FROM
+			changelog
+		WHERE
+			project_name = $1 AND name = $2 AND entity_type = $3
+		ORDER BY
+			created_at DESC;`
+
+	rows, err := r.db.Query(ctx, getChangeLogQuery, projectName, resourceName, "resource")
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, fmt.Sprintf("error while fetching changeLog for resource [%s/%s]", projectName.String(), resourceName.String()), err)
+	}
+	defer rows.Close()
+
+	me := errors.NewMultiError("get change log errors")
+	var changeLog []*resource.ChangeLog
+	for rows.Next() {
+		log, err := FromChangelogRow(rows)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		changeLog = append(changeLog, fromStorageChangelog(log))
+	}
+
+	return changeLog, me.ToErr()
+}

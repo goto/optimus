@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -205,4 +206,15 @@ func FromExisting(existing *Resource, opts ...FromExistingOpt) *Resource {
 		opt(output)
 	}
 	return output
+}
+
+type Change struct {
+	Property string
+	Diff     string
+}
+
+type ChangeLog struct {
+	Change []Change
+	Type   string
+	Time   time.Time
 }

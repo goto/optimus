@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
@@ -17,6 +19,20 @@ import (
 	"github.com/goto/optimus/internal/writer"
 )
 
+var (
+
+	// right now this is done to capture the feature adoption
+	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "get_changelog_total",
+		Help: "number of requests received for viewing changelog",
+	}, []string{"project", "resource"})
+
+	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "get_changelog_errors",
+		Help: "errors occurred in get changelog",
+	}, []string{"project", "resource", "error"})
+)
+
 type ResourceRepository interface {
 	Create(ctx context.Context, res *resource.Resource) error
 	Update(ctx context.Context, res *resource.Resource) error
@@ -25,6 +41,8 @@ type ResourceRepository interface {
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
+
+	GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error)
 }
 
 type ResourceManager interface {
@@ -555,6 +573,37 @@ func (ResourceService) isToRefreshDownstream(incoming, existing *resource.Resour
 	}
 
 	return false
+}
+
+func (rs ResourceService) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {
+	var err error
+
+	defer func() {
+		if err != nil {
+			getChangelogFailures.WithLabelValues(
+				projectName.String(),
+				resourceName.String(),
+				resource.EntityResource,
+				err.Error(),
+			).Inc()
+
+			return
+		}
+
+		getChangelogFeatureAdoption.WithLabelValues(
+			projectName.String(),
+			resourceName.String(),
+			resource.EntityResource,
+		).Inc()
+	}()
+
+	changelogs, err := rs.repo.GetChangelogs(ctx, projectName, resourceName)
+	if err != nil {
+		rs.logger.Error("error getting changelog for resource [%s]: %s", resourceName.String(), err)
+		return nil, err
+	}
+
+	return changelogs, err
 }
 
 func createFullNameToResourceMap(resources []*resource.Resource) map[string]*resource.Resource {

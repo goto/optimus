@@ -42,6 +42,8 @@ type ResourceServiceClient interface {
 	ChangeResourceNamespace(ctx context.Context, in *ChangeResourceNamespaceRequest, opts ...grpc.CallOption) (*ChangeResourceNamespaceResponse, error)
 	// apply a resource from optimus to datastore
 	ApplyResources(ctx context.Context, in *ApplyResourcesRequest, opts ...grpc.CallOption) (*ApplyResourcesResponse, error)
+	// GetResourceChangelogs get all the change logs for a specific resource
+	GetResourceChangelogs(ctx context.Context, in *GetResourceChangelogsRequest, opts ...grpc.CallOption) (*GetResourceChangelogsResponse, error)
 }
 
 type resourceServiceClient struct {
@@ -155,6 +157,15 @@ func (c *resourceServiceClient) ApplyResources(ctx context.Context, in *ApplyRes
 	return out, nil
 }
 
+func (c *resourceServiceClient) GetResourceChangelogs(ctx context.Context, in *GetResourceChangelogsRequest, opts ...grpc.CallOption) (*GetResourceChangelogsResponse, error) {
+	out := new(GetResourceChangelogsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ResourceService/GetResourceChangelogs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ResourceServiceServer is the server API for ResourceService service.
 // All implementations must embed UnimplementedResourceServiceServer
 // for forward compatibility
@@ -179,6 +190,8 @@ type ResourceServiceServer interface {
 	ChangeResourceNamespace(context.Context, *ChangeResourceNamespaceRequest) (*ChangeResourceNamespaceResponse, error)
 	// apply a resource from optimus to datastore
 	ApplyResources(context.Context, *ApplyResourcesRequest) (*ApplyResourcesResponse, error)
+	// GetResourceChangelogs get all the change logs for a specific resource
+	GetResourceChangelogs(context.Context, *GetResourceChangelogsRequest) (*GetResourceChangelogsResponse, error)
 	mustEmbedUnimplementedResourceServiceServer()
 }
 
@@ -212,6 +225,9 @@ func (UnimplementedResourceServiceServer) ChangeResourceNamespace(context.Contex
 }
 func (UnimplementedResourceServiceServer) ApplyResources(context.Context, *ApplyResourcesRequest) (*ApplyResourcesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyResources not implemented")
+}
+func (UnimplementedResourceServiceServer) GetResourceChangelogs(context.Context, *GetResourceChangelogsRequest) (*GetResourceChangelogsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetResourceChangelogs not implemented")
 }
 func (UnimplementedResourceServiceServer) mustEmbedUnimplementedResourceServiceServer() {}
 
@@ -396,6 +412,24 @@ func _ResourceService_ApplyResources_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ResourceService_GetResourceChangelogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResourceChangelogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ResourceServiceServer).GetResourceChangelogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.ResourceService/GetResourceChangelogs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ResourceServiceServer).GetResourceChangelogs(ctx, req.(*GetResourceChangelogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ResourceService_ServiceDesc is the grpc.ServiceDesc for ResourceService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -434,6 +468,10 @@ var ResourceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyResources",
 			Handler:    _ResourceService_ApplyResources_Handler,
+		},
+		{
+			MethodName: "GetResourceChangelogs",
+			Handler:    _ResourceService_GetResourceChangelogs_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

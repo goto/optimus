@@ -35,9 +35,14 @@ type ResourceService interface {
 	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
 }
 
+type ResourceChangeLogService interface {
+	GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error)
+}
+
 type ResourceHandler struct {
-	l       log.Logger
-	service ResourceService
+	l                log.Logger
+	service          ResourceService
+	changelogService ResourceChangeLogService
 
 	pb.UnimplementedResourceServiceServer
 }
@@ -424,6 +429,29 @@ func (rh ResourceHandler) ApplyResources(ctx context.Context, req *pb.ApplyResou
 	return &pb.ApplyResourcesResponse{Statuses: respStatuses}, nil
 }
 
+func (rh ResourceHandler) GetChangelogs(ctx context.Context, req *pb.GetResourceChangelogsRequest) (*pb.GetResourceChangelogsResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		return nil, errors.GRPCErr(err, "invalid project name")
+	}
+
+	resourceName, err := resource.NameFrom(req.GetResourceName())
+	if err != nil {
+		return nil, errors.GRPCErr(err, "invalid resource name")
+	}
+
+	changelogs, err := rh.changelogService.GetChangelogs(ctx, projectName, resourceName)
+	if err != nil {
+		return nil, errors.GRPCErr(err, fmt.Sprintf("unable to get changelog for resource %s", resourceName.String()))
+	}
+
+	responseChangelogs := make([]*pb.ResourceChangelog, len(changelogs))
+	for i, changelog := range changelogs {
+		responseChangelogs[i] = toChangelogProto(changelog)
+	}
+	return &pb.GetResourceChangelogsResponse{History: responseChangelogs}, nil
+}
+
 func writeError(logWriter writer.LogWriter, err error) {
 	if err == nil {
 		return
@@ -523,9 +551,26 @@ func raiseResourceDatastoreEventMetric(jobTenant tenant.Tenant, datastoreName, r
 	}).Inc()
 }
 
-func NewResourceHandler(l log.Logger, resourceService ResourceService) *ResourceHandler {
+func toChangelogProto(cl *resource.ChangeLog) *pb.ResourceChangelog {
+	pbChange := &pb.ResourceChangelog{
+		EventType: cl.Type,
+		Timestamp: cl.Time.String(),
+	}
+
+	pbChange.Change = make([]*pb.ResourceChange, len(cl.Change))
+	for i, change := range cl.Change {
+		pbChange.Change[i] = &pb.ResourceChange{
+			AttributeName: change.Property,
+			Diff:          change.Diff,
+		}
+	}
+	return pbChange
+}
+
+func NewResourceHandler(l log.Logger, resourceService ResourceService, changelogService ResourceChangeLogService) *ResourceHandler {
 	return &ResourceHandler{
-		l:       l,
-		service: resourceService,
+		l:                l,
+		service:          resourceService,
+		changelogService: changelogService,
 	}
 }

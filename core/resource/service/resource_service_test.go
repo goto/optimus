@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -1395,6 +1396,66 @@ func TestResourceService(t *testing.T) {
 			assert.Error(t, err)
 			assert.Nil(t, actual)
 		})
+	})
+
+	t.Run("GetChangelogs", func(t *testing.T) {
+		projectName := tnnt.ProjectName()
+		resourceName := "project.dataset.table"
+
+		t.Run("success fetching resource changelogs", func(t *testing.T) {
+			var (
+				mockDepResolver    = new(mockDownstreamResolver)
+				repo               = newResourceRepository(t)
+				rscService         = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
+				now                = time.Now()
+				resourceChangelogs = []*resource.ChangeLog{
+					{
+						Type: "update",
+						Time: now.Add(2 * time.Hour),
+						Change: []resource.Change{
+							{
+								Property: "metadata.Version",
+								Diff:     "- 2\n+ 3",
+							},
+						},
+					},
+					{
+						Type: "update",
+						Time: now,
+						Change: []resource.Change{
+							{
+								Property: "metadata.Description",
+								Diff:     "- a table used to get the booking\n+ detail of gofood booking",
+							},
+						},
+					},
+				}
+			)
+			defer repo.AssertExpectations(t)
+
+			repo.On("GetChangelogs", ctx, projectName, resource.Name(resourceName)).Return(resourceChangelogs, nil).Once()
+
+			actualChangelogs, err := rscService.GetChangelogs(ctx, projectName, resource.Name(resourceName))
+			assert.NoError(t, err)
+			assert.NotNil(t, actualChangelogs)
+			assert.Equal(t, resourceChangelogs, actualChangelogs)
+		})
+
+		t.Run("error fetching resource changelogs", func(t *testing.T) {
+			var (
+				mockDepResolver = new(mockDownstreamResolver)
+				repo            = newResourceRepository(t)
+				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
+			)
+			defer repo.AssertExpectations(t)
+
+			repo.On("GetChangelogs", ctx, projectName, resource.Name(resourceName)).Return(nil, errors.New("error")).Once()
+
+			actualChangelogs, err := rscService.GetChangelogs(ctx, projectName, resource.Name(resourceName))
+			assert.Error(t, err)
+			assert.Nil(t, actualChangelogs)
+		})
+
 	})
 }
 

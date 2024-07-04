@@ -25,12 +25,12 @@ var (
 	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_changelog_total",
 		Help: "number of requests received for viewing changelog",
-	}, []string{"project", "resource"})
+	}, []string{"project", "resource", "type"})
 
 	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_changelog_errors",
 		Help: "errors occurred in get changelog",
-	}, []string{"project", "resource", "error"})
+	}, []string{"project", "resource", "type", "error"})
 )
 
 type ResourceRepository interface {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -1398,65 +1397,6 @@ func TestResourceService(t *testing.T) {
 		})
 	})
 
-	t.Run("GetChangelogs", func(t *testing.T) {
-		projectName := tnnt.ProjectName()
-		resourceName := "project.dataset.table"
-
-		t.Run("success fetching resource changelogs", func(t *testing.T) {
-			var (
-				mockDepResolver    = new(mockDownstreamResolver)
-				repo               = newResourceRepository(t)
-				rscService         = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
-				now                = time.Now()
-				resourceChangelogs = []*resource.ChangeLog{
-					{
-						Type: "update",
-						Time: now.Add(2 * time.Hour),
-						Change: []resource.Change{
-							{
-								Property: "metadata.Version",
-								Diff:     "- 2\n+ 3",
-							},
-						},
-					},
-					{
-						Type: "update",
-						Time: now,
-						Change: []resource.Change{
-							{
-								Property: "metadata.Description",
-								Diff:     "- a table used to get the booking\n+ detail of gofood booking",
-							},
-						},
-					},
-				}
-			)
-			defer repo.AssertExpectations(t)
-
-			repo.On("GetChangelogs", ctx, projectName, resource.Name(resourceName)).Return(resourceChangelogs, nil).Once()
-
-			actualChangelogs, err := rscService.GetChangelogs(ctx, projectName, resource.Name(resourceName))
-			assert.NoError(t, err)
-			assert.NotNil(t, actualChangelogs)
-			assert.Equal(t, resourceChangelogs, actualChangelogs)
-		})
-
-		t.Run("error fetching resource changelogs", func(t *testing.T) {
-			var (
-				mockDepResolver = new(mockDownstreamResolver)
-				repo            = newResourceRepository(t)
-				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver)
-			)
-			defer repo.AssertExpectations(t)
-
-			repo.On("GetChangelogs", ctx, projectName, resource.Name(resourceName)).Return(nil, errors.New("error")).Once()
-
-			actualChangelogs, err := rscService.GetChangelogs(ctx, projectName, resource.Name(resourceName))
-			assert.Error(t, err)
-			assert.Nil(t, actualChangelogs)
-		})
-
-	})
 }
 
 type mockResourceRepository struct {
@@ -1501,36 +1441,6 @@ func (m *mockResourceRepository) GetResources(ctx context.Context, tnnt tenant.T
 
 func (m *mockResourceRepository) Delete(ctx context.Context, res *resource.Resource) error {
 	return m.Called(ctx, res).Error(0)
-}
-
-// GetChangelogs provides a mock function with given fields: ctx, projectName, resourceName
-func (m *mockResourceRepository) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {
-	ret := m.Called(ctx, projectName, resourceName)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetChangelogs")
-	}
-
-	var r0 []*resource.ChangeLog
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, resource.Name) ([]*resource.ChangeLog, error)); ok {
-		return rf(ctx, projectName, resourceName)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, resource.Name) []*resource.ChangeLog); ok {
-		r0 = rf(ctx, projectName, resourceName)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*resource.ChangeLog)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, resource.Name) error); ok {
-		r1 = rf(ctx, projectName, resourceName)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
 }
 
 type mockConstructorTestingTNewResourceRepository interface {

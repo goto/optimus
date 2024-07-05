@@ -19,6 +19,9 @@ import (
 const (
 	columnsToStore  = `full_name, kind, store, status, urn, project_name, namespace_name, metadata, spec, created_at, updated_at`
 	resourceColumns = `id, ` + columnsToStore
+
+	changelogColumnsToStore = `entity_type, name, project_name, change_type, changes, created_at`
+	changelogColumnsToFetch = `changes, change_type, created_at`
 )
 
 var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -96,10 +99,7 @@ func (r Repository) insertChangelog(ctx context.Context, projectName tenant.Proj
 		return err
 	}
 
-	insertChangeLogQuery := `INSERT INTO changelog
-		(entity_type, name, project_name, change_type, changes, created_at)
-		VALUES
-		($1, $2, $3, $4, $5, NOW());`
+	insertChangeLogQuery := `INSERT INTO changelog ` + changelogColumnsToStore + ` VALUES ($1, $2, $3, $4, $5, NOW());`
 
 	res, err := r.db.Exec(ctx, insertChangeLogQuery, resource.EntityResource, resourceName, projectName,
 		changeType, string(changesEncoded))
@@ -325,10 +325,7 @@ func (r Repository) UpdateStatus(ctx context.Context, resources ...*resource.Res
 
 func (r Repository) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {
 	getChangeLogQuery := `
-		SELECT
-			changes, change_type, created_at
-		FROM
-			changelog
+		SELECT ` + changelogColumnsToFetch + ` FROM changelog
 		WHERE
 			project_name = $1 AND name = $2 AND entity_type = $3
 		ORDER BY

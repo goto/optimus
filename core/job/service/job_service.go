@@ -44,12 +44,12 @@ var (
 	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_changelog_total",
 		Help: "number of requests received for viewing changelog",
-	}, []string{"project", "job"})
+	}, []string{"project", "job", "type"})
 
 	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_changelog_errors",
 		Help: "errors occurred in get changelog",
-	}, []string{"project", "job", "error"})
+	}, []string{"project", "job", "type", "error"})
 )
 
 type JobService struct {
@@ -459,12 +459,14 @@ func (j *JobService) GetChangelog(ctx context.Context, projectName tenant.Projec
 		getChangelogFailures.WithLabelValues(
 			projectName.String(),
 			jobName.String(),
+			job.EntityJob,
 			err.Error(),
 		).Inc()
 	}
 	getChangelogFeatureAdoption.WithLabelValues(
 		projectName.String(),
 		jobName.String(),
+		job.EntityJob,
 	).Inc()
 
 	return changelog, err

@@ -19,12 +19,12 @@ var (
 	// right now this is done to capture the feature adoption
 	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_resource_changelog_total",
-		Help: "number of requests received for viewing changelog",
+		Help: "number of requests received for viewing resource changelog",
 	}, []string{"project", "resource", "type"})
 
 	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_resource_changelog_errors",
-		Help: "errors occurred in get changelog",
+		Help: "errors occurred in get resource changelog",
 	}, []string{"project", "resource", "type", "error"})
 )
 

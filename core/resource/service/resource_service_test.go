@@ -1396,7 +1396,6 @@ func TestResourceService(t *testing.T) {
 			assert.Nil(t, actual)
 		})
 	})
-
 }
 
 type mockResourceRepository struct {

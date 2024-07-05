@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goto/optimus/core/resource"
-	"github.com/goto/optimus/core/resource/service"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/resource/service"
+	"github.com/goto/optimus/core/tenant"
 )
 
 func TestChangelogService(t *testing.T) {
@@ -75,7 +76,6 @@ func TestChangelogService(t *testing.T) {
 			assert.Error(t, err)
 			assert.Nil(t, actualChangelogs)
 		})
-
 	})
 }
 
@@ -119,7 +119,8 @@ func (_m *ChangelogRepository) GetChangelogs(ctx context.Context, projectName te
 func newChangelogRepository(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *ChangelogRepository {
+},
+) *ChangelogRepository {
 	mock := &ChangelogRepository{}
 	mock.Mock.Test(t)
 

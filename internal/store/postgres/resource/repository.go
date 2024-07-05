@@ -2,20 +2,35 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils"
 )
 
 const (
 	columnsToStore  = `full_name, kind, store, status, urn, project_name, namespace_name, metadata, spec, created_at, updated_at`
 	resourceColumns = `id, ` + columnsToStore
 )
+
+var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "resource_repository_changelog_metrics_error",
+	Help: "success or failure metrics",
+}, []string{"project", "namespace", "name", "msg"})
+
+var changelogIgnoredFields = map[string]struct{}{
+	"ID":        {},
+	"CreatedAt": {},
+	"UpdatedAt": {},
+}
 
 type Repository struct {
 	db *pgxpool.Pool
@@ -37,6 +52,86 @@ func (r Repository) Create(ctx context.Context, resourceModel *resource.Resource
 }
 
 func (r Repository) Update(ctx context.Context, resourceModel *resource.Resource) error {
+	existing, err := r.ReadByFullName(ctx, resourceModel.Tenant(), resourceModel.Store(), resourceModel.FullName(), true)
+	if err != nil {
+		return err
+	}
+
+	if err := r.doUpdate(ctx, resourceModel); err != nil {
+		return err
+	}
+
+	if err := r.computeAndPersistChangeLog(ctx, existing, resourceModel); err != nil {
+		// do not return the error
+		changelogMetrics.WithLabelValues(
+			resourceModel.Tenant().ProjectName().String(),
+			resourceModel.Tenant().NamespaceName().String(),
+			resourceModel.Name().String(),
+			err.Error(),
+		).Inc()
+	}
+
+	return nil
+}
+
+func (r Repository) computeAndPersistChangeLog(ctx context.Context, existing, incoming *resource.Resource) error {
+	existingModel := FromResourceToModel(existing)
+	incomingModel := FromResourceToModel(incoming)
+
+	changes, err := getResourceDiffs(existingModel, incomingModel)
+	if err != nil {
+		return err
+	}
+
+	return r.insertChangelog(ctx, incoming.Tenant().ProjectName(), incoming.Name(), changes, resource.ChangelogChangeTypeUpdate)
+}
+
+func (r Repository) insertChangelog(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name, changes []Change, changeType string) error {
+	changesEncoded, err := json.Marshal(changes)
+	if err != nil {
+		return err
+	}
+
+	insertChangeLogQuery := `INSERT INTO changelog
+		(entity_type, name, project_name, change_type, changes, created_at)
+		VALUES
+		($1, $2, $3, $4, $5, NOW());`
+
+	res, err := r.db.Exec(ctx, insertChangeLogQuery, resource.EntityResource, resourceName, projectName,
+		changeType, string(changesEncoded))
+	if err != nil {
+		return errors.Wrap(resource.EntityResourceChangelog, "unable to insert resource changelog", err)
+	}
+
+	if res.RowsAffected() == 0 {
+		return errors.InternalError(resource.EntityResourceChangelog, "unable to insert resource changelog: rows affected 0", nil)
+	}
+
+	return err
+}
+
+func getResourceDiffs(existing, incoming *Resource) ([]Change, error) {
+	var changes []Change
+	diff, err := utils.GetDiffs(*existing, *incoming, nil)
+	if err != nil {
+		return changes, err
+	}
+
+	for _, d := range diff {
+		if _, ignored := changelogIgnoredFields[d.Field]; ignored {
+			continue
+		}
+
+		changes = append(changes, Change{
+			Property: d.Field,
+			Diff:     d.Diff,
+		})
+	}
+
+	return changes, nil
+}
+
+func (r Repository) doUpdate(ctx context.Context, resourceModel *resource.Resource) error {
 	res := FromResourceToModel(resourceModel)
 
 	updateResource := `UPDATE resource SET kind=$1, status=$2, urn=$3, metadata=$4, spec=$5, updated_at=now() 

@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/goto/optimus/core/resource"
 	serviceResource "github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -416,7 +415,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 	})
 }
 
-func insertTestResourceChangelog(pool *pgxpool.Pool, resourceName resource.Name, projectName tenant.ProjectName, changelogs []*repoResource.ChangeLog) {
+func insertTestResourceChangelog(pool *pgxpool.Pool, resourceName serviceResource.Name, projectName tenant.ProjectName, changelogs []*repoResource.ChangeLog) {
 	ctx := context.Background()
 	query := `INSERT INTO changelog ( entity_type , name , project_name , change_type , changes , created_at )
 	VALUES ($1, $2, $3, $4, $5, NOW())`

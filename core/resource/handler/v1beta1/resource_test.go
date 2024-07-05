@@ -17,7 +17,6 @@ import (
 	"github.com/goto/optimus/core/resource/handler/v1beta1"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/writer"
-	optimus "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -1161,7 +1160,7 @@ func TestResourceHandler(t *testing.T) {
 					},
 				}
 
-				expectedChangelogs = &optimus.GetResourceChangelogsResponse{
+				expectedChangelogs = &pb.GetResourceChangelogsResponse{
 					History: []*pb.ResourceChangelog{
 						{
 							EventType: "update",
@@ -1346,7 +1345,8 @@ func (_m *ResourceChangeLogService) GetChangelogs(ctx context.Context, projectNa
 func newResourceChangeLogService(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *ResourceChangeLogService {
+},
+) *ResourceChangeLogService {
 	mock := &ResourceChangeLogService{}
 	mock.Mock.Test(t)
 

@@ -3,10 +3,11 @@ package resource
 import (
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/jackc/pgx/v5"
 )
 
 type Change struct {

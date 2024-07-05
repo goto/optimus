@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 
-	"github.com/goto/optimus/core/resource"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/tenant"
 )
 
 type ChangelogRepository interface {
@@ -17,12 +18,12 @@ type ChangelogRepository interface {
 var (
 	// right now this is done to capture the feature adoption
 	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "get_changelog_total",
+		Name: "get_resource_changelog_total",
 		Help: "number of requests received for viewing changelog",
 	}, []string{"project", "resource", "type"})
 
 	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "get_changelog_errors",
+		Name: "get_resource_changelog_errors",
 		Help: "errors occurred in get changelog",
 	}, []string{"project", "resource", "type", "error"})
 )

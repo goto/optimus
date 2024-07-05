@@ -83,6 +83,10 @@ func (r Repository) computeAndPersistChangeLog(ctx context.Context, existing, in
 		return err
 	}
 
+	if len(changes) == 0 {
+		return nil
+	}
+
 	return r.insertChangelog(ctx, incoming.Tenant().ProjectName(), incoming.Name(), changes, resource.ChangelogChangeTypeUpdate)
 }
 

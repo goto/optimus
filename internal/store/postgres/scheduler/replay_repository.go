@@ -215,24 +215,12 @@ func (r ReplayRepository) UpdateReplay(ctx context.Context, id uuid.UUID, replay
 }
 
 func (r ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (map[string]string, error) {
-	getReplayRequest := `SELECT job_config FROM replay_request WHERE job_name=$1 AND namespace_name=$2 AND project_name=$3 AND start_time<=$4 AND $4<=end_time ORDER BY created_at ASC`
-	rows, err := r.db.Query(ctx, getReplayRequest, jobName, jobTenant.NamespaceName(), jobTenant.ProjectName(), scheduledAt)
-	if err != nil {
-		return nil, errors.Wrap(job.EntityJob, "unable to get replay job configs", err)
-	}
-	defer rows.Close()
-
+	getReplayRequest := `SELECT job_config FROM replay_request WHERE job_name=$1 AND namespace_name=$2 AND project_name=$3 AND start_time<=$4 AND $4<=end_time AND status=$5 ORDER BY created_at DESC LIMIT 1`
 	configs := map[string]string{}
-	for rows.Next() {
-		var rr replayRequest
-		if err := rows.Scan(&rr.JobConfig); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, errors.NotFound(job.EntityJob, fmt.Sprintf("no replay found for scheduledAt %s", scheduledAt.String()))
-			}
-			return nil, errors.Wrap(scheduler.EntityJobRun, "unable to get the stored replay job cnfig", err)
-		}
-		for k, v := range rr.JobConfig {
-			configs[k] = v
+	if err := r.db.QueryRow(ctx, getReplayRequest, jobName, jobTenant.NamespaceName(), jobTenant.ProjectName(), scheduledAt, scheduler.ReplayStateInProgress.String()).
+		Scan(&configs); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.Wrap(job.EntityJob, "unable to get replay job configs", err)
 		}
 	}
 	return configs, nil

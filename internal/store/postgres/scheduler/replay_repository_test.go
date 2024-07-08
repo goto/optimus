@@ -154,17 +154,40 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			scheduledAt, _ := time.Parse(scheduler.ISODateFormat, "2022-01-02T15:04:05Z")
 
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{"EXECUTION_PROJECT": "example1"}, description)
-			replayReq := scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateCreated)
+			replayReq := scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateInProgress)
 			_, err := replayRepo.RegisterReplay(ctx, replayReq, jobRunsAllPending)
 			assert.Nil(t, err)
 			replayConfig = scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description)
-			replayReq = scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateCreated)
+			replayReq = scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateInProgress)
 			_, err = replayRepo.RegisterReplay(ctx, replayReq, jobRunsAllPending)
 			assert.Nil(t, err)
 
 			actualReplayJobConfig, err := replayRepo.GetReplayJobConfig(ctx, tnnt, jobBName, scheduledAt)
 			assert.Nil(t, err)
 			assert.Equal(t, replayJobConfig, actualReplayJobConfig)
+		})
+		t.Run("return latest in progress replay task config for the same filter", func(t *testing.T) {
+			db := dbSetup()
+			replayRepo := postgres.NewReplayRepository(db)
+			startTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-01T15:04:05Z")
+			endTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-03T15:04:05Z")
+			scheduledAt, _ := time.Parse(scheduler.ISODateFormat, "2022-01-02T15:04:05Z")
+
+			firstJobConfig := map[string]string{"EXECUTION_PROJECT": "example1"}
+			firstReplayConfig := scheduler.NewReplayConfig(startTime, endTime, true, firstJobConfig, description)
+			replayReq := scheduler.NewReplayRequest(jobBName, tnnt, firstReplayConfig, scheduler.ReplayStateInProgress)
+			_, err := replayRepo.RegisterReplay(ctx, replayReq, jobRunsAllPending)
+			assert.Nil(t, err)
+
+			secondJobConfig := map[string]string{"EXECUTION_PROJECT": "example2"}
+			secondReplayConfig := scheduler.NewReplayConfig(startTime, endTime, true, secondJobConfig, description)
+			replayReq = scheduler.NewReplayRequest(jobBName, tnnt, secondReplayConfig, scheduler.ReplayStateInProgress)
+			_, err = replayRepo.RegisterReplay(ctx, replayReq, jobRunsAllPending)
+			assert.Nil(t, err)
+
+			actualReplayJobConfig, err := replayRepo.GetReplayJobConfig(ctx, tnnt, jobBName, scheduledAt)
+			assert.Nil(t, err)
+			assert.Equal(t, secondJobConfig, actualReplayJobConfig)
 		})
 		t.Run("return empty replay task config when there's no extra config in replay config", func(t *testing.T) {
 			db := dbSetup()
@@ -174,7 +197,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			scheduledAt, _ := time.Parse(scheduler.ISODateFormat, "2022-01-02T15:04:05Z")
 
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
-			replayReq := scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateCreated)
+			replayReq := scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateInProgress)
 			_, err := replayRepo.RegisterReplay(ctx, replayReq, jobRunsAllPending)
 			assert.Nil(t, err)
 

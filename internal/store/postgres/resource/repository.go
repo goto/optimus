@@ -99,7 +99,7 @@ func (r Repository) insertChangelog(ctx context.Context, projectName tenant.Proj
 		return err
 	}
 
-	insertChangeLogQuery := `INSERT INTO changelog ` + changelogColumnsToStore + ` VALUES ($1, $2, $3, $4, $5, NOW());`
+	insertChangeLogQuery := `INSERT INTO changelog (` + changelogColumnsToStore + `) VALUES ($1, $2, $3, $4, $5, NOW());`
 
 	res, err := r.db.Exec(ctx, insertChangeLogQuery, resource.EntityResource, resourceName, projectName,
 		changeType, string(changesEncoded))

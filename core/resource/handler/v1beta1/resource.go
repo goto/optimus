@@ -429,7 +429,7 @@ func (rh ResourceHandler) ApplyResources(ctx context.Context, req *pb.ApplyResou
 	return &pb.ApplyResourcesResponse{Statuses: respStatuses}, nil
 }
 
-func (rh ResourceHandler) GetChangelogs(ctx context.Context, req *pb.GetResourceChangelogsRequest) (*pb.GetResourceChangelogsResponse, error) {
+func (rh ResourceHandler) GetResourceChangelogs(ctx context.Context, req *pb.GetResourceChangelogsRequest) (*pb.GetResourceChangelogsResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		return nil, errors.GRPCErr(err, "invalid project name")

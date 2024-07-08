@@ -1124,7 +1124,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 	})
 
-	t.Run("GetChangelogs", func(t *testing.T) {
+	t.Run("GetResourceChangelogs", func(t *testing.T) {
 		resourceName := "project.dataset.test_table"
 
 		t.Run("successfully get all changelogs for the resource", func(t *testing.T) {
@@ -1190,7 +1190,7 @@ func TestResourceHandler(t *testing.T) {
 
 			changelogService.On("GetChangelogs", ctx, tnnt.ProjectName(), resource.Name(resourceName)).Return(resourceChangelogs, nil)
 
-			res, err := handler.GetChangelogs(ctx, req)
+			res, err := handler.GetResourceChangelogs(ctx, req)
 			assert.NoError(t, err)
 			assert.NotNil(t, res)
 			assert.Equal(t, expectedChangelogs, res)

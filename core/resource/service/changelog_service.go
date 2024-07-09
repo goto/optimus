@@ -17,15 +17,10 @@ type ChangelogRepository interface {
 
 var (
 	// right now this is done to capture the feature adoption
-	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "get_resource_changelog_total",
-		Help: "number of requests received for viewing resource changelog",
-	}, []string{"project", "resource", "type"})
-
 	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "get_resource_changelog_errors",
 		Help: "errors occurred in get resource changelog",
-	}, []string{"project", "resource", "type", "error"})
+	}, []string{"project", "resource", "error"})
 )
 
 type ChangelogService struct {
@@ -41,31 +36,14 @@ func NewChangelogService(logger log.Logger, repo ChangelogRepository) *Changelog
 }
 
 func (cs ChangelogService) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {
-	var err error
-
-	defer func() {
-		if err != nil {
-			getChangelogFailures.WithLabelValues(
-				projectName.String(),
-				resourceName.String(),
-				resource.EntityResource,
-				err.Error(),
-			).Inc()
-
-			return
-		}
-
-		getChangelogFeatureAdoption.WithLabelValues(
-			projectName.String(),
-			resourceName.String(),
-			resource.EntityResource,
-		).Inc()
-	}()
-
 	changelogs, err := cs.repo.GetChangelogs(ctx, projectName, resourceName)
 	if err != nil {
 		cs.logger.Error("error getting changelog for resource [%s]: %s", resourceName.String(), err)
-		return nil, err
+		getChangelogFailures.WithLabelValues(
+			projectName.String(),
+			resourceName.String(),
+			err.Error(),
+		).Inc()
 	}
 
 	return changelogs, err

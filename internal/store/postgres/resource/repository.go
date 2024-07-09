@@ -326,10 +326,7 @@ func (r Repository) UpdateStatus(ctx context.Context, resources ...*resource.Res
 func (r Repository) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {
 	getChangeLogQuery := `
 		SELECT ` + changelogColumnsToFetch + ` FROM changelog
-		WHERE
-			project_name = $1 AND name = $2 AND entity_type = $3
-		ORDER BY
-			created_at DESC;`
+		WHERE project_name = $1 AND name = $2 AND entity_type = $3;`
 
 	rows, err := r.db.Query(ctx, getChangeLogQuery, projectName, resourceName, "resource")
 	if err != nil {

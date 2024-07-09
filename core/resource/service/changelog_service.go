@@ -15,13 +15,11 @@ type ChangelogRepository interface {
 	GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error)
 }
 
-var (
-	// right now this is done to capture the feature adoption
-	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "get_resource_changelog_errors",
-		Help: "errors occurred in get resource changelog",
-	}, []string{"project", "resource", "error"})
-)
+// right now this is done to capture the feature adoption
+var getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "get_resource_changelog_errors",
+	Help: "errors occurred in get resource changelog",
+}, []string{"project", "resource", "error"})
 
 type ChangelogService struct {
 	repo   ChangelogRepository

@@ -3,18 +3,17 @@ package service
 import (
 	"context"
 
-	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/tenant"
 )
 
-var (
-	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "get_changelog_errors",
-		Help: "errors occurred in get changelog",
-	}, []string{"project", "job", "error"})
-)
+var getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "get_changelog_errors",
+	Help: "errors occurred in get changelog",
+}, []string{"project", "job", "error"})
 
 type ChangeLogService struct {
 	jobRepo JobRepository

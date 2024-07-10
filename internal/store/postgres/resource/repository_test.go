@@ -377,6 +377,55 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.Nil(t, storedResources)
 		})
 	})
+
+	t.Run("GetChangelogs", func(t *testing.T) {
+		t.Run("return empty for a resource", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceName := "project.dataset.table"
+
+			changelogs, err := repository.GetChangelogs(ctx, tnnt.ProjectName(), serviceResource.Name(resourceName))
+			assert.NoError(t, err)
+			assert.Len(t, changelogs, 0)
+		})
+
+		t.Run("return changelogs for a specific resource", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceName := serviceResource.Name("project.dataset.table")
+			changelogs := []*repoResource.ChangeLog{
+				{
+					Type: "update",
+					Change: []repoResource.Change{
+						{
+							Property: "metadata",
+							Diff:     "- + ",
+						},
+					},
+				},
+			}
+			insertTestResourceChangelog(pool, resourceName, tnnt.ProjectName(), changelogs)
+
+			actualChangelogs, err := repository.GetChangelogs(ctx, tnnt.ProjectName(), resourceName)
+			assert.NoError(t, err)
+			assert.Len(t, actualChangelogs, len(changelogs))
+		})
+	})
+}
+
+func insertTestResourceChangelog(pool *pgxpool.Pool, resourceName serviceResource.Name, projectName tenant.ProjectName, changelogs []*repoResource.ChangeLog) {
+	ctx := context.Background()
+	query := `INSERT INTO changelog ( entity_type , name , project_name , change_type , changes , created_at )
+	VALUES ($1, $2, $3, $4, $5, NOW())`
+
+	for _, cl := range changelogs {
+		_, err := pool.Exec(ctx, query, "resource", resourceName, projectName, cl.Type, cl.Change)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func dbSetup() *pgxpool.Pool {

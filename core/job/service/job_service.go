@@ -9,8 +9,6 @@ import (
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
@@ -36,20 +34,6 @@ const (
 	// projectConfigPrefix will be used to prefix all the config variables of
 	// a project, i.e. registered entities
 	projectConfigPrefix = "GLOBAL__"
-)
-
-var (
-
-	// right now this is done to capture the feature adoption
-	getChangelogFeatureAdoption = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "get_changelog_total",
-		Help: "number of requests received for viewing changelog",
-	}, []string{"project", "job"})
-
-	getChangelogFailures = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "get_changelog_errors",
-		Help: "errors occurred in get changelog",
-	}, []string{"project", "job", "error"})
 )
 
 type JobService struct {
@@ -451,23 +435,6 @@ func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenan
 	}
 	j.raiseUpdateEvent(newJobSpec, job.UnspecifiedImpactChange)
 	return nil
-}
-
-func (j *JobService) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
-	changelog, err := j.jobRepo.GetChangelog(ctx, projectName, jobName)
-	if err != nil {
-		getChangelogFailures.WithLabelValues(
-			projectName.String(),
-			jobName.String(),
-			err.Error(),
-		).Inc()
-	}
-	getChangelogFeatureAdoption.WithLabelValues(
-		projectName.String(),
-		jobName.String(),
-	).Inc()
-
-	return changelog, err
 }
 
 func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (*job.Job, error) {

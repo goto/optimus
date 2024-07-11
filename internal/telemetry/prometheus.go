@@ -22,8 +22,6 @@ var (
 	}, []string{"entity", "msg"})
 )
 
-const metricsPushJob = "optimus_push"
-
 func LogPanic(entity, message string) {
 	panicMetric.WithLabelValues(entity, message).Inc()
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
-	"github.com/goto/optimus/internal/telemetry"
 )
 
 type metricType string
@@ -39,6 +38,11 @@ var jobRunEventsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "operator_stats",
 	Help: "total job run events received",
 }, []string{"operator_name", "event_type"})
+
+var jobRunDdurationsBreakdownSeconds = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "jobrun_durations_breakdown_seconds",
+	Help: "operator wise time spent",
+}, []string{"project", "namespace", "job", "type"})
 
 type JobRepository interface {
 	GetJob(ctx context.Context, name tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
@@ -347,12 +351,13 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		return err
 	}
 
-	telemetry.NewGauge("jobrun_durations_breakdown_seconds", map[string]string{
-		"project":   tenant.ProjectName().String(),
-		"namespace": tenant.NamespaceName().String(),
-		"job":       jobName.String(),
-		"type":      scheduleDelay.String(),
-	}).Set(float64(time.Now().Unix() - scheduledAt.Unix()))
+	jobRunDdurationsBreakdownSeconds.WithLabelValues(
+		tenant.ProjectName().String(),
+		tenant.NamespaceName().String(),
+		jobName.String(),
+		scheduleDelay.String(),
+	).Set(float64(time.Now().Unix() - scheduledAt.Unix()))
+
 	return nil
 }
 
@@ -567,12 +572,13 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 		s.l.Error("error updating operator run id [%s]: %s", operatorRun.ID, err)
 		return err
 	}
-	telemetry.NewGauge("jobrun_durations_breakdown_seconds", map[string]string{
-		"project":   event.Tenant.ProjectName().String(),
-		"namespace": event.Tenant.NamespaceName().String(),
-		"job":       event.JobName.String(),
-		"type":      operatorType.String(),
-	}).Set(float64(event.EventTime.Unix() - operatorRun.StartTime.Unix()))
+	jobRunDdurationsBreakdownSeconds.WithLabelValues(
+		event.Tenant.ProjectName().String(),
+		event.Tenant.NamespaceName().String(),
+		event.JobName.String(),
+		operatorType.String(),
+	).Set(float64(event.EventTime.Unix() - operatorRun.StartTime.Unix()))
+
 	return nil
 }
 

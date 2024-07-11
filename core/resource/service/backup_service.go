@@ -6,21 +6,25 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/telemetry"
 )
 
 const (
 	// recentBackupWindowMonths contains the window interval to consider for recent backups
 	recentBackupWindowMonths = -3
 
-	metricBackupRequest        = "resource_backup_requests_total"
 	backupRequestStatusSuccess = "success"
 	backupRequestStatusFailed  = "failed"
 )
+
+var backupRequestMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "resource_backup_requests_total",
+}, []string{"project", "namespace", "resource", "status"})
 
 type BackupRepository interface {
 	GetByID(ctx context.Context, id resource.BackupID) (*resource.Backup, error)
@@ -142,10 +146,10 @@ func raiseBackupRequestMetrics(jobTenant tenant.Tenant, backupResult *resource.B
 }
 
 func raiseBackupRequestMetric(jobTenant tenant.Tenant, resourceName, state string) {
-	telemetry.NewCounter(metricBackupRequest, map[string]string{
-		"project":   jobTenant.ProjectName().String(),
-		"namespace": jobTenant.NamespaceName().String(),
-		"resource":  resourceName,
-		"status":    state,
-	}).Inc()
+	backupRequestMetric.WithLabelValues(
+		jobTenant.ProjectName().String(),
+		jobTenant.NamespaceName().String(),
+		resourceName,
+		state,
+	).Inc()
 }

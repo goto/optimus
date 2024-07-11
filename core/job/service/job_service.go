@@ -22,7 +22,6 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/optimus/sdk/plugin"
 )
@@ -802,11 +801,10 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 			status = "failed"
 		}
 
-		counter := telemetry.NewCounter(job.MetricJobRefreshResourceDownstream, map[string]string{
-			"project": projectName.String(),
-			"status":  status,
-		})
-		counter.Add(float64(len(jobNames)))
+		job.RefreshResourceDownstreamMetric.WithLabelValues(
+			projectName.String(),
+			status,
+		).Add(float64(len(jobNames)))
 	}
 
 	return me.ToErr()
@@ -1329,11 +1327,11 @@ func (*JobService) groupDownstreamPerProject(downstreams []*job.Downstream) map[
 }
 
 func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int) {
-	telemetry.NewCounter(job.MetricJobEvent, map[string]string{
-		"project":   jobTenant.ProjectName().String(),
-		"namespace": jobTenant.NamespaceName().String(),
-		"status":    state,
-	}).Add(float64(metricValue))
+	job.EventMetric.WithLabelValues(
+		jobTenant.ProjectName().String(),
+		jobTenant.NamespaceName().String(),
+		state,
+	).Add(float64(metricValue))
 }
 
 func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]resource.URN, error) {
@@ -1937,14 +1935,12 @@ func (*JobService) validateWindow(tenantDetails *tenant.WithDetails, windowConfi
 }
 
 func registerJobValidationMetric(tnnt tenant.Tenant, stage dto.ValidateStage, success bool) {
-	counter := telemetry.NewCounter(job.MetricJobValidation, map[string]string{
-		"project":   tnnt.ProjectName().String(),
-		"namespace": tnnt.NamespaceName().String(),
-		"stage":     stage.String(),
-		"success":   fmt.Sprintf("%t", success),
-	})
-
-	counter.Add(1)
+	job.ValidationMetric.WithLabelValues(
+		tnnt.ProjectName().String(),
+		tnnt.NamespaceName().String(),
+		stage.String(),
+		fmt.Sprintf("%t", success),
+	).Add(1)
 }
 
 func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (job.DownstreamList, error) {

@@ -13,7 +13,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
-	"github.com/goto/optimus/internal/telemetry"
 )
 
 const (
@@ -52,6 +51,8 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 	defer cancelFn()
 
 	w.logger.Info("[ReplayID: %s] starting to execute replay", replayID)
+	project := jobTenant.ProjectName().String()
+	namespace := jobTenant.NamespaceName().String()
 
 	jobCron, err := getJobCron(ctx, w.logger, w.jobRepo, jobTenant, jobName)
 	if err != nil {
@@ -59,7 +60,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 		if err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateFailed, err.Error()); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to update replay to failed: %s", replayID, err.Error())
 		}
-		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)
+		jobReplayMetric.WithLabelValues(project, namespace, jobName.String(), scheduler.ReplayStateFailed.String()).Inc()
 		return
 	}
 
@@ -76,7 +77,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 		if err := w.replayRepo.UpdateReplayStatus(cleanupCtx, replayID, scheduler.ReplayStateFailed, errMessage); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to set replay status to 'failed': %s", replayID, err.Error())
 		}
-		raiseReplayMetric(jobTenant, jobName, scheduler.ReplayStateFailed)
+		jobReplayMetric.WithLabelValues(project, namespace, jobName.String(), scheduler.ReplayStateFailed.String()).Inc()
 	}
 }
 
@@ -255,13 +256,4 @@ func (*ReplayWorker) syncStatus(existingJobRuns, incomingJobRuns []*scheduler.Jo
 	}
 
 	return updatedJobRuns
-}
-
-func raiseReplayMetric(t tenant.Tenant, jobName scheduler.JobName, state scheduler.ReplayState) {
-	telemetry.NewCounter(metricJobReplay, map[string]string{
-		"project":   t.ProjectName().String(),
-		"namespace": t.NamespaceName().String(),
-		"job":       jobName.String(),
-		"status":    state.String(),
-	}).Inc()
 }

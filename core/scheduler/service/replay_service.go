@@ -5,22 +5,26 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"golang.org/x/net/context"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
-	"github.com/goto/optimus/internal/telemetry"
 )
 
 const (
 	getReplaysDayLimit = 30 // TODO: make it configurable via cli
 
-	metricJobReplay = "jobrun_replay_requests_total"
-
 	tenantReplayExecutionProjectConfigKey = "REPLAY_EXECUTION_PROJECT"
 )
+
+var jobReplayMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "jobrun_replay_requests_total",
+	Help: "replay request count with status",
+}, []string{"project", "namespace", "name", "status"})
 
 type SchedulerRunGetter interface {
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
@@ -92,12 +96,11 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		return uuid.Nil, err
 	}
 
-	telemetry.NewCounter(metricJobReplay, map[string]string{
-		"project":   tenant.ProjectName().String(),
-		"namespace": tenant.NamespaceName().String(),
-		"job":       jobName.String(),
-		"status":    replayReq.State().String(),
-	}).Inc()
+	jobReplayMetric.WithLabelValues(tenant.ProjectName().String(),
+		tenant.NamespaceName().String(),
+		jobName.String(),
+		replayReq.State().String(),
+	).Inc()
 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
 

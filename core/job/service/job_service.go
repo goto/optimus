@@ -812,7 +812,7 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 	return me.ToErr()
 }
 
-func validateDeleteJob(jobTenant tenant.Tenant, downstreamsPerLevel [][]*job.Downstream, toDeleteMap map[job.FullName]*job.Spec, jobToDelete *job.Spec, logWriter writer.LogWriter, me *errors.MultiError) bool {
+func validateDeleteJob(jobTenant tenant.Tenant, downstreamsPerLevel [][]*job.Downstream, toDeleteMap map[job.FullName]*job.Spec) error {
 	notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, downstreamsPerLevel)
 
 	if !safeToDelete {
@@ -823,15 +823,12 @@ func validateDeleteJob(jobTenant tenant.Tenant, downstreamsPerLevel [][]*job.Dow
 			directDownstreams = downstreamsPerLevel[0]
 		}
 
-		// TODO: refactor to put the log writer outside
 		jobFullNames := job.DownstreamList(directDownstreams).GetDownstreamFullNames()
-		errorMsg := fmt.Sprintf("deletion of job %s will fail. job is being used by %s", jobToDelete.Name().String(), jobFullNames.String())
-		logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] %s", jobTenant.NamespaceName().String(), errorMsg))
-		me.Append(errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg))
-		return false
+		errorMsg := fmt.Sprintf("job is being used by %s", jobFullNames.String())
+		return errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errorMsg)
 	}
 
-	return true
+	return nil
 }
 
 func isJobSafeToDelete(toDeleteMap map[job.FullName]*job.Spec, downstreamsPerLevel [][]*job.Downstream) ([][]*job.Downstream, bool) {
@@ -997,9 +994,11 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 			continue
 		}
 
-		isSafeToDelete := validateDeleteJob(jobTenant, downstreamsPerLevel, toDeleteMap, spec, logWriter, me)
-		if !isSafeToDelete {
-			j.logger.Warn("job [%s] is not safe to be deleted", spec.Name())
+		err = validateDeleteJob(jobTenant, downstreamsPerLevel, toDeleteMap)
+		if err != nil {
+			j.logger.Warn("job [%s] is not safe to be deleted: %s", spec.Name(), err)
+			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deletion of job %s will fail. %s", jobTenant.NamespaceName().String(), spec.Name(), err))
+			me.Append(err)
 			continue
 		}
 
@@ -1501,17 +1500,12 @@ func (j *JobService) validateOneJobForDeletion(
 		return []dto.ValidateResult{result}
 	}
 
-	me := errors.NewMultiError("validating job for deletion errors")
-	safeToDelete := validateDeleteJob(jobTenant, downstreams, specByFullName, spec, writer.NewSafeBufferedLogger(), me)
+	err = validateDeleteJob(jobTenant, downstreams, specByFullName)
 
 	var messages []string
 	success := true
-	if !safeToDelete {
-		messages = []string{"job is not safe for deletion"}
-		if err := me.ToErr(); err != nil {
-			messages = append(messages, err.Error())
-		}
-
+	if err != nil {
+		messages = []string{"job is not safe for deletion", err.Error()}
 		success = false
 	} else {
 		messages = []string{"job is safe for deletion"}
@@ -1988,4 +1982,87 @@ func (j *JobService) getDownstreamJobs(ctx context.Context, projectName tenant.P
 		}
 	}
 	return downstreamJobs, me.ToErr()
+}
+
+func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.ProjectName, jobsToDelete []*dto.JobToDeleteRequest) (map[string]dto.BulkDeleteTracker, error) {
+	deletionTracker := map[string]dto.BulkDeleteTracker{}
+	me := errors.NewMultiError("error bulk deleting jobs")
+
+	toDeleteJobs := job.Jobs{}
+	for _, jobToDelete := range jobsToDelete {
+		existingJob, err := j.jobRepo.GetByJobName(ctx, projectName, jobToDelete.JobName)
+		if err != nil {
+			j.logger.Error("error getting existing job %s: %s", jobToDelete.JobName.String(), err)
+			return deletionTracker, err
+		}
+
+		toDeleteJobs = append(toDeleteJobs, existingJob)
+	}
+
+	toDeleteMap := toDeleteJobs.GetFullNameToSpecMap()
+	alreadyDeleted := map[job.FullName]bool{}
+	deletedJobNames := []job.Name{}
+
+	for _, toDeleteJob := range toDeleteJobs {
+		jobTenant := toDeleteJob.Tenant()
+		jobFullName := toDeleteJob.FullName()
+		jobName := toDeleteJob.Spec().Name()
+
+		downstreamsPerLevel, err := j.getAllDownstreams(ctx, toDeleteJob.ProjectName(), jobName, map[job.FullName]bool{}, 0)
+		if err != nil {
+			j.logger.Error("error getting downstreams for job [%s]: %s", jobName, err)
+			me.Append(err)
+			continue
+		}
+
+		err = validateDeleteJob(jobTenant, downstreamsPerLevel, toDeleteMap)
+		if err != nil {
+			j.logger.Warn("job [%s] is not safe to be deleted: %s", jobName, err)
+			me.Append(err)
+			continue
+		}
+
+		// flatten downstreams per level into a single list,
+		// with direct downstreams will be put first & the leaf downstreams at the end
+		downstreams := []*job.Downstream{}
+		for _, dss := range downstreamsPerLevel {
+			downstreams = append(downstreams, dss...)
+		}
+
+		isDeletionFail := false
+		for i := len(downstreams) - 1; i >= 0 && !isDeletionFail; i-- {
+			downstream := downstreams[i]
+			if alreadyDeleted[downstream.FullName()] {
+				continue
+			}
+			if err = j.jobRepo.Delete(ctx, downstream.ProjectName(), downstream.Name(), false); err != nil {
+				j.logger.Error("error deleting [%s] as downstream of [%s]", downstream.Name(), jobName)
+				me.Append(err)
+				isDeletionFail = true
+				continue
+			}
+
+			alreadyDeleted[downstream.FullName()] = true
+			j.raiseDeleteEvent(jobTenant, downstream.Name())
+			raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
+			deletedJobNames = append(deletedJobNames, downstream.Name())
+		}
+
+		if alreadyDeleted[job.FullName(jobFullName)] || isDeletionFail {
+			j.logger.Warn("job [%s] deletion is skipped [already deleted or failure in deleting downstreams]", jobName)
+			continue
+		}
+		if err = j.jobRepo.Delete(ctx, jobTenant.ProjectName(), jobName, false); err != nil {
+			j.logger.Error("error deleting job [%s]")
+			me.Append(err)
+			continue
+		}
+
+		alreadyDeleted[job.FullName(jobFullName)] = true
+		j.raiseDeleteEvent(jobTenant, jobName)
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
+		deletedJobNames = append(deletedJobNames, jobName)
+	}
+
+	return deletionTracker, nil
 }

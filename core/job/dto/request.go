@@ -6,9 +6,8 @@ import (
 )
 
 type JobToDeleteRequest struct {
-	Namespace    tenant.NamespaceName
-	JobName      job.Name
-	CleanHistory bool
+	Namespace tenant.NamespaceName
+	JobName   job.Name
 }
 
 type BulkDeleteTracker struct {

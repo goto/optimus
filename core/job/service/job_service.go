@@ -1985,39 +1985,51 @@ func (j *JobService) getDownstreamJobs(ctx context.Context, projectName tenant.P
 }
 
 func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.ProjectName, jobsToDelete []*dto.JobToDeleteRequest) (map[string]dto.BulkDeleteTracker, error) {
-	deletionTracker := map[string]dto.BulkDeleteTracker{}
-	me := errors.NewMultiError("error bulk deleting jobs")
+	// initiate deletion status per jobs to be deleted
+	deletionTrackerMap := map[string]dto.BulkDeleteTracker{}
 
 	toDeleteJobs := job.Jobs{}
 	for _, jobToDelete := range jobsToDelete {
 		existingJob, err := j.jobRepo.GetByJobName(ctx, projectName, jobToDelete.JobName)
-		if err != nil {
+		if err != nil && !errors.IsErrorType(err, errors.ErrNotFound) {
 			j.logger.Error("error getting existing job %s: %s", jobToDelete.JobName.String(), err)
-			return deletionTracker, err
+			return deletionTrackerMap, err
 		}
 
 		toDeleteJobs = append(toDeleteJobs, existingJob)
 	}
 
-	toDeleteMap := toDeleteJobs.GetFullNameToSpecMap()
-	alreadyDeleted := map[job.FullName]bool{}
-	deletedJobNames := []job.Name{}
+	me := errors.NewMultiError("error bulk deleting jobs")
+	toDeleteMap := toDeleteJobs.GetNameMap()
+	toDeleteSpecMap := toDeleteJobs.GetFullNameToSpecMap()
 
+	alreadyDeleted := map[job.FullName]bool{}
+	deletedJobs := job.Jobs{}
 	for _, toDeleteJob := range toDeleteJobs {
+		jobName := toDeleteJob.Spec().Name()
+		parentDeletionTracker := dto.BulkDeleteTracker{
+			JobName: jobName.String(),
+			Success: false,
+		}
+		defer func() {
+			deletionTrackerMap[jobName.String()] = parentDeletionTracker
+		}()
+
 		jobTenant := toDeleteJob.Tenant()
 		jobFullName := toDeleteJob.FullName()
-		jobName := toDeleteJob.Spec().Name()
 
 		downstreamsPerLevel, err := j.getAllDownstreams(ctx, toDeleteJob.ProjectName(), jobName, map[job.FullName]bool{}, 0)
 		if err != nil {
 			j.logger.Error("error getting downstreams for job [%s]: %s", jobName, err)
+			parentDeletionTracker.Message = err.Error()
 			me.Append(err)
 			continue
 		}
 
-		err = validateDeleteJob(jobTenant, downstreamsPerLevel, toDeleteMap)
+		err = validateDeleteJob(jobTenant, downstreamsPerLevel, toDeleteSpecMap)
 		if err != nil {
 			j.logger.Warn("job [%s] is not safe to be deleted: %s", jobName, err)
+			parentDeletionTracker.Message = err.Error()
 			me.Append(err)
 			continue
 		}
@@ -2035,17 +2047,30 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 			if alreadyDeleted[downstream.FullName()] {
 				continue
 			}
+
+			downstreamDeletionTracker := dto.BulkDeleteTracker{
+				JobName: downstream.Name().String(),
+				Success: false,
+			}
+			defer func() {
+				deletionTrackerMap[downstream.Name().String()] = downstreamDeletionTracker
+			}()
+
 			if err = j.jobRepo.Delete(ctx, downstream.ProjectName(), downstream.Name(), false); err != nil {
 				j.logger.Error("error deleting [%s] as downstream of [%s]", downstream.Name(), jobName)
 				me.Append(err)
+				downstreamDeletionTracker.Message = err.Error()
 				isDeletionFail = true
+
 				continue
 			}
 
-			alreadyDeleted[downstream.FullName()] = true
 			j.raiseDeleteEvent(jobTenant, downstream.Name())
 			raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
-			deletedJobNames = append(deletedJobNames, downstream.Name())
+
+			alreadyDeleted[downstream.FullName()] = true
+			deletedJobs = append(deletedJobs, toDeleteMap[downstream.Name()])
+			downstreamDeletionTracker.Success = true
 		}
 
 		if alreadyDeleted[job.FullName(jobFullName)] || isDeletionFail {
@@ -2055,14 +2080,25 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 		if err = j.jobRepo.Delete(ctx, jobTenant.ProjectName(), jobName, false); err != nil {
 			j.logger.Error("error deleting job [%s]")
 			me.Append(err)
+			parentDeletionTracker.Message = err.Error()
 			continue
 		}
 
 		alreadyDeleted[job.FullName(jobFullName)] = true
 		j.raiseDeleteEvent(jobTenant, jobName)
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
-		deletedJobNames = append(deletedJobNames, jobName)
+		deletedJobs = append(deletedJobs, toDeleteJob)
+		parentDeletionTracker.Success = true
 	}
 
-	return deletionTracker, nil
+	deletedJobsPerNamespace := deletedJobs.GetNamespaceNameAndJobsMap()
+	for namespaceName, deletedJobs := range deletedJobsPerNamespace {
+		tnnt, _ := tenant.NewTenant(projectName.String(), namespaceName.String())
+		err := j.uploadJobs(ctx, tnnt, nil, nil, job.Jobs(deletedJobs).GetJobNames())
+		if err != nil {
+			me.Append(err)
+		}
+	}
+
+	return deletionTrackerMap, me.ToErr()
 }

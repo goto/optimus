@@ -952,9 +952,6 @@
         },
         "jobName": {
           "type": "string"
-        },
-        "cleanHistory": {
-          "type": "boolean"
         }
       }
     },

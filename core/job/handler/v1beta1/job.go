@@ -50,6 +50,7 @@ type JobModificationService interface {
 	Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error)
 	ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, jobs []*job.Spec, jobNamesWithInvalidSpec []job.Name, logWriter writer.LogWriter) error
 	ChangeNamespace(ctx context.Context, jobSourceTenant, jobNewTenant tenant.Tenant, jobName job.Name) error
+	BulkDeleteJobs(ctx context.Context, projectName tenant.ProjectName, jobsToDelete []*dto.JobToDeleteRequest) (map[string]dto.BulkDeleteTracker, error)
 }
 
 type JobQueryService interface {
@@ -155,6 +156,41 @@ func (jh *JobHandler) DeleteJobSpecification(ctx context.Context, deleteRequest 
 	return &pb.DeleteJobSpecificationResponse{
 		Success: true,
 		Message: msg,
+	}, nil
+}
+
+func (jh *JobHandler) BulkDeleteJobs(ctx context.Context, bulkDeleteRequest *pb.BulkDeleteJobsRequest) (*pb.BulkDeleteJobsResponse, error) {
+	jobsToDelete := []*dto.JobToDeleteRequest{}
+	for _, j := range bulkDeleteRequest.GetJobs() {
+		jobsToDelete = append(jobsToDelete, &dto.JobToDeleteRequest{
+			Namespace: tenant.NamespaceName(j.NamespaceName),
+			JobName:   job.Name(j.JobName),
+		})
+	}
+	projectName := tenant.ProjectName(bulkDeleteRequest.GetProjectName())
+
+	bulkDeleteTracker, err := jh.jobService.BulkDeleteJobs(ctx, projectName, jobsToDelete)
+	if err != nil {
+		errorMsg := "failed to do bulk delete"
+		jh.l.Error(fmt.Sprintf("%s: %s", errorMsg, err.Error()))
+		return nil, errors.GRPCErr(err, errorMsg)
+	}
+
+	responseMap := map[string]*pb.BulkDeleteJobsResponse_JobDeletionStatus{}
+	for _, jobToDelete := range bulkDeleteRequest.GetJobs() {
+		jobResult, found := bulkDeleteTracker[jobToDelete.GetJobName()]
+		if !found {
+			continue
+		}
+
+		responseMap[jobToDelete.GetJobName()] = &pb.BulkDeleteJobsResponse_JobDeletionStatus{
+			Message: jobResult.JobName,
+			Success: jobResult.Success,
+		}
+	}
+
+	return &pb.BulkDeleteJobsResponse{
+		ResultsByJobName: responseMap,
 	}, nil
 }
 

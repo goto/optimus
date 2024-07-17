@@ -812,7 +812,7 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 	return me.ToErr()
 }
 
-func validateDeleteJob(jobTenant tenant.Tenant, downstreamsPerLevel [][]*job.Downstream, toDeleteMap map[job.FullName]*job.Spec) error {
+func validateDeleteJob(downstreamsPerLevel [][]*job.Downstream, toDeleteMap map[job.FullName]*job.Spec) error {
 	notDeleted, safeToDelete := isJobSafeToDelete(toDeleteMap, downstreamsPerLevel)
 
 	if !safeToDelete {
@@ -994,7 +994,7 @@ func (j *JobService) bulkDelete(ctx context.Context, jobTenant tenant.Tenant, to
 			continue
 		}
 
-		err = validateDeleteJob(jobTenant, downstreamsPerLevel, toDeleteMap)
+		err = validateDeleteJob(downstreamsPerLevel, toDeleteMap)
 		if err != nil {
 			j.logger.Warn("job [%s] is not safe to be deleted: %s", spec.Name(), err)
 			logWriter.Write(writer.LogLevelError, fmt.Sprintf("[%s] deletion of job %s will fail. %s", jobTenant.NamespaceName().String(), spec.Name(), err))
@@ -1500,7 +1500,7 @@ func (j *JobService) validateOneJobForDeletion(
 		return []dto.ValidateResult{result}
 	}
 
-	err = validateDeleteJob(jobTenant, downstreams, specByFullName)
+	err = validateDeleteJob(downstreams, specByFullName)
 
 	var messages []string
 	success := true
@@ -2026,7 +2026,7 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 			continue
 		}
 
-		err = validateDeleteJob(jobTenant, downstreamsPerLevel, toDeleteSpecMap)
+		err = validateDeleteJob(downstreamsPerLevel, toDeleteSpecMap)
 		if err != nil {
 			j.logger.Warn("job [%s] is not safe to be deleted: %s", jobName, err)
 			parentDeletionTracker.Message = err.Error()

@@ -3831,7 +3831,7 @@ func TestJobService(t *testing.T) {
 					"job2": {
 						{
 							Stage:    "validation for deletion",
-							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job2 will fail. job is being used by test-proj/job3"},
+							Messages: []string{"job is not safe for deletion", "failed precondition for entity job: job is being used by test-proj/job3"},
 							Success:  false,
 						},
 					},
@@ -3891,7 +3891,7 @@ func TestJobService(t *testing.T) {
 					"job1": {
 						{
 							Stage:    "validation for deletion",
-							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job1 will fail. job is being used by test-proj/job2"},
+							Messages: []string{"job is not safe for deletion", "failed precondition for entity job: job is being used by test-proj/job2"},
 							Success:  false,
 						},
 					},
@@ -3952,14 +3952,14 @@ func TestJobService(t *testing.T) {
 					"job1": {
 						{
 							Stage:    "validation for deletion",
-							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job1 will fail. job is being used by test-proj/job2"},
+							Messages: []string{"job is not safe for deletion", "failed precondition for entity job: job is being used by test-proj/job2"},
 							Success:  false,
 						},
 					},
 					"job2": {
 						{
 							Stage:    "validation for deletion",
-							Messages: []string{"job is not safe for deletion", "validating job for deletion errors:\n failed precondition for entity job: deletion of job job2 will fail. job is being used by test-proj/job3"},
+							Messages: []string{"job is not safe for deletion", "failed precondition for entity job: job is being used by test-proj/job3"},
 							Success:  false,
 						},
 					},

@@ -199,6 +199,78 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/job/{jobName}/upstream/run": {
+      "get": {
+        "summary": "GetInterval gets interval on specific job given reference time.",
+        "operationId": "JobRunService_GetJobUpstreamRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetJobUpstreamRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "scheduleTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "upstreamJobName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "upstreamProjectName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "upstreamHost",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/{jobName}/event": {
       "post": {
         "summary": "RegisterJobEvent notifies optimus service about an event related to job",
@@ -319,7 +391,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -349,6 +421,17 @@
         "endTime": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1beta1GetJobUpstreamRunResponse": {
+      "type": "object",
+      "properties": {
+        "jobRuns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobRun"
+          }
         }
       }
     },

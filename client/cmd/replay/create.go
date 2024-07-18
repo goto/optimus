@@ -126,6 +126,7 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// todo: this can be moved up, we should not need a req conversion function
 	if r.dryRun {
 		replayDryRunReq := convertReplayToReplayDryRunRequest(replayReq)
 		err := r.replayDryRun(replayDryRunReq)

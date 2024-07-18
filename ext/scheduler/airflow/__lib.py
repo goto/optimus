@@ -215,6 +215,19 @@ class SuperExternalTaskSensor(BaseSensorOperator):
 
     def poke(self, context):
         schedule_time = get_scheduled_at(context)
+        # the 3 APIs 
+        #   get_schedule_interval
+        #   get_schedule_window 
+        #   _are_all_job_runs_successful
+        #  
+        #  what all is needed for these APIS
+        #  
+        #       subject_job schedule_time -> upstream_schedule
+        #       project_name, job_name
+        #       get job interval
+        #       
+        #       
+
 
         try:
             upstream_schedule = self.get_schedule_interval(schedule_time)
@@ -234,7 +247,6 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self.log.info("waiting for upstream runs between: {} - {} schedule times of airflow dag run".format(
             schedule_time_window_start, schedule_time_window_end))
 
-        # a = 0/0
         if not self._are_all_job_runs_successful(schedule_time_window_start, schedule_time_window_end):
             self.log.warning("unable to find enough successful executions for upstream '{}' in "
                              "'{}' dated between {} and {}(inclusive), rescheduling sensor".
@@ -325,7 +337,6 @@ def optimus_notify(context, event_meta):
                 task_instance = ti
                 break
 
-    message = {
         "log_url": task_instance.log_url,
         "task_id": task_instance.task_id,
         "attempt": task_instance.try_number,

@@ -140,6 +140,37 @@ func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, 
 	}, nil
 }
 
+func (h JobRunHandler) GetUpstreamJobRuns(ctx context.Context, req *pb.GetJobUpstreamRunRequest) (*pb.GetJobUpstreamRunResponse, error) {
+	upstreamHost := req.GetUpstreamHost()
+	if upstreamHost == "" {
+
+	}
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to get projectName")
+	}
+	upstreamProjectName, err := tenant.ProjectNameFrom(req.GetUpstreamProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to get projectName")
+	}
+	upstreamJobName, err := scheduler.JobNameFrom(req.GetUpstreamJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
+	}
+
+	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
+	}
+
+	// identify if this is internal or external upstream
+	return &pb.GetJobUpstreamRunResponse{}, nil
+}
+
 func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSchedulerRequest) (*pb.UploadToSchedulerResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {

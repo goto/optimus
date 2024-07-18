@@ -385,106 +385,10 @@
           "ResourceService"
         ]
       }
-    },
-    "/v1beta1/project/{projectName}/namespace/{namespaceName}/datastore/{datastoreName}/resources-upsert": {
-      "post": {
-        "summary": "UpsertResource updates/inserts a resource specification of a datastore in project",
-        "operationId": "ResourceService_UpsertResource",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1UpsertResourceResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "namespaceName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "datastoreName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "properties": {
-                "resources": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/definitions/v1beta1ResourceSpecification"
-                  }
-                }
-              }
-            }
-          }
-        ],
-        "tags": [
-          "ResourceService"
-        ]
-      }
-    },
-    "/v1beta1/project/{projectName}/resource/{resourceName}/changelog": {
-      "get": {
-        "summary": "GetResourceChangelogs get all the change logs for a specific resource",
-        "operationId": "ResourceService_GetResourceChangelogs",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1GetResourceChangelogsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "resourceName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ResourceService"
-        ]
-      }
     }
   },
   "definitions": {
-    "corev1beta1ResourceStatus": {
+    "ApplyResourcesResponseResourceStatus": {
       "type": "object",
       "properties": {
         "resourceName": {
@@ -493,7 +397,7 @@
         "status": {
           "type": "string"
         },
-        "message": {
+        "reason": {
           "type": "string"
         }
       }
@@ -516,7 +420,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -542,22 +446,8 @@
         "statuses": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/v1beta1ApplyResourcesResponseResourceStatus"
+            "$ref": "#/definitions/ApplyResourcesResponseResourceStatus"
           }
-        }
-      }
-    },
-    "v1beta1ApplyResourcesResponseResourceStatus": {
-      "type": "object",
-      "properties": {
-        "resourceName": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
         }
       }
     },
@@ -591,17 +481,6 @@
       "properties": {
         "logStatus": {
           "$ref": "#/definitions/v1beta1Log"
-        }
-      }
-    },
-    "v1beta1GetResourceChangelogsResponse": {
-      "type": "object",
-      "properties": {
-        "history": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1beta1ResourceChangelog"
-          }
         }
       }
     },
@@ -654,34 +533,6 @@
         }
       }
     },
-    "v1beta1ResourceChange": {
-      "type": "object",
-      "properties": {
-        "attributeName": {
-          "type": "string"
-        },
-        "diff": {
-          "type": "string"
-        }
-      }
-    },
-    "v1beta1ResourceChangelog": {
-      "type": "object",
-      "properties": {
-        "eventType": {
-          "type": "string"
-        },
-        "timestamp": {
-          "type": "string"
-        },
-        "change": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1beta1ResourceChange"
-          }
-        }
-      }
-    },
     "v1beta1ResourceSpecification": {
       "type": "object",
       "properties": {
@@ -721,29 +572,6 @@
         },
         "message": {
           "type": "string"
-        }
-      }
-    },
-    "v1beta1UpsertResourceResponse": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean"
-        },
-        "message": {
-          "type": "string"
-        },
-        "results": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/corev1beta1ResourceStatus"
-          }
-        },
-        "successfulResourceNames": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     }

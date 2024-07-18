@@ -72,6 +72,9 @@ func newHTTPClient(host string) (*http.Client, error) {
 
 	return httpClient, nil
 }
+func (o *OptimusResourceManager) GetHostUrl() string {
+	return o.config.Host
+}
 
 func (o *OptimusResourceManager) GetOptimusUpstreams(ctx context.Context, unresolvedDependency *job.Upstream) ([]*job.Upstream, error) {
 	if ctx == nil {

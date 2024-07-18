@@ -638,59 +638,6 @@
         ]
       }
     },
-    "/v1beta1/project/{projectName}/namespace/{namespaceName}/jobs-upsert": {
-      "post": {
-        "summary": "UpsertJobSpecifications update or add jobs for a namespace which belongs to the given project",
-        "operationId": "JobSpecificationService_UpsertJobSpecifications",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1UpsertJobSpecificationsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "namespaceName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "properties": {
-                "specs": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/definitions/v1beta1JobSpecification"
-                  }
-                }
-              }
-            }
-          }
-        ],
-        "tags": [
-          "JobSpecificationService"
-        ]
-      }
-    },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/sync-job-state": {
       "patch": {
         "summary": "SyncJobsState enable / disable job on scheuler",
@@ -1757,32 +1704,6 @@
     },
     "v1beta1UpdateJobsStateResponse": {
       "type": "object"
-    },
-    "v1beta1UpsertJobSpecificationsResponse": {
-      "type": "object",
-      "properties": {
-        "log": {
-          "type": "string"
-        },
-        "successfulJobNames": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "skippedJobNames": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "failedJobNames": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
     },
     "v1beta1ValidateResponse": {
       "type": "object",

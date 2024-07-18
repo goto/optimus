@@ -138,6 +138,10 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	return s.compiler.Compile(ctx, details, config, executedAt)
 }
 
+func (s *JobRunService) GetUpstreamJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
+	
+}
+
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
 	jobWithDetails, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {

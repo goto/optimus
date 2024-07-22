@@ -2032,7 +2032,7 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 	deletedJobsPerNamespace := deletedJobs.GetNamespaceNameAndJobsMap()
 	for namespaceName, deletedJobs := range deletedJobsPerNamespace {
 		tnnt, _ := tenant.NewTenant(projectName.String(), namespaceName.String())
-		err := j.uploadJobs(ctx, tnnt, nil, nil, job.Jobs(deletedJobs).GetJobNames())
+		err := j.uploadJobs(ctx, tnnt, nil, job.Jobs(deletedJobs).GetJobNames())
 		if err != nil {
 			me.Append(err)
 		}

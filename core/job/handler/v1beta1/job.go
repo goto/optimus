@@ -184,7 +184,7 @@ func (jh *JobHandler) BulkDeleteJobs(ctx context.Context, bulkDeleteRequest *pb.
 		}
 
 		responseMap[jobToDelete.GetJobName()] = &pb.BulkDeleteJobsResponse_JobDeletionStatus{
-			Message: jobResult.JobName,
+			Message: jobResult.Message,
 			Success: jobResult.Success,
 		}
 	}

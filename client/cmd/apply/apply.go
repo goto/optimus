@@ -416,7 +416,7 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 	}
 }
 
-func (c *applyCommand) getBulkDeleteJobsRequest(namespace *config.Namespace, plans plan.Plan) []*pb.BulkDeleteJobsRequest_JobToDelete {
+func (*applyCommand) getBulkDeleteJobsRequest(namespace *config.Namespace, plans plan.Plan) []*pb.BulkDeleteJobsRequest_JobToDelete {
 	jobsToDelete := []*pb.BulkDeleteJobsRequest_JobToDelete{}
 	for _, currentPlan := range plans.Job.Delete.GetByNamespace(namespace.Name) {
 		jobsToDelete = append(jobsToDelete, &pb.BulkDeleteJobsRequest_JobToDelete{

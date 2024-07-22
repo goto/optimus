@@ -2006,89 +2006,17 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 	alreadyDeleted := map[job.FullName]bool{}
 	deletedJobs := job.Jobs{}
 	for _, toDeleteJob := range toDeleteJobs {
-		jobName := toDeleteJob.Spec().Name()
-		parentDeletionTracker := dto.BulkDeleteTracker{
-			JobName: jobName.String(),
-			Success: false,
-		}
-		defer func() {
-			deletionTrackerMap[jobName.String()] = parentDeletionTracker
-		}()
+		deletionTracker, deletedJobNames := j.resolveJobAndDownstreamsDeletion(ctx, toDeleteJob, toDeleteSpecMap, alreadyDeleted)
+		for _, deletedJobName := range deletedJobNames {
+			deletedJob := toDeleteMap[deletedJobName]
 
-		jobTenant := toDeleteJob.Tenant()
-		jobFullName := toDeleteJob.FullName()
-
-		downstreamsPerLevel, err := j.getAllDownstreams(ctx, toDeleteJob.ProjectName(), jobName, map[job.FullName]bool{}, 0)
-		if err != nil {
-			j.logger.Error("error getting downstreams for job [%s]: %s", jobName, err)
-			parentDeletionTracker.Message = err.Error()
-			me.Append(err)
-			continue
+			deletedJobs = append(deletedJobs, deletedJob)
+			alreadyDeleted[job.FullName(deletedJob.FullName())] = true
 		}
 
-		err = validateDeleteJob(downstreamsPerLevel, toDeleteSpecMap)
-		if err != nil {
-			j.logger.Warn("job [%s] is not safe to be deleted: %s", jobName, err)
-			parentDeletionTracker.Message = err.Error()
-			me.Append(err)
-			continue
+		for jobName, tracker := range deletionTracker {
+			deletionTrackerMap[jobName] = tracker
 		}
-
-		// flatten downstreams per level into a single list,
-		// with direct downstreams will be put first & the leaf downstreams at the end
-		downstreams := []*job.Downstream{}
-		for _, dss := range downstreamsPerLevel {
-			downstreams = append(downstreams, dss...)
-		}
-
-		isDeletionFail := false
-		for i := len(downstreams) - 1; i >= 0 && !isDeletionFail; i-- {
-			downstream := downstreams[i]
-			if alreadyDeleted[downstream.FullName()] {
-				continue
-			}
-
-			downstreamDeletionTracker := dto.BulkDeleteTracker{
-				JobName: downstream.Name().String(),
-				Success: false,
-			}
-			defer func() {
-				deletionTrackerMap[downstream.Name().String()] = downstreamDeletionTracker
-			}()
-
-			if err = j.jobRepo.Delete(ctx, downstream.ProjectName(), downstream.Name(), false); err != nil {
-				j.logger.Error("error deleting [%s] as downstream of [%s]", downstream.Name(), jobName)
-				me.Append(err)
-				downstreamDeletionTracker.Message = err.Error()
-				isDeletionFail = true
-
-				continue
-			}
-
-			j.raiseDeleteEvent(jobTenant, downstream.Name())
-			raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
-
-			alreadyDeleted[downstream.FullName()] = true
-			deletedJobs = append(deletedJobs, toDeleteMap[downstream.Name()])
-			downstreamDeletionTracker.Success = true
-		}
-
-		if alreadyDeleted[job.FullName(jobFullName)] || isDeletionFail {
-			j.logger.Warn("job [%s] deletion is skipped [already deleted or failure in deleting downstreams]", jobName)
-			continue
-		}
-		if err = j.jobRepo.Delete(ctx, jobTenant.ProjectName(), jobName, false); err != nil {
-			j.logger.Error("error deleting job [%s]")
-			me.Append(err)
-			parentDeletionTracker.Message = err.Error()
-			continue
-		}
-
-		alreadyDeleted[job.FullName(jobFullName)] = true
-		j.raiseDeleteEvent(jobTenant, jobName)
-		raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
-		deletedJobs = append(deletedJobs, toDeleteJob)
-		parentDeletionTracker.Success = true
 	}
 
 	deletedJobsPerNamespace := deletedJobs.GetNamespaceNameAndJobsMap()
@@ -2101,4 +2029,98 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 	}
 
 	return deletionTrackerMap, me.ToErr()
+}
+
+func (j *JobService) validateDeleteWithDownstreams(ctx context.Context, toDeleteJob *job.Job, toDeleteSpecMap map[job.FullName]*job.Spec) ([]*job.Downstream, error) {
+	downstreamsPerLevel, err := j.getAllDownstreams(ctx, toDeleteJob.ProjectName(), toDeleteJob.Spec().Name(), map[job.FullName]bool{}, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	err = validateDeleteJob(downstreamsPerLevel, toDeleteSpecMap)
+	if err != nil {
+		j.logger.Warn("job [%s] is not safe to be deleted: %s", toDeleteJob.Spec().Name(), err)
+		return nil, err
+	}
+
+	// flatten downstreams per level into a single list,
+	// with direct downstreams will be put first & the leaf downstreams at the end
+	downstreams := []*job.Downstream{}
+	for _, dss := range downstreamsPerLevel {
+		downstreams = append(downstreams, dss...)
+	}
+
+	return downstreams, nil
+}
+
+func (j *JobService) resolveJobAndDownstreamsDeletion(ctx context.Context, toDeleteJob *job.Job, toDeleteSpecMap map[job.FullName]*job.Spec, alreadyDeleted map[job.FullName]bool) (deletionTracker map[string]dto.BulkDeleteTracker, deletedJobNames []job.Name) {
+	deletionTracker = map[string]dto.BulkDeleteTracker{}
+
+	jobName := toDeleteJob.Spec().Name()
+	parentDeletionTracker := dto.BulkDeleteTracker{
+		JobName: jobName.String(),
+		Success: false,
+	}
+	defer func() {
+		deletionTracker[jobName.String()] = parentDeletionTracker
+	}()
+
+	jobTenant := toDeleteJob.Tenant()
+	jobFullName := toDeleteJob.FullName()
+
+	downstreams, err := j.validateDeleteWithDownstreams(ctx, toDeleteJob, toDeleteSpecMap)
+	if err != nil {
+		j.logger.Error("error validating downstreams for job [%s]: %s", toDeleteJob.Spec().Name(), err)
+		parentDeletionTracker.Message = err.Error()
+		return
+	}
+
+	isDeletionFail := false
+	for i := len(downstreams) - 1; i >= 0 && !isDeletionFail; i-- {
+		downstream := downstreams[i]
+		if alreadyDeleted[downstream.FullName()] {
+			continue
+		}
+
+		downstreamDeletionTracker := dto.BulkDeleteTracker{
+			JobName: downstream.Name().String(),
+			Success: false,
+		}
+		defer func() {
+			deletionTracker[downstream.Name().String()] = downstreamDeletionTracker
+		}()
+
+		if err = j.jobRepo.Delete(ctx, downstream.ProjectName(), downstream.Name(), false); err != nil {
+			j.logger.Error("error deleting [%s] as downstream of [%s]", downstream.Name(), jobName)
+			downstreamDeletionTracker.Message = err.Error()
+			isDeletionFail = true
+
+			continue
+		}
+
+		j.raiseDeleteEvent(jobTenant, downstream.Name())
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
+
+		alreadyDeleted[downstream.FullName()] = true
+		deletedJobNames = append(deletedJobNames, downstream.Name())
+		downstreamDeletionTracker.Success = true
+	}
+
+	if alreadyDeleted[job.FullName(jobFullName)] || isDeletionFail {
+		j.logger.Warn("job [%s] deletion is skipped [already deleted or failure in deleting downstreams]", jobName)
+		return
+	}
+	if err = j.jobRepo.Delete(ctx, jobTenant.ProjectName(), jobName, false); err != nil {
+		j.logger.Error("error deleting job [%s]")
+		parentDeletionTracker.Message = err.Error()
+		return
+	}
+
+	alreadyDeleted[job.FullName(jobFullName)] = true
+	j.raiseDeleteEvent(jobTenant, jobName)
+	raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
+	deletedJobNames = append(deletedJobNames, toDeleteJob.Spec().Name())
+	parentDeletionTracker.Success = true
+
+	return
 }

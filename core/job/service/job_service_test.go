@@ -5276,6 +5276,238 @@ func TestJobService(t *testing.T) {
 			assert.Nil(t, actual)
 		})
 	})
+
+	t.Run("BulkDeleteJobs", func(t *testing.T) {
+		t.Run("successfully deletes a job & its downstream", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			upstreamRepo := new(UpstreamRepository)
+			defer upstreamRepo.AssertExpectations(t)
+
+			downstreamRepo := new(DownstreamRepository)
+			defer downstreamRepo.AssertExpectations(t)
+
+			pluginService := NewPluginService(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			jobDeploymentService := new(JobDeploymentService)
+			defer jobDeploymentService.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
+
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, resource.ZeroURN(), nil, false)
+			jobB := job.NewJob(sampleTenant, specB, resource.ZeroURN(), nil, false)
+
+			downstreamA := []*job.Downstream{
+				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
+			}
+
+			jobRepo.On("GetByJobName", ctx, project.Name(), job.Name("job-A")).Return(jobA, nil).Once()
+			jobRepo.On("GetByJobName", ctx, project.Name(), job.Name("job-B")).Return(jobB, nil).Once()
+			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(downstreamA, nil)
+			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specB.Name()).Return(nil, nil)
+			jobRepo.On("Delete", ctx, project.Name(), jobB.Spec().Name(), false).Return(nil).Once()
+			jobRepo.On("Delete", ctx, project.Name(), jobA.Spec().Name(), false).Return(nil).Once()
+			eventHandler.On("HandleEvent", mock.Anything).Times(2)
+
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, mock.Anything, []string{specB.Name().String(), specA.Name().String()}).Return(nil)
+
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
+			deletionTracker, err := jobService.BulkDeleteJobs(ctx, project.Name(), []*dto.JobToDeleteRequest{
+				{
+					Namespace: sampleTenant.NamespaceName(),
+					JobName:   "job-A",
+				},
+				{
+					Namespace: sampleTenant.NamespaceName(),
+					JobName:   "job-B",
+				},
+			})
+
+			assert.NoError(t, err)
+			// assess each job's deletion status: all deletion should be successful
+			jobADeletion := deletionTracker["job-A"]
+			assert.NotNil(t, jobADeletion)
+			assert.True(t, jobADeletion.Success)
+			assert.Empty(t, jobADeletion.Message)
+			jobBDeletion := deletionTracker["job-B"]
+			assert.NotNil(t, jobBDeletion)
+			assert.True(t, jobBDeletion.Success)
+			assert.Empty(t, jobBDeletion.Message)
+		})
+
+		t.Run("error when fetching one of job details", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			upstreamRepo := new(UpstreamRepository)
+			defer upstreamRepo.AssertExpectations(t)
+
+			downstreamRepo := new(DownstreamRepository)
+			defer downstreamRepo.AssertExpectations(t)
+
+			pluginService := NewPluginService(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			jobDeploymentService := new(JobDeploymentService)
+			defer jobDeploymentService.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
+
+			jobRepo.On("GetByJobName", ctx, project.Name(), job.Name("job-A")).Return(nil, errors.New("error")).Once()
+
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
+			deletionTracker, err := jobService.BulkDeleteJobs(ctx, project.Name(), []*dto.JobToDeleteRequest{
+				{
+					Namespace: sampleTenant.NamespaceName(),
+					JobName:   "job-A",
+				},
+			})
+
+			assert.Error(t, err)
+			assert.Empty(t, deletionTracker)
+		})
+
+		t.Run("fail to delete a job because its downstream is failed to be deleted", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			upstreamRepo := new(UpstreamRepository)
+			defer upstreamRepo.AssertExpectations(t)
+
+			downstreamRepo := new(DownstreamRepository)
+			defer downstreamRepo.AssertExpectations(t)
+
+			pluginService := NewPluginService(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			jobDeploymentService := new(JobDeploymentService)
+			defer jobDeploymentService.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
+
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, resource.ZeroURN(), nil, false)
+			jobB := job.NewJob(sampleTenant, specB, resource.ZeroURN(), nil, false)
+
+			downstreamA := []*job.Downstream{
+				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
+			}
+
+			jobRepo.On("GetByJobName", ctx, project.Name(), job.Name("job-A")).Return(jobA, nil).Once()
+			jobRepo.On("GetByJobName", ctx, project.Name(), job.Name("job-B")).Return(jobB, nil).Once()
+			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(downstreamA, nil)
+			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specB.Name()).Return(nil, nil)
+			jobRepo.On("Delete", ctx, project.Name(), jobB.Spec().Name(), false).Return(errors.New("error deleting job-B"))
+
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
+			deletionTracker, err := jobService.BulkDeleteJobs(ctx, project.Name(), []*dto.JobToDeleteRequest{
+				{
+					Namespace: sampleTenant.NamespaceName(),
+					JobName:   "job-A",
+				},
+				{
+					Namespace: sampleTenant.NamespaceName(),
+					JobName:   "job-B",
+				},
+			})
+
+			assert.NoError(t, err)
+			jobADeletion := deletionTracker["job-A"]
+			assert.NotNil(t, jobADeletion)
+			assert.False(t, jobADeletion.Success)
+			assert.Equal(t, "one or more job downstreams cannot be deleted", jobADeletion.Message)
+			jobBDeletion := deletionTracker["job-B"]
+			assert.NotNil(t, jobBDeletion)
+			assert.False(t, jobBDeletion.Success)
+			assert.Equal(t, "error deleting job-B", jobBDeletion.Message)
+		})
+
+		t.Run("fail to delete one or more jobs because there are existing downstream", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			defer jobRepo.AssertExpectations(t)
+
+			upstreamRepo := new(UpstreamRepository)
+			defer upstreamRepo.AssertExpectations(t)
+
+			downstreamRepo := new(DownstreamRepository)
+			defer downstreamRepo.AssertExpectations(t)
+
+			pluginService := NewPluginService(t)
+
+			upstreamResolver := new(UpstreamResolver)
+			defer upstreamResolver.AssertExpectations(t)
+
+			tenantDetailsGetter := new(TenantDetailsGetter)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			jobDeploymentService := new(JobDeploymentService)
+			defer jobDeploymentService.AssertExpectations(t)
+
+			eventHandler := newEventHandler(t)
+
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			specC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, resource.ZeroURN(), nil, false)
+			jobB := job.NewJob(sampleTenant, specB, resource.ZeroURN(), nil, false)
+			_ = job.NewJob(sampleTenant, specC, resource.ZeroURN(), nil, false)
+
+			downstreamA := []*job.Downstream{
+				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
+			}
+			downstreamB := []*job.Downstream{
+				job.NewDownstream("job-C", project.Name(), namespace.Name(), taskName),
+			}
+
+			jobRepo.On("GetByJobName", ctx, project.Name(), job.Name("job-A")).Return(jobA, nil).Once()
+			jobRepo.On("GetByJobName", ctx, project.Name(), job.Name("job-B")).Return(jobB, nil).Once()
+			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(downstreamA, nil)
+			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specB.Name()).Return(downstreamB, nil)
+			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specC.Name()).Return(nil, nil)
+
+			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil)
+			deletionTracker, err := jobService.BulkDeleteJobs(ctx, project.Name(), []*dto.JobToDeleteRequest{
+				{
+					Namespace: sampleTenant.NamespaceName(),
+					JobName:   "job-A",
+				},
+				{
+					Namespace: sampleTenant.NamespaceName(),
+					JobName:   "job-B",
+				},
+			})
+
+			assert.NoError(t, err)
+			jobADeletion := deletionTracker["job-A"]
+			assert.NotNil(t, jobADeletion)
+			assert.False(t, jobADeletion.Success)
+			assert.Equal(t, "failed precondition for entity job: job is being used by test-proj/job-B", jobADeletion.Message)
+			jobBDeletion := deletionTracker["job-B"]
+			assert.NotNil(t, jobBDeletion)
+			assert.False(t, jobBDeletion.Success)
+			assert.Equal(t, "failed precondition for entity job: job is being used by test-proj/job-C", jobBDeletion.Message)
+		})
+	})
 }
 
 // JobRepository is an autogenerated mock type for the JobRepository type

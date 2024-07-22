@@ -2051,7 +2051,6 @@ func (j *JobService) validateDeleteWithDownstreams(ctx context.Context, toDelete
 
 	err = validateDeleteJob(downstreamsPerLevel, toDeleteSpecMap)
 	if err != nil {
-		j.logger.Warn("job [%s] is not safe to be deleted: %s", toDeleteJob.Spec().Name(), err)
 		return nil, err
 	}
 
@@ -2066,72 +2065,71 @@ func (j *JobService) validateDeleteWithDownstreams(ctx context.Context, toDelete
 }
 
 func (j *JobService) resolveJobAndDownstreamsDeletion(ctx context.Context, toDeleteJob *job.Job, toDeleteSpecMap map[job.FullName]*job.Spec, alreadyDeleted map[job.FullName]bool) (map[string]dto.BulkDeleteTracker, []job.Name) {
-	deletionTracker := map[string]dto.BulkDeleteTracker{}
+	deletionTrackerMap := map[string]dto.BulkDeleteTracker{}
 	deletedJobNames := []job.Name{}
 
 	jobName := toDeleteJob.Spec().Name()
-	parentDeletionTracker := dto.BulkDeleteTracker{
-		JobName: jobName.String(),
-		Success: false,
-	}
-	defer func() {
-		deletionTracker[jobName.String()] = parentDeletionTracker
-	}()
-
 	jobTenant := toDeleteJob.Tenant()
 	jobFullName := toDeleteJob.FullName()
 
+	handleDeletion := func(jobName job.Name, err error) {
+		tracker := dto.BulkDeleteTracker{
+			JobName: jobName.String(),
+			Success: true,
+		}
+		if err != nil {
+			j.logger.Error("error deleting job [%s]: %s", jobName.String(), err)
+			tracker.Message = err.Error()
+			tracker.Success = false
+		}
+		deletionTrackerMap[jobName.String()] = tracker
+	}
+
 	downstreams, err := j.validateDeleteWithDownstreams(ctx, toDeleteJob, toDeleteSpecMap)
 	if err != nil {
-		j.logger.Error("error validating downstreams for job [%s]: %s", toDeleteJob.Spec().Name(), err)
-		parentDeletionTracker.Message = err.Error()
-		return deletionTracker, nil
+		handleDeletion(toDeleteJob.Spec().Name(), err)
+		return deletionTrackerMap, nil
 	}
 
 	isDeletionFail := false
+	// delete its downstreams first
 	for i := len(downstreams) - 1; i >= 0 && !isDeletionFail; i-- {
 		downstream := downstreams[i]
 		if alreadyDeleted[downstream.FullName()] {
 			continue
 		}
 
-		downstreamDeletionTracker := dto.BulkDeleteTracker{
-			JobName: downstream.Name().String(),
-			Success: false,
-		}
-
 		if err = j.jobRepo.Delete(ctx, downstream.ProjectName(), downstream.Name(), false); err != nil {
-			j.logger.Error("error deleting [%s] as downstream of [%s]", downstream.Name(), jobName)
-			downstreamDeletionTracker.Message = err.Error()
+			handleDeletion(downstream.Name(), err)
 			isDeletionFail = true
 		} else {
 			j.raiseDeleteEvent(jobTenant, downstream.Name())
 			raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
 
-			alreadyDeleted[downstream.FullName()] = true
 			deletedJobNames = append(deletedJobNames, downstream.Name())
-			downstreamDeletionTracker.Success = true
+			handleDeletion(downstream.Name(), nil)
 		}
-
-		deletionTracker[downstream.Name().String()] = downstreamDeletionTracker
 	}
 
-	if alreadyDeleted[job.FullName(jobFullName)] || isDeletionFail {
-		j.logger.Warn("job [%s] deletion is skipped [already deleted or failure in deleting downstreams]", jobName)
-		return deletionTracker, deletedJobNames
+	// then delete the current job
+	if alreadyDeleted[job.FullName(jobFullName)] {
+		j.logger.Warn("job [%s] deletion is skipped [already deleted]", jobName)
+		return deletionTrackerMap, deletedJobNames
+	}
+	if isDeletionFail {
+		handleDeletion(jobName, fmt.Errorf("one or more job downstreams cannot be deleted"))
+		return deletionTrackerMap, deletedJobNames
 	}
 	if err = j.jobRepo.Delete(ctx, jobTenant.ProjectName(), jobName, false); err != nil {
-		j.logger.Error("error deleting job [%s]")
-		parentDeletionTracker.Message = err.Error()
-		return deletionTracker, deletedJobNames
+		handleDeletion(jobName, err)
+		return deletionTrackerMap, deletedJobNames
 	}
 
-	alreadyDeleted[job.FullName(jobFullName)] = true
 	j.raiseDeleteEvent(jobTenant, jobName)
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
 
 	deletedJobNames = append(deletedJobNames, toDeleteJob.Spec().Name())
-	parentDeletionTracker.Success = true
+	handleDeletion(jobName, nil)
 
-	return deletionTracker, deletedJobNames
+	return deletionTrackerMap, deletedJobNames
 }

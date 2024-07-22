@@ -56,7 +56,8 @@ func (r Repository) Create(ctx context.Context, resourceModel *resource.Resource
 
 func (r Repository) Update(ctx context.Context, resourceModel *resource.Resource) error {
 	// we should fetch include `deleted`, because it also used for re-create `deleted` state resource
-	existing, err := r.ReadByFullName(ctx, resourceModel.Tenant(), resourceModel.Store(), resourceModel.FullName(), false)
+	const excludeDeleted = false
+	existing, err := r.ReadByFullName(ctx, resourceModel.Tenant(), resourceModel.Store(), resourceModel.FullName(), excludeDeleted)
 	if err != nil {
 		return err
 	}

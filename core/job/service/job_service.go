@@ -2009,7 +2009,6 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 		toDeleteJobs = append(toDeleteJobs, existingJob)
 	}
 
-	me := errors.NewMultiError("error bulk deleting jobs")
 	toDeleteMap := toDeleteJobs.GetNameMap()
 	toDeleteSpecMap := toDeleteJobs.GetFullNameToSpecMap()
 
@@ -2025,10 +2024,13 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 		}
 
 		for jobName, tracker := range deletionTracker {
-			deletionTrackerMap[jobName] = tracker
+			if _, alreadyDeleted := deletionTrackerMap[jobName]; !alreadyDeleted {
+				deletionTrackerMap[jobName] = tracker
+			}
 		}
 	}
 
+	me := errors.NewMultiError("error cleanup jobs in scheduler")
 	deletedJobsPerNamespace := deletedJobs.GetNamespaceNameAndJobsMap()
 	for namespaceName, deletedJobs := range deletedJobsPerNamespace {
 		tnnt, _ := tenant.NewTenant(projectName.String(), namespaceName.String())

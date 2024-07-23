@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -186,8 +185,8 @@ func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause s
 	c.isOperationFail = true
 }
 
-func (c *applyCommand) printFailedAll(operation, kind, name, cause string) {
-	c.logger.Error("%s: %s %s ❌", operation, kind, name)
+func (c *applyCommand) printFailedAll(operation, kind, cause string) {
+	c.logger.Error("[all] %s: %s %s ❌", operation, kind)
 	if c.verbose && cause != "" {
 		c.logger.Error(cause)
 	}
@@ -199,14 +198,9 @@ func (c *applyCommand) executeJobBulkDelete(ctx context.Context, client pb.JobSp
 		return []string{}
 	}
 
-	allJobs := []string{}
-	for _, jobToDelete := range request.Jobs {
-		allJobs = append(allJobs, jobToDelete.JobName)
-	}
-
 	response, err := client.BulkDeleteJobs(ctx, request)
 	if err != nil {
-		c.printFailedAll("bulk-delete", "job", strings.Join(allJobs, ","), err.Error())
+		c.printFailedAll("bulk-delete", "job", err.Error())
 		return nil
 	}
 

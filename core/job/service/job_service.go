@@ -2057,8 +2057,8 @@ func (j *JobService) validateDeleteWithDownstreams(ctx context.Context, toDelete
 	// flatten downstreams per level into a single list,
 	// with direct downstreams will be put first & the leaf downstreams at the end
 	downstreams := []*job.Downstream{}
-	for _, dss := range downstreamsPerLevel {
-		downstreams = append(downstreams, dss...)
+	for _, currentDownstreams := range downstreamsPerLevel {
+		downstreams = append(downstreams, currentDownstreams...)
 	}
 
 	return downstreams, nil

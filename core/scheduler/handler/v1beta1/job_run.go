@@ -20,6 +20,7 @@ type JobRunService interface {
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
+	RunJob(ctx context.Context)
 }
 
 type Notifier interface {
@@ -78,6 +79,11 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 		Files:   input.Files,
 		Secrets: input.Secrets,
 	}, nil
+}
+
+func (h JobRunHandler) RunJob(ctx context.Context, req *pb.RunJobRequest) (*pb.RunJobResponse, error) {
+	h.service.RunJob(ctx)
+	return &pb.RunJobResponse{}, nil
 }
 
 // JobRun currently gets the job runs from scheduler based on the criteria

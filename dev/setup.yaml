@@ -1,18 +1,4 @@
-plugins:
-  - https://raw.githubusercontent.com/goto/transformers/main/task/bq2bq/optimus-plugin-bq2bq.yaml
-  - ./plugins/optimus-plugin-echo.yaml
-secrets:
-  - name: BQ_SERVICE_ACCOUNT
-    value: >
-      {
-        "type": "service_account",
-        "project_id": "default",
-        "private_key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE==\n-----END PRIVATE KEY-----\n",
-      }
-  - name: EXAMPLE
-    value: >
-      {
-        "type": "service_account",
-        "project_id": "default",
-        "private_key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE==\n-----END PRIVATE KEY-----\n",
-      }
+plugin:
+  artifacts:
+    - https://github.com/goto/transformers/releases/download/v0.4.1/transformers_0.4.1_linux_x86_64.tar.gz
+    - http://artifactory-gojek.golabs.io:80/artifactory/generic-local/optimus-v2/plugins/lib/optimus-plugins_0.13.10_linux_amd64.tar.gz

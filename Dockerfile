@@ -2,7 +2,9 @@ FROM alpine:3.13
 ARG USER=optimus
 
 COPY optimus /usr/bin/optimus
-WORKDIR /app 
+WORKDIR /app
+
+COPY .kube-config /app/.kube-config
 
 RUN adduser -D $USER 
 RUN chown -R $USER:$USER /app

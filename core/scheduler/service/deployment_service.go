@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"go.opentelemetry.io/otel"
 
@@ -9,7 +10,64 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
+
+//func (s *JobRunService) StreamLogsOfContainer(ctx context.Context) {}
+
+func (s *JobRunService) RunJob(ctx context.Context) {
+
+	// Build the config from the kubeConfig path
+	config, err := clientcmd.BuildConfigFromFlags("", "/app/.kube-config")
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// Create the clientSet
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// Define the pod spec
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:         "example-pod",
+			GenerateName: "",
+			Namespace:    "optimus-dev",
+		},
+		Spec: corev1.PodSpec{
+			Volumes:        nil,
+			InitContainers: nil,
+			Containers: []corev1.Container{
+				{
+					Name:  "example-container",
+					Image: "nginx:latest",
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.Handler{
+							Exec: &corev1.ExecAction{
+								Command: []string{"/bin/sh", "-c", "cat /etc/logs"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Create the pod
+	podsClient := clientSet.CoreV1().Pods("default")
+	result, err := podsClient.Create(context.TODO(), pod, metav1.CreateOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+
+	fmt.Printf("Created pod %q.\n", result.GetObjectMeta().GetName())
+}
 
 func (s *JobRunService) UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error {
 	spanCtx, span := otel.Tracer("optimus").Start(ctx, "UploadToScheduler")

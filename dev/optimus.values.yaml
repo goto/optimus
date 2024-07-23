@@ -41,7 +41,10 @@ configYaml: |-
   log:
     level: DEBUG
   serve:
-    ingress_host: optimus-dev.optimus-dev.svc.cluster.local:80
+    port: 9100
+    ingress_host: optimus-dev.optimus-dev.svc.cluster.local
+    port_grpc: 9101
+    ingress_host_grpc: 0.0.0.0
   scheduler:
     name: airflow2
 

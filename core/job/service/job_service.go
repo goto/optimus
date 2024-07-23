@@ -2012,20 +2012,18 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 	toDeleteMap := toDeleteJobs.GetNameMap()
 	toDeleteSpecMap := toDeleteJobs.GetFullNameToSpecMap()
 
-	alreadyDeleted := map[job.FullName]bool{}
 	deletedJobs := job.Jobs{}
 	for _, toDeleteJob := range toDeleteJobs {
-		deletionTracker, deletedJobNames := j.resolveJobAndDownstreamsDeletion(ctx, toDeleteJob, toDeleteSpecMap, alreadyDeleted)
-		for _, deletedJobName := range deletedJobNames {
-			deletedJob := toDeleteMap[deletedJobName]
-
-			deletedJobs = append(deletedJobs, deletedJob)
-			alreadyDeleted[job.FullName(deletedJob.FullName())] = true
+		if _, alreadyProcessed := deletionTrackerMap[toDeleteJob.GetName()]; alreadyProcessed {
+			continue
 		}
 
+		deletionTracker, _ := j.resolveJobAndDownstreamsDeletion(ctx, toDeleteJob, toDeleteSpecMap, deletionTrackerMap)
 		for jobName, tracker := range deletionTracker {
-			if _, alreadyDeleted := deletionTrackerMap[jobName]; !alreadyDeleted {
-				deletionTrackerMap[jobName] = tracker
+			deletedJob := toDeleteMap[job.Name(jobName)]
+			deletionTrackerMap[jobName] = tracker
+			if tracker.Success {
+				deletedJobs = append(deletedJobs, deletedJob)
 			}
 		}
 	}
@@ -2064,13 +2062,12 @@ func (j *JobService) validateDeleteWithDownstreams(ctx context.Context, toDelete
 	return downstreams, nil
 }
 
-func (j *JobService) resolveJobAndDownstreamsDeletion(ctx context.Context, toDeleteJob *job.Job, toDeleteSpecMap map[job.FullName]*job.Spec, alreadyDeleted map[job.FullName]bool) (map[string]dto.BulkDeleteTracker, []job.Name) {
+func (j *JobService) resolveJobAndDownstreamsDeletion(ctx context.Context, toDeleteJob *job.Job, toDeleteSpecMap map[job.FullName]*job.Spec, currentTrackerMap map[string]dto.BulkDeleteTracker) (map[string]dto.BulkDeleteTracker, []job.Name) {
 	deletionTrackerMap := map[string]dto.BulkDeleteTracker{}
 	deletedJobNames := []job.Name{}
 
 	jobName := toDeleteJob.Spec().Name()
 	jobTenant := toDeleteJob.Tenant()
-	jobFullName := toDeleteJob.FullName()
 
 	handleDeletion := func(jobName job.Name, err error) {
 		tracker := dto.BulkDeleteTracker{
@@ -2095,7 +2092,7 @@ func (j *JobService) resolveJobAndDownstreamsDeletion(ctx context.Context, toDel
 	// delete its downstreams first
 	for i := len(downstreams) - 1; i >= 0 && !isDeletionFail; i-- {
 		downstream := downstreams[i]
-		if alreadyDeleted[downstream.FullName()] {
+		if _, alreadyProcessed := currentTrackerMap[downstream.Name().String()]; alreadyProcessed {
 			continue
 		}
 
@@ -2112,7 +2109,7 @@ func (j *JobService) resolveJobAndDownstreamsDeletion(ctx context.Context, toDel
 	}
 
 	// then delete the current job
-	if alreadyDeleted[job.FullName(jobFullName)] {
+	if _, alreadyProcessed := currentTrackerMap[jobName.String()]; alreadyProcessed {
 		j.logger.Warn("job [%s] deletion is skipped [already deleted]", jobName)
 		return deletionTrackerMap, deletedJobNames
 	}

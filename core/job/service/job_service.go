@@ -2006,7 +2006,9 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 			return deletionTrackerMap, err
 		}
 
-		toDeleteJobs = append(toDeleteJobs, existingJob)
+		if existingJob != nil {
+			toDeleteJobs = append(toDeleteJobs, existingJob)
+		}
 	}
 
 	toDeleteMap := toDeleteJobs.GetNameMap()

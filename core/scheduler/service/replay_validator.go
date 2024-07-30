@@ -40,21 +40,20 @@ func (v Validator) validateDateRange(ctx context.Context, replayRequest *schedul
 	}
 	replayStartDate := replayRequest.Config().StartTime.UTC()
 	replayEndDate := replayRequest.Config().EndTime.UTC()
-	jobExecutionStartDate := jobSpec.Schedule.StartDate.UTC()
-	schedulingStartDate := jobCron.Next(jobExecutionStartDate)
+	jobLogicalStartDate := jobSpec.Schedule.StartDate.UTC()
+	jobScheduleStartDate := jobCron.Next(jobLogicalStartDate)
 
 	// time bound for end date
-	jobEndDate := jobSpec.Schedule.EndDate.UTC()
-	if jobSpec.Schedule.EndDate != nil && replayEndDate.After(jobEndDate) {
-		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay end date (%s) is not allowed to be set after the job end date (%s)", replayEndDate.String(), jobEndDate.String()))
+	if jobSpec.Schedule.EndDate != nil && replayEndDate.After(jobSpec.Schedule.EndDate.UTC()) {
+		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay end date (%s) is not allowed to be set after the job end date (%s)", replayEndDate.String(), jobSpec.Schedule.EndDate.UTC().String()))
 	}
 	currentTime := time.Now().UTC()
 	if replayEndDate.After(currentTime) {
 		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay end date (%s) is not allowed to be set to a future date, current time: (%s)", replayEndDate.String(), currentTime.String()))
 	}
 
-	if replayStartDate.Before(schedulingStartDate) {
-		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay start date (%s) is not allowed to be set before job scheduling start date (%s)", replayStartDate.String(), schedulingStartDate.String()))
+	if replayStartDate.Before(jobScheduleStartDate) {
+		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay start date (%s) is not allowed to be set before job scheduling start date (%s)", replayStartDate.String(), jobScheduleStartDate.String()))
 	}
 
 	return nil

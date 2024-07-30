@@ -76,6 +76,9 @@ type JobSpecificationServiceClient interface {
 	UpdateJobsState(ctx context.Context, in *UpdateJobsStateRequest, opts ...grpc.CallOption) (*UpdateJobsStateResponse, error)
 	// SyncJobsState enable / disable job on scheuler
 	SyncJobsState(ctx context.Context, in *SyncJobsStateRequest, opts ...grpc.CallOption) (*SyncJobsStateResponse, error)
+	// BulkDeleteJobs deletes one or more jobs in bulk operation,
+	// while following postorder deletion, starting from jobs with no dependencies
+	BulkDeleteJobs(ctx context.Context, in *BulkDeleteJobsRequest, opts ...grpc.CallOption) (*BulkDeleteJobsResponse, error)
 }
 
 type jobSpecificationServiceClient struct {
@@ -377,6 +380,15 @@ func (c *jobSpecificationServiceClient) SyncJobsState(ctx context.Context, in *S
 	return out, nil
 }
 
+func (c *jobSpecificationServiceClient) BulkDeleteJobs(ctx context.Context, in *BulkDeleteJobsRequest, opts ...grpc.CallOption) (*BulkDeleteJobsResponse, error) {
+	out := new(BulkDeleteJobsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/BulkDeleteJobs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobSpecificationServiceServer is the server API for JobSpecificationService service.
 // All implementations must embed UnimplementedJobSpecificationServiceServer
 // for forward compatibility
@@ -435,6 +447,9 @@ type JobSpecificationServiceServer interface {
 	UpdateJobsState(context.Context, *UpdateJobsStateRequest) (*UpdateJobsStateResponse, error)
 	// SyncJobsState enable / disable job on scheuler
 	SyncJobsState(context.Context, *SyncJobsStateRequest) (*SyncJobsStateResponse, error)
+	// BulkDeleteJobs deletes one or more jobs in bulk operation,
+	// while following postorder deletion, starting from jobs with no dependencies
+	BulkDeleteJobs(context.Context, *BulkDeleteJobsRequest) (*BulkDeleteJobsResponse, error)
 	mustEmbedUnimplementedJobSpecificationServiceServer()
 }
 
@@ -507,6 +522,9 @@ func (UnimplementedJobSpecificationServiceServer) UpdateJobsState(context.Contex
 }
 func (UnimplementedJobSpecificationServiceServer) SyncJobsState(context.Context, *SyncJobsStateRequest) (*SyncJobsStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SyncJobsState not implemented")
+}
+func (UnimplementedJobSpecificationServiceServer) BulkDeleteJobs(context.Context, *BulkDeleteJobsRequest) (*BulkDeleteJobsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BulkDeleteJobs not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) mustEmbedUnimplementedJobSpecificationServiceServer() {
 }
@@ -940,6 +958,24 @@ func _JobSpecificationService_SyncJobsState_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobSpecificationService_BulkDeleteJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BulkDeleteJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobSpecificationServiceServer).BulkDeleteJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/BulkDeleteJobs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobSpecificationServiceServer).BulkDeleteJobs(ctx, req.(*BulkDeleteJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobSpecificationService_ServiceDesc is the grpc.ServiceDesc for JobSpecificationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1018,6 +1054,10 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SyncJobsState",
 			Handler:    _JobSpecificationService_SyncJobsState_Handler,
+		},
+		{
+			MethodName: "BulkDeleteJobs",
+			Handler:    _JobSpecificationService_BulkDeleteJobs_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

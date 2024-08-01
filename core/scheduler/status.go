@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
 )
@@ -192,6 +193,15 @@ type JobRunsCriteria struct {
 	EndDate     time.Time
 	Filter      []string
 	OnlyLastRun bool
+}
+
+type JobSensorParameters struct {
+	SubjectJobName     JobName
+	SubjectProjectName tenant.ProjectName
+	ScheduledTime      time.Time
+
+	UpstreamJobName JobName
+	UpstreamTenant  tenant.Tenant
 }
 
 func (c *JobRunsCriteria) ExecutionStart(cron *cron.ScheduleSpec) time.Time {

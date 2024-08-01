@@ -20,6 +20,7 @@ type JobRunService interface {
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
+	GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) ([]*scheduler.JobRunStatus, error)
 }
 
 type Notifier interface {
@@ -140,19 +141,16 @@ func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, 
 	}, nil
 }
 
-func (h JobRunHandler) GetUpstreamJobRuns(ctx context.Context, req *pb.GetJobUpstreamRunRequest) (*pb.GetJobUpstreamRunResponse, error) {
-	upstreamHost := req.GetUpstreamHost()
-	if upstreamHost == "" {
-
-	}
+func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.GetJobUpstreamRunRequest) (*pb.GetJobUpstreamRunResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "unable to get projectName")
 	}
-	upstreamProjectName, err := tenant.ProjectNameFrom(req.GetUpstreamProjectName())
+
+	upstreamTenant, err := tenant.NewTenant(req.GetUpstreamProjectName(), req.GetUpstreamNamespaceName())
 	if err != nil {
-		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		h.l.Error("error adapting upstream tenant from Project:[%s], Namespace:[%s], err:%s", req.GetUpstreamProjectName(), req.GetUpstreamNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "unable to get projectName")
 	}
 	upstreamJobName, err := scheduler.JobNameFrom(req.GetUpstreamJobName())
@@ -160,15 +158,44 @@ func (h JobRunHandler) GetUpstreamJobRuns(ctx context.Context, req *pb.GetJobUps
 		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
-
 	jobName, err := scheduler.JobNameFrom(req.GetJobName())
 	if err != nil {
 		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
-	// identify if this is internal or external upstream
-	return &pb.GetJobUpstreamRunResponse{}, nil
+	sensorParameters := scheduler.JobSensorParameters{
+		SubjectJobName:     jobName,
+		SubjectProjectName: projectName,
+		ScheduledTime:      req.GetScheduleTime().AsTime(),
+		UpstreamJobName:    upstreamJobName,
+		UpstreamTenant:     upstreamTenant,
+	}
+
+	filter := req.GetFilter()
+
+	runs, err := h.service.GetUpstreamJobRuns(ctx, req.GetUpstreamHost(), sensorParameters, filter)
+	if err != nil {
+		h.l.Error("unable to get job runs for request %#v, err: %s", sensorParameters, err)
+		return nil, err
+	}
+
+	jobRuns := make([]*pb.JobRun, len(runs))
+	allSuccess := true
+	for i, r := range runs {
+		jobRuns[i] = &pb.JobRun{
+			State:       r.State.String(),
+			ScheduledAt: timestamppb.New(r.ScheduledAt),
+		}
+		if r.State != scheduler.StateSuccess {
+			allSuccess = false
+		}
+	}
+
+	return &pb.GetJobUpstreamRunResponse{
+		AllSuccess: allSuccess,
+		JobRuns:    jobRuns,
+	}, nil
 }
 
 func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSchedulerRequest) (*pb.UploadToSchedulerResponse, error) {

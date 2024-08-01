@@ -732,6 +732,14 @@ func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.
 	return args.Get(0).(interval.Interval), args.Error(1)
 }
 
+func (m *mockJobRunService) GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) ([]*scheduler.JobRunStatus, error) {
+	args := m.Called(ctx, upstreamHost, sensorParameters, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
+}
+
 type mockNotifier struct {
 	mock.Mock
 }

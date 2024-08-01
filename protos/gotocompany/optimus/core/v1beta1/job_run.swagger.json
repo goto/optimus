@@ -136,6 +136,41 @@
         "tags": [
           "JobRunService"
         ]
+      },
+      "put": {
+        "summary": "GetInterval gets interval on specific job given reference time.",
+        "operationId": "JobRunService_RunJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1RunJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
       }
     },
     "/v1beta1/project/{projectName}/job/{jobName}/run_input": {
@@ -245,6 +280,12 @@
           },
           {
             "name": "upstreamProjectName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "upstreamNamespaceName",
             "in": "query",
             "required": false,
             "type": "string"
@@ -427,6 +468,9 @@
     "v1beta1GetJobUpstreamRunResponse": {
       "type": "object",
       "properties": {
+        "allSuccess": {
+          "type": "boolean"
+        },
         "jobRuns": {
           "type": "array",
           "items": {
@@ -525,6 +569,9 @@
       }
     },
     "v1beta1RegisterJobEventResponse": {
+      "type": "object"
+    },
+    "v1beta1RunJobResponse": {
       "type": "object"
     },
     "v1beta1UploadToSchedulerResponse": {

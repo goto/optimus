@@ -34,6 +34,8 @@ type JobRunServiceClient interface {
 	GetInterval(ctx context.Context, in *GetIntervalRequest, opts ...grpc.CallOption) (*GetIntervalResponse, error)
 	// GetInterval gets interval on specific job given reference time.
 	GetJobUpstreamRun(ctx context.Context, in *GetJobUpstreamRunRequest, opts ...grpc.CallOption) (*GetJobUpstreamRunResponse, error)
+	// GetInterval gets interval on specific job given reference time.
+	RunJob(ctx context.Context, in *RunJobRequest, opts ...grpc.CallOption) (*RunJobResponse, error)
 }
 
 type jobRunServiceClient struct {
@@ -98,6 +100,15 @@ func (c *jobRunServiceClient) GetJobUpstreamRun(ctx context.Context, in *GetJobU
 	return out, nil
 }
 
+func (c *jobRunServiceClient) RunJob(ctx context.Context, in *RunJobRequest, opts ...grpc.CallOption) (*RunJobResponse, error) {
+	out := new(RunJobResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/RunJob", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobRunServiceServer is the server API for JobRunService service.
 // All implementations must embed UnimplementedJobRunServiceServer
 // for forward compatibility
@@ -114,6 +125,8 @@ type JobRunServiceServer interface {
 	GetInterval(context.Context, *GetIntervalRequest) (*GetIntervalResponse, error)
 	// GetInterval gets interval on specific job given reference time.
 	GetJobUpstreamRun(context.Context, *GetJobUpstreamRunRequest) (*GetJobUpstreamRunResponse, error)
+	// GetInterval gets interval on specific job given reference time.
+	RunJob(context.Context, *RunJobRequest) (*RunJobResponse, error)
 	mustEmbedUnimplementedJobRunServiceServer()
 }
 
@@ -138,6 +151,9 @@ func (UnimplementedJobRunServiceServer) GetInterval(context.Context, *GetInterva
 }
 func (UnimplementedJobRunServiceServer) GetJobUpstreamRun(context.Context, *GetJobUpstreamRunRequest) (*GetJobUpstreamRunResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobUpstreamRun not implemented")
+}
+func (UnimplementedJobRunServiceServer) RunJob(context.Context, *RunJobRequest) (*RunJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RunJob not implemented")
 }
 func (UnimplementedJobRunServiceServer) mustEmbedUnimplementedJobRunServiceServer() {}
 
@@ -260,6 +276,24 @@ func _JobRunService_GetJobUpstreamRun_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobRunService_RunJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobRunServiceServer).RunJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/RunJob",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobRunServiceServer).RunJob(ctx, req.(*RunJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobRunService_ServiceDesc is the grpc.ServiceDesc for JobRunService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -290,6 +324,10 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetJobUpstreamRun",
 			Handler:    _JobRunService_GetJobUpstreamRun_Handler,
+		},
+		{
+			MethodName: "RunJob",
+			Handler:    _JobRunService_RunJob_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

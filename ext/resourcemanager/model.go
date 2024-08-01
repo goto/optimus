@@ -4,6 +4,10 @@ type getJobSpecificationsResponse struct {
 	JobSpecificationResponses []*jobSpecificationResponse `json:"jobSpecificationResponses"`
 }
 
+type getJobSpecificationResponse struct {
+	Spec jobSpecification `json:"spec"`
+}
+
 type jobSpecificationResponse struct {
 	ProjectName   string           `json:"projectName"`
 	NamespaceName string           `json:"namespaceName"`
@@ -78,6 +82,13 @@ type jobSpecHook struct {
 	Name   string          `json:"name"`
 	Config []jobConfigItem `json:"config"`
 }
+
+type jobRun struct {
+	State       string `json:"state"`
+	ScheduledAt string `json:"scheduledAt"`
+}
+
+type getJobRunsResponse []*jobRun
 
 type jobDependency struct {
 	Name           string         `json:"name"`

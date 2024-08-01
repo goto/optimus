@@ -100,7 +100,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualError := repository.Update(ctx, resourceToUpdate)
 			assert.NoError(t, actualError)
 
-			storedResources, err := repository.ReadAll(ctx, tnnt, store, true)
+			storedResources, err := repository.ReadAll(ctx, tnnt, store, false)
 			assert.NoError(t, err)
 			assert.Len(t, storedResources, 1)
 			assert.EqualValues(t, resourceToUpdate, storedResources[0])

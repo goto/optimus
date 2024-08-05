@@ -61,6 +61,11 @@ func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHand
 	return NewExternalTableHandle(t)
 }
 
+func (c *BqClient) ModelHandleFrom(ds Dataset, name string) ResourceHandle {
+	t := c.DatasetInProject(ds.Project, ds.DatasetName).Model(name)
+	return NewModelHandle(t)
+}
+
 func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names []string) (map[ResourceURN]string, error) {
 	me := errors.NewMultiError("bulk get ddl view errors")
 	urnToDDL := make(map[ResourceURN]string, len(names))

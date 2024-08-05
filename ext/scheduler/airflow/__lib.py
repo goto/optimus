@@ -1,25 +1,25 @@
 import json
 import logging
-from datetime import datetime, timedelta
-
-from typing import Any, Dict, Optional
-
+import base64
 import pendulum
 import requests
+
+from typing import Dict
+from datetime import datetime, timedelta
+from croniter import croniter
+from kubernetes.client import models as k8s
+
 from airflow.configuration import conf
-from airflow.hooks.base import BaseHook
 from airflow.models import (Variable, XCom, TaskReschedule )
 try:
     from airflow.models import XCOM_RETURN_KEY
 except ImportError:
     from airflow.utils.xcom import XCOM_RETURN_KEY  # airflow >= 2.5
 from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
-from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.state import TaskInstanceState
 from airflow.exceptions import AirflowException
-from croniter import croniter
-from kubernetes.client import models as k8s
+
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -86,17 +86,21 @@ class OptimusAPIClient:
             return host
         return "http://" + host
 
-    def get_job_run(self, project_name: str, job_name: str, start_date: str, end_date: str, downstream_project_name: str, downstream_job_name: str) -> dict:
-        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/run'.format(
+    def get_job_run(self, project_name: str, job_name: str, schedule_time: str, upstream_host: str,  upstream_project_name: str,  upstream_namespace_name: str, upstream_job_name: str) -> dict:
+        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/upstream/run'.format(
             optimus_host=self.host,
             optimus_project=project_name,
             optimus_job=job_name,
         )
+        # upstream_host base 64 encode
+        upstream_host = base64.b64encode(upstream_host.encode(), altchars=None)
+
         response = requests.get(url, params={
-            'start_date': start_date,
-            'end_date': end_date,
-            'downstream_project_name': downstream_project_name,
-            'downstream_job_name': downstream_job_name
+            'schedule_time': schedule_time,
+            'upstream_host': upstream_host.decode(),
+            'upstream_project_name': upstream_project_name,
+            'upstream_namespace_name': upstream_namespace_name,
+            'upstream_job_name': upstream_job_name
         }, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         return response.json()
@@ -122,16 +126,6 @@ class OptimusAPIClient:
         self._raise_error_if_request_failed(response)
         return response.json()
 
-    def get_job_metadata(self, execution_date, namespace, project, job) -> dict:
-        url = '{optimus_host}/api/v1beta1/project/{project_name}/namespace/{namespace_name}/job/{job_name}'.format(
-            optimus_host=self.host,
-            namespace_name=namespace,
-            project_name=project,
-            job_name=job)
-        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
-        return response.json()
-
     def notify_event(self, project, namespace, job, event) -> dict:
         url = '{optimus_host}/api/v1beta1/project/{project_name}/namespace/{namespace}/job/{job_name}/event'.format(
             optimus_host=self.host,
@@ -151,44 +145,6 @@ class OptimusAPIClient:
             log.error("Request to optimus returned non-200 status code. Server response:\n")
             log.error(response.json())
             raise AssertionError("request to optimus returned non-200 status code. url: " + response.url)
-
-
-class JobSpecTaskWindow:
-    def __init__(self, optimus_client: OptimusAPIClient, project_name: str, job_name: str):
-        self._optimus_client = optimus_client
-        self.project_name = project_name
-        self.job_name = job_name
-
-    def get(self, scheduled_at: str) -> (datetime, datetime):
-        api_response = self._fetch_task_window(scheduled_at)
-        return (
-            self._parse_datetime(api_response['startTime']),
-            self._parse_datetime(api_response['endTime']),
-        )
-
-    # window start is inclusive
-    def get_schedule_window(self, scheduled_at: str, upstream_schedule: str) -> (str, str):
-        api_response = self._fetch_task_window(scheduled_at)
-
-        schedule_time_window_start = self._parse_datetime(api_response['startTime'])
-        schedule_time_window_end = self._parse_datetime(api_response['endTime'])
-
-        job_cron_iter = croniter(upstream_schedule, schedule_time_window_start)
-        schedule_time_window_inclusive_start = job_cron_iter.get_next(datetime)
-        return (
-            self._parse_datetime_utc_str(schedule_time_window_inclusive_start),
-            self._parse_datetime_utc_str(schedule_time_window_end),
-        )
-
-    def _parse_datetime(self, timestamp):
-        return datetime.strptime(timestamp, TIMESTAMP_FORMAT)
-
-    def _parse_datetime_utc_str(self, timestamp):
-        return timestamp.strftime(TIMESTAMP_FORMAT)
-
-    def _fetch_task_window(self, scheduled_at: str) -> dict:
-        return self._optimus_client.get_task_window(self.project_name, self.job_name, scheduled_at)
-
 
 class SuperExternalTaskSensor(BaseSensorOperator):
 
@@ -211,87 +167,32 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self.upstream_optimus_namespace = upstream_optimus_namespace
         self.upstream_optimus_job = upstream_optimus_job
         self._optimus_client = OptimusAPIClient(optimus_hostname)
-        self._upstream_optimus_client = OptimusAPIClient(upstream_optimus_hostname)
 
     def poke(self, context):
-        schedule_time = get_scheduled_at(context)
-        # the 3 APIs 
-        #   get_schedule_interval
-        #   get_schedule_window 
-        #   _are_all_job_runs_successful
-        #  
-        #  what all is needed for these APIS
-        #  
-        #       subject_job schedule_time -> upstream_schedule
-        #       project_name, job_name
-        #       get job interval
-        #       
-        #       
-
-
         try:
-            upstream_schedule = self.get_schedule_interval(schedule_time)
-        except Exception as e:
-            self.log.warning("error while fetching upstream schedule :: {}".format(e))
-            context[SCHEDULER_ERR_MSG] = "error while fetching upstream schedule :: {}".format(e)
-            return False
+            schedule_time = get_scheduled_at(context)
+            upstream_host = ""
+            if self.upstream_optimus_hostname != self.optimus_hostname:
+                upstream_host = self.upstream_optimus_hostname
 
-        last_upstream_schedule_time, _ = self.get_last_upstream_times(
-            schedule_time, upstream_schedule)
+            api_response = self._optimus_client.get_job_run( self.project_name,
+                                              self.job_name,
+                                              schedule_time.strftime(TIMESTAMP_FORMAT),
+                                              upstream_host,
+                                              self.upstream_optimus_project,
+                                              self.upstream_optimus_namespace,
+                                              self.upstream_optimus_job)
 
-        # get schedule window
-        task_window = JobSpecTaskWindow(self._optimus_client, self.project_name, self.job_name)
-        schedule_time_window_start, schedule_time_window_end = task_window.get_schedule_window(
-            last_upstream_schedule_time.strftime(TIMESTAMP_FORMAT), upstream_schedule)
-
-        self.log.info("waiting for upstream runs between: {} - {} schedule times of airflow dag run".format(
-            schedule_time_window_start, schedule_time_window_end))
-
-        if not self._are_all_job_runs_successful(schedule_time_window_start, schedule_time_window_end):
-            self.log.warning("unable to find enough successful executions for upstream '{}' in "
-                             "'{}' dated between {} and {}(inclusive), rescheduling sensor".
-                             format(self.upstream_optimus_job, self.upstream_optimus_project, schedule_time_window_start,
-                                    schedule_time_window_end))
-            return False
-        return True
-
-    def get_last_upstream_times(self, schedule_time_of_current_job, upstream_schedule_interval):
-        second_ahead_of_schedule_time = schedule_time_of_current_job + timedelta(seconds=1)
-        c = croniter(upstream_schedule_interval, second_ahead_of_schedule_time)
-        last_upstream_schedule_time = c.get_prev(datetime)
-        last_upstream_execution_date = c.get_prev(datetime)
-        return last_upstream_schedule_time, last_upstream_execution_date
-
-    def get_schedule_interval(self, schedule_time):
-        schedule_time_str = schedule_time.strftime(TIMESTAMP_FORMAT)
-        job_metadata = self._upstream_optimus_client.get_job_metadata(schedule_time_str, self.upstream_optimus_namespace,
-                                                             self.upstream_optimus_project, self.upstream_optimus_job)
-        upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
-        return upstream_schedule
-
-    # TODO the api will be updated with getJobRuns even though the field here refers to scheduledAt
-    #  it points to execution_date
-    def _are_all_job_runs_successful(self, schedule_time_window_start, schedule_time_window_end) -> bool:
-        try:
-            api_response = self._upstream_optimus_client.get_job_run(
-                self.upstream_optimus_project, self.upstream_optimus_job,
-                schedule_time_window_start, schedule_time_window_end,
-                self.project_name, self.job_name)
-            self.log.info("job_run api response :: {}".format(api_response))
         except Exception as e:
             self.log.warning("error while fetching job runs :: {}".format(e))
             raise AirflowException(e)
+
+        self.log.info("upstream runs :: {}".format(api_response['jobRuns']))
         for job_run in api_response['jobRuns']:
             if job_run['state'] != 'success':
                 self.log.info("failed for run :: {}".format(job_run))
-                return False
-        return True
 
-    def _parse_datetime(self, timestamp) -> datetime:
-        try:
-            return datetime.strptime(timestamp, TIMESTAMP_FORMAT)
-        except ValueError:
-            return datetime.strptime(timestamp, TIMESTAMP_MS_FORMAT)
+        return api_response['allSuccess']
 
 
 def optimus_notify(context, event_meta):
@@ -337,6 +238,7 @@ def optimus_notify(context, event_meta):
                 task_instance = ti
                 break
 
+    message = {
         "log_url": task_instance.log_url,
         "task_id": task_instance.task_id,
         "attempt": task_instance.try_number,
@@ -515,150 +417,3 @@ def get_result_for_monitoring_from_xcom(ctx):
         if 'monitoring' in return_value:
             return return_value['monitoring']
     return None
-
-# everything below this is here for legacy reasons, should be cleaned up in future
-
-def alert_failed_to_slack(context):
-    SLACK_CONN_ID = "slack_alert"
-    TASKFAIL_ALERT = int(Variable.get("taskfail_alert", default_var=1))
-    SLACK_CHANNEL = Variable.get("slack_channel")
-
-    def _xcom_value_has_error(_xcom) -> bool:
-        return _xcom.key == XCOM_RETURN_KEY and isinstance(_xcom.value, dict) and 'error' in _xcom.value and \
-               _xcom.value['error'] != None
-
-    if TASKFAIL_ALERT != 1:
-        return "suppressed failure alert"
-
-    slack_token = ""
-    try:
-        slack_token = BaseHook.get_connection(SLACK_CONN_ID).password
-    except:
-        print("no slack connection variable set")
-        return "{connection} connection variable not defined, unable to send alerts".format(connection=SLACK_CONN_ID)
-
-    if not SLACK_CHANNEL:
-        return "no slack channel variable set"
-
-    current_dag_id = context.get('task_instance').dag_id
-    current_task_id = context.get('task_instance').task_id
-    current_execution_date = context.get('execution_date')
-
-    # failure message pushed by failed tasks
-    failure_messages = []
-    for xcom in XCom.get_many(
-            current_execution_date,
-            key=None,
-            task_ids=None,
-            dag_ids=current_dag_id,
-            include_prior_dates=False,
-            limit=10):
-        if xcom.key == 'error':
-            failure_messages.append(xcom.value)
-        if _xcom_value_has_error(xcom):
-            failure_messages.append(xcom.value['error'])
-    failure_message = ", ".join(failure_messages)
-    if failure_message != "":
-        log.info(f'failures: {failure_message}')
-
-    message_body = "\n".join([
-        "• *DAG*: {}".format(current_dag_id),
-        "• *Task*: {}".format(current_task_id),
-        "• *Execution Time*: {}".format(current_execution_date),
-        "• *Run ID*: {}".format(context.get('run_id'))
-    ])
-
-    message_footer = "\n".join([
-        ":blob-facepalm: Owner: {}".format(context.get('dag').owner),
-        ":hourglass: Duration: {} sec".format(context.get('task_instance').duration),
-        ":memo: Details: {}".format(failure_message)
-    ])
-
-    blocks = [
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "Task failed :fire:"
-            }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": message_body
-            }
-        },
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "style": "danger",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "View log :airflow:",
-                    },
-                    "url": context.get('task_instance').log_url,
-                    "action_id": "view_log",
-                }
-            ]
-        },
-        {
-            "type": "divider"
-        },
-        {
-            "type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": message_footer
-                },
-            ]
-        },
-    ]
-    failed_alert = SlackAPIPostOperator(
-        slack_conn_id=SLACK_CONN_ID,
-        token=slack_token,
-        blocks=blocks,
-        task_id='slack_failed_alert',
-        channel=SLACK_CHANNEL
-    )
-    return failed_alert.execute(context=context)
-
-
-class ExternalHttpSensor(BaseSensorOperator):
-    """
-    Executes a HTTP GET statement and returns False on failure caused by
-    404 Not Found
-
-    :param method: The HTTP request method to use
-    :param endpoint: The relative part of the full url
-    :param request_params: The parameters to be added to the GET url
-    :param headers: The HTTP headers to be added to the GET request
-
-    """
-
-    template_fields = ('endpoint', 'request_params', 'headers')
-
-    def __init__(
-            self,
-            endpoint: str,
-            method: str = 'GET',
-            request_params: Optional[Dict[str, Any]] = None,
-            headers: Optional[Dict[str, Any]] = None,
-            *args,
-            **kwargs,
-    ) -> None:
-        kwargs['mode'] = kwargs.get('mode', 'reschedule')
-        super().__init__(**kwargs)
-        self.endpoint = endpoint
-        self.request_params = request_params or {}
-        self.headers = headers or {}
-
-    def poke(self, context: 'Context') -> bool:
-        self.log.info('Poking: %s', self.endpoint)
-        r = requests.get(url=self.endpoint, headers=self.headers, params=self.request_params, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        if (r.status_code >= 200 and r.status_code <= 300):
-            return True
-        return False

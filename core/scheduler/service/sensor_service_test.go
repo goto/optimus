@@ -20,12 +20,10 @@ type windowConfig struct {
 }
 
 type testContext struct {
-	BaseJobStartDate        string
 	BaseJobScheduleInterval string
 	BaseJobWindowConfig     windowConfig
 
 	UpstreamJobScheduleInterval string
-	UpstreamJobStartDate        string
 	RecentUpstreamRuns          []*scheduler.JobRunStatus
 }
 
@@ -35,10 +33,9 @@ type testExpectation struct {
 }
 
 type testCase struct {
-	Description            string
-	BaseJobRunScheduleTime string
-	testContext            testContext
-	Expectations           testExpectation
+	Description  string
+	testContext  testContext
+	Expectations testExpectation
 }
 
 func TestGetUpstreamJobRuns(t *testing.T) {
@@ -54,6 +51,8 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 		tenant.ProjectSchedulerVersion: "",
 	})
 	assert.Nil(t, err)
+	jobStartDate := "2006-01-02T15:04:05Z"
+
 	if err != nil {
 		return
 	}
@@ -61,20 +60,245 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 	upstreamTenant, _ := tenant.NewTenant("upstream-proj", "UpstreamTenant-ns")
 
 	// Test Cases
+	baseJobRunScheduleTime := "2016-01-04T01:00:00Z"
 	tests := []testCase{
 		{
-			Description:            "Get all job runs for a given schedule time",
-			BaseJobRunScheduleTime: "2016-01-04T01:00:00Z",
+			Description: "Get today data until tomorrow",
 			testContext: testContext{
-				BaseJobStartDate:        "2006-01-02T15:04:05Z",
-				BaseJobWindowConfig:     windowConfig{"24h", "0d", "d", ""},
-				BaseJobScheduleInterval: "0 1 * * *",
-
-				UpstreamJobStartDate:        "2006-01-02T15:04:05Z",
+				BaseJobWindowConfig:         windowConfig{"1d", "1d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
 				UpstreamJobScheduleInterval: "0 1 * * *",
 			},
 			Expectations: testExpectation{
 				IntervalStart: "2016-01-03T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get yesterday data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"1d", "0d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-03T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 2 days data until today",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"2d", "0d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-02T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get yesterday data until tomorrow",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"2d", "1d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-02T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 2 days data until tomorrow",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"3d", "1d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-01T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 4 days data until tomorrow",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"5d", "1d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-30T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 7 days data until yesterday",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"6d", "-1d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-29T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 6 days data until tomorrow",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"7d", "1d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-28T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get 14 days data until tomorrow",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"15d", "1d", "d", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-20T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get previous monday of the week data until sunday",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"6d", "-1d", "w", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-29T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get previous week data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"1w", "0w", "w", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-28T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get this week data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"7d", "6d", "w", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-28T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get this month data until the next first day of the month data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"1M", "1M", "M", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-04T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get previous month data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"1M", "0M", "M", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-04T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 2 months data until previous month data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"1M", "-1M", "M", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2015-12-04T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 1 hour data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"1h", "0h", "h", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-04T00:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 24 hour data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"24h", "0h", "h", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-03T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get current data until next 24 hours data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"24h", "24h", "h", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-03T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get last 48 hours data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"48h", "0h", "h", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-02T01:00:00Z",
+				IntervalEnd:   "2016-01-04T01:00:00Z",
+			},
+		},
+		{
+			Description: "Get next 7 hours data",
+			testContext: testContext{
+				BaseJobWindowConfig:         windowConfig{"0h", "7h", "h", ""},
+				BaseJobScheduleInterval:     "0 1 * * *",
+				UpstreamJobScheduleInterval: "0 1 * * *",
+			},
+			Expectations: testExpectation{
+				IntervalStart: "2016-01-04T01:00:00Z",
 				IntervalEnd:   "2016-01-04T01:00:00Z",
 			},
 		},
@@ -84,7 +308,7 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.Description, func(t *testing.T) {
 			jobRepo := new(JobRepository)
-			upstreamJobStartDate, err := time.Parse(time.RFC3339, test.testContext.UpstreamJobStartDate)
+			jobStartDateTime, err := time.Parse(time.RFC3339, jobStartDate)
 			assert.Nil(t, err)
 			if err != nil {
 				return
@@ -96,7 +320,7 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 					Tenant: upstreamTenant,
 				},
 				Schedule: &scheduler.Schedule{
-					StartDate: upstreamJobStartDate,
+					StartDate: jobStartDateTime,
 					Interval:  test.testContext.UpstreamJobScheduleInterval,
 				},
 			}
@@ -106,11 +330,6 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 				return
 			}
 
-			baseJobStartDate, err := time.Parse(time.RFC3339, test.testContext.BaseJobStartDate)
-			assert.Nil(t, err)
-			if err != nil {
-				return
-			}
 			subjectJobWithDetails := &scheduler.JobWithDetails{
 				Name: subjectJob,
 				Job: &scheduler.Job{
@@ -118,7 +337,7 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 					WindowConfig: subjectJobWindow,
 				},
 				Schedule: &scheduler.Schedule{
-					StartDate: baseJobStartDate,
+					StartDate: jobStartDateTime,
 					Interval:  test.testContext.BaseJobScheduleInterval,
 				},
 			}
@@ -155,7 +374,7 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 			sensorService := service.NewJobRunService(logger,
 				jobRepo, nil, nil, nil, schedulerService, nil, nil, nil, projectGetter, nil)
 
-			baseJobScheduleTime, err := time.Parse(time.RFC3339, test.BaseJobRunScheduleTime)
+			baseJobScheduleTime, err := time.Parse(time.RFC3339, baseJobRunScheduleTime)
 			assert.Nil(t, err)
 			if err != nil {
 				return
@@ -176,4 +395,11 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 
 func getWindowConfig(w windowConfig) (window.Config, error) {
 	return window.NewConfig(w.Size, w.ShiftBy, w.Location, w.TruncateTo)
+}
+
+func TestParse(t *testing.T) {
+	//a := "2006-01-02T15:04:05Z07:00"
+	_, err := time.Parse(time.RFC3339, time.RFC3339)
+	assert.Nil(t, err)
+
 }

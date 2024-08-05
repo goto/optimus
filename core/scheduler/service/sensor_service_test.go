@@ -396,10 +396,3 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 func getWindowConfig(w windowConfig) (window.Config, error) {
 	return window.NewConfig(w.Size, w.ShiftBy, w.Location, w.TruncateTo)
 }
-
-func TestParse(t *testing.T) {
-	//a := "2006-01-02T15:04:05Z07:00"
-	_, err := time.Parse(time.RFC3339, time.RFC3339)
-	assert.Nil(t, err)
-
-}

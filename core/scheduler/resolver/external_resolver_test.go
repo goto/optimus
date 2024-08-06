@@ -2,7 +2,9 @@ package resolver_test
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -12,25 +14,139 @@ import (
 	"github.com/goto/optimus/core/tenant"
 )
 
-// todo: write tests here
 func TestExternalOptimusManager(t *testing.T) {
 	ctx := context.Background()
-	tnnt1, _ := tenant.NewTenant("test-proj", "test-ns")
-	// resourceManager := new(ResourceManager)
+	baseJobName, _ := scheduler.JobNameFrom("job_name")
+	baseJobTenant, _ := tenant.NewTenant("test-proj", "test-ns")
+	baseJobScheduleTime, _ := time.Parse(time.RFC3339, "2016-01-04T01:00:00Z")
 
-	t.Run("returns max priority for root node", func(t *testing.T) {
-		j1 := &scheduler.JobWithDetails{
-			Name: scheduler.JobName("RootNode"),
-			Job:  &scheduler.Job{Tenant: tnnt1},
-			Upstreams: scheduler.Upstreams{
-				UpstreamJobs: nil,
-			},
+	upstreamJobName, _ := scheduler.JobNameFrom("upstream_job_name")
+	upstreamJobTenant, _ := tenant.NewTenant("upstream-proj", "upstream-ns")
+
+	upstreamHost := "https://upstreamHost"
+
+	t.Run("GetJobScheduleInterval", func(t *testing.T) {
+		t.Run("return not found error when resource manager not found by upstream host", func(t *testing.T) {
+			resourceManager := new(ResourceManager)
+			resourceManager.On("GetHostURL").Return(upstreamHost)
+			defer resourceManager.AssertExpectations(t)
+
+			optimusResourceManagers := []resolver.OptimusResourceManager{resourceManager}
+
+			extUpstreamResolver := resolver.NewTestExternalOptimusConnectors(optimusResourceManagers)
+			scheduleInterval, err := extUpstreamResolver.GetJobScheduleInterval(ctx, "https://upstreamHost/new", baseJobTenant, baseJobName)
+			assert.ErrorContains(t, err, "could not find external resource manager by host: https://upstreamHost/new")
+			assert.Equal(t, "", scheduleInterval)
+		})
+		t.Run("return error when unable to fetch schedule interval from upstream", func(t *testing.T) {
+			resourceManager := new(ResourceManager)
+			resourceManager.On("GetHostURL").Return(upstreamHost)
+			resourceManager.On("GetJobScheduleInterval", ctx, baseJobTenant, baseJobName).Return("", errors.New("error in getting schedule interval"))
+			defer resourceManager.AssertExpectations(t)
+
+			optimusResourceManagers := []resolver.OptimusResourceManager{resourceManager}
+
+			extUpstreamResolver := resolver.NewTestExternalOptimusConnectors(optimusResourceManagers)
+			scheduleInterval, err := extUpstreamResolver.GetJobScheduleInterval(ctx, upstreamHost, baseJobTenant, baseJobName)
+			assert.ErrorContains(t, err, "error in getting schedule interval")
+			assert.Equal(t, "", scheduleInterval)
+		})
+		t.Run("return schedule interval", func(t *testing.T) {
+			resourceManager := new(ResourceManager)
+			resourceManager.On("GetHostURL").Return(upstreamHost)
+			resourceManager.On("GetJobScheduleInterval", ctx, baseJobTenant, baseJobName).Return("0 1 * * *", nil)
+			defer resourceManager.AssertExpectations(t)
+
+			optimusResourceManagers := []resolver.OptimusResourceManager{resourceManager}
+
+			extUpstreamResolver := resolver.NewTestExternalOptimusConnectors(optimusResourceManagers)
+			scheduleInterval, err := extUpstreamResolver.GetJobScheduleInterval(ctx, upstreamHost, baseJobTenant, baseJobName)
+			assert.Equal(t, "0 1 * * *", scheduleInterval)
+			assert.Nil(t, err)
+		})
+	})
+
+	t.Run("GetJobRuns", func(t *testing.T) {
+		sensorParameters := scheduler.JobSensorParameters{
+			SubjectJobName:     baseJobName,
+			SubjectProjectName: baseJobTenant.ProjectName(),
+			ScheduledTime:      baseJobScheduleTime,
+			UpstreamJobName:    upstreamJobName,
+			UpstreamTenant:     upstreamJobTenant,
 		}
+		criteria := &scheduler.JobRunsCriteria{
+			Name:        upstreamJobName.String(),
+			StartDate:   baseJobScheduleTime.Add(-24 * time.Hour),
+			EndDate:     baseJobScheduleTime,
+			Filter:      nil,
+			OnlyLastRun: false,
+		}
+		t.Run("return not found error when resource manager not found by upstream host", func(t *testing.T) {
+			resourceManager := new(ResourceManager)
+			resourceManager.On("GetHostURL").Return(upstreamHost)
+			defer resourceManager.AssertExpectations(t)
 
-		s1 := resolver.SimpleResolver{}
-		err := s1.Resolve(ctx, []*scheduler.JobWithDetails{j1})
-		assert.NoError(t, err)
-		assert.Equal(t, 10000, j1.Priority)
+			optimusResourceManagers := []resolver.OptimusResourceManager{resourceManager}
+
+			extUpstreamResolver := resolver.NewTestExternalOptimusConnectors(optimusResourceManagers)
+
+			sensorParameters := scheduler.JobSensorParameters{
+				SubjectJobName:     baseJobName,
+				SubjectProjectName: baseJobTenant.ProjectName(),
+				ScheduledTime:      baseJobScheduleTime,
+				UpstreamJobName:    upstreamJobName,
+				UpstreamTenant:     upstreamJobTenant,
+			}
+			criteria := &scheduler.JobRunsCriteria{
+				Name:        upstreamJobName.String(),
+				StartDate:   baseJobScheduleTime.Add(-24 * time.Hour),
+				EndDate:     baseJobScheduleTime,
+				Filter:      nil,
+				OnlyLastRun: false,
+			}
+
+			jobRunStatus, err := extUpstreamResolver.GetJobRuns(ctx, "https://upstreamHost/new", sensorParameters, criteria)
+			assert.ErrorContains(t, err, "could not find external resource manager by host: https://upstreamHost/new")
+			assert.Zero(t, len(jobRunStatus))
+		})
+		t.Run("return error when job runs not found on upstream host", func(t *testing.T) {
+			resourceManager := new(ResourceManager)
+			resourceManager.On("GetHostURL").Return(upstreamHost)
+			resourceManager.On("GetJobRuns", ctx, sensorParameters, criteria).Return([]*scheduler.JobRunStatus{}, errors.New("error getting job runs"))
+			defer resourceManager.AssertExpectations(t)
+
+			optimusResourceManagers := []resolver.OptimusResourceManager{resourceManager}
+
+			extUpstreamResolver := resolver.NewTestExternalOptimusConnectors(optimusResourceManagers)
+
+			jobRunStatus, err := extUpstreamResolver.GetJobRuns(ctx, "https://upstreamHost", sensorParameters, criteria)
+			assert.ErrorContains(t, err, "error getting job runs")
+			assert.Zero(t, len(jobRunStatus))
+		})
+
+		t.Run("return job runs from upstream host", func(t *testing.T) {
+			resourceManager := new(ResourceManager)
+			resourceManager.On("GetHostURL").Return(upstreamHost)
+			resourceManager.On("GetJobRuns", ctx, sensorParameters, criteria).Return([]*scheduler.JobRunStatus{
+				{
+					ScheduledAt: time.Time{},
+					State:       scheduler.StateSuccess,
+				},
+				{
+					ScheduledAt: time.Time{},
+					State:       scheduler.StateSuccess,
+				},
+			}, nil)
+			defer resourceManager.AssertExpectations(t)
+
+			optimusResourceManagers := []resolver.OptimusResourceManager{resourceManager}
+
+			extUpstreamResolver := resolver.NewTestExternalOptimusConnectors(optimusResourceManagers)
+
+			jobRunStatus, err := extUpstreamResolver.GetJobRuns(ctx, "https://upstreamHost", sensorParameters, criteria)
+			assert.Nil(t, err)
+			assert.Equal(t, 2, len(jobRunStatus))
+		})
 	})
 }
 

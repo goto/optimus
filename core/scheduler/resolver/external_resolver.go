@@ -49,7 +49,7 @@ func (e *ExternalOptimusConnectors) getResourceManager(hostURL string) (OptimusR
 			return manager, nil
 		}
 	}
-	return nil, errors.NewError(errors.ErrNotFound, ExternalUpstreamEntity, "could not find external resource manager by host: "+hostURL)
+	return nil, errors.NotFound(ExternalUpstreamEntity, "could not find external resource manager by host: "+hostURL)
 }
 
 func (e *ExternalOptimusConnectors) GetJobScheduleInterval(ctx context.Context, upstreamHost string, tnnt tenant.Tenant, jobName scheduler.JobName) (string, error) {
@@ -66,4 +66,12 @@ func (e *ExternalOptimusConnectors) GetJobRuns(ctx context.Context, upstreamHost
 		return nil, err
 	}
 	return rm.GetJobRuns(ctx, sensorParameters, criteria)
+}
+
+func NewTestExternalOptimusConnectors(
+	optimusResourceManagers []OptimusResourceManager,
+) *ExternalOptimusConnectors {
+	return &ExternalOptimusConnectors{
+		optimusResourceManagers: optimusResourceManagers,
+	}
 }

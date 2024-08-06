@@ -2,6 +2,8 @@ package v1beta1
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -142,26 +144,27 @@ func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, 
 }
 
 func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.GetJobUpstreamRunRequest) (*pb.GetJobUpstreamRunResponse, error) {
+	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt base job name")
+	}
+
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
-		return nil, errors.GRPCErr(err, "unable to get projectName")
+		return nil, errors.GRPCErr(err, "unable to adapt base projectName")
 	}
 
 	upstreamTenant, err := tenant.NewTenant(req.GetUpstreamProjectName(), req.GetUpstreamNamespaceName())
 	if err != nil {
 		h.l.Error("error adapting upstream tenant from Project:[%s], Namespace:[%s], err:%s", req.GetUpstreamProjectName(), req.GetUpstreamNamespaceName(), err)
-		return nil, errors.GRPCErr(err, "unable to get projectName")
+		return nil, errors.GRPCErr(err, "unable to adapt to upstream tenant")
 	}
 	upstreamJobName, err := scheduler.JobNameFrom(req.GetUpstreamJobName())
 	if err != nil {
 		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
-		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
-	}
-	jobName, err := scheduler.JobNameFrom(req.GetJobName())
-	if err != nil {
-		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
-		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
+		return nil, errors.GRPCErr(err, fmt.Sprintf("unable to adapt upstream job name for base job: %s, upstream job: %s", req.GetJobName(), req.GetUpstreamJobName()))
 	}
 
 	sensorParameters := scheduler.JobSensorParameters{
@@ -173,8 +176,14 @@ func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.GetJobUpst
 	}
 
 	filter := req.GetFilter()
+	encodedUpstreamHost := req.GetUpstreamHost()
+	decodedUpstreamHost, err := base64.StdEncoding.DecodeString(encodedUpstreamHost)
+	if err != nil {
+		h.l.Error("error decoding upstream host [%s]: %s", encodedUpstreamHost, err)
+		return nil, errors.GRPCErr(err, "unable to decode upstream host "+req.GetJobName())
+	}
 
-	runs, err := h.service.GetUpstreamJobRuns(ctx, req.GetUpstreamHost(), sensorParameters, filter)
+	runs, err := h.service.GetUpstreamJobRuns(ctx, string(decodedUpstreamHost), sensorParameters, filter)
 	if err != nil {
 		h.l.Error("unable to get job runs for request %#v, err: %s", sensorParameters, err)
 		return nil, err

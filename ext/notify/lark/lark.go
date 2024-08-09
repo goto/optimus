@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/goto/optimus/core/scheduler"
 	lark "github.com/larksuite/oapi-sdk-go/v3"
+	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -132,6 +133,7 @@ type Data struct {
 	JobName         string `json:"job_name"`
 	ScheduledAt     string `json:"scheduled_at"`
 	TaskID          string `json:"task_id"`
+	TaskName        string `json:"task_name"`
 	OwnerEmail      string `json:"owner_email"`
 	Duration        string `json:"duration"`
 	LogURL          string `json:"log_url"`
@@ -139,20 +141,17 @@ type Data struct {
 	FooterMessage   string `json:"footer_message"`
 }
 
-func NewData() Data {
-	return Data{
-		TemplateId: "ctp_AA0zf7o45Ppp", // default value of the template
-	}
-}
-
 type Content struct {
 	Type string `json:"type"`
 	Data Data  `json:"data"`
 }
 
+const SLABreachedTemplateID string = "ctp_AA0LV7jVKCDK"
+const JobFailureTemplateID string = "ctp_AA0zf7o45Ppp"
+
 func buildMessageBlocks(events []event, workerErrChan chan error) string {
 
-	data := NewData()
+	data := Data{}
 	content := Content{
 		Type: "template",
 		Data: data,
@@ -167,6 +166,7 @@ func buildMessageBlocks(events []event, workerErrChan chan error) string {
 		projectName := evt.meta.Tenant.ProjectName().String()
 		namespaceName := evt.meta.Tenant.NamespaceName().String()
 		if evt.meta.Type.IsOfType(scheduler.EventCategorySLAMiss) {
+			data.TemplateId = SLABreachedTemplateID
 			data.CardTitle = fmt.Sprintf("[Job] SLA Breached | %s/%s", projectName, namespaceName)
 			if slas, ok := evt.meta.Values["slas"]; ok {
 				for slaIdx, sla := range slas.([]any) {
@@ -182,9 +182,8 @@ func buildMessageBlocks(events []event, workerErrChan chan error) string {
 						if slaIdx > MaxSLAEventsToProcess {
 							slaStr += "\nToo many breaches. Truncating..."
 						}
-
-						//We need to add the Breached Item tag in the message card
-						//fmt.Sprintf("*Breached item:*%s", slaStr))
+						//Task Name
+						 data.TaskName = slaStr
 					}
 					// skip further SLA events
 					if slaIdx > MaxSLAEventsToProcess {
@@ -193,6 +192,7 @@ func buildMessageBlocks(events []event, workerErrChan chan error) string {
 				}
 			}
 		} else if evt.meta.Type.IsOfType(scheduler.EventCategoryJobFailure) {
+			data.TemplateId = JobFailureTemplateID
 			data.CardTitle = fmt.Sprintf("[Job] Failure | %s/%s", projectName, namespaceName)
 			if scheduledAt, ok := evt.meta.Values["scheduled_at"]; ok && scheduledAt.(string) != "" {
 				data.ScheduledAt = scheduledAt.(string)
@@ -251,6 +251,13 @@ func (s *Notifier) Worker(ctx context.Context) {
 				Build()
 
 			client := lark.NewClient("","")
+
+			reqGroup := larkim.NewSearchChatReqBuilder().
+				Query(`cmp-iac-test`).
+				PageSize(20).
+				Build()
+
+			resp1, err := client.Im.Chat.Search(context.Background(), reqGroup, larkcore.WithUserAccessToken("u-cPB9HczhN3EqEb5oRGDmsdl4jM5GhhfHPaG04kS02dNT"))
 
 			resp, err := client.Im.Message.Create(context.Background(), req)
 			if err != nil {

@@ -1294,6 +1294,15 @@ func (j *JobService) GetDownstream(ctx context.Context, subjectJob *job.Job, loc
 	return j.downstreamRepo.GetDownstreamByJobName(ctx, subjectJob.ProjectName(), subjectJob.Spec().Name())
 }
 
+func (j *JobService) createSubscriptions(job *job.Job, eventTypes []string) {
+	createSubscription, err := event.NewCreateSubscriptionEvent(job.Tenant(), job.GetURN(), eventTypes)
+	if err != nil {
+		j.logger.Error("error creating event for job create: %s", err)
+		return
+	}
+	j.eventHandler.HandleEvent(createSubscription)
+}
+
 func (j *JobService) raiseCreateEvent(job *job.Job) {
 	jobEvent, err := event.NewJobCreatedEvent(job)
 	if err != nil {
@@ -1301,6 +1310,8 @@ func (j *JobService) raiseCreateEvent(job *job.Job) {
 		return
 	}
 	j.eventHandler.HandleEvent(jobEvent)
+
+	j.createSubscriptions(job, []string{event.Announcement, event.UpstreamChange})
 }
 
 func (j *JobService) raiseUpdateEvent(job *job.Job, impactType job.UpdateImpact) {

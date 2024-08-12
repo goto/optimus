@@ -16,6 +16,8 @@ const (
 
 	UnspecifiedImpactChange    UpdateImpact = "unspecified_impact"
 	ResourceDataPipeLineImpact UpdateImpact = "data_impact"
+
+	resourceUrnPrefix = "urn:bigquery:"
 )
 
 type UpdateImpact string
@@ -119,6 +121,16 @@ func (r *Resource) FullName() string {
 
 func (r *Resource) URN() URN {
 	return r.urn
+}
+
+func (r *Resource) GetURN() string {
+	resName := strings.Split(r.Name().String(), ".")
+	resProject := resName[0]
+
+	resourceURN := fmt.Sprintf("%s%s:table:%s:%s",
+		resourceUrnPrefix, resProject, resProject,
+		strings.Join(resName[1:], "."))
+	return resourceURN
 }
 
 func (r *Resource) UpdateURN(urn URN) error {

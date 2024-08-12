@@ -41,6 +41,8 @@ const (
 	DeployStateSuccess DeployState = "success"
 	DeployStateSkipped DeployState = "skipped"
 	DeployStateFailed  DeployState = "failed"
+
+	optimusUrnPrefix = "urn:optimus:"
 )
 
 type Job struct {
@@ -64,6 +66,12 @@ func (j *Job) Spec() *Spec {
 
 func (j *Job) GetName() string {
 	return j.spec.name.String()
+}
+
+func (j *Job) GetURN() string {
+	return fmt.Sprintf("%s%s:job:%s.%s.%s",
+		optimusUrnPrefix, j.ProjectName(), j.ProjectName(),
+		j.tenant.NamespaceName(), j.GetName())
 }
 
 func (j *Job) FullName() string {

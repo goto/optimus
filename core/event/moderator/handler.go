@@ -45,3 +45,14 @@ func (e EventHandler) HandleEvent(event Event) {
 	go func() { e.messageChan <- bytes }()
 	eventQueueCounter.Inc()
 }
+
+func (e EventHandler) CreateSubscription(event Event) {
+	bytes, err := event.Bytes()
+	if err != nil {
+		e.logger.Error("error converting event to bytes: %v", err)
+		return
+	}
+
+	go func() { e.messageChan <- bytes }()
+	eventQueueCounter.Inc()
+}

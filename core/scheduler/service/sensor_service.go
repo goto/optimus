@@ -10,6 +10,8 @@ import (
 	"github.com/goto/optimus/internal/lib/interval"
 )
 
+const IgnoreUpstream = "ignore-upstream"
+
 type ExternalOptimusManager interface {
 	GetJobScheduleInterval(ctx context.Context, upstreamHost string, tnnt tenant.Tenant, jobName scheduler.JobName) (string, error)
 	GetJobRuns(ctx context.Context, upstreamHost string, sensorParams scheduler.JobSensorParameters, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
@@ -45,15 +47,29 @@ func (s *JobRunService) getWindowInterval(ctx context.Context, upstreamScheduleI
 	return s.GetInterval(ctx, sensorParameters.SubjectProjectName, sensorParameters.SubjectJobName, latestUpstreamJobScheduleTime)
 }
 
-func (s *JobRunService) GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) ([]*scheduler.JobRunStatus, error) {
+func (s *JobRunService) ForcePassSensor(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) bool {
+	config, err := s.replayRepo.GetReplayJobConfig(ctx, tnnt, jobName, scheduledAt)
+	s.l.Error("error getting ", err)
+	if err != nil {
+		return false
+	}
+	for k := range config {
+		if k == IgnoreUpstream {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *JobRunService) GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) (interval.Interval, []*scheduler.JobRunStatus, error) {
 	upstreamScheduleInterval, err := s.getUpstreamJobInterval(ctx, upstreamHost, sensorParameters)
 	if err != nil {
-		return nil, err
+		return interval.Interval{}, nil, err
 	}
 
 	jobWindowInterval, err := s.getWindowInterval(ctx, upstreamScheduleInterval, sensorParameters)
 	if err != nil {
-		return nil, err
+		return interval.Interval{}, nil, err
 	}
 
 	runCriteria := &scheduler.JobRunsCriteria{
@@ -64,7 +80,9 @@ func (s *JobRunService) GetUpstreamJobRuns(ctx context.Context, upstreamHost str
 	}
 
 	if len(upstreamHost) != 0 {
-		return s.externalOptimusManager.GetJobRuns(ctx, upstreamHost, sensorParameters, runCriteria)
+		runs, err := s.externalOptimusManager.GetJobRuns(ctx, upstreamHost, sensorParameters, runCriteria)
+		return jobWindowInterval, runs, err
 	}
-	return s.GetJobRuns(ctx, sensorParameters.UpstreamTenant.ProjectName(), sensorParameters.UpstreamJobName, runCriteria)
+	runs, err := s.GetJobRuns(ctx, sensorParameters.UpstreamTenant.ProjectName(), sensorParameters.UpstreamJobName, runCriteria)
+	return jobWindowInterval, runs, err
 }

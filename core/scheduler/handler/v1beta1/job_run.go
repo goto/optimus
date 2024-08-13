@@ -20,9 +20,11 @@ type JobRunService interface {
 	JobRunInput(context.Context, tenant.ProjectName, scheduler.JobName, scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 	UpdateJobState(context.Context, *scheduler.Event) error
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
+	GetJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
-	GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) ([]*scheduler.JobRunStatus, error)
+	GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) (interval.Interval, []*scheduler.JobRunStatus, error)
+	ForcePassSensor(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) bool
 }
 
 type Notifier interface {
@@ -143,7 +145,7 @@ func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, 
 	}, nil
 }
 
-func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.GetJobUpstreamRunRequest) (*pb.GetJobUpstreamRunResponse, error) {
+func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.AreAllUpstreamRunsSuccessfulRequest) (*pb.AreAllUpstreamRunsSuccessfulResponse, error) {
 	jobName, err := scheduler.JobNameFrom(req.GetJobName())
 	if err != nil {
 		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
@@ -166,10 +168,21 @@ func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.GetJobUpst
 		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, fmt.Sprintf("unable to adapt upstream job name for base job: %s, upstream job: %s", req.GetJobName(), req.GetUpstreamJobName()))
 	}
+	job, err := h.service.GetJob(ctx, projectName, jobName)
+	if err != nil {
+		h.l.Error("error getting job [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, fmt.Sprintf("unable to fetch job: %s, from DB", req.GetJobName()))
+	}
+
+	if h.service.ForcePassSensor(ctx, job.Tenant, jobName, req.GetScheduleTime().AsTime()) {
+		return &pb.AreAllUpstreamRunsSuccessfulResponse{
+			ForcePass: true,
+		}, nil
+	}
 
 	sensorParameters := scheduler.JobSensorParameters{
 		SubjectJobName:     jobName,
-		SubjectProjectName: projectName,
+		SubjectProjectName: job.Tenant.ProjectName(),
 		ScheduledTime:      req.GetScheduleTime().AsTime(),
 		UpstreamJobName:    upstreamJobName,
 		UpstreamTenant:     upstreamTenant,
@@ -183,7 +196,7 @@ func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.GetJobUpst
 		return nil, errors.GRPCErr(err, "unable to decode upstream host "+req.GetJobName())
 	}
 
-	runs, err := h.service.GetUpstreamJobRuns(ctx, string(decodedUpstreamHost), sensorParameters, filter)
+	windowInterval, runs, err := h.service.GetUpstreamJobRuns(ctx, string(decodedUpstreamHost), sensorParameters, filter)
 	if err != nil {
 		h.l.Error("unable to get job runs for request %#v, err: %s", sensorParameters, err)
 		return nil, err
@@ -201,9 +214,11 @@ func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.GetJobUpst
 		}
 	}
 
-	return &pb.GetJobUpstreamRunResponse{
-		AllSuccess: allSuccess,
-		JobRuns:    jobRuns,
+	return &pb.AreAllUpstreamRunsSuccessfulResponse{
+		AllSuccess:          allSuccess,
+		WindowIntervalStart: timestamppb.New(windowInterval.Start()),
+		WindowIntervalEnd:   timestamppb.New(windowInterval.End()),
+		JobRuns:             jobRuns,
 	}, nil
 }
 

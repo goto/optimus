@@ -25,7 +25,7 @@ type JobRunServiceClient interface {
 	// JobRunInput is used to fetch task/hook compiled configuration and assets.
 	JobRunInput(ctx context.Context, in *JobRunInputRequest, opts ...grpc.CallOption) (*JobRunInputResponse, error)
 	// GetInterval gets interval on specific job given reference time.
-	GetJobUpstreamRun(ctx context.Context, in *GetJobUpstreamRunRequest, opts ...grpc.CallOption) (*GetJobUpstreamRunResponse, error)
+	AreAllUpstreamRunsSuccessful(ctx context.Context, in *AreAllUpstreamRunsSuccessfulRequest, opts ...grpc.CallOption) (*AreAllUpstreamRunsSuccessfulResponse, error)
 	// JobRun returns the current and past run status of jobs on a given range
 	JobRun(ctx context.Context, in *JobRunRequest, opts ...grpc.CallOption) (*JobRunResponse, error)
 	// RegisterJobEvent notifies optimus service about an event related to job
@@ -53,9 +53,9 @@ func (c *jobRunServiceClient) JobRunInput(ctx context.Context, in *JobRunInputRe
 	return out, nil
 }
 
-func (c *jobRunServiceClient) GetJobUpstreamRun(ctx context.Context, in *GetJobUpstreamRunRequest, opts ...grpc.CallOption) (*GetJobUpstreamRunResponse, error) {
-	out := new(GetJobUpstreamRunResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobUpstreamRun", in, out, opts...)
+func (c *jobRunServiceClient) AreAllUpstreamRunsSuccessful(ctx context.Context, in *AreAllUpstreamRunsSuccessfulRequest, opts ...grpc.CallOption) (*AreAllUpstreamRunsSuccessfulResponse, error) {
+	out := new(AreAllUpstreamRunsSuccessfulResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/AreAllUpstreamRunsSuccessful", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ type JobRunServiceServer interface {
 	// JobRunInput is used to fetch task/hook compiled configuration and assets.
 	JobRunInput(context.Context, *JobRunInputRequest) (*JobRunInputResponse, error)
 	// GetInterval gets interval on specific job given reference time.
-	GetJobUpstreamRun(context.Context, *GetJobUpstreamRunRequest) (*GetJobUpstreamRunResponse, error)
+	AreAllUpstreamRunsSuccessful(context.Context, *AreAllUpstreamRunsSuccessfulRequest) (*AreAllUpstreamRunsSuccessfulResponse, error)
 	// JobRun returns the current and past run status of jobs on a given range
 	JobRun(context.Context, *JobRunRequest) (*JobRunResponse, error)
 	// RegisterJobEvent notifies optimus service about an event related to job
@@ -124,8 +124,8 @@ type UnimplementedJobRunServiceServer struct {
 func (UnimplementedJobRunServiceServer) JobRunInput(context.Context, *JobRunInputRequest) (*JobRunInputResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobRunInput not implemented")
 }
-func (UnimplementedJobRunServiceServer) GetJobUpstreamRun(context.Context, *GetJobUpstreamRunRequest) (*GetJobUpstreamRunResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetJobUpstreamRun not implemented")
+func (UnimplementedJobRunServiceServer) AreAllUpstreamRunsSuccessful(context.Context, *AreAllUpstreamRunsSuccessfulRequest) (*AreAllUpstreamRunsSuccessfulResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AreAllUpstreamRunsSuccessful not implemented")
 }
 func (UnimplementedJobRunServiceServer) JobRun(context.Context, *JobRunRequest) (*JobRunResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobRun not implemented")
@@ -170,20 +170,20 @@ func _JobRunService_JobRunInput_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobRunService_GetJobUpstreamRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetJobUpstreamRunRequest)
+func _JobRunService_AreAllUpstreamRunsSuccessful_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AreAllUpstreamRunsSuccessfulRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(JobRunServiceServer).GetJobUpstreamRun(ctx, in)
+		return srv.(JobRunServiceServer).AreAllUpstreamRunsSuccessful(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobUpstreamRun",
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/AreAllUpstreamRunsSuccessful",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobRunServiceServer).GetJobUpstreamRun(ctx, req.(*GetJobUpstreamRunRequest))
+		return srv.(JobRunServiceServer).AreAllUpstreamRunsSuccessful(ctx, req.(*AreAllUpstreamRunsSuccessfulRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -272,8 +272,8 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _JobRunService_JobRunInput_Handler,
 		},
 		{
-			MethodName: "GetJobUpstreamRun",
-			Handler:    _JobRunService_GetJobUpstreamRun_Handler,
+			MethodName: "AreAllUpstreamRunsSuccessful",
+			Handler:    _JobRunService_AreAllUpstreamRunsSuccessful_Handler,
 		},
 		{
 			MethodName: "JobRun",

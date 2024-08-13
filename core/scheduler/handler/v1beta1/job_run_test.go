@@ -732,12 +732,22 @@ func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.
 	return args.Get(0).(interval.Interval), args.Error(1)
 }
 
-func (m *mockJobRunService) GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) ([]*scheduler.JobRunStatus, error) {
+func (m *mockJobRunService) GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) (interval.Interval, []*scheduler.JobRunStatus, error) {
 	args := m.Called(ctx, upstreamHost, sensorParameters, filter)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if args.Get(1) == nil {
+		return args.Get(0).(interval.Interval), nil, args.Error(2)
 	}
-	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
+	return args.Get(0).(interval.Interval), args.Get(1).([]*scheduler.JobRunStatus), args.Error(2)
+}
+
+func (m *mockJobRunService) ForcePassSensor(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) bool {
+	args := m.Called(ctx, tnnt, jobName, scheduledAt)
+	return args.Get(0).(bool)
+}
+
+func (m *mockJobRunService) GetJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error) {
+	args := m.Called(ctx, projectName, jobName)
+	return args.Get(0).(*scheduler.Job), args.Error(1)
 }
 
 type mockNotifier struct {

@@ -4,22 +4,22 @@ import base64
 import pendulum
 import requests
 
-from typing import Dict
-from datetime import datetime, timedelta
-from croniter import croniter
-from kubernetes.client import models as k8s
+from datetime   import datetime, timedelta
+from typing     import Any, Dict, Optional
+from croniter   import croniter
 
 from airflow.configuration import conf
 from airflow.models import (Variable, XCom, TaskReschedule )
+from airflow.sensors.base import BaseSensorOperator
+from airflow.utils.state import TaskInstanceState
+from airflow.exceptions import AirflowException
+from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
 try:
     from airflow.models import XCOM_RETURN_KEY
 except ImportError:
     from airflow.utils.xcom import XCOM_RETURN_KEY  # airflow >= 2.5
-from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
-from airflow.sensors.base import BaseSensorOperator
-from airflow.utils.state import TaskInstanceState
-from airflow.exceptions import AirflowException
 
+from kubernetes.client import models as k8s
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -33,6 +33,9 @@ TIMESTAMP_MS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 SCHEDULER_ERR_MSG = "scheduler_error"
 STARTUP_TIMEOUT_IN_SECS = int(Variable.get("startup_timeout_in_secs", default_var=2 * 60))
 OPTIMUS_REQUEST_TIMEOUT_IN_SECS = int(Variable.get("optimus_request_timeout_in_secs", default_var=5 * 60))
+
+TEST_NEW_SENSOR_API = bool(Variable.get("test_new_sensor_api", default_var=True))
+DEPEND_ON_NEW_SENSOR_API = bool(Variable.get("ony_use_new_sensor_api", default_var=False))
 
 def lookup_non_standard_cron_expression(expr: str) -> str:
     expr_mapping = {
@@ -86,8 +89,8 @@ class OptimusAPIClient:
             return host
         return "http://" + host
 
-    def get_job_run(self, project_name: str, job_name: str, schedule_time: str, upstream_host: str,  upstream_project_name: str,  upstream_namespace_name: str, upstream_job_name: str) -> dict:
-        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/upstream/run'.format(
+    def are_all_upstream_runs_successful(self, project_name: str, job_name: str, schedule_time: str, upstream_host: str, upstream_project_name: str, upstream_namespace_name: str, upstream_job_name: str) -> dict:
+        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/upstream/runs'.format(
             optimus_host=self.host,
             optimus_project=project_name,
             optimus_job=job_name,
@@ -101,6 +104,21 @@ class OptimusAPIClient:
             'upstream_project_name': upstream_project_name,
             'upstream_namespace_name': upstream_namespace_name,
             'upstream_job_name': upstream_job_name
+        }, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        self._raise_error_if_request_failed(response)
+        return response.json()
+
+    def get_job_run(self, project_name: str, job_name: str, start_date: str, end_date: str, downstream_project_name: str, downstream_job_name: str) -> dict:
+        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/run'.format(
+            optimus_host=self.host,
+            optimus_project=project_name,
+            optimus_job=job_name,
+        )
+        response = requests.get(url, params={
+            'start_date': start_date,
+            'end_date': end_date,
+            'downstream_project_name': downstream_project_name,
+            'downstream_job_name': downstream_job_name
         }, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         return response.json()
@@ -119,10 +137,20 @@ class OptimusAPIClient:
 
     def get_job_run_input(self, execution_date: str, project_name: str, job_name: str, job_type: str, instance_name: str) -> dict:
         response = requests.post(url="{}/api/v1beta1/project/{}/job/{}/run_input".format(self.host, project_name, job_name),
-                      json={'scheduled_at': execution_date,
-                            'instance_name': instance_name,
-                            'instance_type': "TYPE_" + job_type.upper()}, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+                                 json={'scheduled_at': execution_date,
+                                       'instance_name': instance_name,
+                                       'instance_type': "TYPE_" + job_type.upper()}, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
 
+        self._raise_error_if_request_failed(response)
+        return response.json()
+
+    def get_job_metadata(self, execution_date, namespace, project, job) -> dict:
+        url = '{optimus_host}/api/v1beta1/project/{project_name}/namespace/{namespace_name}/job/{job_name}'.format(
+            optimus_host=self.host,
+            namespace_name=namespace,
+            project_name=project,
+            job_name=job)
+        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         return response.json()
 
@@ -146,6 +174,43 @@ class OptimusAPIClient:
             log.error(response.json())
             raise AssertionError("request to optimus returned non-200 status code. url: " + response.url)
 
+class JobSpecTaskWindow:
+    def __init__(self, optimus_client: OptimusAPIClient, project_name: str, job_name: str):
+        self._optimus_client = optimus_client
+        self.project_name = project_name
+        self.job_name = job_name
+
+    def get(self, scheduled_at: str) -> (datetime, datetime):
+        api_response = self._fetch_task_window(scheduled_at)
+        return (
+            self._parse_datetime(api_response['startTime']),
+            self._parse_datetime(api_response['endTime']),
+        )
+
+    # window start is inclusive
+    def get_schedule_window(self, scheduled_at: str, upstream_schedule: str) -> (str, str):
+        api_response = self._fetch_task_window(scheduled_at)
+
+        schedule_time_window_start = self._parse_datetime(api_response['startTime'])
+        schedule_time_window_end = self._parse_datetime(api_response['endTime'])
+
+        job_cron_iter = croniter(upstream_schedule, schedule_time_window_start)
+        schedule_time_window_inclusive_start = job_cron_iter.get_next(datetime)
+        return (
+            self._parse_datetime_utc_str(schedule_time_window_inclusive_start),
+            self._parse_datetime_utc_str(schedule_time_window_end),
+        )
+
+    def _parse_datetime(self, timestamp):
+        return datetime.strptime(timestamp, TIMESTAMP_FORMAT)
+
+    def _parse_datetime_utc_str(self, timestamp):
+        return timestamp.strftime(TIMESTAMP_FORMAT)
+
+    def _fetch_task_window(self, scheduled_at: str) -> dict:
+        return self._optimus_client.get_task_window(self.project_name, self.job_name, scheduled_at)
+
+
 class SuperExternalTaskSensor(BaseSensorOperator):
 
     def __init__(
@@ -167,32 +232,118 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self.upstream_optimus_namespace = upstream_optimus_namespace
         self.upstream_optimus_job = upstream_optimus_job
         self._optimus_client = OptimusAPIClient(optimus_hostname)
+        self._upstream_optimus_client = OptimusAPIClient(upstream_optimus_hostname)
+
+    def get_runs_from_new_sensor_api(self, context):
+        schedule_time = get_scheduled_at(context)
+        upstream_host = ""
+        if self.upstream_optimus_hostname != self.optimus_hostname:
+            upstream_host = self.upstream_optimus_hostname
+
+        api_response = self._optimus_client.are_all_upstream_runs_successful( self.project_name,
+                                                         self.job_name,
+                                                         schedule_time.strftime(TIMESTAMP_FORMAT),
+                                                         upstream_host,
+                                                         self.upstream_optimus_project,
+                                                         self.upstream_optimus_namespace,
+                                                         self.upstream_optimus_job)
+
+        self.log.info("[sensor api] upstream runs :: {}".format(api_response['jobRuns']))
+        for job_run in api_response['jobRuns']:
+            if job_run['state'] != 'success':
+                self.log.info("[sensor api] failed for run :: {}".format(job_run))
+        return api_response
 
     def poke(self, context):
+        schedule_time = get_scheduled_at(context)
+        window_start = ""
+        window_end = ""
+        if TEST_NEW_SENSOR_API or DEPEND_ON_NEW_SENSOR_API:
+            try :
+                api_response = self.get_runs_from_new_sensor_api(context)
+                window_start = self._parse_datetime(api_response["window_interval_start"])
+                window_end = self._parse_datetime(api_response["window_interval_end"])
+                if DEPEND_ON_NEW_SENSOR_API:
+                    if api_response["all_success"] or api_response["force_pass"]:
+                        return True
+
+            except Exception as e:
+                self.log.warning("[sensor api] error while fetching upstream schedule :: {}".format(e))
+                context[SCHEDULER_ERR_MSG] = "[sensor api] error while fetching upstream schedule :: {}".format(e)
+                if DEPEND_ON_NEW_SENSOR_API:
+                    return False
+
         try:
-            schedule_time = get_scheduled_at(context)
-            upstream_host = ""
-            if self.upstream_optimus_hostname != self.optimus_hostname:
-                upstream_host = self.upstream_optimus_hostname
+            upstream_schedule = self.get_schedule_interval(schedule_time)
+        except Exception as e:
+            self.log.warning("error while fetching upstream schedule :: {}".format(e))
+            context[SCHEDULER_ERR_MSG] = "error while fetching upstream schedule :: {}".format(e)
+            return False
 
-            api_response = self._optimus_client.get_job_run( self.project_name,
-                                              self.job_name,
-                                              schedule_time.strftime(TIMESTAMP_FORMAT),
-                                              upstream_host,
-                                              self.upstream_optimus_project,
-                                              self.upstream_optimus_namespace,
-                                              self.upstream_optimus_job)
+        last_upstream_schedule_time, _ = self.get_last_upstream_times(
+            schedule_time, upstream_schedule)
 
+        # get schedule window
+        task_window = JobSpecTaskWindow(self._optimus_client, self.project_name, self.job_name)
+        schedule_time_window_start, schedule_time_window_end = task_window.get_schedule_window(
+            last_upstream_schedule_time.strftime(TIMESTAMP_FORMAT), upstream_schedule)
+
+        if TEST_NEW_SENSOR_API:
+            if window_start != "":
+                if window_start != self._parse_datetime(schedule_time_window_start) \
+                        or window_end != self._parse_datetime(schedule_time_window_end):
+                    self.log.warning("[sensor api] sensor window mismatch newAPI:{}->{} , oldApi:{}->{}".format(
+                        self._parse_datetime_str(window_start), window_end, schedule_time_window_start, schedule_time_window_end
+                    ))
+
+        self.log.info("waiting for upstream runs between: {} - {} schedule times of airflow dag run".format(
+            schedule_time_window_start, schedule_time_window_end))
+
+        if not self._are_all_job_runs_successful(schedule_time_window_start, schedule_time_window_end):
+            self.log.warning("unable to find enough successful executions for upstream '{}' in "
+                             "'{}' dated between {} and {}(inclusive), rescheduling sensor".
+                             format(self.upstream_optimus_job, self.upstream_optimus_project, schedule_time_window_start,
+                                    schedule_time_window_end))
+            return False
+        return True
+
+    def get_last_upstream_times(self, schedule_time_of_current_job, upstream_schedule_interval):
+        second_ahead_of_schedule_time = schedule_time_of_current_job + timedelta(seconds=1)
+        c = croniter(upstream_schedule_interval, second_ahead_of_schedule_time)
+        last_upstream_schedule_time = c.get_prev(datetime)
+        last_upstream_execution_date = c.get_prev(datetime)
+        return last_upstream_schedule_time, last_upstream_execution_date
+
+    def get_schedule_interval(self, schedule_time):
+        schedule_time_str = schedule_time.strftime(TIMESTAMP_FORMAT)
+        job_metadata = self._upstream_optimus_client.get_job_metadata(schedule_time_str, self.upstream_optimus_namespace,
+                                                                      self.upstream_optimus_project, self.upstream_optimus_job)
+        upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
+        return upstream_schedule
+
+    # TODO the api will be updated with getJobRuns even though the field here refers to scheduledAt
+    #  it points to execution_date
+    def _are_all_job_runs_successful(self, schedule_time_window_start, schedule_time_window_end) -> bool:
+        try:
+            api_response = self._upstream_optimus_client.get_job_run(
+                self.upstream_optimus_project, self.upstream_optimus_job,
+                schedule_time_window_start, schedule_time_window_end,
+                self.project_name, self.job_name)
+            self.log.info("job_run api response :: {}".format(api_response))
         except Exception as e:
             self.log.warning("error while fetching job runs :: {}".format(e))
             raise AirflowException(e)
-
-        self.log.info("upstream runs :: {}".format(api_response['jobRuns']))
         for job_run in api_response['jobRuns']:
             if job_run['state'] != 'success':
                 self.log.info("failed for run :: {}".format(job_run))
+                return False
+        return True
 
-        return api_response['allSuccess']
+    def _parse_datetime(self, timestamp) -> datetime:
+        try:
+            return datetime.strptime(timestamp, TIMESTAMP_FORMAT)
+        except ValueError:
+            return datetime.strptime(timestamp, TIMESTAMP_MS_FORMAT)
 
 
 def optimus_notify(context, event_meta):
@@ -227,9 +378,9 @@ def optimus_notify(context, event_meta):
         failure_message = failure_message + ", " + event_meta[SCHEDULER_ERR_MSG]
     if len(failure_message)>0:
         log.info(f'failures: {failure_message}')
-    
+
     task_instance = context.get('task_instance')
-    
+
     if event_meta["event_type"] == "TYPE_FAILURE" :
         dag_run = context['dag_run']
         tis = dag_run.get_task_instances()
@@ -309,7 +460,7 @@ def operator_start_event(context):
     try:
         run_type = get_run_type(context)
         if run_type == "SENSOR":
-            if not shouldSendSensorStartEvent(context):
+            if not should_send_sensor_start_event(context):
                 return
         meta = {
             "event_type": "TYPE_{}_START".format(run_type),
@@ -395,7 +546,7 @@ def optimus_sla_miss_notify(dag, task_list, blocking_task_list, slas, blocking_t
     except Exception as e:
         print(e)
 
-def shouldSendSensorStartEvent(ctx):
+def should_send_sensor_start_event(ctx):
     try:
         ti=ctx['ti']
         task_reschedules = TaskReschedule.find_for_task_instance(ti)
@@ -417,3 +568,41 @@ def get_result_for_monitoring_from_xcom(ctx):
         if 'monitoring' in return_value:
             return return_value['monitoring']
     return None
+
+# everything below this is here for legacy reasons, should be cleaned up in future
+
+class ExternalHttpSensor(BaseSensorOperator):
+    """
+    Executes a HTTP GET statement and returns False on failure caused by
+    404 Not Found
+
+    :param method: The HTTP request method to use
+    :param endpoint: The relative part of the full url
+    :param request_params: The parameters to be added to the GET url
+    :param headers: The HTTP headers to be added to the GET request
+
+    """
+
+    template_fields = ('endpoint', 'request_params', 'headers')
+
+    def __init__(
+            self,
+            endpoint: str,
+            method: str = 'GET',
+            request_params: Optional[Dict[str, Any]] = None,
+            headers: Optional[Dict[str, Any]] = None,
+            *args,
+            **kwargs,
+    ) -> None:
+        kwargs['mode'] = kwargs.get('mode', 'reschedule')
+        super().__init__(**kwargs)
+        self.endpoint = endpoint
+        self.request_params = request_params or {}
+        self.headers = headers or {}
+
+    def poke(self, context: 'Context') -> bool:
+        self.log.info('Poking: %s', self.endpoint)
+        r = requests.get(url=self.endpoint, headers=self.headers, params=self.request_params, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        if (r.status_code >= 200 and r.status_code <= 300):
+            return True
+        return False

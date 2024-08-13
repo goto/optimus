@@ -102,6 +102,14 @@ type JobRunService struct {
 	externalOptimusManager ExternalOptimusManager
 }
 
+func (s *JobRunService) GetJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error) {
+	j, err := s.jobRepo.GetJob(ctx, projectName, jobName)
+	if err != nil {
+		s.l.Error("error getting job [%s]:[%s], err: %s", projectName, jobName, err)
+	}
+	return j, err
+}
+
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
 	details, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {

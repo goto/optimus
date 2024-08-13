@@ -387,7 +387,7 @@ func TestGetUpstreamJobRuns(t *testing.T) {
 				UpstreamTenant:     upstreamTenant,
 			}
 
-			_, err = sensorService.GetUpstreamJobRuns(ctx, "", sensorParams, []string{})
+			_, _, err = sensorService.GetUpstreamJobRuns(ctx, "", sensorParams, []string{})
 			assert.Nil(t, err)
 		})
 	}

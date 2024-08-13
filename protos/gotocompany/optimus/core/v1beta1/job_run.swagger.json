@@ -199,15 +199,15 @@
         ]
       }
     },
-    "/v1beta1/project/{projectName}/job/{jobName}/upstream/run": {
+    "/v1beta1/project/{projectName}/job/{jobName}/upstream/runs": {
       "get": {
         "summary": "GetInterval gets interval on specific job given reference time.",
-        "operationId": "JobRunService_GetJobUpstreamRun",
+        "operationId": "JobRunService_AreAllUpstreamRunsSuccessful",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1beta1GetJobUpstreamRunResponse"
+              "$ref": "#/definitions/v1beta1AreAllUpstreamRunsSuccessfulResponse"
             }
           },
           "default": {
@@ -417,6 +417,31 @@
         }
       }
     },
+    "v1beta1AreAllUpstreamRunsSuccessfulResponse": {
+      "type": "object",
+      "properties": {
+        "allSuccess": {
+          "type": "boolean"
+        },
+        "windowIntervalStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "windowIntervalEnd": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "jobRuns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobRun"
+          }
+        },
+        "forcePass": {
+          "type": "boolean"
+        }
+      }
+    },
     "v1beta1GetIntervalResponse": {
       "type": "object",
       "properties": {
@@ -427,20 +452,6 @@
         "endTime": {
           "type": "string",
           "format": "date-time"
-        }
-      }
-    },
-    "v1beta1GetJobUpstreamRunResponse": {
-      "type": "object",
-      "properties": {
-        "allSuccess": {
-          "type": "boolean"
-        },
-        "jobRuns": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1beta1JobRun"
-          }
         }
       }
     },

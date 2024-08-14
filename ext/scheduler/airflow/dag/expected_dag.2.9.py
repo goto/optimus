@@ -125,7 +125,7 @@ init_container = k8s.V1Container(
 
 transformation_bq__dash__bq = SuperKubernetesPodOperator(
     image_pull_policy=IMAGE_PULL_POLICY,
-    namespace=conf.get('kubernetes', 'namespace', fallback="default"),
+    namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
     image="example.io/namespace/bq2bq-executor:latest",
     cmds=["/bin/bash", "-c"],
     arguments=[get_entrypoint_cmd("""python3 /opt/bumblebee/main.py """)],
@@ -162,7 +162,7 @@ init_container_transporter = k8s.V1Container(
 
 hook_transporter = SuperKubernetesPodOperator(
     image_pull_policy=IMAGE_PULL_POLICY,
-    namespace=conf.get('kubernetes', 'namespace', fallback="default"),
+    namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
     image="example.io/namespace/transporter-executor:latest",
     cmds=["/bin/sh", "-c"],
     arguments=[get_entrypoint_cmd("""java -cp /opt/transporter/transporter.jar:/opt/transporter/jolokia-jvm-agent.jar -javaagent:jolokia-jvm-agent.jar=port=7777,host=0.0.0.0 com.gojek.transporter.Main """)],
@@ -197,7 +197,7 @@ init_container_predator = k8s.V1Container(
 
 hook_predator = SuperKubernetesPodOperator(
     image_pull_policy=IMAGE_PULL_POLICY,
-    namespace=conf.get('kubernetes', 'namespace', fallback="default"),
+    namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
     image="example.io/namespace/predator-image:latest",
     cmds=["/bin/sh", "-c"],
     arguments=[get_entrypoint_cmd("""predator ${SUB_COMMAND} -s ${PREDATOR_URL} -u "${BQ_PROJECT}.${BQ_DATASET}.${BQ_TABLE}" """)],
@@ -232,7 +232,7 @@ init_container_failureHook = k8s.V1Container(
 
 hook_failureHook = SuperKubernetesPodOperator(
     image_pull_policy=IMAGE_PULL_POLICY,
-    namespace=conf.get('kubernetes', 'namespace', fallback="default"),
+    namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
     image="example.io/namespace/failure-hook-image:latest",
     cmds=["/bin/sh", "-c"],
     arguments=[get_entrypoint_cmd("""sleep 5 """)],

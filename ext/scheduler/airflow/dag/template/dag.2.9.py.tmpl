@@ -157,7 +157,7 @@ init_container = k8s.V1Container(
 {{ $transformationName := print "transformation_"  .Task.Name | DisplayName -}}
 {{$transformationName}} = SuperKubernetesPodOperator(
     image_pull_policy=IMAGE_PULL_POLICY,
-    namespace=conf.get('kubernetes', 'namespace', fallback="default"),
+    namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
     image={{  .Task.Image | quote}},
     cmds=["{{.Task.Entrypoint.Shell}}", "-c"],
     arguments=[get_entrypoint_cmd("""{{.Task.Entrypoint.Script}} """)],
@@ -198,7 +198,7 @@ init_container_{{$hookName}} = k8s.V1Container(
 
 hook_{{$hookName}} = SuperKubernetesPodOperator(
     image_pull_policy=IMAGE_PULL_POLICY,
-    namespace=conf.get('kubernetes', 'namespace', fallback="default"),
+    namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
     image="{{ $t.Image }}",
     cmds=["{{$t.Entrypoint.Shell}}", "-c"],
     arguments=[get_entrypoint_cmd("""{{$t.Entrypoint.Script}} """)],

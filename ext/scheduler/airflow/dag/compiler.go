@@ -15,6 +15,8 @@ import (
 	"github.com/goto/optimus/sdk/plugin"
 )
 
+const maxSemverPartLength = 2
+
 type PluginRepo interface {
 	GetByName(name string) (*plugin.Plugin, error)
 }
@@ -83,8 +85,8 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 func (c *Compiler) getTemplate(airflowVersion string) *template.Template {
 	// only take the major.minor version part of the given airflow version
 	versionParts := strings.Split(airflowVersion, ".")
-	if len(versionParts) > 2 {
-		versionParts = versionParts[:2]
+	if len(versionParts) > maxSemverPartLength {
+		versionParts = versionParts[:maxSemverPartLength]
 	}
 	version := strings.Join(versionParts, ".")
 

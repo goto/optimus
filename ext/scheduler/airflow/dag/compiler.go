@@ -3,6 +3,8 @@ package dag
 import (
 	"bytes"
 	"fmt"
+	"strings"
+	"text/template"
 
 	"github.com/goto/salt/log"
 
@@ -18,11 +20,12 @@ type PluginRepo interface {
 }
 
 type Compiler struct {
-	hostname   string
-	grpcHost   string
-	log        log.Logger
-	templates  templates
-	pluginRepo PluginRepo
+	hostname             string
+	grpcHost             string
+	log                  log.Logger
+	templates            templates
+	pluginRepo           PluginRepo
+	versionToTemplateMap map[string]string
 }
 
 func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWithDetails) ([]byte, error) {
@@ -66,7 +69,7 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 		c.log.Warn("%s is not provided in project %s, %s. Use default version %s instead", tenant.ProjectSchedulerVersion, project.Name(), err.Error(), defaultVersion)
 		airflowVersion = defaultVersion
 	}
-	tmpl := c.templates.GetTemplate(airflowVersion)
+	tmpl := c.getTemplate(airflowVersion)
 
 	var buf bytes.Buffer
 	if err = tmpl.Execute(&buf, templateContext); err != nil {
@@ -77,17 +80,42 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 	return buf.Bytes(), nil
 }
 
-func NewDagCompiler(l log.Logger, hostname, grpcHost string, repo PluginRepo) (*Compiler, error) {
+func (c *Compiler) getTemplate(airflowVersion string) *template.Template {
+	// only take the major.minor version part of the given airflow version
+	versionParts := strings.Split(airflowVersion, ".")
+	if len(versionParts) > 2 {
+		versionParts = versionParts[:2]
+	}
+	version := strings.Join(versionParts, ".")
+
+	templateVersion := c.versionToTemplateMap[version]
+	if templateVersion == "" {
+		// fallback: if no template mapping provided
+		templateVersion = version
+	}
+
+	return c.templates.GetTemplate(templateVersion)
+}
+
+func NewDagCompiler(l log.Logger, hostname, grpcHost string, repo PluginRepo, dagTemplateVersionMap map[string][]string) (*Compiler, error) {
 	templates, err := NewTemplates()
 	if err != nil {
 		return nil, errors.InternalError(EntitySchedulerAirflow, "unable to instantiate templates", err)
 	}
 
+	versionToTemplateMap := map[string]string{}
+	for airflowVersion, supportedVersions := range dagTemplateVersionMap {
+		for _, supportedVersion := range supportedVersions {
+			versionToTemplateMap[supportedVersion] = airflowVersion
+		}
+	}
+
 	return &Compiler{
-		log:        l,
-		hostname:   hostname,
-		grpcHost:   grpcHost,
-		templates:  templates,
-		pluginRepo: repo,
+		log:                  l,
+		hostname:             hostname,
+		grpcHost:             grpcHost,
+		templates:            templates,
+		pluginRepo:           repo,
+		versionToTemplateMap: versionToTemplateMap,
 	}, nil
 }

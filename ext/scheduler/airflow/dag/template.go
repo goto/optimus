@@ -52,8 +52,7 @@ func NewTemplates() (templates, error) {
 }
 
 func (t templates) GetTemplate(airflowVersion string) *template.Template {
-	version := strings.Join(strings.Split(airflowVersion, ".")[:2], ".")
-	if tmpl, ok := t[version]; ok {
+	if tmpl, ok := t[airflowVersion]; ok {
 		return tmpl
 	}
 	return t[defaultVersion]

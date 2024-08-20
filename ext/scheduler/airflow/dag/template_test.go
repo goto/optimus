@@ -22,14 +22,14 @@ func TestTemplatesGet(t *testing.T) {
 		templates, err := dag.NewTemplates()
 		assert.NoError(t, err)
 
-		tmpl := templates.GetTemplate("2.4.1")
+		tmpl := templates.GetTemplate("2.4")
 		assert.Equal(t, "optimus_dag_v2.4_compiler", tmpl.Name())
 	})
 	t.Run("return default template given wrong version", func(t *testing.T) {
 		templates, err := dag.NewTemplates()
 		assert.NoError(t, err)
 
-		tmpl := templates.GetTemplate("2.2.1")
+		tmpl := templates.GetTemplate("2.2")
 		assert.Equal(t, "optimus_dag_v2.1_compiler", tmpl.Name())
 	})
 }

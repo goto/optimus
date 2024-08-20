@@ -10,6 +10,7 @@ type ServerConfig struct {
 	Plugin           PluginConfig      `mapstructure:"plugin"`
 	Replay           ReplayConfig      `mapstructure:"replay"`
 	Publisher        *Publisher        `mapstructure:"publisher"`
+	Scheduler        SchedulerConfig   `mapstructure:"scheduler"`
 }
 
 type Serve struct {
@@ -76,4 +77,17 @@ type PublisherKafkaConfig struct {
 	Topic               string   `mapstructure:"topic"`
 	BatchIntervalSecond int      `mapstructure:"batch_interval_second"`
 	BrokerURLs          []string `mapstructure:"broker_urls"`
+}
+
+type SchedulerConfig struct {
+	Versions SchedulerVersionsConfig `mapstructure:"versions"`
+}
+
+type SchedulerVersionsConfig struct {
+	Supported SchedulerVersionsSupported `mapstructure:"supported"`
+}
+
+type SchedulerVersionsSupported struct {
+	DAG map[string][]string `mapstructure:"dag"`
+	API map[string][]string `mapstructure:"api"`
 }

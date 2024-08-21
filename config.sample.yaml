@@ -46,18 +46,6 @@ log:
 #  # jaeger collector address to send application traces
 #  jaeger_addr: "http://localhost:14268/api/traces"
 
-scheduler:
-  versions:
-    supported:
-      # 1 DAG template can be used by multiple airflow versions,
-      # this config contains mapping from the dag template version to list
-      # of all supported Airflow minor version for that template.
-      dag:
-      - "2.1": ["2.1", "2.2", "2.3"]
-      - "2.4": ["2.4", "2.5"]
-      - "2.6": ["2.6", "2.7", "2.8"]
-      - "2.9": ["2.9", "2.10"]
-
 # resource managers for job dependency enrichment
 #resource_managers:
 #- name: other_optimus_server

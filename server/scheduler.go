@@ -14,7 +14,7 @@ func NewScheduler(l log.Logger, conf *config.ServerConfig, pluginRepo dag.Plugin
 ) (*airflow.Scheduler, error) {
 	bucketFactory := bucket.NewFactory(projecGetter, secretGetter)
 
-	dagCompiler, err := dag.NewDagCompiler(l, conf.Serve.IngressHost, conf.Serve.IngressHostGRPC, pluginRepo, conf.Scheduler.Versions.Supported.DAG)
+	dagCompiler, err := dag.NewDagCompiler(l, conf.Serve.IngressHost, conf.Serve.IngressHostGRPC, pluginRepo)
 	if err != nil {
 		return nil, err
 	}

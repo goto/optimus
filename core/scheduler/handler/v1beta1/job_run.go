@@ -81,9 +81,9 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 	}, nil
 }
 
-func (h JobRunHandler) RunJob(ctx context.Context, req *pb.RunJobRequest) (*pb.RunJobResponse, error) {
+func (h JobRunHandler) JobTaskExecute(ctx context.Context, req *pb.JobTaskExecuteRequest) (*pb.JobTaskExecuteResponse, error) {
 	h.service.RunJob(ctx)
-	return &pb.RunJobResponse{}, nil
+	return &pb.JobTaskExecuteResponse{}, nil
 }
 
 // JobRun currently gets the job runs from scheduler based on the criteria

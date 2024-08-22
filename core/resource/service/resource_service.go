@@ -448,14 +448,6 @@ func (rs ResourceService) getResourcesToBatchUpdate(ctx context.Context, incomin
 
 	return toUpdateOnStore, me.ToErr()
 }
-func (rs ResourceService) createSubscriptions(res *resource.Resource, eventTypes []string) {
-	createSubscription, err := event.NewCreateSubscriptionEvent(res.Tenant(), res.GetURN(), eventTypes)
-	if err != nil {
-		rs.logger.Error("error creating event for job create: %s", err)
-		return
-	}
-	rs.eventHandler.HandleEvent(createSubscription)
-}
 
 func (rs ResourceService) identifyResourceToUpdateOnStore(ctx context.Context, incoming, existing *resource.Resource) error {
 	if incoming.Status() != resource.StatusValidationSuccess {
@@ -492,8 +484,6 @@ func (rs ResourceService) raiseCreateEvent(res *resource.Resource) { // nolint:g
 		return
 	}
 	rs.eventHandler.HandleEvent(ev)
-
-	rs.createSubscriptions(res, []string{event.Announcement, event.UpstreamChange})
 }
 
 func (rs ResourceService) raiseUpdateEvent(res *resource.Resource, impact resource.UpdateImpact) { // nolint:gocritic

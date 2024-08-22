@@ -384,6 +384,8 @@ func (s *OptimusServer) setupHandlers() error {
 	bigqueryStore := bqStore.NewBigqueryDataStore(tenantService, bqClientProvider)
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
 
+	go schedulerService.WatchPodEvents()
+
 	// Tenant Handlers
 	pb.RegisterSecretServiceServer(s.grpcServer, tHandler.NewSecretsHandler(s.logger, tSecretService))
 	pb.RegisterProjectServiceServer(s.grpcServer, tHandler.NewProjectHandler(s.logger, tProjectService))

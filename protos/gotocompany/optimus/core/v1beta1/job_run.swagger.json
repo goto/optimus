@@ -21,6 +21,39 @@
     "application/json"
   ],
   "paths": {
+    "/v1beta1/project/project_name/job/job_name/task/execute": {
+      "put": {
+        "summary": "JobTaskExecute runs a task instance",
+        "operationId": "JobRunService_JobTaskExecute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1JobTaskExecuteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1JobTaskExecuteRequest"
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/job/{jobName}/interval": {
       "get": {
         "summary": "GetInterval gets interval on specific job given reference time.",
@@ -199,84 +232,6 @@
         ]
       }
     },
-    "/v1beta1/project/{projectName}/job/{jobName}/upstream/run": {
-      "get": {
-        "summary": "GetInterval gets interval on specific job given reference time.",
-        "operationId": "JobRunService_GetJobUpstreamRun",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1GetJobUpstreamRunResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "jobName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "scheduleTime",
-            "in": "query",
-            "required": false,
-            "type": "string",
-            "format": "date-time"
-          },
-          {
-            "name": "upstreamJobName",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "upstreamProjectName",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "upstreamNamespaceName",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "upstreamHost",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "filter",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
-          }
-        ],
-        "tags": [
-          "JobRunService"
-        ]
-      }
-    },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/{jobName}/event": {
       "post": {
         "summary": "RegisterJobEvent notifies optimus service about an event related to job",
@@ -430,20 +385,6 @@
         }
       }
     },
-    "v1beta1GetJobUpstreamRunResponse": {
-      "type": "object",
-      "properties": {
-        "allSuccess": {
-          "type": "boolean"
-        },
-        "jobRuns": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1beta1JobRun"
-          }
-        }
-      }
-    },
     "v1beta1InstanceSpecType": {
       "type": "string",
       "enum": [
@@ -532,6 +473,12 @@
           }
         }
       }
+    },
+    "v1beta1JobTaskExecuteRequest": {
+      "type": "object"
+    },
+    "v1beta1JobTaskExecuteResponse": {
+      "type": "object"
     },
     "v1beta1RegisterJobEventResponse": {
       "type": "object"

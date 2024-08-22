@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/goto/optimus/ext/notify/lark"
 	"io"
 	"net"
 	"net/http"
@@ -307,13 +308,15 @@ func (s *OptimusServer) setupHandlers() error {
 			new(pagerduty.PagerDutyServiceImpl),
 		),
 	}
-	//todo : create for lark Need to use this
-	//larkNotifier := webhook.NewNotifier(
-	//	notificationContext,
-	//	webhook.DefaultEventBatchInterval,
-	//	func(err error) {
-	//		s.logger.Error("webhook error accumulator : " + err.Error())
-	//	})
+	//todo : create for lark Need to use this S.logger to be added
+	larkNotifier := lark.NewNotifier(
+		notificationContext,
+		webhook.DefaultEventBatchInterval,
+		func(err error) {
+			s.logger.Error("webhook error accumulator : " + err.Error())
+		},
+		s.conf.Alerting.LarkSLAMissTemplate,
+		s.conf.Alerting.LarkFailureTemplate)
 
 	webhookNotifier := webhook.NewNotifier(
 		notificationContext,
@@ -337,7 +340,7 @@ func (s *OptimusServer) setupHandlers() error {
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
-	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler)
+	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, larkNotifier, newEngine, alertsHandler)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
 	if err != nil {
 		return err

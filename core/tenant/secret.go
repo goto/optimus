@@ -9,9 +9,12 @@ import (
 const (
 	EntitySecret = "secret"
 
-	SecretStorageKey    = "STORAGE"
-	SecretSchedulerAuth = "SCHEDULER_AUTH"
-	SecretNotifySlack   = "NOTIFY_SLACK"
+	SecretStorageKey            = "STORAGE"
+	SecretSchedulerAuth         = "SCHEDULER_AUTH"
+	SecretNotifySlack           = "NOTIFY_SLACK"
+	SecretLarkAppID             = "NOTIFY_LARK_APP_ID"
+	SecretLarkAppSecret         = "NOTIFY_LARK_APP_SECRET"
+	SecretLarkVerificationToken = "NOTIFY_LARK_VERIFICATION_TOKEN"
 )
 
 type SecretName string

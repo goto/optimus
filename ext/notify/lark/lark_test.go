@@ -29,29 +29,21 @@ func TestLark(t *testing.T) {
 			"exception": "this much data failed",
 		})
 
-		client := NewNotifier(
-			ctx,
-			time.Millisecond*500,
-			func(err error) {
-				sendErrors = append(sendErrors, err)
-			},
-			scheduler.LarkNotifyAttrs{
-				AppId:             "cli_a6218c2786f9102f",
-				AppSecret:         "GillccWhlzoQPXT6zHNPIelK6MUmuGJN",
-				VerificationToken: "TNl7DSVmJl1K6v47ZuYnGf3iko5vPGRA",
-			},
-		)
+		client := NewNotifier(ctx, time.Millisecond*500, func(err error) {
+			sendErrors = append(sendErrors, err)
+		}, "ctp_AA0LV7jVKCDK", "ctp_AA0zf7o45Ppp")
 		defer client.Close()
-		err := client.Notify(context.Background(), scheduler.NotifyAttrs{
-			Owner: "testEmail@gojek.com",
+		err := client.Notify(context.Background(), scheduler.LarkNotifyAttrs{
+			Owner:     "testEmail@gojek.com",
+			AppId:     "cli_a6218c2786f9102f",
+			AppSecret: "GillccWhlzoQPXT6zHNPIelK6MUmuGJN",
 			JobEvent: &scheduler.Event{
 				JobName: jobName,
 				Tenant:  tnnt,
-				Type:    scheduler.SLAMissEvent,
+				Type:    scheduler.JobFailureEvent,
 				Values:  eventValues.AsMap(),
 			},
-			Route:  "#cmp-iac-test",
-			Secret: "test-token",
+			Route: "#cmp-iac-test",
 		})
 
 		assert.Nil(t, err)

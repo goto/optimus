@@ -88,12 +88,16 @@ type WebhookAttrs struct {
 }
 
 type NotifyAttrs struct {
-	Owner     string
-	JobEvent  *Event
-	Route     string
-	Secret    string
-	AppId     string
-	AppSecret string
+	Owner    string
+	JobEvent *Event
+	Route    string
+	Secret   string
+}
+
+type LarkNotifyAttrs struct {
+	AppId             string
+	AppSecret         string
+	VerificationToken string
 }
 
 const (

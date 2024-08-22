@@ -177,6 +177,7 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 						e.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
 					}
+					//todo: if(scheme is slack --> lark.notify)
 				}
 			}
 			telemetry.NewCounter("jobrun_alerts_total", map[string]string{

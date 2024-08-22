@@ -307,6 +307,14 @@ func (s *OptimusServer) setupHandlers() error {
 			new(pagerduty.PagerDutyServiceImpl),
 		),
 	}
+	//todo : create for lark Need to use this
+	//larkNotifier := webhook.NewNotifier(
+	//	notificationContext,
+	//	webhook.DefaultEventBatchInterval,
+	//	func(err error) {
+	//		s.logger.Error("webhook error accumulator : " + err.Error())
+	//	})
+
 	webhookNotifier := webhook.NewNotifier(
 		notificationContext,
 		webhook.DefaultEventBatchInterval,

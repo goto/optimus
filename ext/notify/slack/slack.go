@@ -279,6 +279,7 @@ func (s *Notifier) Close() error { // nolint: unparam
 	return nil
 }
 
+// todo: add this call in the Optimus.go
 func NewNotifier(ctx context.Context, slackURL string, eventBatchInterval time.Duration, errHandler func(error)) *Notifier {
 	this := &Notifier{
 		slackURL:           slackURL,

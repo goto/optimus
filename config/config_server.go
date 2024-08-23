@@ -34,9 +34,11 @@ type TelemetryConfig struct {
 }
 
 type AlertingConfig struct {
-	EventManager EventManagerConfig `mapstructure:"alert_manager"`
-	Dashboard    string             `mapstructure:"dashboard"`
-	DataConsole  string             `mapstructure:"data_console"`
+	EventManager        EventManagerConfig `mapstructure:"alert_manager"`
+	Dashboard           string             `mapstructure:"dashboard"`
+	DataConsole         string             `mapstructure:"data_console"`
+	LarkSLAMissTemplate string             `mapstructure:"lark_sla_miss_template"`
+	LarkFailureTemplate string             `mapstructure:"lark_failure_template"`
 }
 
 type EventManagerConfig struct {

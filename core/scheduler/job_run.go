@@ -94,6 +94,15 @@ type NotifyAttrs struct {
 	Secret   string
 }
 
+type LarkNotifyAttrs struct {
+	Owner             string
+	JobEvent          *Event
+	Route             string
+	AppId             string
+	AppSecret         string
+	VerificationToken string
+}
+
 const (
 	MetricNotificationQueue         = "notification_queue_total"
 	MetricNotificationWorkerBatch   = "notification_worker_batch_total"

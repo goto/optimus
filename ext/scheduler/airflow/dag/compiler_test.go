@@ -28,6 +28,9 @@ var compiledTemplate24 []byte
 //go:embed expected_dag.2.6.py
 var compiledTemplate26 []byte
 
+//go:embed expected_dag.2.9.py
+var compiledTemplate29 []byte
+
 func TestDagCompiler(t *testing.T) {
 	t.Run("Compile", func(t *testing.T) {
 		grpcHost := "http://grpc.optimus.example.com:8081"
@@ -105,6 +108,17 @@ func TestDagCompiler(t *testing.T) {
 				compiledDag, err := com.Compile(project, job)
 				assert.NoError(t, err)
 				assert.Equal(t, string(compiledTemplate26), string(compiledDag))
+			})
+
+			t.Run("with airflow version 2.9.3", func(t *testing.T) {
+				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, repo)
+				assert.NoError(t, err)
+
+				job := setupJobDetails(tnnt)
+				project := setProject(tnnt, "2.9.3")
+				compiledDag, err := com.Compile(project, job)
+				assert.NoError(t, err)
+				assert.Equal(t, string(compiledTemplate29), string(compiledDag))
 			})
 		})
 	})

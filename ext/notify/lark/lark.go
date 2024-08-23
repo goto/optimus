@@ -247,32 +247,17 @@ func (s *Notifier) Worker(ctx context.Context) {
 				return
 			}
 
-			tenantToken, err := larkClient.Post(context.Background(),
-				"/open-apis/auth/v3/tenant_access_token/internal",
-				bodyJsonBytes,
-				larkcore.AccessTokenTypeTenant)
+			//Fetch the tenant access token for fetching the group info
+			tenantTokenForGroupInfo := fetchTenantToken(larkClient, bodyJsonBytes)
 
-			if err != nil {
-				log.Fatalf("Error making request: %v", err)
-			}
-			tenantKeyString := fetchTenantKey(tenantToken.RawBody)
-			listOfGroupsResponse, err := larkClient.Im.Chat.List(context.Background(), groupListReq, larkcore.WithTenantAccessToken(tenantKeyString))
-			allTheGroupsBotIsPartOf := listOfGroupsResponse.Data.Items
+			//fetch the group chat ID from using the above tenant access token
+			groupChatID := fetchGroupChatID(larkClient, tenantTokenForGroupInfo, groupListReq, ro)
 
-			var groupChatId string
-
-			for _, group := range allTheGroupsBotIsPartOf {
-				cleanedString := strings.ReplaceAll(ro.receiverID, "#", "")
-				if *group.Name == cleanedString {
-					groupChatId = *group.ChatId
-				}
-			}
-
-			//todo: create new function for this
+			//Below we make the request to send the message to the channel
 			messageRequest := larkim.NewCreateMessageReqBuilder().
 				ReceiveIdType(`chat_id`).
 				Body(larkim.NewCreateMessageReqBodyBuilder().
-					ReceiveId(groupChatId).
+					ReceiveId(groupChatID).
 					MsgType(`interactive`).
 					Content(s.buildMessageBlocks(events, s.workerErrChan)).
 					Uuid(uuid.NewString()).
@@ -299,6 +284,38 @@ func (s *Notifier) Worker(ctx context.Context) {
 			time.Sleep(s.eventBatchInterval)
 		}
 	}
+}
+
+func fetchGroupChatID(larkClient *lark.Client, tenantTokenForGroupInfo string, groupListReq *larkim.ListChatReq, ro route) string {
+	listOfGroupsResponse, err := larkClient.Im.Chat.List(context.Background(), groupListReq, larkcore.WithTenantAccessToken(tenantTokenForGroupInfo))
+	if err != nil {
+		log.Println(err)
+		return ""
+	}
+	allTheGroupsBotIsPartOf := listOfGroupsResponse.Data.Items
+
+	var groupChatId string
+	for _, group := range allTheGroupsBotIsPartOf {
+		cleanedString := strings.ReplaceAll(ro.receiverID, "#", "")
+		if *group.Name == cleanedString {
+			groupChatId = *group.ChatId
+		}
+	}
+
+	return groupChatId
+}
+
+func fetchTenantToken(larkClient *lark.Client, bodyJsonBytes []byte) string {
+	tenantToken, err := larkClient.Post(context.Background(),
+		"/open-apis/auth/v3/tenant_access_token/internal",
+		bodyJsonBytes,
+		larkcore.AccessTokenTypeTenant)
+
+	if err != nil {
+		log.Fatalf("Error making request: %v", err)
+	}
+
+	return fetchTenantKey(tenantToken.RawBody)
 }
 
 func (s *Notifier) Close() error { // nolint: unparam

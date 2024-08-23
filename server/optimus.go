@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/goto/optimus/ext/notify/lark"
 	"io"
 	"net"
 	"net/http"
@@ -32,6 +31,7 @@ import (
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/alertmanager"
+	"github.com/goto/optimus/ext/notify/lark"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
@@ -308,7 +308,7 @@ func (s *OptimusServer) setupHandlers() error {
 			new(pagerduty.PagerDutyServiceImpl),
 		),
 	}
-	//todo : create for lark Need to use this S.logger to be added
+
 	larkNotifier := lark.NewNotifier(
 		notificationContext,
 		webhook.DefaultEventBatchInterval,

@@ -98,7 +98,7 @@ type LarkNotifyAttrs struct {
 	Owner             string
 	JobEvent          *Event
 	Route             string
-	AppId             string
+	AppID             string
 	AppSecret         string
 	VerificationToken string
 }

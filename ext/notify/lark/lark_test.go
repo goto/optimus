@@ -1,17 +1,13 @@
-package lark
+package lark // nolint: testpackage
 
 import (
 	"context"
-	"github.com/goto/optimus/core/scheduler"
-	"github.com/goto/optimus/core/tenant"
-	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/types/known/structpb"
 	"testing"
 	"time"
+
 )
 
 func TestLark(t *testing.T) {
-
 	projectName := "ss"
 	namespaceName := "bb"
 	jobName := scheduler.JobName("foo-job-spec")
@@ -35,7 +31,7 @@ func TestLark(t *testing.T) {
 		defer client.Close()
 		err := client.Notify(context.Background(), scheduler.LarkNotifyAttrs{
 			Owner:     "testEmail@gojek.com",
-			AppId:     "test_app_id",
+			AppID:     "test_app_id",
 			AppSecret: "test_app_secret",
 			JobEvent: &scheduler.Event{
 				JobName: jobName,

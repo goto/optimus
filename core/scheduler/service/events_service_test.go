@@ -34,7 +34,7 @@ func TestNotificationService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(nil, fmt.Errorf("some error"))
 			defer jobRepo.AssertExpectations(t)
 
-			notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, nil, nil)
 
 			event := &scheduler.Event{
 				JobName: jobName,
@@ -123,7 +123,7 @@ func TestNotificationService(t *testing.T) {
 				templateCompiler.On("Compile", mock.Anything, secretContext).Return(map[string]string{"header": "headerValue"}, nil)
 				defer templateCompiler.AssertExpectations(t)
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, webhookChannel, templateCompiler, nil)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, webhookChannel, nil, templateCompiler, nil)
 
 				err := notifyService.Webhook(ctx, event)
 				assert.Nil(t, err)
@@ -148,7 +148,7 @@ func TestNotificationService(t *testing.T) {
 				tenantService.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
 				defer tenantService.AssertExpectations(t)
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, nil, alertManager)
 
 				err := notifyService.Relay(ctx, event)
 				assert.Nil(t, err)
@@ -181,7 +181,7 @@ func TestNotificationService(t *testing.T) {
 					"pagerduty": notifyChanelPager,
 				}
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
 
 				err := notifyService.Push(ctx, event)
 				assert.Nil(t, err)
@@ -244,7 +244,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 			assert.Nil(t, err)
@@ -306,7 +306,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 

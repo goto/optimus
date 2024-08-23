@@ -183,7 +183,7 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 						e.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
 					}
-					//todo: if(scheme is slack --> lark.notify)
+					// todo: if(scheme is slack --> lark.notify)
 					if scheme == NotificationSchemeSlack {
 						appid, err := secretMap.Get(tenant.SecretLarkAppID)
 						if err != nil {
@@ -203,12 +203,11 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 							Owner:             jobDetails.JobMetadata.Owner,
 							JobEvent:          event,
 							Route:             route,
-							AppId:             appid,
+							AppID:             appid,
 							AppSecret:         appSecret,
 							VerificationToken: appVerificationToken,
 						})
 					}
-
 				}
 			}
 			telemetry.NewCounter("jobrun_alerts_total", map[string]string{

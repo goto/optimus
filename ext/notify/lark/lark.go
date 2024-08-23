@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/goto/optimus/core/scheduler"
-	lark "github.com/larksuite/oapi-sdk-go/v3"
-	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
-	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"io"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	lark "github.com/larksuite/oapi-sdk-go/v3"
+	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
+	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/goto/optimus/core/scheduler"
 )
 
 const (
@@ -63,28 +65,18 @@ type Notifier struct {
 	JobFailureTemplateID  string
 }
 
-func (s *Notifier) Notify(ctx context.Context, attr scheduler.LarkNotifyAttrs) error {
-	//need to add this to the Notify Attributes
+func (s *Notifier) Notify(_ context.Context, attr scheduler.LarkNotifyAttrs) error { //nolint: gocritic
 	var receiverIDs []string
 	// channel this will have channel names in the array which we need to use when we need to fetch the open id
 	if strings.HasPrefix(attr.Route, "#") {
 		receiverIDs = append(receiverIDs, attr.Route)
 	}
 
-	if strings.Contains(attr.Route, "@") {
-		if strings.HasPrefix(attr.Route, "@") {
-			// user group
-			//todo: User groups are not supported in Lark will add the functionality once they are added
-
-		}
-	}
-
+	// todo: we can add the changes for groups
 	if len(receiverIDs) == 0 {
 		return fmt.Errorf("failed to find notification route %s", attr.Route)
 	}
-	fmt.Println("This is the current reciever id", receiverIDs[0])
 
-	//Secret is the verification token we can use for the bot
 	s.queueNotification(receiverIDs, attr)
 	return nil
 }
@@ -93,11 +85,10 @@ func (s *Notifier) queueNotification(receiverIDs []string, attr scheduler.LarkNo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	//reciever ID is the name of the channel we have to later fetch the open Id
 	for _, receiverID := range receiverIDs {
 		rt := route{
 			receiverID: receiverID,
-			appID:      attr.AppId,
+			appID:      attr.AppID,
 			appSecret:  attr.AppSecret,
 		}
 		if _, ok := s.routeMsgBatch[rt]; !ok {
@@ -128,7 +119,7 @@ type TemplateVariable struct {
 }
 
 type Data struct {
-	TemplateId       string           `json:"template_id"`
+	TemplateID       string           `json:"template_id"`
 	TemplateVariable TemplateVariable `json:"template_variable"`
 }
 
@@ -138,7 +129,6 @@ type Content struct {
 }
 
 func (s *Notifier) buildMessageBlocks(events []event, workerErrChan chan error) string {
-
 	data := Data{}
 	content := Content{
 		Type: "template",
@@ -154,7 +144,7 @@ func (s *Notifier) buildMessageBlocks(events []event, workerErrChan chan error) 
 		projectName := evt.meta.Tenant.ProjectName().String()
 		namespaceName := evt.meta.Tenant.NamespaceName().String()
 		if evt.meta.Type.IsOfType(scheduler.EventCategorySLAMiss) {
-			content.Data.TemplateId = s.SLABreachedTemplateID
+			content.Data.TemplateID = s.SLABreachedTemplateID
 			content.Data.TemplateVariable.CardTitle = fmt.Sprintf("[Job] SLA Breached | %s/%s", projectName, namespaceName)
 			if slas, ok := evt.meta.Values["slas"]; ok {
 				for slaIdx, sla := range slas.([]any) {
@@ -170,7 +160,7 @@ func (s *Notifier) buildMessageBlocks(events []event, workerErrChan chan error) 
 						if slaIdx > MaxSLAEventsToProcess {
 							slaStr += "\nToo many breaches. Truncating..."
 						}
-						//Task Name
+
 						content.Data.TemplateVariable.TaskName = slaStr
 					}
 					// skip further SLA events
@@ -180,7 +170,7 @@ func (s *Notifier) buildMessageBlocks(events []event, workerErrChan chan error) 
 				}
 			}
 		} else if evt.meta.Type.IsOfType(scheduler.EventCategoryJobFailure) {
-			content.Data.TemplateId = s.JobFailureTemplateID
+			content.Data.TemplateID = s.JobFailureTemplateID
 			content.Data.TemplateVariable.CardTitle = fmt.Sprintf("[Job] Failure | %s/%s", projectName, namespaceName)
 			if scheduledAt, ok := evt.meta.Values["scheduled_at"]; ok && scheduledAt.(string) != "" {
 				content.Data.TemplateVariable.ScheduledAt = scheduledAt.(string)
@@ -214,8 +204,6 @@ func (s *Notifier) buildMessageBlocks(events []event, workerErrChan chan error) 
 		return ""
 	}
 
-	fmt.Println(string(contentDataString))
-
 	return string(contentDataString)
 }
 
@@ -231,29 +219,26 @@ func (s *Notifier) Worker(ctx context.Context) {
 
 			larkClient := lark.NewClient(ro.appID, ro.appSecret)
 
+			const pageSize = 20
 			groupListReq := larkim.NewListChatReqBuilder().
 				SortType(`ByCreateTimeAsc`).
-				PageSize(20).
+				PageSize(pageSize).
 				Build()
 
-			//todo: get the app tenant token which need to be passed here // create a new function for this to fetch tenant key
+			// todo: get the app tenant token which need to be passed here // create a new function for this to fetch tenant key
 			bodyMap := make(map[string]string)
 			bodyMap["app_id"] = ro.appID
 			bodyMap["app_secret"] = ro.appSecret
-			bodyJsonBytes, err := json.Marshal(bodyMap)
-
+			bodyJSONBytes, err := json.Marshal(bodyMap)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				return
 			}
 
-			//Fetch the tenant access token for fetching the group info
-			tenantTokenForGroupInfo := fetchTenantToken(larkClient, bodyJsonBytes)
+			tenantTokenForGroupInfo := fetchTenantToken(ctx, larkClient, bodyJSONBytes)
 
-			//fetch the group chat ID from using the above tenant access token
-			groupChatID := fetchGroupChatID(larkClient, tenantTokenForGroupInfo, groupListReq, ro)
+			groupChatID := fetchGroupChatID(ctx, larkClient, tenantTokenForGroupInfo, groupListReq, ro)
 
-			//Below we make the request to send the message to the channel
 			messageRequest := larkim.NewCreateMessageReqBuilder().
 				ReceiveIdType(`chat_id`).
 				Body(larkim.NewCreateMessageReqBodyBuilder().
@@ -264,13 +249,13 @@ func (s *Notifier) Worker(ctx context.Context) {
 					Build()).
 				Build()
 
-			resp, err := larkClient.Im.Message.Create(context.Background(), messageRequest)
+			resp, err := larkClient.Im.Message.Create(ctx, messageRequest)
 			if err != nil {
 				log.Println(err)
 				return
 			}
 
-			fmt.Println(resp.Code, resp.Msg, resp.RequestId())
+			log.Println(resp.Code, resp.Msg, resp.RequestId())
 		}
 		s.mu.Unlock()
 		larkWorkerBatchCounter.Inc()
@@ -286,31 +271,30 @@ func (s *Notifier) Worker(ctx context.Context) {
 	}
 }
 
-func fetchGroupChatID(larkClient *lark.Client, tenantTokenForGroupInfo string, groupListReq *larkim.ListChatReq, ro route) string {
-	listOfGroupsResponse, err := larkClient.Im.Chat.List(context.Background(), groupListReq, larkcore.WithTenantAccessToken(tenantTokenForGroupInfo))
+func fetchGroupChatID(ctx context.Context, larkClient *lark.Client, tenantTokenForGroupInfo string, groupListReq *larkim.ListChatReq, ro route) string {
+	listOfGroupsResponse, err := larkClient.Im.Chat.List(ctx, groupListReq, larkcore.WithTenantAccessToken(tenantTokenForGroupInfo))
 	if err != nil {
 		log.Println(err)
 		return ""
 	}
 	allTheGroupsBotIsPartOf := listOfGroupsResponse.Data.Items
 
-	var groupChatId string
+	var groupChatID string
 	for _, group := range allTheGroupsBotIsPartOf {
 		cleanedString := strings.ReplaceAll(ro.receiverID, "#", "")
 		if *group.Name == cleanedString {
-			groupChatId = *group.ChatId
+			groupChatID = *group.ChatId
 		}
 	}
 
-	return groupChatId
+	return groupChatID
 }
 
-func fetchTenantToken(larkClient *lark.Client, bodyJsonBytes []byte) string {
-	tenantToken, err := larkClient.Post(context.Background(),
+func fetchTenantToken(ctx context.Context, larkClient *lark.Client, bodyJSONBytes []byte) string {
+	tenantToken, err := larkClient.Post(ctx,
 		"/open-apis/auth/v3/tenant_access_token/internal",
-		bodyJsonBytes,
+		bodyJSONBytes,
 		larkcore.AccessTokenTypeTenant)
-
 	if err != nil {
 		log.Fatalf("Error making request: %v", err)
 	}
@@ -340,7 +324,7 @@ func fetchTenantKey(tenantTokenResponse []byte) string {
 	return response.TenantAccessToken
 }
 
-func NewNotifier(ctx context.Context, eventBatchInterval time.Duration, errHandler func(error), slaMissTemplate string, failureTemplate string) *Notifier {
+func NewNotifier(ctx context.Context, eventBatchInterval time.Duration, errHandler func(error), slaMissTemplate, failureTemplate string) *Notifier {
 	this := &Notifier{
 		routeMsgBatch:         map[route][]event{},
 		workerErrChan:         make(chan error),

@@ -31,12 +31,12 @@ func TestLark(t *testing.T) {
 
 		client := NewNotifier(ctx, time.Millisecond*500, func(err error) {
 			sendErrors = append(sendErrors, err)
-		}, "ctp_AA0LV7jVKCDK", "ctp_AA0zf7o45Ppp")
+		}, "slamisstemplate", "failuretemplate")
 		defer client.Close()
 		err := client.Notify(context.Background(), scheduler.LarkNotifyAttrs{
 			Owner:     "testEmail@gojek.com",
-			AppId:     "cli_a6218c2786f9102f",
-			AppSecret: "GillccWhlzoQPXT6zHNPIelK6MUmuGJN",
+			AppId:     "test_app_id",
+			AppSecret: "test_app_secret",
 			JobEvent: &scheduler.Event{
 				JobName: jobName,
 				Tenant:  tnnt,

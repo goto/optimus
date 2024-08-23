@@ -137,10 +137,6 @@ type Content struct {
 	Data Data   `json:"data"`
 }
 
-// todo: add it in the handler
-//var SLABreachedTemplateID string = "ctp_AA0LV7jVKCDK"
-//var JobFailureTemplateID string = "ctp_AA0zf7o45Ppp"
-
 func (s *Notifier) buildMessageBlocks(events []event, workerErrChan chan error) string {
 
 	data := Data{}

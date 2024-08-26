@@ -2,9 +2,12 @@ package lark // nolint: testpackage
 
 import (
 	"context"
+	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/structpb"
 	"testing"
 	"time"
-
 )
 
 func TestLark(t *testing.T) {

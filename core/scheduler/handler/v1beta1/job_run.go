@@ -2,6 +2,8 @@ package v1beta1
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -18,8 +20,11 @@ type JobRunService interface {
 	JobRunInput(context.Context, tenant.ProjectName, scheduler.JobName, scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 	UpdateJobState(context.Context, *scheduler.Event) error
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
+	GetJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
+	GetUpstreamJobRuns(ctx context.Context, upstreamHost string, sensorParameters scheduler.JobSensorParameters, filter []string) (interval.Interval, []*scheduler.JobRunStatus, error)
+	ForcePassSensor(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) bool
 }
 
 type Notifier interface {
@@ -137,6 +142,83 @@ func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, 
 		StartDate: req.GetStartDate().AsTime(),
 		EndDate:   req.GetEndDate().AsTime(),
 		Filter:    req.GetFilter(),
+	}, nil
+}
+
+func (h JobRunHandler) GetUpstreamJobRun(ctx context.Context, req *pb.AreAllUpstreamRunsSuccessfulRequest) (*pb.AreAllUpstreamRunsSuccessfulResponse, error) {
+	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt base job name")
+	}
+
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt base projectName")
+	}
+
+	upstreamTenant, err := tenant.NewTenant(req.GetUpstreamProjectName(), req.GetUpstreamNamespaceName())
+	if err != nil {
+		h.l.Error("error adapting upstream tenant from Project:[%s], Namespace:[%s], err:%s", req.GetUpstreamProjectName(), req.GetUpstreamNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt to upstream tenant")
+	}
+	upstreamJobName, err := scheduler.JobNameFrom(req.GetUpstreamJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, fmt.Sprintf("unable to adapt upstream job name for base job: %s, upstream job: %s", req.GetJobName(), req.GetUpstreamJobName()))
+	}
+	job, err := h.service.GetJob(ctx, projectName, jobName)
+	if err != nil {
+		h.l.Error("error getting job [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, fmt.Sprintf("unable to fetch job: %s, from DB", req.GetJobName()))
+	}
+
+	if h.service.ForcePassSensor(ctx, job.Tenant, jobName, req.GetScheduleTime().AsTime()) {
+		return &pb.AreAllUpstreamRunsSuccessfulResponse{
+			ForcePass: true,
+		}, nil
+	}
+
+	sensorParameters := scheduler.JobSensorParameters{
+		SubjectJobName:     jobName,
+		SubjectProjectName: job.Tenant.ProjectName(),
+		ScheduledTime:      req.GetScheduleTime().AsTime(),
+		UpstreamJobName:    upstreamJobName,
+		UpstreamTenant:     upstreamTenant,
+	}
+
+	filter := req.GetFilter()
+	encodedUpstreamHost := req.GetUpstreamHost()
+	decodedUpstreamHost, err := base64.StdEncoding.DecodeString(encodedUpstreamHost)
+	if err != nil {
+		h.l.Error("error decoding upstream host [%s]: %s", encodedUpstreamHost, err)
+		return nil, errors.GRPCErr(err, "unable to decode upstream host "+req.GetJobName())
+	}
+
+	windowInterval, runs, err := h.service.GetUpstreamJobRuns(ctx, string(decodedUpstreamHost), sensorParameters, filter)
+	if err != nil {
+		h.l.Error("unable to get job runs for request %#v, err: %s", sensorParameters, err)
+		return nil, err
+	}
+
+	jobRuns := make([]*pb.JobRun, len(runs))
+	allSuccess := true
+	for i, r := range runs {
+		jobRuns[i] = &pb.JobRun{
+			State:       r.State.String(),
+			ScheduledAt: timestamppb.New(r.ScheduledAt),
+		}
+		if r.State != scheduler.StateSuccess {
+			allSuccess = false
+		}
+	}
+
+	return &pb.AreAllUpstreamRunsSuccessfulResponse{
+		AllSuccess:          allSuccess,
+		WindowIntervalStart: timestamppb.New(windowInterval.Start()),
+		WindowIntervalEnd:   timestamppb.New(windowInterval.End()),
+		JobRuns:             jobRuns,
 	}, nil
 }
 

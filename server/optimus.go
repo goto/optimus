@@ -344,9 +344,14 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames,
 	)
 
+	externalResourceInterface, err := schedulerResolver.NewExternalOptimusManager(s.conf.ResourceManagers)
+	if err != nil {
+		return err
+	}
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
+		externalResourceInterface,
 	)
 
 	// Plugin
@@ -362,7 +367,10 @@ func (s *OptimusServer) setupHandlers() error {
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
-	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
+	jExternalUpstreamResolver, err := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
+	if err != nil {
+		return err
+	}
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
 	jJobService := jService.NewJobService(

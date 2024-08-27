@@ -89,16 +89,25 @@ type ProjectGetter interface {
 }
 
 type JobRunService struct {
-	l                log.Logger
-	repo             JobRunRepository
-	replayRepo       JobReplayRepository
-	operatorRunRepo  OperatorRunRepository
-	eventHandler     EventHandler
-	scheduler        Scheduler
-	jobRepo          JobRepository
-	priorityResolver PriorityResolver
-	compiler         JobInputCompiler
-	projectGetter    ProjectGetter
+	l                      log.Logger
+	repo                   JobRunRepository
+	replayRepo             JobReplayRepository
+	operatorRunRepo        OperatorRunRepository
+	eventHandler           EventHandler
+	scheduler              Scheduler
+	jobRepo                JobRepository
+	priorityResolver       PriorityResolver
+	compiler               JobInputCompiler
+	projectGetter          ProjectGetter
+	externalOptimusManager ExternalOptimusManager
+}
+
+func (s *JobRunService) GetJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error) {
+	j, err := s.jobRepo.GetJob(ctx, projectName, jobName)
+	if err != nil {
+		s.l.Error("error getting job [%s]:[%s], err: %s", projectName, jobName, err)
+	}
+	return j, err
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
@@ -145,12 +154,12 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		s.l.Error(msg)
 		return nil, errors.AddErrContext(err, scheduler.EntityJobRun, msg)
 	}
-	interval := jobWithDetails.Schedule.Interval
-	if interval == "" {
+	jobScheduleInterval := jobWithDetails.Schedule.Interval
+	if jobScheduleInterval == "" {
 		s.l.Error("job schedule interval is empty")
 		return nil, errors.InvalidArgument(scheduler.EntityJobRun, "cannot get job runs, job interval is empty")
 	}
-	jobCron, err := cron.ParseCronSchedule(interval)
+	jobCron, err := cron.ParseCronSchedule(jobScheduleInterval)
 	if err != nil {
 		msg := fmt.Sprintf("unable to parse job cron interval: %s", err)
 		s.l.Error(msg)
@@ -662,18 +671,19 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
 	operatorRunRepo OperatorRunRepository, scheduler Scheduler, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
-	projectGetter ProjectGetter,
+	projectGetter ProjectGetter, externalOptimusManager ExternalOptimusManager,
 ) *JobRunService {
 	return &JobRunService{
-		l:                logger,
-		repo:             jobRunRepo,
-		operatorRunRepo:  operatorRunRepo,
-		scheduler:        scheduler,
-		eventHandler:     eventHandler,
-		replayRepo:       replayRepo,
-		jobRepo:          jobRepo,
-		priorityResolver: resolver,
-		compiler:         compiler,
-		projectGetter:    projectGetter,
+		l:                      logger,
+		repo:                   jobRunRepo,
+		operatorRunRepo:        operatorRunRepo,
+		scheduler:              scheduler,
+		eventHandler:           eventHandler,
+		replayRepo:             replayRepo,
+		jobRepo:                jobRepo,
+		priorityResolver:       resolver,
+		compiler:               compiler,
+		projectGetter:          projectGetter,
+		externalOptimusManager: externalOptimusManager,
 	}
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/goto/optimus/core/job/resolver"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/resourcemanager"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 )
@@ -24,7 +23,7 @@ func TestExternalUpstreamResolver(t *testing.T) {
 	sampleTenant, _ := tenant.NewTenant("project", "namespace")
 	externalTenant, _ := tenant.NewTenant("external-project", "external-namespace")
 	resourceManager := new(ResourceManager)
-	optimusResourceManagers := []resourcemanager.ResourceManager{resourceManager}
+	optimusResourceManagers := []resolver.ResourceManager{resourceManager}
 
 	jobVersion := 1
 	startDate, _ := job.ScheduleDateFrom("2022-10-01")

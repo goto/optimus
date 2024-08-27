@@ -14,12 +14,12 @@ import (
 )
 
 type extUpstreamResolver struct {
-	optimusResourceManagers []resourcemanager.ResourceManager
+	optimusResourceManagers []ResourceManager
 }
 
 // NewExternalUpstreamResolver creates a new instance of externalUpstreamResolver
 func NewExternalUpstreamResolver(resourceManagerConfigs []config.ResourceManager) (*extUpstreamResolver, error) {
-	var optimusResourceManagers []resourcemanager.ResourceManager
+	var optimusResourceManagers []ResourceManager
 	for _, conf := range resourceManagerConfigs {
 		switch conf.Type {
 		case "optimus":
@@ -37,6 +37,7 @@ func NewExternalUpstreamResolver(resourceManagerConfigs []config.ResourceManager
 	}, nil
 }
 
+// ResourceManager is repository for external job spec
 type ResourceManager interface {
 	GetOptimusUpstreams(ctx context.Context, unresolvedDependency *job.Upstream) ([]*job.Upstream, error)
 }
@@ -109,7 +110,7 @@ func (e *extUpstreamResolver) fetchOptimusUpstreams(ctx context.Context, unresol
 }
 
 func NewTestExternalUpstreamResolver(
-	optimusResourceManagers []resourcemanager.ResourceManager,
+	optimusResourceManagers []ResourceManager,
 ) ExternalUpstreamResolver {
 	return &extUpstreamResolver{
 		optimusResourceManagers: optimusResourceManagers,

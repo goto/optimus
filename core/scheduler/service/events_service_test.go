@@ -160,7 +160,10 @@ func TestNotificationService(t *testing.T) {
 				defer jobRepo.AssertExpectations(t)
 
 				plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
-				plainSecrets := []*tenant.PlainTextSecret{plainSecret}
+				larkAppID, _ := tenant.NewPlainTextSecret(tenant.SecretLarkAppID, "secretValue1")
+				larkAppIDSecret, _ := tenant.NewPlainTextSecret(tenant.SecretLarkAppSecret, "secretValue2")
+				larkAppVerificationToken, _ := tenant.NewPlainTextSecret(tenant.SecretLarkVerificationToken, "secretValue3")
+				plainSecrets := []*tenant.PlainTextSecret{plainSecret, larkAppID, larkAppIDSecret, larkAppVerificationToken}
 				tenantService := new(mockTenantService)
 				tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
 				defer tenantService.AssertExpectations(t)
@@ -176,12 +179,25 @@ func TestNotificationService(t *testing.T) {
 				notifyChanelPager := new(mockNotificationChanel)
 				defer notifyChanelPager.AssertExpectations(t)
 
+				larkNotifyChannel := new(mockLarkNotificationChanel)
+
+				larkNotifyChannel.On("Notify", ctx, scheduler.LarkNotifyAttrs{
+					Owner:             "jobOwnerName",
+					JobEvent:          event,
+					Route:             "#chanel-name",
+					AppID:             "secretValue1",
+					AppSecret:         "secretValue2",
+					VerificationToken: "secretValue3",
+				}).Return(nil)
+
+				defer larkNotifyChannel.AssertExpectations(t)
+
 				notifierChannels := map[string]service.Notifier{
 					"slack":     notifyChanelSlack,
 					"pagerduty": notifyChanelPager,
 				}
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, larkNotifyChannel, nil, nil)
 
 				err := notifyService.Push(ctx, event)
 				assert.Nil(t, err)
@@ -314,6 +330,22 @@ func TestNotificationService(t *testing.T) {
 			assert.EqualError(t, err, "ErrorsInNotifyPush:\n notifyChannel.Notify: pagerduty://#chanel-name: error in pagerduty push")
 		})
 	})
+}
+
+// todo: this is added as Lark Notifer
+type mockLarkNotificationChanel struct {
+	io.Closer
+	mock.Mock
+}
+
+func (m *mockLarkNotificationChanel) Notify(ctx context.Context, attr scheduler.LarkNotifyAttrs) error {
+	args := m.Called(ctx, attr)
+	return args.Error(0)
+}
+
+func (m *mockLarkNotificationChanel) Close() error {
+	args := m.Called()
+	return args.Error(0)
 }
 
 type mockNotificationChanel struct {

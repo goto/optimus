@@ -308,15 +308,19 @@ func (s *OptimusServer) setupHandlers() error {
 			new(pagerduty.PagerDutyServiceImpl),
 		),
 	}
-
-	larkNotifier := lark.NewNotifier(
-		notificationContext,
-		webhook.DefaultEventBatchInterval,
-		func(err error) {
-			s.logger.Error("webhook error accumulator : " + err.Error())
-		},
-		s.conf.Alerting.LarkSLAMissTemplate,
-		s.conf.Alerting.LarkFailureTemplate)
+	var larkNotifier *lark.Notifier
+	if s.conf.Alerting.LarkNotificationFlag {
+		larkNotifier = lark.NewNotifier(
+			notificationContext,
+			webhook.DefaultEventBatchInterval,
+			func(err error) {
+				s.logger.Error("webhook error accumulator : " + err.Error())
+			},
+			s.conf.Alerting.LarkSLAMissTemplate,
+			s.conf.Alerting.LarkFailureTemplate)
+	} else {
+		s.logger.Info("Lark Notification flag is disabled")
+	}
 
 	webhookNotifier := webhook.NewNotifier(
 		notificationContext,

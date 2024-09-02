@@ -21,6 +21,49 @@
     "application/json"
   ],
   "paths": {
+    "/v1beta1/project/{projectName}/job/{jobName}/replay/config": {
+      "get": {
+        "operationId": "ReplayService_GetReplayConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetReplayConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "scheduledAt",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "ReplayService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/replay": {
       "get": {
         "operationId": "ReplayService_ListReplay",
@@ -289,6 +332,17 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/v1beta1ReplayRun"
+          }
+        }
+      }
+    },
+    "v1beta1GetReplayConfigResponse": {
+      "type": "object",
+      "properties": {
+        "jobConfig": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
           }
         }
       }

@@ -680,3 +680,11 @@ func (_m *mockReplayService) CancelReplay(ctx context.Context, replayWithRun *sc
 
 	return r0
 }
+
+func (_m *mockReplayService) GetReplayConfig(ctx context.Context, projectName tenant.ProjectName, name scheduler.JobName, scheduledAt time.Time) (map[string]string, error) {
+	args := _m.Called(ctx, projectName, name, scheduledAt)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]string), args.Error(1)
+}

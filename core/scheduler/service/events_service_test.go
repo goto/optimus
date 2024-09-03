@@ -202,6 +202,40 @@ func TestNotificationService(t *testing.T) {
 				err := notifyService.Push(ctx, event)
 				assert.Nil(t, err)
 			})
+
+			t.Run("should send slack notification when there are no secrets added for lark", func(t *testing.T) {
+				jobRepo := new(JobRepository)
+				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
+				defer jobRepo.AssertExpectations(t)
+				plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
+				plainSecrets := []*tenant.PlainTextSecret{plainSecret}
+
+				tenantService := new(mockTenantService)
+				tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
+				defer tenantService.AssertExpectations(t)
+
+				notifyChanelSlack := new(mockNotificationChanel)
+				notifyChanelSlack.On("Notify", ctx, scheduler.NotifyAttrs{
+					Owner:    "jobOwnerName",
+					JobEvent: event,
+					Route:    "#chanel-name",
+					Secret:   "secretValue",
+				}).Return(nil)
+				defer notifyChanelSlack.AssertExpectations(t)
+				notifyChanelPager := new(mockNotificationChanel)
+				defer notifyChanelPager.AssertExpectations(t)
+
+				notifierChannels := map[string]service.Notifier{
+					"slack":     notifyChanelSlack,
+					"pagerduty": notifyChanelPager,
+				}
+
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
+
+				err := notifyService.Push(ctx, event)
+				assert.Nil(t, err)
+
+			})
 		})
 		t.Run("should send notification to the appropriate channel for job fail", func(t *testing.T) {
 			job := scheduler.Job{

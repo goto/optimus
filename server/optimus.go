@@ -309,7 +309,7 @@ func (s *OptimusServer) setupHandlers() error {
 		),
 	}
 	var larkNotifier *lark.Notifier
-	if s.conf.Alerting.LarkNotificationFlag {
+	if s.conf.Alerting.EnableLarkNotifications {
 		larkNotifier = lark.NewNotifier(
 			notificationContext,
 			webhook.DefaultEventBatchInterval,

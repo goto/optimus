@@ -34,12 +34,12 @@ type TelemetryConfig struct {
 }
 
 type AlertingConfig struct {
-	EventManager         EventManagerConfig `mapstructure:"alert_manager"`
-	Dashboard            string             `mapstructure:"dashboard"`
-	DataConsole          string             `mapstructure:"data_console"`
-	LarkNotificationFlag bool               `mapstructure:"lark_notification_flag"`
-	LarkSLAMissTemplate  string             `mapstructure:"lark_sla_miss_template"`
-	LarkFailureTemplate  string             `mapstructure:"lark_failure_template"`
+	EventManager            EventManagerConfig `mapstructure:"alert_manager"`
+	Dashboard               string             `mapstructure:"dashboard"`
+	DataConsole             string             `mapstructure:"data_console"`
+	EnableLarkNotifications bool               `mapstructure:"enable_lark_notification"`
+	LarkSLAMissTemplate     string             `mapstructure:"lark_sla_miss_template"`
+	LarkFailureTemplate     string             `mapstructure:"lark_failure_template"`
 }
 
 type EventManagerConfig struct {

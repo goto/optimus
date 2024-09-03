@@ -234,7 +234,6 @@ func TestNotificationService(t *testing.T) {
 
 				err := notifyService.Push(ctx, event)
 				assert.Nil(t, err)
-
 			})
 		})
 		t.Run("should send notification to the appropriate channel for job fail", func(t *testing.T) {

@@ -231,7 +231,8 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         replay_config = self._optimus_client.get_job_replay_config(self.project_name, self.name)
         if 'jobConfig' in replay_config.keys():
             if 'IGNORE_UPSTREAM' in replay_config['jobConfig'].keys():
-                return True
+                if replay_config['jobConfig']['IGNORE_UPSTREAM'] == "True":
+                    return True
         try:
             upstream_schedule = self.get_schedule_interval(schedule_time)
         except Exception as e:

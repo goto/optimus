@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	"github.com/goto/optimus/core/tenant"
 	errs "github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -660,6 +661,32 @@ func (_m *mockReplayService) GetRunsStatus(ctx context.Context, _a1 tenant.Tenan
 
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, scheduler.JobName, *scheduler.ReplayConfig) error); ok {
 		r1 = rf(ctx, _a1, jobName, config)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetRunsStatus provides a mock function with given fields: ctx, _a1, jobName, config
+func (_m *mockReplayService) GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error) {
+	ret := _m.Called(ctx, project, filters)
+
+	var r0 []*scheduler.ReplayWithRun
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)); ok {
+		return rf(ctx, project, filters...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) []*scheduler.ReplayWithRun); ok {
+		r0 = rf(ctx, project, filters...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*scheduler.ReplayWithRun)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) error); ok {
+		r1 = rf(ctx, project, filters...)
 	} else {
 		r1 = ret.Error(1)
 	}

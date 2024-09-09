@@ -1,6 +1,7 @@
 package v1beta1
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,13 +13,14 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
 type ReplayService interface {
 	CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error)
 	GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error)
-	GetReplayConfig(ctx context.Context, projectName tenant.ProjectName, name scheduler.JobName, scheduledAt time.Time) (map[string]string, error)
+	GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (replay *scheduler.ReplayWithRun, err error)
 	GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (runs []*scheduler.JobRunStatus, err error)
 	CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error
@@ -97,33 +99,31 @@ func (h ReplayHandler) ListReplay(ctx context.Context, req *pb.ListReplayRequest
 	return &pb.ListReplayResponse{Replays: replayProtos}, nil
 }
 
-func (h ReplayHandler) GetReplayConfig(ctx context.Context, req *pb.GetReplayConfigRequest) (*pb.GetReplayConfigResponse, error) {
+func (h ReplayHandler) GetReplayDetails(ctx context.Context, req *pb.GetReplayDetailsRequest) (*pb.GetReplayDetailsResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "unable to get replay config for project "+req.GetProjectName())
 	}
 
-	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	replays, err := h.service.GetByFilter(ctx, projectName,
+		filter.WithStringArray(filter.JobNames, req.GetJobNames()),
+		filter.WithString(filter.ScheduledAt, req.GetScheduledAt().AsTime().Format(time.DateTime)),
+		filter.WithString(filter.ReplayID, req.GetReplayId()),
+		filter.WithString(filter.ReplayStatus, req.GetStatus()),
+	)
 	if err != nil {
-		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
-		return nil, errors.GRPCErr(err, "unable to get replay config for "+req.GetJobName())
+		h.l.Error(fmt.Sprintf("error getting replays for req: %+v, err: %s", req, err.Error()))
+		return nil, errors.GRPCErr(err, "unable to get replays with filter")
+	}
+	replayProtos := make([]*pb.GetReplayResponse, len(replays))
+	for i, replay := range replays {
+		replayProtos[i] = replayToProto(replay.Replay)
+		replayProtos[i].ReplayRuns = replayRunsToProto(replay.Runs)
 	}
 
-	if err = req.GetScheduledAt().CheckValid(); err != nil {
-		h.l.Error("error validating scheduledAt : %s", err)
-		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityJobRun, "invalid scheduled_at"), "unable to get replay config for "+req.GetJobName())
-	}
-
-	config, err := h.service.GetReplayConfig(ctx, projectName, jobName, req.GetScheduledAt().AsTime())
-	if err != nil {
-		h.l.Error("error getting replay config  for project [%s], job [%s], scheduledAt [%s] : %s",
-			projectName, jobName, req.GetScheduledAt().String(), err)
-		return nil, errors.GRPCErr(err, "unable to get replay config")
-	}
-
-	return &pb.GetReplayConfigResponse{
-		JobConfig: config,
+	return &pb.GetReplayDetailsResponse{
+		Replays: replayProtos,
 	}, nil
 }
 

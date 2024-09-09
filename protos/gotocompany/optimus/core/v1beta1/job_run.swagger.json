@@ -21,6 +21,39 @@
     "application/json"
   ],
   "paths": {
+    "/v1beta1/project/project_name/job/job_name/task/execute": {
+      "put": {
+        "summary": "JobTaskExecute runs a task instance",
+        "operationId": "JobRunService_JobTaskExecute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1JobTaskExecuteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1JobTaskExecuteRequest"
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/job/{jobName}/interval": {
       "get": {
         "summary": "GetInterval gets interval on specific job given reference time.",
@@ -440,6 +473,12 @@
           }
         }
       }
+    },
+    "v1beta1JobTaskExecuteRequest": {
+      "type": "object"
+    },
+    "v1beta1JobTaskExecuteResponse": {
+      "type": "object"
     },
     "v1beta1RegisterJobEventResponse": {
       "type": "object"

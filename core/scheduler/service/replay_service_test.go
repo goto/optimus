@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	errs "github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 func TestReplayService(t *testing.T) {
@@ -649,6 +650,29 @@ func (_m *ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant te
 
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, scheduler.JobName, time.Time) error); ok {
 		r1 = rf(ctx, jobTenant, jobName, scheduledAt)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetReplayByFilters provides a mock function with given fields: ctx, jobTenant, projectName, filters
+func (_m *ReplayRepository) GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error) {
+	ret := _m.Called(ctx, projectName, filters)
+
+	var r0 []*scheduler.ReplayWithRun
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) []*scheduler.ReplayWithRun); ok {
+		r0 = rf(ctx, projectName, filters...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*scheduler.ReplayWithRun)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) error); ok {
+		r1 = rf(ctx, projectName, filters...)
 	} else {
 		r1 = ret.Error(1)
 	}

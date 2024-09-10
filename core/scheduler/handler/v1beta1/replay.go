@@ -3,7 +3,6 @@ package v1beta1
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
@@ -108,7 +107,7 @@ func (h ReplayHandler) GetReplayDetails(ctx context.Context, req *pb.GetReplayDe
 
 	replays, err := h.service.GetByFilter(ctx, projectName,
 		filter.WithStringArray(filter.JobNames, req.GetJobNames()),
-		filter.WithString(filter.ScheduledAt, req.GetScheduledAt().AsTime().Format(time.DateTime)),
+		filter.WithTime(filter.ScheduledAt, req.GetScheduledAt().AsTime()),
 		filter.WithString(filter.ReplayID, req.GetReplayId()),
 		filter.WithString(filter.ReplayStatus, req.GetStatus()),
 	)

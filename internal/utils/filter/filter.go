@@ -1,5 +1,7 @@
 package filter
 
+import "time"
+
 type filter struct {
 	bits  uint64
 	value map[Operand]interface{}
@@ -14,6 +16,18 @@ func NewFilter(opts ...FilterOpt) *filter {
 		opt(f)
 	}
 	return f
+}
+
+func (f *filter) GetTimeValue(operand Operand) time.Time {
+	v, ok := f.value[operand]
+	if !ok {
+		return time.Time{}
+	}
+	val, ok := v.(time.Time)
+	if !ok {
+		return time.Time{}
+	}
+	return val
 }
 
 func (f *filter) GetStringValue(operand Operand) string {

@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
@@ -34,7 +33,6 @@ type ReplayRepository interface {
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
 
 	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
-	GetReplayJobConfig(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (map[string]string, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
@@ -145,19 +143,6 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 
 func (r *ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
 	return r.replayRepo.GetReplaysByProject(ctx, projectName, getReplaysDayLimit)
-}
-
-func (r *ReplayService) GetReplayConfig(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (map[string]string, error) {
-	job, err := r.jobRepo.GetJob(ctx, projectName, jobName)
-	if err != nil {
-		r.logger.Error(fmt.Sprintf("error getting job: %s, project: %s, err:", jobName, projectName), err)
-		return nil, err
-	}
-	config, err := r.replayRepo.GetReplayJobConfig(ctx, job.Tenant, jobName, scheduledAt)
-	if err != nil {
-		r.logger.Error(fmt.Sprintf("error getting replay config for job: %s, scheduledAt: %s, err:", jobName, scheduledAt), err)
-	}
-	return config, err
 }
 
 func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error) {

@@ -15,7 +15,6 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/dto"
 	"github.com/goto/optimus/core/job/service"
-	"github.com/goto/optimus/core/job/service/filter"
 	resource "github.com/goto/optimus/core/resource"
 	scheduler "github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
@@ -23,6 +22,7 @@ import (
 	optErrors "github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/optimus/sdk/plugin"
 )

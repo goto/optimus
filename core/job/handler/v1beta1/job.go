@@ -12,11 +12,11 @@ import (
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/dto"
-	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/telemetry"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	"github.com/goto/optimus/sdk/plugin"

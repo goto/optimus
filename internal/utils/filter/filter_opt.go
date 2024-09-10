@@ -12,6 +12,9 @@ const (
 	bitOnNamespaceNames      uint64 = 1 << 3
 	bitOnJobNames            uint64 = 1 << 4
 	bitOnNamespaceName       uint64 = 1 << 5
+	bitOnReplayStatus        uint64 = 1 << 6
+	bitOnScheduledAt         uint64 = 1 << 7
+	bitOnReplayID            uint64 = 1 << 8
 )
 
 const (
@@ -21,6 +24,9 @@ const (
 	JobName             = Operand(bitOnJobName)
 	JobNames            = Operand(bitOnJobNames)
 	ResourceDestination = Operand(bitOnResourceDestination)
+	ReplayStatus        = Operand(bitOnReplayStatus)
+	ScheduledAt         = Operand(bitOnScheduledAt)
+	ReplayID            = Operand(bitOnReplayID)
 )
 
 func WithString(operand Operand, value string) FilterOpt {

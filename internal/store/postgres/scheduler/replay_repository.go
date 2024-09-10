@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 const (
@@ -224,6 +226,100 @@ func (r ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tena
 		}
 	}
 	return configs, nil
+}
+
+func (r ReplayRepository) getReplayRequestWithFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]replayRequest, error) {
+	f := filter.NewFilter(filters...)
+	var filterQueryFragments []string
+	filterQueryFragments = append(filterQueryFragments, fmt.Sprintf(`project_name = '%s'`, projectName))
+	if f.Contains(filter.JobNames) {
+		jobNames := f.GetStringArrayValue(filter.JobNames)
+		for _, name := range jobNames {
+			jobName, err := scheduler.JobNameFrom(name)
+			if err != nil {
+				return nil, err
+			}
+			jobNames = append(jobNames, jobName.String())
+		}
+		if len(jobNames) > 1 {
+			filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("job_name in ('%s')", strings.Join(jobNames, "', '")))
+		} else {
+			filterQueryFragments = append(filterQueryFragments, fmt.Sprintf(`job_name = '%s'`, jobNames[0]))
+		}
+	}
+	if f.Contains(filter.ScheduledAt) {
+		scheduledAt := f.GetStringValue(filter.ScheduledAt)
+		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("start_time<='%s' AND '%s'<=end_time", scheduledAt, scheduledAt))
+	}
+	if f.Contains(filter.ReplayStatus) {
+		replayStatusString := f.GetStringValue(filter.ReplayStatus)
+		replayState, err := scheduler.ReplayStateFromString(replayStatusString)
+		if err != nil {
+			return nil, err
+		}
+		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("status ='%s'", replayState))
+	}
+	getReplayRequest := fmt.Sprintf(`SELECT %s FROM replay_request WHERE %s ORDER BY created_at`, replayColumns, strings.Join(filterQueryFragments, " AND "))
+
+	rows, err := r.db.Query(ctx, getReplayRequest)
+	if err != nil {
+		return nil, err
+	}
+	var rrRows []replayRequest
+	for rows.Next() {
+		var rr replayRequest
+		err = rows.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+			&rr.Status, &rr.Message, &rr.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		rrRows = append(rrRows, rr)
+	}
+	return rrRows, nil
+}
+
+func (r ReplayRepository) GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error) {
+	rrr, err := r.getReplayRequestWithFilters(ctx, projectName, filters...)
+	if err != nil {
+		return nil, err
+	}
+
+	replayWithRuns := make([]*scheduler.ReplayWithRun, len(rrr))
+
+	for i, rr := range rrr {
+		runs, err := r.getReplayRuns(ctx, rr.ID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+
+		replayTenant, err := tenant.NewTenant(rr.ProjectName, rr.NamespaceName)
+		if err != nil {
+			return nil, err
+		}
+		replayConfig := scheduler.ReplayConfig{
+			StartTime:   rr.StartTime,
+			EndTime:     rr.EndTime,
+			JobConfig:   rr.JobConfig,
+			Parallel:    rr.Parallel,
+			Description: rr.Description,
+		}
+		replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.Message)
+		replayRuns := make([]*scheduler.JobRunStatus, len(runs))
+		for i := range runs {
+			replayRun := &scheduler.JobRunStatus{
+				ScheduledAt: runs[i].ScheduledTime,
+				State:       scheduler.State(runs[i].RunStatus),
+			}
+			replayRuns[i] = replayRun
+		}
+
+		replayWithRuns[i] = &scheduler.ReplayWithRun{
+			Replay: replay,
+			Runs:   replayRuns,
+		}
+	}
+
+	return replayWithRuns, nil
 }
 
 func (r ReplayRepository) updateReplayRequest(ctx context.Context, id uuid.UUID, replayStatus scheduler.ReplayState, message string) error {

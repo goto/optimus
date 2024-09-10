@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	"github.com/goto/optimus/core/tenant"
 	errs "github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -667,6 +668,32 @@ func (_m *mockReplayService) GetRunsStatus(ctx context.Context, _a1 tenant.Tenan
 	return r0, r1
 }
 
+// GetRunsStatus provides a mock function with given fields: ctx, _a1, jobName, config
+func (_m *mockReplayService) GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error) {
+	ret := _m.Called(ctx, project, filters)
+
+	var r0 []*scheduler.ReplayWithRun
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)); ok {
+		return rf(ctx, project, filters...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) []*scheduler.ReplayWithRun); ok {
+		r0 = rf(ctx, project, filters...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*scheduler.ReplayWithRun)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, ...filter.FilterOpt) error); ok {
+		r1 = rf(ctx, project, filters...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // CancelReplay provides a mock function with given fields: ctx, replayWithRun
 func (_m *mockReplayService) CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
 	ret := _m.Called(ctx, replayWithRun)
@@ -679,4 +706,12 @@ func (_m *mockReplayService) CancelReplay(ctx context.Context, replayWithRun *sc
 	}
 
 	return r0
+}
+
+func (_m *mockReplayService) GetReplayConfig(ctx context.Context, projectName tenant.ProjectName, name scheduler.JobName, scheduledAt time.Time) (map[string]string, error) {
+	args := _m.Called(ctx, projectName, name, scheduledAt)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]string), args.Error(1)
 }

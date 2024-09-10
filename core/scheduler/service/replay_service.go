@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
 	"github.com/goto/optimus/internal/telemetry"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 const (
@@ -31,6 +32,7 @@ type ReplayRepository interface {
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
 
+	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
@@ -141,6 +143,31 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 
 func (r *ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
 	return r.replayRepo.GetReplaysByProject(ctx, projectName, getReplaysDayLimit)
+}
+
+func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error) {
+	f := filter.NewFilter(filters...)
+	if f.Contains(filter.ReplayID) {
+		r.logger.Debug("getting all replays by replayId [%s]", f.GetStringValue(filter.ReplayID))
+		replayIDString := f.GetStringValue(filter.ReplayID)
+		id, err := uuid.Parse(replayIDString)
+		if err != nil {
+			r.logger.Error("error parsing replay id [%s]: %s", replayIDString, err)
+			err = errors.InvalidArgument(scheduler.EntityReplay, err.Error())
+			return nil, errors.GRPCErr(err, "unable to get replay for replayID "+replayIDString)
+		}
+		replay, err := r.GetReplayByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return []*scheduler.ReplayWithRun{replay}, nil
+	}
+
+	replayWithRuns, err := r.replayRepo.GetReplayByFilters(ctx, project, filters...)
+	if err != nil {
+		return nil, err
+	}
+	return replayWithRuns, nil
 }
 
 func (r *ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {

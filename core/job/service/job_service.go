@@ -14,7 +14,6 @@ import (
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/dto"
-	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
@@ -23,6 +22,7 @@ import (
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/telemetry"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/optimus/sdk/plugin"
 )

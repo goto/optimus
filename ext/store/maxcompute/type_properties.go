@@ -13,7 +13,7 @@ type Decimal struct {
 
 func (d Decimal) Validate() error {
 	if d.Scale > 18 || d.Scale < 0 {
-		return errors.InvalidArgument(resourceSchema, fmt.Sprintf("decimal scale[%d] is not valid ", d.Scale))
+		return errors.InvalidArgument(resourceSchema, fmt.Sprintf("decimal scale[%d] is not valid", d.Scale))
 	}
 	if d.Precision < 1 || d.Precision > 38 {
 		return errors.InvalidArgument(resourceSchema, fmt.Sprintf("decimal precision[%d] is not valid", d.Precision))

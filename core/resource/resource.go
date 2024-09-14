@@ -53,6 +53,7 @@ func NameFrom(name string) (Name, error) {
 	return Name(cleaned), nil
 }
 
+// Deprecated: Sections is deprecated. move to warehouse
 func (n Name) Sections() []string {
 	return strings.Split(n.String(), nameSectionSeparator)
 }

@@ -11,6 +11,8 @@ import (
 
 const (
 	resourceSchema = "maxcompute_schema"
+
+	KindTable string = "table"
 )
 
 type Schema []Field
@@ -23,6 +25,20 @@ func (s Schema) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (s Schema) ToMaxComputeColumns() ([]tableschema.Column, error) {
+	columns := make([]tableschema.Column, len(s))
+	mu := errors.NewMultiError("converting to max compute column")
+	for i, f := range s {
+		column, err := f.ToColumn()
+		if err != nil {
+			mu.Append(err)
+			continue
+		}
+		columns[i] = column
+	}
+	return columns, mu.ToErr()
 }
 
 type MapSchema struct {
@@ -60,27 +76,30 @@ func (f *Field) Validate() error {
 	return f.validateNode(true)
 }
 
-func (f *Field) ToMaxDataType() (datatype.DataType, error) {
+func (f *Field) toMaxDataType() (datatype.DataType, error) {
 	typeCode := datatype.TypeCodeFromStr(strings.ToUpper(f.Type))
 
 	switch typeCode {
 	case datatype.ARRAY:
-		d2, err := f.ArraySchema.ToMaxDataType()
+		d2, err := f.ArraySchema.toMaxDataType()
 		if err != nil {
 			return nil, err
 		}
 		return datatype.NewArrayType(d2), nil
 
 	case datatype.STRUCT:
-		fields := make([]datatype.DataType, len(f.StructSchema))
+		fields := make([]datatype.StructFieldType, len(f.StructSchema))
 		for i, f1 := range f.StructSchema {
-			field, err := f1.ToMaxDataType()
+			d1, err := f1.toMaxDataType()
 			if err != nil {
 				return nil, err
 			}
-			fields[i] = field
+			fields[i] = datatype.StructFieldType{
+				Name: f1.Name,
+				Type: d1,
+			}
 		}
-		return datatype.NewStructType(), nil
+		return datatype.NewStructType(fields...), nil
 
 	case datatype.CHAR:
 		return datatype.NewCharType(f.Char.Length), nil
@@ -95,11 +114,11 @@ func (f *Field) ToMaxDataType() (datatype.DataType, error) {
 		return datatype.NewJsonType(), nil
 
 	case datatype.MAP:
-		keyType, err := f.MapSchema.Key.ToMaxDataType()
+		keyType, err := f.MapSchema.Key.toMaxDataType()
 		if err != nil {
 			return nil, err
 		}
-		valueType, err := f.MapSchema.Value.ToMaxDataType()
+		valueType, err := f.MapSchema.Value.toMaxDataType()
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +132,7 @@ func (f *Field) ToMaxDataType() (datatype.DataType, error) {
 }
 
 func (f *Field) ToColumn() (tableschema.Column, error) {
-	dataType, err := f.ToMaxDataType()
+	dataType, err := f.toMaxDataType()
 	if err != nil {
 		return tableschema.Column{}, err
 	}
@@ -123,11 +142,11 @@ func (f *Field) ToColumn() (tableschema.Column, error) {
 		Type:           dataType,
 		Comment:        f.Description,
 		ExtendedLabels: nil,
-		IsNullable:     false,
+		IsNullable:     true,
 	}
 
 	if f.Required {
-		c1.IsNullable = true
+		c1.IsNullable = false
 	}
 
 	if f.DefaultValue != "" {
@@ -148,34 +167,61 @@ func (f *Field) validateNode(checkName bool) error {
 	if checkName && strings.TrimSpace(f.Name) == "" {
 		mu.Append(errors.InvalidArgument(resourceSchema, "field name is empty"))
 	}
-	if strings.TrimSpace(f.Type) == "" {
-		mu.Append(errors.InvalidArgument(resourceSchema, "field type is empty for "+f.Name))
+
+	typeCode := datatype.TypeCodeFromStr(strings.ToUpper(f.Type))
+	if typeCode == datatype.TypeUnknown {
+		mu.Append(errors.InvalidArgument(resourceSchema, "unknown field type for "+f.Name))
 	}
 
-	if f.Decimal != nil {
-		mu.Append(f.Decimal.Validate())
-	}
+	switch typeCode {
+	case datatype.TypeUnknown:
+		mu.Append(errors.InvalidArgument(resourceSchema, "unknown data type: "+f.Type))
 
-	if f.Char != nil {
-		mu.Append(f.Char.Validate())
-	}
-
-	if f.VarChar != nil {
-		mu.Append(f.VarChar.Validate())
-	}
-
-	if len(f.StructSchema) != 0 {
-		for _, rField := range f.StructSchema {
-			mu.Append(rField.validateNode(true))
+	case datatype.DECIMAL:
+		if f.Decimal == nil {
+			mu.Append(errors.InvalidArgument(resourceSchema, "field decimal is empty"))
+		} else {
+			mu.Append(f.Decimal.Validate())
 		}
-	}
 
-	if f.ArraySchema != nil {
-		mu.Append(f.ArraySchema.validateNode(false))
-	}
+	case datatype.CHAR:
+		if f.Char == nil {
+			mu.Append(errors.InvalidArgument(resourceSchema, "field char is empty"))
+		} else {
+			mu.Append(f.Char.Validate())
+		}
 
-	if f.MapSchema != nil {
-		mu.Append(f.MapSchema.Validate())
+	case datatype.VARCHAR:
+		if f.VarChar == nil {
+			mu.Append(errors.InvalidArgument(resourceSchema, "field varchar is empty"))
+		} else {
+			mu.Append(f.VarChar.Validate())
+		}
+
+	case datatype.STRUCT:
+		if f.StructSchema == nil {
+			mu.Append(errors.InvalidArgument(resourceSchema, "struct schema is empty"))
+		} else {
+			for _, rField := range f.StructSchema {
+				mu.Append(rField.validateNode(true))
+			}
+		}
+
+	case datatype.ARRAY:
+		if f.ArraySchema == nil {
+			mu.Append(errors.InvalidArgument(resourceSchema, "array schema is empty"))
+		} else {
+			mu.Append(f.ArraySchema.validateNode(false))
+		}
+
+	case datatype.MAP:
+		if f.MapSchema == nil {
+			mu.Append(errors.InvalidArgument(resourceSchema, "map schema is empty"))
+		} else {
+			mu.Append(f.MapSchema.Validate())
+		}
+	default:
+		// other data types do not require special properties
 	}
 
 	return mu.ToErr()

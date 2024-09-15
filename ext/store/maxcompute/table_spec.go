@@ -27,6 +27,7 @@ type Table struct {
 	Cluster     *Cluster   `mapstructure:"cluster,omitempty"`
 	Partition   *Partition `mapstructure:"partition,omitempty"`
 
+	Hints       map[string]string      `mapstructure:"hints,omitempty"`
 	ExtraConfig map[string]interface{} `mapstructure:",remain"`
 }
 
@@ -96,5 +97,5 @@ func (c Cluster) Validate() error {
 }
 
 type Partition struct {
-	Columns []string `mapstructure:"columns,omitempty"`
+	Columns []string `mapstructure:"columns"`
 }

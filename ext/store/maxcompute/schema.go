@@ -1,11 +1,14 @@
 package maxcompute
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/datatype"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
+	"github.com/mitchellh/mapstructure"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -15,7 +18,7 @@ const (
 	KindTable string = "table"
 )
 
-type Schema []Field
+type Schema []*Field
 
 func (s Schema) Validate() error {
 	for _, f := range s {
@@ -225,4 +228,13 @@ func (f *Field) validateNode(checkName bool) error {
 	}
 
 	return mu.ToErr()
+}
+
+func ConvertSpecTo[T Table](res *resource.Resource) (*T, error) {
+	var spec T
+	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
+		msg := fmt.Sprintf("%s: not able to decode spec for %s", err, res.FullName())
+		return nil, errors.InvalidArgument(resource.EntityResource, msg)
+	}
+	return &spec, nil
 }

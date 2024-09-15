@@ -1,0 +1,1 @@
+package maxcompute_test

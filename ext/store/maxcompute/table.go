@@ -9,11 +9,20 @@ import (
 	"github.com/goto/optimus/internal/utils"
 )
 
-func Create(odps *odps.Odps, res *resource.Resource) error {
+type McTable interface {
+	Create(schema tableschema.TableSchema, createIfNotExists bool, hints, alias map[string]string) error
+}
+
+type TableHandle struct {
+	mcTable McTable
+}
+
+func (t TableHandle) Create(res *resource.Resource) error {
 	table, err := ConvertSpecTo[Table](res)
 	if err != nil {
 		return err
 	}
+	table.Name = res.Name()
 
 	schema, err := buildTableSchema(table)
 	if err != nil {
@@ -23,8 +32,7 @@ func Create(odps *odps.Odps, res *resource.Resource) error {
 	// We can use  odps.ExecSQl() to run sql queries on maxcompute for some operation if
 	// not supported by sdk, but it will require some more work from our side
 
-	tablesIns := odps.Tables()
-	err = tablesIns.Create(schema, true, table.Hints, nil)
+	err = t.mcTable.Create(schema, true, table.Hints, nil)
 	if err != nil {
 		// TODO: Check for the error type and handle it properly
 		return errors.Wrap(EntityTable, "error while creating table on maxcompute", err)
@@ -33,16 +41,16 @@ func Create(odps *odps.Odps, res *resource.Resource) error {
 }
 
 func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
-	b1 := tableschema.NewSchemaBuilder()
-	builder := &b1 // Builder returns non-pointer type
+	builder := tableschema.NewSchemaBuilder()
 	builder.
 		Name(t.Name.String()).
-		Comment(t.Description)
+		Comment(t.Description).
+		Lifecycle(t.Lifecycle)
 
 	// We can populate columns and partition columns
 	// Currently SDK does not allow setting up Clustering
 	// We accept the config, but we cannot pass it to the sdk
-	err := populateColumns(t, builder)
+	err := populateColumns(t, &builder)
 	if err != nil {
 		return tableschema.TableSchema{}, err
 	}
@@ -69,4 +77,8 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 	}
 
 	return mu.ToErr()
+}
+
+func NewTableHandle(mc *odps.Tables) *TableHandle {
+	return &TableHandle{mcTable: mc}
 }

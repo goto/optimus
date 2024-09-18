@@ -35,6 +35,7 @@ import (
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
+	mcStore "github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
@@ -383,6 +384,10 @@ func (s *OptimusServer) setupHandlers() error {
 	bqClientProvider := bqStore.NewClientProvider()
 	bigqueryStore := bqStore.NewBigqueryDataStore(tenantService, bqClientProvider)
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
+
+	mcClientProvider := mcStore.NewClientProvider()
+	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider)
+	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	// Tenant Handlers
 	pb.RegisterSecretServiceServer(s.grpcServer, tHandler.NewSecretsHandler(s.logger, tSecretService))

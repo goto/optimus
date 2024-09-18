@@ -26,6 +26,7 @@ type Table struct {
 	Schema      Schema     `mapstructure:"schema,omitempty"`
 	Cluster     *Cluster   `mapstructure:"cluster,omitempty"`
 	Partition   *Partition `mapstructure:"partition,omitempty"`
+	Lifecycle   int        `mapstructure:"lifecycle,omitempty"`
 
 	Hints       map[string]string      `mapstructure:"hints,omitempty"`
 	ExtraConfig map[string]interface{} `mapstructure:",remain"`
@@ -97,5 +98,5 @@ func (c Cluster) Validate() error {
 }
 
 type Partition struct {
-	Columns []string `mapstructure:"columns"`
+	Columns []string `mapstructure:"field"`
 }

@@ -23,11 +23,11 @@ type TableResourceHandle interface {
 }
 
 type Client interface {
-	TableHandleFrom(name string) TableResourceHandle
+	TableHandleFrom() TableResourceHandle
 }
 
 type ClientProvider interface {
-	Get(account string) (*MaxComputeClient, error)
+	Get(account string) (Client, error)
 }
 
 type SecretProvider interface {
@@ -59,7 +59,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		return handle.Create(res)
 
 	default:
-		return errors.InvalidArgument(store, "invalid kind for bigquery resource "+res.Kind())
+		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
 }
 

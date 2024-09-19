@@ -13,7 +13,7 @@ func NewClientProvider() *MaxComputeClientProvider {
 	return &MaxComputeClientProvider{}
 }
 
-func (MaxComputeClientProvider) Get(account string) (*MaxComputeClient, error) {
+func (MaxComputeClientProvider) Get(account string) (Client, error) {
 	return NewClient(account)
 }
 

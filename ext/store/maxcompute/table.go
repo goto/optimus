@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
+	"strings"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
@@ -25,15 +26,17 @@ func (t TableHandle) Create(res *resource.Resource) error {
 
 	schema, err := buildTableSchema(table)
 	if err != nil {
-		return err
+		return errors.Wrap(EntityTable, "failed to build table schema to create for "+res.FullName(), err)
 	}
 
 	// We can use  odps.ExecSQl() to run sql queries on maxcompute for some operation if
 	// not supported by sdk, but it will require some more work from our side
 
-	err = t.mcTable.Create(schema, true, table.Hints, nil)
+	err = t.mcTable.Create(schema, false, table.Hints, nil)
 	if err != nil {
-		// TODO: Check for the error type and handle it properly
+		if strings.Contains(err.Error(), "Table or view already exists") {
+			return errors.AlreadyExists(EntityTable, "table already exists on maxcompute: "+res.FullName())
+		}
 		return errors.Wrap(EntityTable, "error while creating table on maxcompute", err)
 	}
 	return nil

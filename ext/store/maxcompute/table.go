@@ -59,7 +59,10 @@ func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
 
 func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 	mu := errors.NewMultiError("column creation")
-	partitionColNames := utils.ListToMap(t.Partition.Columns)
+	partitionColNames := map[string]struct{}{}
+	if t.Partition != nil {
+		partitionColNames = utils.ListToMap(t.Partition.Columns)
+	}
 
 	for _, field := range t.Schema {
 		column, err := field.ToColumn()

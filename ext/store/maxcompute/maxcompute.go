@@ -72,15 +72,18 @@ func (MaxCompute) BatchUpdate(ctx context.Context, resources []*resource.Resourc
 }
 
 func (MaxCompute) Validate(r *resource.Resource) error {
-	if r.Kind() == "table" {
+	switch r.Kind() {
+	case KindTable:
 		table, err := ConvertSpecTo[Table](r)
 		if err != nil {
 			return err
 		}
 		table.Name = r.Name()
 		return table.Validate()
+
+	default:
+		return errors.InvalidArgument(resource.EntityResource, "unknown kind")
 	}
-	return nil
 }
 
 func (MaxCompute) GetURN(res *resource.Resource) (resource.URN, error) {

@@ -75,9 +75,9 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 		}
 
 		if _, ok := partitionColNames[field.Name]; ok {
-			schemaBuilder.Column(column)
-		} else {
 			schemaBuilder.PartitionColumn(column)
+		} else {
+			schemaBuilder.Column(column)
 		}
 	}
 

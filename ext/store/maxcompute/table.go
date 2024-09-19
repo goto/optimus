@@ -1,7 +1,6 @@
 package maxcompute
 
 import (
-	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 
 	"github.com/goto/optimus/core/resource"
@@ -79,6 +78,6 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 	return mu.ToErr()
 }
 
-func NewTableHandle(mc *odps.Tables) *TableHandle {
+func NewTableHandle(mc McTable) *TableHandle {
 	return &TableHandle{mcTable: mc}
 }

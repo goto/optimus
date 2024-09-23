@@ -87,6 +87,18 @@ func TestBqClient(t *testing.T) {
 			assert.NotNil(t, handle)
 		})
 	})
+	t.Run("RoutineHandleFrom", func(t *testing.T) {
+		t.Run("returns the routine handle", func(t *testing.T) {
+			c, err := bigquery.NewClient(ctx, testCredJSON)
+			assert.Nil(t, err)
+
+			dataset, err := bigquery.DataSetFrom("project", "dataset")
+			assert.Nil(t, err)
+
+			handle := c.RoutineHandleFrom(dataset, "routines")
+			assert.NotNil(t, handle)
+		})
+	})
 	t.Run("Close", func(t *testing.T) {
 		t.Run("calls close on bq client", func(t *testing.T) {
 			c, err := bigquery.NewClient(ctx, testCredJSON)

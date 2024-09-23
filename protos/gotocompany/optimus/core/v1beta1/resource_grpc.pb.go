@@ -34,12 +34,16 @@ type ResourceServiceClient interface {
 	ReadResource(ctx context.Context, in *ReadResourceRequest, opts ...grpc.CallOption) (*ReadResourceResponse, error)
 	// UpdateResource updates a resource specification of a datastore in project
 	UpdateResource(ctx context.Context, in *UpdateResourceRequest, opts ...grpc.CallOption) (*UpdateResourceResponse, error)
+	// UpsertResource updates/inserts a resource specification of a datastore in project
+	UpsertResource(ctx context.Context, in *UpsertResourceRequest, opts ...grpc.CallOption) (*UpsertResourceResponse, error)
 	// DeleteResource soft delete a specific resource
 	DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error)
 	// ChangeJobNamespace move a job spec from one namespace to another
 	ChangeResourceNamespace(ctx context.Context, in *ChangeResourceNamespaceRequest, opts ...grpc.CallOption) (*ChangeResourceNamespaceResponse, error)
 	// apply a resource from optimus to datastore
 	ApplyResources(ctx context.Context, in *ApplyResourcesRequest, opts ...grpc.CallOption) (*ApplyResourcesResponse, error)
+	// GetResourceChangelogs get all the change logs for a specific resource
+	GetResourceChangelogs(ctx context.Context, in *GetResourceChangelogsRequest, opts ...grpc.CallOption) (*GetResourceChangelogsResponse, error)
 }
 
 type resourceServiceClient struct {
@@ -117,6 +121,15 @@ func (c *resourceServiceClient) UpdateResource(ctx context.Context, in *UpdateRe
 	return out, nil
 }
 
+func (c *resourceServiceClient) UpsertResource(ctx context.Context, in *UpsertResourceRequest, opts ...grpc.CallOption) (*UpsertResourceResponse, error) {
+	out := new(UpsertResourceResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ResourceService/UpsertResource", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *resourceServiceClient) DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error) {
 	out := new(DeleteResourceResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ResourceService/DeleteResource", in, out, opts...)
@@ -144,6 +157,15 @@ func (c *resourceServiceClient) ApplyResources(ctx context.Context, in *ApplyRes
 	return out, nil
 }
 
+func (c *resourceServiceClient) GetResourceChangelogs(ctx context.Context, in *GetResourceChangelogsRequest, opts ...grpc.CallOption) (*GetResourceChangelogsResponse, error) {
+	out := new(GetResourceChangelogsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ResourceService/GetResourceChangelogs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ResourceServiceServer is the server API for ResourceService service.
 // All implementations must embed UnimplementedResourceServiceServer
 // for forward compatibility
@@ -160,12 +182,16 @@ type ResourceServiceServer interface {
 	ReadResource(context.Context, *ReadResourceRequest) (*ReadResourceResponse, error)
 	// UpdateResource updates a resource specification of a datastore in project
 	UpdateResource(context.Context, *UpdateResourceRequest) (*UpdateResourceResponse, error)
+	// UpsertResource updates/inserts a resource specification of a datastore in project
+	UpsertResource(context.Context, *UpsertResourceRequest) (*UpsertResourceResponse, error)
 	// DeleteResource soft delete a specific resource
 	DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error)
 	// ChangeJobNamespace move a job spec from one namespace to another
 	ChangeResourceNamespace(context.Context, *ChangeResourceNamespaceRequest) (*ChangeResourceNamespaceResponse, error)
 	// apply a resource from optimus to datastore
 	ApplyResources(context.Context, *ApplyResourcesRequest) (*ApplyResourcesResponse, error)
+	// GetResourceChangelogs get all the change logs for a specific resource
+	GetResourceChangelogs(context.Context, *GetResourceChangelogsRequest) (*GetResourceChangelogsResponse, error)
 	mustEmbedUnimplementedResourceServiceServer()
 }
 
@@ -188,6 +214,9 @@ func (UnimplementedResourceServiceServer) ReadResource(context.Context, *ReadRes
 func (UnimplementedResourceServiceServer) UpdateResource(context.Context, *UpdateResourceRequest) (*UpdateResourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateResource not implemented")
 }
+func (UnimplementedResourceServiceServer) UpsertResource(context.Context, *UpsertResourceRequest) (*UpsertResourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpsertResource not implemented")
+}
 func (UnimplementedResourceServiceServer) DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteResource not implemented")
 }
@@ -196,6 +225,9 @@ func (UnimplementedResourceServiceServer) ChangeResourceNamespace(context.Contex
 }
 func (UnimplementedResourceServiceServer) ApplyResources(context.Context, *ApplyResourcesRequest) (*ApplyResourcesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyResources not implemented")
+}
+func (UnimplementedResourceServiceServer) GetResourceChangelogs(context.Context, *GetResourceChangelogsRequest) (*GetResourceChangelogsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetResourceChangelogs not implemented")
 }
 func (UnimplementedResourceServiceServer) mustEmbedUnimplementedResourceServiceServer() {}
 
@@ -308,6 +340,24 @@ func _ResourceService_UpdateResource_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ResourceService_UpsertResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertResourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ResourceServiceServer).UpsertResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.ResourceService/UpsertResource",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ResourceServiceServer).UpsertResource(ctx, req.(*UpsertResourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ResourceService_DeleteResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteResourceRequest)
 	if err := dec(in); err != nil {
@@ -362,6 +412,24 @@ func _ResourceService_ApplyResources_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ResourceService_GetResourceChangelogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResourceChangelogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ResourceServiceServer).GetResourceChangelogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.ResourceService/GetResourceChangelogs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ResourceServiceServer).GetResourceChangelogs(ctx, req.(*GetResourceChangelogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ResourceService_ServiceDesc is the grpc.ServiceDesc for ResourceService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -386,6 +454,10 @@ var ResourceService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ResourceService_UpdateResource_Handler,
 		},
 		{
+			MethodName: "UpsertResource",
+			Handler:    _ResourceService_UpsertResource_Handler,
+		},
+		{
 			MethodName: "DeleteResource",
 			Handler:    _ResourceService_DeleteResource_Handler,
 		},
@@ -396,6 +468,10 @@ var ResourceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyResources",
 			Handler:    _ResourceService_ApplyResources_Handler,
+		},
+		{
+			MethodName: "GetResourceChangelogs",
+			Handler:    _ResourceService_GetResourceChangelogs_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

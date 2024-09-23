@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func TestResourceHandler(t *testing.T) {
 	t.Run("DeployResourceSpecification", func(t *testing.T) {
 		t.Run("returns error when client sends error", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			stream := new(resourceStreamMock)
 			stream.On("Context").Return(ctx)
@@ -40,7 +41,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.DeployResourceSpecificationRequest{
 				ProjectName:   "",
@@ -64,7 +65,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when store is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.DeployResourceSpecificationRequest{
 				ProjectName:   "proj",
@@ -91,7 +92,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Deploy", ctx, mock.Anything, resource.Bigquery, mock.Anything, mock.Anything).Return(nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			res1 := pb.ResourceSpecification{
 				Version: 1,
@@ -129,7 +130,7 @@ func TestResourceHandler(t *testing.T) {
 				Return(errors.New("error in batch"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]any{"description": "spec"})
 			res1 := pb.ResourceSpecification{
@@ -167,7 +168,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Deploy", mock.Anything, tnnt, resource.Bigquery, mock.Anything, mock.Anything).Return(nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]any{"description": "spec"})
 			res1 := pb.ResourceSpecification{
@@ -202,7 +203,7 @@ func TestResourceHandler(t *testing.T) {
 	t.Run("ListResourceSpecification", func(t *testing.T) {
 		t.Run("returns error when store is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ListResourceSpecificationRequest{
 				ProjectName:   "proj",
@@ -216,7 +217,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ListResourceSpecificationRequest{
 				ProjectName:   "",
@@ -235,7 +236,7 @@ func TestResourceHandler(t *testing.T) {
 				Return(nil, errors.New("error in getAll"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ListResourceSpecificationRequest{
 				ProjectName:   "proj",
@@ -253,7 +254,7 @@ func TestResourceHandler(t *testing.T) {
 				Return([]*resource.Resource{{}}, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ListResourceSpecificationRequest{
 				ProjectName:   "proj",
@@ -277,7 +278,7 @@ func TestResourceHandler(t *testing.T) {
 				Return([]*resource.Resource{dbRes}, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ListResourceSpecificationRequest{
 				ProjectName:   "proj",
@@ -295,7 +296,7 @@ func TestResourceHandler(t *testing.T) {
 	t.Run("CreateResource", func(t *testing.T) {
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			createReq := &pb.CreateResourceRequest{
 				ProjectName:   "",
@@ -311,7 +312,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when store is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			createReq := &pb.CreateResourceRequest{
 				ProjectName:   "proj",
@@ -327,7 +328,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when spec is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			createReq := &pb.CreateResourceRequest{
 				ProjectName:   "proj",
@@ -347,7 +348,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when resource is nil", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			createReq := &pb.CreateResourceRequest{
 				ProjectName:   "proj",
@@ -363,7 +364,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when kind is empty", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
 			createReq := &pb.CreateResourceRequest{
@@ -384,7 +385,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when name is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
 			createReq := &pb.CreateResourceRequest{
@@ -409,7 +410,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Create", ctx, mock.Anything).Return(errors.New("validation failure"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
 			createReq := &pb.CreateResourceRequest{
@@ -434,7 +435,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Create", ctx, mock.Anything).Return(nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]interface{}{"description": "test"})
 			createReq := &pb.CreateResourceRequest{
@@ -456,7 +457,7 @@ func TestResourceHandler(t *testing.T) {
 	t.Run("ReadResource", func(t *testing.T) {
 		t.Run("returns error when name is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ReadResourceRequest{
 				ResourceName:  "",
@@ -472,7 +473,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when store is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ReadResourceRequest{
 				ProjectName:   "proj",
@@ -488,7 +489,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ReadResourceRequest{
 				ProjectName:   "",
@@ -508,7 +509,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Get", ctx, mock.Anything, resource.Bigquery, name).Return(nil, errors.New("failure"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ReadResourceRequest{
 				ProjectName:   "proj",
@@ -528,7 +529,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Get", ctx, mock.Anything, resource.Bigquery, name).Return(&resource.Resource{}, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ReadResourceRequest{
 				ProjectName:   "proj",
@@ -553,7 +554,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Get", ctx, mock.Anything, resource.Bigquery, name).Return(dbRes, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ReadResourceRequest{
 				ProjectName:   "proj",
@@ -578,7 +579,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Get", ctx, mock.Anything, resource.Bigquery, name).Return(dbRes, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ReadResourceRequest{
 				ProjectName:   "proj",
@@ -597,7 +598,7 @@ func TestResourceHandler(t *testing.T) {
 	t.Run("UpdateResource", func(t *testing.T) {
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.UpdateResourceRequest{
 				ProjectName:   "",
@@ -613,7 +614,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when store is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.UpdateResourceRequest{
 				ProjectName:   "proj",
@@ -629,7 +630,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when resource is nil", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.UpdateResourceRequest{
 				ProjectName:   "proj",
@@ -645,7 +646,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when kind is empty", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
 			req := &pb.UpdateResourceRequest{
@@ -669,7 +670,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Update", ctx, mock.Anything, mock.Anything).Return(errors.New("validation failure"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
 			req := &pb.UpdateResourceRequest{
@@ -694,7 +695,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("Update", ctx, mock.Anything, mock.Anything).Return(nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			spec, _ := structpb.NewStruct(map[string]interface{}{"description": "test"})
 			req := &pb.UpdateResourceRequest{
@@ -713,10 +714,196 @@ func TestResourceHandler(t *testing.T) {
 			assert.Nil(t, err)
 		})
 	})
+	t.Run("UpsertResource", func(t *testing.T) {
+		t.Run("returns error when tenant is invalid", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "",
+				DatastoreName: "bigquery",
+				Resources:     nil,
+				NamespaceName: "",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
+				"project: project name is empty: failed to upsert resource")
+		})
+		t.Run("returns error when store is invalid", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "",
+				Resources:     nil,
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
+				"resource: unknown store : invalid upsert resource request")
+		})
+		t.Run("returns error when resource is nil", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources:     nil,
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "empty resource")
+		})
+		t.Run("not process a resource when kind is empty", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources: []*pb.ResourceSpecification{
+					{
+						Name:    "proj.ds.table1",
+						Version: 0,
+						Type:    "",
+						Spec:    spec,
+					},
+				},
+				NamespaceName: "ns",
+			}
+
+			resp, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Results[0].Message, "empty resource type for proj.ds.table1")
+		})
+		t.Run("returns error when service returns error", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(errors.New("validation failure"))
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table",
+						Type:    "table",
+						Spec:    spec,
+					},
+				},
+				NamespaceName: "ns",
+			}
+
+			resp, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Results[0].Message, "validation failure")
+		})
+		t.Run("skip invalid resource and proceed other resource", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil).Once()
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"a": "b"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table1",
+						Type:    "",
+						Spec:    spec,
+					},
+					{
+						Version: 0,
+						Name:    "proj.set.table2",
+						Type:    "table",
+						Spec:    spec,
+					},
+				},
+				NamespaceName: "ns",
+			}
+
+			resp, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+			assert.Contains(t, resp.Results[0].Message, "empty resource type for proj.set.table1")
+		})
+		t.Run("upsert a single resource successfully", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"description": "test"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table",
+						Type:    "table",
+						Spec:    spec,
+					},
+				},
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+		})
+		t.Run("upsert a multiple resource successfully", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("Upsert", ctx, mock.Anything, mock.Anything).Return(nil).Twice()
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			spec, _ := structpb.NewStruct(map[string]interface{}{"description": "test"})
+			req := &pb.UpsertResourceRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				Resources: []*pb.ResourceSpecification{
+					{
+						Version: 0,
+						Name:    "proj.set.table",
+						Type:    "table",
+						Spec:    spec,
+					},
+					{
+						Version: 0,
+						Name:    "proj.set.table2",
+						Type:    "table",
+						Spec:    spec,
+					},
+				},
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.UpsertResource(ctx, req)
+			assert.Nil(t, err)
+		})
+	})
 	t.Run("ApplyResource", func(t *testing.T) {
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ApplyResourcesRequest{
 				ProjectName:   "",
@@ -732,7 +919,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when store is invalid", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ApplyResourcesRequest{
 				ProjectName:   "proj",
@@ -748,7 +935,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when resource names are empty", func(t *testing.T) {
 			service := new(resourceService)
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ApplyResourcesRequest{
 				ProjectName:   "proj",
@@ -769,7 +956,7 @@ func TestResourceHandler(t *testing.T) {
 			service.On("SyncResources", ctx, tnnt, resource.Bigquery, names).Return(nil, errors.New("something went wrong"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ApplyResourcesRequest{
 				ProjectName:   "proj",
@@ -791,7 +978,7 @@ func TestResourceHandler(t *testing.T) {
 				&resource.SyncResponse{ResourceNames: names}, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewResourceHandler(logger, service)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ApplyResourcesRequest{
 				ProjectName:   "proj",
@@ -815,7 +1002,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
 			var (
 				service = new(resourceService)
-				handler = v1beta1.NewResourceHandler(logger, service)
+				handler = v1beta1.NewResourceHandler(logger, service, nil)
 				req     = &pb.DeleteResourceRequest{
 					ProjectName:   tnnt.ProjectName().String(),
 					NamespaceName: tnnt.NamespaceName().String(),
@@ -844,7 +1031,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Run("success with force", func(t *testing.T) {
 			var (
 				service = new(resourceService)
-				handler = v1beta1.NewResourceHandler(logger, service)
+				handler = v1beta1.NewResourceHandler(logger, service, nil)
 				req     = &pb.DeleteResourceRequest{
 					ProjectName:   tnnt.ProjectName().String(),
 					NamespaceName: tnnt.NamespaceName().String(),
@@ -874,7 +1061,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Run("return error when delete", func(t *testing.T) {
 			var (
 				service = new(resourceService)
-				handler = v1beta1.NewResourceHandler(logger, service)
+				handler = v1beta1.NewResourceHandler(logger, service, nil)
 				req     = &pb.DeleteResourceRequest{
 					ProjectName:   tnnt.ProjectName().String(),
 					NamespaceName: tnnt.NamespaceName().String(),
@@ -902,7 +1089,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Run("return error when resource store unknown", func(t *testing.T) {
 			var (
 				service = new(resourceService)
-				handler = v1beta1.NewResourceHandler(logger, service)
+				handler = v1beta1.NewResourceHandler(logger, service, nil)
 				req     = &pb.DeleteResourceRequest{
 					ProjectName:   tnnt.ProjectName().String(),
 					NamespaceName: tnnt.NamespaceName().String(),
@@ -920,7 +1107,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Run("return error when tenant invalid", func(t *testing.T) {
 			var (
 				service = new(resourceService)
-				handler = v1beta1.NewResourceHandler(logger, service)
+				handler = v1beta1.NewResourceHandler(logger, service, nil)
 				req     = &pb.DeleteResourceRequest{
 					ProjectName:   tnnt.ProjectName().String(),
 					NamespaceName: "",
@@ -936,6 +1123,79 @@ func TestResourceHandler(t *testing.T) {
 			assert.Nil(t, res)
 		})
 	})
+
+	t.Run("GetResourceChangelogs", func(t *testing.T) {
+		resourceName := "project.dataset.test_table"
+
+		t.Run("successfully get all changelogs for the resource", func(t *testing.T) {
+			var (
+				changelogService = newResourceChangeLogService(t)
+				handler          = v1beta1.NewResourceHandler(logger, nil, changelogService)
+				req              = &pb.GetResourceChangelogsRequest{
+					ProjectName:  tnnt.ProjectName().String(),
+					ResourceName: resourceName,
+				}
+				date = time.Date(2024, 6, 30, 10, 0, 0, 0, time.UTC)
+
+				resourceChangelogs = []*resource.ChangeLog{
+					{
+						Type: "update",
+						Time: date.Add(2 * time.Hour),
+						Change: []resource.Change{
+							{
+								Property: "metadata.Version",
+								Diff:     "- 2\n+ 3",
+							},
+						},
+					},
+					{
+						Type: "update",
+						Time: date,
+						Change: []resource.Change{
+							{
+								Property: "metadata.Description",
+								Diff:     "- a table used to get the booking\n+ detail of gofood booking",
+							},
+						},
+					},
+				}
+
+				expectedChangelogs = &pb.GetResourceChangelogsResponse{
+					History: []*pb.ResourceChangelog{
+						{
+							EventType: "update",
+							Timestamp: "2024-06-30 12:00:00 +0000 UTC",
+							Change: []*pb.ResourceChange{
+								{
+									AttributeName: "metadata.Version",
+									Diff:          "- 2\n+ 3",
+								},
+							},
+						},
+						{
+							EventType: "update",
+							Timestamp: "2024-06-30 10:00:00 +0000 UTC",
+							Change: []*pb.ResourceChange{
+								{
+									AttributeName: "metadata.Description",
+									Diff:          "- a table used to get the booking\n+ detail of gofood booking",
+								},
+							},
+						},
+					},
+				}
+			)
+
+			defer changelogService.AssertExpectations(t)
+
+			changelogService.On("GetChangelogs", ctx, tnnt.ProjectName(), resource.Name(resourceName)).Return(resourceChangelogs, nil)
+
+			res, err := handler.GetResourceChangelogs(ctx, req)
+			assert.NoError(t, err)
+			assert.NotNil(t, res)
+			assert.Equal(t, expectedChangelogs, res)
+		})
+	})
 }
 
 type resourceService struct {
@@ -948,6 +1208,11 @@ func (r *resourceService) Create(ctx context.Context, res *resource.Resource) er
 }
 
 func (r *resourceService) Update(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error {
+	args := r.Called(ctx, res, logWriter)
+	return args.Error(0)
+}
+
+func (r *resourceService) Upsert(ctx context.Context, res *resource.Resource, logWriter writer.LogWriter) error {
 	args := r.Called(ctx, res, logWriter)
 	return args.Error(0)
 }
@@ -1038,4 +1303,54 @@ func (*resourceStreamMock) SendMsg(interface{}) error {
 
 func (*resourceStreamMock) RecvMsg(interface{}) error {
 	panic("not supported")
+}
+
+// ResourceChangeLogService is an autogenerated mock type for the ResourceChangeLogService type
+type ResourceChangeLogService struct {
+	mock.Mock
+}
+
+// GetChangelogs provides a mock function with given fields: ctx, projectName, resourceName
+func (_m *ResourceChangeLogService) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {
+	ret := _m.Called(ctx, projectName, resourceName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetChangelogs")
+	}
+
+	var r0 []*resource.ChangeLog
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, resource.Name) ([]*resource.ChangeLog, error)); ok {
+		return rf(ctx, projectName, resourceName)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, resource.Name) []*resource.ChangeLog); ok {
+		r0 = rf(ctx, projectName, resourceName)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*resource.ChangeLog)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, resource.Name) error); ok {
+		r1 = rf(ctx, projectName, resourceName)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// newResourceChangeLogService creates a new instance of ResourceChangeLogService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// The first argument is typically a *testing.T value.
+func newResourceChangeLogService(t interface {
+	mock.TestingT
+	Cleanup(func())
+},
+) *ResourceChangeLogService {
+	mock := &ResourceChangeLogService{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
 }

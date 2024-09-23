@@ -16,13 +16,14 @@ const (
 type TemplateContext struct {
 	JobDetails *scheduler.JobWithDetails
 
-	Tenant          tenant.Tenant
-	Version         string
-	SLAMissDuration int64
-	Hostname        string
-	GRPCHostName    string
-	ExecutorTask    string
-	ExecutorHook    string
+	Tenant           tenant.Tenant
+	Version          string
+	SchedulerVersion string
+	SLAMissDuration  int64
+	Hostname         string
+	GRPCHostName     string
+	ExecutorTask     string
+	ExecutorHook     string
 
 	RuntimeConfig RuntimeConfig
 	Task          Task

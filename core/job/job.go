@@ -38,6 +38,10 @@ const (
 	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
 	JobInternalImpact       UpdateImpact = "internal_impact"
 	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
+
+	DeployStateSuccess DeployState = "success"
+	DeployStateSkipped DeployState = "skipped"
+	DeployStateFailed  DeployState = "failed"
 )
 
 type Job struct {
@@ -270,6 +274,20 @@ func (j Jobs) GetJobsWithUnresolvedStaticUpstreams() ([]*WithUpstream, error) {
 	}
 
 	return jobsWithUnresolvedUpstream, me.ToErr()
+}
+
+func (j Jobs) Deduplicate() []*Job {
+	jobByName := map[string]*Job{}
+	for _, subjectJob := range j {
+		jobByName[subjectJob.FullName()] = subjectJob
+	}
+	deduplicatedJobs := make([]*Job, len(jobByName))
+	i := 0
+	for _, subjectJob := range jobByName {
+		deduplicatedJobs[i] = subjectJob
+		i++
+	}
+	return deduplicatedJobs
 }
 
 type WithUpstream struct {
@@ -573,4 +591,10 @@ func (d DownstreamList) GetDownstreamFullNames() FullNames {
 		fullNames = append(fullNames, downstream.FullName())
 	}
 	return fullNames
+}
+
+type DeployState string
+
+func (d DeployState) String() string {
+	return string(d)
 }

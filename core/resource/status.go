@@ -21,6 +21,8 @@ const (
 	StatusUpdateFailure     Status = "update_failure"
 	StatusExistInStore      Status = "exist_in_store"
 	StatusSuccess           Status = "success"
+
+	StatusFailure Status = "failed"
 )
 
 func (s Status) String() string {

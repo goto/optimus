@@ -36,6 +36,8 @@ type JobSpecificationServiceClient interface {
 	AddJobSpecifications(ctx context.Context, in *AddJobSpecificationsRequest, opts ...grpc.CallOption) (*AddJobSpecificationsResponse, error)
 	// UpdateJobSpecifications modify jobs for a namespace which belongs to the given project
 	UpdateJobSpecifications(ctx context.Context, in *UpdateJobSpecificationsRequest, opts ...grpc.CallOption) (*UpdateJobSpecificationsResponse, error)
+	// UpsertJobSpecifications update or add jobs for a namespace which belongs to the given project
+	UpsertJobSpecifications(ctx context.Context, in *UpsertJobSpecificationsRequest, opts ...grpc.CallOption) (*UpsertJobSpecificationsResponse, error)
 	// GetJobSpecification reads a provided job spec of a namespace
 	GetJobSpecification(ctx context.Context, in *GetJobSpecificationRequest, opts ...grpc.CallOption) (*GetJobSpecificationResponse, error)
 	// GetJobSpecifications read a job spec for provided filters
@@ -74,6 +76,9 @@ type JobSpecificationServiceClient interface {
 	UpdateJobsState(ctx context.Context, in *UpdateJobsStateRequest, opts ...grpc.CallOption) (*UpdateJobsStateResponse, error)
 	// SyncJobsState enable / disable job on scheuler
 	SyncJobsState(ctx context.Context, in *SyncJobsStateRequest, opts ...grpc.CallOption) (*SyncJobsStateResponse, error)
+	// BulkDeleteJobs deletes one or more jobs in bulk operation,
+	// while following postorder deletion, starting from jobs with no dependencies
+	BulkDeleteJobs(ctx context.Context, in *BulkDeleteJobsRequest, opts ...grpc.CallOption) (*BulkDeleteJobsResponse, error)
 }
 
 type jobSpecificationServiceClient struct {
@@ -145,6 +150,15 @@ func (c *jobSpecificationServiceClient) AddJobSpecifications(ctx context.Context
 func (c *jobSpecificationServiceClient) UpdateJobSpecifications(ctx context.Context, in *UpdateJobSpecificationsRequest, opts ...grpc.CallOption) (*UpdateJobSpecificationsResponse, error) {
 	out := new(UpdateJobSpecificationsResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpdateJobSpecifications", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *jobSpecificationServiceClient) UpsertJobSpecifications(ctx context.Context, in *UpsertJobSpecificationsRequest, opts ...grpc.CallOption) (*UpsertJobSpecificationsResponse, error) {
+	out := new(UpsertJobSpecificationsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpsertJobSpecifications", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -366,6 +380,15 @@ func (c *jobSpecificationServiceClient) SyncJobsState(ctx context.Context, in *S
 	return out, nil
 }
 
+func (c *jobSpecificationServiceClient) BulkDeleteJobs(ctx context.Context, in *BulkDeleteJobsRequest, opts ...grpc.CallOption) (*BulkDeleteJobsResponse, error) {
+	out := new(BulkDeleteJobsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobSpecificationService/BulkDeleteJobs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobSpecificationServiceServer is the server API for JobSpecificationService service.
 // All implementations must embed UnimplementedJobSpecificationServiceServer
 // for forward compatibility
@@ -384,6 +407,8 @@ type JobSpecificationServiceServer interface {
 	AddJobSpecifications(context.Context, *AddJobSpecificationsRequest) (*AddJobSpecificationsResponse, error)
 	// UpdateJobSpecifications modify jobs for a namespace which belongs to the given project
 	UpdateJobSpecifications(context.Context, *UpdateJobSpecificationsRequest) (*UpdateJobSpecificationsResponse, error)
+	// UpsertJobSpecifications update or add jobs for a namespace which belongs to the given project
+	UpsertJobSpecifications(context.Context, *UpsertJobSpecificationsRequest) (*UpsertJobSpecificationsResponse, error)
 	// GetJobSpecification reads a provided job spec of a namespace
 	GetJobSpecification(context.Context, *GetJobSpecificationRequest) (*GetJobSpecificationResponse, error)
 	// GetJobSpecifications read a job spec for provided filters
@@ -422,6 +447,9 @@ type JobSpecificationServiceServer interface {
 	UpdateJobsState(context.Context, *UpdateJobsStateRequest) (*UpdateJobsStateResponse, error)
 	// SyncJobsState enable / disable job on scheuler
 	SyncJobsState(context.Context, *SyncJobsStateRequest) (*SyncJobsStateResponse, error)
+	// BulkDeleteJobs deletes one or more jobs in bulk operation,
+	// while following postorder deletion, starting from jobs with no dependencies
+	BulkDeleteJobs(context.Context, *BulkDeleteJobsRequest) (*BulkDeleteJobsResponse, error)
 	mustEmbedUnimplementedJobSpecificationServiceServer()
 }
 
@@ -443,6 +471,9 @@ func (UnimplementedJobSpecificationServiceServer) AddJobSpecifications(context.C
 }
 func (UnimplementedJobSpecificationServiceServer) UpdateJobSpecifications(context.Context, *UpdateJobSpecificationsRequest) (*UpdateJobSpecificationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateJobSpecifications not implemented")
+}
+func (UnimplementedJobSpecificationServiceServer) UpsertJobSpecifications(context.Context, *UpsertJobSpecificationsRequest) (*UpsertJobSpecificationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpsertJobSpecifications not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) GetJobSpecification(context.Context, *GetJobSpecificationRequest) (*GetJobSpecificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobSpecification not implemented")
@@ -491,6 +522,9 @@ func (UnimplementedJobSpecificationServiceServer) UpdateJobsState(context.Contex
 }
 func (UnimplementedJobSpecificationServiceServer) SyncJobsState(context.Context, *SyncJobsStateRequest) (*SyncJobsStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SyncJobsState not implemented")
+}
+func (UnimplementedJobSpecificationServiceServer) BulkDeleteJobs(context.Context, *BulkDeleteJobsRequest) (*BulkDeleteJobsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BulkDeleteJobs not implemented")
 }
 func (UnimplementedJobSpecificationServiceServer) mustEmbedUnimplementedJobSpecificationServiceServer() {
 }
@@ -600,6 +634,24 @@ func _JobSpecificationService_UpdateJobSpecifications_Handler(srv interface{}, c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(JobSpecificationServiceServer).UpdateJobSpecifications(ctx, req.(*UpdateJobSpecificationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _JobSpecificationService_UpsertJobSpecifications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertJobSpecificationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobSpecificationServiceServer).UpsertJobSpecifications(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/UpsertJobSpecifications",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobSpecificationServiceServer).UpsertJobSpecifications(ctx, req.(*UpsertJobSpecificationsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -906,6 +958,24 @@ func _JobSpecificationService_SyncJobsState_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobSpecificationService_BulkDeleteJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BulkDeleteJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobSpecificationServiceServer).BulkDeleteJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobSpecificationService/BulkDeleteJobs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobSpecificationServiceServer).BulkDeleteJobs(ctx, req.(*BulkDeleteJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobSpecificationService_ServiceDesc is the grpc.ServiceDesc for JobSpecificationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -928,6 +998,10 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateJobSpecifications",
 			Handler:    _JobSpecificationService_UpdateJobSpecifications_Handler,
+		},
+		{
+			MethodName: "UpsertJobSpecifications",
+			Handler:    _JobSpecificationService_UpsertJobSpecifications_Handler,
 		},
 		{
 			MethodName: "GetJobSpecification",
@@ -980,6 +1054,10 @@ var JobSpecificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SyncJobsState",
 			Handler:    _JobSpecificationService_SyncJobsState_Handler,
+		},
+		{
+			MethodName: "BulkDeleteJobs",
+			Handler:    _JobSpecificationService_BulkDeleteJobs_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

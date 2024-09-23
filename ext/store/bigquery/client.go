@@ -51,9 +51,19 @@ func (c *BqClient) TableHandleFrom(ds Dataset, name string) TableResourceHandle 
 	return NewTableHandle(t)
 }
 
+func (c *BqClient) RoutineHandleFrom(ds Dataset, name string) ResourceHandle {
+	t := c.DatasetInProject(ds.Project, ds.DatasetName).Routine(name)
+	return NewRoutineHandle(t)
+}
+
 func (c *BqClient) ExternalTableHandleFrom(ds Dataset, name string) ResourceHandle {
 	t := c.DatasetInProject(ds.Project, ds.DatasetName).Table(name)
 	return NewExternalTableHandle(t)
+}
+
+func (c *BqClient) ModelHandleFrom(ds Dataset, name string) ResourceHandle {
+	t := c.DatasetInProject(ds.Project, ds.DatasetName).Model(name)
+	return NewModelHandle(t)
 }
 
 func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names []string) (map[ResourceURN]string, error) {

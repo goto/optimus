@@ -377,6 +377,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
+	resourceChangeLogService := rService.NewChangelogService(s.logger, resourceRepository)
 
 	// Register datastore
 	bqClientProvider := bqStore.NewClientProvider()
@@ -389,7 +390,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterNamespaceServiceServer(s.grpcServer, tHandler.NewNamespaceHandler(s.logger, tNamespaceService))
 
 	// Resource Handler
-	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService))
+	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
 	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService))
 

@@ -116,7 +116,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	var (
 		addJobRequest          = []*pb.AddJobSpecificationsRequest{}
 		updateJobRequest       = []*pb.UpdateJobSpecificationsRequest{}
-		deleteJobRequest       = []*pb.DeleteJobSpecificationRequest{}
+		deleteJobRequest       = []*pb.BulkDeleteJobsRequest_JobToDelete{}
 		migrateJobRequest      = []*pb.ChangeJobNamespaceRequest{}
 		addResourceRequest     = []*pb.CreateResourceRequest{}
 		updateResourceRequest  = []*pb.UpdateResourceRequest{}
@@ -130,7 +130,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
 		updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(namespace, plans)...)
 		updateJobRequest = append(updateJobRequest, updateFromMigrateJobs...)
-		deleteJobRequest = append(deleteJobRequest, c.getDeleteJobRequest(namespace, plans)...)
+		deleteJobRequest = append(deleteJobRequest, c.getBulkDeleteJobsRequest(namespace, plans)...)
 		migrateJobRequest = append(migrateJobRequest, migrateJobs...)
 		// resource request preparation
 		migrateResources, updateFromMigrateResources := c.getMigrateResourceRequest(namespace, plans)
@@ -149,7 +149,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	migratedJobs := c.executeJobMigrate(ctx, jobClient, migrateJobRequest)
 	updatedJobs := c.executeJobUpdate(ctx, jobClient, updateJobRequest)
 	// job deletion < resource deletion
-	deletedJobs := c.executeJobDelete(ctx, jobClient, deleteJobRequest)
+	deletedJobs := c.executeJobBulkDelete(ctx, jobClient, &pb.BulkDeleteJobsRequest{ProjectName: plans.ProjectName, Jobs: deleteJobRequest})
 	deletedResources := c.executeResourceDelete(ctx, resourceClient, deleteResourceRequest)
 
 	// update plan file, delete successful operations
@@ -185,17 +185,41 @@ func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause s
 	c.isOperationFail = true
 }
 
-func (c *applyCommand) executeJobDelete(ctx context.Context, client pb.JobSpecificationServiceClient, requests []*pb.DeleteJobSpecificationRequest) []string {
+func (c *applyCommand) printFailedAll(operation, kind, cause string) {
+	c.logger.Error("[all] %s: %s %s ❌", operation, kind)
+	if c.verbose && cause != "" {
+		c.logger.Error(cause)
+	}
+	c.isOperationFail = true
+}
+
+func (c *applyCommand) executeJobBulkDelete(ctx context.Context, client pb.JobSpecificationServiceClient, request *pb.BulkDeleteJobsRequest) []string {
+	if len(request.Jobs) == 0 {
+		return []string{}
+	}
+
+	response, err := client.BulkDeleteJobs(ctx, request)
+	if err != nil {
+		c.printFailedAll("bulk-delete", "job", err.Error())
+		return nil
+	}
+
+	// if no failure, check the status of each bulk deletion
 	deletedJobs := []string{}
-	for _, request := range requests {
-		_, err := client.DeleteJobSpecification(ctx, request)
-		if err != nil {
-			c.printFailed(request.NamespaceName, "delete", "job", request.GetJobName(), err.Error())
+	for _, jobToDelete := range request.Jobs {
+		result, found := response.ResultsByJobName[jobToDelete.JobName]
+		if !found {
 			continue
 		}
-		c.printSuccess(request.NamespaceName, "delete", "job", request.GetJobName())
-		deletedJobs = append(deletedJobs, request.GetJobName())
+
+		if result.GetSuccess() {
+			c.printSuccess(jobToDelete.NamespaceName, "bulk-delete", "job", jobToDelete.JobName)
+			deletedJobs = append(deletedJobs, jobToDelete.JobName)
+		} else {
+			c.printFailed(jobToDelete.NamespaceName, "bulk-delete", "job", jobToDelete.JobName, result.GetMessage())
+		}
 	}
+
 	return deletedJobs
 }
 
@@ -386,18 +410,15 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 	}
 }
 
-func (c *applyCommand) getDeleteJobRequest(namespace *config.Namespace, plans plan.Plan) []*pb.DeleteJobSpecificationRequest {
-	jobsToBeDeleted := []*pb.DeleteJobSpecificationRequest{}
+func (*applyCommand) getBulkDeleteJobsRequest(namespace *config.Namespace, plans plan.Plan) []*pb.BulkDeleteJobsRequest_JobToDelete {
+	jobsToDelete := []*pb.BulkDeleteJobsRequest_JobToDelete{}
 	for _, currentPlan := range plans.Job.Delete.GetByNamespace(namespace.Name) {
-		jobsToBeDeleted = append(jobsToBeDeleted, &pb.DeleteJobSpecificationRequest{
-			ProjectName:   c.config.Project.Name,
+		jobsToDelete = append(jobsToDelete, &pb.BulkDeleteJobsRequest_JobToDelete{
 			NamespaceName: namespace.Name,
 			JobName:       currentPlan.Name,
-			CleanHistory:  false,
-			Force:         false,
 		})
 	}
-	return jobsToBeDeleted
+	return jobsToDelete
 }
 
 func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans plan.Plan) ([]*pb.ChangeJobNamespaceRequest, []*pb.UpdateJobSpecificationsRequest) {

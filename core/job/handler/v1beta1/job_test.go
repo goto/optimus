@@ -16,11 +16,11 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/dto"
 	"github.com/goto/optimus/core/job/handler/v1beta1"
-	"github.com/goto/optimus/core/job/service/filter"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	"github.com/goto/optimus/sdk/plugin"
@@ -2573,6 +2573,36 @@ func (_m *JobService) Validate(ctx context.Context, request dto.ValidateRequest)
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, dto.ValidateRequest) error); ok {
 		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// BulkDeleteJobs provides a mock function with given fields: ctx, projectName, jobsToDelete
+func (_m *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.ProjectName, jobsToDelete []*dto.JobToDeleteRequest) (map[string]dto.BulkDeleteTracker, error) {
+	ret := _m.Called(ctx, projectName, jobsToDelete)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BulkDeleteJobs")
+	}
+
+	var r0 map[string]dto.BulkDeleteTracker
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, []*dto.JobToDeleteRequest) (map[string]dto.BulkDeleteTracker, error)); ok {
+		return rf(ctx, projectName, jobsToDelete)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, []*dto.JobToDeleteRequest) map[string]dto.BulkDeleteTracker); ok {
+		r0 = rf(ctx, projectName, jobsToDelete)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]dto.BulkDeleteTracker)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, []*dto.JobToDeleteRequest) error); ok {
+		r1 = rf(ctx, projectName, jobsToDelete)
 	} else {
 		r1 = ret.Error(1)
 	}

@@ -18,20 +18,25 @@ func TestReplayValidator(t *testing.T) {
 	ctx := context.Background()
 	tnnt, _ := tenant.NewTenant("sample-project", "sample-namespace")
 	jobName := scheduler.JobName("sample_select")
-	startTimeStr := "2023-01-02T15:00:00Z"
-	startTime, _ := time.Parse(scheduler.ISODateFormat, startTimeStr)
-	endTime := startTime.Add(48 * time.Hour)
+	jobStartTimeStr := "2023-01-02T15:00:00Z"
+	jobStartTime, _ := time.Parse(scheduler.ISODateFormat, jobStartTimeStr)
+	jobEndTime := jobStartTime.Add(48 * time.Hour)
 	parallel := true
 	description := "sample backfill"
 	replayJobConfig := map[string]string{"EXECUTION_PROJECT": "example_project"}
-	replayConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, replayJobConfig, description)
-	runsCriteriaJobA := &scheduler.JobRunsCriteria{
-		Name:      jobName.String(),
-		StartDate: startTime,
-		EndDate:   endTime,
-	}
 	jobCronStr := "0 12 * * *"
 	jobCron, _ := cron.ParseCronSchedule(jobCronStr)
+
+	replayStartTime := jobCron.Next(jobStartTime)
+	replayEndTime := jobEndTime
+
+	replayConfig := scheduler.NewReplayConfig(replayStartTime, replayEndTime, parallel, replayJobConfig, description)
+	replayRunsCriteriaJobA := &scheduler.JobRunsCriteria{
+		Name:      jobName.String(),
+		StartDate: replayStartTime,
+		EndDate:   replayEndTime,
+	}
+
 	scheduledTimeStr1 := "2023-01-02T12:00:00Z"
 	scheduledTime1, _ := time.Parse(scheduler.ISODateFormat, scheduledTimeStr1)
 	replayStatusToValidate := scheduler.ReplayNonTerminalStates
@@ -62,12 +67,12 @@ func TestReplayValidator(t *testing.T) {
 
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
-					StartDate: startTime,
-					EndDate:   &endTime,
+					StartDate: jobStartTime,
+					EndDate:   &jobEndTime,
 				},
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(onGoingReplay, nil)
-			sch.On("GetJobRuns", ctx, tnnt, runsCriteriaJobA, jobCron).Return(currentRuns, nil)
+			sch.On("GetJobRuns", ctx, tnnt, replayRunsCriteriaJobA, jobCron).Return(currentRuns, nil)
 
 			validator := service.NewValidator(replayRepository, sch, jobRepository)
 			err := validator.Validate(ctx, replayReq, jobCron)
@@ -85,8 +90,8 @@ func TestReplayValidator(t *testing.T) {
 
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
-					StartDate: startTime.Add(1 * time.Second), // start date 1 second ahead of replay
-					EndDate:   &endTime,
+					StartDate: jobStartTime.Add(24 * time.Hour), // logical start date 24 hours ahead
+					EndDate:   &jobEndTime,
 				},
 			}, nil)
 
@@ -104,10 +109,10 @@ func TestReplayValidator(t *testing.T) {
 			jobRepository := new(JobRepository)
 			defer jobRepository.AssertExpectations(t)
 
-			schEndTime := endTime.Add(-1 * time.Second)
+			schEndTime := jobEndTime.Add(-1 * time.Second)
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
-					StartDate: startTime,
+					StartDate: jobStartTime,
 					EndDate:   &schEndTime, // end date 1 second prior of replay
 				},
 			}, nil)
@@ -132,8 +137,8 @@ func TestReplayValidator(t *testing.T) {
 
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
-					StartDate: startTime,
-					EndDate:   &endTime,
+					StartDate: jobStartTime,
+					EndDate:   &jobEndTime,
 				},
 			}, nil)
 
@@ -166,12 +171,12 @@ func TestReplayValidator(t *testing.T) {
 
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
-					StartDate: startTime,
-					EndDate:   &endTime,
+					StartDate: jobStartTime,
+					EndDate:   &jobEndTime,
 				},
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(onGoingReplay, nil)
-			sch.On("GetJobRuns", ctx, tnnt, runsCriteriaJobA, jobCron).Return(currentRuns, nil)
+			sch.On("GetJobRuns", ctx, tnnt, replayRunsCriteriaJobA, jobCron).Return(currentRuns, nil)
 
 			validator := service.NewValidator(replayRepository, sch, jobRepository)
 			err := validator.Validate(ctx, replayReq, jobCron)
@@ -190,8 +195,8 @@ func TestReplayValidator(t *testing.T) {
 			internalErr := errors.New("internal error")
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
-					StartDate: startTime,
-					EndDate:   &endTime,
+					StartDate: jobStartTime,
+					EndDate:   &jobEndTime,
 				},
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(nil, internalErr)
@@ -220,11 +225,11 @@ func TestReplayValidator(t *testing.T) {
 			internalErr := errors.New("internal error")
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
-					StartDate: startTime,
-					EndDate:   &endTime,
+					StartDate: jobStartTime,
+					EndDate:   &jobEndTime,
 				},
 			}, nil)
-			sch.On("GetJobRuns", ctx, tnnt, runsCriteriaJobA, jobCron).Return(nil, internalErr)
+			sch.On("GetJobRuns", ctx, tnnt, replayRunsCriteriaJobA, jobCron).Return(nil, internalErr)
 
 			validator := service.NewValidator(replayRepository, sch, jobRepository)
 			err := validator.Validate(ctx, replayReq, jobCron)

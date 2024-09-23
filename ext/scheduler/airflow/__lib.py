@@ -86,6 +86,31 @@ class OptimusAPIClient:
             return host
         return "http://" + host
 
+    def get_job_replay_config(self, project_name,  job_name, schedule_time) -> dict:
+        scheduled_at_str = schedule_time.strftime(TIMESTAMP_FORMAT)
+        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/replay'.format(
+            optimus_host=self.host,
+            optimus_project=project_name,
+        )
+        response = requests.get(url, params={
+            'scheduled_at': scheduled_at_str,
+            'job_names':    job_name,
+            'status':       "in progress",
+        }, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        if response.status_code != 200:
+            return {}
+        replay_config = response.json()
+
+        if 'replays' in replay_config.keys():
+            for config in replay_config['replays']:
+                if 'replayConfig' in config.keys():
+                    if 'startTime' in config['replayConfig'].keys() & 'endTime' in config['replayConfig'].keys():
+                        start_time = datetime.strptime(config['replayConfig']['startTime'], TIMESTAMP_FORMAT)
+                        end_time = datetime.strptime(config['replayConfig']['endTime'], TIMESTAMP_FORMAT)
+                        if start_time <= schedule_time & schedule_time >= end_time:
+                            return config['replayConfig']['jobConfig']
+        return {}
+
     def get_job_run(self, project_name: str, job_name: str, start_date: str, end_date: str, downstream_project_name: str, downstream_job_name: str) -> dict:
         url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/run'.format(
             optimus_host=self.host,
@@ -215,7 +240,11 @@ class SuperExternalTaskSensor(BaseSensorOperator):
 
     def poke(self, context):
         schedule_time = get_scheduled_at(context)
-
+        job_config = self._optimus_client.get_job_replay_config(self.project_name, self.name, schedule_time)
+        if 'replays' in job_config.keys():
+            if 'IGNORE_UPSTREAM' in job_config['jobConfig'].keys():
+                if job_config['jobConfig']['IGNORE_UPSTREAM'] == "True":
+                    return True
         try:
             upstream_schedule = self.get_schedule_interval(schedule_time)
         except Exception as e:

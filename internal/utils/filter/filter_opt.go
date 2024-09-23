@@ -1,5 +1,7 @@
 package filter
 
+import "time"
+
 type (
 	FilterOpt func(*filter)
 	Operand   uint64
@@ -12,6 +14,9 @@ const (
 	bitOnNamespaceNames      uint64 = 1 << 3
 	bitOnJobNames            uint64 = 1 << 4
 	bitOnNamespaceName       uint64 = 1 << 5
+	bitOnReplayStatus        uint64 = 1 << 6
+	bitOnScheduledAt         uint64 = 1 << 7
+	bitOnReplayID            uint64 = 1 << 8
 )
 
 const (
@@ -21,7 +26,19 @@ const (
 	JobName             = Operand(bitOnJobName)
 	JobNames            = Operand(bitOnJobNames)
 	ResourceDestination = Operand(bitOnResourceDestination)
+	ReplayStatus        = Operand(bitOnReplayStatus)
+	ScheduledAt         = Operand(bitOnScheduledAt)
+	ReplayID            = Operand(bitOnReplayID)
 )
+
+func WithTime(operand Operand, value time.Time) FilterOpt {
+	return func(f *filter) {
+		if !(value.Equal(time.Unix(0, 0))) {
+			f.bits |= uint64(operand)
+			f.value[operand] = value
+		}
+	}
+}
 
 func WithString(operand Operand, value string) FilterOpt {
 	return func(f *filter) {

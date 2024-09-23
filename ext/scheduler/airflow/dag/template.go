@@ -12,7 +12,26 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-const defaultVersion = "2.1"
+const (
+	defaultVersion = "2.1"
+
+	maxSemverPartLength = 2
+)
+
+// this map stores mapping of the provided scheduler minor versions
+// to the DAG template versions available
+var schedulerToTemplateVersionMap = map[string]string{
+	"2.1":  "2.1",
+	"2.2":  "2.1",
+	"2.3":  "2.1",
+	"2.4":  "2.4",
+	"2.5":  "2.4",
+	"2.6":  "2.6",
+	"2.7":  "2.6",
+	"2.8":  "2.6",
+	"2.9":  "2.9",
+	"2.10": "2.9",
+}
 
 //go:embed template
 var templateFS embed.FS
@@ -52,9 +71,20 @@ func NewTemplates() (templates, error) {
 }
 
 func (t templates) GetTemplate(airflowVersion string) *template.Template {
-	version := strings.Join(strings.Split(airflowVersion, ".")[:2], ".")
-	if tmpl, ok := t[version]; ok {
+	// only take the major.minor version part of the given airflow version
+	minorVersion := getMajorMinorVersion(airflowVersion)
+	dagVersion := schedulerToTemplateVersionMap[minorVersion]
+	if tmpl, ok := t[dagVersion]; ok {
 		return tmpl
 	}
 	return t[defaultVersion]
+}
+
+func getMajorMinorVersion(version string) string {
+	versionParts := strings.Split(version, ".")
+	if len(versionParts) > maxSemverPartLength {
+		versionParts = versionParts[:maxSemverPartLength]
+	}
+
+	return strings.Join(versionParts, ".")
 }

@@ -224,6 +224,10 @@ func (s Specs) getJobNameCount() map[Name]int {
 
 type Name string
 
+func (n Name) GetConsoleURN(tnnt tenant.Tenant) string {
+	return fmt.Sprintf("urn:optimus:%s:job:%s.%s.%s", tnnt.ProjectName(), tnnt.ProjectName(), tnnt.NamespaceName(), n)
+}
+
 func NameFrom(name string) (Name, error) {
 	if name == "" {
 		return "", errors.InvalidArgument(EntityJob, "name is empty")

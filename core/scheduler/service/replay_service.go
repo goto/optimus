@@ -64,6 +64,8 @@ type ReplayService struct {
 
 	tenantGetter TenantGetter
 
+	alertManager AlertManager
+
 	logger log.Logger
 
 	// stores mapping of task names (optimus plugin names) to its respective execution project config names.
@@ -103,6 +105,8 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		jobName.String(),
 		replayReq.State().String(),
 	).Inc()
+
+	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{})
 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
 
@@ -224,6 +228,7 @@ func NewReplayService(
 	runGetter SchedulerRunGetter,
 	logger log.Logger,
 	pluginToExecutionProjectKeyMap map[string]string,
+	alertManager AlertManager,
 ) *ReplayService {
 	return &ReplayService{
 		replayRepo:                     replayRepo,
@@ -234,6 +239,7 @@ func NewReplayService(
 		runGetter:                      runGetter,
 		logger:                         logger,
 		pluginToExecutionProjectKeyMap: pluginToExecutionProjectKeyMap,
+		alertManager:                   alertManager,
 	}
 }
 

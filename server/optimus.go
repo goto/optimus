@@ -341,7 +341,7 @@ func (s *OptimusServer) setupHandlers() error {
 	replayService := schedulerService.NewReplayService(
 		replayRepository, jobProviderRepo, tenantService,
 		replayValidator, replayWorker, newScheduler,
-		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames,
+		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames, alertsHandler,
 	)
 
 	newJobRunService := schedulerService.NewJobRunService(
@@ -358,7 +358,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceRepository := resource.NewRepository(s.dbPool)
 	backupRepository := resource.NewBackupRepository(s.dbPool)
 	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
-	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil) // note: job service can be nil
+	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler) // note: job service can be nil
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
@@ -369,13 +369,13 @@ func (s *OptimusServer) setupHandlers() error {
 		jJobRepo, jJobRepo, jJobRepo,
 		pluginService, jUpstreamResolver, tenantService,
 		s.eventHandler, s.logger, newJobRunService, newEngine,
-		jobInputCompiler, secondaryResourceService,
+		jobInputCompiler, secondaryResourceService, alertsHandler,
 	)
 
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
 	// Resource Bounded Context
-	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService)
+	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 	resourceChangeLogService := rService.NewChangelogService(s.logger, resourceRepository)
 

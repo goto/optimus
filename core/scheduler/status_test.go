@@ -28,7 +28,7 @@ func TestStatus(t *testing.T) {
 	t.Run("ExecutionStart", func(t *testing.T) {
 		startDate := time.Date(2022, 1, 1, 1, 1, 1, 0, time.UTC)
 		criteria := scheduler.JobRunsCriteria{
-			Name:        "JobName",
+			Name:        "Name",
 			StartDate:   startDate,
 			EndDate:     startDate.Add(time.Hour),
 			Filter:      nil,

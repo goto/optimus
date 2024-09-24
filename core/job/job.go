@@ -3,6 +3,7 @@ package job
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -76,6 +77,10 @@ func (j *Job) GetName() string {
 	return j.spec.name.String()
 }
 
+func (j *Job) GetConsoleURN() string {
+	return j.Spec().name.GetConsoleURN(j.tenant)
+}
+
 func (j *Job) FullName() string {
 	return j.ProjectName().String() + "/" + j.spec.name.String()
 }
@@ -133,6 +138,25 @@ func (j *Job) GetStaticUpstreamsToResolve() ([]*Upstream, error) {
 		unresolvedStaticUpstreams = append(unresolvedStaticUpstreams, NewUpstreamUnresolvedStatic(jobUpstreamName, projectUpstreamName))
 	}
 	return unresolvedStaticUpstreams, me.ToErr()
+}
+
+type ChangeType string
+
+const (
+	ChangeTypeUpdate ChangeType = "Modified"
+	ChangeTypeDelete ChangeType = "Deleted"
+)
+
+func (j ChangeType) String() string {
+	return string(j)
+}
+
+type AlertAttrs struct {
+	Name       Name
+	URN        string
+	Tenant     tenant.Tenant
+	EventTime  time.Time
+	ChangeType ChangeType
 }
 
 type UpdateImpact string

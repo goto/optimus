@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -19,7 +22,6 @@ const (
 	UpstreamStateResolved   UpstreamState = "resolved"
 	UpstreamStateUnresolved UpstreamState = "unresolved"
 
-	MetricJobEvent                      = "job_events_total"
 	MetricJobEventStateAdded            = "added"
 	MetricJobEventStateUpdated          = "updated"
 	MetricJobEventStateDeleted          = "deleted"
@@ -30,10 +32,6 @@ const (
 	MetricJobEventDisabled              = "disabled"
 	MetricJobEventFoundDirty            = "found_dirty"
 
-	MetricJobValidation = "job_validation"
-
-	MetricJobRefreshResourceDownstream = "refresh_resource_downstream_total"
-
 	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
 	JobInternalImpact       UpdateImpact = "internal_impact"
 	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
@@ -42,6 +40,18 @@ const (
 	DeployStateSkipped DeployState = "skipped"
 	DeployStateFailed  DeployState = "failed"
 )
+
+var EventMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "job_events_total",
+}, []string{"project", "namespace", "status"})
+
+var ValidationMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "job_validation",
+}, []string{"project", "namespace", "stage", "success"})
+
+var RefreshResourceDownstreamMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "refresh_resource_downstream_total",
+}, []string{"project", "status"})
 
 type Job struct {
 	tenant tenant.Tenant

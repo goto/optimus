@@ -8,20 +8,24 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
-const (
-	metricResourceEvents             = "resource_events_total"
-	metricResourcesUploadAllDuration = "resource_upload_all_duration_seconds_total"
-)
+var resourceEventsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "resource_events_total",
+}, []string{"project", "namespace", "datastore", "type", "status"})
+
+var resourcesUploadAllDurationMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "resource_upload_all_duration_seconds_total",
+}, []string{"operator_name", "event_type"})
 
 type ResourceService interface {
 	Create(ctx context.Context, res *resource.Resource) error
@@ -129,10 +133,11 @@ func (rh ResourceHandler) DeployResourceSpecification(stream pb.ResourceService_
 		}
 
 		processDuration := time.Since(startTime)
-		telemetry.NewGauge(metricResourcesUploadAllDuration, map[string]string{
-			"project":   tnnt.ProjectName().String(),
-			"namespace": tnnt.NamespaceName().String(),
-		}).Add(processDuration.Seconds())
+
+		resourcesUploadAllDurationMetric.WithLabelValues(
+			tnnt.ProjectName().String(),
+			tnnt.NamespaceName().String(),
+		).Add(processDuration.Seconds())
 	}
 
 	if len(errNamespaces) > 0 {
@@ -383,12 +388,6 @@ func (rh ResourceHandler) ChangeResourceNamespace(ctx context.Context, req *pb.C
 		return nil, errors.GRPCErr(err, "failed to update resource "+req.GetResourceName())
 	}
 
-	telemetry.NewCounter("resource_namespace_migrations_total", map[string]string{
-		"project":               tnnt.ProjectName().String(),
-		"namespace_source":      tnnt.NamespaceName().String(),
-		"namespace_destination": newTnnt.NamespaceName().String(),
-	}).Inc()
-
 	return &pb.ChangeResourceNamespaceResponse{}, nil
 }
 
@@ -542,13 +541,13 @@ func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) 
 }
 
 func raiseResourceDatastoreEventMetric(jobTenant tenant.Tenant, datastoreName, resourceKind, state string) {
-	telemetry.NewCounter(metricResourceEvents, map[string]string{
-		"project":   jobTenant.ProjectName().String(),
-		"namespace": jobTenant.NamespaceName().String(),
-		"datastore": datastoreName,
-		"type":      resourceKind,
-		"status":    state,
-	}).Inc()
+	resourceEventsTotal.WithLabelValues(
+		jobTenant.ProjectName().String(),
+		jobTenant.NamespaceName().String(),
+		datastoreName,
+		resourceKind,
+		state,
+	).Inc()
 }
 
 func toChangelogProto(cl *resource.ChangeLog) *pb.ResourceChangelog {

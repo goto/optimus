@@ -22,7 +22,6 @@ func (v ViewHandle) Create(ctx context.Context, res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-
 	meta, err := getMetadataToCreate(view.Description, view.ExtraConfig, res.Metadata().Labels)
 	if err != nil {
 		return errors.AddErrContext(err, EntityView, "failed to get metadata to update for "+res.FullName())

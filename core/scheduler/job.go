@@ -47,6 +47,10 @@ func (n JobName) String() string {
 	return string(n)
 }
 
+func (n JobName) GetConsoleURN(tnnt tenant.Tenant) string {
+	return fmt.Sprintf("urn:optimus:%s:job:%s.%s.%s", tnnt.ProjectName(), tnnt.ProjectName(), tnnt.NamespaceName(), n)
+}
+
 type Job struct {
 	ID     uuid.UUID
 	Name   JobName

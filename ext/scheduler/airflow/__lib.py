@@ -88,7 +88,7 @@ class OptimusAPIClient:
 
     def get_job_replay_config(self, project_name,  job_name, schedule_time) -> dict:
         scheduled_at_str = schedule_time.strftime(TIMESTAMP_FORMAT)
-        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/replay'.format(
+        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/replay-details'.format(
             optimus_host=self.host,
             optimus_project=project_name,
         )

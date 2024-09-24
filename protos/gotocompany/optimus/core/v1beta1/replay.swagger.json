@@ -23,12 +23,12 @@
   "paths": {
     "/v1beta1/project/{projectName}/replay": {
       "get": {
-        "operationId": "ReplayService_GetReplayDetails",
+        "operationId": "ReplayService_ListReplay",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1beta1GetReplayDetailsResponse"
+              "$ref": "#/definitions/v1beta1ListReplayResponse"
             }
           },
           "default": {
@@ -43,35 +43,6 @@
             "name": "projectName",
             "in": "path",
             "required": true,
-            "type": "string"
-          },
-          {
-            "name": "replayId",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "jobNames",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
-          },
-          {
-            "name": "scheduledAt",
-            "in": "query",
-            "required": false,
-            "type": "string",
-            "format": "date-time"
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
             "type": "string"
           }
         ],
@@ -134,6 +105,65 @@
                 }
               }
             }
+          }
+        ],
+        "tags": [
+          "ReplayService"
+        ]
+      }
+    },
+    "/v1beta1/project/{projectName}/replay-details": {
+      "get": {
+        "operationId": "ReplayService_GetReplayDetails",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetReplayDetailsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "replayId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "jobNames",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "scheduledAt",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [

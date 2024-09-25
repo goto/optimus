@@ -101,20 +101,29 @@ func fromProjectProto(conf *pb.ProjectSpecification) (*tenant.Project, error) {
 		presets[lowerName] = newPreset
 	}
 
+	locations := []tenant.Location{}
+	for _, loc := range conf.GetLocations() {
+		location := tenant.NewLocation(loc.GetName(), loc.GetProject(), loc.GetDataset())
+		locations = append(locations, location)
+	}
+
 	project, err := tenant.NewProject(conf.GetName(), pConf)
 	if err != nil {
 		return nil, err
 	}
 
 	project.SetPresets(presets)
+	project.SetLocations(locations)
+
 	return project, nil
 }
 
 func toProjectProto(project *tenant.Project) *pb.ProjectSpecification {
 	return &pb.ProjectSpecification{
-		Name:    project.Name().String(),
-		Config:  project.GetConfigs(),
-		Presets: toProjectPresets(project.GetPresets()),
+		Name:      project.Name().String(),
+		Config:    project.GetConfigs(),
+		Presets:   toProjectPresets(project.GetPresets()),
+		Locations: toProjectLocations(project.GetLocations()),
 	}
 }
 
@@ -131,4 +140,17 @@ func toProjectPresets(presets map[string]tenant.Preset) map[string]*pb.ProjectSp
 		}
 	}
 	return presetPb
+}
+
+func toProjectLocations(locations map[string]tenant.Location) []*pb.ProjectSpecification_Location {
+	projectLocations := []*pb.ProjectSpecification_Location{}
+	for _, loc := range locations {
+		projectLocation := &pb.ProjectSpecification_Location{
+			Name:    loc.Name(),
+			Project: loc.Project(),
+			Dataset: loc.Dataset(),
+		}
+		projectLocations = append(projectLocations, projectLocation)
+	}
+	return projectLocations
 }

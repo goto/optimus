@@ -91,9 +91,10 @@ func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Pr
 
 	projectServiceClient := pb.NewProjectServiceClient(conn)
 	projectSpec := &pb.ProjectSpecification{
-		Name:    project.Name,
-		Config:  project.Config,
-		Presets: toPresetProto(presets),
+		Name:      project.Name,
+		Config:    project.Config,
+		Presets:   toPresetProto(presets),
+		Locations: toLocationProto(project.Locations),
 	}
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), registerTimeout)
@@ -130,4 +131,21 @@ func toPresetProto(presetMap model.PresetsMap) map[string]*pb.ProjectSpecificati
 		}
 	}
 	return presets
+}
+
+func toLocationProto(locations []config.Location) []*pb.ProjectSpecification_Location {
+	if len(locations) == 0 {
+		return nil
+	}
+
+	locationsProto := []*pb.ProjectSpecification_Location{}
+	for _, loc := range locations {
+		locationsProto = append(locationsProto, &pb.ProjectSpecification_Location{
+			Name:    loc.Name,
+			Project: loc.Project,
+			Dataset: loc.Dataset,
+		})
+	}
+
+	return locationsProto
 }

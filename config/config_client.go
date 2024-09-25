@@ -30,6 +30,7 @@ type Project struct {
 	Name        string            `mapstructure:"name"`
 	Config      map[string]string `mapstructure:"config"`
 	PresetsPath string            `mapstructure:"preset_path"`
+	Locations   []Location        `mapstructure:"locations"`
 }
 
 type Auth struct {
@@ -42,6 +43,12 @@ type Namespace struct {
 	Config    map[string]string `mapstructure:"config"`
 	Job       Job               `mapstructure:"job"`
 	Datastore []Datastore       `mapstructure:"datastore"`
+}
+
+type Location struct {
+	Name    string `mapstrucure:"name"`
+	Project string `mapstructure:"project"`
+	Dataset string `mapstructure:"dataset"`
 }
 
 func (c *ClientConfig) GetNamespaceByName(name string) (*Namespace, error) {

@@ -27,8 +27,11 @@ func TestProjectService(t *testing.T) {
 	presetsMap := map[string]tenant.Preset{
 		"test_preset": preset,
 	}
+	location := tenant.NewLocation("location-name", "data-mart", "dataset")
+	locations := []tenant.Location{location}
 
 	savedProject.SetPresets(presetsMap)
+	savedProject.SetLocations(locations)
 
 	t.Run("Save", func(t *testing.T) {
 		t.Run("returns error when fails in saving project", func(t *testing.T) {
@@ -37,10 +40,11 @@ func TestProjectService(t *testing.T) {
 			defer projectRepo.AssertExpectations(t)
 
 			presetRepo := new(presetRepo)
+			locationRepo := new(locationRepo)
 
 			toSaveProj, _ := tenant.NewProject("proj", conf)
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			err := projService.Save(ctx, toSaveProj)
 
 			assert.NotNil(t, err)
@@ -53,6 +57,8 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
 			toSaveProj, _ := tenant.NewProject("proj", conf)
 			toSaveProj.SetPresets(presetsMap)
@@ -60,7 +66,7 @@ func TestProjectService(t *testing.T) {
 			presetRepo.On("Read", ctx, toSaveProj.Name()).Return([]tenant.Preset{}, nil)
 			presetRepo.On("Create", ctx, toSaveProj.Name(), preset).Return(errors.New("error in creating preset"))
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			err = projService.Save(ctx, toSaveProj)
 
 			assert.NotNil(t, err)
@@ -73,14 +79,20 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
 			toSaveProj, _ := tenant.NewProject("proj", conf)
 			toSaveProj.SetPresets(presetsMap)
+			toSaveProj.SetLocations(locations)
 
 			presetRepo.On("Read", ctx, toSaveProj.Name()).Return([]tenant.Preset{}, nil)
 			presetRepo.On("Create", ctx, toSaveProj.Name(), preset).Return(nil)
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			locationRepo.On("Get", ctx, toSaveProj.Name()).Return([]tenant.Location{}, nil)
+			locationRepo.On("Create", ctx, toSaveProj.Name(), location).Return(nil)
+
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			err := projService.Save(ctx, toSaveProj)
 
 			assert.Nil(t, err)
@@ -95,8 +107,10 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			_, err := projService.GetAll(ctx)
 
 			assert.NotNil(t, err)
@@ -110,10 +124,12 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
 			presetRepo.On("Read", ctx, savedProject.Name()).Return(nil, errors.New("error getting presets"))
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			_, err := projService.GetAll(ctx)
 
 			assert.NotNil(t, err)
@@ -127,10 +143,12 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
 			presetRepo.On("Read", ctx, savedProject.Name()).Return([]tenant.Preset{preset}, nil)
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			projs, err := projService.GetAll(ctx)
 
 			assert.Nil(t, err)
@@ -146,8 +164,10 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			_, err := projService.Get(ctx, savedProject.Name())
 
 			assert.NotNil(t, err)
@@ -160,10 +180,12 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
 			presetRepo.On("Read", ctx, savedProject.Name()).Return(nil, errors.New("error getting presets"))
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			_, err := projService.Get(ctx, savedProject.Name())
 
 			assert.NotNil(t, err)
@@ -176,10 +198,13 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
+			locationRepo := new(locationRepo)
+			defer locationRepo.AssertExpectations(t)
 
 			presetRepo.On("Read", ctx, savedProject.Name()).Return([]tenant.Preset{preset}, nil)
+			locationRepo.On("Get", ctx, savedProject.Name()).Return(locations, nil)
 
-			projService := service.NewProjectService(projectRepo, presetRepo)
+			projService := service.NewProjectService(projectRepo, presetRepo, locationRepo)
 			proj, err := projService.Get(ctx, savedProject.Name())
 
 			assert.Nil(t, err)
@@ -241,4 +266,93 @@ func (p *presetRepo) Update(ctx context.Context, projectName tenant.ProjectName,
 func (p *presetRepo) Delete(ctx context.Context, projectName tenant.ProjectName, presetName string) error {
 	args := p.Called(ctx, projectName, presetName)
 	return args.Error(0)
+}
+
+// locationRepo is an autogenerated mock type for the LocationRepository type
+type locationRepo struct {
+	mock.Mock
+}
+
+// Create provides a mock function with given fields: ctx, projectName, location
+func (_m *locationRepo) Create(ctx context.Context, projectName tenant.ProjectName, location tenant.Location) error {
+	ret := _m.Called(ctx, projectName, location)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Create")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, tenant.Location) error); ok {
+		r0 = rf(ctx, projectName, location)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Delete provides a mock function with given fields: ctx, projectName, locationName
+func (_m *locationRepo) Delete(ctx context.Context, projectName tenant.ProjectName, locationName string) error {
+	ret := _m.Called(ctx, projectName, locationName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Delete")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, string) error); ok {
+		r0 = rf(ctx, projectName, locationName)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Get provides a mock function with given fields: ctx, projectName
+func (_m *locationRepo) Get(ctx context.Context, projectName tenant.ProjectName) ([]tenant.Location, error) {
+	ret := _m.Called(ctx, projectName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Get")
+	}
+
+	var r0 []tenant.Location
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName) ([]tenant.Location, error)); ok {
+		return rf(ctx, projectName)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName) []tenant.Location); ok {
+		r0 = rf(ctx, projectName)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]tenant.Location)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName) error); ok {
+		r1 = rf(ctx, projectName)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Update provides a mock function with given fields: ctx, projectName, location
+func (_m *locationRepo) Update(ctx context.Context, projectName tenant.ProjectName, location tenant.Location) error {
+	ret := _m.Called(ctx, projectName, location)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Update")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, tenant.Location) error); ok {
+		r0 = rf(ctx, projectName, location)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }

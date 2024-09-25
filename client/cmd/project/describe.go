@@ -119,8 +119,27 @@ func (d *describeCommand) getProject() (config.Project, error) {
 	if err != nil {
 		return project, err
 	}
+
+	projectResp := response.GetProject()
+
 	return config.Project{
-		Name:   response.GetProject().Name,
-		Config: response.GetProject().Config,
+		Name:      projectResp.Name,
+		Config:    projectResp.Config,
+		Locations: d.parseLocationsProto(projectResp.GetLocations()),
 	}, nil
+}
+
+func (*describeCommand) parseLocationsProto(locationProtos []*pb.ProjectSpecification_Location) []config.Location {
+	locations := []config.Location{}
+
+	for _, lp := range locationProtos {
+		location := config.Location{
+			Name:    lp.GetName(),
+			Project: lp.GetProject(),
+			Dataset: lp.GetDataset(),
+		}
+		locations = append(locations, location)
+	}
+
+	return locations
 }

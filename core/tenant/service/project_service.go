@@ -8,14 +8,18 @@ import (
 )
 
 type ProjectService struct {
-	projectRepo ProjectRepository
-	presetRepo  PresetRepository
+	projectRepo  ProjectRepository
+	presetRepo   PresetRepository
+	locationRepo LocationRepository
 }
 
-func NewProjectService(projectRepo ProjectRepository, presetRepo PresetRepository) *ProjectService {
+func NewProjectService(projectRepo ProjectRepository, presetRepo PresetRepository,
+	locationRepo LocationRepository) *ProjectService {
+
 	return &ProjectService{
-		projectRepo: projectRepo,
-		presetRepo:  presetRepo,
+		projectRepo:  projectRepo,
+		presetRepo:   presetRepo,
+		locationRepo: locationRepo,
 	}
 }
 
@@ -32,12 +36,23 @@ type PresetRepository interface {
 	Delete(ctx context.Context, projectName tenant.ProjectName, presetName string) error
 }
 
+type LocationRepository interface {
+	Create(ctx context.Context, projectName tenant.ProjectName, location tenant.Location) error
+	Get(ctx context.Context, projectName tenant.ProjectName) ([]tenant.Location, error)
+	Update(ctx context.Context, projectName tenant.ProjectName, location tenant.Location) error
+	Delete(ctx context.Context, projectName tenant.ProjectName, locationName string) error
+}
+
 func (s ProjectService) Save(ctx context.Context, project *tenant.Project) error {
 	if err := s.projectRepo.Save(ctx, project); err != nil {
 		return err
 	}
 
-	return s.replacePresets(ctx, project.Name(), project.GetPresets())
+	if err := s.replacePresets(ctx, project.Name(), project.GetPresets()); err != nil {
+		return err
+	}
+
+	return s.syncLocations(ctx, project.Name(), project.GetLocations())
 }
 
 func (s ProjectService) Get(ctx context.Context, name tenant.ProjectName) (*tenant.Project, error) {
@@ -50,8 +65,14 @@ func (s ProjectService) Get(ctx context.Context, name tenant.ProjectName) (*tena
 	if err != nil {
 		return nil, err
 	}
-
 	project.SetPresets(presets)
+
+	locations, err := s.locationRepo.Get(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	project.SetLocations(locations)
+
 	return project, nil
 }
 
@@ -130,6 +151,56 @@ func (ProjectService) getPresetsDiff(incomings map[string]tenant.Preset, existin
 				toUpdate = append(toUpdate, incoming)
 			}
 			continue
+		}
+
+		toCreate = append(toCreate, incoming)
+	}
+
+	return toCreate, toUpdate, toDelete
+}
+
+func (s ProjectService) syncLocations(ctx context.Context, projectName tenant.ProjectName, locations map[string]tenant.Location) error {
+	existingLocations, err := s.locationRepo.Get(ctx, projectName)
+	if err != nil {
+		return err
+	}
+
+	me := errors.NewMultiError("sync locations error")
+
+	toCreate, toUpdate, toDelete := s.getLocationsDiff(locations, existingLocations)
+	for _, loc := range toCreate {
+		me.Append(s.locationRepo.Create(ctx, projectName, loc))
+	}
+
+	for _, loc := range toUpdate {
+		me.Append(s.locationRepo.Update(ctx, projectName, loc))
+	}
+
+	for _, loc := range toDelete {
+		me.Append(s.locationRepo.Delete(ctx, projectName, loc.Name()))
+	}
+
+	return nil
+}
+
+func (s ProjectService) getLocationsDiff(incomings map[string]tenant.Location, existings []tenant.Location) (toCreate, toUpdate, toDelete []tenant.Location) {
+	existingsMap := make(map[string]tenant.Location)
+	for _, existing := range existings {
+		if _, ok := incomings[existing.Name()]; !ok {
+			toDelete = append(toDelete, existing)
+			continue
+		}
+
+		existingsMap[existing.Name()] = existing
+	}
+
+	for _, incoming := range incomings {
+		if existing, ok := existingsMap[incoming.Name()]; ok {
+			if existing.Equal(incoming) {
+				continue
+			}
+
+			toUpdate = append(toUpdate, incoming)
 		}
 
 		toCreate = append(toCreate, incoming)

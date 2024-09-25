@@ -203,6 +203,26 @@
           "additionalProperties": {
             "$ref": "#/definitions/ProjectSpecificationProjectPreset"
           }
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1ProjectSpecificationLocation"
+          }
+        }
+      }
+    },
+    "v1beta1ProjectSpecificationLocation": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "dataset": {
+          "type": "string"
         }
       }
     },

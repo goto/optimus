@@ -33,7 +33,8 @@ type Project struct {
 	name   ProjectName
 	config map[string]string
 
-	presets map[string]Preset
+	presets   map[string]Preset
+	locations map[string]Location
 }
 
 func (p *Project) Name() ProjectName {
@@ -80,6 +81,38 @@ func (p *Project) GetPreset(name string) (Preset, error) {
 	return preset, nil
 }
 
+func (p *Project) SetLocations(locations []Location) {
+	if p.locations == nil {
+		p.locations = make(map[string]Location)
+	}
+
+	for _, loc := range locations {
+		p.locations[loc.Name()] = loc
+	}
+}
+
+func (p *Project) GetLocations() map[string]Location {
+	return p.locations
+}
+
+func (p *Project) GetLocationsList() []Location {
+	locationsList := make([]Location, 0, len(p.locations))
+	for _, loc := range p.locations {
+		locationsList = append(locationsList, loc)
+	}
+
+	return locationsList
+}
+
+func (p *Project) GetLocation(name string) (Location, error) {
+	location, ok := p.locations[name]
+	if !ok {
+		return Location{}, errors.NotFound(EntityProject, "location not found: "+name)
+	}
+
+	return location, nil
+}
+
 func NewProject(name string, config map[string]string) (*Project, error) {
 	prjName, err := ProjectNameFrom(name)
 	if err != nil {
@@ -91,8 +124,9 @@ func NewProject(name string, config map[string]string) (*Project, error) {
 	}
 
 	return &Project{
-		name:    prjName,
-		config:  config,
-		presets: make(map[string]Preset),
+		name:      prjName,
+		config:    config,
+		presets:   make(map[string]Preset),
+		locations: make(map[string]Location),
 	}, nil
 }

@@ -19,7 +19,15 @@ const (
 	failureAlertTemplate        = "optimus-job-failure"
 	slaAlertTemplate            = "optimus-job-sla-miss"
 	successNotificationTemplate = "optimus-job-success"
+
+	ReplayLifeCycle ReplayEventType = "replay-lifecycle"
 )
+
+type ReplayEventType string
+
+func (j ReplayEventType) String() string {
+	return string(j)
+}
 
 func (a *AlertManager) getJobConsoleLink(project, job string) string {
 	return fmt.Sprintf("%s/%s/%s:%s", a.dataConsole, "optimus", project, job)
@@ -106,12 +114,13 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 			"job_name":     attr.JobName,
 			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
+			"state":        attr.State.String(),
 			"console_link": a.getJobConsoleLink(projectName, attr.JobName),
 		},
 		Template: replayTemplate,
 		Labels: map[string]string{
 			"identifier": attr.JobURN,
-			"event_type": strings.ToLower(attr.EventType.String()),
+			"event_type": strings.ToLower(ReplayLifeCycle.String()),
 		},
 	})
 }

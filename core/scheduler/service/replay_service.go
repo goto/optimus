@@ -107,11 +107,11 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 	).Inc()
 
 	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
-		JobName:   jobName.String(),
-		ReplayID:  replayID.String(),
-		Tenant:    t,
-		JobURN:    jobName.GetConsoleURN(t),
-		EventType: scheduler.ReplayCreated,
+		JobName:  jobName.String(),
+		ReplayID: replayID.String(),
+		Tenant:   t,
+		JobURN:   jobName.GetConsoleURN(t),
+		State:    scheduler.ReplayStateCreated,
 	})
 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)

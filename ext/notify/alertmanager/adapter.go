@@ -115,6 +115,7 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
 			"state":        attr.State.String(),
+			"replay_id":    attr.ReplayID,
 			"console_link": a.getJobConsoleLink(projectName, attr.JobName),
 		},
 		Template: replayTemplate,

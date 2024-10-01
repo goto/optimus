@@ -110,7 +110,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		JobName:  jobName.String(),
 		ReplayID: replayID.String(),
 		Tenant:   t,
-		JobURN:   jobName.GetConsoleURN(t),
+		JobURN:   jobName.GetJobURN(t),
 		State:    scheduler.ReplayStateCreated,
 	})
 

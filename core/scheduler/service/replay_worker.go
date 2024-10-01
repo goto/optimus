@@ -77,7 +77,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 				JobName:  jobName.String(),
 				ReplayID: replayID.String(),
 				Tenant:   jobTenant,
-				JobURN:   jobName.GetConsoleURN(jobTenant),
+				JobURN:   jobName.GetJobURN(jobTenant),
 				State:    scheduler.ReplayStateTimeout,
 			})
 		} else {
@@ -85,7 +85,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 				JobName:  jobName.String(),
 				ReplayID: replayID.String(),
 				Tenant:   jobTenant,
-				JobURN:   jobName.GetConsoleURN(jobTenant),
+				JobURN:   jobName.GetJobURN(jobTenant),
 				State:    scheduler.ReplayStateFailed,
 			})
 		}
@@ -129,7 +129,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 				JobName:  replayWithRun.Replay.JobName().String(),
 				ReplayID: replayID.String(),
 				Tenant:   t,
-				JobURN:   replayWithRun.Replay.JobName().GetConsoleURN(t),
+				JobURN:   replayWithRun.Replay.JobName().GetJobURN(t),
 				State:    replayWithRun.Replay.State(),
 			})
 			w.logger.Info("[ReplayID: %s] replay is externally terminated with status [%s]", replayWithRun.Replay.ID().String(), replayWithRun.Replay.State().String())
@@ -163,7 +163,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 				JobName:  replayWithRun.Replay.JobName().String(),
 				ReplayID: replayID.String(),
 				Tenant:   t,
-				JobURN:   replayWithRun.Replay.JobName().GetConsoleURN(t),
+				JobURN:   replayWithRun.Replay.JobName().GetJobURN(t),
 				State:    replayState,
 			})
 			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus, runStatusSummary)

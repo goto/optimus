@@ -1,6 +1,7 @@
 package maxcompute
 
 import (
+	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 
 type McTable interface {
 	Create(schema tableschema.TableSchema, createIfNotExists bool, hints, alias map[string]string) error
+	BatchLoadTables(tableNames []string) ([]odps.Table, error)
 }
 
 type TableHandle struct {
@@ -40,6 +42,11 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		return errors.Wrap(EntityTable, "error while creating table on maxcompute", err)
 	}
 	return nil
+}
+
+func (t TableHandle) Exists(tableName string) bool {
+	_, err := t.mcTable.BatchLoadTables([]string{tableName})
+	return err == nil
 }
 
 func buildTableSchema(t *Table) (tableschema.TableSchema, error) {

@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"context"
+	"fmt"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -12,10 +13,15 @@ import (
 const (
 	accountKey = "DATASTORE_MAXCOMPUTE"
 	store      = "MaxComputeStore"
+
+	maxcomputeID = "maxcompute"
+
+	TableNameSections = 2
 )
 
 type ResourceHandle interface {
 	Create(res *resource.Resource) error
+	Exists(tableName string) bool
 }
 
 type TableResourceHandle interface {
@@ -94,14 +100,68 @@ func (MaxCompute) Backup(ctx context.Context, backup *resource.Backup, resources
 	return nil, errors.InternalError(resourceSchema, "support for Backup is not present", nil)
 }
 
-func (MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
-	return false, errors.InternalError(resourceSchema, "support for Exists is not present", nil)
+func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
+	spanCtx, span := startChildSpan(ctx, "maxcompute/Exist")
+	defer span.End()
+
+	if urn.GetStore() != maxcomputeID {
+		msg := fmt.Sprintf("expected store [%s] but received [%s]", maxcomputeID, urn.GetStore())
+		return false, errors.InvalidArgument(store, msg)
+	}
+
+	account, err := m.secretProvider.GetSecret(spanCtx, tnnt, accountKey)
+	if err != nil {
+		return false, err
+	}
+
+	client, err := m.clientProvider.Get(account.Value())
+	if err != nil {
+		return false, err
+	}
+
+	name, err := resource.NameFrom(urn.GetName())
+	if err != nil {
+		return false, err
+	}
+
+	kindToHandleFn := map[string]func() ResourceHandle{
+		KindTable: func() ResourceHandle {
+			return client.TableHandleFrom()
+		},
+	}
+
+	for _, resourceHandleFn := range kindToHandleFn {
+		resourceName, err := resourceNameFor(name)
+		if err != nil {
+			return true, err
+		}
+
+		if resourceHandleFn().Exists(resourceName) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func startChildSpan(ctx context.Context, name string) (context.Context, trace.Span) {
 	tracer := otel.Tracer("datastore/maxcompute")
 
 	return tracer.Start(ctx, name)
+}
+
+func resourceNameFor(name resource.Name) (string, error) {
+	sections := name.Sections()
+	var strName string
+	if len(sections) < TableNameSections {
+		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
+	}
+	strName = sections[1]
+
+	if strName == "" {
+		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
+	}
+	return strName, nil
 }
 
 func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider) *MaxCompute {

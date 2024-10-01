@@ -21,6 +21,11 @@ func (m *mockTableResourceHandle) Create(res *resource.Resource) error {
 	return args.Error(0)
 }
 
+func (m *mockTableResourceHandle) Exists(tableName string) bool {
+	args := m.Called(tableName)
+	return args.Get(0).(bool)
+}
+
 type mockClient struct {
 	mock.Mock
 }
@@ -200,6 +205,166 @@ func TestMaxComputeStore(t *testing.T) {
 			actualURN, err := mcStore.GetURN(res)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedURN, actualURN)
+		})
+	})
+	t.Run("Exist", func(t *testing.T) {
+		t.Run("returns false and error when store is not maxcompute", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			defer secretProvider.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("random_store", "project.table")
+			assert.NoError(t, err)
+
+			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
+			assert.False(t, actualExist)
+			assert.ErrorContains(t, actualError, "expected store [maxcompute] but received [random_store]")
+		})
+		t.Run("returns false and error when secret is not provided", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(nil, errors.New("not found secret"))
+			defer secretProvider.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("maxcompute", "project.table")
+			assert.NoError(t, err)
+
+			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
+			assert.False(t, actualExist)
+			assert.ErrorContains(t, actualError, "not found secret")
+		})
+		t.Run("returns false and error when not able to get client", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", "secret_value").Return(nil, errors.New("error in client"))
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("maxcompute", "project.table")
+			assert.NoError(t, err)
+
+			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
+			assert.False(t, actualExist)
+			assert.ErrorContains(t, actualError, "error in client")
+		})
+		t.Run("returns true and error when resource name is invalid", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			tableHandle := new(mockTableResourceHandle)
+			defer tableHandle.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("maxcompute", "table")
+			assert.NoError(t, err)
+
+			client.On("TableHandleFrom").Return(tableHandle).Maybe()
+
+			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
+			assert.True(t, actualExist)
+			assert.ErrorContains(t, actualError, "invalid resource name: table")
+		})
+		t.Run("returns true and error when resource name is empty", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			tableHandle := new(mockTableResourceHandle)
+			defer tableHandle.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("maxcompute", "project.")
+			assert.NoError(t, err)
+
+			client.On("TableHandleFrom").Return(tableHandle).Maybe()
+
+			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
+			assert.True(t, actualExist)
+			assert.ErrorContains(t, actualError, "invalid resource name: project.")
+		})
+		t.Run("returns true and nil when schema table resource does exist", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			tableHandle := new(mockTableResourceHandle)
+			defer tableHandle.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("maxcompute", "project.table")
+			assert.NoError(t, err)
+
+			client.On("TableHandleFrom").Return(tableHandle).Maybe()
+			tableHandle.On("Exists", mock.Anything).Return(true)
+
+			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
+			assert.True(t, actualExist)
+			assert.NoError(t, actualError)
+		})
+		t.Run("returns false and nil when schema table resource does not exist", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			tableHandle := new(mockTableResourceHandle)
+			defer tableHandle.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			urn, err := resource.NewURN("maxcompute", "project.table")
+			assert.NoError(t, err)
+
+			client.On("TableHandleFrom").Return(tableHandle)
+			tableHandle.On("Exists", mock.Anything).Return(false)
+
+			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
+			assert.False(t, actualExist)
+			assert.NoError(t, actualError)
 		})
 	})
 }

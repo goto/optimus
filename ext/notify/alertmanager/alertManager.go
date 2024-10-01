@@ -126,7 +126,7 @@ func (a *AlertManager) worker(ctx context.Context) {
 				eventWorkerSendErrCounter.WithLabelValues(e.Project, e.LogTag, err.Error()).Inc()
 				a.workerErrChan <- fmt.Errorf("alert worker: %w", err)
 			} else {
-				successSentCounter.WithLabelValues().Inc()
+				successSentCounter.WithLabelValues(e.Project, e.LogTag).Inc()
 			}
 		case <-ctx.Done():
 			close(a.workerErrChan)

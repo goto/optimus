@@ -230,7 +230,7 @@ func (f *Field) validateNode(checkName bool) error {
 	return mu.ToErr()
 }
 
-func ConvertSpecTo[T Table](res *resource.Resource) (*T, error) {
+func ConvertSpecTo[T Table | View](res *resource.Resource) (*T, error) {
 	var spec T
 	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
 		msg := fmt.Sprintf("%s: not able to decode spec for %s", err, res.FullName())

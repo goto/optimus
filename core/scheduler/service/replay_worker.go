@@ -178,7 +178,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 				JobURN:   replayWithRun.Replay.JobName().GetJobURN(t),
 				State:    replayState,
 			})
-			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus, runStatusSummary)
+			return w.finishReplay(ctx, replayWithRun.Replay.ID(), *syncedRunStatus, runStatusSummary)
 		}
 
 		// pick runs to be triggered

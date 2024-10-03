@@ -2,14 +2,16 @@ package maxcompute_test
 
 import (
 	"errors"
+	"testing"
+
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
-	"github.com/goto/optimus/core/resource"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"testing"
+
+	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/tenant"
 
 	"github.com/goto/optimus/ext/store/maxcompute"
 )

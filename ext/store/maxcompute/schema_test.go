@@ -1,9 +1,10 @@
 package maxcompute_test
 
 import (
+	"testing"
+
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/datatype"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 

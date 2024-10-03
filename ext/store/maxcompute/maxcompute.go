@@ -3,11 +3,13 @@ package maxcompute
 import (
 	"context"
 	"fmt"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (

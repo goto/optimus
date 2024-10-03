@@ -1,8 +1,9 @@
 package maxcompute_test
 
 import (
-	"github.com/goto/optimus/ext/store/maxcompute"
 	"testing"
+
+	"github.com/goto/optimus/ext/store/maxcompute"
 
 	"github.com/stretchr/testify/assert"
 )

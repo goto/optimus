@@ -2,8 +2,10 @@ package maxcompute
 
 import (
 	"encoding/json"
+
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
+
 	"github.com/goto/optimus/internal/errors"
 )
 

@@ -102,6 +102,12 @@ func ResourceNameFor(name resource.Name, kind string) (string, error) {
 }
 
 func ValidateName(res *resource.Resource) error {
+	if res.Version() == resource.DefaultResourceSpecVersion {
+		// do not validate name on version 2 of the spec, since we won't use it to create
+		// the actual resource in the datastore
+		return nil
+	}
+
 	sections := res.Name().Sections()
 	if len(sections) < DatesetNameSections {
 		return errors.InvalidArgument(resource.EntityResource, "invalid sections in name: "+res.FullName())
@@ -127,7 +133,17 @@ func ValidateName(res *resource.Resource) error {
 	return nil
 }
 
+type URNComponent struct {
+	Project string `mapstructure:"project"`
+	Dataset string `mapstructure:"dataset"`
+	Name    string `mapstructure:"name"`
+}
+
 func URNFor(res *resource.Resource) (resource.URN, error) {
+	if res.Version() == resource.DefaultResourceSpecVersion {
+		return RetrieveURNFromSpec(res)
+	}
+
 	dataset, err := DataSetFor(res.Name())
 	if err != nil {
 		return resource.ZeroURN(), err
@@ -144,5 +160,19 @@ func URNFor(res *resource.Resource) (resource.URN, error) {
 	}
 
 	name := dataset.Project + ":" + dataset.DatasetName + "." + resourceName
+	return resource.NewURN(resource.Bigquery.String(), name)
+}
+
+func RetrieveURNFromSpec(res *resource.Resource) (resource.URN, error) {
+	var spec URNComponent
+	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
+		return resource.ZeroURN(), errors.InvalidArgument(resource.EntityResource, "not able to decode spec")
+	}
+
+	name := spec.Project + ":" + spec.Dataset
+	if res.Kind() != KindDataset {
+		name = name + "." + spec.Name
+	}
+
 	return resource.NewURN(resource.Bigquery.String(), name)
 }

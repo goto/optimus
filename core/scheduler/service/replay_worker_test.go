@@ -758,6 +758,11 @@ func (_m *mockReplayScheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant
 	return r0
 }
 
+func (_m *mockReplayScheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error {
+	args := _m.Called(ctx, tnnt, jobName, executionTime, dagRunIDPrefix)
+	return args.Error(0)
+}
+
 // GetJobRuns provides a mock function with given fields: ctx, t, criteria, jobCron
 func (_m *mockReplayScheduler) GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
 	ret := _m.Called(ctx, t, criteria, jobCron)

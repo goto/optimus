@@ -77,21 +77,21 @@ type ReplayService struct {
 	pluginToExecutionProjectKeyMap map[string]string
 }
 
-func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
-	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, tenant, jobName)
+func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, t, jobName)
 	if err != nil {
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return uuid.Nil, err
 	}
 
-	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, tenant, jobName, config)
+	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, t, jobName, config)
 	if err != nil {
 		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
 		return uuid.Nil, err
 	}
 	config.JobConfig = newConfig
 
-	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
+	replayReq := scheduler.NewReplayRequest(jobName, t, config, scheduler.ReplayStateCreated)
 	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
 		r.logger.Error("error validating replay request: %s", err)
 		return uuid.Nil, err
@@ -103,13 +103,19 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		return uuid.Nil, err
 	}
 
-	jobReplayMetric.WithLabelValues(tenant.ProjectName().String(),
-		tenant.NamespaceName().String(),
+	jobReplayMetric.WithLabelValues(t.ProjectName().String(),
+		t.NamespaceName().String(),
 		jobName.String(),
 		replayReq.State().String(),
 	).Inc()
 
-	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{})
+	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+		JobName:  jobName.String(),
+		ReplayID: replayID.String(),
+		Tenant:   t,
+		JobURN:   jobName.GetJobURN(t),
+		State:    scheduler.ReplayStateCreated,
+	})
 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
 

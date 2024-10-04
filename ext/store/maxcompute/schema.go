@@ -16,6 +16,7 @@ const (
 	resourceSchema = "maxcompute_schema"
 
 	KindTable string = "table"
+	KindView  string = "view"
 )
 
 type Schema []*Field

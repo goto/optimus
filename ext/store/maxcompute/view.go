@@ -2,7 +2,6 @@ package maxcompute
 
 import (
 	"bytes"
-	"context"
 	"strings"
 	"text/template"
 
@@ -12,19 +11,15 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-const (
-	viewCreate = "view_create"
-)
-
 type McSqlExecutor interface {
-	ExecSql(taskName, sql string) (*odps.Instance, error)
+	ExecSQl(sql string) (*odps.Instance, error)
 }
 
 type ViewHandle struct {
 	mcView McSqlExecutor
 }
 
-func (v ViewHandle) Create(_ context.Context, res *resource.Resource) error {
+func (v ViewHandle) Create(res *resource.Resource) error {
 	view, err := ConvertSpecTo[View](res)
 	if err != nil {
 		return err
@@ -35,7 +30,7 @@ func (v ViewHandle) Create(_ context.Context, res *resource.Resource) error {
 		return err
 	}
 
-	inst, err := v.mcView.ExecSql(viewCreate, sql)
+	inst, err := v.mcView.ExecSQl(sql)
 	if err != nil {
 		return errors.InternalError(EntityView, "failed to create view "+res.FullName(), err)
 	}
@@ -79,4 +74,9 @@ func ToViewSQL(v *View) (string, error) {
 	}
 
 	return out.String(), nil
+}
+
+func (v ViewHandle) Exists(tableName string) bool {
+	//TODO implement me
+	panic("implement me")
 }

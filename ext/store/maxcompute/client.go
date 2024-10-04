@@ -48,6 +48,10 @@ func (c *MaxComputeClient) TableHandleFrom() TableResourceHandle {
 	return NewTableHandle(&t)
 }
 
+func (c *MaxComputeClient) ViewHandleFrom() ResourceHandle {
+	return NewViewHandle(c)
+}
+
 func collectMaxComputeCredential(jsonData []byte) (*maxComputeCredentials, error) {
 	var creds maxComputeCredentials
 	if err := json.Unmarshal(jsonData, &creds); err != nil {

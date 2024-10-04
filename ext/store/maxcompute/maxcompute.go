@@ -32,6 +32,7 @@ type TableResourceHandle interface {
 
 type Client interface {
 	TableHandleFrom() TableResourceHandle
+	ViewHandleFrom() ResourceHandle
 }
 
 type ClientProvider interface {
@@ -64,6 +65,10 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 	switch res.Kind() {
 	case KindTable:
 		handle := odpsClient.TableHandleFrom()
+		return handle.Create(res)
+
+	case KindView:
+		handle := odpsClient.ViewHandleFrom()
 		return handle.Create(res)
 
 	default:

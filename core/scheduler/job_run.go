@@ -80,11 +80,11 @@ type AlertAttrs struct {
 }
 
 type ReplayNotificationAttrs struct {
-	JobName   string
-	ReplayID  string
-	Tenant    tenant.Tenant
-	JobURN    string
-	EventType ReplayEventType
+	JobName  string
+	ReplayID string
+	Tenant   tenant.Tenant
+	JobURN   string
+	State    ReplayState
 }
 
 type WebhookAttrs struct {

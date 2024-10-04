@@ -166,7 +166,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		// check if replay request is on termination state
 		if syncedRunStatus.IsAllTerminated() {
-			return w.finishReplay(ctx, replayWithRun.Replay, syncedRunStatus, runStatusSummary)
+			return w.finishReplay(ctx, replayWithRun.Replay, *syncedRunStatus, runStatusSummary)
 		}
 
 		// pick runs to be triggered

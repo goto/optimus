@@ -104,7 +104,11 @@ func TestReplayWorker(t *testing.T) {
 			summaryMsg := "replay is finished with run status: success(1)"
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, runsPhaseThree, summaryMsg).Return(nil).Once()
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to process sequential replay request with multiple run", func(t *testing.T) {
@@ -179,7 +183,11 @@ func TestReplayWorker(t *testing.T) {
 			summaryMsg := "replay is finished with run status: success(2)"
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to process parallel replay request", func(t *testing.T) {
@@ -252,7 +260,11 @@ func TestReplayWorker(t *testing.T) {
 			summaryMsg := "replay is finished with run status: success(2)"
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 
@@ -326,8 +338,10 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
 			summaryMsg := "replay is finished with run status: success(2)"
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
-
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to process replay request with parallel mode and creating non existing runs", func(t *testing.T) {
@@ -400,7 +414,11 @@ func TestReplayWorker(t *testing.T) {
 			summaryMsg := "replay is finished with run status: success(2)"
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, mock.Anything, summaryMsg).Return(nil).Once()
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 
@@ -429,8 +447,7 @@ func TestReplayWorker(t *testing.T) {
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(nil, errors.New(errorMsg)).Once()
 			errorMsgToStore := "internal error for entity replay: unable to get job details for jobName: job-a, project: proj: internal error"
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsgToStore).Return(nil).Once()
-
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, nil)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to update replay state as failed if unable to get replay by id", func(t *testing.T) {
@@ -459,7 +476,10 @@ func TestReplayWorker(t *testing.T) {
 			errorMsg := "internal error"
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(nil, errors.New(errorMsg)).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to update replay state as failed if unable to fetch job runs", func(t *testing.T) {
@@ -489,8 +509,10 @@ func TestReplayWorker(t *testing.T) {
 			errorMsg := "internal error"
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(nil, errors.New(errorMsg)).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
-
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to update replay state as failed if unable to update replay once it is synced", func(t *testing.T) {
@@ -526,7 +548,11 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(errors.New(errorMsg)).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to update replay state as failed if unable to do clear batch of runs", func(t *testing.T) {
@@ -562,8 +588,10 @@ func TestReplayWorker(t *testing.T) {
 			errorMsg := "internal error"
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(errors.New(errorMsg)).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
-
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to update replay state as failed if unable to create missing run", func(t *testing.T) {
@@ -601,8 +629,11 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("CreateRun", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), "replayed").Return(errors.New(errorMsg)).Once()
 			errorMsgToStore := "create runs:\n internal error"
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsgToStore).Return(nil).Once()
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 
@@ -677,7 +708,10 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything, mock.Anything).Return(nil).Once()
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 
@@ -705,7 +739,11 @@ func TestReplayWorker(t *testing.T) {
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil).Once()
 			replayRepository.On("GetReplayByID", mock.Anything, replayWithRun.Replay.ID()).Return(replayWithRun, nil).Once()
 
-			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+
+			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 	})

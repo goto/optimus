@@ -166,19 +166,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		// check if replay request is on termination state
 		if syncedRunStatus.IsAllTerminated() {
-			t := replayWithRun.Replay.Tenant()
-			replayState := scheduler.ReplayStateSuccess
-			if syncedRunStatus.IsAnyFailure() {
-				replayState = scheduler.ReplayStateFailed
-			}
-			w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
-				JobName:  replayWithRun.Replay.JobName().String(),
-				ReplayID: replayID.String(),
-				Tenant:   t,
-				JobURN:   replayWithRun.Replay.JobName().GetJobURN(t),
-				State:    replayState,
-			})
-			return w.finishReplay(ctx, replayWithRun.Replay.ID(), *syncedRunStatus, runStatusSummary)
+			return w.finishReplay(ctx, replayWithRun.Replay, syncedRunStatus, runStatusSummary)
 		}
 
 		// pick runs to be triggered
@@ -215,11 +203,20 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 	}
 }
 
-func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus scheduler.JobRunStatusList, runStatusSummary string) error {
+func (w *ReplayWorker) finishReplay(ctx context.Context, replay *scheduler.Replay, syncedRunStatus scheduler.JobRunStatusList, runStatusSummary string) error {
+	replayID := replay.ID()
 	replayState := scheduler.ReplayStateSuccess
 	if syncedRunStatus.IsAnyFailure() {
 		replayState = scheduler.ReplayStateFailed
 	}
+	w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+		JobName:  replay.JobName().String(),
+		ReplayID: replayID.String(),
+		Tenant:   replay.Tenant(),
+		JobURN:   replay.JobName().GetJobURN(replay.Tenant()),
+		State:    replayState,
+	})
+
 	msg := fmt.Sprintf("replay is finished with run status: %s", runStatusSummary)
 	w.logger.Info("[ReplayID: %s] replay finished with status %s", replayID, replayState)
 

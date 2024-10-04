@@ -77,7 +77,7 @@ func (s Store) Create(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, resourceName, err := s.determineDatasetAndResourceName(res)
+	dataset, resourceName, err := determineDatasetAndResourceName(res)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, resourceName, err := s.determineDatasetAndResourceName(res)
+	dataset, resourceName, err := determineDatasetAndResourceName(res)
 	if err != nil {
 		return err
 	}
@@ -146,8 +146,8 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	}
 }
 
-func (Store) determineDatasetAndResourceName(res *resource.Resource) (Dataset, string, error) {
-	if res.Version() == resource.DefaultResourceSpecVersion {
+func determineDatasetAndResourceName(res *resource.Resource) (Dataset, string, error) {
+	if res.Version() == resource.ResourceSpecV2 {
 		bqURN, err := NewResourceURNFromString(res.URN().String())
 		if err != nil {
 			return Dataset{}, "", err

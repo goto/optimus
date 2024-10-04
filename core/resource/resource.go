@@ -18,7 +18,10 @@ const (
 	UnspecifiedImpactChange    UpdateImpact = "unspecified_impact"
 	ResourceDataPipeLineImpact UpdateImpact = "data_impact"
 
-	DefaultResourceSpecVersion = 2
+	ResourceSpecV1 = 1
+	ResourceSpecV2 = 2
+
+	DefaultResourceSpecVersion = ResourceSpecV1
 )
 
 type UpdateImpact string

@@ -11,12 +11,12 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-type McSqlExecutor interface {
+type ViewSqlExecutor interface {
 	ExecSQl(sql string) (*odps.Instance, error)
 }
 
 type ViewHandle struct {
-	mcView McSqlExecutor
+	mcView ViewSqlExecutor
 }
 
 func (v ViewHandle) Create(res *resource.Resource) error {
@@ -24,6 +24,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
+	view.Name = res.Name()
 
 	sql, err := ToViewSQL(view)
 	if err != nil {
@@ -44,8 +45,14 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 	return nil
 }
 
-func NewViewHandle(view McSqlExecutor) *ViewHandle {
-	return &ViewHandle{mcView: view}
+func (v ViewHandle) Update(res *resource.Resource) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (v ViewHandle) Exists(tableName string) bool {
+	//TODO implement me
+	panic("implement me")
 }
 
 func ToViewSQL(v *View) (string, error) {
@@ -59,8 +66,7 @@ func ToViewSQL(v *View) (string, error) {
     ({{ join ", " .Columns }}) {{ if .Description }} 
     comment '{{ .Description}}' {{ end }} 
     as
-	{{ .ViewQuery}}
-;`
+	{{ .ViewQuery}};`
 
 	tpl, err := template.New("DDL_UPSERT_VIEW").Funcs(fns).Parse(tplStr)
 	if err != nil {
@@ -76,7 +82,6 @@ func ToViewSQL(v *View) (string, error) {
 	return out.String(), nil
 }
 
-func (v ViewHandle) Exists(tableName string) bool {
-	//TODO implement me
-	panic("implement me")
+func NewViewHandle(view ViewSqlExecutor) *ViewHandle {
+	return &ViewHandle{mcView: view}
 }

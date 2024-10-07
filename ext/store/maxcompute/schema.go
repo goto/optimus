@@ -31,18 +31,24 @@ func (s Schema) Validate() error {
 	return nil
 }
 
-func (s Schema) ToMaxComputeColumns() ([]tableschema.Column, error) {
-	columns := make([]tableschema.Column, len(s))
+func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, schemaBuilder *tableschema.SchemaBuilder) error {
 	mu := errors.NewMultiError("converting to max compute column")
-	for i, f := range s {
+
+	for _, f := range s {
 		column, err := f.ToColumn()
 		if err != nil {
 			mu.Append(err)
 			continue
 		}
-		columns[i] = column
+
+		if _, ok := partitionColumn[f.Name]; ok {
+			schemaBuilder.PartitionColumn(column)
+		} else {
+			schemaBuilder.Column(column)
+		}
 	}
-	return columns, mu.ToErr()
+
+	return mu.ToErr()
 }
 
 type MapSchema struct {

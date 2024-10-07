@@ -2,16 +2,16 @@ package maxcompute_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/ext/store/maxcompute"
 )
@@ -32,20 +32,35 @@ func (m *mockMaxComputeTable) BatchLoadTables(tableNames []string) ([]odps.Table
 	return args.Get(0).([]odps.Table), args.Error(1)
 }
 
+type mockOdpsIns struct {
+	mock.Mock
+}
+
+func (m *mockOdpsIns) ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error) {
+	args := m.Called(sql, hints)
+	return args.Get(0).(*odps.Instance), args.Error(1)
+}
+
 func TestTableHandle(t *testing.T) {
-	tableName := "test_table"
+	accessID, accessKey, endpoint := "LNRJ5tH1XMSINW5J3TjYAvfX", "lAZBJhdkNbwVj3bej5BuhjwbdV0nSp", "http://service.ap-southeast-5.maxcompute.aliyun.com/api"
+	projectName, tableName := "proj", "test_table"
 	mcStore := resource.MaxCompute
-	tnnt, _ := tenant.NewTenant("proj", "ns")
+	tnnt, _ := tenant.NewTenant(projectName, "ns")
 	metadata := resource.Metadata{
 		Version:     1,
 		Description: "resource description",
 		Labels:      map[string]string{"owner": "optimus"},
 	}
 
+	normalTables := []odps.Table{
+		odps.NewTable(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, tableName),
+	}
+
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			tableHandle := maxcompute.NewTableHandle(table)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{"description": []string{"test create"}}
 			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
@@ -57,7 +72,8 @@ func TestTableHandle(t *testing.T) {
 		})
 		t.Run("returns error when use invalid schema data type", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			tableHandle := maxcompute.NewTableHandle(table)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{
 				"description": "test create",
@@ -83,7 +99,8 @@ func TestTableHandle(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("Create", mock.Anything, false, emptyStringMap, emptyStringMap).Return(existTableErr)
 			defer table.AssertExpectations(t)
-			tableHandle := maxcompute.NewTableHandle(table)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{
 				"description": "test create",
@@ -108,7 +125,8 @@ func TestTableHandle(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("Create", mock.Anything, false, emptyStringMap, emptyStringMap).Return(errors.New("some error"))
 			defer table.AssertExpectations(t)
-			tableHandle := maxcompute.NewTableHandle(table)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{
 				"description": "test create",
@@ -133,7 +151,8 @@ func TestTableHandle(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("Create", mock.Anything, false, emptyStringMap, emptyStringMap).Return(nil)
 			defer table.AssertExpectations(t)
-			tableHandle := maxcompute.NewTableHandle(table)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{
 				"description": "test create",
@@ -162,27 +181,57 @@ func TestTableHandle(t *testing.T) {
 			assert.Nil(t, err)
 		})
 	})
-	t.Run("Exists", func(t *testing.T) {
-		accessID, accessKey, endpoint := "LNRJ5tH1XMSINW5J3TjYAvfX", "lAZBJhdkNbwVj3bej5BuhjwbdV0nSp", "http://service.ap-southeast-5.maxcompute.aliyun.com/api"
-		projectName, tableName := "test-maxcompute", "test_table"
 
+	t.Run("Update", func(t *testing.T) {
+		t.Run("returns error when table is not found on maxcompute", func(t *testing.T) {
+			table := new(mockMaxComputeTable)
+			table.On("BatchLoadTables", mock.Anything).Return([]odps.Table{}, fmt.Errorf("table not found"))
+			defer table.AssertExpectations(t)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
+
+			spec := map[string]any{"description": []string{"test update"}}
+			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = tableHandle.Update(res)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "error while get table on maxcompute")
+		})
+		t.Run("returns error when get table schema", func(t *testing.T) {
+			table := new(mockMaxComputeTable)
+			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
+			defer table.AssertExpectations(t)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
+
+			spec := map[string]any{"description": []string{"test update"}}
+			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = tableHandle.Update(res)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "failed to get old table schema to update for "+tableName)
+		})
+	})
+
+	t.Run("Exists", func(t *testing.T) {
 		t.Run("returns false when error in checking existing tables", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("BatchLoadTables", mock.Anything).Return([]odps.Table{}, errors.New("error in get"))
 			defer table.AssertExpectations(t)
-			tableHandle := maxcompute.NewTableHandle(table)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			exists := tableHandle.Exists(tableName)
 			assert.False(t, exists)
 		})
 		t.Run("returns true when checking existing tables", func(t *testing.T) {
-			tables := []odps.Table{
-				odps.NewTable(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, tableName),
-			}
 			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return(tables, nil)
+			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
 			defer table.AssertExpectations(t)
-			tableHandle := maxcompute.NewTableHandle(table)
+			odpsIns := new(mockOdpsIns)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			exists := tableHandle.Exists(tableName)
 			assert.True(t, exists)

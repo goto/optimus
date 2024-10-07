@@ -23,6 +23,11 @@ func (m *mockTableResourceHandle) Create(res *resource.Resource) error {
 	return args.Error(0)
 }
 
+func (m *mockTableResourceHandle) Update(res *resource.Resource) error {
+	args := m.Called(res)
+	return args.Error(0)
+}
+
 func (m *mockTableResourceHandle) Exists(tableName string) bool {
 	args := m.Called(tableName)
 	return args.Get(0).(bool)
@@ -33,6 +38,11 @@ type mockClient struct {
 }
 
 func (m *mockClient) TableHandleFrom() maxcompute.TableResourceHandle {
+	args := m.Called()
+	return args.Get(0).(maxcompute.TableResourceHandle)
+}
+
+func (m *mockClient) ViewHandleFrom() maxcompute.TableResourceHandle {
 	args := m.Called()
 	return args.Get(0).(maxcompute.TableResourceHandle)
 }
@@ -155,6 +165,89 @@ func TestMaxComputeStore(t *testing.T) {
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
 			err = mcStore.Create(ctx, res)
+			assert.Nil(t, err)
+		})
+	})
+	t.Run("Update", func(t *testing.T) {
+		t.Run("returns error when secret is not provided", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(nil, errors.New("not found secret"))
+			defer secretProvider.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			res, err := resource.NewResource(tableName, maxcompute.KindTable, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = mcStore.Update(ctx, res)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "not found secret")
+		})
+		t.Run("returns error when not able to get client", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", "secret_value").Return(nil, errors.New("error in client"))
+			defer clientProvider.AssertExpectations(t)
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			res, err := resource.NewResource(tableName, maxcompute.KindTable, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = mcStore.Update(ctx, res)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "error in client")
+		})
+		t.Run("returns error when kind is invalid", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			client := new(mockClient)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+
+			res, err := resource.NewResource(tableName, "unknown", store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = mcStore.Update(ctx, res)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "invalid kind for maxcompute resource unknown")
+		})
+		t.Run("return success when calls appropriate handler for table", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			res, err := resource.NewResource(tableName, maxcompute.KindTable, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Update", res).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("TableHandleFrom").Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+			err = mcStore.Update(ctx, res)
 			assert.Nil(t, err)
 		})
 	})

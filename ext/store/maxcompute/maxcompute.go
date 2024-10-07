@@ -23,6 +23,7 @@ const (
 
 type ResourceHandle interface {
 	Create(res *resource.Resource) error
+	Update(res *resource.Resource) error
 	Exists(tableName string) bool
 }
 
@@ -32,7 +33,7 @@ type TableResourceHandle interface {
 
 type Client interface {
 	TableHandleFrom() TableResourceHandle
-	ViewHandleFrom() ResourceHandle
+	ViewHandleFrom() TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -76,8 +77,28 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 	}
 }
 
-func (MaxCompute) Update(ctx context.Context, resource *resource.Resource) error {
-	return errors.InternalError(resourceSchema, "support for Update is not present", nil)
+func (m MaxCompute) Update(ctx context.Context, resource *resource.Resource) error {
+	spanCtx, span := startChildSpan(ctx, "maxcompute/UpdateteResource")
+	defer span.End()
+
+	account, err := m.secretProvider.GetSecret(spanCtx, resource.Tenant(), accountKey)
+	if err != nil {
+		return err
+	}
+
+	odpsClient, err := m.clientProvider.Get(account.Value())
+	if err != nil {
+		return err
+	}
+
+	switch resource.Kind() {
+	case KindTable:
+		handle := odpsClient.TableHandleFrom()
+		return handle.Update(resource)
+
+	default:
+		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+resource.Kind())
+	}
 }
 
 func (MaxCompute) BatchUpdate(ctx context.Context, resources []*resource.Resource) error {
@@ -93,6 +114,14 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 		}
 		table.Name = r.Name()
 		return table.Validate()
+
+	case KindView:
+		view, err := ConvertSpecTo[View](r)
+		if err != nil {
+			return err
+		}
+		view.Name = r.Name()
+		return view.Validate()
 
 	default:
 		return errors.InvalidArgument(resource.EntityResource, "unknown kind")

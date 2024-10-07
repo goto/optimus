@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"fmt"
+	"github.com/aliyun/aliyun-odps-go-sdk/odps/datatype"
 
 	"github.com/goto/optimus/internal/errors"
 )
@@ -41,4 +42,22 @@ func (v VarChar) Validate() error {
 		return errors.InvalidArgument(resourceSchema, fmt.Sprintf("varchar length[%d] is not valid", v.Length))
 	}
 	return nil
+}
+
+func isStruct(dataType datatype.DataType) bool {
+	_, ok := dataType.(datatype.StructType)
+	if !ok {
+		return false
+	}
+
+	return true
+}
+
+func isArrayStruct(dataType datatype.DataType) bool {
+	cast, ok := dataType.(datatype.ArrayType)
+	if !ok {
+		return false
+	}
+
+	return isStruct(cast.ElementType)
 }

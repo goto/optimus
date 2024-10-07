@@ -45,10 +45,10 @@ func NewClient(svcAccount string) (*MaxComputeClient, error) {
 
 func (c *MaxComputeClient) TableHandleFrom() TableResourceHandle {
 	t := c.Tables()
-	return NewTableHandle(&t)
+	return NewTableHandle(c, &t)
 }
 
-func (c *MaxComputeClient) ViewHandleFrom() ResourceHandle {
+func (c *MaxComputeClient) ViewHandleFrom() TableResourceHandle {
 	return NewViewHandle(c)
 }
 

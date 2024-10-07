@@ -1,10 +1,8 @@
 package maxcompute_test
 
 import (
-	"testing"
-
-	"github.com/aliyun/aliyun-odps-go-sdk/odps/datatype"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 
@@ -42,6 +40,7 @@ func TestSchemaValidate(t *testing.T) {
 }
 
 func TestSchemaToMaxComputeColumn(t *testing.T) {
+	emptyPartitionColumnName := map[string]struct{}{}
 	t.Run("return error when schema column type is unknown", func(t *testing.T) {
 		schema := maxcompute.Schema{
 			{
@@ -50,7 +49,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		_, err := schema.ToMaxComputeColumns()
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
 	})
@@ -65,7 +64,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		_, err := schema.ToMaxComputeColumns()
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
 	})
@@ -83,7 +82,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		_, err := schema.ToMaxComputeColumns()
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
 	})
@@ -119,11 +118,12 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		_, err := schema.ToMaxComputeColumns()
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
 	})
 	t.Run("return success when schema column is valid", func(t *testing.T) {
+		builder := tableschema.NewSchemaBuilder()
 		schema := maxcompute.Schema{
 			{
 				Name:         "name",
@@ -185,82 +185,12 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 				Type: "json",
 			},
 		}
-		expectedColumns := []tableschema.Column{
-			{
-				Name:            "name",
-				DefaultValue:    "test",
-				HasDefaultValue: true,
-				Type:            datatype.CharType{Length: 255},
-				Comment:         "",
-				Label:           "owner",
-				ExtendedLabels:  []string{"member"},
-				IsNullable:      false,
-			},
-			{
-				Name:           "introduction",
-				Type:           datatype.VarcharType{Length: 300},
-				Comment:        "",
-				ExtendedLabels: nil,
-				IsNullable:     true,
-			},
-			{
-				Name:           "age",
-				Type:           datatype.IntType,
-				Comment:        "",
-				ExtendedLabels: nil,
-				IsNullable:     true,
-			},
-			{
-				Name:           "weight",
-				Type:           datatype.DecimalType{Precision: 2, Scale: 1},
-				Comment:        "",
-				ExtendedLabels: nil,
-				IsNullable:     true,
-			},
-			{
-				Name:           "friends",
-				Type:           datatype.ArrayType{ElementType: datatype.StringType},
-				Comment:        "",
-				ExtendedLabels: nil,
-				IsNullable:     true,
-			},
-			{
-				Name: "address",
-				Type: datatype.StructType{
-					Fields: []datatype.StructFieldType{
-						{
-							Name: "city",
-							Type: datatype.StringType,
-						},
-						{
-							Name: "zip",
-							Type: datatype.StringType,
-						},
-					},
-				},
-				Comment:        "",
-				ExtendedLabels: nil,
-				IsNullable:     true,
-			},
-			{
-				Name:           "other",
-				Type:           datatype.MapType{KeyType: datatype.StringType, ValueType: datatype.StringType},
-				Comment:        "",
-				ExtendedLabels: nil,
-				IsNullable:     true,
-			},
-			{
-				Name:           "data",
-				Type:           datatype.JsonType{},
-				Comment:        "",
-				ExtendedLabels: nil,
-				IsNullable:     true,
-			},
+		partitionColumnName := map[string]struct{}{
+			"data": {},
 		}
 
-		columns, err := schema.ToMaxComputeColumns()
+		err := schema.ToMaxComputeColumns(partitionColumnName, &builder)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedColumns, columns)
 	})
 }
 

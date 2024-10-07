@@ -31,8 +31,7 @@ func TestToViewSQL(t *testing.T) {
     (a, b, c)  
     comment 'Create Test View'  
     as
-	select a, b, c from t1
-;`,
+	select a, b, c from t1;`,
 			wantErr: nil,
 		},
 		{
@@ -47,8 +46,7 @@ func TestToViewSQL(t *testing.T) {
 			want: `create or replace view if not exists Test_View1
     (a, b, c)  
     as
-	select a, b, c from t1
-;`,
+	select a, b, c from t1;`,
 			wantErr: nil,
 		},
 	}

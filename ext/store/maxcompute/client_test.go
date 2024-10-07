@@ -14,7 +14,7 @@ func TestMaxComputeClient(t *testing.T) {
   "access_id": "LNRJ5tH1XMSINW5J3TjYAvfX",
   "access_key": "lAZBJhdkNbwVj3bej5BuhjwbdV0nSp",
   "endpoint": "http://service.ap-southeast-5.maxcompute.aliyun.com/api",
-  "project_name": "test-maxcompute"
+  "project_name": "proj"
 }
 `
 
@@ -48,7 +48,7 @@ func TestClientProvider(t *testing.T) {
   "access_id": "LNRJ5tH1XMSINW5J3TjYAvfX",
   "access_key": "lAZBJhdkNbwVj3bej5BuhjwbdV0nSp",
   "endpoint": "http://service.ap-southeast-5.maxcompute.aliyun.com/api",
-  "project_name": "test-maxcompute"
+  "project_name": "proj"
 }
 `
 

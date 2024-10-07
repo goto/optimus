@@ -222,8 +222,9 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
 	// get list of in progress runs
 	// stop them on the scheduler
-	jobName := replayWithRun.Replay.JobName()
-	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, replayWithRun.Replay.Tenant(), jobName)
+	replay := replayWithRun.Replay
+	jobName := replay.JobName()
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, replay.Tenant(), jobName)
 	if err != nil {
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return err
@@ -235,16 +236,22 @@ func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *sch
 		return err
 	}
 
-	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateQueued}
+	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateInProgress, scheduler.StateQueued}
 	toBeCanceledRuns := syncedRunStatus.GetSortedRunsByStates(statesForCanceling)
 	if len(toBeCanceledRuns) == 0 {
 		return nil
 	}
-
-	canceledRuns := r.executor.CancelReplayRunsOnScheduler(ctx, replayWithRun.Replay, jobCron, toBeCanceledRuns)
+	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+		JobName:  jobName.String(),
+		ReplayID: replay.ID().String(),
+		Tenant:   replay.Tenant(),
+		JobURN:   jobName.GetJobURN(replay.Tenant()),
+		State:    scheduler.ReplayStateCancelled,
+	})
+	canceledRuns := r.executor.CancelReplayRunsOnScheduler(ctx, replay, jobCron, toBeCanceledRuns)
 
 	// update the status of these runs as failed in DB
-	return r.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), canceledRuns)
+	return r.replayRepo.UpdateReplayRuns(ctx, replay.ID(), canceledRuns)
 }
 
 func (r *ReplayService) CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {

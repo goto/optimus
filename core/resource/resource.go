@@ -189,7 +189,7 @@ func (r *Resource) Spec() map[string]any {
 }
 
 func (r *Resource) Version() int32 {
-	if r.metadata == nil {
+	if r.metadata == nil || r.metadata.Version == 0 {
 		return DefaultResourceSpecVersion
 	}
 

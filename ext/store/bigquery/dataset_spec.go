@@ -22,7 +22,7 @@ var (
 	validDatasetName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	validTableName   = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-	validResourceName = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	validResourceName = regexp.MustCompile(`^[a-z][a-zA-Z0-9._-]+$`)
 )
 
 type DatasetDetails struct {
@@ -105,15 +105,13 @@ func ResourceNameFor(name resource.Name, kind string) (string, error) {
 
 func ValidateName(res *resource.Resource) error {
 	if res.Version() == resource.ResourceSpecV2 {
-		// in v2 resource spec, the whole resource name is validated first instead of individual sections.
-		// then res.Spec() is parsed to obtain the project, dataset and name.
-		if !validResourceName.MatchString(res.Name().String()) {
-			return errors.InvalidArgument(resource.EntityResource, "invalid character in resource name "+res.FullName())
-		}
-
-		return ValidateActualName(res)
+		return validateNameV2(res)
 	}
 
+	return validateNameV1(res)
+}
+
+func validateNameV1(res *resource.Resource) error {
 	sections := res.Name().Sections()
 	if len(sections) < DatesetNameSections {
 		return errors.InvalidArgument(resource.EntityResource, "invalid sections in name: "+res.FullName())
@@ -139,22 +137,26 @@ func ValidateName(res *resource.Resource) error {
 	return nil
 }
 
-func ValidateActualName(res *resource.Resource) error {
+func validateNameV2(res *resource.Resource) error {
+	if !validResourceName.MatchString(res.FullName()) {
+		return errors.InvalidArgument(resource.EntityResource, "invalid character in resource name "+res.FullName())
+	}
+
 	var spec URNComponent
 	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
 		return errors.InvalidArgument(resource.EntityResource, "not able to decode spec")
 	}
 
 	if !validProjectName.MatchString(spec.Project) {
-		return errors.InvalidArgument(resource.EntityResource, "invalid character in project name "+res.FullName())
+		return errors.InvalidArgument(resource.EntityResource, fmt.Sprintf("invalid character in project name: %s from %s ", spec.Project, res.FullName()))
 	}
 
 	if !validDatasetName.MatchString(spec.Dataset) {
-		return errors.InvalidArgument(resource.EntityResource, "invalid character in dataset name "+res.FullName())
+		return errors.InvalidArgument(resource.EntityResource, fmt.Sprintf("invalid character in dataset name: %s from %s ", spec.Dataset, res.FullName()))
 	}
 
 	if res.Kind() != KindDataset && !validTableName.MatchString(spec.Name) {
-		return errors.InvalidArgument(resource.EntityResource, "invalid character in resource name "+res.FullName())
+		return errors.InvalidArgument(resource.EntityResource, fmt.Sprintf("invalid character in table/view name: %s from %s ", spec.Name, res.FullName()))
 	}
 
 	return nil
@@ -168,9 +170,13 @@ type URNComponent struct {
 
 func URNFor(res *resource.Resource) (resource.URN, error) {
 	if res.Version() == resource.ResourceSpecV2 {
-		return RetrieveURNFromSpec(res)
+		return urnForV2(res)
 	}
 
+	return urnForV1(res)
+}
+
+func urnForV1(res *resource.Resource) (resource.URN, error) {
 	dataset, err := DataSetFor(res.Name())
 	if err != nil {
 		return resource.ZeroURN(), err
@@ -190,7 +196,7 @@ func URNFor(res *resource.Resource) (resource.URN, error) {
 	return resource.NewURN(resource.Bigquery.String(), name)
 }
 
-func RetrieveURNFromSpec(res *resource.Resource) (resource.URN, error) {
+func urnForV2(res *resource.Resource) (resource.URN, error) {
 	var spec URNComponent
 	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
 		return resource.ZeroURN(), errors.InvalidArgument(resource.EntityResource, "not able to decode spec")

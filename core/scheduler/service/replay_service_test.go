@@ -430,7 +430,7 @@ func TestReplayService(t *testing.T) {
 
 			replayWorker := new(ReplayExecutor)
 			defer replayWorker.AssertExpectations(t)
-			replayWorker.On("SyncStatus", ctx, replayWithRun, jobCron).Return(&scheduler.JobRunStatusList{}, nil)
+			replayWorker.On("SyncStatus", ctx, replayWithRun, jobCron).Return(scheduler.JobRunStatusList{}, nil)
 
 			replayService := service.NewReplayService(replayRepository, jobRepository, nil, nil, replayWorker, nil, logger, nil, nil)
 			err := replayService.CancelReplay(ctx, replayWithRun)
@@ -726,9 +726,9 @@ func (_m *ReplayExecutor) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, j
 	_m.Called(replayID, jobTenant, jobName)
 }
 
-func (_m *ReplayExecutor) SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (*scheduler.JobRunStatusList, error) {
+func (_m *ReplayExecutor) SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error) {
 	args := _m.Called(ctx, replayWithRun, jobCron)
-	return args.Get(0).(*scheduler.JobRunStatusList), args.Error(1)
+	return args.Get(0).(scheduler.JobRunStatusList), args.Error(1)
 }
 
 func (_m *ReplayExecutor) CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {

@@ -53,7 +53,7 @@ type ReplayValidator interface {
 
 type ReplayExecutor interface {
 	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
-	SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (*scheduler.JobRunStatusList, error)
+	SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
 	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus
 }
 

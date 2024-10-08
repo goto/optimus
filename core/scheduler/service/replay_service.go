@@ -241,13 +241,7 @@ func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *sch
 	if len(toBeCanceledRuns) == 0 {
 		return nil
 	}
-	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
-		JobName:  jobName.String(),
-		ReplayID: replay.ID().String(),
-		Tenant:   replay.Tenant(),
-		JobURN:   jobName.GetJobURN(replay.Tenant()),
-		State:    scheduler.ReplayStateCancelled,
-	})
+
 	canceledRuns := r.executor.CancelReplayRunsOnScheduler(ctx, replay, jobCron, toBeCanceledRuns)
 
 	// update the status of these runs as failed in DB

@@ -21,11 +21,12 @@ const (
 )
 
 type ReplayWorker struct {
-	logger     log.Logger
-	replayRepo ReplayRepository
-	jobRepo    JobRepository
-	scheduler  ReplayScheduler
-	config     config.ReplayConfig
+	logger       log.Logger
+	replayRepo   ReplayRepository
+	jobRepo      JobRepository
+	scheduler    ReplayScheduler
+	config       config.ReplayConfig
+	alertManager AlertManager
 }
 
 type ReplayScheduler interface {
@@ -36,13 +37,14 @@ type ReplayScheduler interface {
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 }
 
-func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig) *ReplayWorker {
+func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig, alertManager AlertManager) *ReplayWorker {
 	return &ReplayWorker{
-		logger:     logger,
-		jobRepo:    jobRepo,
-		replayRepo: replayRepository,
-		config:     cfg,
-		scheduler:  scheduler,
+		logger:       logger,
+		jobRepo:      jobRepo,
+		replayRepo:   replayRepository,
+		config:       cfg,
+		scheduler:    scheduler,
+		alertManager: alertManager,
 	}
 }
 
@@ -71,6 +73,21 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 		errMessage := err.Error()
 		if errors.Is(err, context.DeadlineExceeded) {
 			errMessage = "replay execution timed out"
+			w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+				JobName:  jobName.String(),
+				ReplayID: replayID.String(),
+				Tenant:   jobTenant,
+				JobURN:   jobName.GetJobURN(jobTenant),
+				State:    scheduler.ReplayStateTimeout,
+			})
+		} else {
+			w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+				JobName:  jobName.String(),
+				ReplayID: replayID.String(),
+				Tenant:   jobTenant,
+				JobURN:   jobName.GetJobURN(jobTenant),
+				State:    scheduler.ReplayStateFailed,
+			})
 		}
 		w.logger.Error("[ReplayID: %s] unable to execute replay for job [%s]: %s", replayID.String(), jobName.String(), errMessage)
 
@@ -100,20 +117,28 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		w.logger.Info("[ReplayID: %s] executing replay...", replayID)
 
 		// sync run first
-		storedReplayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
+		replayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
 		if err != nil {
 			w.logger.Error("[ReplayID: %s] unable to get existing runs: %s", replayID.String(), err)
 			return err
 		}
-		replayWithRun := storedReplayWithRun
 
-		if storedReplayWithRun.Replay.IsTerminated() {
-			w.logger.Info("[ReplayID: %s] replay is externally terminated with status [%s]", replayWithRun.Replay.ID().String(), storedReplayWithRun.Replay.State().String())
+		if replayWithRun.Replay.IsTerminated() {
+			t := replayWithRun.Replay.Tenant()
+			w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+				JobName:  replayWithRun.Replay.JobName().String(),
+				ReplayID: replayID.String(),
+				Tenant:   t,
+				JobURN:   replayWithRun.Replay.JobName().GetJobURN(t),
+				State:    replayWithRun.Replay.State(),
+			})
+			w.logger.Info("[ReplayID: %s] replay is externally terminated with status [%s]", replayWithRun.Replay.ID().String(), replayWithRun.Replay.State().String())
 			return nil
 		}
 
 		incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
 		if err != nil {
+			// todo: lets not kill watchers on such errors
 			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayWithRun.Replay.ID().String(), err)
 			return err
 		}
@@ -129,7 +154,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		// check if replay request is on termination state
 		if syncedRunStatus.IsAllTerminated() {
-			return w.finishReplay(ctx, replayWithRun.Replay.ID(), syncedRunStatus, runStatusSummary)
+			return w.finishReplay(ctx, replayWithRun.Replay, syncedRunStatus, runStatusSummary)
 		}
 
 		// pick runs to be triggered
@@ -166,11 +191,20 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 	}
 }
 
-func (w *ReplayWorker) finishReplay(ctx context.Context, replayID uuid.UUID, syncedRunStatus scheduler.JobRunStatusList, runStatusSummary string) error {
+func (w *ReplayWorker) finishReplay(ctx context.Context, replay *scheduler.Replay, syncedRunStatus scheduler.JobRunStatusList, runStatusSummary string) error {
+	replayID := replay.ID()
 	replayState := scheduler.ReplayStateSuccess
 	if syncedRunStatus.IsAnyFailure() {
 		replayState = scheduler.ReplayStateFailed
 	}
+	w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+		JobName:  replay.JobName().String(),
+		ReplayID: replayID.String(),
+		Tenant:   replay.Tenant(),
+		JobURN:   replay.JobName().GetJobURN(replay.Tenant()),
+		State:    replayState,
+	})
+
 	msg := fmt.Sprintf("replay is finished with run status: %s", runStatusSummary)
 	w.logger.Info("[ReplayID: %s] replay finished with status %s", replayID, replayState)
 

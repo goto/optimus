@@ -226,6 +226,119 @@ func TestBigqueryStore(t *testing.T) {
 			err = bqStore.Create(ctx, extTable)
 			assert.Nil(t, err)
 		})
+
+		// v2 spec tests
+		metadataV2 := resource.Metadata{
+			Version: resource.ResourceSpecV2,
+		}
+		expectedDs := bigquery.Dataset{Project: "project-new", DatasetName: "dataset-new"}
+
+		t.Run("calls appropriate handler for dataset with v2 spec", func(t *testing.T) {
+			specV2 := map[string]any{
+				"description": "resource",
+				"project":     "project-new",
+				"dataset":     "dataset-new",
+			}
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			datasetRes, err := resource.NewResource("project-dataset", bigquery.KindDataset, store, tnnt, &metadataV2, specV2)
+			assert.Nil(t, err)
+
+			datasetHandle := new(mockTableResourceHandle)
+			datasetHandle.On("Create", mock.Anything, datasetRes).Return(nil)
+			defer datasetHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("Close").Return(nil)
+			client.On("DatasetHandleFrom", expectedDs).Return(datasetHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", mock.Anything, "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			err = bqStore.Create(ctx, datasetRes)
+			assert.Nil(t, err)
+		})
+
+		t.Run("calls appropriate handler for table with v2 spec", func(t *testing.T) {
+			specV2 := map[string]any{
+				"description": "resource",
+				"project":     "project-new",
+				"dataset":     "dataset-new",
+				"name":        "table-new",
+			}
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			tableRes, err := resource.NewResource("project.dataset.table", bigquery.KindTable, store, tnnt, &metadataV2, specV2)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Create", mock.Anything, tableRes).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("Close").Return(nil)
+			client.On("TableHandleFrom", expectedDs, "table-new").Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", mock.Anything, "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			err = bqStore.Create(ctx, tableRes)
+			assert.Nil(t, err)
+		})
+
+		t.Run("calls appropriate handler for view with v2 spec", func(t *testing.T) {
+			specV2 := map[string]any{
+				"description": "resource",
+				"project":     "project-new",
+				"dataset":     "dataset-new",
+				"name":        "view-new",
+			}
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			viewRes, err := resource.NewResource("project.dataset.table", bigquery.KindView, store, tnnt, &metadataV2, specV2)
+			assert.NoError(t, err)
+
+			viewHandle := new(mockTableResourceHandle)
+			viewHandle.On("Create", mock.Anything, viewRes).Return(nil)
+			defer viewHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("Close").Return(nil)
+			client.On("ViewHandleFrom", expectedDs, "view-new").Return(viewHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", mock.Anything, "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			err = bqStore.Create(ctx, viewRes)
+			assert.Nil(t, err)
+		})
 	})
 	t.Run("Update", func(t *testing.T) {
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
@@ -424,6 +537,119 @@ func TestBigqueryStore(t *testing.T) {
 			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
 
 			err = bqStore.Update(ctx, extTable)
+			assert.Nil(t, err)
+		})
+
+		// v2 spec tests
+		metadataV2 := resource.Metadata{
+			Version: resource.ResourceSpecV2,
+		}
+		expectedDs := bigquery.Dataset{Project: "project-new", DatasetName: "dataset-new"}
+
+		t.Run("calls appropriate handler for dataset with v2 spec", func(t *testing.T) {
+			specV2 := map[string]any{
+				"description": "resource",
+				"project":     "project-new",
+				"dataset":     "dataset-new",
+			}
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			datasetRes, err := resource.NewResource("project-dataset", bigquery.KindDataset, store, tnnt, &metadataV2, specV2)
+			assert.Nil(t, err)
+
+			datasetHandle := new(mockTableResourceHandle)
+			datasetHandle.On("Update", mock.Anything, datasetRes).Return(nil)
+			defer datasetHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("Close").Return(nil)
+			client.On("DatasetHandleFrom", expectedDs).Return(datasetHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", mock.Anything, "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			err = bqStore.Update(ctx, datasetRes)
+			assert.Nil(t, err)
+		})
+
+		t.Run("calls appropriate handler for table with v2 spec", func(t *testing.T) {
+			specV2 := map[string]any{
+				"description": "resource",
+				"project":     "project-new",
+				"dataset":     "dataset-new",
+				"name":        "table-new",
+			}
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			tableRes, err := resource.NewResource("project.dataset.table", bigquery.KindTable, store, tnnt, &metadataV2, specV2)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Update", mock.Anything, tableRes).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("Close").Return(nil)
+			client.On("TableHandleFrom", expectedDs, "table-new").Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", mock.Anything, "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			err = bqStore.Update(ctx, tableRes)
+			assert.Nil(t, err)
+		})
+
+		t.Run("calls appropriate handler for view with v2 spec", func(t *testing.T) {
+			specV2 := map[string]any{
+				"description": "resource",
+				"project":     "project-new",
+				"dataset":     "dataset-new",
+				"name":        "view-new",
+			}
+
+			pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_BIGQUERY").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			viewRes, err := resource.NewResource("project.dataset.table", bigquery.KindView, store, tnnt, &metadataV2, specV2)
+			assert.NoError(t, err)
+
+			viewHandle := new(mockTableResourceHandle)
+			viewHandle.On("Update", mock.Anything, viewRes).Return(nil)
+			defer viewHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("Close").Return(nil)
+			client.On("ViewHandleFrom", expectedDs, "view-new").Return(viewHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", mock.Anything, "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			bqStore := bigquery.NewBigqueryDataStore(secretProvider, clientProvider)
+
+			err = bqStore.Update(ctx, viewRes)
 			assert.Nil(t, err)
 		})
 	})

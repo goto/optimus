@@ -435,6 +435,9 @@ func (rh ResourceHandler) GetResourceChangelogs(ctx context.Context, req *pb.Get
 	}
 
 	resourceName := resource.Name(req.GetResourceName())
+	if resourceName == "" {
+		return nil, errors.GRPCErr(errors.InvalidArgument(resource.EntityResource, "resource name is empty"))
+	}
 
 	changelogs, err := rh.changelogService.GetChangelogs(ctx, projectName, resourceName)
 	if err != nil {

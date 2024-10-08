@@ -77,7 +77,7 @@ func (s Store) Create(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, resourceName, err := determineDatasetAndResourceName(res)
+	dataset, resourceName, err := getDatasetAndResourceName(res)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, resourceName, err := determineDatasetAndResourceName(res)
+	dataset, resourceName, err := getDatasetAndResourceName(res)
 	if err != nil {
 		return err
 	}
@@ -146,19 +146,19 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	}
 }
 
-func determineDatasetAndResourceName(res *resource.Resource) (Dataset, string, error) {
+func getDatasetAndResourceName(res *resource.Resource) (Dataset, string, error) {
 	if res.Version() == resource.ResourceSpecV2 {
-		bqURN, err := NewResourceURNFromString(res.URN().String())
+		bqURN, err := getURNComponent(res)
 		if err != nil {
 			return Dataset{}, "", err
 		}
 
-		dataset, err := DataSetFrom(bqURN.Project(), bqURN.Dataset())
+		dataset, err := DataSetFrom(bqURN.Project, bqURN.Dataset)
 		if err != nil {
 			return Dataset{}, "", err
 		}
 
-		return dataset, bqURN.Name(), nil
+		return dataset, bqURN.Name, nil
 	}
 
 	dataset, err := DataSetFor(res.Name())

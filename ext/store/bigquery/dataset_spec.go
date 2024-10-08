@@ -196,9 +196,18 @@ func urnForV1(res *resource.Resource) (resource.URN, error) {
 	return resource.NewURN(resource.Bigquery.String(), name)
 }
 
-func urnForV2(res *resource.Resource) (resource.URN, error) {
+func getURNComponent(res *resource.Resource) (URNComponent, error) {
 	var spec URNComponent
 	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
+		return spec, err
+	}
+
+	return spec, nil
+}
+
+func urnForV2(res *resource.Resource) (resource.URN, error) {
+	spec, err := getURNComponent(res)
+	if err != nil {
 		return resource.ZeroURN(), errors.InvalidArgument(resource.EntityResource, "not able to decode spec")
 	}
 

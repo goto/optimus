@@ -92,7 +92,7 @@ func CreateIfDatasetDoesNotExist(ctx context.Context, client Client, dataset Dat
 }
 
 func BackupTable(ctx context.Context, backup *resource.Backup, source *resource.Resource, client Client) (string, error) {
-	sourceDataset, sourceName, err := determineDatasetAndResourceName(source)
+	sourceDataset, sourceName, err := getDatasetAndResourceName(source)
 	if err != nil {
 		return "", err
 	}

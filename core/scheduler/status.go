@@ -16,6 +16,7 @@ const (
 	StateAccepted State = "accepted"
 	StateRunning  State = "running"
 	StateQueued   State = "queued"
+	StateCanceled State = "canceled"
 
 	StateRetry State = "retried"
 
@@ -28,8 +29,6 @@ const (
 
 	StateMissing State = "missing"
 )
-
-var TaskEndStates = []State{StateSuccess, StateFailed, StateRetry}
 
 type State string
 

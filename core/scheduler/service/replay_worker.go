@@ -33,6 +33,7 @@ type ReplayScheduler interface {
 	Clear(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error
 	ClearBatch(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, startTime, endTime time.Time) error
 
+	CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error
 	CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 }
@@ -98,6 +99,15 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 	}
 }
 
+func (w *ReplayWorker) SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error) {
+	incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
+	if err != nil {
+		w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayWithRun.Replay.ID().String(), err)
+		return scheduler.JobRunStatusList{}, err
+	}
+	return syncStatus(replayWithRun.Runs, incomingRuns), nil
+}
+
 func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
 	executionLoopCount := 0
 	for {
@@ -136,14 +146,13 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			return nil
 		}
 
-		incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
+		syncedRunStatus, err := w.SyncStatus(ctx, replayWithRun, jobCron)
 		if err != nil {
 			// todo: lets not kill watchers on such errors
 			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayWithRun.Replay.ID().String(), err)
 			return err
 		}
-		existingRuns := replayWithRun.Runs
-		syncedRunStatus := w.syncStatus(existingRuns, incomingRuns)
+
 		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, syncedRunStatus, ""); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayWithRun.Replay.ID(), err)
 			return err
@@ -224,6 +233,24 @@ func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.Repla
 	return w.scheduler.GetJobRuns(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
 }
 
+func (w *ReplayWorker) CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {
+	var canceledRuns []*scheduler.JobRunStatus
+	for _, run := range runs {
+		logicalTime := run.GetLogicalTime(jobCron)
+
+		w.logger.Info("[ReplayID: %s] Canceling run with logical time: %s", replay.ID(), logicalTime)
+		if err := w.scheduler.CancelRun(ctx, replay.Tenant(), replay.JobName(), logicalTime, prefixReplayed); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to cancel job run for job: %s, Schedule Time: %s, err: %s", replay.ID(), replay.JobName(), run.ScheduledAt, err.Error())
+			continue
+		}
+		canceledRuns = append(canceledRuns, &scheduler.JobRunStatus{
+			ScheduledAt: run.ScheduledAt,
+			State:       scheduler.StateCanceled,
+		})
+	}
+	return canceledRuns
+}
+
 func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.ScheduleSpec, replayReq *scheduler.Replay, runs ...*scheduler.JobRunStatus) error {
 	// clear runs
 	pendingRuns := scheduler.JobRunStatusList(runs).GetSortedRunsByStates([]scheduler.State{scheduler.StatePending})
@@ -255,7 +282,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 // syncStatus syncs existing and incoming runs
 // replay status: created -> in_progress -> [success, failed]
 // replay runs: [missing, pending] -> in_progress -> [success, failed]
-func (*ReplayWorker) syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) scheduler.JobRunStatusList {
+func syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) scheduler.JobRunStatusList {
 	incomingRunStatusMap := scheduler.JobRunStatusList(incomingJobRuns).ToRunStatusMap()
 	existingRunStatusMap := scheduler.JobRunStatusList(existingJobRuns).ToRunStatusMap()
 

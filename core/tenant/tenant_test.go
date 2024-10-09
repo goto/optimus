@@ -35,8 +35,11 @@ func TestAggregateRootTenant(t *testing.T) {
 			tenant.ProjectStoragePathKey: "gs://location",
 			"BUCKET":                     "gs://some_folder",
 		}
+		projectVars := map[string]string{
+			"WAREHOUSE_PROJECT": "project",
+		}
 
-		project, _ := tenant.NewProject("test-project", projectConf)
+		project, _ := tenant.NewProject("test-project", projectConf, projectVars)
 		namespace, _ := tenant.NewNamespace("test-ns", project.Name(), map[string]string{
 			"BUCKET":       "gs://ns_folder",
 			"OTHER_CONFIG": "optimus",
@@ -116,6 +119,29 @@ func TestAggregateRootTenant(t *testing.T) {
 				secMap := details.SecretsMap()
 				assert.Len(t, secMap, 2)
 				assert.Equal(t, "value2", secMap[p2.Name().String()])
+			})
+			t.Run("returns tenant variables", func(t *testing.T) {
+				details, err := tenant.NewTenantDetails(project, namespace, nil)
+				assert.NoError(t, err)
+
+				tenantVariables := details.GetVariables()
+				assert.EqualValues(t, project.GetVariables(), tenantVariables)
+			})
+			t.Run("returns a single tenant variable", func(t *testing.T) {
+				details, err := tenant.NewTenantDetails(project, namespace, nil)
+				assert.NoError(t, err)
+
+				val, err := details.GetVariable("WAREHOUSE_PROJECT")
+				assert.NoError(t, err)
+				assert.Equal(t, "project", val)
+			})
+			t.Run("returns error if a referred variable does not exist", func(t *testing.T) {
+				details, err := tenant.NewTenantDetails(project, namespace, nil)
+				assert.NoError(t, err)
+
+				_, err = details.GetVariable("NONEXISTENT_VARIABLE")
+				assert.Error(t, err)
+				assert.EqualError(t, err, "not found for entity tenant: variable NONEXISTENT_VARIABLE not present in tenant")
 			})
 		})
 	})

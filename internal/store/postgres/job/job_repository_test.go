@@ -27,7 +27,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 
 	otherProj, err := tenant.NewProject("test-other-proj",
@@ -35,7 +35,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			"bucket":                     "gs://some_folder-3",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 
 	namespace, err := tenant.NewNamespace("test-ns", proj.Name(),

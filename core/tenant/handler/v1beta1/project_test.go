@@ -23,7 +23,8 @@ func TestProjectHandler(t *testing.T) {
 		tenant.ProjectStoragePathKey: "gs://location",
 		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", conf)
+	projectVars := map[string]string{}
+	savedProject, _ := tenant.NewProject("savedProj", conf, projectVars)
 
 	t.Run("RegisterProject", func(t *testing.T) {
 		t.Run("returns error when name is empty", func(t *testing.T) {
@@ -153,7 +154,7 @@ func TestProjectHandler(t *testing.T) {
 				"retrieve project [savedProj]")
 		})
 		t.Run("returns the project successfully", func(t *testing.T) {
-			savedProj, _ := tenant.NewProject("savedProj", conf)
+			savedProj, _ := tenant.NewProject("savedProj", conf, projectVars)
 			pres := tenant.NewPresetWithConfig("yesterday", "description", window.SimpleConfig{
 				Size:       "1d",
 				ShiftBy:    "",

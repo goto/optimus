@@ -22,7 +22,7 @@ func TestPostgresNamespaceRepository(t *testing.T) {
 			transporterKafkaBrokerKey:    "10.12.12.12:6668,10.12.12.13:6668",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 	ns, _ := tenant.NewNamespace("n-optimus-1", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",

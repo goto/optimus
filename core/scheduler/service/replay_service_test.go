@@ -62,8 +62,9 @@ func TestReplayService(t *testing.T) {
 		"STORAGE_PATH":             "file:///tmp/",
 		"SCHEDULER_HOST":           "http://localhost",
 	}
+	projectVars := map[string]string{}
 	namespaceEntity, _ := tenant.NewNamespace(namespaceName.String(), projName, namespaceCfg)
-	projectEntity, _ := tenant.NewProject(projName.String(), projectCfg)
+	projectEntity, _ := tenant.NewProject(projName.String(), projectCfg, projectVars)
 	tenantWithDetails, _ := tenant.NewTenantDetails(projectEntity, namespaceEntity, tenant.PlainTextSecrets{})
 
 	taskNameToExecutionProjectMap := map[string]string{

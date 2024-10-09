@@ -647,8 +647,9 @@ func TestJobRunHandler(t *testing.T) {
 				"STORAGE_PATH":   "file://",
 				"SCHEDULER_HOST": "http://scheduler",
 			}
+			projectVars := map[string]string{}
 
-			project, err := tenant.NewProject(projectName, projectConfig)
+			project, err := tenant.NewProject(projectName, projectConfig, projectVars)
 			assert.NotNil(t, project)
 			assert.NoError(t, err)
 

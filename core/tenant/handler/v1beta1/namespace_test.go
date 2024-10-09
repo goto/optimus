@@ -22,7 +22,8 @@ func TestNamespaceHandler(t *testing.T) {
 		tenant.ProjectStoragePathKey: "gs://location",
 		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", projectConf)
+	projectVars := map[string]string{}
+	savedProject, _ := tenant.NewProject("savedProj", projectConf, projectVars)
 	savedNS, _ := tenant.NewNamespace("savedNS", savedProject.Name(), map[string]string{"BUCKET": "gs://some_folder"})
 
 	t.Run("RegisterProjectNamespace", func(t *testing.T) {

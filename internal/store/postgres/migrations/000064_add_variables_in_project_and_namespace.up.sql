@@ -1,0 +1,2 @@
+ALTER TABLE project ADD COLUMN IF NOT EXISTS variables jsonb NULL;
+ALTER TABLE namespace ADD COLUMN IF NOT EXISTS variables jsonb NULL;

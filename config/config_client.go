@@ -29,6 +29,7 @@ type Job struct {
 type Project struct {
 	Name        string            `mapstructure:"name"`
 	Config      map[string]string `mapstructure:"config"`
+	Variables   map[string]string `mapstructure:"variables"`
 	PresetsPath string            `mapstructure:"preset_path"`
 }
 

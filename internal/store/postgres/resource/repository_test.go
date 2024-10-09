@@ -437,7 +437,7 @@ func dbSetup() *pgxpool.Pool {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 	projRepo := tenantPostgres.NewProjectRepository(pool)
 	err := projRepo.Save(ctx, proj)
 	if err != nil {

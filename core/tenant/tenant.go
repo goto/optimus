@@ -1,6 +1,8 @@
 package tenant
 
 import (
+	"fmt"
+
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
 )
@@ -84,9 +86,22 @@ func (w *WithDetails) GetConfig(key string) (string, error) {
 	return "", errors.NotFound(EntityTenant, "config not present in tenant "+key)
 }
 
+func (w *WithDetails) GetVariable(key string) (string, error) {
+	variable, err := w.project.GetVariable(key)
+	if err == nil {
+		return variable, nil
+	}
+
+	return "", errors.NotFound(EntityTenant, fmt.Sprintf("variable %s not present in tenant", key))
+}
+
 func (w *WithDetails) GetConfigs() map[string]string {
 	m1 := w.namespace.GetConfigs()
 	return utils.MergeMaps(w.project.GetConfigs(), m1)
+}
+
+func (w *WithDetails) GetVariables() map[string]string {
+	return w.project.GetVariables()
 }
 
 func (w *WithDetails) Project() *Project {

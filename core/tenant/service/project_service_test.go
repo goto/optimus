@@ -19,7 +19,8 @@ func TestProjectService(t *testing.T) {
 		tenant.ProjectStoragePathKey: "gs://location",
 		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", conf)
+	projectVars := map[string]string{}
+	savedProject, _ := tenant.NewProject("savedProj", conf, projectVars)
 
 	preset, err := tenant.NewPreset("test_preset", "preset for testing", "1d", "1h", "", "")
 	assert.NoError(t, err)
@@ -38,7 +39,7 @@ func TestProjectService(t *testing.T) {
 
 			presetRepo := new(presetRepo)
 
-			toSaveProj, _ := tenant.NewProject("proj", conf)
+			toSaveProj, _ := tenant.NewProject("proj", conf, projectVars)
 
 			projService := service.NewProjectService(projectRepo, presetRepo)
 			err := projService.Save(ctx, toSaveProj)
@@ -54,7 +55,7 @@ func TestProjectService(t *testing.T) {
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
 
-			toSaveProj, _ := tenant.NewProject("proj", conf)
+			toSaveProj, _ := tenant.NewProject("proj", conf, projectVars)
 			toSaveProj.SetPresets(presetsMap)
 
 			presetRepo.On("Read", ctx, toSaveProj.Name()).Return([]tenant.Preset{}, nil)
@@ -74,7 +75,7 @@ func TestProjectService(t *testing.T) {
 			presetRepo := new(presetRepo)
 			defer presetRepo.AssertExpectations(t)
 
-			toSaveProj, _ := tenant.NewProject("proj", conf)
+			toSaveProj, _ := tenant.NewProject("proj", conf, projectVars)
 			toSaveProj.SetPresets(presetsMap)
 
 			presetRepo.On("Read", ctx, toSaveProj.Name()).Return([]tenant.Preset{}, nil)

@@ -34,6 +34,7 @@ type SchedulerRunGetter interface {
 type ReplayRepository interface {
 	RegisterReplay(ctx context.Context, replay *scheduler.Replay, runs []*scheduler.JobRunStatus) (uuid.UUID, error)
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
+	UpdateReplayRuns(ctx context.Context, replayID uuid.UUID, runs []*scheduler.JobRunStatus) error
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
 
 	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
@@ -52,6 +53,8 @@ type ReplayValidator interface {
 
 type ReplayExecutor interface {
 	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+	SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
+	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus
 }
 
 type ReplayService struct {
@@ -216,13 +219,47 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 	return runs, nil
 }
 
+func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
+	// get list of in progress runs
+	// stop them on the scheduler
+	replay := replayWithRun.Replay
+	jobName := replay.JobName()
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, replay.Tenant(), jobName)
+	if err != nil {
+		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
+		return err
+	}
+
+	syncedRunStatus, err := r.executor.SyncStatus(ctx, replayWithRun, jobCron)
+	if err != nil {
+		r.logger.Error("unable to sync replay runs status for job [%s]: %s", jobName.String(), err.Error())
+		return err
+	}
+
+	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateInProgress, scheduler.StateQueued}
+	toBeCanceledRuns := syncedRunStatus.GetSortedRunsByStates(statesForCanceling)
+	if len(toBeCanceledRuns) == 0 {
+		return nil
+	}
+
+	canceledRuns := r.executor.CancelReplayRunsOnScheduler(ctx, replay, jobCron, toBeCanceledRuns)
+
+	// update the status of these runs as failed in DB
+	return r.replayRepo.UpdateReplayRuns(ctx, replay.ID(), canceledRuns)
+}
+
 func (r *ReplayService) CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
 	if replayWithRun.Replay.IsTerminated() {
 		return errors.InvalidArgument(scheduler.EntityReplay, fmt.Sprintf("replay has already been terminated with status %s", replayWithRun.Replay.State().String()))
 	}
 	statusSummary := scheduler.JobRunStatusList(replayWithRun.Runs).GetJobRunStatusSummary()
 	cancelMessage := fmt.Sprintf("replay cancelled with run status %s", statusSummary)
-	return r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
+
+	err := r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
+	if err != nil {
+		return err
+	}
+	return r.cancelReplayRuns(ctx, replayWithRun)
 }
 
 func NewReplayService(

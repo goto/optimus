@@ -210,7 +210,7 @@ func (r ReplayRepository) UpdateReplayStatus(ctx context.Context, id uuid.UUID, 
 }
 
 func (r ReplayRepository) UpdateReplay(ctx context.Context, id uuid.UUID, replayStatus scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error {
-	if err := r.updateReplayRuns(ctx, id, runs); err != nil {
+	if err := r.UpdateReplayRuns(ctx, id, runs); err != nil {
 		return err
 	}
 	return r.updateReplayRequest(ctx, id, replayStatus, message)
@@ -329,7 +329,7 @@ func (r ReplayRepository) updateReplayRequest(ctx context.Context, id uuid.UUID,
 	return nil
 }
 
-func (r ReplayRepository) updateReplayRuns(ctx context.Context, id uuid.UUID, runs []*scheduler.JobRunStatus) error {
+func (r ReplayRepository) UpdateReplayRuns(ctx context.Context, id uuid.UUID, runs []*scheduler.JobRunStatus) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err

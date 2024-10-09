@@ -25,7 +25,8 @@ func BenchmarkNamespaceRepository(b *testing.B) {
 		serviceTenant.ProjectSchedulerHost:  "http://localhost:8082",
 		serviceTenant.ProjectStoragePathKey: "gs://location",
 	}
-	project, err := serviceTenant.NewProject("project_for_test", config)
+	vars := map[string]string{}
+	project, err := serviceTenant.NewProject("project_for_test", config, vars)
 	assert.NoError(b, err)
 
 	ctx := context.Background()

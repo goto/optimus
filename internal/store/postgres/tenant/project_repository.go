@@ -38,7 +38,7 @@ func (repo ProjectRepository) Save(ctx context.Context, tenantProject *tenant.Pr
 	_, err := repo.get(ctx, tenantProject.Name())
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			insertProjectQuery := `INSERT INTO project (name, config, variables, created_at, updated_at) VALUES ($1, $2, $3 now(), now())`
+			insertProjectQuery := `INSERT INTO project (name, config, variables, created_at, updated_at) VALUES ($1, $2, $3, now(), now())`
 			_, err = repo.db.Exec(ctx, insertProjectQuery, tenantProject.Name(), tenantProject.GetConfigs(), tenantProject.GetVariables())
 			return errors.WrapIfErr(tenant.EntityProject, "unable to save project", err)
 		}

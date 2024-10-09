@@ -25,6 +25,7 @@ type Namespace struct {
 
 	projectName ProjectName
 	config      map[string]string
+	variables   map[string]string
 }
 
 func (n *Namespace) Name() NamespaceName {
@@ -51,6 +52,15 @@ func (n *Namespace) GetConfigs() map[string]string {
 		confs[k] = v
 	}
 	return confs
+}
+
+// GetVariables returns a clone of namespace variables
+func (n *Namespace) GetVariables() map[string]string {
+	vars := make(map[string]string, len(n.variables))
+	for k, v := range n.variables {
+		vars[k] = v
+	}
+	return vars
 }
 
 func NewNamespace(name string, projName ProjectName, config map[string]string) (*Namespace, error) {

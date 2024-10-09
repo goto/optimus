@@ -31,7 +31,8 @@ func BenchmarkJobRepository(b *testing.B) {
 		serviceTenant.ProjectSchedulerHost:  "http://localhost:8082",
 		serviceTenant.ProjectStoragePathKey: "gs://location",
 	}
-	project, err := serviceTenant.NewProject(projectName, config)
+	vars := map[string]string{}
+	project, err := serviceTenant.NewProject(projectName, config, vars)
 	assert.NoError(b, err)
 
 	namespaceName := "namespace_test"

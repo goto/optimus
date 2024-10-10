@@ -188,7 +188,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	namespace, err := tenant.NewNamespace("test-ns", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 
 	namespaceRepo := tenantPostgres.NewNamespaceRepository(pool)

@@ -26,7 +26,7 @@ func TestPostgresNamespaceRepository(t *testing.T) {
 	ns, _ := tenant.NewNamespace("n-optimus-1", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 
 	ctx := context.Background()
 	dbSetup := func() *pgxpool.Pool {
@@ -54,7 +54,7 @@ func TestPostgresNamespaceRepository(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Equal(t, "n-optimus-1", savedNs.Name().String())
 
-			ns2, _ := tenant.NewNamespace("n-optimus-2", proj.Name(), ns.GetConfigs())
+			ns2, _ := tenant.NewNamespace("n-optimus-2", proj.Name(), ns.GetConfigs(), ns.GetVariables())
 			err = repo.Save(ctx, ns2)
 			assert.Nil(t, err)
 
@@ -79,7 +79,9 @@ func TestPostgresNamespaceRepository(t *testing.T) {
 
 			conf := proj.GetConfigs()
 			conf["STORAGE"] = "gs://some_place"
-			ns2, _ := tenant.NewNamespace(ns.Name().String(), ns.ProjectName(), conf)
+			vars := proj.GetVariables()
+			vars["PROJECT"] = "optimus"
+			ns2, _ := tenant.NewNamespace(ns.Name().String(), ns.ProjectName(), conf, vars)
 
 			err = repo.Save(ctx, ns2)
 			assert.Nil(t, err)
@@ -89,23 +91,9 @@ func TestPostgresNamespaceRepository(t *testing.T) {
 			config, err := updatedNS.GetConfig("STORAGE")
 			assert.Nil(t, err)
 			assert.Equal(t, "gs://some_place", config)
-		})
-		t.Run("should not update if config is empty", func(t *testing.T) {
-			db := dbSetup()
-			repo := postgres.NewNamespaceRepository(db)
-
-			err := repo.Save(ctx, ns)
+			updatedVars, err := updatedNS.GetVariable("PROJECT")
 			assert.Nil(t, err)
-
-			savedNS, err := repo.GetByName(ctx, proj.Name(), ns.Name())
-			assert.Nil(t, err)
-			assert.Equal(t, "n-optimus-1", savedNS.Name().String())
-
-			ns2, _ := tenant.NewNamespace(ns.Name().String(), ns.ProjectName(), map[string]string{})
-
-			err = repo.Save(ctx, ns2)
-			assert.NotNil(t, err)
-			assert.EqualError(t, err, "failed precondition for entity namespace: empty config")
+			assert.Equal(t, "optimus", updatedVars)
 		})
 	})
 	t.Run("GetAll", func(t *testing.T) {
@@ -116,7 +104,7 @@ func TestPostgresNamespaceRepository(t *testing.T) {
 			err := repo.Save(ctx, ns)
 			assert.Nil(t, err)
 
-			ns2, _ := tenant.NewNamespace("t-optimus-2", proj.Name(), ns.GetConfigs())
+			ns2, _ := tenant.NewNamespace("t-optimus-2", proj.Name(), ns.GetConfigs(), ns.GetVariables())
 			err = repo.Save(ctx, ns2)
 			assert.Nil(t, err)
 

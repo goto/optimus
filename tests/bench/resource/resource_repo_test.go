@@ -27,17 +27,18 @@ func BenchmarkResourceRepository(b *testing.B) {
 	projectName := "project_test"
 	transporterKafkaBrokerKey := "KAFKA_BROKERS"
 	config := map[string]string{
-		"bucket":                            "gs://folder_for_test",
-		transporterKafkaBrokerKey:           "192.168.1.1:8080,192.168.1.1:8081",
 		serviceTenant.ProjectSchedulerHost:  "http://localhost:8082",
 		serviceTenant.ProjectStoragePathKey: "gs://location",
 	}
-	vars := map[string]string{}
+	vars := map[string]string{
+		"bucket":                  "gs://folder_for_test",
+		transporterKafkaBrokerKey: "192.168.1.1:8080,192.168.1.1:8081",
+	}
 	project, err := serviceTenant.NewProject(projectName, config, vars)
 	assert.NoError(b, err)
 
 	namespaceName := "namespace_test"
-	namespace, err := serviceTenant.NewNamespace(namespaceName, project.Name(), config)
+	namespace, err := serviceTenant.NewNamespace(namespaceName, project.Name(), config, vars)
 	assert.NoError(b, err)
 
 	tnnt, err := serviceTenant.NewTenant(project.Name().String(), namespace.Name().String())

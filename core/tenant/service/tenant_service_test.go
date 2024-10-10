@@ -22,7 +22,9 @@ func TestTenantService(t *testing.T) {
 	}
 	projectVars := map[string]string{}
 	proj, _ := tenant.NewProject("testProj", conf, projectVars)
-	ns, _ := tenant.NewNamespace("testNS", proj.Name(), map[string]string{})
+
+	nsVars := map[string]string{}
+	ns, _ := tenant.NewNamespace("testNS", proj.Name(), map[string]string{}, nsVars)
 	tnnt, _ := tenant.NewTenant(proj.Name().String(), ns.Name().String())
 
 	logger := log.NewLogrus()

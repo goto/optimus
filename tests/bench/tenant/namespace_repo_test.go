@@ -20,12 +20,13 @@ func BenchmarkNamespaceRepository(b *testing.B) {
 
 	transporterKafkaBrokerKey := "KAFKA_BROKERS"
 	config := map[string]string{
-		"bucket":                            "gs://folder_for_test",
-		transporterKafkaBrokerKey:           "192.168.1.1:8080,192.168.1.1:8081",
 		serviceTenant.ProjectSchedulerHost:  "http://localhost:8082",
 		serviceTenant.ProjectStoragePathKey: "gs://location",
 	}
-	vars := map[string]string{}
+	vars := map[string]string{
+		"bucket":                  "gs://folder_for_test",
+		transporterKafkaBrokerKey: "192.168.1.1:8080,192.168.1.1:8081",
+	}
 	project, err := serviceTenant.NewProject("project_for_test", config, vars)
 	assert.NoError(b, err)
 
@@ -52,7 +53,7 @@ func BenchmarkNamespaceRepository(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			name := fmt.Sprintf("namespace_for_test_%d", i)
-			namespace, err := serviceTenant.NewNamespace(name, project.Name(), config)
+			namespace, err := serviceTenant.NewNamespace(name, project.Name(), config, vars)
 			assert.NoError(b, err)
 
 			actualError := repo.Save(ctx, namespace)
@@ -66,7 +67,7 @@ func BenchmarkNamespaceRepository(b *testing.B) {
 		namespaceNames := make([]string, maxNumberOfNamespaces)
 		for i := 0; i < maxNumberOfNamespaces; i++ {
 			name := fmt.Sprintf("namespace_for_test_%d", i)
-			namespace, err := serviceTenant.NewNamespace(name, project.Name(), config)
+			namespace, err := serviceTenant.NewNamespace(name, project.Name(), config, vars)
 			assert.NoError(b, err)
 
 			actualError := repo.Save(ctx, namespace)
@@ -94,7 +95,7 @@ func BenchmarkNamespaceRepository(b *testing.B) {
 		repo := repoTenant.NewNamespaceRepository(db)
 		for i := 0; i < maxNumberOfNamespaces; i++ {
 			name := fmt.Sprintf("namespace_for_test_%d", i)
-			namespace, err := serviceTenant.NewNamespace(name, project.Name(), config)
+			namespace, err := serviceTenant.NewNamespace(name, project.Name(), config, vars)
 			assert.NoError(b, err)
 
 			actualError := repo.Save(ctx, namespace)

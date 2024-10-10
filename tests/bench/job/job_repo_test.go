@@ -36,7 +36,8 @@ func BenchmarkJobRepository(b *testing.B) {
 	assert.NoError(b, err)
 
 	namespaceName := "namespace_test"
-	namespace, err := serviceTenant.NewNamespace(namespaceName, project.Name(), config)
+	nsVars := map[string]string{}
+	namespace, err := serviceTenant.NewNamespace(namespaceName, project.Name(), config, nsVars)
 	assert.NoError(b, err)
 
 	tnnt, err := serviceTenant.NewTenant(project.Name().String(), namespace.Name().String())

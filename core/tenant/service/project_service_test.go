@@ -17,9 +17,10 @@ func TestProjectService(t *testing.T) {
 	conf := map[string]string{
 		tenant.ProjectSchedulerHost:  "host",
 		tenant.ProjectStoragePathKey: "gs://location",
-		"BUCKET":                     "gs://some_folder",
 	}
-	projectVars := map[string]string{}
+	projectVars := map[string]string{
+		"BUCKET": "gs://some_folder",
+	}
 	savedProject, _ := tenant.NewProject("savedProj", conf, projectVars)
 
 	preset, err := tenant.NewPreset("test_preset", "preset for testing", "1d", "1h", "", "")

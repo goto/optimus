@@ -41,19 +41,19 @@ func TestPostgresJobRepository(t *testing.T) {
 	namespace, err := tenant.NewNamespace("test-ns", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 
 	otherNamespace, err := tenant.NewNamespace("other-ns", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 
 	otherNamespace2, err := tenant.NewNamespace("other-ns", otherProj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 	sampleTenant, err := tenant.NewTenant(proj.Name().String(), namespace.Name().String())
 	assert.NoError(t, err)

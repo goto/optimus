@@ -449,7 +449,7 @@ func dbSetup() *pgxpool.Pool {
 	ns, _ := tenant.NewNamespace("n-optimus-1", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	err = namespaceRepo.Save(ctx, ns)
 	if err != nil {
 		panic(err)
@@ -458,7 +458,7 @@ func dbSetup() *pgxpool.Pool {
 	ns2, _ := tenant.NewNamespace("n-optimus-2", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	err = namespaceRepo.Save(ctx, ns2)
 	if err != nil {
 		panic(err)

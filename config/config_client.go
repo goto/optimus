@@ -41,6 +41,7 @@ type Auth struct {
 type Namespace struct {
 	Name      string            `mapstructure:"name"`
 	Config    map[string]string `mapstructure:"config"`
+	Variables map[string]string `mapstructure:"variables"`
 	Job       Job               `mapstructure:"job"`
 	Datastore []Datastore       `mapstructure:"datastore"`
 }

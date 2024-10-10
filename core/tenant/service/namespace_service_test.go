@@ -17,11 +17,12 @@ func TestNamespaceService(t *testing.T) {
 	conf := map[string]string{
 		tenant.ProjectSchedulerHost:  "host",
 		tenant.ProjectStoragePathKey: "gs://location",
-		"BUCKET":                     "gs://some_folder",
 	}
-	projectVars := map[string]string{}
+	projectVars := map[string]string{
+		"BUCKET": "gs://some_folder",
+	}
 	savedProject, _ := tenant.NewProject("savedProj", conf, projectVars)
-	savedNS, _ := tenant.NewNamespace("savedNS", savedProject.Name(), map[string]string{})
+	savedNS, _ := tenant.NewNamespace("savedNS", savedProject.Name(), map[string]string{}, map[string]string{})
 
 	t.Run("Save", func(t *testing.T) {
 		t.Run("returns error when fails in service", func(t *testing.T) {
@@ -29,7 +30,9 @@ func TestNamespaceService(t *testing.T) {
 			nsRepo.On("Save", ctx, mock.Anything).Return(errors.New("error in saving"))
 			defer nsRepo.AssertExpectations(t)
 
-			toSaveNS, _ := tenant.NewNamespace("ns", savedProject.Name(), map[string]string{"BUCKET": "gs://some_folder"})
+			nsConf := map[string]string{}
+			nsVars := map[string]string{"BUCKET": "gs://some_folder"}
+			toSaveNS, _ := tenant.NewNamespace("ns", savedProject.Name(), nsConf, nsVars)
 
 			namespaceService := service.NewNamespaceService(nsRepo)
 			err := namespaceService.Save(ctx, toSaveNS)
@@ -42,7 +45,9 @@ func TestNamespaceService(t *testing.T) {
 			nsRepo.On("Save", ctx, mock.Anything).Return(nil)
 			defer nsRepo.AssertExpectations(t)
 
-			toSaveNS, _ := tenant.NewNamespace("ns", savedProject.Name(), map[string]string{"BUCKET": "gs://some_folder"})
+			nsConf := map[string]string{}
+			nsVars := map[string]string{"BUCKET": "gs://some_folder"}
+			toSaveNS, _ := tenant.NewNamespace("ns", savedProject.Name(), nsConf, nsVars)
 
 			namespaceService := service.NewNamespaceService(nsRepo)
 			err := namespaceService.Save(ctx, toSaveNS)

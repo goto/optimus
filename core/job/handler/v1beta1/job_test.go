@@ -37,7 +37,7 @@ func TestNewJobHandler(t *testing.T) {
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	sampleTenant, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	jobVersion := 1
 	startDate, err := job.ScheduleDateFrom("2022-10-01")

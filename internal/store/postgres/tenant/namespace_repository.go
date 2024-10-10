@@ -38,7 +38,7 @@ func (n *Namespace) toTenantNamespace() (*tenant.Namespace, error) {
 		return nil, err
 	}
 
-	return tenant.NewNamespace(n.Name, projName, n.Config)
+	return tenant.NewNamespace(n.Name, projName, n.Config, n.Variables)
 }
 
 func (n *NamespaceRepository) Save(ctx context.Context, namespace *tenant.Namespace) error {
@@ -54,9 +54,6 @@ VALUES ($1, $2, $3, $4, now(), now())`
 		return errors.Wrap(tenant.EntityNamespace, "unable to save namespace", err)
 	}
 
-	if len(namespace.GetConfigs()) == 0 {
-		return errors.NewError(errors.ErrFailedPrecond, tenant.EntityNamespace, "empty config")
-	}
 	updateNamespaceQuery := `UPDATE namespace n SET config=$1, variables=$2, updated_at=now() WHERE n.name = $3 AND n.project_name=$4`
 	_, err = n.db.Exec(ctx, updateNamespaceQuery, namespace.GetConfigs(), namespace.GetVariables(), namespace.Name(), namespace.ProjectName())
 	return errors.WrapIfErr(tenant.EntityProject, "unable to update namespace", err)

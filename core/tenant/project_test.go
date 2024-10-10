@@ -42,7 +42,9 @@ func TestEntityProject(t *testing.T) {
 			project, err := tenant.NewProject("t-optimus", map[string]string{
 				tenant.ProjectSchedulerHost:  "b",
 				tenant.ProjectStoragePathKey: "d",
-			}, map[string]string{})
+			}, map[string]string{
+				"PROJECT": "optimus",
+			})
 			assert.Nil(t, err)
 
 			assert.NotNil(t, project)
@@ -57,6 +59,16 @@ func TestEntityProject(t *testing.T) {
 			val2, err := project.GetConfig(tenant.ProjectStoragePathKey)
 			assert.Nil(t, err)
 			assert.Equal(t, "d", val2)
+
+			assert.NotNil(t, project.GetVariables())
+
+			projVar, err := project.GetVariable("PROJECT")
+			assert.Nil(t, err)
+			assert.Equal(t, "optimus", projVar)
+
+			_, err = project.GetVariable("non-existent")
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "not found for entity project: variable not found: non-existent")
 		})
 	})
 }

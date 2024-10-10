@@ -87,12 +87,18 @@ func (w *WithDetails) GetConfig(key string) (string, error) {
 }
 
 func (w *WithDetails) GetVariable(key string) (string, error) {
-	variable, err := w.project.GetVariable(key)
+	variable, err := w.namespace.GetVariable(key)
 	if err == nil {
 		return variable, nil
 	}
 
-	return "", errors.NotFound(EntityTenant, fmt.Sprintf("variable %s not present in tenant", key))
+	// key not present in namespace, check project
+	variable, err = w.project.GetVariable(key)
+	if err == nil {
+		return variable, nil
+	}
+
+	return "", errors.NotFound(EntityTenant, fmt.Sprintf("variable not present in tenant: %s", key))
 }
 
 func (w *WithDetails) GetConfigs() map[string]string {
@@ -101,7 +107,8 @@ func (w *WithDetails) GetConfigs() map[string]string {
 }
 
 func (w *WithDetails) GetVariables() map[string]string {
-	return w.project.GetVariables()
+	namespaceVars := w.namespace.GetVariables()
+	return utils.MergeMaps(namespaceVars, w.project.GetVariables())
 }
 
 func (w *WithDetails) Project() *Project {

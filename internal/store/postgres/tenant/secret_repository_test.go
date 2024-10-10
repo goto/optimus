@@ -26,11 +26,11 @@ func TestPostgresSecretRepository(t *testing.T) {
 	namespace, _ := tenant.NewNamespace("test-ns", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	otherNamespace, _ := tenant.NewNamespace("other-ns", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 
 	dbSetup := func() *pgxpool.Pool {
 		pool := setup.TestPool()

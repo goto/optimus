@@ -63,7 +63,8 @@ func TestReplayService(t *testing.T) {
 		"SCHEDULER_HOST":           "http://localhost",
 	}
 	projectVars := map[string]string{}
-	namespaceEntity, _ := tenant.NewNamespace(namespaceName.String(), projName, namespaceCfg)
+	nsVars := map[string]string{}
+	namespaceEntity, _ := tenant.NewNamespace(namespaceName.String(), projName, namespaceCfg, nsVars)
 	projectEntity, _ := tenant.NewProject(projName.String(), projectCfg, projectVars)
 	tenantWithDetails, _ := tenant.NewTenantDetails(projectEntity, namespaceEntity, tenant.PlainTextSecrets{})
 

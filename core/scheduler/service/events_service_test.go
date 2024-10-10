@@ -24,7 +24,7 @@ func TestNotificationService(t *testing.T) {
 		"STORAGE_PATH":   "somePath",
 		"SCHEDULER_HOST": "localhost",
 	}, map[string]string{})
-	namespace, _ := tenant.NewNamespace("ns1", project.Name(), map[string]string{})
+	namespace, _ := tenant.NewNamespace("ns1", project.Name(), map[string]string{}, map[string]string{})
 	tnnt, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	startDate, _ := time.Parse(time.RFC3339, "2022-03-20T02:00:00+00:00")
 	jobName := scheduler.JobName("job1")

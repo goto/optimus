@@ -18,6 +18,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
+	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -714,6 +715,11 @@ func (m *mockJobRunService) UpdateJobState(ctx context.Context, event *scheduler
 func (m *mockJobRunService) UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error {
 	args := m.Called(ctx, projectName)
 	return args.Error(0)
+}
+
+func (m *mockJobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {
+	args := m.Called(ctx, projectName, jobName, filters)
+	return args.Get(0).([]*scheduler.JobRun), args.Error(1)
 }
 
 func (m *mockJobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {

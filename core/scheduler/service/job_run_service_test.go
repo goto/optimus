@@ -1522,6 +1522,16 @@ func (m *mockJobRunRepository) Create(ctx context.Context, tenant tenant.Tenant,
 	return args.Error(0)
 }
 
+func (m *mockJobRunRepository) GetLatestRun(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, runState *scheduler.State) (*scheduler.JobRun, error) {
+	args := m.Called(ctx, project, jobName, runState)
+	return args.Get(0).(*scheduler.JobRun), args.Error(1)
+}
+
+func (m *mockJobRunRepository) GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, runState *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error) {
+	args := m.Called(ctx, project, jobName, runState, since, until)
+	return args.Get(0).([]*scheduler.JobRun), args.Error(1)
+}
+
 func (m *mockJobRunRepository) Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error {
 	args := m.Called(ctx, jobRunID, endTime, jobRunStatus)
 	return args.Error(0)

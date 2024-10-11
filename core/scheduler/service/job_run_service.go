@@ -22,6 +22,7 @@ import (
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 type metricType string
@@ -54,6 +55,8 @@ type JobRepository interface {
 type JobRunRepository interface {
 	GetByID(ctx context.Context, id scheduler.JobRunID) (*scheduler.JobRun, error)
 	GetByScheduledAt(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
+	GetLatestRun(ctx context.Context, project tenant.ProjectName, name scheduler.JobName, status *scheduler.State) (*scheduler.JobRun, error)
+	GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, status *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error)
 	GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error)
 	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, slaDefinitionInSec int64) error
 	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error
@@ -144,6 +147,27 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	}
 
 	return s.compiler.Compile(ctx, details, config, executedAt)
+}
+
+func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {
+	f := filter.NewFilter(filters...)
+	var runState *scheduler.State
+	state, err := scheduler.StateFromString(f.GetStringValue(filter.RunState))
+	if err == nil {
+		runState = &state
+	}
+
+	if f.Contains(filter.StartDate) && f.Contains(filter.EndDate) {
+		//	get job run by scheduled at between start date and end date, filter by runState if applicable
+		return s.repo.GetRunsByTimeRange(ctx, projectName, jobName, runState,
+			f.GetTimeValue(filter.StartDate), f.GetTimeValue(filter.EndDate))
+	}
+
+	jobRun, err := s.repo.GetLatestRun(ctx, projectName, jobName, runState)
+	if err != nil {
+		return nil, err
+	}
+	return []*scheduler.JobRun{jobRun}, nil
 }
 
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {

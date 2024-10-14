@@ -39,6 +39,15 @@ func TestMaxComputeClient(t *testing.T) {
 			assert.NotNil(t, tableHandle)
 		})
 	})
+	t.Run("ViewHandleFrom", func(t *testing.T) {
+		t.Run("returns success when init the view handle", func(t *testing.T) {
+			client, err := maxcompute.NewClient(testCredJSON)
+			assert.Nil(t, err)
+
+			viewHandle := client.ViewHandleFrom()
+			assert.NotNil(t, viewHandle)
+		})
+	})
 }
 
 func TestClientProvider(t *testing.T) {

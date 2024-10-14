@@ -36,6 +36,11 @@ type mockOdpsIns struct {
 	mock.Mock
 }
 
+func (m *mockOdpsIns) ExecSQl(sql string) (*odps.Instance, error) {
+	args := m.Called(sql)
+	return args.Get(0).(*odps.Instance), args.Error(1)
+}
+
 func (m *mockOdpsIns) ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error) {
 	args := m.Called(sql, hints)
 	return args.Get(0).(*odps.Instance), args.Error(1)

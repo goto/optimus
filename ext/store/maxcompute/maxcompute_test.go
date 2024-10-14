@@ -167,6 +167,31 @@ func TestMaxComputeStore(t *testing.T) {
 			err = mcStore.Create(ctx, res)
 			assert.Nil(t, err)
 		})
+		t.Run("return success when calls appropriate handler for view", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			res, err := resource.NewResource(tableName, maxcompute.KindView, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Create", res).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("ViewHandleFrom").Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+			err = mcStore.Create(ctx, res)
+			assert.Nil(t, err)
+		})
 	})
 	t.Run("Update", func(t *testing.T) {
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
@@ -250,6 +275,31 @@ func TestMaxComputeStore(t *testing.T) {
 			err = mcStore.Update(ctx, res)
 			assert.Nil(t, err)
 		})
+		t.Run("return success when calls appropriate handler for view", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			res, err := resource.NewResource(tableName, maxcompute.KindView, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Update", res).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("ViewHandleFrom").Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", "secret_value").Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
+			err = mcStore.Update(ctx, res)
+			assert.Nil(t, err)
+		})
 	})
 	t.Run("Validate", func(t *testing.T) {
 		invalidSpec := map[string]any{
@@ -285,6 +335,28 @@ func TestMaxComputeStore(t *testing.T) {
 				err = mcStore.Validate(res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "empty schema for table "+tableName)
+			})
+		})
+		t.Run("for view", func(t *testing.T) {
+			t.Run("returns error when cannot decode view", func(t *testing.T) {
+				res, err := resource.NewResource(tableName, maxcompute.KindView, store, tnnt, &metadata, invalidSpec)
+				assert.Nil(t, err)
+				assert.Equal(t, tableName, res.FullName())
+
+				mcStore := maxcompute.NewMaxComputeDataStore(nil, nil)
+				err = mcStore.Validate(res)
+				assert.NotNil(t, err)
+				assert.ErrorContains(t, err, "not able to decode spec for "+tableName)
+			})
+			t.Run("returns error when decode empty view schema", func(t *testing.T) {
+				res, err := resource.NewResource(tableName, maxcompute.KindView, store, tnnt, &metadata, specWithoutValues)
+				assert.Nil(t, err)
+				assert.Equal(t, tableName, res.FullName())
+
+				mcStore := maxcompute.NewMaxComputeDataStore(nil, nil)
+				err = mcStore.Validate(res)
+				assert.NotNil(t, err)
+				assert.ErrorContains(t, err, "view query is empty for "+tableName)
 			})
 		})
 	})

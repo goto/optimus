@@ -1,6 +1,7 @@
 package maxcompute_test
 
 import (
+	"fmt"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 	"testing"
 
@@ -49,7 +50,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
 	})
@@ -64,7 +65,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
 	})
@@ -82,7 +83,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
 	})
@@ -118,9 +119,78 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			},
 		}
 
-		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil)
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, nil, nil)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "unknown data type")
+	})
+	t.Run("return error when cluster column type is hash but not specify bucket", func(t *testing.T) {
+		builder := tableschema.NewSchemaBuilder()
+		schema := maxcompute.Schema{
+			{
+				Name:         "name",
+				Required:     true,
+				DefaultValue: "test",
+				Type:         "char",
+				Char:         &maxcompute.Char{Length: 255},
+				Labels:       []string{"owner", "member"},
+			},
+		}
+
+		clusterColumns := &maxcompute.Cluster{
+			Using:  []string{"name", "age"},
+			SortBy: []maxcompute.SortColumn{{Name: "name", Order: "asc"}},
+		}
+
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, &builder)
+		assert.NotNil(t, err)
+		assert.ErrorContains(t, err, "number of cluster buckets is needed for hash type clustering")
+	})
+	t.Run("return error when cluster column is not found in normal column", func(t *testing.T) {
+		builder := tableschema.NewSchemaBuilder()
+		schema := maxcompute.Schema{
+			{
+				Name:         "name",
+				Required:     true,
+				DefaultValue: "test",
+				Type:         "char",
+				Char:         &maxcompute.Char{Length: 255},
+				Labels:       []string{"owner", "member"},
+			},
+		}
+
+		invalidClusterColumn := "age"
+		clusterColumns := &maxcompute.Cluster{
+			Using:   []string{invalidClusterColumn},
+			Buckets: 5,
+		}
+
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, &builder)
+		assert.NotNil(t, err)
+		assert.ErrorContains(t, err, fmt.Sprintf("cluster column %s not found in normal column", invalidClusterColumn))
+	})
+	t.Run("return error when sort column is not found in cluster column", func(t *testing.T) {
+		builder := tableschema.NewSchemaBuilder()
+		schema := maxcompute.Schema{
+			{
+				Name:         "name",
+				Required:     true,
+				DefaultValue: "test",
+				Type:         "char",
+				Char:         &maxcompute.Char{Length: 255},
+				Labels:       []string{"owner", "member"},
+			},
+		}
+
+		invalidSortClusterColumn := "age"
+		clusterColumns := &maxcompute.Cluster{
+			Using:   []string{"name"},
+			SortBy:  []maxcompute.SortColumn{{Name: invalidSortClusterColumn, Order: "asc"}},
+			Buckets: 5,
+		}
+
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, &builder)
+		assert.NotNil(t, err)
+		assert.ErrorContains(t, err, fmt.Sprintf("sort column %s not found in cluster column", invalidSortClusterColumn))
 	})
 	t.Run("return success when schema column is valid", func(t *testing.T) {
 		builder := tableschema.NewSchemaBuilder()
@@ -189,7 +259,13 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			"data": {},
 		}
 
-		err := schema.ToMaxComputeColumns(partitionColumnName, &builder)
+		clusterColumns := &maxcompute.Cluster{
+			Using:   []string{"name", "age"},
+			SortBy:  []maxcompute.SortColumn{{Name: "name", Order: "asc"}},
+			Buckets: 5,
+		}
+
+		err := schema.ToMaxComputeColumns(partitionColumnName, clusterColumns, &builder)
 		assert.Nil(t, err)
 	})
 }

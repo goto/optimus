@@ -69,6 +69,11 @@ func (t TableHandle) Update(res *resource.Resource) error {
 		return err
 	}
 
+	if table.Hints == nil {
+		table.Hints = make(map[string]string)
+	}
+	table.Hints["odps.sql.schema.evolution.json.enable"] = "true"
+
 	schema, err := buildTableSchema(table)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to update for "+res.FullName())

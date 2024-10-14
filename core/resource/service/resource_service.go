@@ -26,6 +26,7 @@ type ResourceRepository interface {
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
+	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
 }
 
 type ResourceManager interface {
@@ -348,17 +349,7 @@ func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn 
 		return nil, errors.InvalidArgument(resource.EntityResource, "urn is zero value")
 	}
 
-	store, err := resource.FromStringToStore(urn.GetStore())
-	if err != nil {
-		return nil, err
-	}
-
-	name, err := resource.NameFrom(urn.GetName())
-	if err != nil {
-		return nil, err
-	}
-
-	return rs.repo.ReadByFullName(ctx, tnnt, store, name.String(), false)
+	return rs.repo.ReadByURN(ctx, tnnt, urn)
 }
 
 func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {

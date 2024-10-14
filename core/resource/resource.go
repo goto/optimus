@@ -17,6 +17,11 @@ const (
 
 	UnspecifiedImpactChange    UpdateImpact = "unspecified_impact"
 	ResourceDataPipeLineImpact UpdateImpact = "data_impact"
+
+	ResourceSpecV1 = 1
+	ResourceSpecV2 = 2
+
+	DefaultResourceSpecVersion = ResourceSpecV1
 )
 
 type UpdateImpact string
@@ -181,6 +186,14 @@ func (r *Resource) Status() Status {
 
 func (r *Resource) Spec() map[string]any {
 	return r.spec
+}
+
+func (r *Resource) Version() int32 {
+	if r.metadata == nil || r.metadata.Version == 0 {
+		return DefaultResourceSpecVersion
+	}
+
+	return r.metadata.Version
 }
 
 func (r *Resource) Equal(incoming *Resource) bool {

@@ -138,6 +138,18 @@ func TestValidateName(t *testing.T) {
 	}
 	spec := map[string]any{"description": []string{"a", "b"}}
 
+	metadataV2 := resource.Metadata{
+		Version:     2,
+		Description: "resource description",
+		Labels:      map[string]string{"owner": "optimus"},
+	}
+	specV2 := map[string]any{
+		"project":     "project",
+		"dataset":     "dataset",
+		"name":        "table",
+		"description": "a",
+	}
+
 	t.Run("when invalid", func(t *testing.T) {
 		t.Run("return error for not enough sections", func(t *testing.T) {
 			res, err := resource.NewResource("proj", bigquery.KindDataset, bqStore, tnnt, &metadata, spec)
@@ -179,7 +191,50 @@ func TestValidateName(t *testing.T) {
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "invalid character in resource name p-project.dataset.tab@tab1")
 		})
+
+		t.Run("returns error when project name is invalid for v2 spec", func(t *testing.T) {
+			invalidSpecV2 := map[string]any{
+				"project": "project@@",
+				"dataset": "dataset",
+				"name":    "table",
+			}
+			res, err := resource.NewResource("project.dataset.table", bigquery.KindTable, bqStore, tnnt, &metadataV2, invalidSpecV2)
+			assert.NoError(t, err)
+
+			err = bigquery.ValidateName(res)
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, "invalid character in project name: project@@ from project.dataset.table")
+		})
+
+		t.Run("returns error when dataset name is invalid for v2 spec", func(t *testing.T) {
+			invalidSpecV2 := map[string]any{
+				"project": "project",
+				"dataset": "datasetINVALID!",
+				"name":    "table",
+			}
+			res, err := resource.NewResource("project.dataset.table", bigquery.KindTable, bqStore, tnnt, &metadataV2, invalidSpecV2)
+			assert.NoError(t, err)
+
+			err = bigquery.ValidateName(res)
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, "invalid character in dataset name: datasetINVALID! from project.dataset.table")
+		})
+
+		t.Run("returns error when table name is invalid for v2 spec", func(t *testing.T) {
+			invalidSpecV2 := map[string]any{
+				"project": "project",
+				"dataset": "dataset",
+				"name":    "table@",
+			}
+			res, err := resource.NewResource("project.dataset.table", bigquery.KindTable, bqStore, tnnt, &metadataV2, invalidSpecV2)
+			assert.NoError(t, err)
+
+			err = bigquery.ValidateName(res)
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, "invalid character in table/view name: table@ from project.dataset.table")
+		})
 	})
+
 	t.Run("when valid", func(t *testing.T) {
 		t.Run("return no error for dataset", func(t *testing.T) {
 			res, err := resource.NewResource("p-project.dataset", bigquery.KindDataset, bqStore, tnnt, &metadata, spec)
@@ -188,8 +243,25 @@ func TestValidateName(t *testing.T) {
 			err = bigquery.ValidateName(res)
 			assert.NoError(t, err)
 		})
+
 		t.Run("returns no error when table name is valid", func(t *testing.T) {
 			res, err := resource.NewResource("p-project.dataset.tab1", bigquery.KindTable, bqStore, tnnt, &metadata, spec)
+			assert.NoError(t, err)
+
+			err = bigquery.ValidateName(res)
+			assert.NoError(t, err)
+		})
+
+		t.Run("returns no error for dataset v2 spec", func(t *testing.T) {
+			res, err := resource.NewResource("project.dataset", bigquery.KindDataset, bqStore, tnnt, &metadataV2, specV2)
+			assert.NoError(t, err)
+
+			err = bigquery.ValidateName(res)
+			assert.NoError(t, err)
+		})
+
+		t.Run("returns no error for table v2 spec", func(t *testing.T) {
+			res, err := resource.NewResource("project.dataset.table", bigquery.KindTable, bqStore, tnnt, &metadataV2, specV2)
 			assert.NoError(t, err)
 
 			err = bigquery.ValidateName(res)
@@ -207,6 +279,23 @@ func TestURNFor(t *testing.T) {
 		Labels:      map[string]string{"owner": "optimus"},
 	}
 	spec := map[string]any{"description": []string{"a", "b"}}
+
+	metadataV2 := resource.Metadata{
+		Version:     2,
+		Description: "resource description v2",
+		Labels:      map[string]string{"owner": "optimus"},
+	}
+	specV2 := map[string]any{
+		"description": "a",
+		"project":     "project",
+		"dataset":     "dataset",
+		"name":        "table",
+	}
+	invalidSpecV2 := map[string]any{
+		"project": "project",
+		"dataset": []string{"data", "set"},
+		"name":    "table1",
+	}
 
 	t.Run("returns error when cannot get dataset", func(t *testing.T) {
 		res, err := resource.NewResource("p-project.", bigquery.KindDataset, bqStore, tnnt, &metadata, spec)
@@ -238,5 +327,32 @@ func TestURNFor(t *testing.T) {
 		urn, err := bigquery.URNFor(res)
 		assert.NoError(t, err)
 		assert.Equal(t, "bigquery://p-project:dataset.table1", urn.String())
+	})
+
+	t.Run("returns urn for table with v2 spec", func(t *testing.T) {
+		res, err := resource.NewResource("project.dataset.table1", bigquery.KindDataset, bqStore, tnnt, &metadataV2, specV2)
+		assert.NoError(t, err)
+
+		urn, err := bigquery.URNFor(res)
+		assert.NoError(t, err)
+		assert.Equal(t, "bigquery://project:dataset", urn.String())
+	})
+
+	t.Run("returns urn for dataset with v2 spec", func(t *testing.T) {
+		res, err := resource.NewResource("project.dataset", bigquery.KindTable, bqStore, tnnt, &metadataV2, specV2)
+		assert.NoError(t, err)
+
+		urn, err := bigquery.URNFor(res)
+		assert.NoError(t, err)
+		assert.Equal(t, "bigquery://project:dataset.table", urn.String())
+	})
+
+	t.Run("returns error for table with invalid v2 spec", func(t *testing.T) {
+		res, err := resource.NewResource("project.dataset.table", bigquery.KindTable, bqStore, tnnt, &metadataV2, invalidSpecV2)
+		assert.NoError(t, err)
+
+		_, err = bigquery.URNFor(res)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "not able to decode spec")
 	})
 }

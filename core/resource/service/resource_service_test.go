@@ -1419,6 +1419,57 @@ func TestResourceService(t *testing.T) {
 			assert.Nil(t, actual)
 		})
 	})
+
+	t.Run("GetByURN", func(t *testing.T) {
+		t.Run("returns error if urn is zero value", func(t *testing.T) {
+			mgr := NewResourceManager(t)
+			repo := newResourceRepository(t)
+			logger := log.NewLogrus()
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+
+			_, err := rscService.GetByURN(ctx, tnnt, resource.ZeroURN())
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, "urn is zero value")
+		})
+
+		t.Run("returns error if repo returns error", func(t *testing.T) {
+			mgr := NewResourceManager(t)
+			repo := newResourceRepository(t)
+			logger := log.NewLogrus()
+
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
+			assert.NoError(t, err)
+
+			repo.On("ReadByURN", ctx, tnnt, urn).Return(nil, errors.New("unknown error"))
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+
+			_, err = rscService.GetByURN(ctx, tnnt, urn)
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, "unknown error")
+		})
+
+		t.Run("returns resource if no error is encountered", func(t *testing.T) {
+			mgr := NewResourceManager(t)
+			repo := newResourceRepository(t)
+			logger := log.NewLogrus()
+
+			urn, err := resource.ParseURN("bigquery://project:dataset.table")
+			assert.NoError(t, err)
+
+			expectedResource, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			assert.NoError(t, err)
+
+			repo.On("ReadByURN", ctx, tnnt, urn).Return(expectedResource, nil)
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+
+			actualResource, err := rscService.GetByURN(ctx, tnnt, urn)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedResource, actualResource)
+		})
+	})
 }
 
 type mockResourceRepository struct {
@@ -1463,6 +1514,14 @@ func (m *mockResourceRepository) GetResources(ctx context.Context, tnnt tenant.T
 
 func (m *mockResourceRepository) Delete(ctx context.Context, res *resource.Resource) error {
 	return m.Called(ctx, res).Error(0)
+}
+
+func (m *mockResourceRepository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error) {
+	args := m.Called(ctx, tnnt, urn)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*resource.Resource), args.Error(1)
 }
 
 type mockConstructorTestingTNewResourceRepository interface {

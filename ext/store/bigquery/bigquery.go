@@ -77,11 +77,7 @@ func (s Store) Create(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, err := DataSetFor(res.Name())
-	if err != nil {
-		return err
-	}
-	resourceName, err := ResourceNameFor(res.Name(), res.Kind())
+	dataset, resourceName, err := getDatasetAndResourceName(res)
 	if err != nil {
 		return err
 	}
@@ -123,11 +119,7 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	}
 	defer client.Close()
 
-	dataset, err := DataSetFor(res.Name())
-	if err != nil {
-		return err
-	}
-	resourceName, err := ResourceNameFor(res.Name(), res.Kind())
+	dataset, resourceName, err := getDatasetAndResourceName(res)
 	if err != nil {
 		return err
 	}
@@ -152,6 +144,34 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	default:
 		return errors.InvalidArgument(store, "invalid kind for bigquery resource "+res.Kind())
 	}
+}
+
+func getDatasetAndResourceName(res *resource.Resource) (Dataset, string, error) {
+	if res.Version() == resource.ResourceSpecV2 {
+		bqURN, err := getURNComponent(res)
+		if err != nil {
+			return Dataset{}, "", err
+		}
+
+		dataset, err := DataSetFrom(bqURN.Project, bqURN.Dataset)
+		if err != nil {
+			return Dataset{}, "", err
+		}
+
+		return dataset, bqURN.Name, nil
+	}
+
+	dataset, err := DataSetFor(res.Name())
+	if err != nil {
+		return Dataset{}, "", err
+	}
+
+	resourceName, err := ResourceNameFor(res.Name(), res.Kind())
+	if err != nil {
+		return Dataset{}, "", err
+	}
+
+	return dataset, resourceName, nil
 }
 
 func (s Store) BatchUpdate(ctx context.Context, resources []*resource.Resource) error {

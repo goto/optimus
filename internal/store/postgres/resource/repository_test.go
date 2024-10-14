@@ -413,6 +413,41 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.Len(t, actualChangelogs, len(changelogs))
 		})
 	})
+
+	t.Run("ReadByURN", func(t *testing.T) {
+		t.Run("returns nil and error if resource does not exist", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			urn, err := serviceResource.ParseURN("bigquery://project:dataset")
+			assert.NoError(t, err)
+
+			actualResource, actualError := repository.ReadByURN(ctx, tnnt, urn)
+			assert.Nil(t, actualResource)
+			assert.ErrorContains(t, actualError, "not found for entity resource")
+		})
+
+		t.Run("returns resource and nil if no error is encountered", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			urn, err := serviceResource.ParseURN("bigquery://project:dataset.table")
+			assert.NoError(t, err)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset.table", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = resourceToCreate.UpdateURN(urn)
+			assert.NoError(t, err)
+
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			actualResource, actualError := repository.ReadByURN(ctx, tnnt, urn)
+			assert.NotNil(t, actualResource)
+			assert.NoError(t, actualError)
+			assert.EqualValues(t, resourceToCreate, actualResource)
+		})
+	})
 }
 
 func insertTestResourceChangelog(pool *pgxpool.Pool, resourceName serviceResource.Name, projectName tenant.ProjectName, changelogs []*repoResource.ChangeLog) {

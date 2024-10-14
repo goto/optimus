@@ -15,8 +15,13 @@ type ViewSqlExecutor interface {
 	ExecSQl(sql string) (*odps.Instance, error)
 }
 
+type ViewTable interface {
+	BatchLoadTables(tableNames []string) ([]odps.Table, error)
+}
+
 type ViewHandle struct {
-	mcView ViewSqlExecutor
+	viewSqlExecutor ViewSqlExecutor
+	viewTable       ViewTable
 }
 
 func (v ViewHandle) Create(res *resource.Resource) error {
@@ -28,17 +33,19 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 
 	sql, err := ToViewSQL(view)
 	if err != nil {
-		return err
+		return errors.AddErrContext(err, EntityView, "failed to build view sql query to create view "+res.FullName())
 	}
 
-	inst, err := v.mcView.ExecSQl(sql)
+	inst, err := v.viewSqlExecutor.ExecSQl(sql)
 	if err != nil {
-		return errors.InternalError(EntityView, "failed to create view "+res.FullName(), err)
+		return errors.AddErrContext(err, EntityView, "failed to create sql task to create view "+res.FullName())
 	}
 
 	err = inst.WaitForSuccess()
 	if err != nil {
-		// TODO: check the type of error
+		if strings.Contains(err.Error(), "Table or view already exists") {
+			return errors.AlreadyExists(EntityView, "view already exists on maxcompute: "+res.FullName())
+		}
 		return errors.InternalError(EntityView, "failed to create view "+res.FullName(), err)
 	}
 
@@ -46,13 +53,38 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 }
 
 func (v ViewHandle) Update(res *resource.Resource) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := v.viewTable.BatchLoadTables([]string{res.FullName()})
+	if err != nil {
+		return errors.InternalError(EntityView, "error while get view on maxcompute", err)
+	}
+
+	view, err := ConvertSpecTo[View](res)
+	if err != nil {
+		return err
+	}
+	view.Name = res.Name()
+
+	sql, err := ToViewSQL(view)
+	if err != nil {
+		return errors.AddErrContext(err, EntityView, "failed to build view sql query to update view "+res.FullName())
+	}
+
+	inst, err := v.viewSqlExecutor.ExecSQl(sql)
+	if err != nil {
+		return errors.AddErrContext(err, EntityView, "failed to create sql task to update view "+res.FullName())
+	}
+
+	err = inst.WaitForSuccess()
+	if err != nil {
+		return errors.InternalError(EntityView, "failed to update view "+res.FullName(), err)
+	}
+
+	return nil
 }
 
 func (v ViewHandle) Exists(tableName string) bool {
-	//TODO implement me
-	panic("implement me")
+	_, err := v.viewTable.BatchLoadTables([]string{tableName})
+	return err == nil
 }
 
 func ToViewSQL(v *View) (string, error) {
@@ -62,7 +94,7 @@ func ToViewSQL(v *View) (string, error) {
 		},
 	}
 
-	tplStr := `create or replace view if not exists {{ .Name.String }}
+	tplStr := `create or replace view {{ .Name.String }}
     ({{ join ", " .Columns }}) {{ if .Description }} 
     comment '{{ .Description}}' {{ end }} 
     as
@@ -82,6 +114,6 @@ func ToViewSQL(v *View) (string, error) {
 	return out.String(), nil
 }
 
-func NewViewHandle(view ViewSqlExecutor) *ViewHandle {
-	return &ViewHandle{mcView: view}
+func NewViewHandle(viewSqlExecutor ViewSqlExecutor, view ViewTable) *ViewHandle {
+	return &ViewHandle{viewSqlExecutor: viewSqlExecutor, viewTable: view}
 }

@@ -2,7 +2,6 @@ package maxcompute
 
 import (
 	"encoding/json"
-
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
 
@@ -49,7 +48,8 @@ func (c *MaxComputeClient) TableHandleFrom() TableResourceHandle {
 }
 
 func (c *MaxComputeClient) ViewHandleFrom() TableResourceHandle {
-	return NewViewHandle(c)
+	t := c.Tables()
+	return NewViewHandle(c, &t)
 }
 
 func collectMaxComputeCredential(jsonData []byte) (*maxComputeCredentials, error) {

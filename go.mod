@@ -9,7 +9,7 @@ require (
 	github.com/AlecAivazis/survey/v2 v2.3.6
 	github.com/MakeNowJust/heredoc v1.0.0
 	github.com/PagerDuty/go-pagerduty v1.5.1
-	github.com/aliyun/aliyun-odps-go-sdk v0.3.4
+	github.com/aliyun/aliyun-odps-go-sdk v0.3.7
 	github.com/briandowns/spinner v1.18.0
 	github.com/charmbracelet/bubbles v0.13.0
 	github.com/charmbracelet/bubbletea v0.22.1

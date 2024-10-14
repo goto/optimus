@@ -31,9 +31,10 @@ func (s Schema) Validate() error {
 	return nil
 }
 
-func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, schemaBuilder *tableschema.SchemaBuilder) error {
+func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, clusterColumn *Cluster, schemaBuilder *tableschema.SchemaBuilder) error {
 	mu := errors.NewMultiError("converting to max compute column")
 
+	clusterColumnAllowed := map[string]struct{}{}
 	for _, f := range s {
 		column, err := f.ToColumn()
 		if err != nil {
@@ -45,6 +46,44 @@ func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, schemaB
 			schemaBuilder.PartitionColumn(column)
 		} else {
 			schemaBuilder.Column(column)
+			clusterColumnAllowed[column.Name] = struct{}{}
+		}
+	}
+
+	if clusterColumn != nil && len(clusterColumn.Using) != 0 {
+		if clusterColumn.Type == "" {
+			clusterColumn.Type = tableschema.CLUSTER_TYPE.Hash
+		}
+		schemaBuilder.ClusterType(clusterColumn.Type)
+
+		if clusterColumn.Type == tableschema.CLUSTER_TYPE.Hash {
+			if clusterColumn.Buckets == 0 {
+				mu.Append(errors.InvalidArgument(resourceSchema, "number of cluster buckets is needed for hash type clustering"))
+				return mu.ToErr()
+			}
+			schemaBuilder.ClusterBucketNum(clusterColumn.Buckets)
+		}
+
+		sortClusterAllowed := map[string]struct{}{}
+		for _, column := range clusterColumn.Using {
+			if _, ok := clusterColumnAllowed[column]; !ok {
+				mu.Append(errors.InvalidArgument(resourceSchema, fmt.Sprintf("cluster column %s not found in normal column", column)))
+				return mu.ToErr()
+			}
+			sortClusterAllowed[column] = struct{}{}
+		}
+		schemaBuilder.ClusterColumns(clusterColumn.Using)
+
+		if len(clusterColumn.SortBy) != 0 {
+			var sortClusterColumn []tableschema.SortColumn
+			for _, sortColumn := range clusterColumn.SortBy {
+				if _, ok := sortClusterAllowed[sortColumn.Name]; !ok {
+					mu.Append(errors.InvalidArgument(resourceSchema, fmt.Sprintf("sort column %s not found in cluster column", sortColumn.Name)))
+					return mu.ToErr()
+				}
+				sortClusterColumn = append(sortClusterColumn, tableschema.SortColumn{Name: sortColumn.Name, Order: tableschema.SortOrder(sortColumn.Order)})
+			}
+			schemaBuilder.ClusterSortColumns(sortClusterColumn)
 		}
 	}
 

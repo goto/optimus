@@ -96,6 +96,10 @@ func (m MaxCompute) Update(ctx context.Context, resource *resource.Resource) err
 		handle := odpsClient.TableHandleFrom()
 		return handle.Update(resource)
 
+	case KindView:
+		handle := odpsClient.ViewHandleFrom()
+		return handle.Update(resource)
+
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+resource.Kind())
 	}

@@ -106,9 +106,6 @@ func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
 		Comment(t.Description).
 		Lifecycle(t.Lifecycle)
 
-	// We can populate columns and partition columns
-	// Currently SDK does not allow setting up Clustering
-	// We accept the config, but we cannot pass it to the sdk
 	err := populateColumns(t, &builder)
 	if err != nil {
 		return tableschema.TableSchema{}, err
@@ -123,7 +120,7 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 		partitionColNames = utils.ListToMap(t.Partition.Columns)
 	}
 
-	return t.Schema.ToMaxComputeColumns(partitionColNames, schemaBuilder)
+	return t.Schema.ToMaxComputeColumns(partitionColNames, t.Cluster, schemaBuilder)
 }
 
 func generateUpdateQuery(incoming, existing tableschema.TableSchema) ([]string, error) {

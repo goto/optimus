@@ -77,6 +77,7 @@ type Replay struct {
 	message string
 
 	createdAt time.Time
+	updatedAt time.Time
 }
 
 func (r *Replay) ID() uuid.UUID {
@@ -89,6 +90,10 @@ func (r *Replay) JobName() JobName {
 
 func (r *Replay) Tenant() tenant.Tenant {
 	return r.tenant
+}
+
+func (r *Replay) UpdatedAt() time.Time {
+	return r.updatedAt
 }
 
 func (r *Replay) Config() *ReplayConfig {

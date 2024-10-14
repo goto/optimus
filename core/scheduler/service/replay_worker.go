@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
@@ -20,6 +23,11 @@ const (
 	replayCleanupTimeout = time.Minute
 )
 
+var replayReqLag = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "replay_request_lag",
+	Help: "how old is the oldest unhandled replay request",
+})
+
 type ReplayWorker struct {
 	logger       log.Logger
 	replayRepo   ReplayRepository
@@ -27,6 +35,8 @@ type ReplayWorker struct {
 	scheduler    ReplayScheduler
 	config       config.ReplayConfig
 	alertManager AlertManager
+
+	wg sync.WaitGroup
 }
 
 type ReplayScheduler interface {
@@ -317,4 +327,63 @@ func syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) sche
 	}
 
 	return updatedJobRuns
+}
+
+func (w *ReplayWorker) ScanReplayRequest(ctx context.Context) {
+	defer w.wg.Done()
+
+	//todo: read from config how many replay requests a server should handle at max
+	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds * 3)
+	requestScanInterval := time.Duration(w.config.ExecutionIntervalInSeconds * 3)
+	for {
+		select {
+		case <-ctx.Done():
+			// some graceful shutdown handling
+			return
+		default:
+			time.Sleep(requestScanInterval * time.Second)
+		}
+
+		// get replay requests from DB
+		replays, err := w.replayRepo.ScanAbandonedReplayRequests(ctx, unhandledClassifierDuration)
+		if err != nil {
+			w.logger.Error("unable to scan for replay requests")
+			continue
+		}
+		requestsToProcess, err := w.handleReplayRequests(ctx, replays)
+		if err != nil {
+			w.logger.Error("unable to process replay requests")
+			continue
+		}
+		for _, req := range requestsToProcess {
+			go w.Execute(req.ID(), req.Tenant(), req.JobName())
+		}
+
+	}
+}
+
+func (w *ReplayWorker) handleReplayRequests(ctx context.Context, replays []*scheduler.Replay) ([]*scheduler.Replay, error) {
+	// how old the oldest unfinished replay request is
+	var maxLag float64
+	// add a prometheus metric for this
+	var requestsToProcess []*scheduler.Replay
+
+	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds * 3)
+	for _, replay := range replays {
+		lag := time.Now().Sub(replay.UpdatedAt())
+		if lag.Seconds() > maxLag {
+			maxLag = lag.Seconds()
+		}
+		err := w.replayRepo.AcquireReplayRequest(ctx, replay.ID(), unhandledClassifierDuration)
+		if err != nil {
+			if errors.IsErrorType(err, errors.ErrNotFound) {
+				continue
+			}
+			w.logger.Error("unable to acquire lock on replay request err: %s", err.Error())
+		}
+		requestsToProcess = append(requestsToProcess, replay)
+
+	}
+	replayReqLag.Set(maxLag)
+	return requestsToProcess, nil
 }

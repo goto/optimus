@@ -228,6 +228,47 @@ func (r ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tena
 	return configs, nil
 }
 
+func (r ReplayRepository) ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error) {
+	// todo: add list of non terminal states
+	nonTerminalStateString := make([]string, len(scheduler.ReplayNonTerminalStates))
+	for _, state := range scheduler.ReplayNonTerminalStates {
+		nonTerminalStateString = append(nonTerminalStateString, state.String())
+	}
+	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE status in ('` + strings.Join(nonTerminalStateString, "', '") + `') and  (now() - updated_at) > INTERVAL $2`
+	rows, err := r.db.Query(ctx, getReplayRequest, unhandledClassifierDuration)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "unable to get replay list", err)
+	}
+	defer rows.Close()
+	var replayReqs []*scheduler.Replay
+	for rows.Next() {
+		var rr replayRequest
+		if err := rows.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+			&rr.Status, &rr.Message, &rr.CreatedAt); err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "unable to get the stored replay", err)
+		}
+		schedulerReplayReq, err := rr.toSchedulerReplayRequest()
+		if err != nil {
+			return nil, err
+		}
+		replayReqs = append(replayReqs, schedulerReplayReq)
+	}
+	return replayReqs, nil
+}
+
+func (r ReplayRepository) AcquireReplayRequest(ctx context.Context, replayID uuid.UUID, unhandledClassifierDuration time.Duration) error {
+	updateReplayRequest := "update replay_request set updated_at = now() WHERE id = $1 and ( now() - updated_at ) > INTERVAL $2"
+	tag, err := r.db.Exec(ctx, updateReplayRequest, replayID, unhandledClassifierDuration)
+	if err != nil {
+		return errors.Wrap(scheduler.EntityReplay, "error acquiring replay request", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return errors.NotFound(scheduler.EntityReplay, "unable to acquire replay request, perhaps acquired by another server")
+	}
+	return nil
+}
+
 func (r ReplayRepository) getReplayRequestWithFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]replayRequest, error) {
 	f := filter.NewFilter(filters...)
 	var filterQueryFragments []string

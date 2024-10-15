@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +20,7 @@ import (
 const (
 	prefixReplayed       = "replayed"
 	replayCleanupTimeout = time.Minute
+	replaySyncMultiplyer = 3
 )
 
 var replayReqLag = promauto.NewGauge(prometheus.GaugeOpts{
@@ -35,8 +35,6 @@ type ReplayWorker struct {
 	scheduler    ReplayScheduler
 	config       config.ReplayConfig
 	alertManager AlertManager
-
-	wg sync.WaitGroup
 }
 
 type ReplayScheduler interface {
@@ -59,8 +57,8 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 	}
 }
 
-func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
-	ctx, cancelFn := context.WithTimeout(context.Background(), time.Minute*time.Duration(w.config.ReplayTimeoutInMinutes))
+func (w *ReplayWorker) Execute(ctxBack context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
+	ctx, cancelFn := context.WithTimeout(ctxBack, time.Minute*time.Duration(w.config.ReplayTimeoutInMinutes))
 	defer cancelFn()
 
 	w.logger.Info("[ReplayID: %s] starting to execute replay", replayID)
@@ -78,7 +76,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 	}
 
 	if err := w.startExecutionLoop(ctx, replayID, jobCron); err != nil {
-		cleanupCtx, cleanupCancelFn := context.WithTimeout(context.Background(), replayCleanupTimeout)
+		cleanupCtx, cleanupCancelFn := context.WithTimeout(ctx, replayCleanupTimeout)
 		defer cleanupCancelFn()
 
 		errMessage := err.Error()
@@ -330,18 +328,14 @@ func syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) sche
 }
 
 func (w *ReplayWorker) ScanReplayRequest(ctx context.Context) {
-	defer w.wg.Done()
-
-	//todo: read from config how many replay requests a server should handle at max
-	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds * 3)
-	requestScanInterval := time.Duration(w.config.ExecutionIntervalInSeconds * 3)
+	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplyer) * time.Second
+	requestScanInterval := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplyer) * time.Second
 	for {
 		select {
 		case <-ctx.Done():
-			// some graceful shutdown handling
 			return
 		default:
-			time.Sleep(requestScanInterval * time.Second)
+			time.Sleep(requestScanInterval)
 		}
 
 		// get replay requests from DB
@@ -350,27 +344,25 @@ func (w *ReplayWorker) ScanReplayRequest(ctx context.Context) {
 			w.logger.Error("unable to scan for replay requests")
 			continue
 		}
-		requestsToProcess, err := w.handleReplayRequests(ctx, replays)
-		if err != nil {
-			w.logger.Error("unable to process replay requests")
+		if len(replays) == 0 {
 			continue
 		}
+		requestsToProcess := w.getRequestsToProcess(ctx, replays)
 		for _, req := range requestsToProcess {
-			go w.Execute(req.ID(), req.Tenant(), req.JobName())
+			go w.Execute(ctx, req.ID(), req.Tenant(), req.JobName())
 		}
-
 	}
 }
 
-func (w *ReplayWorker) handleReplayRequests(ctx context.Context, replays []*scheduler.Replay) ([]*scheduler.Replay, error) {
+func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*scheduler.Replay) []*scheduler.Replay {
 	// how old the oldest unfinished replay request is
 	var maxLag float64
 	// add a prometheus metric for this
 	var requestsToProcess []*scheduler.Replay
 
-	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds * 3)
+	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplyer) * time.Second
 	for _, replay := range replays {
-		lag := time.Now().Sub(replay.UpdatedAt())
+		lag := time.Since(replay.UpdatedAt())
 		if lag.Seconds() > maxLag {
 			maxLag = lag.Seconds()
 		}
@@ -382,8 +374,7 @@ func (w *ReplayWorker) handleReplayRequests(ctx context.Context, replays []*sche
 			w.logger.Error("unable to acquire lock on replay request err: %s", err.Error())
 		}
 		requestsToProcess = append(requestsToProcess, replay)
-
 	}
 	replayReqLag.Set(maxLag)
-	return requestsToProcess, nil
+	return requestsToProcess
 }

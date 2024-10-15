@@ -55,7 +55,7 @@ type ReplayValidator interface {
 }
 
 type ReplayExecutor interface {
-	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+	Execute(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
 	SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
 	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus
 }
@@ -120,7 +120,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		State:    scheduler.ReplayStateCreated,
 	})
 
-	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
+	go r.executor.Execute(ctx, replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
 }
@@ -238,6 +238,7 @@ func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *sch
 		r.logger.Error("unable to sync replay runs status for job [%s]: %s", jobName.String(), err.Error())
 		return err
 	}
+	r.logger.Debug(fmt.Sprintf("Synced Run status from Airflow : %#v", syncedRunStatus))
 
 	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateInProgress, scheduler.StateQueued}
 	toBeCanceledRuns := syncedRunStatus.GetSortedRunsByStates(statesForCanceling)

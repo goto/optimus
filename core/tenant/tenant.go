@@ -106,9 +106,15 @@ func (w *WithDetails) GetConfigs() map[string]string {
 	return utils.MergeMaps(w.project.GetConfigs(), m1)
 }
 
+// GetVariables for now will merge tenant variables & tenant configs.
+// Since we are moving to use tenant "variables" for job config / job asset compilation & discourage using config for the purpose,
+// merging both is a temporary solution to support older behavior.
+// Once we have all tenants migrated to use variables, we can remove the tenant config.
 func (w *WithDetails) GetVariables() map[string]string {
-	namespaceVars := w.namespace.GetVariables()
-	return utils.MergeMaps(w.project.GetVariables(), namespaceVars)
+	tenantConfigs := utils.MergeMaps(w.project.GetConfigs(), w.namespace.GetConfigs())
+	tenantVariables := utils.MergeMaps(w.project.GetVariables(), w.namespace.GetVariables())
+
+	return utils.MergeMaps(tenantConfigs, tenantVariables)
 }
 
 func (w *WithDetails) Project() *Project {

@@ -112,7 +112,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 
 	// Prepare template context and compile task config
 	taskContext := compiler.PrepareContext(
-		compiler.From(tenantDetails.GetConfigs()).WithName(contextProject).WithKeyPrefix(projectConfigPrefix),
+		compiler.From(tenantDetails.GetVariables()).WithName(contextProject).WithKeyPrefix(projectConfigPrefix),
 		compiler.From(tenantDetails.SecretsMap()).WithName(contextSecret),
 		compiler.From(systemDefinedVars).WithName(contextSystemDefined).AddToContext(),
 	)

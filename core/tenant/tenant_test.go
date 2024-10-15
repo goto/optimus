@@ -124,12 +124,12 @@ func TestAggregateRootTenant(t *testing.T) {
 				assert.Len(t, secMap, 2)
 				assert.Equal(t, "value2", secMap[p2.Name().String()])
 			})
-			t.Run("returns tenant variables", func(t *testing.T) {
+			t.Run("returns tenant variables & configs", func(t *testing.T) {
 				details, err := tenant.NewTenantDetails(project, namespace, nil)
 				assert.NoError(t, err)
 
 				tenantVariables := details.GetVariables()
-				assert.Len(t, tenantVariables, 1)
+				assert.Len(t, tenantVariables, 5)
 			})
 			t.Run("returns a single tenant variable", func(t *testing.T) {
 				details, err := tenant.NewTenantDetails(project, namespace, nil)

@@ -1405,6 +1405,92 @@ func TestResourceService(t *testing.T) {
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
 			assert.NoError(t, actualError)
 		})
+
+		t.Run("v2 spec returns nil if no error is encountered with 1 updated & 1 created resource", func(t *testing.T) {
+			resourceMeta := resource.Metadata{
+				Version:     resource.ResourceSpecV2,
+				Labels:      map[string]string{"ping": "pong"},
+				Description: "incoming resource metadata",
+			}
+			existingSpec := map[string]any{
+				"project": "project",
+				"dataset": "dataset",
+				"name":    "table-update",
+				"a":       "a",
+			}
+			existingToUpdate, err := resource.NewResource("data-table-update", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, existingSpec)
+			assert.NoError(t, err)
+
+			newSpec := map[string]any{
+				"project": "project",
+				"dataset": "dataset",
+				"name":    "table-create",
+				"a":       "b",
+			}
+			incomingToCreate, err := resource.NewResource("data-table-create", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, newSpec)
+			assert.NoError(t, err)
+
+			toUpdateSpec := map[string]any{
+				"project": "project",
+				"dataset": "dataset",
+				"name":    "table-update",
+				"a":       "b",
+			}
+			incomingToUpdate, err := resource.NewResource("data-table-update", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, toUpdateSpec)
+			assert.NoError(t, err)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(tnntDetails, nil)
+			engine := compiler.NewEngine()
+
+			repo := newResourceRepository(t)
+			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{existingToUpdate}, nil)
+			repo.On("Create", ctx, incomingToCreate).Return(nil)
+			repo.On("Update", ctx, incomingToUpdate).Return(nil)
+
+			urnToUpdate, err := resource.ParseURN("bigquery://project:dataset.table-update")
+			assert.NoError(t, err)
+			urnToCreate, err := resource.ParseURN("bigquery://project:dataset.table-create")
+			assert.NoError(t, err)
+
+			mgr := NewResourceManager(t)
+			// first iteration: for incomingToCreate
+			mgr.On("Validate", incomingToCreate).Return(nil).Once()
+			mgr.On("GetURN", incomingToCreate).Return(urnToCreate, nil).Once()
+			// second iteration: for incomingToUpdate
+			mgr.On("Validate", incomingToUpdate).Return(nil).Once()
+			mgr.On("GetURN", incomingToUpdate).Return(urnToUpdate, nil).Once()
+
+			mgr.On("BatchUpdate", ctx, resource.Bigquery, []*resource.Resource{incomingToCreate, incomingToUpdate}).
+				Run(func(args mock.Arguments) {
+					res := args.Get(2).([]*resource.Resource)
+					for _, r := range res {
+						if r.Status() == resource.StatusToDelete {
+							r.MarkDeleted()
+							continue
+						}
+						r.MarkSuccess()
+					}
+				}).
+				Return(nil)
+
+			eventHandler := newEventHandler(t)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+			argMatcher := mock.MatchedBy(func(ev moderator.Event) bool {
+				return ev != nil
+			})
+			eventHandler.On("HandleEvent", argMatcher).Return().Times(2)
+
+			refresher := new(mockDownstreamRefresher)
+			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
+
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager, tenantDetailsGetter, engine)
+
+			incomings := []*resource.Resource{incomingToCreate, incomingToUpdate}
+			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
+			assert.NoError(t, actualError)
+		})
 	})
 
 	t.Run("SyncResource", func(t *testing.T) {

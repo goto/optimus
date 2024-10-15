@@ -427,6 +427,13 @@ func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
 	multiError := errors.NewMultiError("error batch updating resources")
 	for _, r := range incomings {
+		compiledSpec, err := rs.compileSpec(ctx, r)
+		if err != nil {
+			rs.logger.Warn("suppressed error compiling spec for resource [%s]: %s", r.FullName(), err)
+			compiledSpec = r.Spec()
+		}
+		r.UpdateSpec(compiledSpec)
+
 		if err := rs.mgr.Validate(r); err != nil {
 			msg := fmt.Sprintf("error validating [%s]: %s", r.FullName(), err)
 			multiError.Append(errors.Wrap(resource.EntityResource, msg, err))

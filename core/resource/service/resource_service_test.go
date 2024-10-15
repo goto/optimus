@@ -14,6 +14,8 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/resource/service"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/internal/compiler"
 	oErrors "github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/writer"
 )
@@ -22,8 +24,26 @@ func TestResourceService(t *testing.T) {
 	ctx := context.Background()
 	logger := log.NewLogrus()
 	logWriter := writer.NewLogWriter(logger)
-	tnnt, tenantErr := tenant.NewTenant("project_test", "namespace_tes")
+
+	project, _ := tenant.NewProject("project_test",
+		map[string]string{
+			tenant.ProjectSchedulerHost:  "host",
+			tenant.ProjectStoragePathKey: "gs://location",
+		}, map[string]string{
+			"bucket":       "gs://some_folder-2",
+			"DATA_PROJECT": "project_test_proj",
+		})
+	namespace, _ := tenant.NewNamespace("namespace_tes", project.Name(),
+		map[string]string{},
+		map[string]string{
+			"bucket":       "gs://ns_bucket",
+			"DATA_PROJECT": "project_test_ns",
+		})
+	tnnt, tenantErr := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	assert.NoError(t, tenantErr)
+	tnntDetails, tenantErr := tenant.NewTenantDetails(project, namespace, nil)
+	assert.NoError(t, tenantErr)
+
 	meta := &resource.Metadata{
 		Version:     1,
 		Description: "test metadata",
@@ -32,20 +52,38 @@ func TestResourceService(t *testing.T) {
 	spec := map[string]any{
 		"description": "test spec",
 	}
-
 	datasetURN, err := resource.ParseURN("bigquery://project:dataset")
 	assert.NoError(t, err)
 	tableURN, err := resource.ParseURN("bigquery://project:dataset.table")
 	assert.NoError(t, err)
 
+	metaV2 := &resource.Metadata{
+		Version:     2,
+		Description: "test metadata",
+		Labels:      map[string]string{"owner": "optimus"},
+	}
+
+	specV2 := map[string]any{
+		"project": "{{.GLOBAL__DATA_PROJECT}}",
+		"dataset": "data-dataset",
+		"name":    "data-table",
+	}
+
+	tableURNV2, err := resource.ParseURN("bigquery://project_test_ns:data-dataset.data-table")
+	assert.NoError(t, err)
+
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error if resource is invalid", func(t *testing.T) {
-			invalid := &resource.Resource{}
+			invalid, err := resource.NewResource("<invalid-naming>", "table", resource.Bigquery, tnnt, meta, spec)
+			assert.NoError(t, err)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			specEngine := compiler.NewEngine()
 
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", invalid).Return(errors.New("validation error"))
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, tenantDetailsGetter, specEngine)
 
 			actualError := rscService.Create(ctx, invalid)
 			assert.Error(t, actualError)
@@ -55,11 +93,14 @@ func TestResourceService(t *testing.T) {
 			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
 			assert.NoError(t, err)
 
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			specEngine := compiler.NewEngine()
+
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", incoming).Return(nil)
 			mgr.On("GetURN", incoming).Return(resource.ZeroURN(), errors.New("urn error"))
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, tenantDetailsGetter, specEngine)
 
 			actualError := rscService.Create(ctx, incoming)
 			assert.Error(t, actualError)
@@ -75,7 +116,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", incoming).Return(nil)
 			mgr.On("GetURN", incoming).Return(tableURN, nil)
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Create(ctx, incoming)
 			assert.Error(t, actualError)
@@ -95,7 +136,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(nil, errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Create(ctx, incoming)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -114,7 +155,7 @@ func TestResourceService(t *testing.T) {
 				mgr.On("Validate", incoming).Return(nil)
 				mgr.On("GetURN", incoming).Return(tableURN, nil)
 
-				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 				actualError := rscService.Create(ctx, incoming)
 				assert.ErrorContains(t, actualError, "error creating resource")
@@ -144,7 +185,7 @@ func TestResourceService(t *testing.T) {
 					repo := newResourceRepository(t)
 					repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(existingWithStatus, nil)
 
-					rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+					rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 					err = rscService.Create(ctx, incoming)
 					assert.NoError(t, err)
@@ -175,7 +216,7 @@ func TestResourceService(t *testing.T) {
 					existingWithStatus := resource.FromExisting(existing, resource.ReplaceStatus(status))
 
 					repo := newResourceRepository(t)
-					rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+					rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 					repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(existingWithStatus, nil)
 
@@ -200,7 +241,7 @@ func TestResourceService(t *testing.T) {
 				mgr.On("Validate", incoming).Return(nil)
 				mgr.On("GetURN", incoming).Return(tableURN, nil)
 
-				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 				actualError := rscService.Create(ctx, incoming)
 				assert.ErrorContains(t, actualError, "error updating resource")
@@ -220,7 +261,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("GetURN", incoming).Return(tableURN, nil)
 			mgr.On("CreateResource", ctx, incoming).Return(errors.New("error creating to store"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Create(ctx, incoming)
 			assert.ErrorContains(t, actualError, "error creating to store")
@@ -243,7 +284,53 @@ func TestResourceService(t *testing.T) {
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendResourceEvent", mock.Anything)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, nil, nil, nil)
+
+			actualError := rscService.Create(ctx, incoming)
+			assert.NoError(t, actualError)
+		})
+
+		t.Run("v2 spec return error if tenant details return error and validation fails", func(t *testing.T) {
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+
+			repo := newResourceRepository(t)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(nil, errors.New("tenant details not found"))
+			engine := compiler.NewEngine()
+
+			mgr := NewResourceManager(t)
+			mgr.On("Validate", incoming).Return(errors.New("error validation"))
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, tenantDetailsGetter, engine)
+
+			actualError := rscService.Create(ctx, incoming)
+			assert.Error(t, actualError)
+		})
+
+		t.Run("v2 spec return nil if resource is successfully saved", func(t *testing.T) {
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(tnntDetails, nil)
+			engine := compiler.NewEngine()
+
+			repo := newResourceRepository(t)
+			repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(nil, oErrors.NotFound(resource.EntityResource, "resource not found"))
+			repo.On("Create", ctx, incoming).Return(nil)
+
+			mgr := NewResourceManager(t)
+			mgr.On("Validate", incoming).Return(nil)
+			mgr.On("GetURN", incoming).Return(tableURNV2, nil)
+			mgr.On("CreateResource", ctx, incoming).Return(nil)
+
+			eventHandler := newEventHandler(t)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, tenantDetailsGetter, engine)
 
 			actualError := rscService.Create(ctx, incoming)
 			assert.NoError(t, actualError)
@@ -258,7 +345,7 @@ func TestResourceService(t *testing.T) {
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", invalidResource).Return(errors.New("validation error"))
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Update(ctx, invalidResource, logWriter)
 			assert.Error(t, actualError)
@@ -271,7 +358,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", incoming).Return(nil)
 			mgr.On("GetURN", incoming).Return(resource.ZeroURN(), errors.New("urn error"))
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Update(ctx, incoming, logWriter)
 			assert.Error(t, actualError)
@@ -289,7 +376,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", incoming).Return(nil)
 			mgr.On("GetURN", incoming).Return(urn, nil)
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Update(ctx, incoming, logWriter)
 			assert.Error(t, actualError)
@@ -308,7 +395,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", resourceToUpdate).Return(nil)
 			mgr.On("GetURN", resourceToUpdate).Return(datasetURN, nil)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Update(ctx, resourceToUpdate, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -323,7 +410,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("GetURN", mock.Anything).Return(datasetURN, nil)
 
 			repo := newResourceRepository(t)
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			unacceptableStatuses := []resource.Status{
 				resource.StatusUnknown,
@@ -363,7 +450,7 @@ func TestResourceService(t *testing.T) {
 			repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, fullName, onlyActive).Return(existingResource, nil)
 			repo.On("Update", ctx, mock.Anything).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Update(ctx, resourceToUpdate, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -386,7 +473,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("GetURN", mock.Anything).Return(datasetURN, nil)
 			mgr.On("UpdateResource", ctx, mock.Anything).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Update(ctx, resourceToUpdate, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -424,7 +511,7 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			actualError := rscService.Update(ctx, resourceToUpdate, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -456,9 +543,59 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, nil)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, nil, nil, nil)
 
 			actualError := rscService.Update(ctx, resourceToUpdate, logWriter)
+			assert.NoError(t, actualError)
+		})
+
+		t.Run("v2 spec return error if tenant details return error and validation fails", func(t *testing.T) {
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+
+			repo := newResourceRepository(t)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(nil, errors.New("tenant details not found"))
+			engine := compiler.NewEngine()
+
+			mgr := NewResourceManager(t)
+			mgr.On("Validate", incoming).Return(errors.New("error validation"))
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, tenantDetailsGetter, engine)
+
+			actualError := rscService.Update(ctx, incoming, logWriter)
+			assert.Error(t, actualError)
+		})
+
+		t.Run("v2 spec return nil if resource is successfully updated", func(t *testing.T) {
+			tableName := "data-table"
+			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+			existingResource, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(tnntDetails, nil)
+			engine := compiler.NewEngine()
+
+			repo := newResourceRepository(t)
+			repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(existingResource, nil)
+			repo.On("Update", ctx, mock.Anything).Return(nil)
+
+			mgr := NewResourceManager(t)
+			mgr.On("Validate", incoming).Return(nil)
+			mgr.On("GetURN", incoming).Return(tableURNV2, nil)
+			mgr.On("UpdateResource", ctx, incoming).Return(nil)
+
+			eventHandler := newEventHandler(t)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, tenantDetailsGetter, engine)
+
+			actualError := rscService.Update(ctx, incoming, logWriter)
 			assert.NoError(t, actualError)
 		})
 	})
@@ -470,7 +607,7 @@ func TestResourceService(t *testing.T) {
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", invalid).Return(errors.New("validation error"))
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Upsert(ctx, invalid, logWriter)
 			assert.Error(t, actualError)
@@ -485,7 +622,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", incoming).Return(nil)
 			mgr.On("GetURN", incoming).Return(resource.ZeroURN(), errors.New("urn error"))
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Upsert(ctx, incoming, logWriter)
 			assert.Error(t, actualError)
@@ -502,7 +639,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", incoming).Return(nil)
 			mgr.On("GetURN", incoming).Return(tableURN, nil)
 
-			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Upsert(ctx, incoming, logWriter)
 			assert.Error(t, actualError)
@@ -522,7 +659,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(nil, errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Upsert(ctx, incoming, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -541,7 +678,7 @@ func TestResourceService(t *testing.T) {
 				mgr.On("Validate", incoming).Return(nil)
 				mgr.On("GetURN", incoming).Return(tableURN, nil)
 
-				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 				actualError := rscService.Upsert(ctx, incoming, logWriter)
 				assert.ErrorContains(t, actualError, "error creating resource")
@@ -560,7 +697,7 @@ func TestResourceService(t *testing.T) {
 				mgr.On("GetURN", incoming).Return(tableURN, nil)
 				mgr.On("CreateResource", ctx, incoming).Return(errors.New("error creating to store"))
 
-				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 				actualError := rscService.Upsert(ctx, incoming, logWriter)
 				assert.ErrorContains(t, actualError, "error creating to store")
@@ -581,7 +718,7 @@ func TestResourceService(t *testing.T) {
 
 				eventHandler := newEventHandler(t)
 
-				rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, nil)
+				rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, nil, nil, nil)
 
 				actualError := rscService.Upsert(ctx, incoming, logWriter)
 				assert.NoError(t, actualError)
@@ -605,7 +742,7 @@ func TestResourceService(t *testing.T) {
 				repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, fullName, onlyActive).Return(existingResource, nil)
 				repo.On("Update", ctx, mock.Anything).Return(errors.New("unknown error"))
 
-				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 				actualError := rscService.Upsert(ctx, resourceToUpdate, logWriter)
 				assert.ErrorContains(t, actualError, "unknown error")
@@ -628,7 +765,7 @@ func TestResourceService(t *testing.T) {
 				mgr.On("GetURN", mock.Anything).Return(datasetURN, nil)
 				mgr.On("UpdateResource", ctx, mock.Anything).Return(errors.New("unknown error"))
 
-				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+				rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 				actualError := rscService.Upsert(ctx, resourceToUpdate, logWriter)
 				assert.ErrorContains(t, actualError, "unknown error")
@@ -667,7 +804,7 @@ func TestResourceService(t *testing.T) {
 				refresher := new(mockDownstreamRefresher)
 				refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(errors.New("unknown error"))
 
-				rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
+				rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager, nil, nil)
 
 				actualError := rscService.Upsert(ctx, resourceToUpdate, logWriter)
 				assert.ErrorContains(t, actualError, "unknown error")
@@ -697,18 +834,96 @@ func TestResourceService(t *testing.T) {
 				refresher := new(mockDownstreamRefresher)
 				refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
 
-				rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, nil)
+				rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, nil, nil, nil)
 
 				actualError := rscService.Upsert(ctx, resourceToUpdate, logWriter)
 				assert.NoError(t, actualError)
 			})
+		})
+
+		t.Run("v2 spec return error if tenant details return error and validation fails", func(t *testing.T) {
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+
+			repo := newResourceRepository(t)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(nil, errors.New("tenant details not found"))
+			engine := compiler.NewEngine()
+
+			mgr := NewResourceManager(t)
+			mgr.On("Validate", incoming).Return(errors.New("error validation"))
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, tenantDetailsGetter, engine)
+
+			actualError := rscService.Upsert(ctx, incoming, logWriter)
+			assert.Error(t, actualError)
+		})
+
+		t.Run("v2 spec return nil if resource is successfully created", func(t *testing.T) {
+			tableName := "data-table"
+			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(tnntDetails, nil)
+			engine := compiler.NewEngine()
+
+			repo := newResourceRepository(t)
+			repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(nil, oErrors.NotFound(resource.EntityResource, "resource not found"))
+			repo.On("Create", ctx, incoming).Return(nil)
+
+			mgr := NewResourceManager(t)
+			mgr.On("Validate", incoming).Return(nil)
+			mgr.On("GetURN", incoming).Return(tableURNV2, nil)
+			mgr.On("CreateResource", ctx, incoming).Return(nil)
+
+			eventHandler := newEventHandler(t)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, tenantDetailsGetter, engine)
+
+			actualError := rscService.Upsert(ctx, incoming, logWriter)
+			assert.NoError(t, actualError)
+		})
+
+		t.Run("v2 spec return nil if resource is successfully updated", func(t *testing.T) {
+			tableName := "data-table"
+			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+			existingResource, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			assert.NoError(t, err)
+			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", ctx, tnnt).Return(tnntDetails, nil)
+			engine := compiler.NewEngine()
+
+			repo := newResourceRepository(t)
+			repo.On("ReadByFullName", ctx, tnnt, resource.Bigquery, incoming.FullName(), onlyActive).Return(existingResource, nil)
+			repo.On("Update", ctx, incoming).Return(nil)
+
+			mgr := NewResourceManager(t)
+			mgr.On("Validate", incoming).Return(nil)
+			mgr.On("GetURN", incoming).Return(tableURNV2, nil)
+			mgr.On("UpdateResource", ctx, incoming).Return(nil)
+
+			eventHandler := newEventHandler(t)
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendResourceEvent", mock.Anything)
+
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, tenantDetailsGetter, engine)
+
+			actualError := rscService.Upsert(ctx, incoming, logWriter)
+			assert.NoError(t, actualError)
 		})
 	})
 
 	t.Run("Get", func(t *testing.T) {
 		onlyActive := true
 		t.Run("returns nil and error if resource name is empty", func(t *testing.T) {
-			rscService := service.NewResourceService(logger, nil, nil, nil, nil, nil, nil)
+			rscService := service.NewResourceService(logger, nil, nil, nil, nil, nil, nil, nil, nil)
 
 			store := resource.Bigquery
 			actualResource, actualError := rscService.Get(ctx, tnnt, store, "")
@@ -723,7 +938,7 @@ func TestResourceService(t *testing.T) {
 
 			refresher := new(mockDownstreamRefresher)
 
-			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil, nil, nil)
 
 			actualResource, actualError := rscService.Get(ctx, tnnt, resource.Bigquery, fullName)
 			assert.Nil(t, actualResource)
@@ -740,7 +955,7 @@ func TestResourceService(t *testing.T) {
 
 			refresher := new(mockDownstreamRefresher)
 
-			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil, nil, nil)
 
 			actualResource, actualError := rscService.Get(ctx, tnnt, resource.Bigquery, fullName)
 			assert.EqualValues(t, existingResource, actualResource)
@@ -756,7 +971,7 @@ func TestResourceService(t *testing.T) {
 
 			refresher := new(mockDownstreamRefresher)
 
-			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil, nil, nil)
 
 			actualResources, actualError := rscService.GetAll(ctx, tnnt, resource.Bigquery)
 			assert.Nil(t, actualResources)
@@ -772,7 +987,7 @@ func TestResourceService(t *testing.T) {
 
 			refresher := new(mockDownstreamRefresher)
 
-			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil, nil, nil)
 
 			actualResources, actualError := rscService.GetAll(ctx, tnnt, resource.Bigquery)
 			assert.EqualValues(t, []*resource.Resource{existingResource}, actualResources)
@@ -801,7 +1016,7 @@ func TestResourceService(t *testing.T) {
 			mgr := NewResourceManager(t)
 			mgr.On("Validate", invalidResourceToUpdate).Return(errors.New("error validating"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, resourcesToUpdate, logWriter)
 			assert.Error(t, actualError)
@@ -819,7 +1034,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{}, nil)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incoming}, logWriter)
 			assert.Error(t, actualError)
@@ -842,7 +1057,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{}, nil)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incoming}, logWriter)
 			assert.Error(t, actualError)
@@ -864,7 +1079,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", incomingResourceToUpdate).Return(nil)
 			mgr.On("GetURN", incomingResourceToUpdate).Return(urn, nil)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, resourcesToUpdate, logWriter)
 			assert.ErrorContains(t, actualError, "error while read all")
@@ -885,7 +1100,7 @@ func TestResourceService(t *testing.T) {
 			mgr.On("Validate", mock.Anything).Return(nil)
 			mgr.On("GetURN", mock.Anything).Return(urn, nil)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 			assert.NoError(t, actualError)
@@ -911,7 +1126,7 @@ func TestResourceService(t *testing.T) {
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendResourceEvent", mock.Anything)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 
@@ -942,7 +1157,7 @@ func TestResourceService(t *testing.T) {
 			eventHandler := newEventHandler(t)
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendResourceEvent", mock.Anything)
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 
@@ -974,7 +1189,7 @@ func TestResourceService(t *testing.T) {
 			eventHandler := newEventHandler(t)
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendResourceEvent", mock.Anything)
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -1013,7 +1228,7 @@ func TestResourceService(t *testing.T) {
 			eventHandler := newEventHandler(t)
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendResourceEvent", mock.Anything)
-			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, []*resource.Resource{incomingResourceToUpdate}, logWriter)
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -1066,7 +1281,7 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting}
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
@@ -1120,7 +1335,7 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting}
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
@@ -1184,7 +1399,7 @@ func TestResourceService(t *testing.T) {
 			refresher := new(mockDownstreamRefresher)
 			refresher.On("RefreshResourceDownstream", ctx, mock.Anything, logWriter).Return(nil)
 
-			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager)
+			rscService := service.NewResourceService(logger, repo, refresher, mgr, eventHandler, nil, alertManager, nil, nil)
 
 			incomings := []*resource.Resource{incomingToCreate, incomingToSkip, incomingToUpdate, incomingToCreateExisting, incomingToRecreate}
 			actualError := rscService.Deploy(ctx, tnnt, resource.Bigquery, incomings, logWriter)
@@ -1200,7 +1415,7 @@ func TestResourceService(t *testing.T) {
 
 			mgr := NewResourceManager(t)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			resp, actualError := rscService.SyncResources(ctx, tnnt, resource.Bigquery, []string{fullName})
 			assert.ErrorContains(t, actualError, "unknown error")
@@ -1213,7 +1428,7 @@ func TestResourceService(t *testing.T) {
 
 			mgr := NewResourceManager(t)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			response, actualError := rscService.SyncResources(ctx, tnnt, resource.Bigquery, []string{fullName})
 			assert.Nil(t, actualError)
@@ -1233,7 +1448,7 @@ func TestResourceService(t *testing.T) {
 			mgr := NewResourceManager(t)
 			mgr.On("SyncResource", ctx, incoming).Return(errors.New("unable to create"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			response, actualError := rscService.SyncResources(ctx, tnnt, resource.Bigquery, []string{fullName})
 			assert.Nil(t, actualError)
@@ -1253,7 +1468,7 @@ func TestResourceService(t *testing.T) {
 			mgr := NewResourceManager(t)
 			mgr.On("SyncResource", ctx, incoming).Return(nil)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			response, actualError := rscService.SyncResources(ctx, tnnt, resource.Bigquery, []string{fullName})
 			assert.Nil(t, actualError)
@@ -1270,7 +1485,7 @@ func TestResourceService(t *testing.T) {
 			var (
 				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
-				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil)
+				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil, nil, nil)
 				req             = &resource.DeleteRequest{
 					Tenant:    tnnt,
 					Datastore: resource.Bigquery,
@@ -1296,7 +1511,7 @@ func TestResourceService(t *testing.T) {
 			var (
 				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
-				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil)
+				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil, nil, nil)
 				req             = &resource.DeleteRequest{
 					Tenant:    tnnt,
 					Datastore: resource.Bigquery,
@@ -1328,7 +1543,7 @@ func TestResourceService(t *testing.T) {
 			var (
 				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
-				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil)
+				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil, nil, nil)
 				req             = &resource.DeleteRequest{
 					Tenant:    tnnt,
 					Datastore: resource.Bigquery,
@@ -1353,7 +1568,7 @@ func TestResourceService(t *testing.T) {
 			var (
 				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
-				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil)
+				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil, nil, nil)
 				req             = &resource.DeleteRequest{
 					Tenant:    tnnt,
 					Datastore: resource.Bigquery,
@@ -1378,7 +1593,7 @@ func TestResourceService(t *testing.T) {
 			var (
 				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
-				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil)
+				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil, nil, nil)
 				req             = &resource.DeleteRequest{
 					Tenant:    tnnt,
 					Datastore: resource.Bigquery,
@@ -1402,7 +1617,7 @@ func TestResourceService(t *testing.T) {
 			var (
 				mockDepResolver = new(mockDownstreamResolver)
 				repo            = newResourceRepository(t)
-				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil)
+				rscService      = service.NewResourceService(logger, repo, nil, nil, nil, mockDepResolver, nil, nil, nil)
 				req             = &resource.DeleteRequest{
 					Tenant:    tnnt,
 					Datastore: resource.Bigquery,
@@ -1426,7 +1641,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			logger := log.NewLogrus()
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			_, err := rscService.GetByURN(ctx, tnnt, resource.ZeroURN())
 			assert.Error(t, err)
@@ -1443,7 +1658,7 @@ func TestResourceService(t *testing.T) {
 
 			repo.On("ReadByURN", ctx, tnnt, urn).Return(nil, errors.New("unknown error"))
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			_, err = rscService.GetByURN(ctx, tnnt, urn)
 			assert.Error(t, err)
@@ -1463,7 +1678,7 @@ func TestResourceService(t *testing.T) {
 
 			repo.On("ReadByURN", ctx, tnnt, urn).Return(expectedResource, nil)
 
-			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil)
+			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil)
 
 			actualResource, err := rscService.GetByURN(ctx, tnnt, urn)
 			assert.NoError(t, err)
@@ -1752,4 +1967,18 @@ type mockAlertManager struct {
 
 func (m *mockAlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 	m.Called(attr)
+}
+
+// TenantDetailsGetter is an autogenerated mock type for the TenantDetailsGetter type
+type mockTenantDetailsGetter struct {
+	mock.Mock
+}
+
+// GetDetails provides a mock function with given fields: ctx, jobTenant
+func (m *mockTenantDetailsGetter) GetDetails(ctx context.Context, jobTenant tenant.Tenant) (*tenant.WithDetails, error) {
+	args := m.Called(ctx, jobTenant)
+	if args.Get(0) != nil {
+		return args.Get(0).(*tenant.WithDetails), args.Error(1)
+	}
+	return nil, args.Error(1)
 }

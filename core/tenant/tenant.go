@@ -108,7 +108,7 @@ func (w *WithDetails) GetConfigs() map[string]string {
 
 func (w *WithDetails) GetVariables() map[string]string {
 	namespaceVars := w.namespace.GetVariables()
-	return utils.MergeMaps(namespaceVars, w.project.GetVariables())
+	return utils.MergeMaps(w.project.GetVariables(), namespaceVars)
 }
 
 func (w *WithDetails) Project() *Project {

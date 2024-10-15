@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -14,8 +15,13 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/writer"
+)
+
+const (
+	projectConfigPrefix = "GLOBAL__"
 )
 
 type ResourceRepository interface {
@@ -51,6 +57,15 @@ type EventHandler interface {
 	HandleEvent(moderator.Event)
 }
 
+type TenantDetailsGetter interface {
+	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
+}
+
+type CompileEngine interface {
+	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
+	CompileString(input string, context map[string]any) (string, error)
+}
+
 type ResourceService struct {
 	repo               ResourceRepository
 	mgr                ResourceManager
@@ -60,6 +75,9 @@ type ResourceService struct {
 	logger       log.Logger
 	eventHandler EventHandler
 	alertHandler AlertManager
+
+	tenantDetailsGetter TenantDetailsGetter
+	compileEngine       CompileEngine
 }
 
 type AlertManager interface {
@@ -70,33 +88,31 @@ func NewResourceService(
 	logger log.Logger,
 	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
 	eventHandler EventHandler, downstreamResolver DownstreamResolver, alertManager AlertManager,
+	tenantDetailsGetter TenantDetailsGetter, compileEngine CompileEngine,
 ) *ResourceService {
 	return &ResourceService{
-		repo:               repo,
-		mgr:                mgr,
-		refresher:          downstreamRefresher,
-		downstreamResolver: downstreamResolver,
-		logger:             logger,
-		eventHandler:       eventHandler,
-		alertHandler:       alertManager,
+		repo:                repo,
+		mgr:                 mgr,
+		refresher:           downstreamRefresher,
+		downstreamResolver:  downstreamResolver,
+		logger:              logger,
+		eventHandler:        eventHandler,
+		alertHandler:        alertManager,
+		tenantDetailsGetter: tenantDetailsGetter,
+		compileEngine:       compileEngine,
 	}
 }
 
 func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resource) error { // nolint:gocritic
-	if err := rs.mgr.Validate(incoming); err != nil {
-		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
-		return err
+	compiledSpec, err := rs.compileSpec(ctx, incoming)
+	if err != nil {
+		rs.logger.Warn("suppressed error compiling spec for resource [%s]: %s", incoming.FullName(), err)
+		compiledSpec = incoming.Spec()
 	}
+	incoming.UpdateSpec(compiledSpec)
 
-	incoming.MarkValidationSuccess()
-	urn, err := rs.mgr.GetURN(incoming)
+	err = rs.validateAndGenerateURN(incoming)
 	if err != nil {
-		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
-		return err
-	}
-	err = incoming.UpdateURN(urn)
-	if err != nil {
-		rs.logger.Error("error updating urn of resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
 
@@ -138,20 +154,15 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 }
 
 func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
-	if err := rs.mgr.Validate(incoming); err != nil {
-		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
-		return err
+	compiledSpec, err := rs.compileSpec(ctx, incoming)
+	if err != nil {
+		rs.logger.Warn("suppressed error compiling spec for resource [%s]: %s", incoming.FullName(), err)
+		compiledSpec = incoming.Spec()
 	}
+	incoming.UpdateSpec(compiledSpec)
 
-	incoming.MarkValidationSuccess()
-	urn, err := rs.mgr.GetURN(incoming)
+	err = rs.validateAndGenerateURN(incoming)
 	if err != nil {
-		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
-		return err
-	}
-	err = incoming.UpdateURN(urn)
-	if err != nil {
-		rs.logger.Error("error updating urn of resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
 
@@ -193,21 +204,15 @@ func (rs ResourceService) Update(ctx context.Context, incoming *resource.Resourc
 }
 
 func (rs ResourceService) Upsert(ctx context.Context, incoming *resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
-	if err := rs.mgr.Validate(incoming); err != nil {
-		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
-		return err
-	}
-	incoming.MarkValidationSuccess()
-
-	urn, err := rs.mgr.GetURN(incoming)
+	compiledSpec, err := rs.compileSpec(ctx, incoming)
 	if err != nil {
-		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
-		return err
+		rs.logger.Warn("suppressed error compiling spec for resource [%s]: %s", incoming.FullName(), err)
+		compiledSpec = incoming.Spec()
 	}
+	incoming.UpdateSpec(compiledSpec)
 
-	err = incoming.UpdateURN(urn)
+	err = rs.validateAndGenerateURN(incoming)
 	if err != nil {
-		rs.logger.Error("error updating urn of resource [%s]: %s", incoming.FullName(), err)
 		return err
 	}
 
@@ -247,6 +252,65 @@ func (rs ResourceService) Upsert(ctx context.Context, incoming *resource.Resourc
 		}
 	}
 	return nil
+}
+
+func (rs ResourceService) validateAndGenerateURN(incoming *resource.Resource) error {
+	if err := rs.mgr.Validate(incoming); err != nil {
+		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
+		return err
+	}
+	incoming.MarkValidationSuccess()
+
+	urn, err := rs.mgr.GetURN(incoming)
+	if err != nil {
+		rs.logger.Error("error validating resource [%s]: %s", incoming.FullName(), err)
+		return err
+	}
+
+	err = incoming.UpdateURN(urn)
+	if err != nil {
+		rs.logger.Error("error updating urn of resource [%s]: %s", incoming.FullName(), err)
+		return err
+	}
+
+	return nil
+}
+
+// helper method to compile resource specs containing template variables
+// which is only supported on resource specs with version: 2 and above
+func (rs ResourceService) compileSpec(ctx context.Context, res *resource.Resource) (map[string]any, error) {
+	if res.Version() < resource.ResourceSpecV2 {
+		return res.Spec(), nil
+	}
+
+	sourceSpec := res.Spec()
+	tnnt, err := rs.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
+	if err != nil {
+		return nil, err
+	}
+
+	tmplCtx := compiler.PrepareContext(
+		compiler.From(tnnt.GetVariables()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
+	)
+
+	// instead of having to traverse through each field in spec, and compile them individually,
+	// we should be able to compile the entire spec at once by treating the spec as a string
+	specBytes, err := json.Marshal(sourceSpec)
+	if err != nil {
+		return nil, err
+	}
+	specStr := string(specBytes)
+	compiledSpecStr, err := rs.compileEngine.CompileString(specStr, tmplCtx)
+	if err != nil {
+		return nil, err
+	}
+	var compiledSpec map[string]any
+	err = json.Unmarshal([]byte(compiledSpecStr), &compiledSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	return compiledSpec, nil
 }
 
 func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResponse, error) {

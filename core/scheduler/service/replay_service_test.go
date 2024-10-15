@@ -104,7 +104,7 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJob", ctx, projName, jobName).Return(&job, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", ctx,replayID, tnnt, jobName).Return().Maybe()
+			replayWorker.On("Execute", ctx, replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
@@ -149,7 +149,7 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJob", ctx, projName, jobName).Return(&job, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", ctx,replayID, tnnt, jobName).Return().Maybe()
+			replayWorker.On("Execute", ctx, replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()

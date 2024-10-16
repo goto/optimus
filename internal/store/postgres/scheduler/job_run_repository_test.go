@@ -112,4 +112,97 @@ func TestPostgresJobRunRepository(t *testing.T) {
 			assert.EqualValues(t, monitoring, jobRunByID.Monitoring)
 		})
 	})
+	t.Run("GetLatestRun", func(t *testing.T) {
+		t.Run("gets the latest job run", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+			jobRunRepo := postgres.NewJobRunRepository(db)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			assert.Nil(t, err)
+			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
+			assert.Nil(t, err)
+	
+			latestJobRun, err := jobRunRepo.GetLatestRun(ctx, tnnt.ProjectName(), jobAName, nil)
+			assert.Nil(t, err)
+			assert.EqualValues(t, jobRun, latestJobRun)
+		})
+	
+		t.Run("returns error if no job run found", func(t *testing.T) {
+			db := dbSetup()
+			jobRunRepo := postgres.NewJobRunRepository(db)
+	
+			_, err := jobRunRepo.GetLatestRun(ctx, tnnt.ProjectName(), jobAName, nil)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "no record for job")
+		})
+	
+		t.Run("gets the latest job run with specific state", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+			jobRunRepo := postgres.NewJobRunRepository(db)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			assert.Nil(t, err)
+			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
+			assert.Nil(t, err)
+	
+			jobEndTime := currentTime.Add(-time.Minute)
+			err = jobRunRepo.Update(ctx, jobRun.ID, jobEndTime, scheduler.StateSuccess)
+			assert.Nil(t, err)
+	
+			latestJobRun, err := jobRunRepo.GetLatestRun(ctx, tnnt.ProjectName(), jobAName, &scheduler.StateSuccess)
+			assert.Nil(t, err)
+			assert.EqualValues(t, scheduler.StateSuccess, latestJobRun.State)
+		})
+	})
+	
+	t.Run("GetRunsByTimeRange", func(t *testing.T) {
+		t.Run("gets job runs within a specific time range", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+			jobRunRepo := postgres.NewJobRunRepository(db)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			assert.Nil(t, err)
+			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
+			assert.Nil(t, err)
+	
+			since := scheduledAt.Add(-2 * time.Hour)
+			until := scheduledAt.Add(2 * time.Hour)
+			jobRuns, err := jobRunRepo.GetRunsByTimeRange(ctx, tnnt.ProjectName(), jobAName, nil, since, until)
+			assert.Nil(t, err)
+			assert.Len(t, jobRuns, 1)
+			assert.Equal(t, jobRun.ID, jobRuns[0].ID)
+		})
+	
+		t.Run("returns empty list if no job runs found in the time range", func(t *testing.T) {
+			db := dbSetup()
+			jobRunRepo := postgres.NewJobRunRepository(db)
+	
+			since := scheduledAt.Add(-2 * time.Hour)
+			until := scheduledAt.Add(-1 * time.Hour)
+			jobRuns, err := jobRunRepo.GetRunsByTimeRange(ctx, tnnt.ProjectName(), jobAName, nil, since, until)
+			assert.Nil(t, err)
+			assert.Len(t, jobRuns, 0)
+		})
+	
+		t.Run("gets job runs within a specific time range and state", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+			jobRunRepo := postgres.NewJobRunRepository(db)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			assert.Nil(t, err)
+			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
+			assert.Nil(t, err)
+	
+			jobEndTime := currentTime.Add(-time.Minute)
+			err = jobRunRepo.Update(ctx, jobRun.ID, jobEndTime, scheduler.StateSuccess)
+			assert.Nil(t, err)
+	
+			since := scheduledAt.Add(-2 * time.Hour)
+			until := scheduledAt.Add(2 * time.Hour)
+			jobRuns, err := jobRunRepo.GetRunsByTimeRange(ctx, tnnt.ProjectName(), jobAName, &scheduler.StateSuccess, since, until)
+			assert.Nil(t, err)
+			assert.Len(t, jobRuns, 1)
+			assert.Equal(t, scheduler.StateSuccess, jobRuns[0].State)
+		})
+	})
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
 	"github.com/goto/optimus/internal/lib/window"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 func TestJobRunService(t *testing.T) {
@@ -30,13 +31,13 @@ func TestJobRunService(t *testing.T) {
 	scheduledAtString := "2022-01-02T15:04:05Z"
 	scheduledAtTimeStamp, _ := time.Parse(scheduler.ISODateFormat, scheduledAtString)
 	logger := log.NewNoop()
+	tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
 
 	monitoring := map[string]any{
 		"slot_millis":           float64(5000),
 		"total_bytes_processed": float64(2500),
 	}
 	t.Run("UpdateJobState", func(t *testing.T) {
-		tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
 
 		t.Run("should reject unregistered events", func(t *testing.T) {
 			runService := service.NewJobRunService(logger,
@@ -1466,6 +1467,114 @@ func TestJobRunService(t *testing.T) {
 			assert.NoError(t, actualError)
 		})
 	})
+
+	t.Run("GetJobRunsByFilter", func(t *testing.T) {
+		t.Run("should return job runs by time range when start date and end date filters are provided", func(t *testing.T) {
+			startDate := time.Now().Add(-24 * time.Hour)
+			endDate := time.Now()
+			runState := scheduler.StateSuccess
+
+			jobRunRepo := new(mockJobRunRepository)
+			jobRunRepo.On("GetRunsByTimeRange", ctx, projName, jobName, &runState, startDate, endDate).Return([]*scheduler.JobRun{
+				{
+					ID:        uuid.New(),
+					JobName:   jobName,
+					Tenant:    tnnt,
+					StartTime: startDate,
+					State:     runState,
+				},
+			}, nil)
+			defer jobRunRepo.AssertExpectations(t)
+
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil)
+
+			filters := []filter.FilterOpt{
+				filter.WithTime(filter.StartDate, startDate),
+				filter.WithTime(filter.EndDate, endDate),
+				filter.WithString(filter.RunState, runState.String()),
+			}
+			jobRuns, err := runService.GetJobRunsByFilter(ctx, projName, jobName, filters...)
+
+			assert.Nil(t, err)
+			assert.Len(t, jobRuns, 1)
+			assert.Equal(t, jobName, jobRuns[0].JobName)
+			assert.Equal(t, runState, jobRuns[0].State)
+		})
+
+		t.Run("should return latest job run when no date filters are provided", func(t *testing.T) {
+			runState := scheduler.StateSuccess
+			jobRun := &scheduler.JobRun{
+				ID:        uuid.New(),
+				JobName:   jobName,
+				Tenant:    tnnt,
+				StartTime: time.Now(),
+				State:     runState,
+			}
+
+			jobRunRepo := new(mockJobRunRepository)
+			jobRunRepo.On("GetLatestRun", ctx, projName, jobName, &runState).Return(jobRun, nil)
+			defer jobRunRepo.AssertExpectations(t)
+
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil)
+
+			filters := []filter.FilterOpt{
+				filter.WithString(filter.RunState, runState.String()),
+			}
+			jobRuns, err := runService.GetJobRunsByFilter(ctx, projName, jobName, filters...)
+
+			assert.Nil(t, err)
+			assert.Len(t, jobRuns, 1)
+			assert.Equal(t, jobName, jobRuns[0].JobName)
+			assert.Equal(t, runState, jobRuns[0].State)
+		})
+
+		t.Run("should return error when GetRunsByTimeRange fails", func(t *testing.T) {
+			startDate := time.Now().Add(-24 * time.Hour)
+			endDate := time.Now()
+			runState := scheduler.StateSuccess
+
+			jobRunRepo := new(mockJobRunRepository)
+			var runsByTimeRange []*scheduler.JobRun
+			runsByTimeRange = nil
+			jobRunRepo.On("GetRunsByTimeRange", ctx, projName, jobName, &runState, startDate, endDate).Return(runsByTimeRange, fmt.Errorf("some error"))
+			defer jobRunRepo.AssertExpectations(t)
+
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil)
+
+			filters := []filter.FilterOpt{
+				filter.WithTime(filter.StartDate, startDate),
+				filter.WithTime(filter.EndDate, endDate),
+				filter.WithString(filter.RunState, runState.String()),
+			}
+			jobRuns, err := runService.GetJobRunsByFilter(ctx, projName, jobName, filters...)
+
+			assert.NotNil(t, err)
+			assert.Nil(t, jobRuns)
+			assert.EqualError(t, err, "some error")
+		})
+
+		t.Run("should return error when GetLatestRun fails", func(t *testing.T) {
+			runState := scheduler.StateSuccess
+
+			jobRunRepo := new(mockJobRunRepository)
+			var jobRun *scheduler.JobRun
+			jobRun = nil
+			jobRunRepo.On("GetLatestRun", ctx, projName, jobName, &runState).Return(jobRun, fmt.Errorf("some error"))
+			defer jobRunRepo.AssertExpectations(t)
+
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil)
+
+			filters := []filter.FilterOpt{
+				filter.WithString(filter.RunState, runState.String()),
+			}
+			jobRuns, err := runService.GetJobRunsByFilter(ctx, projName, jobName, filters...)
+
+			assert.NotNil(t, err)
+			assert.Nil(t, jobRuns)
+			assert.EqualError(t, err, "some error")
+		})
+	})
+
 }
 
 func mockGetJobRuns(afterDays int, date time.Time, interval string, status scheduler.State) ([]*scheduler.JobRunStatus, error) {

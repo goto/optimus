@@ -65,15 +65,15 @@
         ]
       }
     },
-    "/v1beta1/project/{projectName}/job/{jobName}/job_runs": {
+    "/v1beta1/project/{projectName}/job/{jobName}/latest-runs": {
       "get": {
         "summary": "JobRunList returns the current and past run status of jobs on a given range",
-        "operationId": "JobRunService_GetJobRuns",
+        "operationId": "JobRunService_GetLatestJobRuns",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1beta1GetJobRunsResponse"
+              "$ref": "#/definitions/v1beta1GetLatestJobRunsResponse"
             }
           },
           "default": {
@@ -98,23 +98,10 @@
           },
           {
             "name": "state",
+            "description": "state is an optional filter.",
             "in": "query",
             "required": false,
             "type": "string"
-          },
-          {
-            "name": "since",
-            "in": "query",
-            "required": false,
-            "type": "string",
-            "format": "date-time"
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "required": false,
-            "type": "string",
-            "format": "date-time"
           }
         ],
         "tags": [
@@ -409,7 +396,7 @@
         }
       }
     },
-    "v1beta1GetJobRunsResponse": {
+    "v1beta1GetLatestJobRunsResponse": {
       "type": "object",
       "properties": {
         "jobRuns": {

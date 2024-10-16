@@ -32,6 +32,113 @@ func TestJobRunHandler(t *testing.T) {
 	projectName := "a-data-proj"
 	jobName := "a-job-name"
 
+	t.Run("GetJobRun", func(t *testing.T) {
+		t.Run("should return error if project name is invalid", func(t *testing.T) {
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil)
+			req := &pb.GetJobRunsRequest{
+				ProjectName: "",
+				JobName:     "job1",
+				Since:       timestamppb.Now(),
+				Until:       timestamppb.Now(),
+				State:       "success",
+			}
+			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity project: project name is empty: unable to get job run for job1")
+			assert.Nil(t, resp)
+		})
+
+		t.Run("should return error if job name is invalid", func(t *testing.T) {
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil)
+			req := &pb.GetJobRunsRequest{
+				ProjectName: "proj",
+				JobName:     "",
+				Since:       timestamppb.Now(),
+				Until:       timestamppb.Now(),
+				State:       "success",
+			}
+			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity jobRun: job name is empty: unable to get job run for ")
+			assert.Nil(t, resp)
+		})
+
+		t.Run("should return error if state is invalid", func(t *testing.T) {
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil)
+			req := &pb.GetJobRunsRequest{
+				ProjectName: "proj",
+				JobName:     "job1",
+				Since:       timestamppb.Now(),
+				Until:       timestamppb.Now(),
+				State:       "invalid_state",
+			}
+			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "invalid job run state: invalid_state")
+			assert.Nil(t, resp)
+		})
+
+		t.Run("should return job runs successfully", func(t *testing.T) {
+			jobRuns := []*scheduler.JobRun{
+				{
+					State:       scheduler.StateSuccess,
+					ScheduledAt: time.Now(),
+				},
+			}
+			jobRunService := new(mockJobRunService)
+			jobRunService.On("GetJobRunsByFilter", ctx, tenant.ProjectName("proj"), scheduler.JobName("job1"), mock.Anything).
+				Return(jobRuns, nil)
+			defer jobRunService.AssertExpectations(t)
+
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil)
+			req := &pb.GetJobRunsRequest{
+				ProjectName: "proj",
+				JobName:     "job1",
+				Since:       timestamppb.Now(),
+				Until:       timestamppb.Now(),
+				State:       "success",
+			}
+			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			assert.Nil(t, err)
+			assert.Equal(t, len(jobRuns), len(resp.JobRuns))
+			for _, expectedRun := range jobRuns {
+				var found bool
+				for _, respRun := range resp.JobRuns {
+					if expectedRun.ScheduledAt.Equal(respRun.ScheduledAt.AsTime()) &&
+						expectedRun.State.String() == respRun.State {
+						found = true
+						break
+					}
+				}
+				if !found {
+					assert.Fail(t, fmt.Sprintf("failed to find expected job run %v", expectedRun))
+				}
+			}
+		})
+
+		t.Run("should return error if service returns error", func(t *testing.T) {
+			jobRunService := new(mockJobRunService)
+			var jobRuns []*scheduler.JobRun
+			jobRuns = nil
+			jobRunService.On("GetJobRunsByFilter", ctx, tenant.ProjectName("proj"), scheduler.JobName("job1"), mock.Anything).
+				Return(jobRuns, fmt.Errorf("service error"))
+			defer jobRunService.AssertExpectations(t)
+
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil)
+			req := &pb.GetJobRunsRequest{
+				ProjectName: "proj",
+				JobName:     "job1",
+				Since:       timestamppb.Now(),
+				Until:       timestamppb.Now(),
+				State:       "success",
+			}
+			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = Internal desc = service error: unable to get job run for job1")
+			assert.Nil(t, resp)
+		})
+	})
+
 	t.Run("JobRunInput", func(t *testing.T) {
 		t.Run("returns error when project name is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
@@ -693,6 +800,7 @@ func TestJobRunHandler(t *testing.T) {
 			assert.NoError(t, actualError)
 		})
 	})
+
 }
 
 type mockJobRunService struct {

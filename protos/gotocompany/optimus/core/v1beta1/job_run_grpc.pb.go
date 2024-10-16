@@ -27,7 +27,7 @@ type JobRunServiceClient interface {
 	// JobRun returns the current and past run status of jobs on a given range
 	JobRun(ctx context.Context, in *JobRunRequest, opts ...grpc.CallOption) (*JobRunResponse, error)
 	// JobRunList returns the current and past run status of jobs on a given range
-	GetJobRuns(ctx context.Context, in *GetJobRunsRequest, opts ...grpc.CallOption) (*GetJobRunsResponse, error)
+	GetLatestJobRuns(ctx context.Context, in *GetLatestJobRunsRequest, opts ...grpc.CallOption) (*GetLatestJobRunsResponse, error)
 	// RegisterJobEvent notifies optimus service about an event related to job
 	RegisterJobEvent(ctx context.Context, in *RegisterJobEventRequest, opts ...grpc.CallOption) (*RegisterJobEventResponse, error)
 	// UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler
@@ -62,9 +62,9 @@ func (c *jobRunServiceClient) JobRun(ctx context.Context, in *JobRunRequest, opt
 	return out, nil
 }
 
-func (c *jobRunServiceClient) GetJobRuns(ctx context.Context, in *GetJobRunsRequest, opts ...grpc.CallOption) (*GetJobRunsResponse, error) {
-	out := new(GetJobRunsResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobRuns", in, out, opts...)
+func (c *jobRunServiceClient) GetLatestJobRuns(ctx context.Context, in *GetLatestJobRunsRequest, opts ...grpc.CallOption) (*GetLatestJobRunsResponse, error) {
+	out := new(GetLatestJobRunsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GetLatestJobRuns", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ type JobRunServiceServer interface {
 	// JobRun returns the current and past run status of jobs on a given range
 	JobRun(context.Context, *JobRunRequest) (*JobRunResponse, error)
 	// JobRunList returns the current and past run status of jobs on a given range
-	GetJobRuns(context.Context, *GetJobRunsRequest) (*GetJobRunsResponse, error)
+	GetLatestJobRuns(context.Context, *GetLatestJobRunsRequest) (*GetLatestJobRunsResponse, error)
 	// RegisterJobEvent notifies optimus service about an event related to job
 	RegisterJobEvent(context.Context, *RegisterJobEventRequest) (*RegisterJobEventResponse, error)
 	// UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler
@@ -127,8 +127,8 @@ func (UnimplementedJobRunServiceServer) JobRunInput(context.Context, *JobRunInpu
 func (UnimplementedJobRunServiceServer) JobRun(context.Context, *JobRunRequest) (*JobRunResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobRun not implemented")
 }
-func (UnimplementedJobRunServiceServer) GetJobRuns(context.Context, *GetJobRunsRequest) (*GetJobRunsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetJobRuns not implemented")
+func (UnimplementedJobRunServiceServer) GetLatestJobRuns(context.Context, *GetLatestJobRunsRequest) (*GetLatestJobRunsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLatestJobRuns not implemented")
 }
 func (UnimplementedJobRunServiceServer) RegisterJobEvent(context.Context, *RegisterJobEventRequest) (*RegisterJobEventResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterJobEvent not implemented")
@@ -188,20 +188,20 @@ func _JobRunService_JobRun_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobRunService_GetJobRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetJobRunsRequest)
+func _JobRunService_GetLatestJobRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLatestJobRunsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(JobRunServiceServer).GetJobRuns(ctx, in)
+		return srv.(JobRunServiceServer).GetLatestJobRuns(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobRuns",
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GetLatestJobRuns",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobRunServiceServer).GetJobRuns(ctx, req.(*GetJobRunsRequest))
+		return srv.(JobRunServiceServer).GetLatestJobRuns(ctx, req.(*GetLatestJobRunsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -276,8 +276,8 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _JobRunService_JobRun_Handler,
 		},
 		{
-			MethodName: "GetJobRuns",
-			Handler:    _JobRunService_GetJobRuns_Handler,
+			MethodName: "GetLatestJobRuns",
+			Handler:    _JobRunService_GetLatestJobRuns_Handler,
 		},
 		{
 			MethodName: "RegisterJobEvent",

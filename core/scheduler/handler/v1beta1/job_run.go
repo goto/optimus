@@ -100,7 +100,7 @@ func (h JobRunHandler) GetJobRun(ctx context.Context, req *pb.GetJobRunsRequest)
 		_, err := scheduler.StateFromString(req.GetState())
 		if err != nil {
 			h.l.Error("error adapting job run state [%s]: %s", req.GetState(), err)
-			return nil, errors.GRPCErr(err, "invalid job run state: "+req.GetSince().String())
+			return nil, errors.GRPCErr(err, "invalid job run state: "+req.GetState())
 		}
 	}
 

@@ -53,7 +53,8 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 }
 
 func (v ViewHandle) Update(res *resource.Resource) error {
-	_, err := v.viewTable.BatchLoadTables([]string{res.FullName()})
+	viewName := res.Name().Sections()[TableNameSections-1]
+	_, err := v.viewTable.BatchLoadTables([]string{viewName})
 	if err != nil {
 		return errors.InternalError(EntityView, "error while get view on maxcompute", err)
 	}

@@ -48,7 +48,8 @@ func (m *mockOdpsIns) ExecSQlWithHints(sql string, hints map[string]string) (*od
 
 func TestTableHandle(t *testing.T) {
 	accessID, accessKey, endpoint := "LNRJ5tH1XMSINW5J3TjYAvfX", "lAZBJhdkNbwVj3bej5BuhjwbdV0nSp", "http://service.ap-southeast-5.maxcompute.aliyun.com/api"
-	projectName, tableName := "proj", "test_table"
+	projectName, schemaName, tableName := "proj", "schema", "test_table"
+	fullName := projectName + "." + schemaName + "." + tableName
 	mcStore := resource.MaxCompute
 	tnnt, _ := tenant.NewTenant(projectName, "ns")
 	metadata := resource.Metadata{
@@ -68,12 +69,12 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{"description": []string{"test create"}}
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = tableHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "not able to decode spec for "+tableName)
+			assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
 		})
 		t.Run("returns error when use invalid schema data type", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -92,12 +93,12 @@ func TestTableHandle(t *testing.T) {
 					"field": []string{"customer_id"},
 				},
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = tableHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to build table schema to create for "+tableName)
+			assert.ErrorContains(t, err, "failed to build table schema to create for "+fullName)
 		})
 		t.Run("returns error when table already present on maxcompute", func(t *testing.T) {
 			existTableErr := errors.New("Table or view already exists - table or view proj.test_table is already defined")
@@ -119,12 +120,12 @@ func TestTableHandle(t *testing.T) {
 					"field": []string{"customer_id"},
 				},
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = tableHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "table already exists on maxcompute: "+tableName)
+			assert.ErrorContains(t, err, "table already exists on maxcompute: "+fullName)
 		})
 		t.Run("returns error when table creation returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -145,7 +146,7 @@ func TestTableHandle(t *testing.T) {
 					"field": []string{"customer_id"},
 				},
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = tableHandle.Create(res)
@@ -179,7 +180,7 @@ func TestTableHandle(t *testing.T) {
 					"field": []string{"customer_id"},
 				},
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = tableHandle.Create(res)
@@ -196,7 +197,7 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{"description": []string{"test update"}}
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = tableHandle.Update(res)
@@ -211,12 +212,12 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, table)
 
 			spec := map[string]any{"description": []string{"test update"}}
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = tableHandle.Update(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to get old table schema to update for "+tableName)
+			assert.ErrorContains(t, err, "failed to get old table schema to update for "+fullName)
 		})
 	})
 

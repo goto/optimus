@@ -362,10 +362,10 @@ func TestMaxComputeStore(t *testing.T) {
 	})
 	t.Run("GetURN", func(t *testing.T) {
 		t.Run("returns urn for resource", func(t *testing.T) {
-			expectedURN, err := resource.NewURN(store.String(), tableName)
+			expectedURN, err := resource.ParseURN("maxcompute://proj:schema." + tableName)
 			assert.NoError(t, err)
 
-			res, err := resource.NewResource(tableName, maxcompute.KindTable, store, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.schema."+tableName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.NoError(t, err)
 
 			mcStore := maxcompute.NewMaxComputeDataStore(nil, nil)
@@ -496,10 +496,10 @@ func TestMaxComputeStore(t *testing.T) {
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
 
-			urn, err := resource.NewURN("maxcompute", "project.table")
+			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
 
-			client.On("TableHandleFrom").Return(tableHandle).Maybe()
+			client.On("TableHandleFrom").Return(tableHandle)
 			tableHandle.On("Exists", mock.Anything).Return(true)
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
@@ -521,13 +521,18 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle := new(mockTableResourceHandle)
 			defer tableHandle.AssertExpectations(t)
 
+			viewHandle := new(mockTableResourceHandle)
+			defer viewHandle.AssertExpectations(t)
+
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
 
-			urn, err := resource.NewURN("maxcompute", "project.table")
+			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
 
 			client.On("TableHandleFrom").Return(tableHandle)
 			tableHandle.On("Exists", mock.Anything).Return(false)
+			client.On("ViewHandleFrom").Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(false)
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.False(t, actualExist)

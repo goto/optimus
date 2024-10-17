@@ -3,7 +3,6 @@ package maxcompute
 import (
 	"context"
 	"fmt"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
@@ -18,7 +17,8 @@ const (
 
 	maxcomputeID = "maxcompute"
 
-	TableNameSections = 2
+	SchemaNameSections = 2
+	TableNameSections  = 3
 )
 
 type ResourceHandle interface {
@@ -133,7 +133,7 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 }
 
 func (MaxCompute) GetURN(res *resource.Resource) (resource.URN, error) {
-	return resource.NewURN(resource.MaxCompute.String(), res.FullName())
+	return generateMaxComputeURN(res)
 }
 
 func (MaxCompute) Backup(ctx context.Context, backup *resource.Backup, resources []*resource.Resource) (*resource.BackupResult, error) {
@@ -164,14 +164,13 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		return false, err
 	}
 
-	kindToHandleFn := map[string]func() ResourceHandle{
-		KindTable: func() ResourceHandle {
-			return client.TableHandleFrom()
-		},
+	kindToHandleFn := map[string]func() TableResourceHandle{
+		KindTable: client.TableHandleFrom,
+		KindView:  client.ViewHandleFrom,
 	}
 
-	for _, resourceHandleFn := range kindToHandleFn {
-		resourceName, err := resourceNameFor(name)
+	for kind, resourceHandleFn := range kindToHandleFn {
+		resourceName, err := resourceNameFor(name, kind)
 		if err != nil {
 			return true, err
 		}
@@ -188,20 +187,6 @@ func startChildSpan(ctx context.Context, name string) (context.Context, trace.Sp
 	tracer := otel.Tracer("datastore/maxcompute")
 
 	return tracer.Start(ctx, name)
-}
-
-func resourceNameFor(name resource.Name) (string, error) {
-	sections := name.Sections()
-	var strName string
-	if len(sections) < TableNameSections {
-		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
-	}
-	strName = sections[1]
-
-	if strName == "" {
-		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
-	}
-	return strName, nil
 }
 
 func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider) *MaxCompute {

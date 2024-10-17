@@ -15,8 +15,9 @@ import (
 const (
 	resourceSchema = "maxcompute_schema"
 
-	KindTable string = "table"
-	KindView  string = "view"
+	KindTable  string = "table"
+	KindView   string = "view"
+	KindSchema string = "schema"
 )
 
 type Schema []*Field

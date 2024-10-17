@@ -36,7 +36,7 @@ func (t TableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-	table.Name = res.Name()
+	table.Name = resource.Name(res.Name().Sections()[TableNameSections-1])
 
 	schema, err := buildTableSchema(table)
 	if err != nil {
@@ -54,7 +54,8 @@ func (t TableHandle) Create(res *resource.Resource) error {
 }
 
 func (t TableHandle) Update(res *resource.Resource) error {
-	existing, err := t.mcTable.BatchLoadTables([]string{res.FullName()})
+	tableName := res.Name().Sections()[TableNameSections-1]
+	existing, err := t.mcTable.BatchLoadTables([]string{tableName})
 	if err != nil {
 		return errors.InternalError(EntityTable, "error while get table on maxcompute", err)
 	}

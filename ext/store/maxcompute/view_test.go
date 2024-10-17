@@ -16,7 +16,8 @@ import (
 
 func TestViewHandle(t *testing.T) {
 	accessID, accessKey, endpoint := "LNRJ5tH1XMSINW5J3TjYAvfX", "lAZBJhdkNbwVj3bej5BuhjwbdV0nSp", "http://service.ap-southeast-5.maxcompute.aliyun.com/api"
-	projectName, tableName := "proj", "test_view"
+	projectName, schemaName, tableName := "proj", "schema", "test_view"
+	fullName := projectName + "." + schemaName + "." + tableName
 	mcStore := resource.MaxCompute
 	tnnt, _ := tenant.NewTenant(projectName, "ns")
 	metadata := resource.Metadata{
@@ -38,12 +39,12 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, table)
 
 			spec := map[string]any{"description": []string{"test create"}}
-			res, err := resource.NewResource(tableName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "not able to decode spec for "+tableName)
+			assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
 		})
 		t.Run("returns error when view query is invalid", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -57,12 +58,12 @@ func TestViewHandle(t *testing.T) {
 				"columns":     []string{"customer_id", "customer_name", "product_name"},
 				"view_query":  "select * from test_customer;",
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to create sql task to create view "+tableName)
+			assert.ErrorContains(t, err, "failed to create sql task to create view "+fullName)
 		})
 		t.Run("returns error when view creation returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -75,12 +76,12 @@ func TestViewHandle(t *testing.T) {
 				"description": "test create",
 				"view_query":  "select * from test_customer",
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to create view "+tableName)
+			assert.ErrorContains(t, err, "failed to create view "+fullName)
 		})
 	})
 
@@ -93,7 +94,7 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, table)
 
 			spec := map[string]any{"description": []string{"test update"}}
-			res, err := resource.NewResource(tableName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Update(res)
@@ -108,12 +109,12 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, table)
 
 			spec := map[string]any{"description": []string{"test update"}}
-			res, err := resource.NewResource(tableName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Update(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "not able to decode spec for "+tableName)
+			assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
 		})
 		t.Run("returns error when view query is invalid", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -129,12 +130,12 @@ func TestViewHandle(t *testing.T) {
 				"columns":     []string{"customer_id", "customer_name", "product_name"},
 				"view_query":  "select * from test_customer;",
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Update(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to create sql task to update view "+tableName)
+			assert.ErrorContains(t, err, "failed to create sql task to update view "+fullName)
 		})
 		t.Run("returns error when view creation returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -149,12 +150,12 @@ func TestViewHandle(t *testing.T) {
 				"description": "test update",
 				"view_query":  "select * from test_customer",
 			}
-			res, err := resource.NewResource(tableName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Update(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to update view "+tableName)
+			assert.ErrorContains(t, err, "failed to update view "+fullName)
 		})
 	})
 

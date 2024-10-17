@@ -116,6 +116,15 @@ func (w *ReplayWorker) SyncStatus(ctx context.Context, replayWithRun *scheduler.
 	return syncStatus(replayWithRun.Runs, incomingRuns), nil
 }
 
+func (w *ReplayWorker) isReplayCanceled(ctx context.Context, replayID uuid.UUID) (bool, error) {
+	replayReq, err := w.replayRepo.GetReplayRequestByID(ctx, replayID)
+	if err != nil {
+		w.logger.Error("[ReplayID: %s] unable to get existing runs, err: %s", replayID.String(), err.Error())
+		return false, err
+	}
+	return replayReq.State() == scheduler.ReplayStateCancelled, nil
+}
+
 func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
 	executionLoopCount := 0
 	for {
@@ -126,18 +135,18 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		default:
 		}
 
-		// delay if not the first loop
 		executionLoopCount++
+		// delay if not the first loop iteration
 		if executionLoopCount > 1 {
 			time.Sleep(time.Duration(w.config.ExecutionIntervalInSeconds) * time.Second)
 		}
 
-		w.logger.Info("[ReplayID: %s] executing replay...", replayID)
+		w.logger.Info("[ReplayID: %s] processing replay request with ID: ", replayID)
 
 		// sync run first
 		replayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
 		if err != nil {
-			w.logger.Error("[ReplayID: %s] unable to get existing runs: %s", replayID.String(), err)
+			w.logger.Error("[ReplayID: %s] unable to get existing runs, err: %s", replayID.String(), err.Error())
 			return err
 		}
 
@@ -154,6 +163,14 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			return nil
 		}
 
+		if executionLoopCount == 1 {
+			err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateInProgress, "started handling replay request")
+			if err != nil {
+				w.logger.Error("[ReplayID: %s] unable to set replay state in progress", replayID.String(), err)
+				return err
+			}
+		}
+
 		syncedRunStatus, err := w.SyncStatus(ctx, replayWithRun, jobCron)
 		if err != nil {
 			// todo: lets not kill watchers on such errors
@@ -161,7 +178,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			return err
 		}
 
-		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, syncedRunStatus, ""); err != nil {
+		if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), syncedRunStatus); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
@@ -182,6 +199,14 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		}
 
 		// execute replay run on scheduler
+		canceled, err := w.isReplayCanceled(ctx, replayID)
+		if err != nil {
+			return err
+		}
+		if canceled {
+			w.logger.Info("[ReplayID: %s] replay is externally canceled", replayID.String())
+			return nil
+		}
 		var updatedRuns []*scheduler.JobRunStatus
 		if replayWithRun.Replay.Config().Parallel {
 			if err := w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns...); err != nil {

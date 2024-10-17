@@ -686,6 +686,16 @@ func (_m *ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant te
 	return r0, r1
 }
 
+func (_m *ReplayRepository) GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error) {
+	args := _m.Called(ctx, replayID)
+	return args.Get(0).(*scheduler.Replay), args.Error(1)
+}
+
+func (_m *ReplayRepository) CancelReplayRequest(ctx context.Context, replayID uuid.UUID, message string) error {
+	args := _m.Called(ctx, replayID, message)
+	return args.Error(0)
+}
+
 // GetReplayByFilters provides a mock function with given fields: ctx, jobTenant, projectName, filters
 func (_m *ReplayRepository) GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error) {
 	ret := _m.Called(ctx, projectName, filters)

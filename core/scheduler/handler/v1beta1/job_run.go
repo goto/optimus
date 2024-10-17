@@ -11,12 +11,14 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/interval"
+	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
 type JobRunService interface {
 	JobRunInput(context.Context, tenant.ProjectName, scheduler.JobName, scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 	UpdateJobState(context.Context, *scheduler.Event) error
+	GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error)
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
@@ -80,8 +82,51 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 	}, nil
 }
 
-// JobRun currently gets the job runs from scheduler based on the criteria
-// TODO: later should collect the job runs from optimus
+// GetJobRun gets job runs from optimus DB based on the criteria
+func (h JobRunHandler) GetJobRun(ctx context.Context, req *pb.GetJobRunsRequest) (*pb.GetJobRunsResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
+	}
+
+	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
+	}
+
+	if len(req.GetState()) > 0 {
+		_, err := scheduler.StateFromString(req.GetState())
+		if err != nil {
+			h.l.Error("error adapting job run state [%s]: %s", req.GetState(), err)
+			return nil, errors.GRPCErr(err, "invalid job run state: "+req.GetState())
+		}
+	}
+
+	var jobRuns []*scheduler.JobRun
+	jobRuns, err = h.service.GetJobRunsByFilter(ctx, projectName, jobName,
+		filter.WithString(filter.RunState, req.GetState()),
+		filter.WithTime(filter.StartDate, req.GetSince().AsTime()),
+		filter.WithTime(filter.EndDate, req.GetUntil().AsTime()),
+	)
+	if err != nil {
+		h.l.Error("error getting job runs: %s", err)
+		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
+	}
+
+	var runs []*pb.JobRun
+	for _, run := range jobRuns {
+		ts := timestamppb.New(run.ScheduledAt)
+		runs = append(runs, &pb.JobRun{
+			State:       run.State.String(),
+			ScheduledAt: ts,
+		})
+	}
+	return &pb.GetJobRunsResponse{JobRuns: runs}, nil
+}
+
+// JobRun gets the job runs from scheduler based on the criteria
 func (h JobRunHandler) JobRun(ctx context.Context, req *pb.JobRunRequest) (*pb.JobRunResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {

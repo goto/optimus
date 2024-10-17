@@ -119,7 +119,6 @@ func TestJobRunHandler(t *testing.T) {
 		t.Run("should return error if service returns error", func(t *testing.T) {
 			jobRunService := new(mockJobRunService)
 			var jobRuns []*scheduler.JobRun
-			jobRuns = nil
 			jobRunService.On("GetJobRunsByFilter", ctx, tenant.ProjectName("proj"), scheduler.JobName("job1"), mock.Anything).
 				Return(jobRuns, fmt.Errorf("service error"))
 			defer jobRunService.AssertExpectations(t)
@@ -800,7 +799,6 @@ func TestJobRunHandler(t *testing.T) {
 			assert.NoError(t, actualError)
 		})
 	})
-
 }
 
 type mockJobRunService struct {

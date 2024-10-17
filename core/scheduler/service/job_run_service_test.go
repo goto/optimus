@@ -38,7 +38,6 @@ func TestJobRunService(t *testing.T) {
 		"total_bytes_processed": float64(2500),
 	}
 	t.Run("UpdateJobState", func(t *testing.T) {
-
 		t.Run("should reject unregistered events", func(t *testing.T) {
 			runService := service.NewJobRunService(logger,
 				nil, nil, nil, nil, nil, nil, nil, nil, nil)
@@ -1535,7 +1534,6 @@ func TestJobRunService(t *testing.T) {
 
 			jobRunRepo := new(mockJobRunRepository)
 			var runsByTimeRange []*scheduler.JobRun
-			runsByTimeRange = nil
 			jobRunRepo.On("GetRunsByTimeRange", ctx, projName, jobName, &runState, startDate, endDate).Return(runsByTimeRange, fmt.Errorf("some error"))
 			defer jobRunRepo.AssertExpectations(t)
 
@@ -1558,7 +1556,6 @@ func TestJobRunService(t *testing.T) {
 
 			jobRunRepo := new(mockJobRunRepository)
 			var jobRun *scheduler.JobRun
-			jobRun = nil
 			jobRunRepo.On("GetLatestRun", ctx, projName, jobName, &runState).Return(jobRun, fmt.Errorf("some error"))
 			defer jobRunRepo.AssertExpectations(t)
 
@@ -1574,7 +1571,6 @@ func TestJobRunService(t *testing.T) {
 			assert.EqualError(t, err, "some error")
 		})
 	})
-
 }
 
 func mockGetJobRuns(afterDays int, date time.Time, interval string, status scheduler.State) ([]*scheduler.JobRunStatus, error) {

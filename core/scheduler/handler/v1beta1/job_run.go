@@ -82,8 +82,8 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 	}, nil
 }
 
-// GetJobRun gets job runs from optimus DB based on the criteria
-func (h JobRunHandler) GetJobRun(ctx context.Context, req *pb.GetJobRunsRequest) (*pb.GetJobRunsResponse, error) {
+// GetJobRuns gets job runs from optimus DB based on the criteria
+func (h JobRunHandler) GetJobRuns(ctx context.Context, req *pb.GetJobRunsRequest) (*pb.GetJobRunsResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)

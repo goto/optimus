@@ -42,7 +42,7 @@ func TestJobRunHandler(t *testing.T) {
 				Until:       timestamppb.Now(),
 				State:       "success",
 			}
-			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			resp, err := jobRunHandler.GetJobRuns(ctx, req)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity project: project name is empty: unable to get job run for job1")
 			assert.Nil(t, resp)
@@ -57,7 +57,7 @@ func TestJobRunHandler(t *testing.T) {
 				Until:       timestamppb.Now(),
 				State:       "success",
 			}
-			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			resp, err := jobRunHandler.GetJobRuns(ctx, req)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity jobRun: job name is empty: unable to get job run for ")
 			assert.Nil(t, resp)
@@ -72,7 +72,7 @@ func TestJobRunHandler(t *testing.T) {
 				Until:       timestamppb.Now(),
 				State:       "invalid_state",
 			}
-			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			resp, err := jobRunHandler.GetJobRuns(ctx, req)
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "invalid job run state: invalid_state")
 			assert.Nil(t, resp)
@@ -98,7 +98,7 @@ func TestJobRunHandler(t *testing.T) {
 				Until:       timestamppb.Now(),
 				State:       "success",
 			}
-			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			resp, err := jobRunHandler.GetJobRuns(ctx, req)
 			assert.Nil(t, err)
 			assert.Equal(t, len(jobRuns), len(resp.JobRuns))
 			for _, expectedRun := range jobRuns {
@@ -131,7 +131,7 @@ func TestJobRunHandler(t *testing.T) {
 				Until:       timestamppb.Now(),
 				State:       "success",
 			}
-			resp, err := jobRunHandler.GetJobRun(ctx, req)
+			resp, err := jobRunHandler.GetJobRuns(ctx, req)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "rpc error: code = Internal desc = service error: unable to get job run for job1")
 			assert.Nil(t, resp)

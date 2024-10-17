@@ -111,10 +111,12 @@ func (w *WithDetails) GetConfigs() map[string]string {
 // merging both is a temporary solution to support older behavior.
 // Once we have all tenants migrated to use variables, we can remove the tenant config.
 func (w *WithDetails) GetVariables() map[string]string {
-	tenantConfigs := utils.MergeMaps(w.project.GetConfigs(), w.namespace.GetConfigs())
-	tenantVariables := utils.MergeMaps(w.project.GetVariables(), w.namespace.GetVariables())
-
-	return utils.MergeMaps(tenantConfigs, tenantVariables)
+	return utils.MergeMaps(
+		w.project.GetConfigs(),
+		w.namespace.GetConfigs(),
+		w.project.GetVariables(),
+		w.namespace.GetVariables(),
+	)
 }
 
 func (w *WithDetails) Project() *Project {

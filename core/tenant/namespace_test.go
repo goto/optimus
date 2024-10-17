@@ -64,5 +64,26 @@ func TestEntityNamespace(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "not found for entity namespace: namespace variable not found: non-existent")
 		})
+		t.Run("creates namespace object with nil config & variables", func(t *testing.T) {
+			ns, err := tenant.NewNamespace("t-namespace", projName, nil, nil)
+
+			assert.Nil(t, err)
+			assert.Equal(t, "t-namespace", ns.Name().String())
+			assert.Equal(t, projName.String(), ns.ProjectName().String())
+
+			assert.NotNil(t, ns.GetConfigs())
+			assert.Empty(t, ns.GetConfigs())
+
+			_, err = ns.GetConfig("non-existent")
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "not found for entity namespace: namespace config not found non-existent")
+
+			assert.NotNil(t, ns.GetVariables())
+			assert.Empty(t, ns.GetVariables())
+
+			_, err = ns.GetVariable("non-existent")
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "not found for entity namespace: namespace variable not found: non-existent")
+		})
 	})
 }

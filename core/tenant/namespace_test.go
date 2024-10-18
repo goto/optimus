@@ -27,19 +27,19 @@ func TestEntityNamespace(t *testing.T) {
 		projName, _ := tenant.ProjectNameFrom("optimus-proj")
 
 		t.Run("return error when name is empty", func(t *testing.T) {
-			_, err := tenant.NewNamespace("", projName, map[string]string{})
+			_, err := tenant.NewNamespace("", projName, map[string]string{}, map[string]string{})
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "invalid argument for entity namespace: namespace name is empty")
 		})
 		t.Run("return error when validation fails due to project name", func(t *testing.T) {
-			_, err := tenant.NewNamespace("t-namespace", "", map[string]string{})
+			_, err := tenant.NewNamespace("t-namespace", "", map[string]string{}, map[string]string{})
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "invalid argument for entity namespace: project name is empty")
 		})
 		t.Run("creates namespace object", func(t *testing.T) {
-			ns, err := tenant.NewNamespace("t-namespace", projName, map[string]string{"a": "b"})
+			ns, err := tenant.NewNamespace("t-namespace", projName, map[string]string{"a": "b"}, map[string]string{"ns_var": "ns_val"})
 
 			assert.Nil(t, err)
 			assert.Equal(t, "t-namespace", ns.Name().String())
@@ -53,6 +53,37 @@ func TestEntityNamespace(t *testing.T) {
 			_, err = ns.GetConfig("non-existent")
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "not found for entity namespace: namespace config not found non-existent")
+
+			assert.NotNil(t, ns.GetVariables())
+
+			nsVar, err := ns.GetVariable("ns_var")
+			assert.Nil(t, err)
+			assert.Equal(t, "ns_val", nsVar)
+
+			_, err = ns.GetVariable("non-existent")
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "not found for entity namespace: namespace variable not found: non-existent")
+		})
+		t.Run("creates namespace object with nil config & variables", func(t *testing.T) {
+			ns, err := tenant.NewNamespace("t-namespace", projName, nil, nil)
+
+			assert.Nil(t, err)
+			assert.Equal(t, "t-namespace", ns.Name().String())
+			assert.Equal(t, projName.String(), ns.ProjectName().String())
+
+			assert.NotNil(t, ns.GetConfigs())
+			assert.Empty(t, ns.GetConfigs())
+
+			_, err = ns.GetConfig("non-existent")
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "not found for entity namespace: namespace config not found non-existent")
+
+			assert.NotNil(t, ns.GetVariables())
+			assert.Empty(t, ns.GetVariables())
+
+			_, err = ns.GetVariable("non-existent")
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "not found for entity namespace: namespace variable not found: non-existent")
 		})
 	})
 }

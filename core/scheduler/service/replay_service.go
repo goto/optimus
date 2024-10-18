@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
@@ -36,7 +37,11 @@ type ReplayRepository interface {
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
 	UpdateReplayRuns(ctx context.Context, replayID uuid.UUID, runs []*scheduler.JobRunStatus) error
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
+	CancelReplayRequest(ctx context.Context, replayID uuid.UUID, message string) error
+	ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error)
+	AcquireReplayRequest(ctx context.Context, replayID uuid.UUID, unhandledClassifierDuration time.Duration) error
 
+	GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error)
 	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
@@ -52,7 +57,7 @@ type ReplayValidator interface {
 }
 
 type ReplayExecutor interface {
-	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+	Execute(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
 	FetchAndSyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
 	FetchRunsWithDetails(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec) (scheduler.JobRunDetailsList, error)
 	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunWithDetails) []*scheduler.JobRunStatus
@@ -118,7 +123,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		State:    scheduler.ReplayStateCreated,
 	})
 
-	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
+	go r.executor.Execute(ctx, replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
 }
@@ -234,6 +239,7 @@ func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *sch
 		r.logger.Error("unable to sync replay runs status for job [%s]: %s", jobName.String(), err.Error())
 		return err
 	}
+	r.logger.Debug(fmt.Sprintf("Synced Run status from Airflow : %#v", jobRunsRunsWithDetails))
 
 	filteredRunsMangedByReplay := jobRunsRunsWithDetails.FilterRunsManagedByReplay(replayWithRun.Runs)
 

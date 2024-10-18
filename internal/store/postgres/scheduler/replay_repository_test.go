@@ -253,4 +253,83 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			assert.Len(t, replayWithRuns.Runs, len(jobRunsAllPending))
 		})
 	})
+	t.Run("AcquireReplayRequest", func(t *testing.T) {
+		t.Run("successfully acquires replay request", func(t *testing.T) {
+			db := dbSetup()
+			replayRepo := postgres.NewReplayRepository(db)
+
+			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description)
+			replayReq := scheduler.NewReplayRequest(jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated)
+
+			replayID, err := replayRepo.RegisterReplay(ctx, replayReq, jobRunsAllPending)
+			assert.Nil(t, err)
+			assert.NotNil(t, replayID)
+			time.Sleep(2 * time.Second)
+			err = replayRepo.AcquireReplayRequest(ctx, replayID, 1*time.Second)
+			assert.Nil(t, err)
+		})
+
+		t.Run("fails to acquire replay request if already acquired", func(t *testing.T) {
+			db := dbSetup()
+			replayRepo := postgres.NewReplayRepository(db)
+
+			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description)
+			replayReq := scheduler.NewReplayRequest(jobAName, tnnt, replayConfig, scheduler.ReplayStateCreated)
+
+			replayID, err := replayRepo.RegisterReplay(ctx, replayReq, jobRunsAllPending)
+			assert.Nil(t, err)
+			assert.NotNil(t, replayID)
+
+			time.Sleep(2 * time.Second)
+			err = replayRepo.AcquireReplayRequest(ctx, replayID, 1*time.Second)
+			assert.Nil(t, err)
+
+			err = replayRepo.AcquireReplayRequest(ctx, replayID, 1*time.Second)
+			assert.NotNil(t, err)
+			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
+		})
+
+		t.Run("fails to acquire replay request if not found", func(t *testing.T) {
+			db := dbSetup()
+			replayRepo := postgres.NewReplayRepository(db)
+
+			replayID := uuid.New()
+			err := replayRepo.AcquireReplayRequest(ctx, replayID, 1*time.Second)
+			assert.NotNil(t, err)
+			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
+		})
+	})
+	t.Run("ScanAbandonedReplayRequests", func(t *testing.T) {
+		t.Run("returns replay requests that are in non-terminal states and have not been updated within the specified duration", func(t *testing.T) {
+			db := dbSetup()
+			replayRepo := postgres.NewReplayRepository(db)
+
+			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description)
+			replayReq1 := scheduler.NewReplayRequest(jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress)
+			replayReq2 := scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateCreated)
+
+			replayID1, err := replayRepo.RegisterReplay(ctx, replayReq1, jobRunsAllPending)
+			assert.Nil(t, err)
+			assert.NotNil(t, replayID1)
+
+			replayID2, err := replayRepo.RegisterReplay(ctx, replayReq2, jobRunsAllPending)
+			assert.Nil(t, err)
+			assert.NotNil(t, replayID2)
+
+			time.Sleep(2 * time.Second)
+
+			replayReqs, err := replayRepo.ScanAbandonedReplayRequests(ctx, 1*time.Second)
+			assert.Nil(t, err)
+			assert.Len(t, replayReqs, 2)
+		})
+
+		t.Run("returns empty list if no replay requests match the criteria", func(t *testing.T) {
+			db := dbSetup()
+			replayRepo := postgres.NewReplayRepository(db)
+
+			replayReqs, err := replayRepo.ScanAbandonedReplayRequests(ctx, 1*time.Second)
+			assert.Nil(t, err)
+			assert.Len(t, replayReqs, 0)
+		})
+	})
 }

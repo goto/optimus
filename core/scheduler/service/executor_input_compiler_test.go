@@ -28,8 +28,8 @@ func TestExecutorCompiler(t *testing.T) {
 	project, _ := tenant.NewProject("proj1", map[string]string{
 		"STORAGE_PATH":   "somePath",
 		"SCHEDULER_HOST": "localhost",
-	})
-	namespace, _ := tenant.NewNamespace("ns1", project.Name(), map[string]string{})
+	}, map[string]string{})
+	namespace, _ := tenant.NewNamespace("ns1", project.Name(), map[string]string{}, map[string]string{})
 
 	secret1, _ := tenant.NewPlainTextSecret("secretName", "secretValue")
 	secret2, _ := tenant.NewPlainTextSecret("secret2Name", "secret2Value")

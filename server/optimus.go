@@ -337,6 +337,11 @@ func (s *OptimusServer) setupHandlers() error {
 
 	replayRepository := schedulerRepo.NewReplayRepository(s.dbPool)
 	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay, alertsHandler)
+
+	replayContext, closeReplayScan := context.WithCancel(context.Background())
+	s.cleanupFn = append(s.cleanupFn, closeReplayScan)
+	go replayWorker.ScanReplayRequest(replayContext)
+
 	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
 	replayService := schedulerService.NewReplayService(
 		replayRepository, jobProviderRepo, tenantService,

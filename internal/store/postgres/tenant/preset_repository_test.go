@@ -23,7 +23,7 @@ func TestPostgresPresetRepository(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 
 	dbSetup := func() *pgxpool.Pool {
 		dbPool := setup.TestPool()

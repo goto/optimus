@@ -193,6 +193,12 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

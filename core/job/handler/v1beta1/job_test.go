@@ -33,11 +33,11 @@ func TestNewJobHandler(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		}) // TODO: add test for presets
+		}, map[string]string{}) // TODO: add test for presets
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	sampleTenant, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	jobVersion := 1
 	startDate, err := job.ScheduleDateFrom("2022-10-01")

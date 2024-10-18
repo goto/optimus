@@ -13,64 +13,6 @@ import (
 	"github.com/goto/optimus/ext/store/maxcompute"
 )
 
-type mockTableResourceHandle struct {
-	mock.Mock
-}
-
-func (m *mockTableResourceHandle) Create(res *resource.Resource) error {
-	args := m.Called(res)
-	return args.Error(0)
-}
-
-func (m *mockTableResourceHandle) Update(res *resource.Resource) error {
-	args := m.Called(res)
-	return args.Error(0)
-}
-
-func (m *mockTableResourceHandle) Exists(tableName string) bool {
-	args := m.Called(tableName)
-	return args.Get(0).(bool)
-}
-
-type mockClient struct {
-	mock.Mock
-}
-
-func (m *mockClient) TableHandleFrom() maxcompute.TableResourceHandle {
-	args := m.Called()
-	return args.Get(0).(maxcompute.TableResourceHandle)
-}
-
-func (m *mockClient) ViewHandleFrom() maxcompute.TableResourceHandle {
-	args := m.Called()
-	return args.Get(0).(maxcompute.TableResourceHandle)
-}
-
-type mockClientProvider struct {
-	mock.Mock
-}
-
-func (m *mockClientProvider) Get(account string) (maxcompute.Client, error) {
-	args := m.Called(account)
-	if args.Get(0) != nil {
-		return args.Get(0).(maxcompute.Client), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-type mockSecretProvider struct {
-	mock.Mock
-}
-
-func (s *mockSecretProvider) GetSecret(ctx context.Context, ten tenant.Tenant, name string) (*tenant.PlainTextSecret, error) {
-	args := s.Called(ctx, ten, name)
-	var pts *tenant.PlainTextSecret
-	if args.Get(0) != nil {
-		pts = args.Get(0).(*tenant.PlainTextSecret)
-	}
-	return pts, args.Error(1)
-}
-
 func TestMaxComputeStore(t *testing.T) {
 	ctx := context.Background()
 	tableName := "test_table"
@@ -538,4 +480,62 @@ func TestMaxComputeStore(t *testing.T) {
 			assert.NoError(t, actualError)
 		})
 	})
+}
+
+type mockTableResourceHandle struct {
+	mock.Mock
+}
+
+func (m *mockTableResourceHandle) Create(res *resource.Resource) error {
+	args := m.Called(res)
+	return args.Error(0)
+}
+
+func (m *mockTableResourceHandle) Update(res *resource.Resource) error {
+	args := m.Called(res)
+	return args.Error(0)
+}
+
+func (m *mockTableResourceHandle) Exists(tableName string) bool {
+	args := m.Called(tableName)
+	return args.Get(0).(bool)
+}
+
+type mockClient struct {
+	mock.Mock
+}
+
+func (m *mockClient) TableHandleFrom() maxcompute.TableResourceHandle {
+	args := m.Called()
+	return args.Get(0).(maxcompute.TableResourceHandle)
+}
+
+func (m *mockClient) ViewHandleFrom() maxcompute.TableResourceHandle {
+	args := m.Called()
+	return args.Get(0).(maxcompute.TableResourceHandle)
+}
+
+type mockClientProvider struct {
+	mock.Mock
+}
+
+func (m *mockClientProvider) Get(account string) (maxcompute.Client, error) {
+	args := m.Called(account)
+	if args.Get(0) != nil {
+		return args.Get(0).(maxcompute.Client), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+type mockSecretProvider struct {
+	mock.Mock
+}
+
+func (s *mockSecretProvider) GetSecret(ctx context.Context, ten tenant.Tenant, name string) (*tenant.PlainTextSecret, error) {
+	args := s.Called(ctx, ten, name)
+	var pts *tenant.PlainTextSecret
+	if args.Get(0) != nil {
+		pts = args.Get(0).(*tenant.PlainTextSecret)
+	}
+	return pts, args.Error(1)
 }

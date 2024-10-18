@@ -61,7 +61,7 @@ type TenantDetailsGetter interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 }
 
-type CompileEngine interface {
+type TemplateCompiler interface {
 	Compile(templateMap map[string]string, context map[string]any) (map[string]string, error)
 	CompileString(input string, context map[string]any) (string, error)
 }
@@ -77,7 +77,7 @@ type ResourceService struct {
 	alertHandler AlertManager
 
 	tenantDetailsGetter TenantDetailsGetter
-	compileEngine       CompileEngine
+	compileEngine       TemplateCompiler
 }
 
 type AlertManager interface {
@@ -88,7 +88,7 @@ func NewResourceService(
 	logger log.Logger,
 	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
 	eventHandler EventHandler, downstreamResolver DownstreamResolver, alertManager AlertManager,
-	tenantDetailsGetter TenantDetailsGetter, compileEngine CompileEngine,
+	tenantDetailsGetter TenantDetailsGetter, compileEngine TemplateCompiler,
 ) *ResourceService {
 	return &ResourceService{
 		repo:                repo,

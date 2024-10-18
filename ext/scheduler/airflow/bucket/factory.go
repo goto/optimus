@@ -39,6 +39,9 @@ func (f *Factory) New(ctx context.Context, tnnt tenant.Tenant) (airflow.Bucket, 
 
 	case "mem":
 		return memblob.OpenBucket(nil), nil
+
+	case "oss":
+		return f.GetOSSBucket(ctx, tnnt, parsedURL)
 	}
 	return nil, errors.InvalidArgument("airflow", "unsupported storage config "+parsedURL.String())
 }

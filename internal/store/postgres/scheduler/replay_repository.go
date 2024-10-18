@@ -229,7 +229,6 @@ func (r ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tena
 }
 
 func (r ReplayRepository) ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error) {
-	// todo: add list of non terminal states
 	nonTerminalStateString := make([]string, len(scheduler.ReplayNonTerminalStates))
 	for i, state := range scheduler.ReplayNonTerminalStates {
 		nonTerminalStateString[i] = state.String()

@@ -103,7 +103,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhaseOne, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), runsPhaseOne).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), scheduledTime1.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, runsPhaseTwo, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), runsPhaseTwo).Return(nil).Once()
 
 			// loop 2
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhaseTwo, nil).Once()
@@ -181,14 +181,14 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase1, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), scheduledTime1.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, []*scheduler.JobRunStatus{runsPhase2[0]}, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), []*scheduler.JobRunStatus{runsPhase2[0]}).Return(nil).Once()
 
 			// loop 2
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase2, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase2, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, []*scheduler.JobRunStatus{runsPhase3[1]}, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), []*scheduler.JobRunStatus{runsPhase3[1]}).Return(nil).Once()
 
 			// loop 3
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
@@ -266,7 +266,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase1, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 
 			// loop 2
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase2, nil).Once()
@@ -349,14 +349,14 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase1, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("CreateRun", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), "replayed").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, []*scheduler.JobRunStatus{runsPhase2[0]}, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), []*scheduler.JobRunStatus{runsPhase2[0]}).Return(nil).Once()
 
 			// loop 2
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase2, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase2, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, []*scheduler.JobRunStatus{runsPhase3[1]}, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), []*scheduler.JobRunStatus{runsPhase3[1]}).Return(nil).Once()
 
 			// loop 3
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
@@ -432,7 +432,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
 			sch.On("CreateRun", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), "replayed").Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, mock.Anything, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 
 			// loop 2
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase2, nil).Once()
@@ -746,14 +746,14 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase1, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime1.Add(-24*time.Hour), scheduledTime1.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, []*scheduler.JobRunStatus{runsPhase2[0]}, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), []*scheduler.JobRunStatus{runsPhase2[0]}).Return(nil).Once()
 
 			// loop 2
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase2, nil).Once()
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase2, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, []*scheduler.JobRunStatus{runsPhase3[1]}, "").Return(nil).Once()
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), []*scheduler.JobRunStatus{runsPhase3[1]}).Return(nil).Once()
 
 			// loop 3
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()

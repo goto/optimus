@@ -20,7 +20,7 @@ import (
 const (
 	prefixReplayed       = "replayed"
 	replayCleanupTimeout = time.Minute
-	replaySyncMultiplyer = 3
+	replaySyncMultiplier = 3
 )
 
 var replayReqLag = promauto.NewGauge(prometheus.GaugeOpts{
@@ -141,7 +141,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			time.Sleep(time.Duration(w.config.ExecutionIntervalInSeconds) * time.Second)
 		}
 
-		w.logger.Info("[ReplayID: %s] processing replay request with ID: ", replayID)
+		w.logger.Info("[ReplayID: %s] processing replay...", replayID)
 
 		// sync run first
 		replayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
@@ -226,7 +226,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		}
 
 		// update runs status
-		if err := w.replayRepo.UpdateReplay(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateInProgress, updatedRuns, ""); err != nil {
+		if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), updatedRuns); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to update replay runs: %s", replayWithRun.Replay.ID(), err)
 			return err
 		}
@@ -353,8 +353,8 @@ func syncStatus(existingJobRuns, incomingJobRuns []*scheduler.JobRunStatus) sche
 }
 
 func (w *ReplayWorker) ScanReplayRequest(ctx context.Context) {
-	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplyer) * time.Second
-	requestScanInterval := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplyer) * time.Second
+	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplier) * time.Second
+	requestScanInterval := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplier) * time.Second
 	for {
 		select {
 		case <-ctx.Done():
@@ -385,7 +385,7 @@ func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*sche
 	// add a prometheus metric for this
 	var requestsToProcess []*scheduler.Replay
 
-	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplyer) * time.Second
+	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds*replaySyncMultiplier) * time.Second
 	for _, replay := range replays {
 		lag := time.Since(replay.UpdatedAt())
 		if lag.Seconds() > maxLag {

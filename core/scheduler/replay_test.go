@@ -29,10 +29,11 @@ func TestReplay(t *testing.T) {
 	scheduledTime3 := scheduledTime1.Add(2 * 24 * time.Hour)
 	scheduledTime4 := scheduledTime1.Add(3 * 24 * time.Hour)
 	message := "sample message"
+	updatedTime := time.Now()
 
 	t.Run("NewReplay", func(t *testing.T) {
 		createdTime := time.Now()
-		replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, createdTime, message)
+		replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, createdTime, updatedTime, message)
 
 		assert.Equal(t, replayID, replay.ID())
 		assert.Equal(t, jobNameA, replay.JobName())
@@ -73,7 +74,7 @@ func TestReplay(t *testing.T) {
 		}
 
 		t.Run("GetFirstExecutableRun", func(t *testing.T) {
-			replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), message)
+			replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), updatedTime, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -87,7 +88,7 @@ func TestReplay(t *testing.T) {
 			assert.Equal(t, firstExecutableRun, secondRun)
 		})
 		t.Run("GetLastExecutableRun", func(t *testing.T) {
-			replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), message)
+			replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, time.Now(), updatedTime, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -130,26 +131,26 @@ func TestReplay(t *testing.T) {
 			t.Run("should return true if it is in termination state", func(t *testing.T) {
 				createdTime := time.Now()
 
-				replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCancelled, createdTime, message)
+				replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCancelled, createdTime, updatedTime, message)
 				result := replay.IsTerminated()
 				assert.True(t, result)
 
-				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateFailed, createdTime, message)
+				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateFailed, createdTime, updatedTime, message)
 				result = replay.IsTerminated()
 				assert.True(t, result)
 
-				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateSuccess, createdTime, message)
+				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateSuccess, createdTime, updatedTime, message)
 				result = replay.IsTerminated()
 				assert.True(t, result)
 			})
 			t.Run("should return false if replay is not in termination state", func(t *testing.T) {
 				createdTime := time.Now()
 
-				replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, createdTime, message)
+				replay := scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateCreated, createdTime, updatedTime, message)
 				result := replay.IsTerminated()
 				assert.False(t, result)
 
-				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateInProgress, createdTime, message)
+				replay = scheduler.NewReplay(replayID, jobNameA, tnnt, replayConfig, scheduler.ReplayStateInProgress, createdTime, updatedTime, message)
 				result = replay.IsTerminated()
 				assert.False(t, result)
 			})

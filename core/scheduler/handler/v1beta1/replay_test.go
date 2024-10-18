@@ -28,6 +28,7 @@ func TestReplayHandler(t *testing.T) {
 	jobTenant, _ := tenant.NewTenant(projectName, namespaceName)
 	jobName, _ := scheduler.JobNameFrom("a-job-name")
 	startTime := timestamppb.New(time.Date(2023, 0o1, 0o1, 13, 0, 0, 0, time.UTC))
+	updateTime := time.Now()
 	endTime := timestamppb.New(time.Date(2023, 0o1, 0o2, 13, 0, 0, 0, time.UTC))
 	jobConfigStr := "EXECUTION_PROJECT=example_project,ANOTHER_CONFIG=example_value"
 	jobConfig := map[string]string{"EXECUTION_PROJECT": "example_project", "ANOTHER_CONFIG": "example_value"}
@@ -456,7 +457,7 @@ func TestReplayHandler(t *testing.T) {
 			startTime, _ := time.Parse(scheduler.ISODateFormat, startTimeStr)
 			endTime := startTime.Add(48 * time.Hour)
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
-			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, updateTime, message)
 			service.On("GetReplayByID", ctx, replayID).Return(&scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -535,7 +536,7 @@ func TestReplayHandler(t *testing.T) {
 			startTime, _ := time.Parse(scheduler.ISODateFormat, startTimeStr)
 			endTime := startTime.Add(48 * time.Hour)
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, map[string]string{}, description)
-			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replay := scheduler.NewReplay(replayID, "sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, updateTime, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{

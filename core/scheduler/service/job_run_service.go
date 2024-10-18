@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
@@ -21,7 +22,7 @@ import (
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
-	"github.com/goto/optimus/internal/telemetry"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 type metricType string
@@ -32,9 +33,17 @@ func (m metricType) String() string {
 
 const (
 	scheduleDelay metricType = "schedule_delay"
-
-	metricJobRunEvents = "jobrun_events_total"
 )
+
+var jobRunEventsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "operator_stats",
+	Help: "total job run events received",
+}, []string{"operator_name", "event_type"})
+
+var jobRunDdurationsBreakdownSeconds = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "jobrun_durations_breakdown_seconds",
+	Help: "operator wise time spent",
+}, []string{"project", "namespace", "job", "type"})
 
 type JobRepository interface {
 	GetJob(ctx context.Context, name tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
@@ -46,6 +55,8 @@ type JobRepository interface {
 type JobRunRepository interface {
 	GetByID(ctx context.Context, id scheduler.JobRunID) (*scheduler.JobRun, error)
 	GetByScheduledAt(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
+	GetLatestRun(ctx context.Context, project tenant.ProjectName, name scheduler.JobName, status *scheduler.State) (*scheduler.JobRun, error)
+	GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, status *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error)
 	GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error)
 	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, slaDefinitionInSec int64) error
 	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error
@@ -136,6 +147,27 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	}
 
 	return s.compiler.Compile(ctx, details, config, executedAt)
+}
+
+func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {
+	f := filter.NewFilter(filters...)
+	var runState *scheduler.State
+	state, err := scheduler.StateFromString(f.GetStringValue(filter.RunState))
+	if err == nil {
+		runState = &state
+	}
+
+	if f.Contains(filter.StartDate) && f.Contains(filter.EndDate) {
+		//	get job run by scheduled at between start date and end date, filter by runState if applicable
+		return s.repo.GetRunsByTimeRange(ctx, projectName, jobName, runState,
+			f.GetTimeValue(filter.StartDate), f.GetTimeValue(filter.EndDate))
+	}
+
+	jobRun, err := s.repo.GetLatestRun(ctx, projectName, jobName, runState)
+	if err != nil {
+		return nil, err
+	}
+	return []*scheduler.JobRun{jobRun}, nil
 }
 
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
@@ -343,12 +375,13 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		return err
 	}
 
-	telemetry.NewGauge("jobrun_durations_breakdown_seconds", map[string]string{
-		"project":   tenant.ProjectName().String(),
-		"namespace": tenant.NamespaceName().String(),
-		"job":       jobName.String(),
-		"type":      scheduleDelay.String(),
-	}).Set(float64(time.Now().Unix() - scheduledAt.Unix()))
+	jobRunDdurationsBreakdownSeconds.WithLabelValues(
+		tenant.ProjectName().String(),
+		tenant.NamespaceName().String(),
+		jobName.String(),
+		scheduleDelay.String(),
+	).Set(float64(time.Now().Unix() - scheduledAt.Unix()))
+
 	return nil
 }
 
@@ -454,20 +487,10 @@ func (s *JobRunService) updateJobRunSLA(ctx context.Context, event *scheduler.Ev
 	}
 	var slaBreachedJobRunScheduleTimes []time.Time
 	event.SLAObjectList, slaBreachedJobRunScheduleTimes = s.filterSLAObjects(ctx, event)
-
 	err := s.repo.UpdateSLA(ctx, event.JobName, event.Tenant.ProjectName(), slaBreachedJobRunScheduleTimes)
 	if err != nil {
 		s.l.Error("error updating job run sla status", err)
 		return err
-	}
-	err = telemetry.SetGaugeViaPush(metricJobRunEvents, map[string]string{
-		"project":   event.Tenant.ProjectName().String(),
-		"namespace": event.Tenant.NamespaceName().String(),
-		"name":      event.JobName.String(),
-		"status":    scheduler.SLAMissEvent.String(),
-	}, 1)
-	if err != nil {
-		s.l.Error("failed metric push", err)
 	}
 	return nil
 }
@@ -506,17 +529,6 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 		return
 	}
 	s.eventHandler.HandleEvent(schedulerEvent)
-	err = telemetry.SetGaugeViaPush(metricJobRunEvents, map[string]string{
-		"project":   jobRun.Tenant.ProjectName().String(),
-		"namespace": jobRun.Tenant.NamespaceName().String(),
-		"name":      jobRun.JobName.String(),
-		"status":    jobRun.State.String(),
-	}, 1)
-	if err != nil {
-		if !strings.Contains(err.Error(), "status code 204") {
-			s.l.Error("failed metric push", err)
-		}
-	}
 }
 
 func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {
@@ -584,12 +596,13 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 		s.l.Error("error updating operator run id [%s]: %s", operatorRun.ID, err)
 		return err
 	}
-	telemetry.NewGauge("jobrun_durations_breakdown_seconds", map[string]string{
-		"project":   event.Tenant.ProjectName().String(),
-		"namespace": event.Tenant.NamespaceName().String(),
-		"job":       event.JobName.String(),
-		"type":      operatorType.String(),
-	}).Set(float64(event.EventTime.Unix() - operatorRun.StartTime.Unix()))
+	jobRunDdurationsBreakdownSeconds.WithLabelValues(
+		event.Tenant.ProjectName().String(),
+		event.Tenant.NamespaceName().String(),
+		event.JobName.String(),
+		operatorType.String(),
+	).Set(float64(event.EventTime.Unix() - operatorRun.StartTime.Unix()))
+
 	return nil
 }
 
@@ -605,33 +618,17 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 			event.Type, event.EventTime.Format("01/02/06 15:04:05 MST"), event.JobName, event.OperatorName, event.JobScheduledAt.Format("01/02/06 15:04:05 MST"), event.Status)
 	}
 
-	if event.Type == scheduler.SensorStartEvent || event.Type == scheduler.SensorRetryEvent || event.Type == scheduler.SensorSuccessEvent || event.Type == scheduler.SensorFailEvent {
-		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorSensor))
-		telemetry.NewCounter("jobrun_sensor_events_total", map[string]string{
-			"project":    event.Tenant.ProjectName().String(),
-			"namespace":  event.Tenant.NamespaceName().String(),
-			"event_type": eventType,
-		}).Inc()
-		return
-	}
-	if event.Type == scheduler.TaskStartEvent || event.Type == scheduler.TaskRetryEvent || event.Type == scheduler.TaskSuccessEvent || event.Type == scheduler.TaskFailEvent {
-		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorTask))
-		telemetry.NewCounter("jobrun_task_events_total", map[string]string{
-			"project":    event.Tenant.ProjectName().String(),
-			"namespace":  event.Tenant.NamespaceName().String(),
-			"event_type": eventType,
-			"operator":   event.OperatorName,
-		}).Inc()
-		return
-	}
-	if event.Type == scheduler.HookStartEvent || event.Type == scheduler.HookRetryEvent || event.Type == scheduler.HookSuccessEvent || event.Type == scheduler.HookFailEvent {
-		eventType := strings.TrimPrefix(event.Type.String(), fmt.Sprintf("%s_", scheduler.OperatorHook))
-		telemetry.NewCounter("jobrun_hook_events_total", map[string]string{
-			"project":    event.Tenant.ProjectName().String(),
-			"namespace":  event.Tenant.NamespaceName().String(),
-			"event_type": eventType,
-			"operator":   event.OperatorName,
-		}).Inc()
+	switch event.Type {
+	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
+		jobRunEventsMetric.WithLabelValues(
+			scheduler.OperatorSensor.String(),
+			event.Type.String(),
+		).Inc()
+	case scheduler.TaskSuccessEvent, scheduler.TaskRetryEvent, scheduler.TaskFailEvent, scheduler.HookSuccessEvent, scheduler.HookRetryEvent, scheduler.HookFailEvent:
+		jobRunEventsMetric.WithLabelValues(
+			event.OperatorName,
+			event.Type.String(),
+		).Inc()
 	}
 }
 

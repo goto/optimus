@@ -14,6 +14,8 @@ import (
 
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 
@@ -22,7 +24,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
-	"github.com/goto/optimus/internal/telemetry"
 )
 
 //go:embed __lib.py
@@ -35,6 +36,7 @@ const (
 	dagURL            = "api/v1/dags/%s"
 	dagRunClearURL    = "api/v1/dags/%s/clearTaskInstances"
 	dagRunCreateURL   = "api/v1/dags/%s/dagRuns"
+	dagRunModifyURL   = "api/v1/dags/%s/dagRuns/%s"
 	airflowDateFormat = "2006-01-02T15:04:05+00:00"
 
 	schedulerHostKey = "SCHEDULER_HOST"
@@ -46,11 +48,17 @@ const (
 	concurrentTicketPerSec = 50
 	concurrentLimit        = 100
 
-	metricJobUpload       = "job_upload_total"
-	metricJobRemoval      = "job_removal_total"
 	metricJobStateSuccess = "success"
 	metricJobStateFailed  = "failed"
 )
+
+var jobUploadMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "job_upload_total",
+}, []string{"project", "namespace", "status"})
+
+var jobRemovalMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "job_removal_total",
+}, []string{"project", "namespace", "status"})
 
 type Bucket interface {
 	WriteAll(ctx context.Context, key string, p []byte, opts *blob.WriterOptions) error
@@ -129,8 +137,11 @@ func (s *Scheduler) DeployJobs(ctx context.Context, tenant tenant.Tenant, jobs [
 		}
 		countDeploySucceed++
 	}
-	raiseSchedulerMetric(tenant, metricJobUpload, metricJobStateSuccess, countDeploySucceed)
-	raiseSchedulerMetric(tenant, metricJobUpload, metricJobStateFailed, countDeployFailed)
+
+	projectName := project.Name().String()
+	namespace := tenant.NamespaceName().String()
+	jobUploadMetric.WithLabelValues(projectName, namespace, metricJobStateSuccess).Add(float64(countDeploySucceed))
+	jobUploadMetric.WithLabelValues(projectName, namespace, metricJobStateFailed).Add(float64(countDeployFailed))
 
 	return multiError.ToErr()
 }
@@ -193,8 +204,11 @@ func (s *Scheduler) DeleteJobs(ctx context.Context, t tenant.Tenant, jobNames []
 		}
 		countDeleteJobsSucceed++
 	}
-	raiseSchedulerMetric(t, metricJobRemoval, metricJobStateSuccess, countDeleteJobsSucceed)
-	raiseSchedulerMetric(t, metricJobRemoval, metricJobStateFailed, countDeleteJobsFailed)
+
+	projectName := t.ProjectName().String()
+	namespace := t.NamespaceName().String()
+	jobRemovalMetric.WithLabelValues(projectName, namespace, metricJobStateSuccess).Add(float64(countDeleteJobsSucceed))
+	jobRemovalMetric.WithLabelValues(projectName, namespace, metricJobStateFailed).Add(float64(countDeleteJobsFailed))
 
 	err = deleteDirectoryIfEmpty(ctx, t.NamespaceName().String(), bucket)
 	if err != nil {
@@ -405,6 +419,27 @@ func (s *Scheduler) ClearBatch(ctx context.Context, tnnt tenant.Tenant, jobName 
 	return nil
 }
 
+func (s *Scheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error {
+	spanCtx, span := startChildSpan(ctx, "CancelRun")
+	defer span.End()
+	dagRunID := fmt.Sprintf("%s__%s", dagRunIDPrefix, executionTime.UTC().Format(airflowDateFormat))
+	data := []byte(`{"state": "failed"}`)
+	req := airflowRequest{
+		path:   fmt.Sprintf(dagRunModifyURL, jobName.String(), dagRunID),
+		method: http.MethodPatch,
+		body:   data,
+	}
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	if err != nil {
+		return err
+	}
+	_, err = s.client.Invoke(spanCtx, req, schdAuth)
+	if err != nil {
+		return errors.Wrap(EntityAirflow, "failure while canceling airflow dag run", err)
+	}
+	return nil
+}
+
 func (s *Scheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error {
 	spanCtx, span := startChildSpan(ctx, "CreateRun")
 	defer span.End()
@@ -438,12 +473,4 @@ func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler
 		projectGetter: projectGetter,
 		secretGetter:  secretGetter,
 	}
-}
-
-func raiseSchedulerMetric(jobTenant tenant.Tenant, metricName, status string, metricValue int) {
-	telemetry.NewCounter(metricName, map[string]string{
-		"project":   jobTenant.ProjectName().String(),
-		"namespace": jobTenant.NamespaceName().String(),
-		"status":    status,
-	}).Add(float64(metricValue))
 }

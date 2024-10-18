@@ -21,7 +21,6 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/optimus/sdk/plugin"
@@ -45,6 +44,8 @@ type JobService struct {
 	upstreamResolver UpstreamResolver
 	eventHandler     EventHandler
 
+	alertHandler AlertManager
+
 	tenantDetailsGetter TenantDetailsGetter
 
 	jobDeploymentService JobDeploymentService
@@ -56,12 +57,17 @@ type JobService struct {
 	logger log.Logger
 }
 
+type AlertManager interface {
+	SendJobEvent(attr *job.AlertAttrs)
+}
+
 func NewJobService(
 	jobRepo JobRepository, upstreamRepo UpstreamRepository, downstreamRepo DownstreamRepository,
 	pluginService PluginService, upstreamResolver UpstreamResolver,
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
 	jobDeploymentService JobDeploymentService, engine Engine,
 	jobInputCompiler JobRunInputCompiler, resourceChecker ResourceExistenceChecker,
+	alertHandler AlertManager,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -76,6 +82,7 @@ func NewJobService(
 		engine:               engine,
 		jobRunInputCompiler:  jobInputCompiler,
 		resourceChecker:      resourceChecker,
+		alertHandler:         alertHandler,
 	}
 }
 
@@ -812,11 +819,10 @@ func (j *JobService) RefreshResourceDownstream(ctx context.Context, resourceURNs
 			status = "failed"
 		}
 
-		counter := telemetry.NewCounter(job.MetricJobRefreshResourceDownstream, map[string]string{
-			"project": projectName.String(),
-			"status":  status,
-		})
-		counter.Add(float64(len(jobNames)))
+		job.RefreshResourceDownstreamMetric.WithLabelValues(
+			projectName.String(),
+			status,
+		).Add(float64(len(jobNames)))
 	}
 
 	return me.ToErr()
@@ -1302,8 +1308,15 @@ func (j *JobService) raiseCreateEvent(job *job.Job) {
 	j.eventHandler.HandleEvent(jobEvent)
 }
 
-func (j *JobService) raiseUpdateEvent(job *job.Job, impactType job.UpdateImpact) {
-	jobEvent, err := event.NewJobUpdateEvent(job, impactType)
+func (j *JobService) raiseUpdateEvent(incomingJob *job.Job, impactType job.UpdateImpact) {
+	j.alertHandler.SendJobEvent(&job.AlertAttrs{
+		Name:       incomingJob.Spec().Name(),
+		URN:        incomingJob.GetConsoleURN(),
+		Tenant:     incomingJob.Tenant(),
+		EventTime:  time.Now(),
+		ChangeType: job.ChangeTypeUpdate,
+	})
+	jobEvent, err := event.NewJobUpdateEvent(incomingJob, impactType)
 	if err != nil {
 		j.logger.Error("error creating event for job update: %s", err)
 		return
@@ -1321,6 +1334,13 @@ func (j *JobService) raiseStateChangeEvent(tnnt tenant.Tenant, jobName job.Name,
 }
 
 func (j *JobService) raiseDeleteEvent(tnnt tenant.Tenant, jobName job.Name) {
+	j.alertHandler.SendJobEvent(&job.AlertAttrs{
+		Name:       jobName,
+		URN:        jobName.GetConsoleURN(tnnt),
+		Tenant:     tnnt,
+		EventTime:  time.Now(),
+		ChangeType: job.ChangeTypeDelete,
+	})
 	jobEvent, err := event.NewJobDeleteEvent(tnnt, jobName)
 	if err != nil {
 		j.logger.Error("error creating event for job delete: %s", err)
@@ -1338,11 +1358,11 @@ func (*JobService) groupDownstreamPerProject(downstreams []*job.Downstream) map[
 }
 
 func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int) {
-	telemetry.NewCounter(job.MetricJobEvent, map[string]string{
-		"project":   jobTenant.ProjectName().String(),
-		"namespace": jobTenant.NamespaceName().String(),
-		"status":    state,
-	}).Add(float64(metricValue))
+	job.EventMetric.WithLabelValues(
+		jobTenant.ProjectName().String(),
+		jobTenant.NamespaceName().String(),
+		state,
+	).Add(float64(metricValue))
 }
 
 func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]resource.URN, error) {
@@ -1941,14 +1961,12 @@ func (*JobService) validateWindow(tenantDetails *tenant.WithDetails, windowConfi
 }
 
 func registerJobValidationMetric(tnnt tenant.Tenant, stage dto.ValidateStage, success bool) {
-	counter := telemetry.NewCounter(job.MetricJobValidation, map[string]string{
-		"project":   tnnt.ProjectName().String(),
-		"namespace": tnnt.NamespaceName().String(),
-		"stage":     stage.String(),
-		"success":   fmt.Sprintf("%t", success),
-	})
-
-	counter.Add(1)
+	job.ValidationMetric.WithLabelValues(
+		tnnt.ProjectName().String(),
+		tnnt.NamespaceName().String(),
+		stage.String(),
+		fmt.Sprintf("%t", success),
+	).Add(1)
 }
 
 func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (job.DownstreamList, error) {

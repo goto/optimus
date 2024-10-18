@@ -604,4 +604,41 @@ func TestResource(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("Version", func(t *testing.T) {
+		t.Run("returns default version if no version is provided", func(t *testing.T) {
+			tnnt, tnntErr := tenant.NewTenant("proj", "ns")
+			assert.Nil(t, tnntErr)
+
+			metadata := &resource.Metadata{
+				Description: "description",
+			}
+			spec := map[string]any{
+				"description": "spec for unit test",
+			}
+			res, err := resource.NewResource("proj.set.res_name", "table", resource.Bigquery, tnnt, metadata, spec)
+			assert.Nil(t, err)
+
+			version := res.Version()
+			assert.Equal(t, int32(resource.DefaultResourceSpecVersion), version)
+		})
+
+		t.Run("returns version from metadata if metadata is not nil", func(t *testing.T) {
+			tnnt, tnntErr := tenant.NewTenant("proj", "ns")
+			assert.Nil(t, tnntErr)
+
+			meta := &resource.Metadata{
+				Version:     resource.ResourceSpecV2,
+				Description: "description",
+			}
+			spec := map[string]any{
+				"description": "spec for unit test",
+			}
+			res, err := resource.NewResource("proj.set.res_name", "table", resource.Bigquery, tnnt, meta, spec)
+			assert.Nil(t, err)
+
+			version := res.Version()
+			assert.Equal(t, int32(resource.ResourceSpecV2), version)
+		})
+	})
 }

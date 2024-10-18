@@ -5,17 +5,17 @@ import (
 	"encoding/base64"
 
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/core/tenant/dto"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/telemetry"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
 const (
-	metricSecretEvents               = "secret_events_total"
 	secretEventsStatusRegistered     = "registered"
 	secretEventsStatusUpdated        = "updated"
 	secretEventsStatusDeleted        = "deleted"
@@ -23,6 +23,10 @@ const (
 	secretEventsStatusUpdateFailed   = "update_failed"
 	secretEventsStatusDeleteFailed   = "delete_failed"
 )
+
+var secretEventsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "secret_events_total",
+}, []string{"project", "namespace", "status"})
 
 type SecretService interface {
 	Save(ctx context.Context, projName tenant.ProjectName, nsName string, pts *tenant.PlainTextSecret) error
@@ -157,9 +161,9 @@ func NewSecretsHandler(l log.Logger, secretService SecretService) *SecretHandler
 }
 
 func raiseSecretEventsMetric(projectName, namespaceName, state string) {
-	telemetry.NewCounter(metricSecretEvents, map[string]string{
-		"project":   projectName,
-		"namespace": namespaceName,
-		"status":    state,
-	}).Inc()
+	secretEventsMetric.WithLabelValues(
+		projectName,
+		namespaceName,
+		state,
+	).Inc()
 }

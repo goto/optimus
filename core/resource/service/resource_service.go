@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/salt/log"
 
@@ -25,6 +26,7 @@ type ResourceRepository interface {
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
+	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
 }
 
 type ResourceManager interface {
@@ -57,12 +59,17 @@ type ResourceService struct {
 
 	logger       log.Logger
 	eventHandler EventHandler
+	alertHandler AlertManager
+}
+
+type AlertManager interface {
+	SendResourceEvent(attr *resource.AlertAttrs)
 }
 
 func NewResourceService(
 	logger log.Logger,
 	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
-	eventHandler EventHandler, downstreamResolver DownstreamResolver,
+	eventHandler EventHandler, downstreamResolver DownstreamResolver, alertManager AlertManager,
 ) *ResourceService {
 	return &ResourceService{
 		repo:               repo,
@@ -71,6 +78,7 @@ func NewResourceService(
 		downstreamResolver: downstreamResolver,
 		logger:             logger,
 		eventHandler:       eventHandler,
+		alertHandler:       alertManager,
 	}
 }
 
@@ -273,6 +281,8 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 		res.DownstreamJobs = strings.Split(jobNames, ", ")
 	}
 
+	rs.raiseDeleteEvent(existing)
+
 	return res, nil
 }
 
@@ -339,17 +349,7 @@ func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn 
 		return nil, errors.InvalidArgument(resource.EntityResource, "urn is zero value")
 	}
 
-	store, err := resource.FromStringToStore(urn.GetStore())
-	if err != nil {
-		return nil, err
-	}
-
-	name, err := resource.NameFrom(urn.GetName())
-	if err != nil {
-		return nil, err
-	}
-
-	return rs.repo.ReadByFullName(ctx, tnnt, store, name.String(), false)
+	return rs.repo.ReadByURN(ctx, tnnt, urn)
 }
 
 func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {
@@ -487,11 +487,30 @@ func (rs ResourceService) raiseCreateEvent(res *resource.Resource) { // nolint:g
 	rs.eventHandler.HandleEvent(ev)
 }
 
+func (rs ResourceService) raiseDeleteEvent(res *resource.Resource) { // nolint:gocritic
+	if res.Status() != resource.StatusDeleted {
+		return
+	}
+	rs.alertHandler.SendResourceEvent(&resource.AlertAttrs{
+		Name:      res.Name(),
+		URN:       res.ConsoleURN(),
+		Tenant:    res.Tenant(),
+		EventTime: time.Now(),
+		EventType: resource.ChangeTypeDelete,
+	})
+}
+
 func (rs ResourceService) raiseUpdateEvent(res *resource.Resource, impact resource.UpdateImpact) { // nolint:gocritic
 	if res.Status() != resource.StatusSuccess {
 		return
 	}
-
+	rs.alertHandler.SendResourceEvent(&resource.AlertAttrs{
+		Name:      res.Name(),
+		URN:       res.ConsoleURN(),
+		Tenant:    res.Tenant(),
+		EventTime: time.Now(),
+		EventType: resource.ChangeTypeUpdate,
+	})
 	ev, err := event.NewResourceUpdatedEvent(res, impact)
 	if err != nil {
 		rs.logger.Error("error creating event for resource update: %s", err)

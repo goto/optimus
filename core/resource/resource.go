@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -16,6 +17,11 @@ const (
 
 	UnspecifiedImpactChange    UpdateImpact = "unspecified_impact"
 	ResourceDataPipeLineImpact UpdateImpact = "data_impact"
+
+	ResourceSpecV1 = 1
+	ResourceSpecV2 = 2
+
+	DefaultResourceSpecVersion = ResourceSpecV1
 )
 
 type UpdateImpact string
@@ -24,6 +30,25 @@ type Metadata struct {
 	Version     int32
 	Description string
 	Labels      labels.Labels
+}
+
+type ChangeType string
+
+const (
+	ChangeTypeUpdate ChangeType = "Modified"
+	ChangeTypeDelete ChangeType = "Deleted"
+)
+
+func (j ChangeType) String() string {
+	return string(j)
+}
+
+type AlertAttrs struct {
+	Name      Name
+	URN       string
+	Tenant    tenant.Tenant
+	EventTime time.Time
+	EventType ChangeType
 }
 
 func (m *Metadata) Validate() error {
@@ -118,6 +143,11 @@ func (r *Resource) FullName() string {
 	return r.name.String()
 }
 
+func (r *Resource) ConsoleURN() string {
+	resourceProject := strings.Split(r.urn.name, ":")[0]
+	return fmt.Sprintf("urn:%s:%s:%s:%s", r.store.String(), resourceProject, r.kind, r.urn.name)
+}
+
 func (r *Resource) URN() URN {
 	return r.urn
 }
@@ -157,6 +187,14 @@ func (r *Resource) Status() Status {
 
 func (r *Resource) Spec() map[string]any {
 	return r.spec
+}
+
+func (r *Resource) Version() int32 {
+	if r.metadata == nil || r.metadata.Version == 0 {
+		return DefaultResourceSpecVersion
+	}
+
+	return r.metadata.Version
 }
 
 func (r *Resource) Equal(incoming *Resource) bool {

@@ -20,6 +20,8 @@ const (
 	// ReplayStateSuccess is a terminal state which occurs when the replay execution finished with successful job runs
 	ReplayStateSuccess ReplayState = "success"
 
+	ReplayStateTimeout ReplayState = "timeout"
+
 	// ReplayStateFailed is a terminal state which occurs when the replay execution failed, timed out, or finished with one of the run fails
 	ReplayStateFailed ReplayState = "failed"
 
@@ -75,6 +77,7 @@ type Replay struct {
 	message string
 
 	createdAt time.Time
+	updatedAt time.Time
 }
 
 func (r *Replay) ID() uuid.UUID {
@@ -87,6 +90,10 @@ func (r *Replay) JobName() JobName {
 
 func (r *Replay) Tenant() tenant.Tenant {
 	return r.tenant
+}
+
+func (r *Replay) UpdatedAt() time.Time {
+	return r.updatedAt
 }
 
 func (r *Replay) Config() *ReplayConfig {
@@ -118,8 +125,8 @@ func NewReplayRequest(jobName JobName, tenant tenant.Tenant, config *ReplayConfi
 	return &Replay{jobName: jobName, tenant: tenant, config: config, state: state}
 }
 
-func NewReplay(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState, createdAt time.Time, message string) *Replay {
-	return &Replay{id: id, jobName: jobName, tenant: tenant, config: config, state: state, createdAt: createdAt, message: message}
+func NewReplay(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *ReplayConfig, state ReplayState, createdAt, updatedAt time.Time, message string) *Replay {
+	return &Replay{id: id, jobName: jobName, tenant: tenant, config: config, state: state, createdAt: createdAt, updatedAt: updatedAt, message: message}
 }
 
 type ReplayWithRun struct {

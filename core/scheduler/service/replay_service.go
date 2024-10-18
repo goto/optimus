@@ -2,26 +2,31 @@ package service
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"golang.org/x/net/context"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
-	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/internal/utils/filter"
 )
 
 const (
 	getReplaysDayLimit = 30 // TODO: make it configurable via cli
 
-	metricJobReplay = "jobrun_replay_requests_total"
-
 	tenantReplayExecutionProjectConfigKey = "REPLAY_EXECUTION_PROJECT"
 )
+
+var jobReplayMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "jobrun_replay_requests_total",
+	Help: "replay request count with status",
+}, []string{"project", "namespace", "name", "status"})
 
 type SchedulerRunGetter interface {
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
@@ -30,8 +35,13 @@ type SchedulerRunGetter interface {
 type ReplayRepository interface {
 	RegisterReplay(ctx context.Context, replay *scheduler.Replay, runs []*scheduler.JobRunStatus) (uuid.UUID, error)
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
+	UpdateReplayRuns(ctx context.Context, replayID uuid.UUID, runs []*scheduler.JobRunStatus) error
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
+	CancelReplayRequest(ctx context.Context, replayID uuid.UUID, message string) error
+	ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error)
+	AcquireReplayRequest(ctx context.Context, replayID uuid.UUID, unhandledClassifierDuration time.Duration) error
 
+	GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error)
 	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
@@ -47,7 +57,9 @@ type ReplayValidator interface {
 }
 
 type ReplayExecutor interface {
-	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+	Execute(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+	SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
+	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus
 }
 
 type ReplayService struct {
@@ -60,6 +72,8 @@ type ReplayService struct {
 
 	tenantGetter TenantGetter
 
+	alertManager AlertManager
+
 	logger log.Logger
 
 	// stores mapping of task names (optimus plugin names) to its respective execution project config names.
@@ -68,21 +82,21 @@ type ReplayService struct {
 	pluginToExecutionProjectKeyMap map[string]string
 }
 
-func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
-	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, tenant, jobName)
+func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, t, jobName)
 	if err != nil {
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return uuid.Nil, err
 	}
 
-	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, tenant, jobName, config)
+	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, t, jobName, config)
 	if err != nil {
 		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
 		return uuid.Nil, err
 	}
 	config.JobConfig = newConfig
 
-	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
+	replayReq := scheduler.NewReplayRequest(jobName, t, config, scheduler.ReplayStateCreated)
 	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
 		r.logger.Error("error validating replay request: %s", err)
 		return uuid.Nil, err
@@ -94,14 +108,21 @@ func (r *ReplayService) CreateReplay(ctx context.Context, tenant tenant.Tenant, 
 		return uuid.Nil, err
 	}
 
-	telemetry.NewCounter(metricJobReplay, map[string]string{
-		"project":   tenant.ProjectName().String(),
-		"namespace": tenant.NamespaceName().String(),
-		"job":       jobName.String(),
-		"status":    replayReq.State().String(),
-	}).Inc()
+	jobReplayMetric.WithLabelValues(t.ProjectName().String(),
+		t.NamespaceName().String(),
+		jobName.String(),
+		replayReq.State().String(),
+	).Inc()
 
-	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
+	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+		JobName:  jobName.String(),
+		ReplayID: replayID.String(),
+		Tenant:   t,
+		JobURN:   jobName.GetJobURN(t),
+		State:    scheduler.ReplayStateCreated,
+	})
+
+	go r.executor.Execute(ctx, replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
 }
@@ -203,13 +224,48 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 	return runs, nil
 }
 
+func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
+	// get list of in progress runs
+	// stop them on the scheduler
+	replay := replayWithRun.Replay
+	jobName := replay.JobName()
+	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, replay.Tenant(), jobName)
+	if err != nil {
+		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
+		return err
+	}
+
+	syncedRunStatus, err := r.executor.SyncStatus(ctx, replayWithRun, jobCron)
+	if err != nil {
+		r.logger.Error("unable to sync replay runs status for job [%s]: %s", jobName.String(), err.Error())
+		return err
+	}
+	r.logger.Debug(fmt.Sprintf("Synced Run status from Airflow : %#v", syncedRunStatus))
+
+	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateInProgress, scheduler.StateQueued}
+	toBeCanceledRuns := syncedRunStatus.GetSortedRunsByStates(statesForCanceling)
+	if len(toBeCanceledRuns) == 0 {
+		return nil
+	}
+
+	canceledRuns := r.executor.CancelReplayRunsOnScheduler(ctx, replay, jobCron, toBeCanceledRuns)
+
+	// update the status of these runs as failed in DB
+	return r.replayRepo.UpdateReplayRuns(ctx, replay.ID(), canceledRuns)
+}
+
 func (r *ReplayService) CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
 	if replayWithRun.Replay.IsTerminated() {
 		return errors.InvalidArgument(scheduler.EntityReplay, fmt.Sprintf("replay has already been terminated with status %s", replayWithRun.Replay.State().String()))
 	}
 	statusSummary := scheduler.JobRunStatusList(replayWithRun.Runs).GetJobRunStatusSummary()
 	cancelMessage := fmt.Sprintf("replay cancelled with run status %s", statusSummary)
-	return r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
+
+	err := r.replayRepo.UpdateReplayStatus(ctx, replayWithRun.Replay.ID(), scheduler.ReplayStateCancelled, cancelMessage)
+	if err != nil {
+		return err
+	}
+	return r.cancelReplayRuns(ctx, replayWithRun)
 }
 
 func NewReplayService(
@@ -221,6 +277,7 @@ func NewReplayService(
 	runGetter SchedulerRunGetter,
 	logger log.Logger,
 	pluginToExecutionProjectKeyMap map[string]string,
+	alertManager AlertManager,
 ) *ReplayService {
 	return &ReplayService{
 		replayRepo:                     replayRepo,
@@ -231,6 +288,7 @@ func NewReplayService(
 		runGetter:                      runGetter,
 		logger:                         logger,
 		pluginToExecutionProjectKeyMap: pluginToExecutionProjectKeyMap,
+		alertManager:                   alertManager,
 	}
 }
 

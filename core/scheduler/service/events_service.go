@@ -7,18 +7,23 @@ import (
 	"strings"
 
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/telemetry"
 )
 
 const (
 	NotificationSchemeSlack     = "slack"
 	NotificationSchemePagerDuty = "pagerduty"
 )
+
+var jobrunAlertsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "jobrun_alerts_total",
+}, []string{"project", "namespace", "type"})
 
 type Notifier interface {
 	io.Closer
@@ -31,8 +36,8 @@ type Webhook interface {
 }
 
 type AlertManager interface {
-	io.Closer
-	Relay(attr *scheduler.AlertAttrs)
+	SendJobRunEvent(attr *scheduler.AlertAttrs)
+	SendReplayEvent(attr *scheduler.ReplayNotificationAttrs)
 }
 
 type EventsService struct {
@@ -65,7 +70,7 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 	} else {
 		status = scheduler.StatusResolved
 	}
-	e.alertManager.Relay(&scheduler.AlertAttrs{
+	e.alertManager.SendJobRunEvent(&scheduler.AlertAttrs{
 		Owner:         jobDetails.JobMetadata.Owner,
 		JobURN:        jobDetails.Job.URN(),
 		Title:         "Optimus Job Alert",
@@ -179,11 +184,11 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 					}
 				}
 			}
-			telemetry.NewCounter("jobrun_alerts_total", map[string]string{
-				"project":   event.Tenant.ProjectName().String(),
-				"namespace": event.Tenant.NamespaceName().String(),
-				"type":      event.Type.String(),
-			}).Inc()
+			jobrunAlertsMetric.WithLabelValues(
+				event.Tenant.ProjectName().String(),
+				event.Tenant.NamespaceName().String(),
+				event.Type.String(),
+			).Inc()
 		}
 	}
 	return multierror.ToErr()

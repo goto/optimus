@@ -3,6 +3,10 @@ package job
 import (
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
@@ -19,7 +23,6 @@ const (
 	UpstreamStateResolved   UpstreamState = "resolved"
 	UpstreamStateUnresolved UpstreamState = "unresolved"
 
-	MetricJobEvent                      = "job_events_total"
 	MetricJobEventStateAdded            = "added"
 	MetricJobEventStateUpdated          = "updated"
 	MetricJobEventStateDeleted          = "deleted"
@@ -30,10 +33,6 @@ const (
 	MetricJobEventDisabled              = "disabled"
 	MetricJobEventFoundDirty            = "found_dirty"
 
-	MetricJobValidation = "job_validation"
-
-	MetricJobRefreshResourceDownstream = "refresh_resource_downstream_total"
-
 	UnspecifiedImpactChange UpdateImpact = "unspecified_impact"
 	JobInternalImpact       UpdateImpact = "internal_impact"
 	JobBehaviourImpact      UpdateImpact = "behaviour_impact"
@@ -42,6 +41,18 @@ const (
 	DeployStateSkipped DeployState = "skipped"
 	DeployStateFailed  DeployState = "failed"
 )
+
+var EventMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "job_events_total",
+}, []string{"project", "namespace", "status"})
+
+var ValidationMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "job_validation",
+}, []string{"project", "namespace", "stage", "success"})
+
+var RefreshResourceDownstreamMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "refresh_resource_downstream_total",
+}, []string{"project", "status"})
 
 type Job struct {
 	tenant tenant.Tenant
@@ -64,6 +75,10 @@ func (j *Job) Spec() *Spec {
 
 func (j *Job) GetName() string {
 	return j.spec.name.String()
+}
+
+func (j *Job) GetConsoleURN() string {
+	return j.Spec().name.GetConsoleURN(j.tenant)
 }
 
 func (j *Job) FullName() string {
@@ -123,6 +138,25 @@ func (j *Job) GetStaticUpstreamsToResolve() ([]*Upstream, error) {
 		unresolvedStaticUpstreams = append(unresolvedStaticUpstreams, NewUpstreamUnresolvedStatic(jobUpstreamName, projectUpstreamName))
 	}
 	return unresolvedStaticUpstreams, me.ToErr()
+}
+
+type ChangeType string
+
+const (
+	ChangeTypeUpdate ChangeType = "Modified"
+	ChangeTypeDelete ChangeType = "Deleted"
+)
+
+func (j ChangeType) String() string {
+	return string(j)
+}
+
+type AlertAttrs struct {
+	Name       Name
+	URN        string
+	Tenant     tenant.Tenant
+	EventTime  time.Time
+	ChangeType ChangeType
 }
 
 type UpdateImpact string

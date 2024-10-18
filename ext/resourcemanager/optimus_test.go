@@ -82,7 +82,7 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
 			panic(err)
 		}
 
-		router.HandleFunc(apiPath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(apiPath, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Add("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 		})
@@ -111,7 +111,7 @@ func (o *OptimusResourceManager) TestGetJobSpecifications() {
 			panic(err)
 		}
 
-		router.HandleFunc(apiPath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(apiPath, func(w http.ResponseWriter, _ *http.Request) {
 			content := []byte("invalid-content")
 
 			w.Header().Add("Content-Type", "application/json")

@@ -44,7 +44,7 @@ type DagRunRequest struct {
 	OrderBy          string   `json:"order_by"`
 	PageOffset       int      `json:"page_offset"`
 	PageLimit        int      `json:"page_limit"`
-	DagIds           []string `json:"dag_ids"`
+	DagIds           []string `json:"dag_ids"` // nolint: revive
 	ExecutionDateGte string   `json:"execution_date_gte,omitempty"`
 	ExecutionDateLte string   `json:"execution_date_lte,omitempty"`
 }

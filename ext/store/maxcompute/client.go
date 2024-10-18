@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"encoding/json"
+
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
 
@@ -23,7 +24,7 @@ type MaxComputeClient struct {
 }
 
 type maxComputeCredentials struct {
-	AccessId    string `json:"access_id"`
+	AccessID    string `json:"access_id"`
 	AccessKey   string `json:"access_key"`
 	Endpoint    string `json:"endpoint"`
 	ProjectName string `json:"project_name"`
@@ -35,7 +36,7 @@ func NewClient(svcAccount string) (*MaxComputeClient, error) {
 		return nil, errors.InternalError(store, "failed to read account", err)
 	}
 
-	aliAccount := account.NewAliyunAccount(cred.AccessId, cred.AccessKey)
+	aliAccount := account.NewAliyunAccount(cred.AccessID, cred.AccessKey)
 	odpsIns := odps.NewOdps(aliAccount, cred.Endpoint)
 	odpsIns.SetDefaultProjectName(cred.ProjectName)
 

@@ -3,6 +3,7 @@ package maxcompute
 import (
 	"context"
 	"fmt"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
@@ -105,7 +106,7 @@ func (m MaxCompute) Update(ctx context.Context, resource *resource.Resource) err
 	}
 }
 
-func (MaxCompute) BatchUpdate(ctx context.Context, resources []*resource.Resource) error {
+func (MaxCompute) BatchUpdate(_ context.Context, _ []*resource.Resource) error {
 	return errors.InternalError(resourceSchema, "support for BatchUpdate is not present", nil)
 }
 
@@ -136,7 +137,7 @@ func (MaxCompute) GetURN(res *resource.Resource) (resource.URN, error) {
 	return generateMaxComputeURN(res)
 }
 
-func (MaxCompute) Backup(ctx context.Context, backup *resource.Backup, resources []*resource.Resource) (*resource.BackupResult, error) {
+func (MaxCompute) Backup(_ context.Context, _ *resource.Backup, _ []*resource.Resource) (*resource.BackupResult, error) {
 	return nil, errors.InternalError(resourceSchema, "support for Backup is not present", nil)
 }
 

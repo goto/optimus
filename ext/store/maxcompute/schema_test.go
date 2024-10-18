@@ -2,9 +2,9 @@ package maxcompute_test
 
 import (
 	"fmt"
-	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 	"testing"
 
+	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/ext/store/maxcompute"

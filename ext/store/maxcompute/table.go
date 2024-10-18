@@ -2,10 +2,11 @@ package maxcompute
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/datatype"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
-	"strings"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
@@ -17,7 +18,7 @@ type ColumnRecord struct {
 	columnValue     tableschema.Column
 }
 
-type McSqlExecutor interface {
+type McSQLExecutor interface {
 	ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error)
 }
 
@@ -27,7 +28,7 @@ type McTable interface {
 }
 
 type TableHandle struct {
-	mcSqlExecutor McSqlExecutor
+	mcSQLExecutor McSQLExecutor
 	mcTable       McTable
 }
 
@@ -86,7 +87,7 @@ func (t TableHandle) Update(res *resource.Resource) error {
 	}
 
 	for _, task := range sqlTasks {
-		ins, err := t.mcSqlExecutor.ExecSQlWithHints(task, table.Hints)
+		ins, err := t.mcSQLExecutor.ExecSQlWithHints(task, table.Hints)
 		if err != nil {
 			return errors.AddErrContext(err, EntityTable, "failed to create sql task to update for "+res.FullName())
 		}
@@ -159,7 +160,7 @@ func flattenSchema(tableSchema tableschema.TableSchema, isExistingTable bool) (m
 	return columnCollection, columnList
 }
 
-func trackSchema(parent string, column tableschema.Column, columnCollection map[string]tableschema.Column, columnList *[]ColumnRecord, isArrayStructType bool, isExistingTable bool) {
+func trackSchema(parent string, column tableschema.Column, columnCollection map[string]tableschema.Column, columnList *[]ColumnRecord, isArrayStructType, isExistingTable bool) {
 	if isStruct(column.Type) || isArrayStruct(column.Type) {
 		storeColumn(specifyColumnStructure(parent, column.Name, isArrayStructType), tableschema.Column{
 			Name:            column.Name,
@@ -209,7 +210,7 @@ func storeColumn(key string, column tableschema.Column, columnCollection map[str
 	}
 }
 
-func specifyColumnStructure(parent string, columnName string, isArrayStruct bool) string {
+func specifyColumnStructure(parent, columnName string, isArrayStruct bool) string {
 	if parent == "" {
 		return columnName
 	}
@@ -271,6 +272,6 @@ func getNormalColumnDifferences(tableName string, incoming []ColumnRecord, exist
 	return nil
 }
 
-func NewTableHandle(mcSqlExecutor McSqlExecutor, mc McTable) *TableHandle {
-	return &TableHandle{mcSqlExecutor: mcSqlExecutor, mcTable: mc}
+func NewTableHandle(mcSQLExecutor McSQLExecutor, mc McTable) *TableHandle {
+	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcTable: mc}
 }

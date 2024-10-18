@@ -38,6 +38,7 @@ func TestDecimalProperties(t *testing.T) {
 		assert.Nil(t, err)
 	})
 }
+
 func TestCharProperties(t *testing.T) {
 	t.Run("returns error when invalid length", func(t *testing.T) {
 		v1 := maxcompute.Char{Length: 256}
@@ -51,6 +52,7 @@ func TestCharProperties(t *testing.T) {
 		assert.Nil(t, err)
 	})
 }
+
 func TestVarCharProperties(t *testing.T) {
 	t.Run("returns error when invalid length", func(t *testing.T) {
 		v1 := maxcompute.VarChar{Length: 0}

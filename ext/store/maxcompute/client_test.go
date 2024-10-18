@@ -3,9 +3,9 @@ package maxcompute_test
 import (
 	"testing"
 
-	"github.com/goto/optimus/ext/store/maxcompute"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/ext/store/maxcompute"
 )
 
 func TestMaxComputeClient(t *testing.T) {

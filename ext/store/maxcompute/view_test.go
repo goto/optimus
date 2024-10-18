@@ -3,15 +3,16 @@ package maxcompute_test
 import (
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/maxcompute"
-	"github.com/stretchr/testify/mock"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestViewHandle(t *testing.T) {

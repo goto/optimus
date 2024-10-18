@@ -11,7 +11,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-type ViewSqlExecutor interface {
+type ViewSQLExecutor interface {
 	ExecSQl(sql string) (*odps.Instance, error)
 }
 
@@ -20,7 +20,7 @@ type ViewTable interface {
 }
 
 type ViewHandle struct {
-	viewSqlExecutor ViewSqlExecutor
+	viewSQLExecutor ViewSQLExecutor
 	viewTable       ViewTable
 }
 
@@ -36,7 +36,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 		return errors.AddErrContext(err, EntityView, "failed to build view sql query to create view "+res.FullName())
 	}
 
-	inst, err := v.viewSqlExecutor.ExecSQl(sql)
+	inst, err := v.viewSQLExecutor.ExecSQl(sql)
 	if err != nil {
 		return errors.AddErrContext(err, EntityView, "failed to create sql task to create view "+res.FullName())
 	}
@@ -70,7 +70,7 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 		return errors.AddErrContext(err, EntityView, "failed to build view sql query to update view "+res.FullName())
 	}
 
-	inst, err := v.viewSqlExecutor.ExecSQl(sql)
+	inst, err := v.viewSQLExecutor.ExecSQl(sql)
 	if err != nil {
 		return errors.AddErrContext(err, EntityView, "failed to create sql task to update view "+res.FullName())
 	}
@@ -89,7 +89,7 @@ func (v ViewHandle) Exists(tableName string) bool {
 }
 
 func ToViewSQL(v *View) (string, error) {
-	var fns = template.FuncMap{
+	fns := template.FuncMap{
 		"join": func(sep string, s []string) string {
 			return strings.Join(s, sep)
 		},
@@ -115,6 +115,6 @@ func ToViewSQL(v *View) (string, error) {
 	return out.String(), nil
 }
 
-func NewViewHandle(viewSqlExecutor ViewSqlExecutor, view ViewTable) *ViewHandle {
-	return &ViewHandle{viewSqlExecutor: viewSqlExecutor, viewTable: view}
+func NewViewHandle(viewSQLExecutor ViewSQLExecutor, view ViewTable) *ViewHandle {
+	return &ViewHandle{viewSQLExecutor: viewSQLExecutor, viewTable: view}
 }

@@ -5,13 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/maxcompute"
-
-	"github.com/stretchr/testify/assert"
 )
 
 type mockTableResourceHandle struct {

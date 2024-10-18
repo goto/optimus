@@ -2,9 +2,9 @@ package maxcompute
 
 import (
 	"fmt"
-	"github.com/goto/optimus/core/resource"
 	"regexp"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
 )
 

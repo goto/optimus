@@ -22,7 +22,7 @@ func NewWindow(version int, truncateTo, offset, size string) (Window, error) {
 	if version == 1 {
 		return windowV1{truncateTo: truncateTo, offset: offset, size: size}, nil
 	}
-	if version == 2 { // nolint:gomnd
+	if version == 2 { // nolint:mnd
 		return windowV2{truncateTo: truncateTo, offset: offset, size: size}, nil
 	}
 	return nil, fmt.Errorf("window version [%d] is not recognized", version)

@@ -8,11 +8,11 @@ import (
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
-	"github.com/goto/optimus/core/resource"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/store/maxcompute"
 )
 
@@ -36,12 +36,12 @@ type mockOdpsIns struct {
 	mock.Mock
 }
 
-func (m *mockOdpsIns) ExecSQl(sql string) (*odps.Instance, error) {
+func (m *mockOdpsIns) ExecSQl(sql string) (*odps.Instance, error) { // nolint
 	args := m.Called(sql)
 	return args.Get(0).(*odps.Instance), args.Error(1)
 }
 
-func (m *mockOdpsIns) ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error) {
+func (m *mockOdpsIns) ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error) { // nolint
 	args := m.Called(sql, hints)
 	return args.Get(0).(*odps.Instance), args.Error(1)
 }

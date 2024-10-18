@@ -111,13 +111,18 @@ func fromNamespaceProto(conf *pb.NamespaceSpecification, projName tenant.Project
 	for key, val := range conf.GetConfig() {
 		namespaceConf[strings.ToUpper(key)] = val
 	}
+	namespaceVariables := map[string]string{}
+	for key, val := range conf.GetVariables() {
+		namespaceVariables[strings.ToUpper(key)] = val
+	}
 
-	return tenant.NewNamespace(conf.GetName(), projName, namespaceConf)
+	return tenant.NewNamespace(conf.GetName(), projName, namespaceConf, namespaceVariables)
 }
 
 func toNamespaceProto(ns *tenant.Namespace) *pb.NamespaceSpecification {
 	return &pb.NamespaceSpecification{
-		Name:   ns.Name().String(),
-		Config: ns.GetConfigs(),
+		Name:      ns.Name().String(),
+		Config:    ns.GetConfigs(),
+		Variables: ns.GetVariables(),
 	}
 }

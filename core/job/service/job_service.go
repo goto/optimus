@@ -1143,7 +1143,7 @@ func (j *JobService) generateJobs(ctx context.Context, tenantWithDetails *tenant
 
 func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails) map[string]string {
 	tmplCtx := compiler.PrepareContext(
-		compiler.From(tnnt.GetConfigs()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
+		compiler.From(tnnt.GetVariables()).WithName("proj").WithKeyPrefix(projectConfigPrefix),
 		compiler.From(tnnt.SecretsMap()).WithName("secret"),
 	)
 

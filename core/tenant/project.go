@@ -1,6 +1,7 @@
 package tenant
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/goto/optimus/internal/errors"
@@ -30,8 +31,9 @@ func (pn ProjectName) String() string {
 }
 
 type Project struct {
-	name   ProjectName
-	config map[string]string
+	name      ProjectName
+	config    map[string]string
+	variables map[string]string
 
 	presets map[string]Preset
 }
@@ -58,6 +60,24 @@ func (p *Project) GetConfigs() map[string]string {
 	return confs
 }
 
+func (p *Project) GetVariable(key string) (string, error) {
+	for k, v := range p.variables {
+		if key == k {
+			return v, nil
+		}
+	}
+	return "", errors.NotFound(EntityProject, fmt.Sprintf("variable not found: %s", key))
+}
+
+// GetVariables returns a clone of project variables
+func (p *Project) GetVariables() map[string]string {
+	vars := make(map[string]string, len(p.variables))
+	for k, v := range p.variables {
+		vars[k] = v
+	}
+	return vars
+}
+
 func (p *Project) SetPresets(presets map[string]Preset) {
 	if presets == nil {
 		p.presets = make(map[string]Preset)
@@ -80,7 +100,7 @@ func (p *Project) GetPreset(name string) (Preset, error) {
 	return preset, nil
 }
 
-func NewProject(name string, config map[string]string) (*Project, error) {
+func NewProject(name string, config, variables map[string]string) (*Project, error) {
 	prjName, err := ProjectNameFrom(name)
 	if err != nil {
 		return nil, err
@@ -91,8 +111,9 @@ func NewProject(name string, config map[string]string) (*Project, error) {
 	}
 
 	return &Project{
-		name:    prjName,
-		config:  config,
-		presets: make(map[string]Preset),
+		name:      prjName,
+		config:    config,
+		variables: variables,
+		presets:   make(map[string]Preset),
 	}, nil
 }

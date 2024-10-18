@@ -120,7 +120,8 @@ func (d *describeCommand) getProject() (config.Project, error) {
 		return project, err
 	}
 	return config.Project{
-		Name:   response.GetProject().Name,
-		Config: response.GetProject().Config,
+		Name:      response.GetProject().Name,
+		Config:    response.GetProject().Config,
+		Variables: response.GetProject().Variables,
 	}, nil
 }

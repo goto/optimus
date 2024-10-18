@@ -125,11 +125,13 @@ func TestDagCompiler(t *testing.T) {
 }
 
 func setProject(tnnt tenant.Tenant, airflowVersion string) *tenant.Project {
-	p, _ := tenant.NewProject(tnnt.ProjectName().String(), map[string]string{
+	projectCfg := map[string]string{
 		tenant.ProjectSchedulerVersion: airflowVersion,
 		tenant.ProjectStoragePathKey:   "./path/to/storage",
 		tenant.ProjectSchedulerHost:    "http://airflow.com",
-	})
+	}
+	projectVars := map[string]string{}
+	p, _ := tenant.NewProject(tnnt.ProjectName().String(), projectCfg, projectVars)
 	return p
 }
 

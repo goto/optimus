@@ -34,11 +34,11 @@ func TestJobService(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	secret1, err := tenant.NewPlainTextSecret("table_name", "secret_table")
 	assert.Nil(t, err)
 
@@ -48,7 +48,7 @@ func TestJobService(t *testing.T) {
 	otherNamespace, _ := tenant.NewNamespace("other-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://other_ns_bucket",
-		})
+		}, map[string]string{})
 	otherTenant, _ := tenant.NewTenant(project.Name().String(), otherNamespace.Name().String())
 	secret2, err := tenant.NewPlainTextSecret("bucket", "gs://some_secret_bucket")
 	assert.Nil(t, err)

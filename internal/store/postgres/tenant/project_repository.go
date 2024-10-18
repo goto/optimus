@@ -17,35 +17,36 @@ type ProjectRepository struct {
 }
 
 const (
-	projectColumns = `id, name, config, created_at, updated_at`
+	projectColumns = `id, name, config, variables, created_at, updated_at`
 )
 
 type Project struct {
-	ID     uuid.UUID
-	Name   string
-	Config map[string]string
+	ID        uuid.UUID
+	Name      string
+	Config    map[string]string
+	Variables map[string]string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
 func (p *Project) toTenantProject() (*tenant.Project, error) {
-	return tenant.NewProject(p.Name, p.Config)
+	return tenant.NewProject(p.Name, p.Config, p.Variables)
 }
 
 func (repo ProjectRepository) Save(ctx context.Context, tenantProject *tenant.Project) error {
 	_, err := repo.get(ctx, tenantProject.Name())
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			insertProjectQuery := `INSERT INTO project (name, config, created_at, updated_at) VALUES ($1, $2, now(), now())`
-			_, err = repo.db.Exec(ctx, insertProjectQuery, tenantProject.Name(), tenantProject.GetConfigs())
+			insertProjectQuery := `INSERT INTO project (name, config, variables, created_at, updated_at) VALUES ($1, $2, $3, now(), now())`
+			_, err = repo.db.Exec(ctx, insertProjectQuery, tenantProject.Name(), tenantProject.GetConfigs(), tenantProject.GetVariables())
 			return errors.WrapIfErr(tenant.EntityProject, "unable to save project", err)
 		}
 		return errors.Wrap(tenant.EntityProject, "unable to save project", err)
 	}
 
-	updateProjectQuery := `UPDATE project SET config=$1, updated_at=now() WHERE name=$2`
-	_, err = repo.db.Exec(ctx, updateProjectQuery, tenantProject.GetConfigs(), tenantProject.Name())
+	updateProjectQuery := `UPDATE project SET config=$1, variables=$2, updated_at=now() WHERE name=$3`
+	_, err = repo.db.Exec(ctx, updateProjectQuery, tenantProject.GetConfigs(), tenantProject.GetVariables(), tenantProject.Name())
 	return errors.WrapIfErr(tenant.EntityProject, "unable to update project", err)
 }
 
@@ -65,7 +66,7 @@ func (repo ProjectRepository) get(ctx context.Context, name tenant.ProjectName) 
 
 	getProjectByNameQuery := `SELECT ` + projectColumns + ` FROM project WHERE name = $1 AND deleted_at IS NULL`
 	err := repo.db.QueryRow(ctx, getProjectByNameQuery, name).
-		Scan(&project.ID, &project.Name, &project.Config, &project.CreatedAt, &project.UpdatedAt)
+		Scan(&project.ID, &project.Name, &project.Config, &project.Variables, &project.CreatedAt, &project.UpdatedAt)
 	if err != nil {
 		return Project{}, err
 	}
@@ -84,7 +85,7 @@ func (repo ProjectRepository) GetAll(ctx context.Context) ([]*tenant.Project, er
 
 	for rows.Next() {
 		var prj Project
-		err = rows.Scan(&prj.ID, &prj.Name, &prj.Config, &prj.CreatedAt, &prj.UpdatedAt)
+		err = rows.Scan(&prj.ID, &prj.Name, &prj.Config, &prj.Variables, &prj.CreatedAt, &prj.UpdatedAt)
 		if err != nil {
 			return nil, errors.Wrap(tenant.EntityProject, "error in GetAll", err)
 		}

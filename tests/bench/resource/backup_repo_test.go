@@ -21,15 +21,16 @@ func BenchmarkBackupRepository(b *testing.B) {
 	ctx := context.Background()
 	projectName := "project_test"
 	namespaceName := "namespace_test"
+	vars := map[string]string{}
 	proj, err := serviceTenant.NewProject(projectName,
 		map[string]string{
 			"bucket":                            "gs://some_folder-2",
 			serviceTenant.ProjectSchedulerHost:  "host",
 			serviceTenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, vars)
 	assert.NoError(b, err)
 	namespace, err := serviceTenant.NewNamespace(namespaceName, proj.Name(),
-		map[string]string{
+		map[string]string{}, map[string]string{
 			"bucket": "gs://ns_bucket",
 		})
 	assert.NoError(b, err)

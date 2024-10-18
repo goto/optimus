@@ -31,11 +31,13 @@ func BenchmarkJobRepository(b *testing.B) {
 		serviceTenant.ProjectSchedulerHost:  "http://localhost:8082",
 		serviceTenant.ProjectStoragePathKey: "gs://location",
 	}
-	project, err := serviceTenant.NewProject(projectName, config)
+	vars := map[string]string{}
+	project, err := serviceTenant.NewProject(projectName, config, vars)
 	assert.NoError(b, err)
 
 	namespaceName := "namespace_test"
-	namespace, err := serviceTenant.NewNamespace(namespaceName, project.Name(), config)
+	nsVars := map[string]string{}
+	namespace, err := serviceTenant.NewNamespace(namespaceName, project.Name(), config, nsVars)
 	assert.NoError(b, err)
 
 	tnnt, err := serviceTenant.NewTenant(project.Name().String(), namespace.Name().String())

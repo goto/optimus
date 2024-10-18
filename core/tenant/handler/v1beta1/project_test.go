@@ -21,9 +21,11 @@ func TestProjectHandler(t *testing.T) {
 	conf := map[string]string{
 		tenant.ProjectSchedulerHost:  "host",
 		tenant.ProjectStoragePathKey: "gs://location",
-		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", conf)
+	projectVars := map[string]string{
+		"BUCKET": "gs://some_folder",
+	}
+	savedProject, _ := tenant.NewProject("savedProj", conf, projectVars)
 
 	t.Run("RegisterProject", func(t *testing.T) {
 		t.Run("returns error when name is empty", func(t *testing.T) {
@@ -31,8 +33,9 @@ func TestProjectHandler(t *testing.T) {
 			handler := v1beta1.NewProjectHandler(logger, projectService)
 
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
-				Name:   "",
-				Config: conf,
+				Name:      "",
+				Config:    conf,
+				Variables: projectVars,
 			}}
 
 			_, err := handler.RegisterProject(ctx, &registerReq)
@@ -68,8 +71,9 @@ func TestProjectHandler(t *testing.T) {
 			handler := v1beta1.NewProjectHandler(logger, projectService)
 
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
-				Name:   "proj",
-				Config: conf,
+				Name:      "proj",
+				Config:    conf,
+				Variables: projectVars,
 			}}
 
 			_, err := handler.RegisterProject(ctx, &registerReq)
@@ -85,8 +89,9 @@ func TestProjectHandler(t *testing.T) {
 			handler := v1beta1.NewProjectHandler(logger, projectService)
 
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
-				Name:   "proj",
-				Config: conf,
+				Name:      "proj",
+				Config:    conf,
+				Variables: projectVars,
 				Presets: map[string]*pb.ProjectSpecification_ProjectPreset{
 					"yesterday": {
 						Name:        "yesterday",
@@ -153,7 +158,7 @@ func TestProjectHandler(t *testing.T) {
 				"retrieve project [savedProj]")
 		})
 		t.Run("returns the project successfully", func(t *testing.T) {
-			savedProj, _ := tenant.NewProject("savedProj", conf)
+			savedProj, _ := tenant.NewProject("savedProj", conf, projectVars)
 			pres := tenant.NewPresetWithConfig("yesterday", "description", window.SimpleConfig{
 				Size:       "1d",
 				ShiftBy:    "",

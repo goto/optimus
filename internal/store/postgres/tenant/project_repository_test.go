@@ -22,7 +22,7 @@ func TestPostgresProjectRepository(t *testing.T) {
 			transporterKafkaBrokerKey:    "10.12.12.12:6668,10.12.12.13:6668",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 
 	ctx := context.Background()
 	dbSetup := func() *pgxpool.Pool {
@@ -44,7 +44,7 @@ func TestPostgresProjectRepository(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Equal(t, "t-optimus-1", savedProj.Name().String())
 
-			proj2, _ := tenant.NewProject("t-optimus-2", proj.GetConfigs())
+			proj2, _ := tenant.NewProject("t-optimus-2", proj.GetConfigs(), proj.GetVariables())
 			err = repo.Save(ctx, proj2)
 			assert.Nil(t, err)
 
@@ -69,7 +69,7 @@ func TestPostgresProjectRepository(t *testing.T) {
 
 			conf := proj.GetConfigs()
 			conf["STORAGE"] = "gs://some_place"
-			proj2, _ := tenant.NewProject(proj.Name().String(), conf)
+			proj2, _ := tenant.NewProject(proj.Name().String(), conf, map[string]string{})
 
 			err = repo.Save(ctx, proj2)
 			assert.Nil(t, err)
@@ -89,7 +89,7 @@ func TestPostgresProjectRepository(t *testing.T) {
 			err := repo.Save(ctx, proj)
 			assert.Nil(t, err)
 
-			proj2, _ := tenant.NewProject("t-optimus-2", proj.GetConfigs())
+			proj2, _ := tenant.NewProject("t-optimus-2", proj.GetConfigs(), map[string]string{})
 			err = repo.Save(ctx, proj2)
 			assert.Nil(t, err)
 

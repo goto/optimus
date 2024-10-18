@@ -20,10 +20,15 @@ func TestNamespaceHandler(t *testing.T) {
 	projectConf := map[string]string{
 		tenant.ProjectSchedulerHost:  "host",
 		tenant.ProjectStoragePathKey: "gs://location",
-		"BUCKET":                     "gs://some_folder",
 	}
-	savedProject, _ := tenant.NewProject("savedProj", projectConf)
-	savedNS, _ := tenant.NewNamespace("savedNS", savedProject.Name(), map[string]string{"BUCKET": "gs://some_folder"})
+	projectVars := map[string]string{
+		"BUCKET": "gs://some_folder",
+	}
+	savedProject, _ := tenant.NewProject("savedProj", projectConf, projectVars)
+
+	namespaceConf := map[string]string{}
+	namespaceVars := map[string]string{"BUCKET": "gs://some_folder"}
+	savedNS, _ := tenant.NewNamespace("savedNS", savedProject.Name(), namespaceConf, namespaceVars)
 
 	t.Run("RegisterProjectNamespace", func(t *testing.T) {
 		t.Run("returns error when project name is empty", func(t *testing.T) {
@@ -33,8 +38,9 @@ func TestNamespaceHandler(t *testing.T) {
 			registerReq := pb.RegisterProjectNamespaceRequest{
 				ProjectName: "",
 				Namespace: &pb.NamespaceSpecification{
-					Name:   "NS",
-					Config: map[string]string{"BUCKET": "gs://some_folder"},
+					Name:      "NS",
+					Config:    map[string]string{},
+					Variables: map[string]string{"BUCKET": "gs://some_folder"},
 				},
 			}
 
@@ -50,8 +56,9 @@ func TestNamespaceHandler(t *testing.T) {
 			registerReq := pb.RegisterProjectNamespaceRequest{
 				ProjectName: "proj",
 				Namespace: &pb.NamespaceSpecification{
-					Name:   "",
-					Config: map[string]string{"BUCKET": "gs://some_folder"},
+					Name:      "",
+					Config:    map[string]string{},
+					Variables: map[string]string{"BUCKET": "gs://some_folder"},
 				},
 			}
 
@@ -70,8 +77,9 @@ func TestNamespaceHandler(t *testing.T) {
 			registerReq := pb.RegisterProjectNamespaceRequest{
 				ProjectName: "proj",
 				Namespace: &pb.NamespaceSpecification{
-					Name:   "ns",
-					Config: map[string]string{"BUCKET": "gs://some_folder"},
+					Name:      "ns",
+					Config:    map[string]string{},
+					Variables: map[string]string{"BUCKET": "gs://some_folder"},
 				},
 			}
 
@@ -90,8 +98,9 @@ func TestNamespaceHandler(t *testing.T) {
 			registerReq := pb.RegisterProjectNamespaceRequest{
 				ProjectName: "proj",
 				Namespace: &pb.NamespaceSpecification{
-					Name:   "ns",
-					Config: map[string]string{"BUCKET": "gs://some_folder"},
+					Name:      "ns",
+					Config:    map[string]string{},
+					Variables: map[string]string{"BUCKET": "gs://some_folder"},
 				},
 			}
 

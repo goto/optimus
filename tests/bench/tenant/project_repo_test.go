@@ -32,6 +32,7 @@ func BenchmarkProjectRepository(b *testing.B) {
 		serviceTenant.ProjectSchedulerHost:  "http://localhost:8082",
 		serviceTenant.ProjectStoragePathKey: "gs://location",
 	}
+	vars := map[string]string{}
 
 	b.Run("Save", func(b *testing.B) {
 		db := dbSetup()
@@ -41,7 +42,7 @@ func BenchmarkProjectRepository(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			name := fmt.Sprintf("project_for_test_%d", i)
-			project, err := serviceTenant.NewProject(name, config)
+			project, err := serviceTenant.NewProject(name, config, vars)
 			assert.NoError(b, err)
 
 			actualError := repo.Save(ctx, project)
@@ -55,7 +56,7 @@ func BenchmarkProjectRepository(b *testing.B) {
 		projectNames := make([]string, maxNumberOfProjects)
 		for i := 0; i < maxNumberOfProjects; i++ {
 			name := fmt.Sprintf("project_for_test_%d", i)
-			project, err := serviceTenant.NewProject(name, config)
+			project, err := serviceTenant.NewProject(name, config, vars)
 			assert.NoError(b, err)
 
 			actualError := repo.Save(ctx, project)
@@ -83,7 +84,7 @@ func BenchmarkProjectRepository(b *testing.B) {
 		repo := repoTenant.NewProjectRepository(db)
 		for i := 0; i < maxNumberOfProjects; i++ {
 			name := fmt.Sprintf("project_for_test_%d", i)
-			project, err := serviceTenant.NewProject(name, config)
+			project, err := serviceTenant.NewProject(name, config, vars)
 			assert.NoError(b, err)
 
 			actualError := repo.Save(ctx, project)

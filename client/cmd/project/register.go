@@ -91,9 +91,10 @@ func RegisterProject(logger log.Logger, conn *grpc.ClientConn, project config.Pr
 
 	projectServiceClient := pb.NewProjectServiceClient(conn)
 	projectSpec := &pb.ProjectSpecification{
-		Name:    project.Name,
-		Config:  project.Config,
-		Presets: toPresetProto(presets),
+		Name:      project.Name,
+		Config:    project.Config,
+		Variables: project.Variables,
+		Presets:   toPresetProto(presets),
 	}
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), registerTimeout)

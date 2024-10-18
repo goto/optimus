@@ -1,6 +1,8 @@
 package tenant
 
 import (
+	"fmt"
+
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
 )
@@ -84,9 +86,37 @@ func (w *WithDetails) GetConfig(key string) (string, error) {
 	return "", errors.NotFound(EntityTenant, "config not present in tenant "+key)
 }
 
+func (w *WithDetails) GetVariable(key string) (string, error) {
+	variable, err := w.namespace.GetVariable(key)
+	if err == nil {
+		return variable, nil
+	}
+
+	// key not present in namespace, check project
+	variable, err = w.project.GetVariable(key)
+	if err == nil {
+		return variable, nil
+	}
+
+	return "", errors.NotFound(EntityTenant, fmt.Sprintf("variable not present in tenant: %s", key))
+}
+
 func (w *WithDetails) GetConfigs() map[string]string {
 	m1 := w.namespace.GetConfigs()
 	return utils.MergeMaps(w.project.GetConfigs(), m1)
+}
+
+// GetVariables for now will merge tenant variables & tenant configs.
+// Since we are moving to use tenant "variables" for job config / job asset compilation & discourage using config for the purpose,
+// merging both is a temporary solution to support older behavior.
+// Once we have all tenants migrated to use variables, we can remove the tenant config.
+func (w *WithDetails) GetVariables() map[string]string {
+	return utils.MergeMaps(
+		w.project.GetConfigs(),
+		w.namespace.GetConfigs(),
+		w.project.GetVariables(),
+		w.namespace.GetVariables(),
+	)
 }
 
 func (w *WithDetails) Project() *Project {

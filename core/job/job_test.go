@@ -18,11 +18,11 @@ func TestEntityJob(t *testing.T) {
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 	namespace, _ := tenant.NewNamespace("test-ns", project.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	sampleTenant, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	jobVersion := 1
 	startDate, _ := job.ScheduleDateFrom("2022-10-01")

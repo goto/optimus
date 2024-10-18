@@ -179,7 +179,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 			"bucket":                     "gs://some_folder-2",
 			tenant.ProjectSchedulerHost:  "host",
 			tenant.ProjectStoragePathKey: "gs://location",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 
 	projRepo := tenantPostgres.NewProjectRepository(pool)
@@ -188,7 +188,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	namespace, err := tenant.NewNamespace("test-ns", proj.Name(),
 		map[string]string{
 			"bucket": "gs://ns_bucket",
-		})
+		}, map[string]string{})
 	assert.NoError(t, err)
 
 	namespaceRepo := tenantPostgres.NewNamespaceRepository(pool)

@@ -1,6 +1,8 @@
 package tenant
 
 import (
+	"fmt"
+
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -25,6 +27,7 @@ type Namespace struct {
 
 	projectName ProjectName
 	config      map[string]string
+	variables   map[string]string
 }
 
 func (n *Namespace) Name() NamespaceName {
@@ -53,7 +56,25 @@ func (n *Namespace) GetConfigs() map[string]string {
 	return confs
 }
 
-func NewNamespace(name string, projName ProjectName, config map[string]string) (*Namespace, error) {
+func (n *Namespace) GetVariable(key string) (string, error) {
+	for k, v := range n.variables {
+		if key == k {
+			return v, nil
+		}
+	}
+	return "", errors.NotFound(EntityNamespace, fmt.Sprintf("namespace variable not found: %s", key))
+}
+
+// GetVariables returns a clone of namespace variables
+func (n *Namespace) GetVariables() map[string]string {
+	vars := make(map[string]string, len(n.variables))
+	for k, v := range n.variables {
+		vars[k] = v
+	}
+	return vars
+}
+
+func NewNamespace(name string, projName ProjectName, config, variables map[string]string) (*Namespace, error) {
 	nsName, err := NamespaceNameFrom(name)
 	if err != nil {
 		return nil, err
@@ -66,6 +87,7 @@ func NewNamespace(name string, projName ProjectName, config map[string]string) (
 	return &Namespace{
 		name:        nsName,
 		config:      config,
+		variables:   variables,
 		projectName: projName,
 	}, nil
 }

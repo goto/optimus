@@ -1,0 +1,2 @@
+ALTER TABLE namespace DROP COLUMN IF EXISTS variables;
+ALTER TABLE project DROP COLUMN IF EXISTS variables;

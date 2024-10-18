@@ -123,8 +123,9 @@ func (d *describeCommand) getNamespace() (*config.Namespace, error) {
 		return nil, fmt.Errorf("unable to get namespace [%s]: %w", d.namespaceName, err)
 	}
 	return &config.Namespace{
-		Name:   response.GetNamespace().Name,
-		Config: response.GetNamespace().Config,
+		Name:      response.GetNamespace().Name,
+		Config:    response.GetNamespace().Config,
+		Variables: response.GetNamespace().Variables,
 	}, nil
 }
 
@@ -135,6 +136,17 @@ func (*describeCommand) stringifyNamespace(namespace *config.Namespace) string {
 	} else {
 		output += "config:\n"
 		for key, value := range namespace.Config {
+			output += fmt.Sprintf("\t%s: %s", key, value)
+		}
+	}
+
+	output += "\n"
+
+	if len(namespace.Variables) == 0 {
+		output += "variables: {}"
+	} else {
+		output += "variables:\n"
+		for key, value := range namespace.Variables {
 			output += fmt.Sprintf("\t%s: %s", key, value)
 		}
 	}

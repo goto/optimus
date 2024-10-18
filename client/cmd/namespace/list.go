@@ -125,8 +125,9 @@ func (l *listCommand) listNamespacesFromServer(serverHost, projectName string) (
 	output := make([]*config.Namespace, len(response.Namespaces))
 	for i, n := range response.Namespaces {
 		output[i] = &config.Namespace{
-			Name:   n.GetName(),
-			Config: n.GetConfig(),
+			Name:      n.GetName(),
+			Config:    n.GetConfig(),
+			Variables: n.GetVariables(),
 		}
 	}
 	return output, nil

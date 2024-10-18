@@ -203,6 +203,12 @@
           "additionalProperties": {
             "$ref": "#/definitions/ProjectSpecificationProjectPreset"
           }
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

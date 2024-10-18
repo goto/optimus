@@ -273,28 +273,44 @@ func jobNameFromPath(filePath, suffix string) string {
 	return strings.TrimSuffix(jobFileName, suffix)
 }
 
-func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
-	spanCtx, span := startChildSpan(ctx, "GetJobRuns")
-	defer span.End()
-
+func (s *Scheduler) fetchJobRunBatch(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]byte, error) {
 	dagRunRequest := getDagRunRequest(jobQuery, jobCron)
 	reqBody, err := json.Marshal(dagRunRequest)
 	if err != nil {
 		return nil, errors.Wrap(EntityAirflow, "unable to marshal dag run request", err)
 	}
 
-	req := airflowRequest{
-		path:   dagStatusBatchURL,
-		method: http.MethodPost,
-		body:   reqBody,
-	}
+	req := airflowRequest{path: dagStatusBatchURL, method: http.MethodPost, body: reqBody}
 
 	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := s.client.Invoke(spanCtx, req, schdAuth)
+	return s.client.Invoke(ctx, req, schdAuth)
+}
+
+func (s *Scheduler) GetJobRunsWithDetails(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error) {
+	spanCtx, span := startChildSpan(ctx, "GetJobRuns")
+	defer span.End()
+
+	resp, err := s.fetchJobRunBatch(spanCtx, tnnt, jobQuery, jobCron)
+	if err != nil {
+		return nil, errors.Wrap(EntityAirflow, "failure while fetching airflow dag runs", err)
+	}
+	var dagRunList DagRunListResponse
+	if err := json.Unmarshal(resp, &dagRunList); err != nil {
+		return nil, errors.Wrap(EntityAirflow, fmt.Sprintf("json error on parsing airflow dag runs: %s", string(resp)), err)
+	}
+
+	return getJobRunsWithDetails(dagRunList, jobCron)
+}
+
+func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+	spanCtx, span := startChildSpan(ctx, "GetJobRuns")
+	defer span.End()
+
+	resp, err := s.fetchJobRunBatch(spanCtx, tnnt, jobQuery, jobCron)
 	if err != nil {
 		return nil, errors.Wrap(EntityAirflow, "failure while fetching airflow dag runs", err)
 	}
@@ -419,10 +435,9 @@ func (s *Scheduler) ClearBatch(ctx context.Context, tnnt tenant.Tenant, jobName 
 	return nil
 }
 
-func (s *Scheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error {
+func (s *Scheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, dagRunID string) error {
 	spanCtx, span := startChildSpan(ctx, "CancelRun")
 	defer span.End()
-	dagRunID := fmt.Sprintf("%s__%s", dagRunIDPrefix, executionTime.UTC().Format(airflowDateFormat))
 	data := []byte(`{"state": "failed"}`)
 	req := airflowRequest{
 		path:   fmt.Sprintf(dagRunModifyURL, jobName.String(), dagRunID),

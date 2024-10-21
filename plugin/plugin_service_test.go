@@ -542,13 +542,49 @@ func (_m *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context
 	return r0, r1
 }
 
+// GetMaxcomputeUpstreamIdentifier provides a mock function with given fields: ctx, evaluators
+func (_m *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(ctx context.Context, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error) {
+	_va := make([]interface{}, len(evaluators))
+	for _i := range evaluators {
+		_va[_i] = evaluators[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetMaxcomputeUpstreamIdentifier")
+	}
+
+	var r0 upstreamidentifier.UpstreamIdentifier
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)); ok {
+		return rf(ctx, evaluators...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, ...evaluator.Evaluator) upstreamidentifier.UpstreamIdentifier); ok {
+		r0 = rf(ctx, evaluators...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(upstreamidentifier.UpstreamIdentifier)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, ...evaluator.Evaluator) error); ok {
+		r1 = rf(ctx, evaluators...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // NewUpstreamIdentifierFactory creates a new instance of UpstreamIdentifierFactory. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewUpstreamIdentifierFactory(t interface {
 	mock.TestingT
 	Cleanup(func())
-},
-) *UpstreamIdentifierFactory {
+}) *UpstreamIdentifierFactory {
 	mock := &UpstreamIdentifierFactory{}
 	mock.Mock.Test(t)
 

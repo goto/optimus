@@ -41,9 +41,10 @@ type ReplayScheduler interface {
 	Clear(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error
 	ClearBatch(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, startTime, endTime time.Time) error
 
-	CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error
+	CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, dagRunID string) error
 	CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
+	GetJobRunsWithDetails(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error)
 }
 
 func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig, alertManager AlertManager) *ReplayWorker {
@@ -107,7 +108,7 @@ func (w *ReplayWorker) Execute(ctxBack context.Context, replayID uuid.UUID, jobT
 	}
 }
 
-func (w *ReplayWorker) SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error) {
+func (w *ReplayWorker) FetchAndSyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error) {
 	incomingRuns, err := w.fetchRuns(ctx, replayWithRun, jobCron)
 	if err != nil {
 		w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayWithRun.Replay.ID().String(), err)
@@ -171,9 +172,8 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			}
 		}
 
-		syncedRunStatus, err := w.SyncStatus(ctx, replayWithRun, jobCron)
+		syncedRunStatus, err := w.FetchAndSyncStatus(ctx, replayWithRun, jobCron)
 		if err != nil {
-			// todo: lets not kill watchers on such errors
 			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayWithRun.Replay.ID().String(), err)
 			return err
 		}
@@ -257,6 +257,15 @@ func (w *ReplayWorker) finishReplay(ctx context.Context, replay *scheduler.Repla
 	return nil
 }
 
+func (w *ReplayWorker) FetchRunsWithDetails(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec) (scheduler.JobRunDetailsList, error) {
+	jobRunCriteria := &scheduler.JobRunsCriteria{
+		Name:      replay.JobName().String(),
+		StartDate: replay.Config().StartTime.UTC(),
+		EndDate:   replay.Config().EndTime.UTC(),
+	}
+	return w.scheduler.GetJobRunsWithDetails(ctx, replay.Tenant(), jobRunCriteria, jobCron)
+}
+
 func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
 	jobRunCriteria := &scheduler.JobRunsCriteria{
 		Name:      replayReq.Replay.JobName().String(),
@@ -266,20 +275,21 @@ func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.Repla
 	return w.scheduler.GetJobRuns(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
 }
 
-func (w *ReplayWorker) CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {
+func (w *ReplayWorker) CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunWithDetails) []*scheduler.JobRunStatus {
 	var canceledRuns []*scheduler.JobRunStatus
 	for _, run := range runs {
-		logicalTime := run.GetLogicalTime(jobCron)
+		runState := scheduler.JobRunStatus{
+			ScheduledAt: run.ScheduledAt,
+			State:       scheduler.StateCanceled,
+		}
+		logicalTime := runState.GetLogicalTime(jobCron)
 
 		w.logger.Info("[ReplayID: %s] Canceling run with logical time: %s", replay.ID(), logicalTime)
-		if err := w.scheduler.CancelRun(ctx, replay.Tenant(), replay.JobName(), logicalTime, prefixReplayed); err != nil {
+		if err := w.scheduler.CancelRun(ctx, replay.Tenant(), replay.JobName(), run.DagRunID); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to cancel job run for job: %s, Schedule Time: %s, err: %s", replay.ID(), replay.JobName(), run.ScheduledAt, err.Error())
 			continue
 		}
-		canceledRuns = append(canceledRuns, &scheduler.JobRunStatus{
-			ScheduledAt: run.ScheduledAt,
-			State:       scheduler.StateCanceled,
-		})
+		canceledRuns = append(canceledRuns, &runState)
 	}
 	return canceledRuns
 }
@@ -391,6 +401,7 @@ func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*sche
 		if lag.Seconds() > maxLag {
 			maxLag = lag.Seconds()
 		}
+		w.logger.Info(fmt.Sprintf("trying to acquired replay request with ID: %s", replay.ID()))
 		err := w.replayRepo.AcquireReplayRequest(ctx, replay.ID(), unhandledClassifierDuration)
 		if err != nil {
 			if errors.IsErrorType(err, errors.ErrNotFound) {
@@ -398,6 +409,7 @@ func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*sche
 			}
 			w.logger.Error("unable to acquire lock on replay request err: %s", err.Error())
 		}
+		w.logger.Info(fmt.Sprintf("successfully acquired replay request with ID: %s", replay.ID()))
 		requestsToProcess = append(requestsToProcess, replay)
 	}
 	replayReqLag.Set(maxLag)

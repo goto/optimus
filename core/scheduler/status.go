@@ -26,8 +26,9 @@ const (
 	StateNotScheduled State = "waiting_to_schedule"
 	StateWaitUpstream State = "wait_upstream"
 	StateInProgress   State = "in_progress"
-
-	StateMissing State = "missing"
+	StateUpForRetry   State = "up_for_retry"
+	StateRestarting   State = "restarting"
+	StateMissing      State = "missing"
 )
 
 type State string
@@ -68,6 +69,14 @@ type JobRunStatus struct {
 	State       State
 }
 
+func (j JobRunStatus) GetState() State {
+	return j.State
+}
+
+func (j JobRunStatus) GetScheduledAt() time.Time {
+	return j.ScheduledAt
+}
+
 func JobRunStatusFrom(scheduledAt time.Time, state string) (JobRunStatus, error) {
 	runState, err := StateFromString(state)
 	if err != nil {
@@ -82,6 +91,54 @@ func JobRunStatusFrom(scheduledAt time.Time, state string) (JobRunStatus, error)
 
 func (j JobRunStatus) GetLogicalTime(jobCron *cron.ScheduleSpec) time.Time {
 	return jobCron.Prev(j.ScheduledAt)
+}
+
+type JobRunWithDetails struct {
+	ScheduledAt     time.Time
+	State           State
+	RunType         string
+	ExternalTrigger bool
+	DagRunID        string
+	DagID           string
+}
+
+func (j JobRunWithDetails) GetState() State {
+	return j.State
+}
+
+type JobRunDetailsList []*JobRunWithDetails
+
+func (j JobRunDetailsList) GetSortedRunsByStates(states []State) []*JobRunWithDetails {
+	stateMap := make(map[State]bool, len(states))
+	for _, state := range states {
+		stateMap[state] = true
+	}
+
+	var result []*JobRunWithDetails
+	for _, run := range j {
+		if stateMap[run.State] {
+			result = append(result, run)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ScheduledAt.Before(result[j].ScheduledAt)
+	})
+	return result
+}
+
+func (j JobRunDetailsList) FilterRunsManagedByReplay(runs []*JobRunStatus) JobRunDetailsList {
+	runMap := make(map[time.Time]bool, len(runs))
+	for _, state := range runs {
+		runMap[state.ScheduledAt] = true
+	}
+
+	var result []*JobRunWithDetails
+	for _, run := range j {
+		if runMap[run.ScheduledAt] {
+			result = append(result, run)
+		}
+	}
+	return result
 }
 
 type JobRunStatusList []*JobRunStatus

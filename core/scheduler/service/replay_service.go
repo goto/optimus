@@ -234,14 +234,14 @@ func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *sch
 		return err
 	}
 
-	jobRunsRunsWithDetails, err := r.executor.FetchRunsWithDetails(ctx, replay, jobCron)
+	jobRunsWithDetails, err := r.executor.FetchRunsWithDetails(ctx, replay, jobCron)
 	if err != nil {
 		r.logger.Error("unable to sync replay runs status for job [%s]: %s", jobName.String(), err.Error())
 		return err
 	}
-	r.logger.Debug(fmt.Sprintf("Synced Run status from Airflow : %#v", jobRunsRunsWithDetails))
+	r.logger.Debug(fmt.Sprintf("Synced Run status from Airflow : %#v", jobRunsWithDetails))
 
-	filteredRunsMangedByReplay := jobRunsRunsWithDetails.FilterRunsManagedByReplay(replayWithRun.Runs)
+	filteredRunsMangedByReplay := jobRunsWithDetails.FilterRunsManagedByReplay(replayWithRun.Runs)
 
 	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateUpForRetry, scheduler.StateQueued, scheduler.StateRestarting}
 	toBeCanceledRuns := filteredRunsMangedByReplay.GetSortedRunsByStates(statesForCanceling)

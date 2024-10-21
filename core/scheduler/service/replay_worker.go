@@ -280,7 +280,7 @@ func (w *ReplayWorker) CancelReplayRunsOnScheduler(ctx context.Context, replay *
 	for _, run := range runs {
 		runState := scheduler.JobRunStatus{
 			ScheduledAt: run.ScheduledAt,
-			State:       run.State,
+			State:       scheduler.StateCanceled,
 		}
 		logicalTime := runState.GetLogicalTime(jobCron)
 
@@ -401,6 +401,7 @@ func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*sche
 		if lag.Seconds() > maxLag {
 			maxLag = lag.Seconds()
 		}
+		w.logger.Info(fmt.Sprintf("trying to acquired replay request with ID: %s", replay.ID()))
 		err := w.replayRepo.AcquireReplayRequest(ctx, replay.ID(), unhandledClassifierDuration)
 		if err != nil {
 			if errors.IsErrorType(err, errors.ErrNotFound) {
@@ -408,6 +409,7 @@ func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*sche
 			}
 			w.logger.Error("unable to acquire lock on replay request err: %s", err.Error())
 		}
+		w.logger.Info(fmt.Sprintf("successfully acquired replay request with ID: %s", replay.ID()))
 		requestsToProcess = append(requestsToProcess, replay)
 	}
 	replayReqLag.Set(maxLag)

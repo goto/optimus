@@ -21,6 +21,7 @@ import (
 
 func TestReplayService(t *testing.T) {
 	ctx := context.Background()
+	now := time.Now()
 	projName := tenant.ProjectName("proj")
 	namespaceName := tenant.NamespaceName("ns1")
 	jobName := scheduler.JobName("sample_select")
@@ -62,8 +63,10 @@ func TestReplayService(t *testing.T) {
 		"STORAGE_PATH":             "file:///tmp/",
 		"SCHEDULER_HOST":           "http://localhost",
 	}
-	namespaceEntity, _ := tenant.NewNamespace(namespaceName.String(), projName, namespaceCfg)
-	projectEntity, _ := tenant.NewProject(projName.String(), projectCfg)
+	projectVars := map[string]string{}
+	nsVars := map[string]string{}
+	namespaceEntity, _ := tenant.NewNamespace(namespaceName.String(), projName, namespaceCfg, nsVars)
+	projectEntity, _ := tenant.NewProject(projName.String(), projectCfg, projectVars)
 	tenantWithDetails, _ := tenant.NewTenantDetails(projectEntity, namespaceEntity, tenant.PlainTextSecrets{})
 
 	taskNameToExecutionProjectMap := map[string]string{
@@ -103,7 +106,7 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJob", ctx, projName, jobName).Return(&job, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
+			replayWorker.On("Execute", ctx, replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
@@ -148,7 +151,7 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJob", ctx, projName, jobName).Return(&job, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
+			replayWorker.On("Execute", ctx, replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
@@ -348,7 +351,7 @@ func TestReplayService(t *testing.T) {
 			defer replayRepository.AssertExpectations(t)
 
 			replayID := uuid.New()
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, now, message)
 			replayRepository.On("GetReplayByID", ctx, replayID).Return(&scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -372,7 +375,7 @@ func TestReplayService(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateSuccess, startTime, message)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateSuccess, startTime, now, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -391,7 +394,7 @@ func TestReplayService(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, now, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -410,7 +413,7 @@ func TestReplayService(t *testing.T) {
 			assert.ErrorContains(t, err, errorMsg)
 		})
 		t.Run("returns no error if replay has been successfully cancelled", func(t *testing.T) {
-			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, message)
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, now, message)
 			replayWithRun := &scheduler.ReplayWithRun{
 				Replay: replay,
 				Runs: []*scheduler.JobRunStatus{
@@ -430,7 +433,128 @@ func TestReplayService(t *testing.T) {
 
 			replayWorker := new(ReplayExecutor)
 			defer replayWorker.AssertExpectations(t)
-			replayWorker.On("SyncStatus", ctx, replayWithRun, jobCron).Return(scheduler.JobRunStatusList{}, nil)
+			replayWorker.On("FetchRunsWithDetails", ctx, replay, jobCron).Return([]*scheduler.JobRunWithDetails{}, nil)
+
+			replayService := service.NewReplayService(replayRepository, jobRepository, nil, nil, replayWorker, nil, logger, nil, nil)
+			err := replayService.CancelReplay(ctx, replayWithRun)
+			assert.NoError(t, err)
+		})
+
+		t.Run("returns no error if replay has been successfully cancelled with runs to be canceled", func(t *testing.T) {
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, startTime, message)
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: replay,
+				Runs: []*scheduler.JobRunStatus{
+					{
+						ScheduledAt: startTime,
+						State:       scheduler.StatePending,
+					},
+				},
+			}
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+			replayRepository.On("UpdateReplayStatus", mock.Anything, replay.ID(), scheduler.ReplayStateCancelled, mock.Anything).Return(nil).Once()
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+			jobRepository.On("GetJobDetails", mock.Anything, projName, jobName).Return(jobWithDetails, nil)
+
+			replayWorker := new(ReplayExecutor)
+			defer replayWorker.AssertExpectations(t)
+			jobRunWithDetails := []*scheduler.JobRunWithDetails{
+				{
+					ScheduledAt:     startTime,
+					State:           scheduler.StatePending,
+					RunType:         "scheduled",
+					ExternalTrigger: false,
+					DagRunID:        "scheduled_some_date",
+					DagID:           jobName.String(),
+				},
+			}
+			replayWorker.On("FetchRunsWithDetails", ctx, replay, jobCron).Return(jobRunWithDetails, nil)
+
+			replayService := service.NewReplayService(replayRepository, jobRepository, nil, nil, replayWorker, nil, logger, nil, nil)
+			err := replayService.CancelReplay(ctx, replayWithRun)
+			assert.NoError(t, err)
+		})
+
+		t.Run("returns no error if replay has been successfully cancelled with runs in queued and running state", func(t *testing.T) {
+			replay := scheduler.NewReplay(replayID, jobName, tnnt, replayConfig, scheduler.ReplayStateInProgress, startTime, startTime, message)
+			replayWithRun := &scheduler.ReplayWithRun{
+				Replay: replay,
+				Runs: []*scheduler.JobRunStatus{
+					{
+						ScheduledAt: startTime,
+						State:       scheduler.StatePending, // this state won't matter only the scheduler state matters
+					},
+					{
+						ScheduledAt: startTime.Add(48 * time.Hour),
+						State:       scheduler.StateRunning,
+					},
+				},
+			}
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+			replayRepository.On("UpdateReplayStatus", mock.Anything, replay.ID(), scheduler.ReplayStateCancelled, mock.Anything).Return(nil).Once()
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+			jobRepository.On("GetJobDetails", mock.Anything, projName, jobName).Return(jobWithDetails, nil)
+
+			replayWorker := new(ReplayExecutor)
+			defer replayWorker.AssertExpectations(t)
+			jobRunWithDetailsFromScheduler := []*scheduler.JobRunWithDetails{
+				{
+					ScheduledAt: startTime,
+					State:       scheduler.StateQueued, // this means queued on scheduler
+				},
+				{
+					ScheduledAt: startTime.Add(12 * time.Hour),
+					State:       scheduler.StateQueued, // this is non replay managed extra run from scheduler
+				},
+				{
+					ScheduledAt: startTime.Add(24 * time.Hour),
+					State:       scheduler.StateRunning, // this is non replay managed extra run from scheduler
+				},
+				{
+					ScheduledAt: startTime.Add(48 * time.Hour),
+					State:       scheduler.StateRunning,
+				},
+			}
+			replayWorker.On("FetchRunsWithDetails", ctx, replay, jobCron).Return(jobRunWithDetailsFromScheduler, nil)
+
+			filteredJobRunWithDetails := []*scheduler.JobRunWithDetails{
+				{
+					ScheduledAt: startTime,
+					State:       scheduler.StateQueued, // this means queued on scheduler
+				},
+				{
+					ScheduledAt: startTime.Add(48 * time.Hour),
+					State:       scheduler.StateRunning,
+				},
+			}
+			replayWorker.On("CancelReplayRunsOnScheduler", ctx, replay, jobCron, filteredJobRunWithDetails).Return([]*scheduler.JobRunStatus{
+				{
+					ScheduledAt: startTime,
+					State:       scheduler.StateQueued, // this means queued on scheduler
+				},
+				{
+					ScheduledAt: startTime.Add(48 * time.Hour),
+					State:       scheduler.StateRunning,
+				},
+			})
+
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replay.ID(),
+				[]*scheduler.JobRunStatus{
+					{
+						ScheduledAt: startTime,
+						State:       scheduler.StateQueued, // this means queued on scheduler
+					},
+					{
+						ScheduledAt: startTime.Add(48 * time.Hour),
+						State:       scheduler.StateRunning,
+					},
+				}).Return(nil).Once()
 
 			replayService := service.NewReplayService(replayRepository, jobRepository, nil, nil, replayWorker, nil, logger, nil, nil)
 			err := replayService.CancelReplay(ctx, replayWithRun)
@@ -649,6 +773,16 @@ func (_m *ReplayRepository) UpdateReplayStatus(ctx context.Context, replayID uui
 	return r0
 }
 
+func (_m *ReplayRepository) ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error) {
+	args := _m.Called(ctx, unhandledClassifierDuration)
+	return args.Get(0).([]*scheduler.Replay), args.Error(1)
+}
+
+func (_m *ReplayRepository) AcquireReplayRequest(ctx context.Context, replayID uuid.UUID, unhandledClassifierDuration time.Duration) error {
+	args := _m.Called(ctx, replayID, unhandledClassifierDuration)
+	return args.Error(0)
+}
+
 // GetReplayJobConfig provides a mock function with given fields: ctx, jobTenant, jobName, scheduledAt
 func (_m *ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (map[string]string, error) {
 	ret := _m.Called(ctx, jobTenant, jobName, scheduledAt)
@@ -673,6 +807,16 @@ func (_m *ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant te
 	}
 
 	return r0, r1
+}
+
+func (_m *ReplayRepository) GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error) {
+	args := _m.Called(ctx, replayID)
+	return args.Get(0).(*scheduler.Replay), args.Error(1)
+}
+
+func (_m *ReplayRepository) CancelReplayRequest(ctx context.Context, replayID uuid.UUID, message string) error {
+	args := _m.Called(ctx, replayID, message)
+	return args.Error(0)
 }
 
 // GetReplayByFilters provides a mock function with given fields: ctx, jobTenant, projectName, filters
@@ -722,16 +866,21 @@ type ReplayExecutor struct {
 }
 
 // Execute provides a mock function with given fields: ctx, replayRequest
-func (_m *ReplayExecutor) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
-	_m.Called(replayID, jobTenant, jobName)
+func (_m *ReplayExecutor) Execute(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
+	_m.Called(ctx, replayID, jobTenant, jobName)
 }
 
-func (_m *ReplayExecutor) SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error) {
+func (_m *ReplayExecutor) FetchAndSyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error) {
 	args := _m.Called(ctx, replayWithRun, jobCron)
 	return args.Get(0).(scheduler.JobRunStatusList), args.Error(1)
 }
 
-func (_m *ReplayExecutor) CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus {
+func (_m *ReplayExecutor) FetchRunsWithDetails(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec) (scheduler.JobRunDetailsList, error) {
+	args := _m.Called(ctx, replay, jobCron)
+	return args.Get(0).([]*scheduler.JobRunWithDetails), args.Error(1)
+}
+
+func (_m *ReplayExecutor) CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunWithDetails) []*scheduler.JobRunStatus {
 	args := _m.Called(ctx, replay, jobCron, runs)
 	return args.Get(0).([]*scheduler.JobRunStatus)
 }

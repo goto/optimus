@@ -196,6 +196,10 @@ func (r *Resource) Version() int32 {
 	return r.metadata.Version
 }
 
+func (r *Resource) UpdateSpec(spec map[string]any) {
+	r.spec = spec
+}
+
 func (r *Resource) Equal(incoming *Resource) bool {
 	if r == nil || incoming == nil {
 		return r == nil && incoming == nil

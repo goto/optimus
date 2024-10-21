@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
@@ -36,7 +37,11 @@ type ReplayRepository interface {
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
 	UpdateReplayRuns(ctx context.Context, replayID uuid.UUID, runs []*scheduler.JobRunStatus) error
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
+	CancelReplayRequest(ctx context.Context, replayID uuid.UUID, message string) error
+	ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error)
+	AcquireReplayRequest(ctx context.Context, replayID uuid.UUID, unhandledClassifierDuration time.Duration) error
 
+	GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error)
 	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
@@ -52,9 +57,10 @@ type ReplayValidator interface {
 }
 
 type ReplayExecutor interface {
-	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
-	SyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
-	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunStatus) []*scheduler.JobRunStatus
+	Execute(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+	FetchAndSyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
+	FetchRunsWithDetails(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec) (scheduler.JobRunDetailsList, error)
+	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunWithDetails) []*scheduler.JobRunStatus
 }
 
 type ReplayService struct {
@@ -117,7 +123,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		State:    scheduler.ReplayStateCreated,
 	})
 
-	go r.executor.Execute(replayID, replayReq.Tenant(), jobName)
+	go r.executor.Execute(ctx, replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
 }
@@ -220,8 +226,6 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 }
 
 func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error {
-	// get list of in progress runs
-	// stop them on the scheduler
 	replay := replayWithRun.Replay
 	jobName := replay.JobName()
 	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, replay.Tenant(), jobName)
@@ -230,14 +234,17 @@ func (r *ReplayService) cancelReplayRuns(ctx context.Context, replayWithRun *sch
 		return err
 	}
 
-	syncedRunStatus, err := r.executor.SyncStatus(ctx, replayWithRun, jobCron)
+	jobRunsWithDetails, err := r.executor.FetchRunsWithDetails(ctx, replay, jobCron)
 	if err != nil {
 		r.logger.Error("unable to sync replay runs status for job [%s]: %s", jobName.String(), err.Error())
 		return err
 	}
+	r.logger.Debug(fmt.Sprintf("Synced Run status from Airflow : %#v", jobRunsWithDetails))
 
-	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateInProgress, scheduler.StateQueued}
-	toBeCanceledRuns := syncedRunStatus.GetSortedRunsByStates(statesForCanceling)
+	filteredRunsMangedByReplay := jobRunsWithDetails.FilterRunsManagedByReplay(replayWithRun.Runs)
+
+	statesForCanceling := []scheduler.State{scheduler.StateRunning, scheduler.StateUpForRetry, scheduler.StateQueued, scheduler.StateRestarting}
+	toBeCanceledRuns := filteredRunsMangedByReplay.GetSortedRunsByStates(statesForCanceling)
 	if len(toBeCanceledRuns) == 0 {
 		return nil
 	}

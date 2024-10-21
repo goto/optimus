@@ -91,6 +91,11 @@ func fromProjectProto(conf *pb.ProjectSpecification) (*tenant.Project, error) {
 		pConf[strings.ToUpper(key)] = val
 	}
 
+	variablesMap := map[string]string{}
+	for key, val := range conf.GetVariables() {
+		variablesMap[strings.ToUpper(key)] = val
+	}
+
 	presets := make(map[string]tenant.Preset, len(conf.GetPresets()))
 	for name, preset := range conf.GetPresets() {
 		lowerName := strings.ToLower(name)
@@ -101,7 +106,7 @@ func fromProjectProto(conf *pb.ProjectSpecification) (*tenant.Project, error) {
 		presets[lowerName] = newPreset
 	}
 
-	project, err := tenant.NewProject(conf.GetName(), pConf)
+	project, err := tenant.NewProject(conf.GetName(), pConf, variablesMap)
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +117,10 @@ func fromProjectProto(conf *pb.ProjectSpecification) (*tenant.Project, error) {
 
 func toProjectProto(project *tenant.Project) *pb.ProjectSpecification {
 	return &pb.ProjectSpecification{
-		Name:    project.Name().String(),
-		Config:  project.GetConfigs(),
-		Presets: toProjectPresets(project.GetPresets()),
+		Name:      project.Name().String(),
+		Config:    project.GetConfigs(),
+		Variables: project.GetVariables(),
+		Presets:   toProjectPresets(project.GetPresets()),
 	}
 }
 

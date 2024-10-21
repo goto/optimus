@@ -111,8 +111,9 @@ func RegisterNamespace(l log.Logger, conn *grpc.ClientConn, projectName string, 
 	_, err := namespaceServiceClient.RegisterProjectNamespace(ctx, &pb.RegisterProjectNamespaceRequest{
 		ProjectName: projectName,
 		Namespace: &pb.NamespaceSpecification{
-			Name:   namespace.Name,
-			Config: namespace.Config,
+			Name:      namespace.Name,
+			Config:    namespace.Config,
+			Variables: namespace.Variables,
 		},
 	})
 	if err != nil {

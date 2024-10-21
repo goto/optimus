@@ -337,6 +337,11 @@ func (s *OptimusServer) setupHandlers() error {
 
 	replayRepository := schedulerRepo.NewReplayRepository(s.dbPool)
 	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay, alertsHandler)
+
+	replayContext, closeReplayScan := context.WithCancel(context.Background())
+	s.cleanupFn = append(s.cleanupFn, closeReplayScan)
+	go replayWorker.ScanReplayRequest(replayContext)
+
 	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
 	replayService := schedulerService.NewReplayService(
 		replayRepository, jobProviderRepo, tenantService,
@@ -358,7 +363,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceRepository := resource.NewRepository(s.dbPool)
 	backupRepository := resource.NewBackupRepository(s.dbPool)
 	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
-	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler) // note: job service can be nil
+	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler, tenantService, newEngine) // note: job service can be nil
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
@@ -375,7 +380,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
 	// Resource Bounded Context
-	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler)
+	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 	resourceChangeLogService := rService.NewChangelogService(s.logger, resourceRepository)
 

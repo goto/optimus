@@ -3,32 +3,20 @@ package maxcompute
 import (
 	"fmt"
 	"regexp"
+	"strings"
+
+	"github.com/mitchellh/mapstructure"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
 )
 
-const (
-	EntityProject = "project"
-	EntitySchema  = "schema"
-)
-
-var mcResourceURNRegex = regexp.MustCompile(`maxcompute://([^:]+):([^\.]+)\.(.+)`)
+var mcResourceURNRegex = regexp.MustCompile(`maxcompute://([^:]+).([^.]+)\.(.+)`)
 
 type ResourceURN struct {
-	project string
-	schema  string
-	name    string
-}
-
-func NewResourceURNFromString(urn string) (ResourceURN, error) {
-	const lengthMatchedString = 3
-	matchedString := mcResourceURNRegex.FindStringSubmatch(urn)
-	if len(matchedString) != lengthMatchedString+1 {
-		return ResourceURN{}, fmt.Errorf("urn %s can't be parsed to maxcompute urn format", urn)
-	}
-	project, schema, table := matchedString[1], matchedString[2], matchedString[3]
-	return ResourceURN{project: project, schema: schema, name: table}, nil
+	Project string `mapstructure:"project"`
+	Schema  string `mapstructure:"schema"`
+	Name    string `mapstructure:"name"`
 }
 
 func NewResourceURN(project, schema, name string) (ResourceURN, error) {
@@ -48,26 +36,14 @@ func NewResourceURN(project, schema, name string) (ResourceURN, error) {
 	}
 
 	return ResourceURN{
-		project: project,
-		schema:  schema,
-		name:    name,
+		Project: project,
+		Schema:  schema,
+		Name:    name,
 	}, nil
 }
 
 func (n ResourceURN) URN() string {
-	return "maxcompute://" + fmt.Sprintf("%s:%s.%s", n.project, n.schema, n.name)
-}
-
-func (n ResourceURN) Project() string {
-	return n.project
-}
-
-func (n ResourceURN) Schema() string {
-	return n.schema
-}
-
-func (n ResourceURN) Name() string {
-	return n.name
+	return "maxcompute://" + fmt.Sprintf("%s.%s.%s", n.Project, n.Schema, n.Name)
 }
 
 type ResourceURNWithUpstreams struct {
@@ -119,77 +95,41 @@ func (n ResourceURNs) GroupByProjectschema() map[ProjectSchema][]string {
 	output := make(map[ProjectSchema][]string)
 
 	for _, resourceURN := range n {
-		pd := ProjectSchema{Project: resourceURN.project, Schema: resourceURN.schema}
+		pd := ProjectSchema{Project: resourceURN.Project, Schema: resourceURN.Schema}
 		if _, ok := output[pd]; !ok {
 			output[pd] = []string{}
 		}
-		output[pd] = append(output[pd], resourceURN.name)
+		output[pd] = append(output[pd], resourceURN.Name)
 	}
 
 	return output
 }
 
-func ProjectSchemaFrom(project, schema string) (ProjectSchema, error) {
-	if project == "" {
-		return ProjectSchema{}, errors.InvalidArgument(EntityProject, "maxcompute project name is empty")
+func resourceNameFor(name resource.Name) (string, error) {
+	parts := strings.Split(name.String(), ".")
+	if len(parts) < 3 {
+		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
 	}
 
-	if schema == "" {
-		return ProjectSchema{}, errors.InvalidArgument(EntitySchema, "maxcompute schema name is empty")
-	}
-
-	return ProjectSchema{
-		Project: project,
-		Schema:  schema,
-	}, nil
+	return parts[2], nil
 }
 
-func SchemaFor(name resource.Name) (ProjectSchema, error) {
-	sections := name.Sections()
-	if len(sections) < SchemaNameSections {
-		return ProjectSchema{}, errors.InvalidArgument(EntitySchema, "invalid schema name: "+name.String())
-	}
-
-	return ProjectSchemaFrom(sections[0], sections[1])
-}
-
-func generateMaxComputeURN(res *resource.Resource) (resource.URN, error) {
-	schema, err := SchemaFor(res.Name())
+func URNFor(res *resource.Resource) (resource.URN, error) {
+	spec, err := getURNComponent(res)
 	if err != nil {
-		return resource.ZeroURN(), err
+		return resource.ZeroURN(), errors.InvalidArgument(resource.EntityResource, "not able to decode spec")
 	}
 
-	if res.Kind() == KindSchema {
-		name := schema.Project + ":" + schema.Schema
-		return resource.NewURN(resource.MaxCompute.String(), name)
-	}
+	name := spec.Project + "." + spec.Schema + "." + spec.Name
 
-	resourceName, err := resourceNameFor(res.Name(), res.Kind())
-	if err != nil {
-		return resource.ZeroURN(), err
-	}
-
-	name := schema.Project + ":" + schema.Schema + "." + resourceName
 	return resource.NewURN(resource.MaxCompute.String(), name)
 }
 
-func resourceNameFor(name resource.Name, kind string) (string, error) {
-	sections := name.Sections()
-	var strName string
-	if kind == KindSchema {
-		if len(sections) < SchemaNameSections {
-			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
-		}
-		strName = sections[1]
-	} else {
-		if len(sections) < TableNameSections {
-			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
-		}
-		strName = sections[2]
+func getURNComponent(res *resource.Resource) (ResourceURN, error) {
+	var spec ResourceURN
+	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
+		return spec, err
 	}
 
-	if strName == "" {
-		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
-	}
-	return strName, nil
+	return spec, nil
 }

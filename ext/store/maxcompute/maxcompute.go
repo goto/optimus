@@ -18,8 +18,7 @@ const (
 
 	maxcomputeID = "maxcompute"
 
-	SchemaNameSections = 2
-	TableNameSections  = 3
+	TableNameSections = 3
 )
 
 type ResourceHandle interface {
@@ -134,7 +133,7 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 }
 
 func (MaxCompute) GetURN(res *resource.Resource) (resource.URN, error) {
-	return generateMaxComputeURN(res)
+	return URNFor(res)
 }
 
 func (MaxCompute) Backup(_ context.Context, _ *resource.Backup, _ []*resource.Resource) (*resource.BackupResult, error) {
@@ -170,8 +169,8 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		KindView:  client.ViewHandleFrom,
 	}
 
-	for kind, resourceHandleFn := range kindToHandleFn {
-		resourceName, err := resourceNameFor(name, kind)
+	for _, resourceHandleFn := range kindToHandleFn {
+		resourceName, err := resourceNameFor(name)
 		if err != nil {
 			return true, err
 		}

@@ -105,15 +105,6 @@ func (n ResourceURNs) GroupByProjectschema() map[ProjectSchema][]string {
 	return output
 }
 
-func resourceNameFor(name resource.Name) (string, error) {
-	parts := strings.Split(name.String(), ".")
-	if len(parts) < 3 {
-		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
-	}
-
-	return parts[2], nil
-}
-
 func URNFor(res *resource.Resource) (resource.URN, error) {
 	spec, err := getURNComponent(res)
 	if err != nil {
@@ -132,4 +123,21 @@ func getURNComponent(res *resource.Resource) (ResourceURN, error) {
 	}
 
 	return spec, nil
+}
+
+func getComponentName(res *resource.Resource) (resource.Name, error) {
+	component, err := getURNComponent(res)
+	if err != nil {
+		return "", err
+	}
+	return resource.Name(component.Name), nil
+}
+
+func resourceNameFor(name resource.Name) (string, error) {
+	parts := strings.Split(name.String(), ".")
+	if len(parts) < 3 {
+		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
+	}
+
+	return parts[2], nil
 }

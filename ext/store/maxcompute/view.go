@@ -29,7 +29,11 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-	view.Name = res.Name()
+
+	view.Name, err = getComponentName(res)
+	if err != nil {
+		return err
+	}
 
 	sql, err := ToViewSQL(view)
 	if err != nil {
@@ -53,8 +57,11 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 }
 
 func (v ViewHandle) Update(res *resource.Resource) error {
-	viewName := res.Name().Sections()[TableNameSections-1]
-	_, err := v.viewTable.BatchLoadTables([]string{viewName})
+	viewName, err := getComponentName(res)
+	if err != nil {
+		return err
+	}
+	_, err = v.viewTable.BatchLoadTables([]string{viewName.String()})
 	if err != nil {
 		return errors.InternalError(EntityView, "error while get view on maxcompute", err)
 	}

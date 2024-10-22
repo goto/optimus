@@ -302,8 +302,14 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 	})
 	t.Run("GetURN", func(t *testing.T) {
+		spec := map[string]any{
+			"description": "resource",
+			"project":     "proj",
+			"database":    "schema",
+			"name":        tableName,
+		}
 		t.Run("returns urn for resource", func(t *testing.T) {
-			expectedURN, err := resource.ParseURN("maxcompute://proj:schema." + tableName)
+			expectedURN, err := resource.ParseURN("maxcompute://proj.schema." + tableName)
 			assert.NoError(t, err)
 
 			res, err := resource.NewResource("proj.schema."+tableName, maxcompute.KindTable, store, tnnt, &metadata, spec)

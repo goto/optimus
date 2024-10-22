@@ -2,7 +2,6 @@ package maxcompute
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
@@ -10,8 +9,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
 )
-
-var mcResourceURNRegex = regexp.MustCompile(`maxcompute://([^:]+).([^.]+)\.(.+)`)
 
 type ResourceURN struct {
 	Project string `mapstructure:"project"`
@@ -135,7 +132,7 @@ func getComponentName(res *resource.Resource) (resource.Name, error) {
 
 func resourceNameFor(name resource.Name) (string, error) {
 	parts := strings.Split(name.String(), ".")
-	if len(parts) < 3 {
+	if len(parts) < TableNameSections {
 		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
 	}
 

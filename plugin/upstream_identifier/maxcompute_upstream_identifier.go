@@ -63,7 +63,11 @@ func (g MaxcomputeUpstreamIdentifier) identifyResources(query string) []resource
 	resources := g.parserFunc(query)
 	resourceURNs := make([]resource.URN, len(resources))
 	for i, r := range resources {
-		resourceURN, _ := resource.NewURN("maxcompute", r) // TODO: use dedicated function new resource from string
+		resourceURN, err := resource.ParseURN(r)
+		if err != nil {
+			g.logger.Error("error when parsing resource urn %s", r)
+			continue
+		}
 		resourceURNs[i] = resourceURN
 	}
 	return resourceURNs

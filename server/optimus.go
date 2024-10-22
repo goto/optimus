@@ -31,6 +31,7 @@ import (
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/alertmanager"
+	"github.com/goto/optimus/ext/notify/lark"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
@@ -307,6 +308,20 @@ func (s *OptimusServer) setupHandlers() error {
 			new(pagerduty.PagerDutyServiceImpl),
 		),
 	}
+	var larkNotifier *lark.Notifier
+	if s.conf.Alerting.EnableLarkNotifications {
+		larkNotifier = lark.NewNotifier(
+			notificationContext,
+			webhook.DefaultEventBatchInterval,
+			func(err error) {
+				s.logger.Error("webhook error accumulator : " + err.Error())
+			},
+			s.conf.Alerting.LarkSLAMissTemplate,
+			s.conf.Alerting.LarkFailureTemplate)
+	} else {
+		s.logger.Info("Lark Notification flag is disabled")
+	}
+
 	webhookNotifier := webhook.NewNotifier(
 		notificationContext,
 		webhook.DefaultEventBatchInterval,
@@ -329,7 +344,7 @@ func (s *OptimusServer) setupHandlers() error {
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
-	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler)
+	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, larkNotifier, newEngine, alertsHandler)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
 	if err != nil {
 		return err

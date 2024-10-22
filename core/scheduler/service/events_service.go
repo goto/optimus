@@ -35,6 +35,11 @@ type Webhook interface {
 	Trigger(attr scheduler.WebhookAttrs)
 }
 
+type LarkNotifier interface {
+	io.Closer
+	Notify(ctx context.Context, attr scheduler.LarkNotifyAttrs) error
+}
+
 type AlertManager interface {
 	SendJobRunEvent(attr *scheduler.AlertAttrs)
 	SendReplayEvent(attr *scheduler.ReplayNotificationAttrs)
@@ -43,6 +48,7 @@ type AlertManager interface {
 type EventsService struct {
 	notifyChannels map[string]Notifier
 	webhookChannel Webhook
+	larkNotifier   LarkNotifier
 	alertManager   AlertManager
 	compiler       TemplateCompiler
 	jobRepo        JobRepository
@@ -182,6 +188,34 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 						e.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
 					}
+					// This will send the notification to lark aswell
+					if scheme == NotificationSchemeSlack && e.larkNotifier != nil {
+						appid, err := secretMap.Get(tenant.SecretLarkAppID)
+						if err != nil {
+							return err
+						}
+
+						appSecret, err := secretMap.Get(tenant.SecretLarkAppSecret)
+						if err != nil {
+							return err
+						}
+
+						appVerificationToken, err := secretMap.Get(tenant.SecretLarkVerificationToken)
+						if err != nil {
+							return err
+						}
+						err = e.larkNotifier.Notify(ctx, scheduler.LarkNotifyAttrs{
+							Owner:             jobDetails.JobMetadata.Owner,
+							JobEvent:          event,
+							Route:             route,
+							AppID:             appid,
+							AppSecret:         appSecret,
+							VerificationToken: appVerificationToken,
+						})
+						if err != nil {
+							return err
+						}
+					}
 				}
 			}
 			jobrunAlertsMetric.WithLabelValues(
@@ -205,13 +239,14 @@ func (e *EventsService) Close() error {
 	return me.ToErr()
 }
 
-func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler, alertsHandler AlertManager) *EventsService {
+func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier, webhookNotifier Webhook, larkNotifier LarkNotifier, compiler TemplateCompiler, alertsHandler AlertManager) *EventsService {
 	return &EventsService{
 		l:              l,
 		jobRepo:        jobRepo,
 		tenantService:  tenantService,
 		notifyChannels: notifyChan,
 		webhookChannel: webhookNotifier,
+		larkNotifier:   larkNotifier,
 		compiler:       compiler,
 		alertManager:   alertsHandler,
 	}

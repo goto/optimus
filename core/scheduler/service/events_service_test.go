@@ -34,7 +34,7 @@ func TestNotificationService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(nil, fmt.Errorf("some error"))
 			defer jobRepo.AssertExpectations(t)
 
-			notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, nil, nil)
 
 			event := &scheduler.Event{
 				JobName: jobName,
@@ -123,7 +123,7 @@ func TestNotificationService(t *testing.T) {
 				templateCompiler.On("Compile", mock.Anything, secretContext).Return(map[string]string{"header": "headerValue"}, nil)
 				defer templateCompiler.AssertExpectations(t)
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, webhookChannel, templateCompiler, nil)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, webhookChannel, nil, templateCompiler, nil)
 
 				err := notifyService.Webhook(ctx, event)
 				assert.Nil(t, err)
@@ -148,7 +148,7 @@ func TestNotificationService(t *testing.T) {
 				tenantService.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
 				defer tenantService.AssertExpectations(t)
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, nil, alertManager)
 
 				err := notifyService.Relay(ctx, event)
 				assert.Nil(t, err)
@@ -160,7 +160,56 @@ func TestNotificationService(t *testing.T) {
 				defer jobRepo.AssertExpectations(t)
 
 				plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
+				larkAppID, _ := tenant.NewPlainTextSecret(tenant.SecretLarkAppID, "secretValue1")
+				larkAppIDSecret, _ := tenant.NewPlainTextSecret(tenant.SecretLarkAppSecret, "secretValue2")
+				larkAppVerificationToken, _ := tenant.NewPlainTextSecret(tenant.SecretLarkVerificationToken, "secretValue3")
+				plainSecrets := []*tenant.PlainTextSecret{plainSecret, larkAppID, larkAppIDSecret, larkAppVerificationToken}
+				tenantService := new(mockTenantService)
+				tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
+				defer tenantService.AssertExpectations(t)
+
+				notifyChanelSlack := new(mockNotificationChanel)
+				notifyChanelSlack.On("Notify", ctx, scheduler.NotifyAttrs{
+					Owner:    "jobOwnerName",
+					JobEvent: event,
+					Route:    "#chanel-name",
+					Secret:   "secretValue",
+				}).Return(nil)
+				defer notifyChanelSlack.AssertExpectations(t)
+				notifyChanelPager := new(mockNotificationChanel)
+				defer notifyChanelPager.AssertExpectations(t)
+
+				larkNotifyChannel := new(mockLarkNotificationChanel)
+
+				larkNotifyChannel.On("Notify", ctx, scheduler.LarkNotifyAttrs{
+					Owner:             "jobOwnerName",
+					JobEvent:          event,
+					Route:             "#chanel-name",
+					AppID:             "secretValue1",
+					AppSecret:         "secretValue2",
+					VerificationToken: "secretValue3",
+				}).Return(nil)
+
+				defer larkNotifyChannel.AssertExpectations(t)
+
+				notifierChannels := map[string]service.Notifier{
+					"slack":     notifyChanelSlack,
+					"pagerduty": notifyChanelPager,
+				}
+
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, larkNotifyChannel, nil, nil)
+
+				err := notifyService.Push(ctx, event)
+				assert.Nil(t, err)
+			})
+
+			t.Run("should send slack notification when there are no secrets added for lark", func(t *testing.T) {
+				jobRepo := new(JobRepository)
+				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
+				defer jobRepo.AssertExpectations(t)
+				plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
 				plainSecrets := []*tenant.PlainTextSecret{plainSecret}
+
 				tenantService := new(mockTenantService)
 				tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
 				defer tenantService.AssertExpectations(t)
@@ -181,7 +230,7 @@ func TestNotificationService(t *testing.T) {
 					"pagerduty": notifyChanelPager,
 				}
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
 
 				err := notifyService.Push(ctx, event)
 				assert.Nil(t, err)
@@ -244,7 +293,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 			assert.Nil(t, err)
@@ -306,7 +355,7 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, nil)
 
 			err := notifyService.Push(ctx, event)
 
@@ -314,6 +363,22 @@ func TestNotificationService(t *testing.T) {
 			assert.EqualError(t, err, "ErrorsInNotifyPush:\n notifyChannel.Notify: pagerduty://#chanel-name: error in pagerduty push")
 		})
 	})
+}
+
+// todo: this is added as Lark Notifer
+type mockLarkNotificationChanel struct {
+	io.Closer
+	mock.Mock
+}
+
+func (m *mockLarkNotificationChanel) Notify(ctx context.Context, attr scheduler.LarkNotifyAttrs) error {
+	args := m.Called(ctx, attr)
+	return args.Error(0)
+}
+
+func (m *mockLarkNotificationChanel) Close() error {
+	args := m.Called()
+	return args.Error(0)
 }
 
 type mockNotificationChanel struct {

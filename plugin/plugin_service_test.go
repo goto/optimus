@@ -584,7 +584,8 @@ func (_m *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(ctx context
 func NewUpstreamIdentifierFactory(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *UpstreamIdentifierFactory {
+},
+) *UpstreamIdentifierFactory {
 	mock := &UpstreamIdentifierFactory{}
 	mock.Mock.Test(t)
 

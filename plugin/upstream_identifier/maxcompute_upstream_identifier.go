@@ -2,10 +2,13 @@ package upstreamidentifier
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/plugin/upstream_identifier/parser"
-	"github.com/goto/salt/log"
 )
 
 type MaxcomputeUpstreamIdentifier struct {
@@ -15,6 +18,25 @@ type MaxcomputeUpstreamIdentifier struct {
 }
 
 func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, evaluatorFuncs ...EvalAssetFunc) (*MaxcomputeUpstreamIdentifier, error) {
+	me := errors.NewMultiError("create maxcompute upstream generator errors")
+	if logger == nil {
+		me.Append(fmt.Errorf("logger is nil"))
+	}
+	if parserFunc == nil {
+		me.Append(fmt.Errorf("parserFunc is nil"))
+	}
+	sanitizedEvaluatorFuncs := []EvalAssetFunc{}
+	for _, evaluatorFunc := range evaluatorFuncs {
+		if evaluatorFunc != nil {
+			sanitizedEvaluatorFuncs = append(sanitizedEvaluatorFuncs, evaluatorFunc)
+		}
+	}
+	if len(sanitizedEvaluatorFuncs) == 0 {
+		me.Append(fmt.Errorf("non-nil evaluatorFuncs is needed"))
+	}
+	if me.ToErr() != nil {
+		return nil, me.ToErr()
+	}
 	return &MaxcomputeUpstreamIdentifier{
 		logger:         logger,
 		parserFunc:     parser.MaxcomputeURNDecorator(parserFunc),
@@ -22,7 +44,7 @@ func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, e
 	}, nil
 }
 
-func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
+func (g MaxcomputeUpstreamIdentifier) IdentifyResources(_ context.Context, assets map[string]string) ([]resource.URN, error) {
 	resourceURNs := []resource.URN{}
 
 	// generate resource urn with upstream from each evaluator
@@ -40,9 +62,9 @@ func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, ass
 func (g MaxcomputeUpstreamIdentifier) identifyResources(query string) []resource.URN {
 	resources := g.parserFunc(query)
 	resourceURNs := make([]resource.URN, len(resources))
-	for _, r := range resources {
+	for i, r := range resources {
 		resourceURN, _ := resource.NewURN("maxcompute", r) // TODO: use dedicated function new resource from string
-		resourceURNs = append(resourceURNs, resourceURN)
+		resourceURNs[i] = resourceURN
 	}
 	return resourceURNs
 }

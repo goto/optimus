@@ -45,7 +45,7 @@ func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context,
 	return NewBQUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluatorFuncs...)
 }
 
-func (u *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(ctx context.Context, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {
+func (u *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(_ context.Context, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {
 	evaluatorFuncs := make([]EvalAssetFunc, len(evaluators))
 	for i, evaluator := range evaluators {
 		evaluatorFuncs[i] = evaluator.Evaluate

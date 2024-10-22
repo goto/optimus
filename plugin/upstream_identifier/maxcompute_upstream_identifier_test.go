@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
+
+	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 )
 
 func TestNewMaxcomputeUpstreamIdentifier(t *testing.T) {

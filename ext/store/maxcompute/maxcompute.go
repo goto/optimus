@@ -78,7 +78,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 }
 
 func (m MaxCompute) Update(ctx context.Context, resource *resource.Resource) error {
-	spanCtx, span := startChildSpan(ctx, "maxcompute/UpdateteResource")
+	spanCtx, span := startChildSpan(ctx, "maxcompute/UpdateResource")
 	defer span.End()
 
 	account, err := m.secretProvider.GetSecret(spanCtx, resource.Tenant(), accountKey)

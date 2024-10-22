@@ -15,7 +15,7 @@ var mcResourceURNRegex = regexp.MustCompile(`maxcompute://([^:]+).([^.]+)\.(.+)`
 
 type ResourceURN struct {
 	Project string `mapstructure:"project"`
-	Schema  string `mapstructure:"schema"`
+	Schema  string `mapstructure:"database"`
 	Name    string `mapstructure:"name"`
 }
 

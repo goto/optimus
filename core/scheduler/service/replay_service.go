@@ -123,7 +123,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		State:    scheduler.ReplayStateCreated,
 	})
 
-	go r.executor.Execute(ctx, replayID, replayReq.Tenant(), jobName)
+	go r.executor.Execute(context.Background(), replayID, replayReq.Tenant(), jobName)
 
 	return replayID, nil
 }

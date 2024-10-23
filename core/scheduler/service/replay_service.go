@@ -57,7 +57,7 @@ type ReplayValidator interface {
 }
 
 type ReplayExecutor interface {
-	Execute(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
+	Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName)
 	FetchAndSyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error)
 	FetchRunsWithDetails(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec) (scheduler.JobRunDetailsList, error)
 	CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunWithDetails) []*scheduler.JobRunStatus
@@ -123,7 +123,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		State:    scheduler.ReplayStateCreated,
 	})
 
-	go r.executor.Execute(context.Background(), replayID, replayReq.Tenant(), jobName)
+	go r.executor.Execute(replayID, replayReq.Tenant(), jobName) //nolint:contextcheck
 
 	return replayID, nil
 }

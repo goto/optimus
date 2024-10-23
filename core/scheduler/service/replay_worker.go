@@ -58,8 +58,8 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 	}
 }
 
-func (w *ReplayWorker) Execute(ctxBack context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
-	ctx, cancelFn := context.WithTimeout(ctxBack, time.Minute*time.Duration(w.config.ReplayTimeoutInMinutes))
+func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
+	ctx, cancelFn := context.WithTimeout(context.Background(), time.Minute*time.Duration(w.config.ReplayTimeoutInMinutes))
 	defer cancelFn()
 
 	w.logger.Info("[ReplayID: %s] starting to execute replay", replayID)
@@ -384,7 +384,7 @@ func (w *ReplayWorker) ScanReplayRequest(ctx context.Context) {
 		}
 		requestsToProcess := w.getRequestsToProcess(ctx, replays)
 		for _, req := range requestsToProcess {
-			go w.Execute(ctx, req.ID(), req.Tenant(), req.JobName())
+			go w.Execute(req.ID(), req.Tenant(), req.JobName()) //nolint:contextcheck
 		}
 	}
 }

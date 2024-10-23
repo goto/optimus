@@ -61,6 +61,7 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = v.viewTable.BatchLoadTables([]string{viewName.String()})
 	if err != nil {
 		return errors.InternalError(EntityView, "error while get view on maxcompute", err)
@@ -70,7 +71,7 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-	view.Name = res.Name()
+	view.Name = viewName
 
 	sql, err := ToViewSQL(view)
 	if err != nil {

@@ -241,6 +241,21 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				},
 			},
 			{
+				Name: "have quote in one part of table name",
+				InputQuery: `
+					select *
+					from ` +
+					"data-engineering.`testing`.tableB" + `
+
+					select *
+					from
+						/*@ignoreupstream*/ data-engineering.testing.tableC
+					`,
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "tableB"),
+				},
+			},
+			{
 				Name: "ignore characters after -- comment",
 				InputQuery: `
 				-- sources

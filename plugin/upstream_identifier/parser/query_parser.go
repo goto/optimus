@@ -7,25 +7,25 @@ import (
 
 var (
 	topLevelUpstreamsPattern = regexp.MustCompile(
-		"(?i)(?:FROM)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-\\*?]+)`?" + //nolint:gocritic
+		"(?i)(?:FROM)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-\\*?]+`?)`?" + //nolint:gocritic
 			"|" +
-			"(?i)(?:JOIN)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-]+)`?" +
+			"(?i)(?:JOIN)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" +
 			"|" +
-			"(?i)(?:WITH)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-]+)`?\\s+(?:AS)" +
+			"(?i)(?:WITH)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?\\s+(?:AS)" +
 			"|" +
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
-			"(?i)(?:MERGE)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-]+)`?" + // to ignore
+			"(?i)(?:MERGE)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
 			"|" +
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
-			"(?i)(?:INSERT)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-]+)`?" + // to ignore
+			"(?i)(?:INSERT)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
 			"|" +
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
-			"(?i)(?:DELETE)\\s*(?:FROM)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-]+)`?" + // to ignore
+			"(?i)(?:DELETE)\\s*(?:FROM)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
 			"|" +
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
-			"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-]+)`?" + // to ignore
+			"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
 			"|" +
-			"(?i)(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?([\\w-]+\\.[\\w-]+\\.[\\w-]+)`?\\s*(?:AS)?")
+			"(?i)(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?\\s*(?:AS)?")
 
 	singleLineCommentsPattern = regexp.MustCompile(`(--.*)`)
 	multiLineCommentsPattern  = regexp.MustCompile(`(((/\*)+?[\w\W]*?(\*/)+))`)
@@ -72,7 +72,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []string {
 			continue
 		}
 
-		tableName := match[tableIdx]
+		tableName := cleanTableFromTickQuote(match[tableIdx])
 		if clause == "with" {
 			pseudoTable[tableName] = true
 		} else {
@@ -104,4 +104,8 @@ func cleanQueryFromComment(query string) string {
 	}
 
 	return cleanedQuery
+}
+
+func cleanTableFromTickQuote(tableName string) string {
+	return strings.ReplaceAll(tableName, "`", "")
 }

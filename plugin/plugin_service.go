@@ -35,6 +35,7 @@ type EvaluatorFactory interface {
 
 type UpstreamIdentifierFactory interface {
 	GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
+	GetMaxcomputeUpstreamIdentifier(ctx context.Context, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
 }
 
 type PluginService struct {
@@ -108,20 +109,27 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 			evaluators = append(evaluators, evaluator)
 		}
 
-		if parserType != plugin.BQParser {
+		switch parserType {
+		case plugin.MaxcomputeParser:
+			upstreamIdentifier, err := s.upstreamIdentifierFactory.GetMaxcomputeUpstreamIdentifier(ctx, evaluators...)
+			if err != nil {
+				return nil, err
+			}
+			upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
+		case plugin.BQParser:
+			svcAcc, ok := compiledConfig[bqSvcAccKey]
+			if !ok {
+				return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
+			}
+			upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
+			if err != nil {
+				return nil, err
+			}
+			upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
+		default:
 			s.l.Warn("parserType %s is not supported", parserType)
 			continue
 		}
-		// for now parser type is only scoped for bigquery, so that it uses bigquery as upstream identifier
-		svcAcc, ok := compiledConfig[bqSvcAccKey]
-		if !ok {
-			return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
-		}
-		upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
-		if err != nil {
-			return nil, err
-		}
-		upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
 	}
 
 	// identify all upstream resource urns by all identifier from given asset

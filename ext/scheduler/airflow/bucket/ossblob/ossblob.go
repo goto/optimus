@@ -188,10 +188,85 @@ func (r *ossReader) Attributes() *driver.ReaderAttributes {
 	return &r.attrs
 }
 
+type ossWriter struct {
+	ctx         context.Context
+	client      *oss.Client
+	bucket      string
+	key         string
+	contentType string
+	opts        *driver.WriterOptions
+	pr          *io.PipeReader
+	pw          *io.PipeWriter
+	donec       chan struct{}
+	err         error
+}
+
+func (w *ossWriter) Write(p []byte) (int, error) {
+	return w.pw.Write(p)
+}
+
+func (w *ossWriter) Close() error {
+	w.pw.Close()
+	<-w.donec
+	return w.err
+}
+
+func (w *ossWriter) As(i interface{}) bool {
+	return false
+}
+
 // NewTypedWriter implements driver.NewTypedWriter.
 func (b *ossBucket) NewTypedWriter(ctx context.Context, key string, contentType string, opts *driver.WriterOptions) (driver.Writer, error) {
-	// Implementation for creating a new typed writer
-	return nil, nil
+	pr, pw := io.Pipe()
+	w := &ossWriter{
+		ctx:         ctx,
+		client:      b.client,
+		bucket:      b.bucket,
+		key:         key,
+		contentType: contentType,
+		opts:        opts,
+		pr:          pr,
+		pw:          pw,
+		donec:       make(chan struct{}),
+	}
+
+	go func() {
+		defer close(w.donec)
+
+		req := oss.PutObjectRequest{
+			Bucket:      &w.bucket,
+			Key:         &w.key,
+			Body:        w.pr,
+			ContentType: &w.contentType,
+		}
+
+		if opts.ContentDisposition != "" {
+			req.ContentDisposition = &opts.ContentDisposition
+		}
+
+		if opts.ContentEncoding != "" {
+			req.ContentEncoding = &opts.ContentEncoding
+		}
+
+		if opts.CacheControl != "" {
+			req.CacheControl = &opts.CacheControl
+		}
+
+		if len(opts.Metadata) > 0 {
+			req.Metadata = opts.Metadata
+		}
+
+		if len(opts.ContentMD5) > 0 {
+			strmd5 := string(opts.ContentMD5)
+			req.ContentMD5 = &strmd5
+		}
+
+		_, err := b.client.PutObject(ctx, &req)
+		w.err = err
+		w.pr.Close()
+	}()
+
+	return w, nil
 }
 
 // Delete implements driver.Delete.

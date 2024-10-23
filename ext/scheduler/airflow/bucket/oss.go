@@ -3,16 +3,13 @@ package bucket
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/url"
-	"strings"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/scheduler/airflow"
 	"github.com/goto/optimus/ext/scheduler/airflow/bucket/ossblob"
 	"go.opentelemetry.io/otel"
-	"gocloud.dev/blob"
 )
 
 type ossCredentials struct {
@@ -39,11 +36,10 @@ func (f *Factory) GetOSSBucket(ctx context.Context, tnnt tenant.Tenant, parsedUR
 
 	credProvider := credentials.NewStaticCredentialsProvider(cred.AccessID, cred.AccessKey, "")
 
-	client, err := ossblob.OpenBucket(ctx, credProvider, cred.Endpoint, parsedURL.Host)
+	client, err := ossblob.OpenBucket(ctx, credProvider, cred.Endpoint, cred.Region, parsedURL.Host)
 	if err != nil {
 		return nil, err
 	}
 
-	prefix := fmt.Sprintf("%s/", strings.Trim(parsedURL.Path, "/\\"))
-	return blob.PrefixedBucket(client, prefix), nil
+	return client, nil
 }

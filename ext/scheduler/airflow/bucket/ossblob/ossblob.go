@@ -256,11 +256,6 @@ func (b *ossBucket) NewTypedWriter(ctx context.Context, key string, contentType 
 			req.Metadata = opts.Metadata
 		}
 
-		if len(opts.ContentMD5) > 0 {
-			strmd5 := string(opts.ContentMD5)
-			req.ContentMD5 = &strmd5
-		}
-
 		_, err := b.client.PutObject(ctx, &req)
 		w.err = err
 		w.pr.Close()
@@ -342,7 +337,7 @@ func (b *ossBucket) Copy(ctx context.Context, dstKey, srcKey string, opts *drive
 	return err
 }
 
-func openBucket(_ context.Context, cred credentials.CredentialsProvider, endpoint, bucketName string) (*ossBucket, error) {
+func openBucket(_ context.Context, cred credentials.CredentialsProvider, endpoint, region, bucketName string) (*ossBucket, error) {
 	if cred == nil {
 		return nil, errors.New("ossblob.openBucket: credentials are required")
 	}
@@ -353,15 +348,16 @@ func openBucket(_ context.Context, cred credentials.CredentialsProvider, endpoin
 	// TODO provide more available options
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(cred).
-		WithEndpoint(endpoint)
+		WithEndpoint(endpoint).
+		WithRegion(region)
 
 	client := oss.NewClient(cfg)
 
 	return &ossBucket{client: client, bucket: bucketName}, nil
 }
 
-func OpenBucket(ctx context.Context, cred credentials.CredentialsProvider, endpoint, bucketName string) (*blob.Bucket, error) {
-	drv, err := openBucket(ctx, cred, endpoint, bucketName)
+func OpenBucket(ctx context.Context, cred credentials.CredentialsProvider, endpoint, region, bucketName string) (*blob.Bucket, error) {
+	drv, err := openBucket(ctx, cred, endpoint, region, bucketName)
 	if err != nil {
 		return nil, err
 	}

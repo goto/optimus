@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/scheduler/airflow"
@@ -13,33 +14,49 @@ import (
 )
 
 type ossCredentials struct {
-	AccessID    string `json:"access_id"`
-	AccessKey   string `json:"access_key"`
-	Endpoint    string `json:"endpoint"`
-	ProjectName string `json:"project_name"`
-	Region      string `json:"region"`
+	AccessID      string `json:"access_key_id"`
+	AccessKey     string `json:"access_key_secret"`
+	Endpoint      string `json:"endpoint"`
+	ProjectName   string `json:"project_name"`
+	Region        string `json:"region"`
+	SecurityToken string `json:"security_token"`
 }
 
 func (f *Factory) GetOSSBucket(ctx context.Context, tnnt tenant.Tenant, parsedURL *url.URL) (airflow.Bucket, error) {
 	spanCtx, span := otel.Tracer("airflow/bucketFactory").Start(ctx, "GetOSSBucket")
 	defer span.End()
 
-	storageSecret, err := f.secretsGetter.Get(spanCtx, tnnt.ProjectName(), tnnt.NamespaceName().String(), tenant.SecretStorageKey)
+	cred, err := f.getOSSCredentials(spanCtx, tnnt)
 	if err != nil {
 		return nil, err
 	}
 
-	var cred ossCredentials
-	if err := json.Unmarshal([]byte(storageSecret.Value()), &cred); err != nil {
-		return nil, err
-	}
+	credProvider := credentials.NewStaticCredentialsProvider(cred.AccessID, cred.AccessKey, cred.SecurityToken)
 
-	credProvider := credentials.NewStaticCredentialsProvider(cred.AccessID, cred.AccessKey, "")
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(credProvider).
+		WithEndpoint(cred.Endpoint).
+		WithRegion(cred.Region)
 
-	client, err := ossblob.OpenBucket(ctx, credProvider, cred.Endpoint, cred.Region, parsedURL.Host)
+	client, err := ossblob.OpenBucket(ctx, cfg, parsedURL.Host)
 	if err != nil {
 		return nil, err
 	}
 
 	return client, nil
+}
+
+func (f *Factory) getOSSCredentials(ctx context.Context, tnnt tenant.Tenant) (ossCredentials, error) {
+	// Get credentials from secret manager
+	secret, err := f.secretsGetter.Get(ctx, tnnt.ProjectName(), tnnt.NamespaceName().String(), tenant.SecretStorageKey)
+	if err != nil {
+		return ossCredentials{}, err
+	}
+
+	var cred ossCredentials
+	if err := json.Unmarshal([]byte(secret.Value()), &cred); err != nil {
+		return ossCredentials{}, err
+	}
+
+	return cred, nil
 }

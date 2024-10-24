@@ -5,12 +5,20 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/driver"
 	"gocloud.dev/gcerrors"
+)
+
+const (
+	// DefaultMaxKeys is the default maximum number of keys to retrieve in a List call.
+	defaultMaxKeys = 1000
+
+	// DefaultRangeBehavior is the default range behavior for OSS.
+	defaultRangeBehavior string = "standard"
 )
 
 type ossBucket struct {
@@ -79,7 +87,12 @@ func (b *ossBucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*d
 		MaxKeys:   int32(opts.PageSize),
 	}
 	if req.MaxKeys == 0 {
-		req.MaxKeys = 1000
+		req.MaxKeys = defaultMaxKeys
+	}
+
+	if len(opts.PageToken) > 0 {
+		pageToken := string(opts.PageToken)
+		req.ContinuationToken = &pageToken
 	}
 
 	paginator := b.client.NewListObjectsV2Paginator(req)
@@ -104,16 +117,32 @@ func (b *ossBucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*d
 			*p = obj
 			return true
 		}
-		page.Objects[i] = &driver.ListObject{
-			Key:     safeGet(obj.Key),
-			ModTime: safeGet(obj.LastModified),
-			Size:    obj.Size,
-			MD5:     []byte(safeGet(obj.ETag)),
-			AsFunc:  asFunc,
+
+		var objRes driver.ListObject
+		blobKey := safeGet(obj.Key)
+		if strings.HasSuffix(blobKey, "/") {
+			// object is a directory
+			objRes = driver.ListObject{
+				Key:    blobKey,
+				IsDir:  true,
+				Size:   obj.Size,
+				AsFunc: asFunc,
+			}
+		} else {
+			// regular blob object
+			objRes = driver.ListObject{
+				Key:     blobKey,
+				ModTime: safeGet(obj.LastModified),
+				Size:    obj.Size,
+				MD5:     []byte(safeGet(obj.ETag)),
+				AsFunc:  asFunc,
+			}
 		}
+
+		page.Objects[i] = &objRes
 	}
 
-	if result.NextContinuationToken != nil {
+	if safeGet(result.NextContinuationToken) != "" {
 		page.NextPageToken = []byte(safeGet(result.NextContinuationToken))
 	}
 
@@ -132,7 +161,9 @@ func (b *ossBucket) NewRangeReader(ctx context.Context, key string, offset, leng
 		request.RangeBehavior = nil
 		if rangeStr != nil {
 			request.Range = rangeStr
-			request.RangeBehavior = oss.Ptr("standard")
+
+			rangeBehavior := defaultRangeBehavior
+			request.RangeBehavior = &rangeBehavior
 		}
 
 		result, err := b.client.GetObject(ctx, &request)
@@ -241,19 +272,19 @@ func (b *ossBucket) NewTypedWriter(ctx context.Context, key string, contentType 
 		}
 
 		if opts.ContentDisposition != "" {
-			req.ContentDisposition = &opts.ContentDisposition
+			req.ContentDisposition = &w.opts.ContentDisposition
 		}
 
 		if opts.ContentEncoding != "" {
-			req.ContentEncoding = &opts.ContentEncoding
+			req.ContentEncoding = &w.opts.ContentEncoding
 		}
 
 		if opts.CacheControl != "" {
-			req.CacheControl = &opts.CacheControl
+			req.CacheControl = &w.opts.CacheControl
 		}
 
 		if len(opts.Metadata) > 0 {
-			req.Metadata = opts.Metadata
+			req.Metadata = w.opts.Metadata
 		}
 
 		_, err := b.client.PutObject(ctx, &req)
@@ -337,27 +368,24 @@ func (b *ossBucket) Copy(ctx context.Context, dstKey, srcKey string, opts *drive
 	return err
 }
 
-func openBucket(_ context.Context, cred credentials.CredentialsProvider, endpoint, region, bucketName string) (*ossBucket, error) {
-	if cred == nil {
-		return nil, errors.New("ossblob.openBucket: credentials are required")
+func openBucket(_ context.Context, cfg *oss.Config, bucketName string) (*ossBucket, error) {
+	if cfg == nil {
+		return nil, errors.New("ossblob.openBucket: oss config are required")
+	}
+	if cfg.CredentialsProvider == nil {
+		return nil, errors.New("ossblob.openBucket: credentials provider is required")
 	}
 	if bucketName == "" {
 		return nil, errors.New("ossblob.openBucket: bucketName is required")
 	}
-
-	// TODO provide more available options
-	cfg := oss.LoadDefaultConfig().
-		WithCredentialsProvider(cred).
-		WithEndpoint(endpoint).
-		WithRegion(region)
 
 	client := oss.NewClient(cfg)
 
 	return &ossBucket{client: client, bucket: bucketName}, nil
 }
 
-func OpenBucket(ctx context.Context, cred credentials.CredentialsProvider, endpoint, region, bucketName string) (*blob.Bucket, error) {
-	drv, err := openBucket(ctx, cred, endpoint, region, bucketName)
+func OpenBucket(ctx context.Context, cfg *oss.Config, bucketName string) (*blob.Bucket, error) {
+	drv, err := openBucket(ctx, cfg, bucketName)
 	if err != nil {
 		return nil, err
 	}

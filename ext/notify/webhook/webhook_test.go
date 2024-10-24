@@ -30,7 +30,7 @@ func TestWebhook(t *testing.T) {
 		muxRouter := http.NewServeMux()
 		server := httptest.NewServer(muxRouter)
 		defer server.Close()
-		muxRouter.HandleFunc("/users/webhook_end_point", func(rw http.ResponseWriter, r *http.Request) {
+		muxRouter.HandleFunc("/users/webhook_end_point", func(rw http.ResponseWriter, _ *http.Request) {
 			rw.Header().Set("Content-Type", "application/json")
 			response, _ := json.Marshal(struct {
 				Ok bool `json:"ok"`
@@ -85,7 +85,7 @@ func TestWebhook(t *testing.T) {
 		muxRouter := http.NewServeMux()
 		server := httptest.NewServer(muxRouter)
 		defer server.Close()
-		muxRouter.HandleFunc("/users/webhook_end_point", func(rw http.ResponseWriter, r *http.Request) {
+		muxRouter.HandleFunc("/users/webhook_end_point", func(rw http.ResponseWriter, _ *http.Request) {
 			rw.Header().Set("Content-Type", "application/json")
 			response, _ := json.Marshal(struct {
 				Ok bool `json:"ok"`

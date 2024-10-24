@@ -47,7 +47,7 @@ func (r *ossReader) As(i interface{}) bool {
 
 // Attributes implements driver.Reader.Attributes.
 // For now this will return no attributes
-func (r *ossReader) Attributes() *driver.ReaderAttributes {
+func (*ossReader) Attributes() *driver.ReaderAttributes {
 	return &driver.ReaderAttributes{}
 }
 
@@ -55,7 +55,6 @@ func (r *ossReader) Attributes() *driver.ReaderAttributes {
 // pipereader & pipewriter is used so that a stream-like write can be done using
 // OSS PutObject API.
 type ossWriter struct {
-	ctx    context.Context
 	req    oss.PutObjectRequest
 	pr     *io.PipeReader
 	pw     *io.PipeWriter
@@ -97,7 +96,7 @@ func (b *ossBucket) As(i interface{}) bool {
 	return true
 }
 
-func (b *ossBucket) ErrorCode(err error) gcerrors.ErrorCode {
+func (*ossBucket) ErrorCode(err error) gcerrors.ErrorCode {
 	if ossErr, ok := err.(*oss.ServiceError); ok {
 		switch ossErr.StatusCode {
 		case http.StatusNotFound:
@@ -115,7 +114,7 @@ func (b *ossBucket) ErrorCode(err error) gcerrors.ErrorCode {
 	return gcerrors.Internal
 }
 
-func (b *ossBucket) ErrorAs(err error, target interface{}) bool {
+func (*ossBucket) ErrorAs(err error, target interface{}) bool {
 	switch ossErr := err.(type) {
 	case *oss.ServiceError:
 		if p, ok := target.(**oss.ServiceError); ok {
@@ -211,7 +210,7 @@ func (b *ossBucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*d
 	return page, nil
 }
 
-func (b *ossBucket) NewRangeReader(ctx context.Context, key string, offset, length int64, opts *driver.ReaderOptions) (driver.Reader, error) {
+func (b *ossBucket) NewRangeReader(ctx context.Context, key string, offset, length int64, _ *driver.ReaderOptions) (driver.Reader, error) {
 	request := oss.GetObjectRequest{
 		Bucket: &b.bucket,
 		Key:    &key,
@@ -254,7 +253,7 @@ func (b *ossBucket) NewRangeReader(ctx context.Context, key string, offset, leng
 }
 
 // NewTypedWriter implements driver.NewTypedWriter.
-func (b *ossBucket) NewTypedWriter(ctx context.Context, key string, contentType string, opts *driver.WriterOptions) (driver.Writer, error) {
+func (b *ossBucket) NewTypedWriter(ctx context.Context, key, contentType string, opts *driver.WriterOptions) (driver.Writer, error) {
 	pr, pw := io.Pipe()
 	req := oss.PutObjectRequest{
 		Bucket:      &b.bucket,
@@ -280,7 +279,6 @@ func (b *ossBucket) NewTypedWriter(ctx context.Context, key string, contentType 
 	}
 
 	w := &ossWriter{
-		ctx:    ctx,
 		req:    req,
 		pr:     pr,
 		pw:     pw,
@@ -341,7 +339,7 @@ func (b *ossBucket) Attributes(ctx context.Context, key string) (*driver.Attribu
 }
 
 // Close implements driver.Close.
-func (b *ossBucket) Close() error {
+func (ossBucket) Close() error {
 	return nil
 }
 
@@ -359,7 +357,7 @@ func (b *ossBucket) SignedURL(ctx context.Context, key string, opts *driver.Sign
 }
 
 // Copy implements driver.Copy
-func (b *ossBucket) Copy(ctx context.Context, dstKey, srcKey string, opts *driver.CopyOptions) error {
+func (b *ossBucket) Copy(ctx context.Context, dstKey, srcKey string, _ *driver.CopyOptions) error {
 	copier := oss.NewCopier(b.client)
 	_, err := copier.Copy(ctx, &oss.CopyObjectRequest{
 		Bucket:       &b.bucket,

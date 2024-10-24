@@ -7,10 +7,11 @@ import (
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
+	"go.opentelemetry.io/otel"
+
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/ext/scheduler/airflow"
 	"github.com/goto/optimus/ext/scheduler/airflow/bucket/ossblob"
-	"go.opentelemetry.io/otel"
 )
 
 type ossCredentials struct {

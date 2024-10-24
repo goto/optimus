@@ -97,7 +97,8 @@ func (b *ossBucket) As(i interface{}) bool {
 }
 
 func (*ossBucket) ErrorCode(err error) gcerrors.ErrorCode {
-	if ossErr, ok := err.(*oss.ServiceError); ok {
+	var ossErr *oss.ServiceError
+	if errors.As(err, &ossErr) {
 		switch ossErr.StatusCode {
 		case http.StatusNotFound:
 			return gcerrors.NotFound
@@ -115,29 +116,12 @@ func (*ossBucket) ErrorCode(err error) gcerrors.ErrorCode {
 }
 
 func (*ossBucket) ErrorAs(err error, target interface{}) bool {
-	switch ossErr := err.(type) {
-	case *oss.ServiceError:
-		if p, ok := target.(**oss.ServiceError); ok {
-			*p = ossErr
-			return true
-		}
-	case *oss.ClientError:
-		if p, ok := target.(**oss.ClientError); ok {
-			*p = ossErr
-			return true
-		}
-	case *oss.CanceledError:
-		if p, ok := target.(**oss.CanceledError); ok {
-			*p = ossErr
-			return true
-		}
-	case *oss.SerializationError:
-		if p, ok := target.(**oss.SerializationError); ok {
-			*p = ossErr
-			return true
-		}
+	switch errType := target.(type) {
+	case **oss.ServiceError, **oss.ClientError, **oss.CanceledError, **oss.SerializationError:
+		return errors.As(err, errType)
+	default:
+		return false
 	}
-	return false
 }
 
 func (b *ossBucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driver.ListPage, error) {

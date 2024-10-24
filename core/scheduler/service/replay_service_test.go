@@ -106,7 +106,7 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJob", ctx, projName, jobName).Return(&job, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", ctx, replayID, tnnt, jobName).Return().Maybe()
+			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
@@ -151,7 +151,7 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJob", ctx, projName, jobName).Return(&job, nil)
 			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
 			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
-			replayWorker.On("Execute", ctx, replayID, tnnt, jobName).Return().Maybe()
+			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
@@ -866,8 +866,8 @@ type ReplayExecutor struct {
 }
 
 // Execute provides a mock function with given fields: ctx, replayRequest
-func (_m *ReplayExecutor) Execute(ctx context.Context, replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
-	_m.Called(ctx, replayID, jobTenant, jobName)
+func (_m *ReplayExecutor) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobName scheduler.JobName) {
+	_m.Called(replayID, jobTenant, jobName)
 }
 
 func (_m *ReplayExecutor) FetchAndSyncStatus(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, jobCron *cron.ScheduleSpec) (scheduler.JobRunStatusList, error) {

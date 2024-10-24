@@ -21,6 +21,68 @@ const (
 	defaultRangeBehavior string = "standard"
 )
 
+// ossReader is an implementation of driver.Reader for OSS.
+// This reader is used in OSS RangeReader to read content of a blob in OSS.
+type ossReader struct {
+	body io.ReadCloser
+	raw  *oss.RangeReader
+}
+
+func (r *ossReader) Read(p []byte) (int, error) {
+	return r.body.Read(p)
+}
+
+func (r *ossReader) Close() error {
+	return r.body.Close()
+}
+
+func (r *ossReader) As(i interface{}) bool {
+	p, ok := i.(**oss.RangeReader)
+	if !ok {
+		return false
+	}
+	*p = r.raw
+	return true
+}
+
+// Attributes implements driver.Reader.Attributes.
+// For now this will return no attributes
+func (r *ossReader) Attributes() *driver.ReaderAttributes {
+	return &driver.ReaderAttributes{}
+}
+
+// ossWriter is an implementation of driver.Writer for OSS.
+// pipereader & pipewriter is used so that a stream-like write can be done using
+// OSS PutObject API.
+type ossWriter struct {
+	ctx    context.Context
+	req    oss.PutObjectRequest
+	pr     *io.PipeReader
+	pw     *io.PipeWriter
+	doneCh chan struct{}
+	err    error
+}
+
+func (w *ossWriter) Write(p []byte) (int, error) {
+	return w.pw.Write(p)
+}
+
+func (w *ossWriter) Close() error {
+	w.pw.Close()
+
+	<-w.doneCh
+	return w.err
+}
+
+func (w *ossWriter) As(i interface{}) bool {
+	p, ok := i.(**oss.PutObjectRequest)
+	if !ok {
+		return false
+	}
+	*p = &w.req
+	return true
+}
+
 type ossBucket struct {
 	client *oss.Client
 	bucket string
@@ -186,108 +248,49 @@ func (b *ossBucket) NewRangeReader(ctx context.Context, key string, offset, leng
 	}
 
 	return &ossReader{
-		body:  rangeReader,
-		attrs: driver.ReaderAttributes{},
-		raw:   rangeReader,
+		body: rangeReader,
+		raw:  rangeReader,
 	}, nil
-}
-
-type ossReader struct {
-	body  io.ReadCloser
-	attrs driver.ReaderAttributes
-	raw   *oss.RangeReader
-}
-
-func (r *ossReader) Read(p []byte) (int, error) {
-	return r.body.Read(p)
-}
-
-func (r *ossReader) Close() error {
-	return r.body.Close()
-}
-
-func (r *ossReader) As(i interface{}) bool {
-	p, ok := i.(**oss.RangeReader)
-	if !ok {
-		return false
-	}
-	*p = r.raw
-	return true
-}
-
-func (r *ossReader) Attributes() *driver.ReaderAttributes {
-	return &r.attrs
-}
-
-type ossWriter struct {
-	ctx         context.Context
-	client      *oss.Client
-	bucket      string
-	key         string
-	contentType string
-	opts        *driver.WriterOptions
-	pr          *io.PipeReader
-	pw          *io.PipeWriter
-	donec       chan struct{}
-	err         error
-}
-
-func (w *ossWriter) Write(p []byte) (int, error) {
-	return w.pw.Write(p)
-}
-
-func (w *ossWriter) Close() error {
-	w.pw.Close()
-	<-w.donec
-	return w.err
-}
-
-func (w *ossWriter) As(i interface{}) bool {
-	return false
 }
 
 // NewTypedWriter implements driver.NewTypedWriter.
 func (b *ossBucket) NewTypedWriter(ctx context.Context, key string, contentType string, opts *driver.WriterOptions) (driver.Writer, error) {
 	pr, pw := io.Pipe()
+	req := oss.PutObjectRequest{
+		Bucket:      &b.bucket,
+		Key:         &key,
+		Body:        pr,
+		ContentType: &contentType,
+	}
+
+	if opts.ContentDisposition != "" {
+		req.ContentDisposition = &opts.ContentDisposition
+	}
+
+	if opts.ContentEncoding != "" {
+		req.ContentEncoding = &opts.ContentEncoding
+	}
+
+	if opts.CacheControl != "" {
+		req.CacheControl = &opts.CacheControl
+	}
+
+	if len(opts.Metadata) > 0 {
+		req.Metadata = opts.Metadata
+	}
+
 	w := &ossWriter{
-		ctx:         ctx,
-		client:      b.client,
-		bucket:      b.bucket,
-		key:         key,
-		contentType: contentType,
-		opts:        opts,
-		pr:          pr,
-		pw:          pw,
-		donec:       make(chan struct{}),
+		ctx:    ctx,
+		req:    req,
+		pr:     pr,
+		pw:     pw,
+		doneCh: make(chan struct{}),
 	}
 
 	go func() {
-		defer close(w.donec)
+		defer close(w.doneCh)
 
-		req := oss.PutObjectRequest{
-			Bucket:      &w.bucket,
-			Key:         &w.key,
-			Body:        w.pr,
-			ContentType: &w.contentType,
-		}
-
-		if opts.ContentDisposition != "" {
-			req.ContentDisposition = &w.opts.ContentDisposition
-		}
-
-		if opts.ContentEncoding != "" {
-			req.ContentEncoding = &w.opts.ContentEncoding
-		}
-
-		if opts.CacheControl != "" {
-			req.CacheControl = &w.opts.CacheControl
-		}
-
-		if len(opts.Metadata) > 0 {
-			req.Metadata = w.opts.Metadata
-		}
-
-		_, err := b.client.PutObject(ctx, &req)
+		_, err := b.client.PutObject(ctx, &w.req)
 		w.err = err
 		w.pr.Close()
 	}()

@@ -3,7 +3,7 @@ update
     replay_request
 set
     status = 'cancelled',
-    message = 'canceled by optimus migration 000064'
+    message = 'canceled by optimus migration 000065'
 where
     status in ('created', 'in progress')
     and (now() - updated_at) > INTERVAL '4 HOURS';

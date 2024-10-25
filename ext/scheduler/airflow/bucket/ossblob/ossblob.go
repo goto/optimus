@@ -28,6 +28,14 @@ type ossReader struct {
 	raw  *oss.RangeReader
 }
 
+// NewOSSReader creates a new ossReader.
+func NewOSSReader(body io.ReadCloser, raw *oss.RangeReader) *ossReader {
+	return &ossReader{
+		body: body,
+		raw:  raw,
+	}
+}
+
 func (r *ossReader) Read(p []byte) (int, error) {
 	return r.body.Read(p)
 }
@@ -62,6 +70,16 @@ type ossWriter struct {
 	err    error
 }
 
+// NewOSSWriter creates a new ossWriter.
+func NewOSSWriter(req oss.PutObjectRequest, pr *io.PipeReader, pw *io.PipeWriter) *ossWriter {
+	return &ossWriter{
+		req:    req,
+		pr:     pr,
+		pw:     pw,
+		doneCh: make(chan struct{}),
+	}
+}
+
 func (w *ossWriter) Write(p []byte) (int, error) {
 	return w.pw.Write(p)
 }
@@ -85,6 +103,14 @@ func (w *ossWriter) As(i interface{}) bool {
 type ossBucket struct {
 	client *oss.Client
 	bucket string
+}
+
+// NewOSSBucket creates a new ossBucket.
+func NewOSSBucket(client *oss.Client, bucket string) *ossBucket {
+	return &ossBucket{
+		client: client,
+		bucket: bucket,
+	}
 }
 
 func (b *ossBucket) As(i interface{}) bool {
@@ -230,10 +256,7 @@ func (b *ossBucket) NewRangeReader(ctx context.Context, key string, offset, leng
 		return nil, err
 	}
 
-	return &ossReader{
-		body: rangeReader,
-		raw:  rangeReader,
-	}, nil
+	return NewOSSReader(rangeReader, rangeReader), nil
 }
 
 // NewTypedWriter implements driver.NewTypedWriter.
@@ -262,12 +285,7 @@ func (b *ossBucket) NewTypedWriter(ctx context.Context, key, contentType string,
 		req.Metadata = opts.Metadata
 	}
 
-	w := &ossWriter{
-		req:    req,
-		pr:     pr,
-		pw:     pw,
-		doneCh: make(chan struct{}),
-	}
+	w := NewOSSWriter(req, pr, pw)
 
 	go func() {
 		defer close(w.doneCh)
@@ -366,7 +384,7 @@ func openBucket(_ context.Context, cfg *oss.Config, bucketName string) (*ossBuck
 
 	client := oss.NewClient(cfg)
 
-	return &ossBucket{client: client, bucket: bucketName}, nil
+	return NewOSSBucket(client, bucketName), nil
 }
 
 func OpenBucket(ctx context.Context, cfg *oss.Config, bucketName string) (*blob.Bucket, error) {

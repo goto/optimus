@@ -1,4 +1,4 @@
-package ossblob
+package ossblob_test
 
 import (
 	"context"
@@ -12,12 +12,14 @@ import (
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/stretchr/testify/assert"
 	"gocloud.dev/gcerrors"
+
+	"github.com/goto/optimus/ext/scheduler/airflow/bucket/ossblob"
 )
 
 func TestOSSReader(t *testing.T) {
 	body := io.NopCloser(strings.NewReader("test content"))
 	raw := &oss.RangeReader{}
-	reader := &ossReader{body: body, raw: raw}
+	reader := ossblob.NewOSSReader(body, raw)
 
 	t.Run("Read", func(t *testing.T) {
 		buf := make([]byte, 4)
@@ -47,7 +49,7 @@ func TestOSSReader(t *testing.T) {
 func TestOSSWriter(t *testing.T) {
 	pr, pw := io.Pipe()
 	req := oss.PutObjectRequest{}
-	writer := &ossWriter{req: req, pr: pr, pw: pw, doneCh: make(chan struct{})}
+	writer := ossblob.NewOSSWriter(req, pr, pw)
 
 	t.Run("As", func(t *testing.T) {
 		var reqPtr *oss.PutObjectRequest
@@ -59,7 +61,7 @@ func TestOSSWriter(t *testing.T) {
 func TestOSSBucket(t *testing.T) {
 	client := &oss.Client{}
 	bucket := "test-bucket"
-	b := &ossBucket{client: client, bucket: bucket}
+	b := ossblob.NewOSSBucket(client, bucket)
 
 	t.Run("As", func(t *testing.T) {
 		var clientPtr *oss.Client
@@ -103,24 +105,24 @@ func TestOpenBucket(t *testing.T) {
 	bucketName := "test-bucket"
 
 	t.Run("openBucket with nil config", func(t *testing.T) {
-		_, err := OpenBucket(ctx, nil, bucketName)
+		_, err := ossblob.OpenBucket(ctx, nil, bucketName)
 		assert.Error(t, err)
 	})
 
 	t.Run("openBucket with nil credentials provider", func(t *testing.T) {
 		cfg.CredentialsProvider = nil
-		_, err := OpenBucket(ctx, cfg, bucketName)
+		_, err := ossblob.OpenBucket(ctx, cfg, bucketName)
 		assert.Error(t, err)
 	})
 
 	t.Run("openBucket with empty bucket name", func(t *testing.T) {
-		_, err := OpenBucket(ctx, cfg, "")
+		_, err := ossblob.OpenBucket(ctx, cfg, "")
 		assert.Error(t, err)
 	})
 
 	t.Run("openBucket with valid config", func(t *testing.T) {
 		cfg.CredentialsProvider = &credentials.StaticCredentialsProvider{}
-		b, err := OpenBucket(ctx, cfg, bucketName)
+		b, err := ossblob.OpenBucket(ctx, cfg, bucketName)
 		assert.NoError(t, err)
 		assert.NotNil(t, b)
 	})

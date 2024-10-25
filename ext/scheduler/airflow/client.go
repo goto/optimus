@@ -35,9 +35,18 @@ type DagRunListResponse struct {
 }
 
 type DagRun struct {
-	ExecutionDate   time.Time `json:"execution_date"`
-	State           string    `json:"state"`
-	ExternalTrigger bool      `json:"external_trigger"`
+	ExecutionDate          time.Time `json:"execution_date"`
+	State                  string    `json:"state"`
+	ExternalTrigger        bool      `json:"external_trigger"`
+	DagRunID               string    `json:"dag_run_id"`
+	DagID                  string    `json:"dag_id"`
+	LogicalDate            time.Time `json:"logical_date"`
+	StartDate              time.Time `json:"start_date"`
+	EndDate                time.Time `json:"end_date"`
+	DataIntervalStart      time.Time `json:"data_interval_start"`
+	DataIntervalEnd        time.Time `json:"data_interval_end"`
+	LastSchedulingDecision time.Time `json:"last_scheduling_decision"`
+	RunType                string    `json:"run_type"`
 }
 
 type DagRunRequest struct {
@@ -114,6 +123,26 @@ func getJobRuns(res DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.J
 		jobRunStatus, _ := scheduler.JobRunStatusFrom(scheduledAt, dag.State)
 		// use multi error to collect errors and proceed
 		jobRunList = append(jobRunList, &jobRunStatus)
+	}
+	return jobRunList, nil
+}
+
+func getJobRunsWithDetails(res DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error) {
+	var jobRunList []*scheduler.JobRunWithDetails
+	if res.TotalEntries > pageLimit {
+		return jobRunList, errors.InternalError(EntityAirflow, "total number of entries exceed page limit", nil)
+	}
+	for _, dag := range res.DagRuns {
+		scheduledAt := spec.Next(dag.ExecutionDate)
+		jobRunStatus, _ := scheduler.StateFromString(dag.State)
+		jobRunList = append(jobRunList, &scheduler.JobRunWithDetails{
+			ScheduledAt:     scheduledAt,
+			State:           jobRunStatus,
+			RunType:         dag.RunType,
+			ExternalTrigger: dag.ExternalTrigger,
+			DagRunID:        dag.DagRunID,
+			DagID:           dag.DagID,
+		})
 	}
 	return jobRunList, nil
 }

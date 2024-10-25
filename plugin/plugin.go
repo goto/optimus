@@ -87,7 +87,7 @@ func discoverPluginsGivenFilePattern(l log.Logger, prefix, suffix string) []stri
 				continue
 			}
 
-			if len(strings.Split(fullName, "-")) < 2 { //nolint: gomnd
+			if len(strings.Split(fullName, "-")) < 2 { //nolint: mnd
 				continue
 			}
 

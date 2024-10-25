@@ -59,11 +59,11 @@ func CreateCommand() *cobra.Command {
 			"second is start time[required] of\nreplay, third is end time[optional] of replay. \nDate ranges are inclusive. " +
 			"Supported date formats are RFC3339 and \nsimple date YYYY-MM-DD",
 		Example: "optimus replay create <job_name> <2023-01-01T02:30:00Z00:00> [2023-01-02T02:30:00Z00:00]\noptimus replay create <job_name> <2023-01-01> [2023-01-02]",
-		Args: func(cmd *cobra.Command, args []string) error {
+		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return errors.New("job name is required")
 			}
-			if len(args) < 2 { //nolint: gomnd
+			if len(args) < 2 { //nolint: mnd
 				return errors.New("replay start time is required")
 			}
 			return nil
@@ -117,7 +117,7 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 	jobName := args[0]
 	startTime := args[1]
 	endTime := args[1]
-	if len(args) >= 3 { //nolint: gomnd
+	if len(args) >= 3 { //nolint: mnd
 		endTime = args[2]
 	}
 

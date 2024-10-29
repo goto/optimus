@@ -16,8 +16,6 @@ linters:
     - durationcheck
     - errname
     - errorlint
-    - execinquery
-    - exportloopref
     - forbidigo
     - gci
     - ginkgolinter
@@ -29,7 +27,6 @@ linters:
     - gofumpt
     - goheader
     - goimports
-    - gomnd
     - gomodguard
     - goprintffuncname
     - gosec
@@ -42,6 +39,7 @@ linters:
     - makezero
     - mirror
     - misspell
+    - mnd
     - nakedret
     - nilerr
     - nilnil
@@ -98,7 +96,7 @@ linters-settings:
   goconst:
     ignore-tests: true
     numbers: true
-  gomnd:
+  mnd:
     ignored-numbers: # Why we have a big range of file permissions
       - '0o600'
       - '0o644'
@@ -115,6 +113,7 @@ linters-settings:
   gosec:
     excludes:
       - G101
+      - G115
   gosimple:
     checks:
       - "all"
@@ -153,7 +152,7 @@ issues:
     - path: tests
       linters:
         - gocritic
-        - gomnd
+        - mnd
         - unparam
         - testpackage
 severity:

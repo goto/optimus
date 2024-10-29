@@ -264,7 +264,7 @@ func (e *inspectCommand) displayBasicInfoSection(basicInfoSection *pb.JobInspect
 	e.printLogs(basicInfoSection.Notice)
 }
 
-func (e *inspectCommand) processJobInspectResponse(resp *pb.JobInspectResponse) error {
+func (e *inspectCommand) processJobInspectResponse(resp *pb.JobInspectResponse) error { //nolint:unparam
 	e.displayBasicInfoSection(resp.BasicInfo)
 	e.displayUpstreamSection(resp.Upstreams)
 	e.displayDownstreamSection(resp.Downstreams)

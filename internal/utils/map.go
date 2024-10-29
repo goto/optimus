@@ -30,6 +30,14 @@ func MapToList[V any](inputMap map[string]V) []V {
 	return smp
 }
 
+func ListToMap(inputList []string) map[string]struct{} {
+	smp := map[string]struct{}{}
+	for _, value := range inputList {
+		smp[value] = struct{}{}
+	}
+	return smp
+}
+
 func AppendToMap(gmap map[string]interface{}, mp map[string]string) {
 	for k, v := range mp {
 		gmap[k] = v

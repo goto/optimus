@@ -93,7 +93,7 @@ func (m *model) generateWindowResultView() string {
 	table := tablewriter.NewWriter(buff)
 	table.SetHeader([]string{"Version", "Start Time", "End Time"})
 	table.Append(m.generateWindowTableRowView(1))
-	table.Append(m.generateWindowTableRowView(2)) //nolint: gomnd
+	table.Append(m.generateWindowTableRowView(2)) //nolint: mnd
 	table.Render()
 	return buff.String()
 }

@@ -23,6 +23,11 @@ const (
 	replaySyncMultiplier = 3
 )
 
+var replayWorkerLoopDuration = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "replay_worker_loop_duration",
+	Help: "how long it takes to process a replay loop",
+}, []string{"replayID"})
+
 var replayReqLag = promauto.NewGauge(prometheus.GaugeOpts{
 	Name: "replay_request_lag",
 	Help: "how old is the oldest unhandled replay request",
@@ -129,6 +134,7 @@ func (w *ReplayWorker) isReplayCanceled(ctx context.Context, replayID uuid.UUID)
 func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
 	executionLoopCount := 0
 	for {
+		loopStartTime := time.Now()
 		select {
 		case <-ctx.Done():
 			w.logger.Error("[ReplayID: %s] deadline encountered...", replayID)
@@ -147,7 +153,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		// sync run first
 		replayWithRun, err := w.replayRepo.GetReplayByID(ctx, replayID)
 		if err != nil {
-			w.logger.Error("[ReplayID: %s] unable to get existing runs, err: %s", replayID.String(), err.Error())
+			w.logger.Error("[ReplayID: %s] unable to get existing runs, err: %s", replayID, err.Error())
 			return err
 		}
 
@@ -160,26 +166,32 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 				JobURN:   replayWithRun.Replay.JobName().GetJobURN(t),
 				State:    replayWithRun.Replay.State(),
 			})
-			w.logger.Info("[ReplayID: %s] replay is externally terminated with status [%s]", replayWithRun.Replay.ID().String(), replayWithRun.Replay.State().String())
+			w.logger.Info("[ReplayID: %s] replay is externally terminated with status [%s]", replayID, replayWithRun.Replay.State().String())
 			return nil
 		}
 
 		if executionLoopCount == 1 {
 			err := w.replayRepo.UpdateReplayStatus(ctx, replayID, scheduler.ReplayStateInProgress, "started handling replay request")
 			if err != nil {
-				w.logger.Error("[ReplayID: %s] unable to set replay state in progress", replayID.String(), err)
+				w.logger.Error("[ReplayID: %s] unable to set replay state in progress", replayID, err)
+				return err
+			}
+		} else {
+			err := w.replayRepo.UpdateReplayHeartbeat(ctx, replayID)
+			if err != nil {
+				w.logger.Error("[ReplayID: %s] unable to update replay heartbeat err:: %s", replayID, err)
 				return err
 			}
 		}
 
 		syncedRunStatus, err := w.FetchAndSyncStatus(ctx, replayWithRun, jobCron)
 		if err != nil {
-			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayWithRun.Replay.ID().String(), err)
+			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayID, err)
 			return err
 		}
 
-		if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), syncedRunStatus); err != nil {
-			w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayWithRun.Replay.ID(), err)
+		if err := w.replayRepo.UpdateReplayRuns(ctx, replayID, syncedRunStatus); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayID, err)
 			return err
 		}
 
@@ -207,6 +219,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			w.logger.Info("[ReplayID: %s] replay is externally canceled", replayID.String())
 			return nil
 		}
+
 		var updatedRuns []*scheduler.JobRunStatus
 		if replayWithRun.Replay.Config().Parallel {
 			if err := w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns...); err != nil {
@@ -216,7 +229,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		} else { // sequential should work when there's no in_progress state on existing runs
 			inProgressRuns := syncedRunStatus.GetSortedRunsByStates([]scheduler.State{scheduler.StateInProgress})
 			if len(inProgressRuns) > 0 {
-				w.logger.Info("[ReplayID: %s] %d run is in progress, skip sequential iteration", replayWithRun.Replay.ID(), len(inProgressRuns))
+				w.logger.Info("[ReplayID: %s] %d run is in progress, skip sequential iteration", replayID, len(inProgressRuns))
 				continue
 			}
 			if err := w.replayRunOnScheduler(ctx, jobCron, replayWithRun.Replay, toBeReplayedRuns[0]); err != nil {
@@ -226,10 +239,12 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		}
 
 		// update runs status
-		if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), updatedRuns); err != nil {
-			w.logger.Error("[ReplayID: %s] unable to update replay runs: %s", replayWithRun.Replay.ID(), err)
+		if err := w.replayRepo.UpdateReplayRuns(ctx, replayID, updatedRuns); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to update replay runs: %s", replayID, err)
 			return err
 		}
+
+		replayWorkerLoopDuration.WithLabelValues(replayID.String()).Set(time.Since(loopStartTime).Seconds())
 	}
 }
 
@@ -401,15 +416,17 @@ func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*sche
 		if lag.Seconds() > maxLag {
 			maxLag = lag.Seconds()
 		}
-		w.logger.Info(fmt.Sprintf("trying to acquired replay request with ID: %s", replay.ID()))
+		w.logger.Info(fmt.Sprintf("[ReplayID: %s] trying to acquire replay request", replay.ID()))
 		err := w.replayRepo.AcquireReplayRequest(ctx, replay.ID(), unhandledClassifierDuration)
 		if err != nil {
 			if errors.IsErrorType(err, errors.ErrNotFound) {
 				continue
 			}
-			w.logger.Error("unable to acquire lock on replay request err: %s", err.Error())
+			w.logger.Error("[ReplayID: %s] unable to acquire lock on replay request err: %s", replay.ID(), err.Error())
+			// return early with the requests that have been acquired, the errors has been logged and can be retried in next iteration
+			return requestsToProcess
 		}
-		w.logger.Info(fmt.Sprintf("successfully acquired replay request with ID: %s", replay.ID()))
+		w.logger.Info(fmt.Sprintf("[ReplayID: %s] successfully acquired replay request", replay.ID()))
 		requestsToProcess = append(requestsToProcess, replay)
 	}
 	replayReqLag.Set(maxLag)

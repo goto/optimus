@@ -435,15 +435,21 @@ func TestMaxComputeStore(t *testing.T) {
 			defer clientProvider.AssertExpectations(t)
 
 			tableHandle := new(mockTableResourceHandle)
-			tableHandle.On("Exists", mock.Anything).Return(true)
-			defer tableHandle.AssertExpectations(t)
+			viewHandle := new(mockTableResourceHandle)
+			defer func() {
+				tableHandle.AssertExpectations(t)
+				viewHandle.AssertExpectations(t)
+			}()
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
 
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
 
-			client.On("TableHandleFrom").Return(tableHandle)
+			client.On("TableHandleFrom").Return(tableHandle).Maybe()
+			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ViewHandleFrom").Return(viewHandle)
+			viewHandle.On("Exists", mock.Anything).Return(true)
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.True(t, actualExist)
@@ -462,20 +468,21 @@ func TestMaxComputeStore(t *testing.T) {
 			defer clientProvider.AssertExpectations(t)
 
 			tableHandle := new(mockTableResourceHandle)
-			tableHandle.On("Exists", mock.Anything).Return(false)
-			defer tableHandle.AssertExpectations(t)
-
 			viewHandle := new(mockTableResourceHandle)
-			viewHandle.On("Exists", mock.Anything).Return(false)
-			defer viewHandle.AssertExpectations(t)
+			defer func() {
+				tableHandle.AssertExpectations(t)
+				viewHandle.AssertExpectations(t)
+			}()
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
 
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
 
-			client.On("TableHandleFrom").Return(tableHandle)
-			client.On("ViewHandleFrom").Return(viewHandle)
+			client.On("TableHandleFrom").Return(tableHandle).Maybe()
+			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ViewHandleFrom").Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.False(t, actualExist)

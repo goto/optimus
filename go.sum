@@ -209,6 +209,8 @@ github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae/go.mod h1:C
 github.com/alexflint/go-filemutex v1.1.0/go.mod h1:7P4iRhttt/nUvUOrYIhcpMzv2G6CY9UnI16Z+UJqRyk=
 github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.1.1 h1:Sc2T9vs8SCq0DErL/QIY3ZVx8F+dm+DIv4RFP9NLwC4=
 github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.1.1/go.mod h1:FTzydeQVmR24FI0D6XWUOMKckjXehM/jgMn1xC+DA9M=
+github.com/aliyun/aliyun-odps-go-sdk v0.3.4 h1:IwidtZJUmFjlwBRb/24LGsYn/PSeIAcV7r5Ia09dvkE=
+github.com/aliyun/aliyun-odps-go-sdk v0.3.4/go.mod h1:o2yLh138hfeBZThn+rorDVNhoaFsPwFSF+CgE69yaw8=
 github.com/aliyun/aliyun-odps-go-sdk v0.3.7 h1:mG+pmrQPLOwy5ycI54zJ9lcgpI7GHV8cPfX0iDM8WbM=
 github.com/aliyun/aliyun-odps-go-sdk v0.3.7/go.mod h1:o2yLh138hfeBZThn+rorDVNhoaFsPwFSF+CgE69yaw8=
 github.com/andres-erbsen/clock v0.0.0-20160526145045-9e14626cd129 h1:MzBOUgng9orim59UnfUTLRjMpd09C5uEVQ6RPGeCaVI=

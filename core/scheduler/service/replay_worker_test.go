@@ -770,7 +770,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			replayRepository.On("UpdateReplay", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything, mock.Anything).Return(nil).Once()
 			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
-			
+
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
 			defer alertManager.AssertExpectations(t)

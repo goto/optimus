@@ -40,6 +40,7 @@ func NewClient(svcAccount string) (*MaxComputeClient, error) {
 
 	aliAccount := account.NewAliyunAccount(cred.AccessID, cred.AccessKey)
 	odpsIns := odps.NewOdps(aliAccount, cred.Endpoint)
+	odpsIns.SetDefaultProjectName(cred.ProjectName)
 
 	return &MaxComputeClient{odpsIns}, nil
 }

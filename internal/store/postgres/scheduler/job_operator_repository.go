@@ -81,7 +81,6 @@ func (o *OperatorRunRepository) GetOperatorRun(ctx context.Context, name string,
 	getJobRunByID := "SELECT " + jobOperatorColumns + " FROM " + operatorTableName + " j where job_run_id = $1 and name = $2 order by created_at desc limit 1"
 	err = o.db.QueryRow(ctx, getJobRunByID, jobRunID, name).
 		Scan(&opRun.ID, &opRun.Name, &opRun.JobRunID, &opRun.Status, &opRun.StartTime, &opRun.EndTime)
-
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityJobRun, "no record for "+operatorType.String()+"/"+name+" for job_run ID: "+jobRunID.String())

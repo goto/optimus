@@ -63,7 +63,6 @@ func (*PagerDutyServiceImpl) SendAlert(ctx context.Context, evt Event) error {
 		Payload:    &payload,
 	}
 	_, err = pagerduty.ManageEventWithContext(ctx, e)
-
 	if err != nil {
 		return err
 	}

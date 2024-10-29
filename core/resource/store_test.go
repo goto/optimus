@@ -19,4 +19,9 @@ func TestDataStore(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, "bigquery", bq.String())
 	})
+	t.Run("converts a string to store when correct", func(t *testing.T) {
+		mc, err := resource.FromStringToStore("maxcompute")
+		assert.Nil(t, err)
+		assert.Equal(t, "maxcompute", mc.String())
+	})
 }

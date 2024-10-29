@@ -76,6 +76,14 @@ func TestMapHelper(t *testing.T) {
 			assert.Equal(t, []string{"b", "d", "f"}, list)
 		})
 	})
+	t.Run("ListToMap", func(t *testing.T) {
+		t.Run("returns the list of strings as map", func(t *testing.T) {
+			list := []string{"a", "b", "c", "d"}
+			mapping := utils.ListToMap(list)
+			assert.Len(t, mapping, 4)
+			assert.EqualValues(t, map[string]struct{}{"a": {}, "b": {}, "c": {}, "d": {}}, mapping)
+		})
+	})
 	t.Run("AppendToMap", func(t *testing.T) {
 		t.Run("appends data from string map", func(t *testing.T) {
 			orig := map[string]interface{}{

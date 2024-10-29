@@ -41,7 +41,7 @@ type templates map[string]*template.Template
 func NewTemplates() (templates, error) {
 	templates := map[string]*template.Template{}
 	re := regexp.MustCompile(`dag\.(\d.\d)\.py\.tmpl`)
-	err := fs.WalkDir(templateFS, ".", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(templateFS, ".", func(path string, d fs.DirEntry, _ error) error {
 		if d.IsDir() {
 			return nil
 		}

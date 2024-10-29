@@ -55,7 +55,7 @@ func TestSlack(t *testing.T) {
 	t.Run("should send message to user using email address successfully", func(t *testing.T) {
 		muxRouter := http.NewServeMux()
 		server := httptest.NewServer(muxRouter)
-		muxRouter.HandleFunc("/users.lookupByEmail", func(rw http.ResponseWriter, r *http.Request) {
+		muxRouter.HandleFunc("/users.lookupByEmail", func(rw http.ResponseWriter, _ *http.Request) {
 			rw.Header().Set("Content-Type", "application/json")
 			response, _ := json.Marshal(struct {
 				Ok   bool     `json:"ok"`
@@ -66,7 +66,7 @@ func TestSlack(t *testing.T) {
 			})
 			rw.Write(response)
 		})
-		muxRouter.HandleFunc("/chat.postMessage", func(rw http.ResponseWriter, r *http.Request) {
+		muxRouter.HandleFunc("/chat.postMessage", func(rw http.ResponseWriter, _ *http.Request) {
 			rw.Header().Set("Content-Type", "application/json")
 			response, _ := json.Marshal(struct {
 				SlackResponse api.SlackResponse
@@ -108,7 +108,7 @@ func TestSlack(t *testing.T) {
 	t.Run("should send message to user groups successfully", func(t *testing.T) {
 		muxRouter := http.NewServeMux()
 		server := httptest.NewServer(muxRouter)
-		muxRouter.HandleFunc("/usergroups.list", func(rw http.ResponseWriter, r *http.Request) {
+		muxRouter.HandleFunc("/usergroups.list", func(rw http.ResponseWriter, _ *http.Request) {
 			rw.Header().Set("Content-Type", "application/json")
 			response, _ := json.Marshal(struct {
 				Ok         bool            `json:"ok"`
@@ -121,7 +121,7 @@ func TestSlack(t *testing.T) {
 			})
 			rw.Write(response)
 		})
-		muxRouter.HandleFunc("/usergroups.users.list", func(rw http.ResponseWriter, r *http.Request) {
+		muxRouter.HandleFunc("/usergroups.users.list", func(rw http.ResponseWriter, _ *http.Request) {
 			rw.Header().Set("Content-Type", "application/json")
 			response, _ := json.Marshal(struct {
 				Ok    bool     `json:"ok"`
@@ -132,7 +132,7 @@ func TestSlack(t *testing.T) {
 			})
 			rw.Write(response)
 		})
-		muxRouter.HandleFunc("/chat.postMessage", func(rw http.ResponseWriter, r *http.Request) {
+		muxRouter.HandleFunc("/chat.postMessage", func(rw http.ResponseWriter, _ *http.Request) {
 			rw.Header().Set("Content-Type", "application/json")
 			response, _ := json.Marshal(struct {
 				SlackResponse api.SlackResponse

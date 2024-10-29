@@ -394,8 +394,6 @@ func TestMaxComputeStore(t *testing.T) {
 			urn, err := resource.NewURN("maxcompute", "table")
 			assert.NoError(t, err)
 
-			client.On("TableHandleFrom").Return(tableHandle).Maybe()
-
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.True(t, actualExist)
 			assert.ErrorContains(t, actualError, "invalid resource name: table")
@@ -420,8 +418,6 @@ func TestMaxComputeStore(t *testing.T) {
 			urn, err := resource.NewURN("maxcompute", "project.")
 			assert.NoError(t, err)
 
-			client.On("TableHandleFrom").Return(tableHandle).Maybe()
-
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.True(t, actualExist)
 			assert.ErrorContains(t, actualError, "invalid resource name: project.")
@@ -439,6 +435,7 @@ func TestMaxComputeStore(t *testing.T) {
 			defer clientProvider.AssertExpectations(t)
 
 			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Exists", mock.Anything).Return(true)
 			defer tableHandle.AssertExpectations(t)
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
@@ -447,7 +444,6 @@ func TestMaxComputeStore(t *testing.T) {
 			assert.NoError(t, err)
 
 			client.On("TableHandleFrom").Return(tableHandle)
-			tableHandle.On("Exists", mock.Anything).Return(true)
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.True(t, actualExist)
@@ -466,9 +462,11 @@ func TestMaxComputeStore(t *testing.T) {
 			defer clientProvider.AssertExpectations(t)
 
 			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Exists", mock.Anything).Return(false)
 			defer tableHandle.AssertExpectations(t)
 
 			viewHandle := new(mockTableResourceHandle)
+			viewHandle.On("Exists", mock.Anything).Return(false)
 			defer viewHandle.AssertExpectations(t)
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider)
@@ -477,9 +475,7 @@ func TestMaxComputeStore(t *testing.T) {
 			assert.NoError(t, err)
 
 			client.On("TableHandleFrom").Return(tableHandle)
-			tableHandle.On("Exists", mock.Anything).Return(false)
-			client.On("ViewHandleFrom").Return(viewHandle).Maybe()
-			viewHandle.On("Exists", mock.Anything).Return(false)
+			client.On("ViewHandleFrom").Return(viewHandle)
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.False(t, actualExist)

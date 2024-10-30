@@ -35,6 +35,7 @@ type SchedulerRunGetter interface {
 type ReplayRepository interface {
 	RegisterReplay(ctx context.Context, replay *scheduler.Replay, runs []*scheduler.JobRunStatus) (uuid.UUID, error)
 	UpdateReplay(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, runs []*scheduler.JobRunStatus, message string) error
+	UpdateReplayHeartbeat(ctx context.Context, replayID uuid.UUID) error
 	UpdateReplayRuns(ctx context.Context, replayID uuid.UUID, runs []*scheduler.JobRunStatus) error
 	UpdateReplayStatus(ctx context.Context, replayID uuid.UUID, state scheduler.ReplayState, message string) error
 	CancelReplayRequest(ctx context.Context, replayID uuid.UUID, message string) error

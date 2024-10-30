@@ -783,6 +783,11 @@ func (_m *ReplayRepository) AcquireReplayRequest(ctx context.Context, replayID u
 	return args.Error(0)
 }
 
+func (_m *ReplayRepository) UpdateReplayHeartbeat(ctx context.Context, replayID uuid.UUID) error {
+	args := _m.Called(ctx, replayID)
+	return args.Error(0)
+}
+
 // GetReplayJobConfig provides a mock function with given fields: ctx, jobTenant, jobName, scheduledAt
 func (_m *ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (map[string]string, error) {
 	ret := _m.Called(ctx, jobTenant, jobName, scheduledAt)

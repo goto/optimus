@@ -9,6 +9,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/plugin/upstream_identifier/parser"
 )
 
 type (
@@ -129,7 +130,7 @@ func NewBQUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, bqExtract
 
 	return &BQUpstreamIdentifier{
 		logger:         logger,
-		parserFunc:     parserFunc,
+		parserFunc:     parser.BQURNDecorator(parserFunc),
 		extractorFunc:  bqExtractorDecorator(logger, bqExtractorFunc),
 		evaluatorFuncs: sanitizedEvaluatorFuncs,
 	}, nil

@@ -35,7 +35,10 @@ func TestMaxComputeClient(t *testing.T) {
 			client, err := maxcompute.NewClient(testCredJSON)
 			assert.Nil(t, err)
 
-			tableHandle := client.TableHandleFrom()
+			projectSchema, err := maxcompute.ProjectSchemaFrom("proj", "schema")
+			assert.Nil(t, err)
+
+			tableHandle := client.TableHandleFrom(projectSchema)
 			assert.NotNil(t, tableHandle)
 		})
 	})
@@ -44,7 +47,10 @@ func TestMaxComputeClient(t *testing.T) {
 			client, err := maxcompute.NewClient(testCredJSON)
 			assert.Nil(t, err)
 
-			viewHandle := client.ViewHandleFrom()
+			projectSchema, err := maxcompute.ProjectSchemaFrom("proj", "schema")
+			assert.Nil(t, err)
+
+			viewHandle := client.ViewHandleFrom(projectSchema)
 			assert.NotNil(t, viewHandle)
 		})
 	})

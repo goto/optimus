@@ -12,11 +12,11 @@ import (
 )
 
 type ViewSQLExecutor interface {
-	ExecSQl(sql string) (*odps.Instance, error)
+	ExecSQl(sql string, hints ...map[string]string) (*odps.Instance, error)
 }
 
 type ViewTable interface {
-	BatchLoadTables(tableNames []string) ([]odps.Table, error)
+	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
 }
 
 type ViewHandle struct {
@@ -30,7 +30,12 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 		return err
 	}
 
-	view.Name, err = getComponentName(res)
+	projectSchema, viewName, err := getCompleteComponentName(res)
+	if err != nil {
+		return err
+	}
+
+	view.Name, err = resource.NameFrom(projectSchema.Schema + "." + viewName.String())
 	if err != nil {
 		return err
 	}
@@ -45,8 +50,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 		return errors.AddErrContext(err, EntityView, "failed to create sql task to create view "+res.FullName())
 	}
 
-	err = inst.WaitForSuccess()
-	if err != nil {
+	if err = inst.WaitForSuccess(); err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityView, "view already exists on maxcompute: "+res.FullName())
 		}
@@ -57,7 +61,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 }
 
 func (v ViewHandle) Update(res *resource.Resource) error {
-	viewName, err := getComponentName(res)
+	projectSchema, viewName, err := getCompleteComponentName(res)
 	if err != nil {
 		return err
 	}
@@ -71,7 +75,11 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-	view.Name = viewName
+
+	view.Name, err = resource.NameFrom(projectSchema.Schema + "." + viewName.String())
+	if err != nil {
+		return err
+	}
 
 	sql, err := ToViewSQL(view)
 	if err != nil {
@@ -83,8 +91,7 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 		return errors.AddErrContext(err, EntityView, "failed to create sql task to update view "+res.FullName())
 	}
 
-	err = inst.WaitForSuccess()
-	if err != nil {
+	if err = inst.WaitForSuccess(); err != nil {
 		return errors.InternalError(EntityView, "failed to update view "+res.FullName(), err)
 	}
 

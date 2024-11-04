@@ -13,6 +13,11 @@ import (
 
 type ViewSQLExecutor interface {
 	ExecSQl(sql string, hints ...map[string]string) (*odps.Instance, error)
+	CurrentSchemaName() string
+}
+
+type ViewSchema interface {
+	Create(schemaName string, createIfNotExists bool, comment string) error
 }
 
 type ViewTable interface {
@@ -21,6 +26,7 @@ type ViewTable interface {
 
 type ViewHandle struct {
 	viewSQLExecutor ViewSQLExecutor
+	viewSchema      ViewSchema
 	viewTable       ViewTable
 }
 
@@ -33,6 +39,10 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 	projectSchema, viewName, err := getCompleteComponentName(res)
 	if err != nil {
 		return err
+	}
+
+	if err := v.viewSchema.Create(v.viewSQLExecutor.CurrentSchemaName(), true, ""); err != nil {
+		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
 
 	view.Name, err = resource.NameFrom(projectSchema.Schema + "." + viewName.String())
@@ -130,6 +140,6 @@ func ToViewSQL(v *View) (string, error) {
 	return out.String(), nil
 }
 
-func NewViewHandle(viewSQLExecutor ViewSQLExecutor, view ViewTable) *ViewHandle {
-	return &ViewHandle{viewSQLExecutor: viewSQLExecutor, viewTable: view}
+func NewViewHandle(viewSQLExecutor ViewSQLExecutor, viewSchema ViewSchema, viewTable ViewTable) *ViewHandle {
+	return &ViewHandle{viewSQLExecutor: viewSQLExecutor, viewSchema: viewSchema, viewTable: viewTable}
 }

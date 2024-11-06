@@ -415,7 +415,7 @@
         "jobRuns": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/v1beta1JobRun"
+            "$ref": "#/definitions/v1beta1JobRunWithDetail"
           }
         }
       }
@@ -506,6 +506,26 @@
           "items": {
             "$ref": "#/definitions/v1beta1JobRun"
           }
+        }
+      }
+    },
+    "v1beta1JobRunWithDetail": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },

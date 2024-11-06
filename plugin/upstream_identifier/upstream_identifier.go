@@ -15,9 +15,11 @@ import (
 
 type (
 	// ParserFunc parses given raw and return list of resource urns
-	ParserFunc func(rawResource string) (resourceURNs []string)
+	ParserFunc func(rawResource string) (resources []string)
 	// EvalAssetFunc returns raw string from a given asset
 	EvalAssetFunc func(assets map[string]string) (rawResource string)
+	// ExtractorFunc extracts the ddl from the given resource urns
+	ExtractorFunc func(ctx context.Context, resources []string) (map[string]string, error)
 )
 
 type UpstreamIdentifierFactory struct {
@@ -46,11 +48,19 @@ func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context,
 }
 
 func (u *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(_ context.Context, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {
+	extract := func(ctx context.Context, resources []string) (map[string]string, error) {
+		mp := make(map[string]string)
+		for _, resource := range resources {
+			mp[resource] = ""
+		}
+		return mp, nil
+	}
+
 	evaluatorFuncs := make([]EvalAssetFunc, len(evaluators))
 	for i, evaluator := range evaluators {
 		evaluatorFuncs[i] = evaluator.Evaluate
 	}
-	return NewMaxcomputeUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, evaluatorFuncs...)
+	return NewMaxcomputeUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, extract, evaluatorFuncs...)
 }
 
 func NewUpstreamIdentifierFactory(logger log.Logger) (*UpstreamIdentifierFactory, error) {

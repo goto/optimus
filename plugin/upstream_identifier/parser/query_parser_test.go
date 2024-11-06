@@ -43,6 +43,13 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				},
 			},
 			{
+				Name:       "simple query with quotes in schema / dataset",
+				InputQuery: "select * from data-engineering.`testing`.table1",
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "table1"),
+				},
+			},
+			{
 				Name:           "simple query without project name",
 				InputQuery:     "select * from testing.table1",
 				ExpectedTables: []string{},

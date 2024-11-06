@@ -9,6 +9,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
 	"github.com/goto/optimus/plugin/upstream_identifier/parser"
 )
@@ -47,20 +48,22 @@ func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context,
 	return NewBQUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluatorFuncs...)
 }
 
-func (u *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(_ context.Context, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {
-	extract := func(ctx context.Context, resources []string) (map[string]string, error) {
-		mp := make(map[string]string)
-		for _, resource := range resources {
-			mp[resource] = ""
-		}
-		return mp, nil
+func (u *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(_ context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {
+	client, err := maxcompute.NewClient(svcAcc)
+	if err != nil {
+		return nil, err
+	}
+
+	e, err := extractor.NewMCExtractor(client, u.l)
+	if err != nil {
+		return nil, err
 	}
 
 	evaluatorFuncs := make([]EvalAssetFunc, len(evaluators))
 	for i, evaluator := range evaluators {
 		evaluatorFuncs[i] = evaluator.Evaluate
 	}
-	return NewMaxcomputeUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, extract, evaluatorFuncs...)
+	return NewMaxcomputeUpstreamIdentifier(u.l, parser.ParseTopLevelUpstreamsFromQuery, e.Extract, evaluatorFuncs...)
 }
 
 func NewUpstreamIdentifierFactory(logger log.Logger) (*UpstreamIdentifierFactory, error) {

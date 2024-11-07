@@ -64,7 +64,7 @@ func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, ass
 	// generate resource URNs
 	resourceURNs := []resource.URN{}
 	for _, r := range resources {
-		urn, err := resource.NewURN("maxcompute", r)
+		urn, err := resource.NewURN(resource.MaxCompute.String(), r)
 		if err != nil {
 			return nil, err
 		}

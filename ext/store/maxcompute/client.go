@@ -38,19 +38,24 @@ func NewClient(svcAccount string) (*MaxComputeClient, error) {
 
 	aliAccount := account.NewAliyunAccount(cred.AccessID, cred.AccessKey)
 	odpsIns := odps.NewOdps(aliAccount, cred.Endpoint)
-	odpsIns.SetDefaultProjectName(cred.ProjectName)
 
 	return &MaxComputeClient{odpsIns}, nil
 }
 
-func (c *MaxComputeClient) TableHandleFrom() TableResourceHandle {
+func (c *MaxComputeClient) TableHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
+	c.SetDefaultProjectName(projectSchema.Project)
+	c.SetCurrentSchemaName(projectSchema.Schema)
+	s := c.Schemas()
 	t := c.Tables()
-	return NewTableHandle(c, &t)
+	return NewTableHandle(c, s, t)
 }
 
-func (c *MaxComputeClient) ViewHandleFrom() TableResourceHandle {
+func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
+	c.SetDefaultProjectName(projectSchema.Project)
+	c.SetCurrentSchemaName(projectSchema.Schema)
+	s := c.Schemas()
 	t := c.Tables()
-	return NewViewHandle(c, &t)
+	return NewViewHandle(c, s, t)
 }
 
 func collectMaxComputeCredential(jsonData []byte) (*maxComputeCredentials, error) {

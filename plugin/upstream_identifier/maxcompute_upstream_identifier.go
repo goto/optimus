@@ -75,6 +75,7 @@ func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, ass
 
 func (g MaxcomputeUpstreamIdentifier) identifyResources(ctx context.Context, visited map[string]bool, query string) []string {
 	resources := g.parserFunc(query)
+	g.logger.Debug(fmt.Sprintf("resources from parsed query: %v", resources))
 	resourceToDDL, err := g.extractorFunc(ctx, resources)
 	if err != nil {
 		g.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
@@ -89,6 +90,7 @@ func (g MaxcomputeUpstreamIdentifier) identifyResources(ctx context.Context, vis
 		}
 
 		// mark the resource as visited
+		g.logger.Debug(fmt.Sprintf("check ddl for resource: %s", resource))
 		visited[resource] = true
 		ddl := resourceToDDL[resource]
 		if ddl == "" {
@@ -98,6 +100,7 @@ func (g MaxcomputeUpstreamIdentifier) identifyResources(ctx context.Context, vis
 		}
 
 		// otherwise, recursively identify the upstreams
+		g.logger.Debug(fmt.Sprintf("recursively identify upstreams for resource view: %s", resource))
 		actualResources = append(actualResources, g.identifyResources(ctx, visited, ddl)...)
 	}
 

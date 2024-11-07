@@ -59,7 +59,7 @@ func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableReso
 	return NewViewHandle(c, s, t)
 }
 
-func (c *MaxComputeClient) GetDDLView(ctx context.Context, table string) (string, error) {
+func (c *MaxComputeClient) GetDDLView(_ context.Context, table string) (string, error) {
 	t := c.Odps.Table(table)
 	if err := t.Load(); err != nil {
 		return "", errors.InternalError(store, "failed to load table", err)

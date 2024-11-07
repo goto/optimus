@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/salt/log"
+
+	"github.com/goto/optimus/internal/errors"
 )
 
 type ViewGetter interface {
@@ -37,12 +38,13 @@ func NewMCExtractor(client ViewGetter, l log.Logger) (*MCExtractor, error) {
 
 func (e MCExtractor) Extract(ctx context.Context, resourceURNs []string) (map[string]string, error) {
 	me := errors.NewMultiError("extract resourceURN to ddl errors")
-	urnToDDLAll := make(map[string]string)
+	urnToDDLAll := map[string]string{}
 
 	for _, resourceURN := range resourceURNs {
 		ddl, err := e.client.GetDDLView(ctx, resourceURN)
 		if err != nil {
 			me.Append(err)
+			continue
 		}
 		urnToDDLAll[resourceURN] = ddl
 	}

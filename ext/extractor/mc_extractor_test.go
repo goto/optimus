@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/goto/optimus/ext/extractor"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/goto/optimus/ext/extractor"
 )
 
 func TestMCExtractor(t *testing.T) {
@@ -30,9 +31,19 @@ func TestMCExtractor(t *testing.T) {
 
 		client.On("GetDDLView", mock.Anything, mock.Anything).Return("", errors.New("some error"))
 		me, _ := extractor.NewMCExtractor(client, log.NewNoop())
-		urnToDDL, err := me.Extract(context.Background(), []string{"table"})
-		assert.NoError(t, err)
+		urnToDDL, err := me.Extract(context.Background(), []string{"project.schema.table_view"})
+		assert.ErrorContains(t, err, "some error")
 		assert.Empty(t, urnToDDL)
+	})
+	t.Run("should return ddl if get ddl is success", func(t *testing.T) {
+		client := new(ViewGetter)
+		defer client.AssertExpectations(t)
+
+		client.On("GetDDLView", mock.Anything, mock.Anything).Return("select * from project.schema.table", nil)
+		me, _ := extractor.NewMCExtractor(client, log.NewNoop())
+		urnToDDL, err := me.Extract(context.Background(), []string{"project.schema.table_view"})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]string{"project.schema.table_view": "select * from project.schema.table"}, urnToDDL)
 	})
 }
 
@@ -74,7 +85,8 @@ func (_m *ViewGetter) GetDDLView(ctx context.Context, table string) (string, err
 func NewViewGetter(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *ViewGetter {
+},
+) *ViewGetter {
 	mock := &ViewGetter{}
 	mock.Mock.Test(t)
 

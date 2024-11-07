@@ -14,7 +14,7 @@ func TestNewMaxcomputeUpstreamIdentifier(t *testing.T) {
 	logger := log.NewNoop()
 	parserFunc := func(string) []string { return nil }
 	evaluatorFunc := func(map[string]string) string { return "" }
-	extractFunc := func(ctx context.Context, resources []string) (map[string]string, error) {
+	extractFunc := func(_ context.Context, resources []string) (map[string]string, error) {
 		mp := make(map[string]string)
 		for _, resource := range resources {
 			mp[resource] = ""
@@ -67,7 +67,7 @@ func TestMaxcomputeUpstreamIdentifier_IdentifyResources(t *testing.T) {
 	t.Run("return success", func(t *testing.T) {
 		parserFunc := func(string) []string { return []string{"project1.schema1.name1"} }
 		evaluatorFunc := func(map[string]string) string { return "./query.sql" }
-		extractFunc := func(ctx context.Context, resources []string) (map[string]string, error) {
+		extractFunc := func(_ context.Context, resources []string) (map[string]string, error) {
 			mp := make(map[string]string)
 			for _, resource := range resources {
 				mp[resource] = ""
@@ -85,7 +85,7 @@ func TestMaxcomputeUpstreamIdentifier_IdentifyResources(t *testing.T) {
 	t.Run("return success on view", func(t *testing.T) {
 		parserFunc := func(string) []string { return []string{"project1.schema1.name1"} }
 		evaluatorFunc := func(map[string]string) string { return "./query.sql" }
-		extractFunc := func(ctx context.Context, resources []string) (map[string]string, error) {
+		extractFunc := func(_ context.Context, resources []string) (map[string]string, error) {
 			mp := make(map[string]string)
 			for _, resource := range resources {
 				mp[resource] = resourceToDDL[resource]

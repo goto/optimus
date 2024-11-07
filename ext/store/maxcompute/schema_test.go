@@ -141,7 +141,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			SortBy: []maxcompute.SortColumn{{Name: "name", Order: "asc"}},
 		}
 
-		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, &builder)
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, builder)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "number of cluster buckets is needed for hash type clustering")
 	})
@@ -164,7 +164,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			Buckets: 5,
 		}
 
-		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, &builder)
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, builder)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, fmt.Sprintf("cluster column %s not found in normal column", invalidClusterColumn))
 	})
@@ -188,7 +188,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			Buckets: 5,
 		}
 
-		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, &builder)
+		err := schema.ToMaxComputeColumns(emptyPartitionColumnName, clusterColumns, builder)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, fmt.Sprintf("sort column %s not found in cluster column", invalidSortClusterColumn))
 	})
@@ -265,7 +265,7 @@ func TestSchemaToMaxComputeColumn(t *testing.T) {
 			Buckets: 5,
 		}
 
-		err := schema.ToMaxComputeColumns(partitionColumnName, clusterColumns, &builder)
+		err := schema.ToMaxComputeColumns(partitionColumnName, clusterColumns, builder)
 		assert.Nil(t, err)
 	})
 }

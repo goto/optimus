@@ -17,8 +17,6 @@ const (
 	store      = "MaxComputeStore"
 
 	maxcomputeID = "maxcompute"
-
-	TableNameSections = 3
 )
 
 type ResourceHandle interface {
@@ -32,8 +30,8 @@ type TableResourceHandle interface {
 }
 
 type Client interface {
-	TableHandleFrom() TableResourceHandle
-	ViewHandleFrom() TableResourceHandle
+	TableHandleFrom(projectSchema ProjectSchema) TableResourceHandle
+	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -63,13 +61,18 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		return err
 	}
 
+	projectSchema, _, err := getCompleteComponentName(res)
+	if err != nil {
+		return err
+	}
+
 	switch res.Kind() {
 	case KindTable:
-		handle := odpsClient.TableHandleFrom()
+		handle := odpsClient.TableHandleFrom(projectSchema)
 		return handle.Create(res)
 
 	case KindView:
-		handle := odpsClient.ViewHandleFrom()
+		handle := odpsClient.ViewHandleFrom(projectSchema)
 		return handle.Create(res)
 
 	default:
@@ -77,11 +80,11 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 	}
 }
 
-func (m MaxCompute) Update(ctx context.Context, resource *resource.Resource) error {
+func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "maxcompute/UpdateResource")
 	defer span.End()
 
-	account, err := m.secretProvider.GetSecret(spanCtx, resource.Tenant(), accountKey)
+	account, err := m.secretProvider.GetSecret(spanCtx, res.Tenant(), accountKey)
 	if err != nil {
 		return err
 	}
@@ -91,17 +94,22 @@ func (m MaxCompute) Update(ctx context.Context, resource *resource.Resource) err
 		return err
 	}
 
-	switch resource.Kind() {
+	projectSchema, _, err := getCompleteComponentName(res)
+	if err != nil {
+		return err
+	}
+
+	switch res.Kind() {
 	case KindTable:
-		handle := odpsClient.TableHandleFrom()
-		return handle.Update(resource)
+		handle := odpsClient.TableHandleFrom(projectSchema)
+		return handle.Update(res)
 
 	case KindView:
-		handle := odpsClient.ViewHandleFrom()
-		return handle.Update(resource)
+		handle := odpsClient.ViewHandleFrom(projectSchema)
+		return handle.Update(res)
 
 	default:
-		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+resource.Kind())
+		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
 }
 
@@ -164,7 +172,12 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		return false, err
 	}
 
-	kindToHandleFn := map[string]func() TableResourceHandle{
+	projectSchema, err := ProjectSchemaFor(name)
+	if err != nil {
+		return false, err
+	}
+
+	kindToHandleFn := map[string]func(projectSchema ProjectSchema) TableResourceHandle{
 		KindTable: client.TableHandleFrom,
 		KindView:  client.ViewHandleFrom,
 	}
@@ -175,7 +188,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			return true, err
 		}
 
-		if resourceHandleFn().Exists(resourceName) {
+		if resourceHandleFn(projectSchema).Exists(resourceName) {
 			return true, nil
 		}
 	}

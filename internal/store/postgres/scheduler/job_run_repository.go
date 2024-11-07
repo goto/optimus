@@ -127,8 +127,7 @@ func (j *JobRunRepository) GetRunsByTimeRange(ctx context.Context, project tenan
 			&jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				errMsg := fmt.Sprintf("no record for job: %s, scheduled between : %s -> %s, %s", jobName, since, until, stateClause)
-				return nil, errors.NotFound(scheduler.EntityJobRun, errMsg)
+				return []*scheduler.JobRun{}, nil
 			}
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting run", err)
 		}

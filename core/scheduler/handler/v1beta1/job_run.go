@@ -115,13 +115,17 @@ func (h JobRunHandler) GetJobRuns(ctx context.Context, req *pb.GetJobRunsRequest
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
-	var runs []*pb.JobRun
+	var runs []*pb.JobRunWithDetail
 	for _, run := range jobRuns {
-		ts := timestamppb.New(run.ScheduledAt)
-		runs = append(runs, &pb.JobRun{
+		jobRunWithDetail := pb.JobRunWithDetail{
 			State:       run.State.String(),
-			ScheduledAt: ts,
-		})
+			ScheduledAt: timestamppb.New(run.ScheduledAt),
+			StartTime:   timestamppb.New(run.StartTime),
+		}
+		if run.EndTime != nil {
+			jobRunWithDetail.EndTime = timestamppb.New(*run.EndTime)
+		}
+		runs = append(runs, &jobRunWithDetail)
 	}
 	return &pb.GetJobRunsResponse{JobRuns: runs}, nil
 }

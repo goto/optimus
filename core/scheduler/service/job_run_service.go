@@ -165,6 +165,9 @@ func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tena
 
 	jobRun, err := s.repo.GetLatestRun(ctx, projectName, jobName, runState)
 	if err != nil {
+		if errors.IsErrorType(err, errors.ErrNotFound) {
+			return []*scheduler.JobRun{}, nil
+		}
 		return nil, err
 	}
 	return []*scheduler.JobRun{jobRun}, nil

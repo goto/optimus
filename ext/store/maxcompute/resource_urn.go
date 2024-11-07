@@ -10,6 +10,14 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
+const (
+	EntityProject = "project"
+	EntitySchema  = "schema"
+
+	ProjectSchemaSections = 2
+	TableNameSections     = 3
+)
+
 type ResourceURN struct {
 	Project string `mapstructure:"project"`
 	Schema  string `mapstructure:"database"`
@@ -86,6 +94,34 @@ type ProjectSchema struct {
 	Schema  string
 }
 
+func ProjectSchemaFrom(project, schemaName string) (ProjectSchema, error) {
+	if project == "" {
+		return ProjectSchema{}, errors.InvalidArgument(EntityProject, "maxcompute project name is empty")
+	}
+
+	if schemaName == "" {
+		return ProjectSchema{}, errors.InvalidArgument(EntitySchema, "maxcompute schema name is empty")
+	}
+
+	return ProjectSchema{
+		Project: project,
+		Schema:  schemaName,
+	}, nil
+}
+
+func (ps ProjectSchema) FullName() string {
+	return ps.Project + "." + ps.Schema
+}
+
+func ProjectSchemaFor(name resource.Name) (ProjectSchema, error) {
+	parts := strings.Split(name.String(), ".")
+	if len(parts) < ProjectSchemaSections {
+		return ProjectSchema{}, errors.InvalidArgument(EntitySchema, "invalid schema name: "+name.String())
+	}
+
+	return ProjectSchemaFrom(parts[0], parts[1])
+}
+
 type ResourceURNs []ResourceURN
 
 func (n ResourceURNs) GroupByProjectschema() map[ProjectSchema][]string {
@@ -116,23 +152,48 @@ func URNFor(res *resource.Resource) (resource.URN, error) {
 func getURNComponent(res *resource.Resource) (ResourceURN, error) {
 	var spec ResourceURN
 	if err := mapstructure.Decode(res.Spec(), &spec); err != nil {
-		return spec, err
+		msg := fmt.Sprintf("%s: not able to decode spec for %s", err, res.FullName())
+		return spec, errors.InvalidArgument(resource.EntityResource, msg)
 	}
 
 	return spec, nil
 }
 
-func getComponentName(res *resource.Resource) (resource.Name, error) {
-	component, err := getURNComponent(res)
-	if err != nil {
-		return "", err
+func getCompleteComponentName(res *resource.Resource) (ProjectSchema, resource.Name, error) {
+	if res.Version() == resource.ResourceSpecV2 {
+		mcURN, err := getURNComponent(res)
+		if err != nil {
+			return ProjectSchema{}, "", err
+		}
+
+		projectSchema, err := ProjectSchemaFrom(mcURN.Project, mcURN.Schema)
+		if err != nil {
+			return ProjectSchema{}, "", err
+		}
+
+		return projectSchema, resource.Name(mcURN.Name), nil
 	}
-	return resource.Name(component.Name), nil
+
+	projectSchema, err := ProjectSchemaFor(res.Name())
+	if err != nil {
+		return ProjectSchema{}, "", err
+	}
+
+	resourceName, err := resourceNameFor(res.Name())
+	if err != nil {
+		return ProjectSchema{}, "", err
+	}
+
+	return projectSchema, resource.Name(resourceName), nil
 }
 
 func resourceNameFor(name resource.Name) (string, error) {
 	parts := strings.Split(name.String(), ".")
 	if len(parts) < TableNameSections {
+		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
+	}
+
+	if parts[2] == "" {
 		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
 	}
 

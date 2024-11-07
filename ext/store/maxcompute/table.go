@@ -20,15 +20,21 @@ type ColumnRecord struct {
 
 type McSQLExecutor interface {
 	ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error)
+	CurrentSchemaName() string
+}
+
+type McSchema interface {
+	Create(schemaName string, createIfNotExists bool, comment string) error
 }
 
 type McTable interface {
 	Create(schema tableschema.TableSchema, createIfNotExists bool, hints, alias map[string]string) error
-	BatchLoadTables(tableNames []string) ([]odps.Table, error)
+	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
 }
 
 type TableHandle struct {
 	mcSQLExecutor McSQLExecutor
+	mcSchema      McSchema
 	mcTable       McTable
 }
 
@@ -37,18 +43,22 @@ func (t TableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-	name, err := getComponentName(res)
+
+	_, table.Name, err = getCompleteComponentName(res)
 	if err != nil {
 		return err
 	}
-	table.Name = name
 
-	schema, err := buildTableSchema(table)
+	if err := t.mcSchema.Create(t.mcSQLExecutor.CurrentSchemaName(), true, ""); err != nil {
+		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
+	}
+
+	tableSchema, err := buildTableSchema(table)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+res.FullName())
 	}
 
-	err = t.mcTable.Create(schema, false, table.Hints, nil)
+	err = t.mcTable.Create(tableSchema, false, table.Hints, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityTable, "table already exists on maxcompute: "+res.FullName())
@@ -59,7 +69,7 @@ func (t TableHandle) Create(res *resource.Resource) error {
 }
 
 func (t TableHandle) Update(res *resource.Resource) error {
-	tableName, err := getComponentName(res)
+	projectSchema, tableName, err := getCompleteComponentName(res)
 	if err != nil {
 		return err
 	}
@@ -68,11 +78,7 @@ func (t TableHandle) Update(res *resource.Resource) error {
 	if err != nil {
 		return errors.InternalError(EntityTable, "error while get table on maxcompute", err)
 	}
-
-	existingSchema, err := existing[0].GetSchema()
-	if err != nil {
-		return errors.AddErrContext(err, EntityTable, "failed to get old table schema to update for "+res.FullName())
-	}
+	existingSchema := existing[0].Schema()
 
 	table, err := ConvertSpecTo[Table](res)
 	if err != nil {
@@ -84,12 +90,12 @@ func (t TableHandle) Update(res *resource.Resource) error {
 	}
 	table.Hints["odps.sql.schema.evolution.json.enable"] = "true"
 
-	schema, err := buildTableSchema(table)
+	tableSchema, err := buildTableSchema(table)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to update for "+res.FullName())
 	}
 
-	sqlTasks, err := generateUpdateQuery(schema, *existingSchema)
+	sqlTasks, err := generateUpdateQuery(tableSchema, existingSchema, projectSchema.Schema)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "invalid schema for table "+res.FullName())
 	}
@@ -100,8 +106,7 @@ func (t TableHandle) Update(res *resource.Resource) error {
 			return errors.AddErrContext(err, EntityTable, "failed to create sql task to update for "+res.FullName())
 		}
 
-		err = ins.WaitForSuccess()
-		if err != nil {
+		if err = ins.WaitForSuccess(); err != nil {
 			return errors.InternalError(EntityTable, "error while execute sql query on maxcompute", err)
 		}
 	}
@@ -121,7 +126,7 @@ func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
 		Comment(t.Description).
 		Lifecycle(t.Lifecycle)
 
-	err := populateColumns(t, &builder)
+	err := populateColumns(t, builder)
 	if err != nil {
 		return tableschema.TableSchema{}, err
 	}
@@ -138,20 +143,20 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 	return t.Schema.ToMaxComputeColumns(partitionColNames, t.Cluster, schemaBuilder)
 }
 
-func generateUpdateQuery(incoming, existing tableschema.TableSchema) ([]string, error) {
+func generateUpdateQuery(incoming, existing tableschema.TableSchema, schemaName string) ([]string, error) {
 	var sqlTasks []string
 	if incoming.Comment != existing.Comment {
-		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s set comment '%s';", existing.TableName, incoming.Comment))
+		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set comment '%s';", schemaName, existing.TableName, incoming.Comment))
 	}
 
 	if incoming.Lifecycle != existing.Lifecycle {
-		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s set lifecycle %d;", existing.TableName, incoming.Lifecycle))
+		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set lifecycle %d;", schemaName, existing.TableName, incoming.Lifecycle))
 	}
 
 	_, incomingFlattenSchema := flattenSchema(incoming, false)
 	existingFlattenSchema, _ := flattenSchema(existing, true)
 
-	if err := getNormalColumnDifferences(existing.TableName, incomingFlattenSchema, existingFlattenSchema, &sqlTasks); err != nil {
+	if err := getNormalColumnDifferences(existing.TableName, schemaName, incomingFlattenSchema, existingFlattenSchema, &sqlTasks); err != nil {
 		return []string{}, err
 	}
 
@@ -228,7 +233,7 @@ func specifyColumnStructure(parent, columnName string, isArrayStruct bool) strin
 	return fmt.Sprintf("%s.%s", parent, columnName)
 }
 
-func getNormalColumnDifferences(tableName string, incoming []ColumnRecord, existing map[string]tableschema.Column, sqlTasks *[]string) error {
+func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnRecord, existing map[string]tableschema.Column, sqlTasks *[]string) error {
 	var columnAddition []string
 	for _, incomingColumnRecord := range incoming {
 		columnFound, ok := existing[incomingColumnRecord.columnStructure]
@@ -250,7 +255,7 @@ func getNormalColumnDifferences(tableName string, incoming []ColumnRecord, exist
 		if columnFound.IsNullable && !incomingColumnRecord.columnValue.IsNullable {
 			return fmt.Errorf("unable to modify column mode from nullable to required")
 		} else if !columnFound.IsNullable && incomingColumnRecord.columnValue.IsNullable {
-			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s change column %s null;", tableName, columnFound.Name))
+			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s null;", schemaName, tableName, columnFound.Name))
 		}
 
 		if columnFound.Type.ID() != incomingColumnRecord.columnValue.Type.ID() {
@@ -258,8 +263,8 @@ func getNormalColumnDifferences(tableName string, incoming []ColumnRecord, exist
 		}
 
 		if incomingColumnRecord.columnValue.Comment != columnFound.Comment {
-			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s change column %s %s %s comment '%s';",
-				tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, incomingColumnRecord.columnValue.Comment))
+			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment '%s';",
+				schemaName, tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, incomingColumnRecord.columnValue.Comment))
 		}
 		delete(existing, incomingColumnRecord.columnStructure)
 	}
@@ -272,7 +277,7 @@ func getNormalColumnDifferences(tableName string, incoming []ColumnRecord, exist
 
 	if len(columnAddition) > 0 {
 		for _, segment := range columnAddition {
-			addColumnQuery := fmt.Sprintf("alter table %s add column ", tableName) + segment + ";"
+			addColumnQuery := fmt.Sprintf("alter table %s.%s add column ", schemaName, tableName) + segment + ";"
 			*sqlTasks = append(*sqlTasks, addColumnQuery)
 		}
 	}
@@ -280,6 +285,6 @@ func getNormalColumnDifferences(tableName string, incoming []ColumnRecord, exist
 	return nil
 }
 
-func NewTableHandle(mcSQLExecutor McSQLExecutor, mc McTable) *TableHandle {
-	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcTable: mc}
+func NewTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcTable McTable) *TableHandle {
+	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcTable: mcTable}
 }

@@ -310,7 +310,7 @@ func toAlerts(notifiers []*pb.JobSpecification_Behavior_Notifiers) ([]*job.Alert
 		if err != nil {
 			return nil, err
 		}
-		alertConfig, err := job.NewAlertSpec(alertOn, notify.Channels, config)
+		alertConfig, err := job.NewAlertSpec(alertOn, notify.Channels, config, notify.GetSeverity())
 		if err != nil {
 			return nil, err
 		}
@@ -350,6 +350,7 @@ func fromAlerts(jobAlerts []*job.AlertSpec) []*pb.JobSpecification_Behavior_Noti
 			On:       pb.JobEvent_Type(pb.JobEvent_Type_value[utils.ToEnumProto(alert.On(), "type")]),
 			Channels: alert.Channels(),
 			Config:   alert.Config(),
+			Severity: alert.Severity(),
 		})
 	}
 	return notifiers

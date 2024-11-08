@@ -400,7 +400,7 @@ def get_run_type(context):
 def job_success_event(context):
     try:
         meta = {
-            "event_type": "TYPE_JOB_SUCCESS",
+            "event_type": "TYPE_SUCCESS",
             "status": "success"
         }
         result_for_monitoring = get_result_for_monitoring_from_xcom(context)

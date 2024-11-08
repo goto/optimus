@@ -37,7 +37,7 @@ func TestEntitySpec(t *testing.T) {
 	httpUpstreamHeader := map[string]string{"header-key": "sample-header-val"}
 	httpUpstream, _ := job.NewSpecHTTPUpstreamBuilder("sample-name", "sample-url").WithParams(httpUpstreamConfig).WithHeaders(httpUpstreamHeader).Build()
 	specUpstream, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"job-d"}).WithSpecHTTPUpstream([]*job.SpecHTTPUpstream{httpUpstream}).Build()
-	alert, _ := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig)
+	alert, _ := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig, "CRITICAL")
 	assetMap := map[string]string{"key": "value"}
 	asset, _ := job.AssetFrom(assetMap)
 	resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi")

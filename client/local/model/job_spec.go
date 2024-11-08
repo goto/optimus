@@ -51,6 +51,7 @@ type JobSpecBehaviorNotifier struct {
 	On       string            `yaml:"on"`
 	Config   map[string]string `yaml:"config"`
 	Channels []string          `yaml:"channels"`
+	Severity string            `yaml:"severity"`
 }
 
 type WebhookEndpoint struct {
@@ -215,6 +216,7 @@ func (j *JobSpec) getProtoJobSpecBehavior() *pb.JobSpecification_Behavior {
 				On:       pb.JobEvent_Type(pb.JobEvent_Type_value[utils.ToEnumProto(notify.On, "type")]),
 				Channels: notify.Channels,
 				Config:   notify.Config,
+				Severity: notify.Severity,
 			}
 		}
 	}

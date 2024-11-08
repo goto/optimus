@@ -293,7 +293,7 @@ func (d *DummyJobBuilder) Build(tnnt tenant.Tenant) *job.Job {
 	}
 	hooks := []*job.Hook{hook}
 
-	alert, err := job.NewAlertSpec(d.alertName, d.alertChannelNames, d.alertConfig)
+	alert, err := job.NewAlertSpec(d.alertName, d.alertChannelNames, d.alertConfig, "")
 	if err != nil {
 		panic(err)
 	}

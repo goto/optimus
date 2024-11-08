@@ -59,7 +59,7 @@ func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType strin
 		alertPayload.Labels["team"] = jobDetails.Job.Tenant.NamespaceName().String()
 		alertPayload.Labels["severity"] = severity
 		if severity == CriticalSeverity {
-			alertPayload.Labels["environment"] = "prod"
+			alertPayload.Labels["environment"] = "production"
 		}
 	}
 }

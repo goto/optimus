@@ -418,30 +418,6 @@ func (ReplayRepository) getReplayRequest(ctx context.Context, tx pgx.Tx, replay 
 	return rr, nil
 }
 
-func (r ReplayRepository) GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error) {
-	rr, err := r.getReplayRequestByID(ctx, replayID)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, err
-		}
-		return nil, errors.NotFound(job.EntityJob, fmt.Sprintf("no replay found for replay ID %s", replayID.String()))
-	}
-
-	replayTenant, err := tenant.NewTenant(rr.ProjectName, rr.NamespaceName)
-	if err != nil {
-		return nil, err
-	}
-	replayConfig := scheduler.ReplayConfig{
-		StartTime:   rr.StartTime,
-		EndTime:     rr.EndTime,
-		JobConfig:   rr.JobConfig,
-		Parallel:    rr.Parallel,
-		Description: rr.Description,
-	}
-	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message)
-	return replay, nil
-}
-
 func (r ReplayRepository) getReplayRequestByID(ctx context.Context, replayID uuid.UUID) (replayRequest, error) {
 	var rr replayRequest
 	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE id=$1`

@@ -195,6 +195,7 @@ type Alert struct {
 	Channels []string
 	Config   map[string]string
 	Severity string
+	Team     string
 }
 
 type WebhookEndPoint struct {

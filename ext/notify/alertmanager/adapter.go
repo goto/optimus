@@ -22,9 +22,10 @@ const (
 
 	ReplayLifeCycle ReplayEventType = "replay-lifecycle"
 
-	DefaultSeverity  = "INFO"
+	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"
 	CriticalSeverity = "CRITICAL"
+	DefaultSeverity  = WarningSeverity
 )
 
 type ReplayEventType string
@@ -39,7 +40,7 @@ func (a *AlertManager) getJobConsoleLink(project, job string) string {
 
 func getSeverity(severity string) string {
 	switch strings.ToUpper(severity) {
-	case WarningSeverity, CriticalSeverity:
+	case InfoSeverity, CriticalSeverity:
 		return strings.ToUpper(severity)
 	default:
 		return DefaultSeverity
@@ -47,19 +48,20 @@ func getSeverity(severity string) string {
 }
 
 func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType string, alertPayload *AlertPayload) {
-	var notifyOwner bool
 	var severity string
 	for _, notify := range jobDetails.Alerts {
 		if strings.EqualFold(eventType, notify.On.String()) {
-			notifyOwner = true
 			severity = getSeverity(notify.Severity)
-		}
-	}
-	if notifyOwner {
-		alertPayload.Labels["team"] = jobDetails.Job.Tenant.NamespaceName().String()
-		alertPayload.Labels["severity"] = severity
-		if severity == CriticalSeverity {
-			alertPayload.Labels["environment"] = "production"
+			if len(notify.Team) > 0 {
+				alertPayload.Labels["team"] = notify.Team
+			} else {
+				alertPayload.Labels["team"] = jobDetails.Job.Tenant.NamespaceName().String()
+			}
+			alertPayload.Labels["severity"] = severity
+			if severity == CriticalSeverity {
+				alertPayload.Labels["environment"] = "production"
+			}
+			return
 		}
 	}
 }

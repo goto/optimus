@@ -97,6 +97,7 @@ type Alert struct {
 	Config   map[string]string
 	Channels []string
 	Severity string
+	Team     string
 }
 
 type WebhookEndpoint struct {
@@ -287,6 +288,7 @@ func toStorageAlerts(alertSpecs []*job.AlertSpec) ([]byte, error) {
 			Config:   alertSpec.Config(),
 			Channels: alertSpec.Channels(),
 			Severity: alertSpec.Severity(),
+			Team:     alertSpec.Team(),
 		})
 	}
 	return json.Marshal(alerts)
@@ -643,7 +645,7 @@ func fromStorageAlerts(raw []byte) ([]*job.AlertSpec, error) {
 		if err != nil {
 			return nil, err
 		}
-		jobAlert, err := job.NewAlertSpec(alert.On, alert.Channels, config, alert.Severity)
+		jobAlert, err := job.NewAlertSpec(alert.On, alert.Channels, config, alert.Severity, alert.Team)
 		if err != nil {
 			return nil, err
 		}

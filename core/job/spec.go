@@ -549,6 +549,7 @@ type AlertSpec struct {
 	channels []string
 	config   Config
 	severity string
+	team     string
 }
 
 type WebhookEndPoint struct {
@@ -576,7 +577,7 @@ func getSeverity(severity string) string {
 	}
 }
 
-func NewAlertSpec(on string, channels []string, config Config, severity string) (*AlertSpec, error) {
+func NewAlertSpec(on string, channels []string, config Config, severity, team string) (*AlertSpec, error) {
 	if err := validateMap(config); err != nil {
 		return nil, err
 	}
@@ -585,6 +586,7 @@ func NewAlertSpec(on string, channels []string, config Config, severity string) 
 		channels: channels,
 		config:   config,
 		severity: getSeverity(severity),
+		team:     team,
 	}, nil
 }
 
@@ -602,6 +604,10 @@ func (a AlertSpec) Config() Config {
 
 func (a AlertSpec) Severity() string {
 	return a.severity
+}
+
+func (a AlertSpec) Team() string {
+	return a.team
 }
 
 // TODO: reconsider whether we still need it or not

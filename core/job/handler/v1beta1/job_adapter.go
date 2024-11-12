@@ -310,7 +310,7 @@ func toAlerts(notifiers []*pb.JobSpecification_Behavior_Notifiers) ([]*job.Alert
 		if err != nil {
 			return nil, err
 		}
-		alertConfig, err := job.NewAlertSpec(alertOn, notify.Channels, config, notify.GetSeverity())
+		alertConfig, err := job.NewAlertSpec(alertOn, notify.Channels, config, notify.GetSeverity(), notify.GetTeam())
 		if err != nil {
 			return nil, err
 		}

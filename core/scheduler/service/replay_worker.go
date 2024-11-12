@@ -191,9 +191,10 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 			return err
 		}
 
-		// update runs status
-		if len(updatedRuns) > 0 {
-			if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), updatedRuns); err != nil {
+		// store updated runs
+		runsToStore := updatedRuns.GetOnlyDifferedRuns(replayWithRun.Runs)
+		if len(runsToStore) > 0 {
+			if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), runsToStore); err != nil {
 				w.logger.Error("[ReplayID: %s] unable to update replay runs: %s", replayWithRun.Replay.ID(), err)
 				return err
 			}

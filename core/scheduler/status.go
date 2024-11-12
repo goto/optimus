@@ -243,14 +243,18 @@ func (j JobRunStatusList) IsAnyFailure() bool {
 
 func (j JobRunStatusList) GetOnlyDifferedRuns(runsComparator []*JobRunStatus) JobRunStatusList {
 	var differedRuns []*JobRunStatus
-	comparatorMap := j.ToRunStatusMap()
-	for _, storedRun := range runsComparator {
-		if comparatorMap[storedRun.ScheduledAt] != storedRun.State {
-			runToUpdate := &JobRunStatus{
-				ScheduledAt: storedRun.ScheduledAt,
-				State:       comparatorMap[storedRun.ScheduledAt],
+	runMap := j.ToRunStatusMap()
+	for _, comparatorRun := range runsComparator {
+		runState, ok := runMap[comparatorRun.ScheduledAt.UTC()]
+		if !ok {
+			continue
+		}
+		if runState != comparatorRun.State {
+			differedRun := &JobRunStatus{
+				ScheduledAt: comparatorRun.ScheduledAt,
+				State:       runState,
 			}
-			differedRuns = append(differedRuns, runToUpdate)
+			differedRuns = append(differedRuns, differedRun)
 		}
 	}
 	return differedRuns

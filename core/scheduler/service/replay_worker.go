@@ -122,6 +122,15 @@ func (w *ReplayWorker) FetchAndSyncStatus(ctx context.Context, replayWithRun *sc
 	return syncStatus(replayWithRun.Runs, incomingRuns), nil
 }
 
+func (w *ReplayWorker) isReplayCanceled(ctx context.Context, replayID uuid.UUID) (bool, error) {
+	replayReq, err := w.replayRepo.GetReplayRequestByID(ctx, replayID)
+	if err != nil {
+		w.logger.Error("[ReplayID: %s] unable to get existing runs, err: %s", replayID.String(), err.Error())
+		return false, err
+	}
+	return replayReq.State() == scheduler.ReplayStateCancelled, nil
+}
+
 func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUID, jobCron *cron.ScheduleSpec) error {
 	executionLoopCount := 0
 	for {
@@ -184,6 +193,16 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 		// check if replay request is on termination state
 		if syncedRunStatus.IsAllTerminated() {
 			return w.finishReplay(ctx, replayWithRun, syncedRunStatus)
+		}
+
+		// TODO: this is a temporary solution. replay worker should have been killed when cancelled
+		canceled, err := w.isReplayCanceled(ctx, replayID)
+		if err != nil {
+			return err
+		}
+		if canceled {
+			w.logger.Info("[ReplayID: %s] replay is externally canceled", replayID.String())
+			return nil
 		}
 
 		updatedRuns, err := w.continueExecution(ctx, syncedRunStatus, replayWithRun, jobCron)

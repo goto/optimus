@@ -1,11 +1,13 @@
 package maxcompute
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
 
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -56,6 +58,21 @@ func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableReso
 	s := c.Schemas()
 	t := c.Tables()
 	return NewViewHandle(c, s, t)
+}
+
+func (c *MaxComputeClient) GetDDLView(_ context.Context, table string) (string, error) {
+	resourceURN, err := NewResourceURNFromResourceName(table)
+	if err != nil {
+		return "", errors.InvalidArgument(resource.EntityResource, err.Error())
+	}
+
+	t := odps.NewTable(c.Odps, resourceURN.Project, resourceURN.Schema, resourceURN.Name)
+	_ = t.Load() // ignored error, there's a bug in maxcompute sdk that returns error even if the ddl table is loaded
+
+	if t.Schema().IsVirtualView {
+		return t.Schema().ViewText, nil
+	}
+	return "", nil
 }
 
 func collectMaxComputeCredential(jsonData []byte) (*maxComputeCredentials, error) {

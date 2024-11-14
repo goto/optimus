@@ -542,14 +542,14 @@ func (_m *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context
 	return r0, r1
 }
 
-// GetMaxcomputeUpstreamIdentifier provides a mock function with given fields: ctx, evaluators
-func (_m *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(ctx context.Context, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error) {
+// GetMaxcomputeUpstreamIdentifier provides a mock function with given fields: ctx, svcAcc, evaluators
+func (_m *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error) {
 	_va := make([]interface{}, len(evaluators))
 	for _i := range evaluators {
 		_va[_i] = evaluators[_i]
 	}
 	var _ca []interface{}
-	_ca = append(_ca, ctx)
+	_ca = append(_ca, ctx, svcAcc)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
@@ -559,19 +559,19 @@ func (_m *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(ctx context
 
 	var r0 upstreamidentifier.UpstreamIdentifier
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)); ok {
-		return rf(ctx, evaluators...)
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)); ok {
+		return rf(ctx, svcAcc, evaluators...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, ...evaluator.Evaluator) upstreamidentifier.UpstreamIdentifier); ok {
-		r0 = rf(ctx, evaluators...)
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...evaluator.Evaluator) upstreamidentifier.UpstreamIdentifier); ok {
+		r0 = rf(ctx, svcAcc, evaluators...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(upstreamidentifier.UpstreamIdentifier)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, ...evaluator.Evaluator) error); ok {
-		r1 = rf(ctx, evaluators...)
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...evaluator.Evaluator) error); ok {
+		r1 = rf(ctx, svcAcc, evaluators...)
 	} else {
 		r1 = ret.Error(1)
 	}

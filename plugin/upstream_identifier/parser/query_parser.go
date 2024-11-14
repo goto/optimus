@@ -3,37 +3,34 @@ package parser
 import (
 	"regexp"
 	"strings"
+
+	"github.com/goto/optimus/plugin/upstream_identifier/processor"
 )
 
-var (
-	topLevelUpstreamsPattern = regexp.MustCompile(
-		"(?i)(?:FROM)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-\\*?]+`?)`?" + //nolint:gocritic
-			"|" +
-			"(?i)(?:JOIN)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" +
-			"|" +
-			"(?i)(?:WITH)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?\\s+(?:AS)" +
-			"|" +
-			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
-			"(?i)(?:MERGE)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
-			"|" +
-			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
-			"(?i)(?:INSERT)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
-			"|" +
-			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
-			"(?i)(?:DELETE)\\s*(?:FROM)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
-			"|" +
-			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
-			"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
-			"|" +
-			"(?i)(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?\\s*(?:AS)?")
-
-	singleLineCommentsPattern = regexp.MustCompile(`(--.*)`)
-	multiLineCommentsPattern  = regexp.MustCompile(`(((/\*)+?[\w\W]*?(\*/)+))`)
-	specialCommentPattern     = regexp.MustCompile(`(\/\*\s*(@[a-zA-Z0-9_-]+)\s*\*\/)`)
+var topLevelUpstreamsPattern = regexp.MustCompile(
+	"(?i)(?:FROM)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-\\*?]+`?)`?" + //nolint:gocritic
+		"|" +
+		"(?i)(?:JOIN)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" +
+		"|" +
+		"(?i)(?:WITH)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?\\s+(?:AS)" +
+		"|" +
+		// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
+		"(?i)(?:MERGE)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
+		"|" +
+		// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+		"(?i)(?:INSERT)\\s*(?:INTO)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
+		"|" +
+		// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
+		"(?i)(?:DELETE)\\s*(?:FROM)?\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
+		"|" +
+		// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
+		"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
+		"|" +
+		"(?i)(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?\\s*(?:AS)?",
 )
 
 func ParseTopLevelUpstreamsFromQuery(query string) []string {
-	cleanedQuery := cleanQueryFromComment(query)
+	cleanedQuery := processor.CleanQueryFromComment(query)
 
 	tableFound := map[string]bool{}
 	pseudoTable := map[string]bool{}
@@ -90,20 +87,6 @@ func ParseTopLevelUpstreamsFromQuery(query string) []string {
 	}
 
 	return output
-}
-
-func cleanQueryFromComment(query string) string {
-	cleanedQuery := singleLineCommentsPattern.ReplaceAllString(query, "")
-
-	matches := multiLineCommentsPattern.FindAllString(query, -1)
-	for _, match := range matches {
-		if specialCommentPattern.MatchString(match) {
-			continue
-		}
-		cleanedQuery = strings.ReplaceAll(cleanedQuery, match, "")
-	}
-
-	return cleanedQuery
 }
 
 func cleanTableFromTickQuote(tableName string) string {

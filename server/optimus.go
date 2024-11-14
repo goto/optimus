@@ -350,15 +350,16 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames, alertsHandler,
 	)
 
-	newJobRunService := schedulerService.NewJobRunService(
-		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
-		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
-	)
-
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
+
+	// Job run service
+	newJobRunService := schedulerService.NewJobRunService(
+		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
+		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService, pluginService,
+	)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)

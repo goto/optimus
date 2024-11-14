@@ -24,6 +24,19 @@ type ResourceURN struct {
 	Name    string `mapstructure:"name"`
 }
 
+func NewResourceURNFromResourceName(resourceName string) (ResourceURN, error) {
+	parts := strings.Split(resourceName, ".")
+	if len(parts) < TableNameSections {
+		return ResourceURN{}, errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+resourceName)
+	}
+
+	return ResourceURN{
+		Project: parts[0],
+		Schema:  parts[1],
+		Name:    parts[2],
+	}, nil
+}
+
 func NewResourceURN(project, schema, name string) (ResourceURN, error) {
 	me := errors.NewMultiError("resource urn constructor errors")
 	if project == "" {

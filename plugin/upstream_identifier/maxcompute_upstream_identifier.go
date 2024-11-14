@@ -8,19 +8,22 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/plugin/upstream_identifier/parser"
 )
 
 type MaxcomputeUpstreamIdentifier struct {
 	logger         log.Logger
 	parserFunc     ParserFunc
+	extractorFunc  ExtractorFunc
 	evaluatorFuncs []EvalAssetFunc
 }
 
-func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, evaluatorFuncs ...EvalAssetFunc) (*MaxcomputeUpstreamIdentifier, error) {
+func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, extractorFunc ExtractorFunc, evaluatorFuncs ...EvalAssetFunc) (*MaxcomputeUpstreamIdentifier, error) {
 	me := errors.NewMultiError("create maxcompute upstream generator errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
+	}
+	if extractorFunc == nil {
+		me.Append(fmt.Errorf("extractorFunc is nil"))
 	}
 	if parserFunc == nil {
 		me.Append(fmt.Errorf("parserFunc is nil"))
@@ -39,13 +42,14 @@ func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, e
 	}
 	return &MaxcomputeUpstreamIdentifier{
 		logger:         logger,
-		parserFunc:     parser.MaxcomputeURNDecorator(parserFunc),
+		parserFunc:     parserFunc,
+		extractorFunc:  extractorFunc,
 		evaluatorFuncs: evaluatorFuncs,
 	}, nil
 }
 
-func (g MaxcomputeUpstreamIdentifier) IdentifyResources(_ context.Context, assets map[string]string) ([]resource.URN, error) {
-	resourceURNs := []resource.URN{}
+func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
+	resources := []string{}
 
 	// generate resource urn with upstream from each evaluator
 	for _, evaluatorFunc := range g.evaluatorFuncs {
@@ -53,22 +57,52 @@ func (g MaxcomputeUpstreamIdentifier) IdentifyResources(_ context.Context, asset
 		if query == "" {
 			continue
 		}
-		resources := g.identifyResources(query)
-		resourceURNs = append(resourceURNs, resources...)
+		visited := map[string]bool{}
+		resources = append(resources, g.identifyResources(ctx, visited, query)...)
+	}
+
+	// generate resource URNs
+	resourceURNs := []resource.URN{}
+	for _, r := range resources {
+		urn, err := resource.NewURN(resource.MaxCompute.String(), r)
+		if err != nil {
+			return nil, err
+		}
+		resourceURNs = append(resourceURNs, urn)
 	}
 	return resourceURNs, nil
 }
 
-func (g MaxcomputeUpstreamIdentifier) identifyResources(query string) []resource.URN {
+func (g MaxcomputeUpstreamIdentifier) identifyResources(ctx context.Context, visited map[string]bool, query string) []string {
 	resources := g.parserFunc(query)
-	resourceURNs := make([]resource.URN, len(resources))
-	for i, r := range resources {
-		resourceURN, err := resource.ParseURN(r)
-		if err != nil {
-			g.logger.Error("error when parsing resource urn %s", r)
+	g.logger.Debug(fmt.Sprintf("resources from parsed query: %v", resources))
+	resourceToDDL, err := g.extractorFunc(ctx, resources)
+	if err != nil {
+		g.logger.Error(fmt.Sprintf("error when extract ddl resource: %s", err.Error()))
+		return nil
+	}
+
+	// collect the actual resources
+	actualResources := []string{}
+	for _, resource := range resources {
+		if _, ok := visited[resource]; ok {
 			continue
 		}
-		resourceURNs[i] = resourceURN
+
+		// mark the resource as visited
+		g.logger.Debug(fmt.Sprintf("check ddl for resource: %s", resource))
+		visited[resource] = true
+		ddl := resourceToDDL[resource]
+		if ddl == "" {
+			// indicate that the resource is not a view
+			actualResources = append(actualResources, resource)
+			continue
+		}
+
+		// otherwise, recursively identify the upstreams
+		g.logger.Debug(fmt.Sprintf("recursively identify upstreams for resource view: %s", resource))
+		actualResources = append(actualResources, g.identifyResources(ctx, visited, ddl)...)
 	}
-	return resourceURNs
+
+	return actualResources
 }

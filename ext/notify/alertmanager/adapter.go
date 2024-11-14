@@ -40,7 +40,7 @@ func (a *AlertManager) getJobConsoleLink(project, job string) string {
 
 func getSeverity(severity string) string {
 	switch strings.ToUpper(severity) {
-	case InfoSeverity, CriticalSeverity:
+	case InfoSeverity, WarningSeverity, CriticalSeverity:
 		return strings.ToUpper(severity)
 	default:
 		return DefaultSeverity

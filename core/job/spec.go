@@ -563,14 +563,15 @@ type WebhookSpec struct {
 }
 
 const (
-	DefaultSeverity  = "INFO"
 	WarningSeverity  = "WARNING"
 	CriticalSeverity = "CRITICAL"
+	InfoSeverity     = "INFO"
+	DefaultSeverity  = WarningSeverity
 )
 
 func getSeverity(severity string) string {
 	switch strings.ToUpper(severity) {
-	case WarningSeverity, CriticalSeverity:
+	case WarningSeverity, InfoSeverity, CriticalSeverity:
 		return strings.ToUpper(severity)
 	default:
 		return DefaultSeverity

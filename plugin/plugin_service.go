@@ -18,6 +18,7 @@ import (
 
 const (
 	bqSvcAccKey = "BQ_SERVICE_ACCOUNT"
+	mcSvcAccKey = "MAXCOMPUTE_SERVICE_ACCOUNT"
 )
 
 type (
@@ -35,7 +36,7 @@ type EvaluatorFactory interface {
 
 type UpstreamIdentifierFactory interface {
 	GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
-	GetMaxcomputeUpstreamIdentifier(ctx context.Context, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
+	GetMaxcomputeUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
 }
 
 type PluginService struct {
@@ -111,7 +112,11 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 
 		switch parserType {
 		case plugin.MaxcomputeParser:
-			upstreamIdentifier, err := s.upstreamIdentifierFactory.GetMaxcomputeUpstreamIdentifier(ctx, evaluators...)
+			svcAcc, ok := compiledConfig[mcSvcAccKey]
+			if !ok {
+				return nil, fmt.Errorf("secret " + mcSvcAccKey + " required to generate upstream is not found")
+			}
+			upstreamIdentifier, err := s.upstreamIdentifierFactory.GetMaxcomputeUpstreamIdentifier(ctx, svcAcc, evaluators...)
 			if err != nil {
 				return nil, err
 			}

@@ -5,13 +5,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/goto/optimus/core/scheduler"
-	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/scheduler/airflow"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"gocloud.dev/blob"
+
+	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/scheduler/airflow"
 )
 
 func TestScheduler(t *testing.T) {

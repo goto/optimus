@@ -241,6 +241,25 @@ func (j JobRunStatusList) IsAnyFailure() bool {
 	return false
 }
 
+func (j JobRunStatusList) GetOnlyDifferedRuns(runsComparator []*JobRunStatus) JobRunStatusList {
+	var differedRuns []*JobRunStatus
+	runMap := j.ToRunStatusMap()
+	for _, comparatorRun := range runsComparator {
+		runState, ok := runMap[comparatorRun.ScheduledAt.UTC()]
+		if !ok {
+			continue
+		}
+		if runState != comparatorRun.State {
+			differedRun := &JobRunStatus{
+				ScheduledAt: comparatorRun.ScheduledAt,
+				State:       runState,
+			}
+			differedRuns = append(differedRuns, differedRun)
+		}
+	}
+	return differedRuns
+}
+
 // JobRunsCriteria represents the filter condition to get run status from scheduler
 type JobRunsCriteria struct {
 	Name        string

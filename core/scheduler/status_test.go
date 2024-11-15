@@ -409,4 +409,48 @@ func TestStatus(t *testing.T) {
 			assert.False(t, isAnyFailure)
 		})
 	})
+	t.Run("GetOnlyDifferedRuns", func(t *testing.T) {
+		time1 := time.Date(2023, 0o1, 1, 0, 0, 0, 0, time.UTC)
+		time2 := time.Date(2023, 0o1, 2, 0, 0, 0, 0, time.UTC)
+		time3 := time.Date(2023, 0o1, 3, 0, 0, 0, 0, time.UTC)
+
+		jobRunStatusList := scheduler.JobRunStatusList([]*scheduler.JobRunStatus{
+			{
+				ScheduledAt: time3,
+				State:       scheduler.StateRunning,
+			},
+			{
+				ScheduledAt: time1,
+				State:       scheduler.StatePending,
+			},
+			{
+				ScheduledAt: time2,
+				State:       scheduler.StateSuccess,
+			},
+		})
+		comparator := []*scheduler.JobRunStatus{
+			{
+				ScheduledAt: time3,
+				State:       scheduler.StateRunning,
+			},
+			{
+				ScheduledAt: time1,
+				State:       scheduler.StatePending,
+			},
+			{
+				ScheduledAt: time2,
+				State:       scheduler.StateInProgress,
+			},
+		}
+
+		expectedRuns := scheduler.JobRunStatusList([]*scheduler.JobRunStatus{
+			{
+				ScheduledAt: time2,
+				State:       scheduler.StateSuccess,
+			},
+		})
+
+		runs := jobRunStatusList.GetOnlyDifferedRuns(comparator)
+		assert.ElementsMatch(t, expectedRuns, runs)
+	})
 }

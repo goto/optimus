@@ -21,6 +21,11 @@ const (
 	successNotificationTemplate = "optimus-job-success"
 
 	ReplayLifeCycle ReplayEventType = "replay-lifecycle"
+
+	InfoSeverity     = "INFO"
+	WarningSeverity  = "WARNING"
+	CriticalSeverity = "CRITICAL"
+	DefaultSeverity  = WarningSeverity
 )
 
 type ReplayEventType string
@@ -31,6 +36,34 @@ func (j ReplayEventType) String() string {
 
 func (a *AlertManager) getJobConsoleLink(project, job string) string {
 	return fmt.Sprintf("%s/%s/%s:%s", a.dataConsole, "optimus", project, job)
+}
+
+func getSeverity(severity string) string {
+	switch strings.ToUpper(severity) {
+	case InfoSeverity, WarningSeverity, CriticalSeverity:
+		return strings.ToUpper(severity)
+	default:
+		return DefaultSeverity
+	}
+}
+
+func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType string, alertPayload *AlertPayload) {
+	var severity string
+	for _, notify := range jobDetails.Alerts {
+		if strings.EqualFold(eventType, notify.On.String()) {
+			severity = getSeverity(notify.Severity)
+			if len(notify.Team) > 0 {
+				alertPayload.Labels["team"] = notify.Team
+			} else {
+				alertPayload.Labels["team"] = jobDetails.Job.Tenant.NamespaceName().String()
+			}
+			alertPayload.Labels["severity"] = severity
+			if severity == CriticalSeverity {
+				alertPayload.Labels["environment"] = "production"
+			}
+			return
+		}
+	}
 }
 
 func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
@@ -70,8 +103,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		template = successNotificationTemplate
 		templateContext["state"] = e.JobEvent.Status.String()
 	}
-
-	a.relay(&AlertPayload{
+	alertPayload := &AlertPayload{
 		Project:  projectName,
 		LogTag:   e.JobURN,
 		Data:     templateContext,
@@ -80,7 +112,9 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 			"identifier": e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
 		},
-	})
+	}
+	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type.String(), alertPayload)
+	a.relay(alertPayload)
 }
 
 func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
@@ -107,7 +141,7 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 
 func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
 	projectName := attr.Tenant.ProjectName().String()
-	a.relay(&AlertPayload{
+	alertPayload := AlertPayload{
 		Project: projectName,
 		LogTag:  attr.JobURN,
 		Data: map[string]string{
@@ -123,7 +157,9 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 			"identifier": attr.JobURN,
 			"event_type": strings.ToLower(ReplayLifeCycle.String()),
 		},
-	})
+	}
+	handleSpecBasedAlerts(attr.JobWithDetails, ReplayLifeCycle.String(), &alertPayload)
+	a.relay(&alertPayload)
 }
 
 func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {

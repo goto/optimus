@@ -13,10 +13,10 @@ import (
 )
 
 type (
-	EventName        string
-	EventStatus      string
-	JobEventType     string
-	JobEventCategory string
+	EventName     string
+	EventStatus   string
+	JobEventType  string
+	EventCategory string
 )
 
 const (
@@ -24,9 +24,10 @@ const (
 
 	ISODateFormat = "2006-01-02T15:04:05Z"
 
-	EventCategorySLAMiss    JobEventCategory = "sla_miss"
-	EventCategoryJobFailure JobEventCategory = "failure"
-	EventCategoryJobSuccess JobEventCategory = "success"
+	EventCategorySLAMiss    EventCategory = "sla_miss"
+	EventCategoryJobFailure EventCategory = "failure"
+	EventCategoryJobSuccess EventCategory = "job_success"
+	EventCategoryReplay     EventCategory = "replay_lifecycle"
 
 	SLAMissEvent    JobEventType = "sla_miss"
 	JobFailureEvent JobEventType = "failure"
@@ -111,7 +112,11 @@ type Event struct {
 	SLAObjectList  []*SLAObject
 }
 
-func (event JobEventType) IsOfType(category JobEventCategory) bool {
+func (e EventCategory) String() string {
+	return string(e)
+}
+
+func (event JobEventType) IsOfType(category EventCategory) bool {
 	switch category {
 	case EventCategoryJobFailure:
 		if event == JobFailureEvent {

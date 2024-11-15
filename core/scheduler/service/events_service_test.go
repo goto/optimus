@@ -39,7 +39,7 @@ func TestNotificationService(t *testing.T) {
 			event := &scheduler.Event{
 				JobName: jobName,
 				Tenant:  tnnt,
-				Type:    scheduler.TaskStartEvent,
+				Type:    scheduler.JobFailureEvent,
 				Values:  map[string]any{},
 			}
 			err := notifyService.Push(ctx, event)
@@ -142,6 +142,8 @@ func TestNotificationService(t *testing.T) {
 					SchedulerHost: "localhost",
 					Status:        scheduler.StatusFiring,
 					JobEvent:      event,
+
+					JobWithDetails: &jobWithDetails,
 				})
 				tenantService := new(mockTenantService)
 				tenantWithDetails, _ := tenant.NewTenantDetails(project, namespace, []*tenant.PlainTextSecret{})

@@ -291,22 +291,26 @@ func (s *OptimusServer) setupHandlers() error {
 	notificationContext, cancelNotifiers := context.WithCancel(context.Background())
 	s.cleanupFn = append(s.cleanupFn, cancelNotifiers)
 
-	notifierChanels := map[string]schedulerService.Notifier{
-		"slack": slack.NewNotifier(notificationContext, slackapi.APIURL,
+	notifierChanels := map[string]schedulerService.Notifier{}
+	if s.conf.Alerting.EnableSlack {
+		notifierChanels["slack"] = slack.NewNotifier(notificationContext, slackapi.APIURL,
 			slack.DefaultEventBatchInterval,
 			func(err error) {
 				s.logger.Error("slack error accumulator", "error", err)
 			},
-		),
-		"pagerduty": pagerduty.NewNotifier(
+		)
+	}
+	if s.conf.Alerting.EnablePagerDuty {
+		notifierChanels["pagerduty"] = pagerduty.NewNotifier(
 			notificationContext,
 			pagerduty.DefaultEventBatchInterval,
 			func(err error) {
 				s.logger.Error("pagerduty error accumulator", "error", err)
 			},
 			new(pagerduty.PagerDutyServiceImpl),
-		),
+		)
 	}
+
 	webhookNotifier := webhook.NewNotifier(
 		notificationContext,
 		webhook.DefaultEventBatchInterval,

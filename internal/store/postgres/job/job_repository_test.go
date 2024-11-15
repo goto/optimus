@@ -134,7 +134,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			jobHooks := []*job.Hook{jobHook1}
 			jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 			assert.NoError(t, err)
-			alert, err := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig)
+			alert, err := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig, "", "")
 			assert.NoError(t, err)
 			jobAlerts := []*job.AlertSpec{alert}
 			upstreamName1 := job.SpecUpstreamNameFrom("job-upstream-1")
@@ -251,7 +251,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			jobHooks := []*job.Hook{jobHook1}
 			jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 			assert.NoError(t, err)
-			alert, err := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig)
+			alert, err := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig, "", "")
 			assert.NoError(t, err)
 			jobAlerts := []*job.AlertSpec{alert}
 			upstreamName1 := job.SpecUpstreamNameFrom("job-upstream-1")
@@ -319,7 +319,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			jobHooks := []*job.Hook{jobHook1}
 			jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 			assert.NoError(t, err)
-			alert, err := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig)
+			alert, err := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig, "", "")
 			assert.NoError(t, err)
 			jobAlerts := []*job.AlertSpec{alert}
 			upstreamName1 := job.SpecUpstreamNameFrom("job-upstream-1")

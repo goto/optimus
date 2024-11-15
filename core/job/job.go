@@ -157,6 +157,7 @@ type AlertAttrs struct {
 	Tenant     tenant.Tenant
 	EventTime  time.Time
 	ChangeType ChangeType
+	Job        *Spec
 }
 
 type UpdateImpact string

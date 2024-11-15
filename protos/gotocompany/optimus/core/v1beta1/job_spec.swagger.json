@@ -910,6 +910,12 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "severity": {
+          "type": "string"
+        },
+        "team": {
+          "type": "string"
         }
       },
       "title": "Notifiers are used to set custom alerting in case of job failure/sla_miss"
@@ -1482,7 +1488,7 @@
         "TYPE_SLA_MISS",
         "TYPE_JOB_SUCCESS",
         "TYPE_FAILURE",
-        "TYPE_SUCCESS",
+        "TYPE_REPLAY_LIFECYCLE",
         "TYPE_TASK_RETRY",
         "TYPE_TASK_SUCCESS",
         "TYPE_TASK_START",

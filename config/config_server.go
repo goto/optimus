@@ -34,9 +34,11 @@ type TelemetryConfig struct {
 }
 
 type AlertingConfig struct {
-	EventManager EventManagerConfig `mapstructure:"alert_manager"`
-	Dashboard    string             `mapstructure:"dashboard"`
-	DataConsole  string             `mapstructure:"data_console"`
+	EventManager    EventManagerConfig `mapstructure:"alert_manager"`
+	Dashboard       string             `mapstructure:"dashboard"`
+	DataConsole     string             `mapstructure:"data_console"`
+	EnableSlack     bool               `mapstructure:"enable_slack"`
+	EnablePagerDuty bool               `mapstructure:"enable_pager_duty"`
 }
 
 type EventManagerConfig struct {

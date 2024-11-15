@@ -447,7 +447,7 @@
         "TYPE_SLA_MISS",
         "TYPE_JOB_SUCCESS",
         "TYPE_FAILURE",
-        "TYPE_SUCCESS",
+        "TYPE_REPLAY_LIFECYCLE",
         "TYPE_TASK_RETRY",
         "TYPE_TASK_SUCCESS",
         "TYPE_TASK_START",

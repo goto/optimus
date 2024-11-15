@@ -70,13 +70,15 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 	} else {
 		status = scheduler.StatusResolved
 	}
+
 	e.alertManager.SendJobRunEvent(&scheduler.AlertAttrs{
-		Owner:         jobDetails.JobMetadata.Owner,
-		JobURN:        jobDetails.Job.URN(),
-		Title:         "Optimus Job Alert",
-		SchedulerHost: schedulerHost,
-		Status:        status,
-		JobEvent:      event,
+		Owner:          jobDetails.JobMetadata.Owner,
+		JobURN:         jobDetails.Job.URN(),
+		Title:          "Optimus Job Alert",
+		SchedulerHost:  schedulerHost,
+		Status:         status,
+		JobEvent:       event,
+		JobWithDetails: jobDetails,
 	})
 	return nil
 }
@@ -131,6 +133,10 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 }
 
 func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {
+	if !(event.Type.IsOfType(scheduler.EventCategoryJobFailure) || event.Type.IsOfType(scheduler.EventCategorySLAMiss)) {
+		return nil
+	}
+
 	jobDetails, err := e.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
 	if err != nil {
 		e.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
@@ -146,6 +152,10 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 			for _, channel := range notify.Channels {
 				chanParts := strings.Split(channel, "://")
 				scheme := chanParts[0]
+				if _, ok := e.notifyChannels[scheme]; !ok {
+					e.l.Warn("Scheme: %s, is not enabled", scheme)
+					continue
+				}
 				route := chanParts[1]
 
 				e.l.Debug("notification event for job: %s , event: %+v", event.JobName, event)

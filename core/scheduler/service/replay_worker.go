@@ -257,9 +257,11 @@ func (w *ReplayWorker) continueExecution(ctx context.Context, runs scheduler.Job
 
 func (w *ReplayWorker) finishReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun, syncedRunStatus scheduler.JobRunStatusList) error {
 	runsToUpdate := syncedRunStatus.GetOnlyDifferedRuns(replayWithRun.Runs)
-	if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), runsToUpdate); err != nil {
-		w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayWithRun.Replay.ID(), err)
-		return err
+	if len(runsToUpdate) > 0 {
+		if err := w.replayRepo.UpdateReplayRuns(ctx, replayWithRun.Replay.ID(), runsToUpdate); err != nil {
+			w.logger.Error("[ReplayID: %s] unable to update replay state to failed: %s", replayWithRun.Replay.ID(), err)
+			return err
+		}
 	}
 
 	runStatusSummary := syncedRunStatus.GetJobRunStatusSummary()

@@ -191,9 +191,11 @@ type Retry struct {
 }
 
 type Alert struct {
-	On       JobEventCategory
+	On       EventCategory
 	Channels []string
 	Config   map[string]string
+	Severity string
+	Team     string
 }
 
 type WebhookEndPoint struct {
@@ -202,7 +204,7 @@ type WebhookEndPoint struct {
 }
 
 type Webhook struct {
-	On        JobEventCategory
+	On        EventCategory
 	Endpoints []WebhookEndPoint
 }
 

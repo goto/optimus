@@ -548,6 +548,8 @@ type AlertSpec struct {
 
 	channels []string
 	config   Config
+	severity string
+	team     string
 }
 
 type WebhookEndPoint struct {
@@ -560,7 +562,23 @@ type WebhookSpec struct {
 	Endpoints []WebhookEndPoint
 }
 
-func NewAlertSpec(on string, channels []string, config Config) (*AlertSpec, error) {
+const (
+	WarningSeverity  = "WARNING"
+	CriticalSeverity = "CRITICAL"
+	InfoSeverity     = "INFO"
+	DefaultSeverity  = WarningSeverity
+)
+
+func getSeverity(severity string) string {
+	switch strings.ToUpper(severity) {
+	case WarningSeverity, InfoSeverity, CriticalSeverity:
+		return strings.ToUpper(severity)
+	default:
+		return DefaultSeverity
+	}
+}
+
+func NewAlertSpec(on string, channels []string, config Config, severity, team string) (*AlertSpec, error) {
 	if err := validateMap(config); err != nil {
 		return nil, err
 	}
@@ -568,6 +586,8 @@ func NewAlertSpec(on string, channels []string, config Config) (*AlertSpec, erro
 		on:       on,
 		channels: channels,
 		config:   config,
+		severity: getSeverity(severity),
+		team:     team,
 	}, nil
 }
 
@@ -581,6 +601,14 @@ func (a AlertSpec) Channels() []string {
 
 func (a AlertSpec) Config() Config {
 	return a.config
+}
+
+func (a AlertSpec) Severity() string {
+	return a.severity
+}
+
+func (a AlertSpec) Team() string {
+	return a.team
 }
 
 // TODO: reconsider whether we still need it or not

@@ -1315,6 +1315,7 @@ func (j *JobService) raiseUpdateEvent(incomingJob *job.Job, impactType job.Updat
 		Tenant:     incomingJob.Tenant(),
 		EventTime:  time.Now(),
 		ChangeType: job.ChangeTypeUpdate,
+		Job:        incomingJob.Spec(),
 	})
 	jobEvent, err := event.NewJobUpdateEvent(incomingJob, impactType)
 	if err != nil {

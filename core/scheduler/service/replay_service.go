@@ -115,13 +115,17 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		jobName.String(),
 		replayReq.State().String(),
 	).Inc()
-
+	jobWithDetails, err := r.jobRepo.GetJobDetails(ctx, t.ProjectName(), jobName)
+	if err != nil {
+		return uuid.Nil, err
+	}
 	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
-		JobName:  jobName.String(),
-		ReplayID: replayID.String(),
-		Tenant:   t,
-		JobURN:   jobName.GetJobURN(t),
-		State:    scheduler.ReplayStateCreated,
+		JobName:        jobName.String(),
+		ReplayID:       replayID.String(),
+		Tenant:         t,
+		JobURN:         jobName.GetJobURN(t),
+		State:          scheduler.ReplayStateCreated,
+		JobWithDetails: jobWithDetails,
 	})
 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName) //nolint:contextcheck

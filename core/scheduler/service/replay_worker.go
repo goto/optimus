@@ -88,7 +88,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 		errMessage := err.Error()
 		if errors.Is(err, context.DeadlineExceeded) {
 			errMessage = "replay execution timed out"
-			w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+			w.sendReplayEvent(ctx, scheduler.ReplayNotificationAttrs{
 				JobName:  jobName.String(),
 				ReplayID: replayID.String(),
 				Tenant:   jobTenant,
@@ -96,7 +96,7 @@ func (w *ReplayWorker) Execute(replayID uuid.UUID, jobTenant tenant.Tenant, jobN
 				State:    scheduler.ReplayStateTimeout,
 			})
 		} else {
-			w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+			w.sendReplayEvent(ctx, scheduler.ReplayNotificationAttrs{
 				JobName:  jobName.String(),
 				ReplayID: replayID.String(),
 				Tenant:   jobTenant,
@@ -159,7 +159,7 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		if replayWithRun.Replay.IsTerminated() {
 			t := replayWithRun.Replay.Tenant()
-			w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+			w.sendReplayEvent(ctx, scheduler.ReplayNotificationAttrs{
 				JobName:  replayWithRun.Replay.JobName().String(),
 				ReplayID: replayID.String(),
 				Tenant:   t,
@@ -272,7 +272,8 @@ func (w *ReplayWorker) finishReplay(ctx context.Context, replayWithRun *schedule
 	if syncedRunStatus.IsAnyFailure() {
 		replayState = scheduler.ReplayStateFailed
 	}
-	w.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
+
+	w.sendReplayEvent(ctx, scheduler.ReplayNotificationAttrs{
 		JobName:  replayWithRun.Replay.JobName().String(),
 		ReplayID: replayID.String(),
 		Tenant:   replayWithRun.Replay.Tenant(),
@@ -449,4 +450,20 @@ func (w *ReplayWorker) getRequestsToProcess(ctx context.Context, replays []*sche
 	}
 	replayReqLag.Set(maxLag)
 	return requestsToProcess
+}
+
+func (w *ReplayWorker) sendReplayEvent(ctx context.Context, attr scheduler.ReplayNotificationAttrs) error {
+	jobName, err := scheduler.JobNameFrom(attr.JobName)
+	if err != nil {
+		w.logger.Error("[ReplayID: %s] unable adapt job name from %s", attr.ReplayID, attr.JobName)
+		return err
+	}
+	jobWithDetails, err := w.jobRepo.GetJobDetails(ctx, attr.Tenant.ProjectName(), jobName)
+	if err != nil {
+		w.logger.Error("[ReplayID: %s] unable get jobWithDetails for %s", attr.ReplayID, jobName)
+		return err
+	}
+	attr.JobWithDetails = jobWithDetails
+	w.alertManager.SendReplayEvent(&attr)
+	return nil
 }

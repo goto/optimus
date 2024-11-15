@@ -201,7 +201,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	jobHooks := []*job.Hook{hookSpec}
 	jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 	assert.NoError(t, err)
-	alert, _ := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig)
+	alert, _ := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig, "", "")
 	jobAlerts := []*job.AlertSpec{alert}
 	upstreamName1 := job.SpecUpstreamNameFrom("job-upstream-1")
 	upstreamName2 := job.SpecUpstreamNameFrom("job-upstream-2")

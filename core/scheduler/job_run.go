@@ -77,6 +77,8 @@ type AlertAttrs struct {
 	SchedulerHost string
 	Status        EventStatus
 	JobEvent      *Event
+
+	JobWithDetails *JobWithDetails
 }
 
 type ReplayNotificationAttrs struct {
@@ -85,6 +87,8 @@ type ReplayNotificationAttrs struct {
 	Tenant   tenant.Tenant
 	JobURN   string
 	State    ReplayState
+
+	JobWithDetails *JobWithDetails
 }
 
 type WebhookAttrs struct {

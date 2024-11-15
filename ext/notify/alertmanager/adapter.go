@@ -20,7 +20,7 @@ const (
 	slaAlertTemplate            = "optimus-job-sla-miss"
 	successNotificationTemplate = "optimus-job-success"
 
-	ReplayLifeCycle ReplayEventType = "replay-lifecycle"
+	ReplayLifeCycle ReplayEventType = "replay_lifecycle"
 
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"

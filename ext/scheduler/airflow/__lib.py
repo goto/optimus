@@ -50,7 +50,11 @@ def lookup_non_standard_cron_expression(expr: str) -> str:
         return expr
 
 def get_scheduled_at(context):
-    job_cron_iter = croniter(context.get("dag").schedule_interval, context.get('execution_date'))
+    interval = context.get("dag").schedule_interval
+    if interval is None:
+        return context.get('execution_date')
+
+    job_cron_iter = croniter(interval, context.get('execution_date'))
     return job_cron_iter.get_next(datetime)
 
 class SuperKubernetesPodOperator(KubernetesPodOperator):

@@ -46,19 +46,20 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 	upstreams := SetupUpstreams(jobDetails.Upstreams, c.hostname)
 
 	templateContext := TemplateContext{
-		JobDetails:      jobDetails,
-		Tenant:          jobDetails.Job.Tenant,
-		Version:         config.BuildVersion,
-		SLAMissDuration: slaDuration,
-		Hostname:        c.hostname,
-		GRPCHostName:    c.grpcHost,
-		ExecutorTask:    scheduler.ExecutorTask.String(),
-		ExecutorHook:    scheduler.ExecutorHook.String(),
-		Task:            task,
-		Hooks:           hooks,
-		RuntimeConfig:   runtimeConfig,
-		Priority:        jobDetails.Priority,
-		Upstreams:       upstreams,
+		JobDetails:           jobDetails,
+		Tenant:               jobDetails.Job.Tenant,
+		Version:              config.BuildVersion,
+		SLAMissDuration:      slaDuration,
+		Hostname:             c.hostname,
+		GRPCHostName:         c.grpcHost,
+		ExecutorTask:         scheduler.ExecutorTask.String(),
+		ExecutorHook:         scheduler.ExecutorHook.String(),
+		Task:                 task,
+		Hooks:                hooks,
+		RuntimeConfig:        runtimeConfig,
+		Priority:             jobDetails.Priority,
+		Upstreams:            upstreams,
+		DisableJobScheduling: project.IsJobSchedulingDisabled(),
 	}
 
 	airflowVersion, err := project.GetConfig(tenant.ProjectSchedulerVersion)

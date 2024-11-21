@@ -11,9 +11,10 @@ import (
 const (
 	EntityProject = "project"
 
-	ProjectStoragePathKey   = "STORAGE_PATH"
-	ProjectSchedulerHost    = "SCHEDULER_HOST"
-	ProjectSchedulerVersion = "SCHEDULER_VERSION"
+	ProjectStoragePathKey       = "STORAGE_PATH"
+	ProjectSchedulerHost        = "SCHEDULER_HOST"
+	ProjectSchedulerVersion     = "SCHEDULER_VERSION"
+	ProjectDisableJobScheduling = "DISABLE_JOB_SCHEDULING"
 )
 
 type ProjectName string
@@ -76,6 +77,15 @@ func (p *Project) GetVariables() map[string]string {
 		vars[k] = v
 	}
 	return vars
+}
+
+func (p *Project) IsJobSchedulingDisabled() bool {
+	disable, err := p.GetConfig(ProjectDisableJobScheduling)
+	if err != nil {
+		return false
+	}
+
+	return strings.ToLower(disable) == "true"
 }
 
 func (p *Project) SetPresets(presets map[string]Preset) {

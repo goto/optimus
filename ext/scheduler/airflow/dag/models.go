@@ -30,6 +30,8 @@ type TemplateContext struct {
 	Hooks         Hooks
 	Priority      int
 	Upstreams     Upstreams
+
+	DisableJobScheduling bool
 }
 
 type Task struct {

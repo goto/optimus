@@ -19,7 +19,7 @@ import (
 
 const (
 	bqSvcAccKey = "BQ_SERVICE_ACCOUNT"
-	mcSvcAccKey = "MAXCOMPUTE_SERVICE_ACCOUNT"
+	mcSvcAccKey = "MC_SERVICE_ACCOUNT"
 )
 
 type (

@@ -27,7 +27,9 @@ func TestViewHandle(t *testing.T) {
 		Labels:      map[string]string{"owner": "optimus"},
 	}
 
-	odpsInstance := odps.NewInstance(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, "")
+	normalTables := []*odps.Table{
+		odps.NewTable(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, schemaName, tableName),
+	}
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
@@ -60,7 +62,6 @@ func TestViewHandle(t *testing.T) {
 				"database":    "schema",
 				"project":     "proj",
 				"description": "test create",
-				"columns":     []string{"customer_id", "customer_name", "product_name"},
 				"view_query":  "select * from test_customer;",
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
@@ -70,14 +71,15 @@ func TestViewHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "error while creating schema on maxcompute")
 		})
-		t.Run("returns error when view query is invalid", func(t *testing.T) {
+		t.Run("returns error when view table is already exist", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
+			table.On("CreateView", mock.Anything, false, false, false).Return(fmt.Errorf("Table or view already exists"))
+			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
-			odpsIns.On("ExecSQl", mock.Anything).Return(odpsInstance, fmt.Errorf("sql task is invalid"))
 			defer odpsIns.AssertExpectations(t)
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
@@ -86,24 +88,24 @@ func TestViewHandle(t *testing.T) {
 				"database":    "schema",
 				"project":     "proj",
 				"description": "test create",
-				"columns":     []string{"customer_id", "customer_name", "product_name"},
-				"view_query":  "select from test_customer;",
+				"view_query":  "select * from test_customer;",
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to create sql task to create view "+fullName)
+			assert.ErrorContains(t, err, "view already exists on maxcompute: "+fullName)
 		})
 		t.Run("returns error when view creation returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
+			table.On("CreateView", mock.Anything, false, false, false).Return(fmt.Errorf("error while creating view"))
+			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
-			odpsIns.On("ExecSQl", mock.Anything).Return(odpsInstance, nil)
 			defer odpsIns.AssertExpectations(t)
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
@@ -112,7 +114,7 @@ func TestViewHandle(t *testing.T) {
 				"database":    "schema",
 				"project":     "proj",
 				"description": "test create",
-				"view_query":  "select * from test_customer",
+				"view_query":  "select from test_customer;",
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -121,12 +123,37 @@ func TestViewHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "failed to create view "+fullName)
 		})
+		t.Run("returns success when create view table", func(t *testing.T) {
+			table := new(mockMaxComputeTable)
+			table.On("CreateView", mock.Anything, false, false, false).Return(nil)
+			defer table.AssertExpectations(t)
+			schema := new(mockMaxComputeSchema)
+			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
+			defer schema.AssertExpectations(t)
+			odpsIns := new(mockOdpsIns)
+			odpsIns.On("CurrentSchemaName").Return(schemaName)
+			defer odpsIns.AssertExpectations(t)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+
+			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
+				"description": "test create",
+				"view_query":  "select * from test_customer;",
+			}
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = viewHandle.Create(res)
+			assert.Nil(t, err)
+		})
 	})
 
 	t.Run("Update", func(t *testing.T) {
 		t.Run("returns error when view is not found", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{}, fmt.Errorf("view is not found"))
+			table.On("BatchLoadTables", mock.Anything).Return(normalTables, fmt.Errorf("view is not found"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
@@ -153,14 +180,13 @@ func TestViewHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
 		})
-		t.Run("returns error when view query is invalid", func(t *testing.T) {
+		t.Run("returns error when view update returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{}, nil)
+			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
+			table.On("CreateView", mock.Anything, true, false, false).Return(fmt.Errorf("error while update view"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			odpsIns.On("ExecSQl", mock.Anything).Return(odpsInstance, fmt.Errorf("sql task is invalid"))
-			defer odpsIns.AssertExpectations(t)
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
@@ -168,24 +194,22 @@ func TestViewHandle(t *testing.T) {
 				"database":    "schema",
 				"project":     "proj",
 				"description": "test update",
-				"columns":     []string{"customer_id", "customer_name", "product_name"},
-				"view_query":  "select * from test_customer;",
+				"view_query":  "select from test_customer;",
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
 			err = viewHandle.Update(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to create sql task to update view "+fullName)
+			assert.ErrorContains(t, err, "failed to update view "+fullName)
 		})
-		t.Run("returns error when view creation returns error", func(t *testing.T) {
+		t.Run("returns success when view update", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{}, nil)
+			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
+			table.On("CreateView", mock.Anything, true, false, false).Return(nil)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			odpsIns.On("ExecSQl", mock.Anything).Return(odpsInstance, nil)
-			defer odpsIns.AssertExpectations(t)
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
@@ -199,14 +223,14 @@ func TestViewHandle(t *testing.T) {
 			assert.Nil(t, err)
 
 			err = viewHandle.Update(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to update view "+fullName)
+			assert.Nil(t, err)
 		})
 	})
 
 	t.Run("Exists", func(t *testing.T) {
 		t.Run("returns false when error in checking existing view", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
+			table.On("BatchLoadTables", mock.Anything).Return(normalTables, errors.New("error in get"))
 			table.On("BatchLoadTables", mock.Anything).Return(nil, errors.New("error in get"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
@@ -229,61 +253,4 @@ func TestViewHandle(t *testing.T) {
 			assert.True(t, exists)
 		})
 	})
-}
-
-func TestToViewSQL(t *testing.T) {
-	type args struct {
-		v *maxcompute.View
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{
-			name: "create_view",
-			args: args{
-				v: &maxcompute.View{
-					Name:        "test_view",
-					Database:    "schema",
-					Description: "Create Test View",
-					Columns:     []string{"a", "b", "c"},
-					ViewQuery:   "select a, b, c from t1",
-				},
-			},
-			want: `create or replace view schema.test_view
-    (a, b, c)  
-    comment 'Create Test View'  
-    as
-	select a, b, c from t1;`,
-			wantErr: nil,
-		},
-		{
-			name: "create_view_missing_description",
-			args: args{
-				v: &maxcompute.View{
-					Name:      "test_view",
-					Database:  "schema",
-					Project:   "proj",
-					Columns:   []string{"a", "b", "c"},
-					ViewQuery: "select a, b, c from t1",
-				},
-			},
-			want: `create or replace view schema.test_view
-    (a, b, c)  
-    as
-	select a, b, c from t1;`,
-			wantErr: nil,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := maxcompute.ToViewSQL(tt.args.v)
-			if tt.wantErr != nil && !tt.wantErr(t, err, fmt.Sprintf("ToViewSQL error in (%s)", tt.name)) {
-				return
-			}
-			assert.Equalf(t, tt.want, got, "ToViewSQL(%v)", tt.args.v)
-		})
-	}
 }

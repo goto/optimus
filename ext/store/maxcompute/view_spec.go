@@ -18,6 +18,7 @@ type View struct {
 	Description string   `mapstructure:"description,omitempty"`
 	Columns     []string `mapstructure:"columns,omitempty"`
 	ViewQuery   string   `mapstructure:"view_query,omitempty"`
+	Lifecycle   int      `mapstructure:"lifecycle,omitempty"`
 }
 
 func (v *View) FullName() string {
@@ -27,10 +28,6 @@ func (v *View) FullName() string {
 func (v *View) Validate() error {
 	if v.ViewQuery == "" {
 		return errors.InvalidArgument(EntityView, "view query is empty for "+v.FullName())
-	}
-
-	if len(v.Columns) == 0 {
-		return errors.InvalidArgument(EntityView, "column names not provided for "+v.FullName())
 	}
 
 	return nil

@@ -216,6 +216,10 @@ github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.1.1 h1:Sc2T9vs8SCq0DErL/QIY3ZVx8
 github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.1.1/go.mod h1:FTzydeQVmR24FI0D6XWUOMKckjXehM/jgMn1xC+DA9M=
 github.com/aliyun/aliyun-odps-go-sdk v0.3.13 h1:frPJCVxhlHceH8077tNJQEuLjPBIbnzq0FE/1HtxrFY=
 github.com/aliyun/aliyun-odps-go-sdk v0.3.13/go.mod h1:t/tgF/iN5aAs/gLL7sEI8/qdax4NuFCKEjO3OJbHZqI=
+github.com/aliyun/aliyun-odps-go-sdk v0.3.15 h1:HkWki3g7G0xEAyxSAChqSDxLw8NCl7PFc8KxcECXReQ=
+github.com/aliyun/aliyun-odps-go-sdk v0.3.15/go.mod h1:t/tgF/iN5aAs/gLL7sEI8/qdax4NuFCKEjO3OJbHZqI=
+github.com/aliyun/aliyun-odps-go-sdk v0.3.16 h1:f3YKYhFrAZyPmiL0dfJerK+POg1DilyOKLPkeyy4y28=
+github.com/aliyun/aliyun-odps-go-sdk v0.3.16/go.mod h1:t/tgF/iN5aAs/gLL7sEI8/qdax4NuFCKEjO3OJbHZqI=
 github.com/aliyun/credentials-go v1.3.10 h1:45Xxrae/evfzQL9V10zL3xX31eqgLWEaIdCoPipOEQA=
 github.com/aliyun/credentials-go v1.3.10/go.mod h1:Jm6d+xIgwJVLVWT561vy67ZRP4lPTQxMbEYRuT2Ti1U=
 github.com/andres-erbsen/clock v0.0.0-20160526145045-9e14626cd129 h1:MzBOUgng9orim59UnfUTLRjMpd09C5uEVQ6RPGeCaVI=

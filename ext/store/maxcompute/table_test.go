@@ -35,6 +35,11 @@ func (m *mockMaxComputeTable) BatchLoadTables(tableNames []string) ([]*odps.Tabl
 	return args.Get(0).([]*odps.Table), args.Error(1)
 }
 
+func (m *mockMaxComputeTable) CreateView(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool) error {
+	args := m.Called(schema, orReplace, createIfNotExists, buildDeferred)
+	return args.Error(0)
+}
+
 type mockMaxComputeSchema struct {
 	mock.Mock
 }
@@ -46,11 +51,6 @@ func (m *mockMaxComputeSchema) Create(schemaName string, createIfNotExists bool,
 
 type mockOdpsIns struct {
 	mock.Mock
-}
-
-func (m *mockOdpsIns) ExecSQl(sql string, hints ...map[string]string) (*odps.Instance, error) { // nolint
-	args := m.Called(sql)
-	return args.Get(0).(*odps.Instance), args.Error(1)
 }
 
 func (m *mockOdpsIns) ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error) { // nolint

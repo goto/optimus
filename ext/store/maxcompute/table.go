@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"fmt"
+	"github.com/aliyun/aliyun-odps-go-sdk/odps/common"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
@@ -153,7 +154,7 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 func generateUpdateQuery(incoming, existing tableschema.TableSchema, schemaName string) ([]string, error) {
 	var sqlTasks []string
 	if incoming.Comment != existing.Comment {
-		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set comment '%s';", schemaName, existing.TableName, incoming.Comment))
+		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set comment %s;", schemaName, existing.TableName, common.QuoteString(incoming.Comment)))
 	}
 
 	if incoming.Lifecycle != existing.Lifecycle {
@@ -232,12 +233,12 @@ func storeColumn(key string, column tableschema.Column, columnCollection map[str
 
 func specifyColumnStructure(parent, columnName string, isArrayStruct bool) string {
 	if parent == "" {
-		return columnName
+		return fmt.Sprintf("`%s`", columnName)
 	}
 	if isArrayStruct {
-		return fmt.Sprintf("%s.element.%s", parent, columnName)
+		return fmt.Sprintf("%s.element.`%s`", parent, columnName)
 	}
-	return fmt.Sprintf("%s.%s", parent, columnName)
+	return fmt.Sprintf("%s.`%s`", parent, columnName)
 }
 
 func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnRecord, existing map[string]tableschema.Column, sqlTasks *[]string) error {
@@ -249,11 +250,8 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 				return fmt.Errorf("unable to add new required column")
 			}
 			segment := fmt.Sprintf("if not exists %s %s", incomingColumnRecord.columnStructure, incomingColumnRecord.columnValue.Type.Name())
-			if incomingColumnRecord.columnValue.HasDefaultValue {
-				segment += fmt.Sprintf(" default %s", incomingColumnRecord.columnValue.DefaultValue)
-			}
 			if incomingColumnRecord.columnValue.Comment != "" {
-				segment += fmt.Sprintf(" comment '%s'", incomingColumnRecord.columnValue.Comment)
+				segment += fmt.Sprintf(" comment %s", common.QuoteString(incomingColumnRecord.columnValue.Comment))
 			}
 			columnAddition = append(columnAddition, segment)
 			continue
@@ -270,8 +268,8 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 		}
 
 		if incomingColumnRecord.columnValue.Comment != columnFound.Comment {
-			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment '%s';",
-				schemaName, tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, incomingColumnRecord.columnValue.Comment))
+			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment %s;",
+				schemaName, tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, common.QuoteString(incomingColumnRecord.columnValue.Comment)))
 		}
 		delete(existing, incomingColumnRecord.columnStructure)
 	}

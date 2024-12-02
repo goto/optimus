@@ -14,6 +14,8 @@ const (
 	ProjectStoragePathKey   = "STORAGE_PATH"
 	ProjectSchedulerHost    = "SCHEDULER_HOST"
 	ProjectSchedulerVersion = "SCHEDULER_VERSION"
+	ProjectOptimusHost      = "OPTIMUS_HOST"
+	ProjectOptimusGRPCHost  = "OPTIMUS_GRPC_HOST"
 )
 
 type ProjectName string

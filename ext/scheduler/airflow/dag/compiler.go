@@ -18,11 +18,11 @@ type PluginRepo interface {
 }
 
 type Compiler struct {
-	hostname   string
-	grpcHost   string
-	log        log.Logger
-	templates  templates
-	pluginRepo PluginRepo
+	defaultHostname string
+	defaultGRPCHost string
+	log             log.Logger
+	templates       templates
+	pluginRepo      PluginRepo
 }
 
 func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWithDetails) ([]byte, error) {
@@ -43,15 +43,25 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 
 	runtimeConfig := SetupRuntimeConfig(jobDetails)
 
-	upstreams := SetupUpstreams(jobDetails.Upstreams, c.hostname)
+	optimusHostname, _ := project.GetConfig(tenant.ProjectOptimusHost)
+	if optimusHostname == "" {
+		optimusHostname = c.defaultHostname
+	}
+
+	upstreams := SetupUpstreams(jobDetails.Upstreams, optimusHostname)
+
+	optimusHostnameGRPC, _ := project.GetConfig(tenant.ProjectOptimusGRPCHost)
+	if optimusHostnameGRPC == "" {
+		optimusHostnameGRPC = c.defaultGRPCHost
+	}
 
 	templateContext := TemplateContext{
 		JobDetails:      jobDetails,
 		Tenant:          jobDetails.Job.Tenant,
 		Version:         config.BuildVersion,
 		SLAMissDuration: slaDuration,
-		Hostname:        c.hostname,
-		GRPCHostName:    c.grpcHost,
+		Hostname:        optimusHostname,
+		GRPCHostName:    optimusHostnameGRPC,
 		ExecutorTask:    scheduler.ExecutorTask.String(),
 		ExecutorHook:    scheduler.ExecutorHook.String(),
 		Task:            task,
@@ -84,10 +94,10 @@ func NewDagCompiler(l log.Logger, hostname, grpcHost string, repo PluginRepo) (*
 	}
 
 	return &Compiler{
-		log:        l,
-		hostname:   hostname,
-		grpcHost:   grpcHost,
-		templates:  templates,
-		pluginRepo: repo,
+		log:             l,
+		defaultHostname: hostname,
+		defaultGRPCHost: grpcHost,
+		templates:       templates,
+		pluginRepo:      repo,
 	}, nil
 }

@@ -31,6 +31,9 @@ var compiledTemplate26 []byte
 //go:embed expected_dag.2.9.py
 var compiledTemplate29 []byte
 
+//go:embed expected_dag_with_project_host.2.9.py
+var compiledTemplate29WithProjectHost []byte
+
 func TestDagCompiler(t *testing.T) {
 	t.Run("Compile", func(t *testing.T) {
 		grpcHost := "http://grpc.optimus.example.com:8081"
@@ -44,7 +47,7 @@ func TestDagCompiler(t *testing.T) {
 			assert.NoError(t, err)
 
 			job := setupJobDetails(tnnt)
-			project := setProject(tnnt, "2.1.4")
+			project := setProject(tnnt, "2.1.4", "", "")
 			_, err = com.Compile(project, job)
 			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
 			assert.ErrorContains(t, err, "plugin not found for bq-bq")
@@ -55,7 +58,7 @@ func TestDagCompiler(t *testing.T) {
 
 			job := setupJobDetails(tnnt)
 			job.Job.Hooks = append(job.Job.Hooks, &scheduler.Hook{Name: "invalid"})
-			project := setProject(tnnt, "2.1.4")
+			project := setProject(tnnt, "2.1.4", "", "")
 			_, err = com.Compile(project, job)
 			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
 			assert.ErrorContains(t, err, "hook not found for name invalid")
@@ -73,7 +76,7 @@ func TestDagCompiler(t *testing.T) {
 					On:     scheduler.EventCategorySLAMiss,
 					Config: map[string]string{"duration": "2"},
 				})
-			project := setProject(tnnt, "2.1.4")
+			project := setProject(tnnt, "2.1.4", "", "")
 			_, err = com.Compile(project, job)
 			assert.ErrorContains(t, err, "failed to parse sla_miss duration 2")
 		})
@@ -84,7 +87,7 @@ func TestDagCompiler(t *testing.T) {
 				assert.NoError(t, err)
 
 				job := setupJobDetails(tnnt)
-				project := setProject(tnnt, "2.1.4")
+				project := setProject(tnnt, "2.1.4", "", "")
 				compiledDag, err := com.Compile(project, job)
 				assert.NoError(t, err)
 				assert.Equal(t, string(compiledTemplate21), string(compiledDag))
@@ -94,7 +97,7 @@ func TestDagCompiler(t *testing.T) {
 				assert.NoError(t, err)
 
 				job := setupJobDetails(tnnt)
-				project := setProject(tnnt, "2.4.3")
+				project := setProject(tnnt, "2.4.3", "", "")
 				compiledDag, err := com.Compile(project, job)
 				assert.NoError(t, err)
 				assert.Equal(t, string(compiledTemplate24), string(compiledDag))
@@ -104,7 +107,7 @@ func TestDagCompiler(t *testing.T) {
 				assert.NoError(t, err)
 
 				job := setupJobDetails(tnnt)
-				project := setProject(tnnt, "2.6.3")
+				project := setProject(tnnt, "2.6.3", "", "")
 				compiledDag, err := com.Compile(project, job)
 				assert.NoError(t, err)
 				assert.Equal(t, string(compiledTemplate26), string(compiledDag))
@@ -115,20 +118,35 @@ func TestDagCompiler(t *testing.T) {
 				assert.NoError(t, err)
 
 				job := setupJobDetails(tnnt)
-				project := setProject(tnnt, "2.9.3")
+				project := setProject(tnnt, "2.9.3", "", "")
 				compiledDag, err := com.Compile(project, job)
 				assert.NoError(t, err)
 				assert.Equal(t, string(compiledTemplate29), string(compiledDag))
 			})
 		})
+
+		t.Run("compiles template using project-level optimus hosts", func(t *testing.T) {
+			t.Run("with airflow version 2.9.3", func(t *testing.T) {
+				com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, repo)
+				assert.NoError(t, err)
+
+				job := setupJobDetails(tnnt)
+				project := setProject(tnnt, "2.9.3", "http://optimus-proxy.example.com", "http://grpc.optimus-proxy.example.com")
+				compiledDag, err := com.Compile(project, job)
+				assert.NoError(t, err)
+				assert.Equal(t, string(compiledTemplate29WithProjectHost), string(compiledDag))
+			})
+		})
 	})
 }
 
-func setProject(tnnt tenant.Tenant, airflowVersion string) *tenant.Project {
+func setProject(tnnt tenant.Tenant, airflowVersion, optimusHost, optimusGRPCHost string) *tenant.Project {
 	projectCfg := map[string]string{
 		tenant.ProjectSchedulerVersion: airflowVersion,
 		tenant.ProjectStoragePathKey:   "./path/to/storage",
 		tenant.ProjectSchedulerHost:    "http://airflow.com",
+		tenant.ProjectOptimusHost:      optimusHost,
+		tenant.ProjectOptimusGRPCHost:  optimusGRPCHost,
 	}
 	projectVars := map[string]string{}
 	p, _ := tenant.NewProject(tnnt.ProjectName().String(), projectCfg, projectVars)

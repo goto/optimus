@@ -43,7 +43,7 @@ func (m *ManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}

@@ -37,7 +37,7 @@ func CancelCommand() *cobra.Command {
 		Short:   "Cancel replay using replay ID",
 		Long:    "This operation takes 1 argument, replayID [required] \nwhich UUID format ",
 		Example: "optimus replay cancel <replay_id>",
-		Args: func(cmd *cobra.Command, args []string) error {
+		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return errors.New("replayID is required")
 			}

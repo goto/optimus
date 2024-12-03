@@ -28,6 +28,7 @@ func NewJobCommand() *cobra.Command {
 		NewDeleteCommand(),
 		NewDeployCommand(),
 		NewPlanCommand(),
+		NewMigrateCommand(),
 	)
 	return cmd
 }

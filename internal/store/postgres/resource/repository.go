@@ -288,7 +288,7 @@ store = $3 AND full_name = any ($4) AND status NOT IN ($5, $6)`
 	for rows.Next() {
 		var res Resource
 		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
-			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.Deprecated, &res.CreatedAt, &res.UpdatedAt)
 		if err != nil {
 			return nil, errors.Wrap(resource.EntityResource, "error in GetAll", err)
 		}
@@ -361,7 +361,7 @@ func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resou
 	var res Resource
 	err := r.db.QueryRow(ctx, query, args...).
 		Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
-			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.Deprecated, &res.CreatedAt, &res.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(resource.EntityResource, fmt.Sprintf("no resource with urn: '%s' found for project:%s, namespace:%s ", urn, tnnt.ProjectName(), tnnt.NamespaceName()))

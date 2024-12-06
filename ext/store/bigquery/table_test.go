@@ -32,7 +32,7 @@ func TestTableHandle(t *testing.T) {
 			tHandle := bigquery.NewTableHandle(table)
 
 			spec := map[string]any{"description": []string{"a", "b"}}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Create(ctx, res)
@@ -47,7 +47,7 @@ func TestTableHandle(t *testing.T) {
 				"description":     "test create",
 				"expiration_time": "invalid_date",
 			}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Create(ctx, res)
@@ -63,7 +63,7 @@ func TestTableHandle(t *testing.T) {
 			tHandle := bigquery.NewTableHandle(table)
 
 			spec := map[string]any{"description": "test create"}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Create(ctx, res)
@@ -78,7 +78,7 @@ func TestTableHandle(t *testing.T) {
 			tHandle := bigquery.NewTableHandle(table)
 
 			spec := map[string]any{"description": "test create"}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Create(ctx, res)
@@ -125,7 +125,7 @@ func TestTableHandle(t *testing.T) {
 					},
 				},
 			}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Create(ctx, res)
@@ -152,7 +152,7 @@ func TestTableHandle(t *testing.T) {
 					"type":  "hour",
 				},
 			}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Create(ctx, res)
@@ -165,7 +165,7 @@ func TestTableHandle(t *testing.T) {
 			tHandle := bigquery.NewTableHandle(table)
 
 			spec := map[string]any{"description": []string{"a", "b"}}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Update(ctx, res)
@@ -180,7 +180,7 @@ func TestTableHandle(t *testing.T) {
 				"description":     "test update",
 				"expiration_time": "invalid_date",
 			}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Update(ctx, res)
@@ -196,7 +196,7 @@ func TestTableHandle(t *testing.T) {
 			tHandle := bigquery.NewTableHandle(table)
 
 			spec := map[string]any{"description": "test update"}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Update(ctx, res)
@@ -211,7 +211,7 @@ func TestTableHandle(t *testing.T) {
 			tHandle := bigquery.NewTableHandle(table)
 
 			spec := map[string]any{"description": "test update"}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Update(ctx, res)
@@ -253,7 +253,7 @@ func TestTableHandle(t *testing.T) {
 					"type":  "DAY",
 				},
 			}
-			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec)
+			res, err := resource.NewResource("proj.dataset.table1", bigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 			assert.Nil(t, err)
 
 			err = tHandle.Update(ctx, res)

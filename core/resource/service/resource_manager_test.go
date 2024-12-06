@@ -28,7 +28,7 @@ func TestResourceManager(t *testing.T) {
 			manager := service.NewResourceManager(repo, logger)
 
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			err = manager.CreateResource(ctx, res)
@@ -37,7 +37,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("return error when datastore return an error", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			createRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToCreate))
 
@@ -64,7 +64,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("return error when create fails and mark also fails", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			createRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToCreate))
 
@@ -93,7 +93,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("marks the create exist_in_store if already exists on datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			createRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToCreate))
 
@@ -119,7 +119,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("creates the resource on the datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			createRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToCreate))
 
@@ -151,7 +151,7 @@ func TestResourceManager(t *testing.T) {
 			manager := service.NewResourceManager(repo, logger)
 
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			err = manager.UpdateResource(ctx, res)
@@ -160,7 +160,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("return error when datastore return an error", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -187,7 +187,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("return error when update fails and mark also fails", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -217,7 +217,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("updates the resource on the datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -245,7 +245,7 @@ func TestResourceManager(t *testing.T) {
 	t.Run("Validate", func(t *testing.T) {
 		t.Run("return error when service not found for datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -259,7 +259,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("returns response from the datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -279,7 +279,7 @@ func TestResourceManager(t *testing.T) {
 	t.Run("URN", func(t *testing.T) {
 		t.Run("return error when service not found for datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -293,7 +293,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("returns response from the datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -317,7 +317,7 @@ func TestResourceManager(t *testing.T) {
 	t.Run("BatchUpdate", func(t *testing.T) {
 		t.Run("return error when service not found for datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -332,7 +332,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("return error when error in both batchUpdate and update status", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 			batchReq := []*resource.Resource{updateRequest}
@@ -375,7 +375,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("returns success when no error in updating the batch", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 			updateRequest := resource.FromExisting(res, resource.ReplaceStatus(resource.StatusToUpdate))
 			batchReq := []*resource.Resource{updateRequest}
@@ -414,7 +414,7 @@ func TestResourceManager(t *testing.T) {
 			manager := service.NewResourceManager(repo, logger)
 
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			createdAt := time.Date(2022, 11, 18, 1, 0, 0, 0, time.UTC)
@@ -428,7 +428,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("runs backup in datastore", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			createdAt := time.Date(2022, 11, 18, 1, 0, 0, 0, time.UTC)
@@ -458,7 +458,7 @@ func TestResourceManager(t *testing.T) {
 			manager := service.NewResourceManager(repo, logger)
 
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			err = manager.SyncResource(ctx, res)
@@ -467,7 +467,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("returns error when create fails", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			argMatcher := mock.MatchedBy(func(r []*resource.Resource) bool {
@@ -494,7 +494,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("returns error when update fails", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			argMatcher := mock.MatchedBy(func(r []*resource.Resource) bool {
@@ -522,7 +522,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("returns error when fails to update in db", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			argMatcher := mock.MatchedBy(func(r []*resource.Resource) bool {
@@ -549,7 +549,7 @@ func TestResourceManager(t *testing.T) {
 		})
 		t.Run("returns success when successful", func(t *testing.T) {
 			spec := map[string]any{"description": "test spec"}
-			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec)
+			res, err := resource.NewResource("proj.ds.name1", "table", store, tnnt, meta, spec, nil)
 			assert.Nil(t, err)
 
 			argMatcher := mock.MatchedBy(func(r []*resource.Resource) bool {

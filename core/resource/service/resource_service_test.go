@@ -74,7 +74,7 @@ func TestResourceService(t *testing.T) {
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error if resource is invalid", func(t *testing.T) {
-			invalid, err := resource.NewResource("<invalid-naming>", "table", resource.Bigquery, tnnt, meta, spec)
+			invalid, err := resource.NewResource("<invalid-naming>", "table", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			tenantDetailsGetter := new(mockTenantDetailsGetter)
@@ -90,7 +90,7 @@ func TestResourceService(t *testing.T) {
 			assert.ErrorContains(t, actualError, "validation error")
 		})
 		t.Run("returns error cannot get resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			tenantDetailsGetter := new(mockTenantDetailsGetter)
@@ -107,7 +107,7 @@ func TestResourceService(t *testing.T) {
 			assert.ErrorContains(t, actualError, "urn error")
 		})
 		t.Run("returns error if cannot update resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 			err = incoming.UpdateURN(tableURN)
 			assert.NoError(t, err)
@@ -126,7 +126,7 @@ func TestResourceService(t *testing.T) {
 		onlyActive := false
 
 		t.Run("returns error if unknown error is encountered when getting existing resource", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -144,7 +144,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("resource does not exist in repository", func(t *testing.T) {
 			t.Run("returns error if error is encountered when creating resource to repository", func(t *testing.T) {
-				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 
 				repo := newResourceRepository(t)
@@ -164,7 +164,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("resource already exists in repository", func(t *testing.T) {
 			t.Run("returns no error if status is success or exists_in_store", func(t *testing.T) {
-				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 
 				mgr := NewResourceManager(t)
@@ -177,7 +177,7 @@ func TestResourceService(t *testing.T) {
 				}
 
 				for _, status := range statusToTest {
-					incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+					incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 					assert.NoError(t, err)
 
 					existingWithStatus := resource.FromExisting(existing, resource.ReplaceStatus(status))
@@ -193,7 +193,7 @@ func TestResourceService(t *testing.T) {
 				}
 			})
 			t.Run("returns error if status is neither create_failure nor to_create", func(t *testing.T) {
-				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 
 				mgr := NewResourceManager(t)
@@ -210,7 +210,7 @@ func TestResourceService(t *testing.T) {
 				}
 
 				for _, status := range unacceptableStatuses {
-					incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+					incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 					assert.NoError(t, err)
 
 					existingWithStatus := resource.FromExisting(existing, resource.ReplaceStatus(status))
@@ -227,9 +227,9 @@ func TestResourceService(t *testing.T) {
 			})
 
 			t.Run("returns error if error is encountered when updating to repository", func(t *testing.T) {
-				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
-				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 				existing = resource.FromExisting(existing, resource.ReplaceStatus(resource.StatusCreateFailure))
 
@@ -249,7 +249,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns error if error is encountered when creating to store", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -268,7 +268,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns nil if no error is encountered", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -291,7 +291,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("v2 spec return error if tenant details return error and validation fails", func(t *testing.T) {
-			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -310,7 +310,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("v2 spec return nil if resource is successfully saved", func(t *testing.T) {
-			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
 
 			tenantDetailsGetter := new(mockTenantDetailsGetter)
@@ -351,7 +351,7 @@ func TestResourceService(t *testing.T) {
 			assert.Error(t, actualError)
 		})
 		t.Run("returns error cannot get resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -365,7 +365,7 @@ func TestResourceService(t *testing.T) {
 			assert.ErrorContains(t, actualError, "urn error")
 		})
 		t.Run("returns error if cannot update resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
@@ -385,7 +385,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("returns error if error is encountered when getting from repo", func(t *testing.T) {
 			fullName := "project.dataset"
-			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -402,7 +402,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns error if status is not one of to_update, success, exist_in_store, or update_failure", func(t *testing.T) {
-			existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			existing, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -422,7 +422,7 @@ func TestResourceService(t *testing.T) {
 			}
 
 			for _, status := range unacceptableStatuses {
-				resourceToUpdate, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				resourceToUpdate, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 
 				existingWithStatus := resource.FromExisting(existing, resource.ReplaceStatus(status))
@@ -436,9 +436,9 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("returns error if error is encountered when updating to repo", func(t *testing.T) {
 			fullName := "project.dataset"
-			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
-			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -458,9 +458,9 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("returns error if error is encountered when updating to store", func(t *testing.T) {
 			fullName := "project.dataset"
-			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
-			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -482,10 +482,10 @@ func TestResourceService(t *testing.T) {
 		t.Run("returns error if encountered error when refreshing downstream", func(t *testing.T) {
 			fullName := "project.dataset"
 			incomingSpec := map[string]any{"view_query": "select 1;"}
-			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec)
+			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec, nil)
 			assert.NoError(t, err)
 			existingSpec := map[string]any{"view_query": "select 2;"}
-			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec)
+			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec, nil)
 			assert.NoError(t, err)
 			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -520,10 +520,10 @@ func TestResourceService(t *testing.T) {
 		t.Run("returns nil if no error is encountered", func(t *testing.T) {
 			fullName := "project.dataset"
 			incomingSpec := map[string]any{"view_query": "select 1;"}
-			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec)
+			resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec, nil)
 			assert.NoError(t, err)
 			existingSpec := map[string]any{"view_query": "select 2;"}
-			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec)
+			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec, nil)
 			assert.NoError(t, err)
 			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -550,7 +550,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("v2 spec return error if tenant details return error and validation fails", func(t *testing.T) {
-			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -570,9 +570,9 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("v2 spec return nil if resource is successfully updated", func(t *testing.T) {
 			tableName := "data-table"
-			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
-			existingResource, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			existingResource, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
 			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -615,7 +615,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns error cannot get resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -630,7 +630,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns error if cannot update resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 			err = incoming.UpdateURN(tableURN)
 			assert.NoError(t, err)
@@ -649,7 +649,7 @@ func TestResourceService(t *testing.T) {
 		onlyActive := false
 
 		t.Run("returns error if unknown error is encountered when getting existing resource", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -667,7 +667,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("resource does not exist in repository", func(t *testing.T) {
 			t.Run("returns error if error is encountered when creating resource to repository", func(t *testing.T) {
-				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 
 				repo := newResourceRepository(t)
@@ -685,7 +685,7 @@ func TestResourceService(t *testing.T) {
 			})
 
 			t.Run("returns error if error is encountered when creating to store", func(t *testing.T) {
-				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 
 				repo := newResourceRepository(t)
@@ -704,7 +704,7 @@ func TestResourceService(t *testing.T) {
 			})
 
 			t.Run("returns nil if no error is encountered", func(t *testing.T) {
-				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+				incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 
 				repo := newResourceRepository(t)
@@ -728,9 +728,9 @@ func TestResourceService(t *testing.T) {
 		t.Run("resource already exists in repository", func(t *testing.T) {
 			t.Run("returns error if error is encountered when updating to repo", func(t *testing.T) {
 				fullName := "project.dataset"
-				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
-				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 				existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -750,9 +750,9 @@ func TestResourceService(t *testing.T) {
 
 			t.Run("returns error if error is encountered when updating to store", func(t *testing.T) {
 				fullName := "project.dataset"
-				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
-				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 				assert.NoError(t, err)
 				existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -774,10 +774,10 @@ func TestResourceService(t *testing.T) {
 			t.Run("returns error if encountered error when refreshing downstream", func(t *testing.T) {
 				fullName := "project.dataset"
 				incomingSpec := map[string]any{"view_query": "select 1;"}
-				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec)
+				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec, nil)
 				assert.NoError(t, err)
 				existingSpec := map[string]any{"view_query": "select 2;"}
-				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec)
+				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec, nil)
 				assert.NoError(t, err)
 				existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -813,10 +813,10 @@ func TestResourceService(t *testing.T) {
 			t.Run("returns nil if no error is encountered", func(t *testing.T) {
 				fullName := "project.dataset"
 				incomingSpec := map[string]any{"view_query": "select 1;"}
-				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec)
+				resourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, incomingSpec, nil)
 				assert.NoError(t, err)
 				existingSpec := map[string]any{"view_query": "select 2;"}
-				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec)
+				existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, existingSpec, nil)
 				assert.NoError(t, err)
 				existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -842,7 +842,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("v2 spec return error if tenant details return error and validation fails", func(t *testing.T) {
-			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			incoming, err := resource.NewResource("data-table", bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -862,7 +862,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("v2 spec return nil if resource is successfully created", func(t *testing.T) {
 			tableName := "data-table"
-			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
 
 			tenantDetailsGetter := new(mockTenantDetailsGetter)
@@ -890,9 +890,9 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("v2 spec return nil if resource is successfully updated", func(t *testing.T) {
 			tableName := "data-table"
-			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			incoming, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
-			existingResource, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2)
+			existingResource, err := resource.NewResource(tableName, bigquery.KindTable, resource.Bigquery, tnnt, metaV2, specV2, nil)
 			assert.NoError(t, err)
 			existingResource = resource.FromExisting(existingResource, resource.ReplaceStatus(resource.StatusToUpdate))
 
@@ -947,7 +947,7 @@ func TestResourceService(t *testing.T) {
 
 		t.Run("returns resource and nil if no error is encountered", func(t *testing.T) {
 			fullName := "project.dataset"
-			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -979,7 +979,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns resources and nil if no error is encountered", func(t *testing.T) {
-			existingResource, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			existingResource, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -1001,7 +1001,7 @@ func TestResourceService(t *testing.T) {
 			"view_query": "select * from `proj.dataset.table`",
 		}
 		resourceWithStatus := func(name string, spec map[string]any, status resource.Status) *resource.Resource {
-			existingResource, resErr := resource.NewResource(name, "view", resource.Bigquery, tnnt, meta, spec)
+			existingResource, resErr := resource.NewResource(name, "view", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, resErr)
 			return resource.FromExisting(existingResource, resource.ReplaceStatus(status))
 		}
@@ -1024,7 +1024,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("skips resource when cannot get resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			mgr := NewResourceManager(t)
@@ -1043,7 +1043,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns error if cannot update resource urn", func(t *testing.T) {
-			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
@@ -1086,7 +1086,7 @@ func TestResourceService(t *testing.T) {
 		})
 
 		t.Run("returns nil if there is no resource to create or modify", func(t *testing.T) {
-			incomingResourceToUpdate, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingResourceToUpdate, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
 			existing := resourceWithStatus("project.dataset.view1", viewSpec, resource.StatusSuccess)
 
@@ -1111,7 +1111,7 @@ func TestResourceService(t *testing.T) {
 				Description: "incoming resource metadata",
 			}
 			fullName := "project.dataset"
-			incomingResourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, incomingMetadata, spec)
+			incomingResourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, incomingMetadata, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -1138,7 +1138,7 @@ func TestResourceService(t *testing.T) {
 			incomingMetadata := &resource.Metadata{
 				Description: "incoming resource metadata",
 			}
-			incomingResourceToUpdate, err := resource.NewResource(fullName, "view", resource.Bigquery, tnnt, incomingMetadata, viewSpec)
+			incomingResourceToUpdate, err := resource.NewResource(fullName, "view", resource.Bigquery, tnnt, incomingMetadata, viewSpec, nil)
 			assert.NoError(t, err)
 
 			existing := resourceWithStatus(fullName, viewSpec, resource.StatusSuccess)
@@ -1169,7 +1169,7 @@ func TestResourceService(t *testing.T) {
 			incomingMetadata := &resource.Metadata{
 				Description: "incoming resource metadata",
 			}
-			incomingResourceToUpdate, err := resource.NewResource(fullName, "view", resource.Bigquery, tnnt, incomingMetadata, viewSpec)
+			incomingResourceToUpdate, err := resource.NewResource(fullName, "view", resource.Bigquery, tnnt, incomingMetadata, viewSpec, nil)
 			assert.NoError(t, err)
 
 			existing := resourceWithStatus(fullName, viewSpec, resource.StatusCreateFailure)
@@ -1200,12 +1200,12 @@ func TestResourceService(t *testing.T) {
 				Description: "existing resource metadata",
 			}
 			fullName := "project.dataset"
-			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, existingMetadata, spec)
+			existingResource, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, existingMetadata, spec, nil)
 			assert.NoError(t, err)
 			incomingMetadata := &resource.Metadata{
 				Description: "incoming resource metadata",
 			}
-			incomingResourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, incomingMetadata, spec)
+			incomingResourceToUpdate, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, incomingMetadata, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -1242,13 +1242,13 @@ func TestResourceService(t *testing.T) {
 			updatedViewSpec := map[string]any{
 				"view_query": "select 1;",
 			}
-			incomingToUpdate, err := resource.NewResource("project.dataset.view3", "view", resource.Bigquery, tnnt, meta, updatedViewSpec)
+			incomingToUpdate, err := resource.NewResource("project.dataset.view3", "view", resource.Bigquery, tnnt, meta, updatedViewSpec, nil)
 			assert.NoError(t, err)
-			incomingToCreateExisting, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToCreateExisting, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
-			incomingToSkip, resErr := resource.NewResource("project.dataset.view2", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToSkip, resErr := resource.NewResource("project.dataset.view2", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
-			incomingToCreate, resErr := resource.NewResource("project.dataset.view5", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToCreate, resErr := resource.NewResource("project.dataset.view5", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
 
 			repo := newResourceRepository(t)
@@ -1296,13 +1296,13 @@ func TestResourceService(t *testing.T) {
 			updatedViewSpec := map[string]any{
 				"view_query": "select 1;",
 			}
-			incomingToUpdate, err := resource.NewResource("project.dataset.view3", "view", resource.Bigquery, tnnt, meta, updatedViewSpec)
+			incomingToUpdate, err := resource.NewResource("project.dataset.view3", "view", resource.Bigquery, tnnt, meta, updatedViewSpec, nil)
 			assert.NoError(t, err)
-			incomingToCreateExisting, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToCreateExisting, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
-			incomingToSkip, resErr := resource.NewResource("project.dataset.view2", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToSkip, resErr := resource.NewResource("project.dataset.view2", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
-			incomingToCreate, resErr := resource.NewResource("project.dataset.view5", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToCreate, resErr := resource.NewResource("project.dataset.view5", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
 
 			repo := newResourceRepository(t)
@@ -1351,15 +1351,15 @@ func TestResourceService(t *testing.T) {
 			updatedViewSpec := map[string]any{
 				"view_query": "select 1;",
 			}
-			incomingToUpdate, err := resource.NewResource("project.dataset.view3", "view", resource.Bigquery, tnnt, meta, updatedViewSpec)
+			incomingToUpdate, err := resource.NewResource("project.dataset.view3", "view", resource.Bigquery, tnnt, meta, updatedViewSpec, nil)
 			assert.NoError(t, err)
-			incomingToCreateExisting, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToCreateExisting, resErr := resource.NewResource("project.dataset.view1", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
-			incomingToSkip, resErr := resource.NewResource("project.dataset.view2", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToSkip, resErr := resource.NewResource("project.dataset.view2", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
-			incomingToCreate, resErr := resource.NewResource("project.dataset.view5", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToCreate, resErr := resource.NewResource("project.dataset.view5", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
-			incomingToRecreate, resErr := resource.NewResource("project.dataset.view4", "view", resource.Bigquery, tnnt, meta, viewSpec)
+			incomingToRecreate, resErr := resource.NewResource("project.dataset.view4", "view", resource.Bigquery, tnnt, meta, viewSpec, nil)
 			assert.NoError(t, resErr)
 
 			repo := newResourceRepository(t)
@@ -1418,7 +1418,7 @@ func TestResourceService(t *testing.T) {
 				"name":    "table-update",
 				"a":       "a",
 			}
-			existingToUpdate, err := resource.NewResource("data-table-update", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, existingSpec)
+			existingToUpdate, err := resource.NewResource("data-table-update", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, existingSpec, nil)
 			assert.NoError(t, err)
 
 			newSpec := map[string]any{
@@ -1427,7 +1427,7 @@ func TestResourceService(t *testing.T) {
 				"name":    "table-create",
 				"a":       "b",
 			}
-			incomingToCreate, err := resource.NewResource("data-table-create", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, newSpec)
+			incomingToCreate, err := resource.NewResource("data-table-create", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, newSpec, nil)
 			assert.NoError(t, err)
 
 			toUpdateSpec := map[string]any{
@@ -1436,7 +1436,7 @@ func TestResourceService(t *testing.T) {
 				"name":    "table-update",
 				"a":       "b",
 			}
-			incomingToUpdate, err := resource.NewResource("data-table-update", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, toUpdateSpec)
+			incomingToUpdate, err := resource.NewResource("data-table-update", bigquery.KindTable, resource.Bigquery, tnnt, &resourceMeta, toUpdateSpec, nil)
 			assert.NoError(t, err)
 
 			tenantDetailsGetter := new(mockTenantDetailsGetter)
@@ -1524,7 +1524,7 @@ func TestResourceService(t *testing.T) {
 		})
 		t.Run("returns error while syncing resource", func(t *testing.T) {
 			fullName := "project.dataset"
-			incoming, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -1544,7 +1544,7 @@ func TestResourceService(t *testing.T) {
 		})
 		t.Run("syncs the resource successfully", func(t *testing.T) {
 			fullName := "project.dataset"
-			incoming, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec)
+			incoming, err := resource.NewResource(fullName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
@@ -1578,7 +1578,7 @@ func TestResourceService(t *testing.T) {
 					FullName:  resourceName,
 					Force:     false,
 				}
-				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			)
 			defer mockDepResolver.AssertExpectations(t)
 
@@ -1604,7 +1604,7 @@ func TestResourceService(t *testing.T) {
 					FullName:  resourceName,
 					Force:     true,
 				}
-				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			)
 			defer mockDepResolver.AssertExpectations(t)
 
@@ -1636,7 +1636,7 @@ func TestResourceService(t *testing.T) {
 					FullName:  resourceName,
 					Force:     false,
 				}
-				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			)
 			defer mockDepResolver.AssertExpectations(t)
 
@@ -1661,7 +1661,7 @@ func TestResourceService(t *testing.T) {
 					FullName:  resourceName,
 					Force:     false,
 				}
-				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			)
 			defer mockDepResolver.AssertExpectations(t)
 
@@ -1686,7 +1686,7 @@ func TestResourceService(t *testing.T) {
 					FullName:  resourceName,
 					Force:     false,
 				}
-				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec)
+				existingResource, _ = resource.NewResource(resourceName, "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			)
 			defer mockDepResolver.AssertExpectations(t)
 
@@ -1759,7 +1759,7 @@ func TestResourceService(t *testing.T) {
 			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
 
-			expectedResource, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
+			expectedResource, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			repo.On("ReadByURN", ctx, tnnt, urn).Return(expectedResource, nil)

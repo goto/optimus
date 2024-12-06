@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	columnsToStore  = `full_name, kind, store, status, urn, project_name, namespace_name, metadata, spec, created_at, updated_at`
+	columnsToStore  = `full_name, kind, store, status, urn, project_name, namespace_name, metadata, spec, deprecation, created_at, updated_at`
 	resourceColumns = `id, ` + columnsToStore
 
 	changelogColumnsToStore = `entity_type, name, project_name, change_type, changes, created_at`
@@ -48,9 +48,9 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 func (r Repository) Create(ctx context.Context, resourceModel *resource.Resource) error {
 	res := FromResourceToModel(resourceModel)
 
-	insertResource := `INSERT INTO resource (` + columnsToStore + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())`
+	insertResource := `INSERT INTO resource (` + columnsToStore + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())`
 	_, err := r.db.Exec(ctx, insertResource, res.FullName, res.Kind, res.Store, res.Status, res.URN,
-		res.ProjectName, res.NamespaceName, res.Metadata, res.Spec)
+		res.ProjectName, res.NamespaceName, res.Metadata, res.Spec, res.Deprecated)
 	return errors.WrapIfErr(tenant.EntityNamespace, "error creating resource to database", err)
 }
 
@@ -140,10 +140,10 @@ func getResourceDiffs(existing, incoming *Resource) ([]Change, error) {
 func (r Repository) doUpdate(ctx context.Context, resourceModel *resource.Resource) error {
 	res := FromResourceToModel(resourceModel)
 
-	updateResource := `UPDATE resource SET kind=$1, status=$2, urn=$3, metadata=$4, spec=$5, updated_at=now() 
+	updateResource := `UPDATE resource SET kind=$1, status=$2, urn=$3, metadata=$4, spec=$5, deprecation=$10, updated_at=now() 
                 WHERE full_name=$6 AND store=$7 AND project_name = $8 And namespace_name = $9`
 	tag, err := r.db.Exec(ctx, updateResource, res.Kind, res.Status, res.URN,
-		res.Metadata, res.Spec, res.FullName, res.Store, res.ProjectName, res.NamespaceName)
+		res.Metadata, res.Spec, res.FullName, res.Store, res.ProjectName, res.NamespaceName, res.Deprecated)
 	if err != nil {
 		return errors.Wrap(resource.EntityResource, "error updating resource to database", err)
 	}
@@ -229,7 +229,7 @@ func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, stor
 
 	err := r.db.QueryRow(ctx, getResource, args...).
 		Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
-			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.Deprecated, &res.CreatedAt, &res.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(resource.EntityResource, fmt.Sprintf("no resource: '%s' found for project:%s, namespace:%s ", fullName, tnnt.ProjectName(), tnnt.NamespaceName()))
@@ -260,7 +260,7 @@ func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resou
 	for rows.Next() {
 		var res Resource
 		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
-			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.Deprecated, &res.CreatedAt, &res.UpdatedAt)
 		if err != nil {
 			return nil, errors.Wrap(resource.EntityResource, "error in GetAll", err)
 		}

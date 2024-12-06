@@ -11,6 +11,12 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
+type Deprecated struct {
+	Reason           string
+	Date             time.Time
+	ReplacementTable string
+}
+
 type Resource struct {
 	ID uuid.UUID
 
@@ -24,6 +30,8 @@ type Resource struct {
 	Metadata json.RawMessage
 	Spec     map[string]any
 
+	Deprecated json.RawMessage
+
 	URN string
 
 	Status string
@@ -34,6 +42,7 @@ type Resource struct {
 
 func FromResourceToModel(r *resource.Resource) *Resource {
 	metadata, _ := json.Marshal(r.Metadata())
+	deprecation, _ := json.Marshal(r.GetDeprecationInfo())
 
 	return &Resource{
 		FullName:      r.FullName(),
@@ -45,6 +54,7 @@ func FromResourceToModel(r *resource.Resource) *Resource {
 		Spec:          r.Spec(),
 		URN:           r.URN().String(),
 		Status:        r.Status().String(),
+		Deprecated:    deprecation,
 	}
 }
 
@@ -62,7 +72,12 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 		return nil, errors.Wrap(resource.EntityResource, "error unmarshalling metadata", err)
 	}
 
-	output, err := resource.NewResource(r.FullName, r.Kind, store, tnnt, metadata, r.Spec)
+	var deprecated *resource.Deprecated
+	if err := json.Unmarshal(r.Deprecated, &deprecated); err != nil {
+		return nil, errors.Wrap(resource.EntityResource, "error unmarshalling deprecation info", err)
+	}
+
+	output, err := resource.NewResource(r.FullName, r.Kind, store, tnnt, metadata, r.Spec, deprecated)
 	if err == nil {
 		output = resource.FromExisting(output, resource.ReplaceStatus(resource.FromStringToStatus(r.Status)))
 

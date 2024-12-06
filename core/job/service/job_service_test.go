@@ -4586,7 +4586,7 @@ func TestJobService(t *testing.T) {
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(nil, errors.New("unexpected get by urn error"))
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(false, errors.New("unexpected exist in store error"))
 
-					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
+					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1}, nil)
 					assert.NoError(t, err)
 					deletedRsc := resource.FromExisting(rsc, resource.ReplaceStatus(resource.StatusDeleted))
 
@@ -4744,7 +4744,7 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
-					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
+					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1}, nil)
 					assert.NoError(t, err)
 
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)

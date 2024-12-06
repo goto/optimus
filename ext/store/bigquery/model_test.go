@@ -24,7 +24,7 @@ func TestModelHandle(t *testing.T) {
 		Labels:      map[string]string{"owner": "optimus"},
 	}
 	spec := map[string]any{"description": []string{"a", "b"}}
-	res, err := resource.NewResource("proj.dataset.view1", storebigquery.KindView, bqStore, tnnt, &metadata, spec)
+	res, err := resource.NewResource("proj.dataset.view1", storebigquery.KindView, bqStore, tnnt, &metadata, spec, nil)
 	assert.Nil(t, err)
 
 	t.Run("Create", func(t *testing.T) {

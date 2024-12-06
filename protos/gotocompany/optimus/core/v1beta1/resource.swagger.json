@@ -594,6 +594,21 @@
         }
       }
     },
+    "v1beta1Deprecation": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "replacementTable": {
+          "type": "string"
+        }
+      }
+    },
     "v1beta1GetResourceChangelogsResponse": {
       "type": "object",
       "properties": {
@@ -709,6 +724,9 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "deprecation": {
+          "$ref": "#/definitions/v1beta1Deprecation"
         }
       },
       "title": "ResourceSpecification are datastore specification representation of a resource"

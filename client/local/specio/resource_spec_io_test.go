@@ -320,6 +320,7 @@ spec:
     - mode: nullable
       name: name
       type: string
+deprecation: null
 `)
 		r.Assert().EqualValues(expectedContent, actualContent)
 	})

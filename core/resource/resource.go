@@ -110,10 +110,7 @@ type Resource struct {
 }
 
 func (r *Resource) IsDeprecated() bool {
-	if r.deprecation != nil {
-		return true
-	}
-	return false
+	return r.deprecation != nil
 }
 
 func (r *Resource) GetUpdateImpact(incoming *Resource) UpdateImpact {

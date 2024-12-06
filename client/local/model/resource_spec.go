@@ -36,7 +36,7 @@ func (r ResourceSpec) ToProto() (*pb.ResourceSpecification, error) {
 	if r.Deprecation != nil && len(r.Deprecation.Date) > 0 {
 		deprecationDate, err := time.Parse(time.DateOnly, r.Deprecation.Date)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing deprication Date, for resource: %s, expected_format: [YYYY-MM-DD], got: [%s], err: %w", r.Name, r.Deprecation.Date, err)
+			return nil, fmt.Errorf("error parsing deprivation Date, for resource: %s, expected_format: [YYYY-MM-DD], got: [%s], err: %w", r.Name, r.Deprecation.Date, err)
 		}
 		deprecation = &pb.Deprecation{
 			Reason:           r.Deprecation.Reason,

@@ -81,7 +81,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			fullName := fmt.Sprintf("project.dataset_%d", i)
-			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
+			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
@@ -101,7 +101,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 		fullNames := make([]string, maxNumberOfResources)
 		for i := 0; i < maxNumberOfResources; i++ {
 			fullName := fmt.Sprintf("project.dataset_%d", i)
-			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
+			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
@@ -128,7 +128,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 			resourceIdx := i % maxNumberOfResources
 			fullName := fullNames[resourceIdx]
 
-			resourceToUpdate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, updatedMeta, spec)
+			resourceToUpdate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, updatedMeta, spec, nil)
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
@@ -157,7 +157,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 		fullNames := make([]string, maxNumberOfResources)
 		for i := 0; i < maxNumberOfResources; i++ {
 			fullName := fmt.Sprintf("project.dataset_%d", i)
-			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
+			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
@@ -190,7 +190,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 		repository := repoResource.NewRepository(db)
 		for i := 0; i < maxNumberOfResources; i++ {
 			fullName := fmt.Sprintf("project.dataset_%d", i)
-			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
+			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
@@ -218,7 +218,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 		fullNames := make([]string, maxNumberOfResources)
 		for i := 0; i < maxNumberOfResources; i++ {
 			fullName := fmt.Sprintf("project.dataset_%d", i)
-			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
+			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)
@@ -248,7 +248,7 @@ func BenchmarkResourceRepository(b *testing.B) {
 		resources := make([]*serviceResource.Resource, maxNumberOfResources)
 		for i := 0; i < maxNumberOfResources; i++ {
 			fullName := fmt.Sprintf("project.dataset_%d", i)
-			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec)
+			resourceToCreate, err := serviceResource.NewResource(fullName, bigquery.KindDataset, serviceResource.Bigquery, tnnt, meta, spec, nil)
 			assert.NoError(b, err)
 
 			name := fmt.Sprintf("%s:%s.%s", projectName, namespaceName, fullName)

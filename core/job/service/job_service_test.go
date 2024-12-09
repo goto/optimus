@@ -4581,6 +4581,9 @@ func TestJobService(t *testing.T) {
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
+					// validateSourcesIsDeprecated
+					resourceExistenceChecker.On("GetDeprecated", ctx, sampleTenant, sourcesToValidate).Return(nil, nil).Times(2)
+
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("unexpected compile error"))
 
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(nil, errors.New("unexpected get by urn error"))
@@ -4632,6 +4635,11 @@ func TestJobService(t *testing.T) {
 								Success: false,
 							},
 							{
+								Stage:    dto.StageSourceDeprecationValidation,
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
 								Stage:    "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
@@ -4667,6 +4675,11 @@ func TestJobService(t *testing.T) {
 									"bigquery://project:dataset.tableD: no issue",
 								},
 								Success: false,
+							},
+							{
+								Stage:    dto.StageSourceDeprecationValidation,
+								Messages: []string{"no issue"},
+								Success:  true,
 							},
 							{
 								Stage:    "window validation",
@@ -4742,6 +4755,9 @@ func TestJobService(t *testing.T) {
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
+					// validateSourcesIsDeprecated
+					resourceExistenceChecker.On("GetDeprecated", ctx, sampleTenant, sourcesToValidate).Return(nil, nil).Times(2)
+
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1}, nil)
@@ -4789,6 +4805,11 @@ func TestJobService(t *testing.T) {
 								Success: true,
 							},
 							{
+								Stage:    dto.StageSourceDeprecationValidation,
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
 								Stage:    "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
@@ -4821,6 +4842,11 @@ func TestJobService(t *testing.T) {
 								Success: true,
 							},
 							{
+								Stage:    dto.StageSourceDeprecationValidation,
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
 								Stage:    "window validation",
 								Messages: []string{"no issue"},
 								Success:  true,
@@ -4844,6 +4870,335 @@ func TestJobService(t *testing.T) {
 					assert.EqualValues(t, expectedResult["jobB"], actualResult["jobB"])
 					assert.NoError(t, actualError)
 				})
+			})
+		})
+
+		t.Run("SourceDeprecationValidation", func(t *testing.T) {
+			t.Run("should return unsuccessful result and nil error when failed get deprecated sources", func(t *testing.T) {
+				tenantDetailsGetter := new(TenantDetailsGetter)
+				defer tenantDetailsGetter.AssertExpectations(t)
+
+				jobRepo := new(JobRepository)
+				defer jobRepo.AssertExpectations(t)
+
+				downstreamRepo := new(DownstreamRepository)
+				defer downstreamRepo.AssertExpectations(t)
+
+				upstreamResolver := new(UpstreamResolver)
+				defer upstreamResolver.AssertExpectations(t)
+
+				pluginService := NewPluginService(t)
+
+				jobRunInputCompiler := NewJobRunInputCompiler(t)
+				resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+				jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+					pluginService, upstreamResolver, tenantDetailsGetter, nil,
+					log, nil, compiler.NewEngine(),
+					jobRunInputCompiler, resourceExistenceChecker, nil,
+				)
+
+				resourceURND, err := resource.ParseURN("bigquery://project:dataset.tableD")
+				assert.NoError(t, err)
+
+				jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+				assert.NoError(t, err)
+				jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+				assert.NoError(t, err)
+
+				jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNC}, false)
+				jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []resource.URN{resourceURNA}, false)
+
+				upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+				jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+				jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
+
+				jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
+
+				tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+				pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+				sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
+				pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
+
+				// validateSourcesIsDeprecated
+				resourceExistenceChecker.On("GetDeprecated", ctx, sampleTenant, sourcesToValidate).Return(nil, context.DeadlineExceeded).Times(2)
+
+				jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
+
+				rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1}, nil)
+				assert.NoError(t, err)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
+
+				upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+				upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURND).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURND).Return(true, nil)
+
+				upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+				request := dto.ValidateRequest{
+					Tenant:       sampleTenant,
+					JobSpecs:     []*job.Spec{jobSpecA, jobSpecB},
+					JobNames:     nil,
+					DeletionMode: false,
+				}
+
+				expectedResult := map[job.Name][]dto.ValidateResult{
+					"jobA": {
+						{
+							Stage:    "destination validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage: "source validation",
+							Messages: []string{
+								"bigquery://project:dataset.tableA: no issue",
+								"bigquery://project:dataset.tableB: no issue",
+								"bigquery://project:dataset.tableC: no issue",
+								"bigquery://project:dataset.tableD: no issue",
+							},
+							Success: true,
+						},
+						{
+							Stage:    dto.StageSourceDeprecationValidation,
+							Messages: []string{"error getting deprecated resources [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB, bigquery://project:dataset.tableC, bigquery://project:dataset.tableD] for job test-proj/jobA: context deadline exceeded"},
+							Success:  false,
+						},
+						{
+							Stage:    "window validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "compile validation for run",
+							Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "upstream validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+					},
+					"jobB": {
+						{
+							Stage:    "destination validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage: "source validation",
+							Messages: []string{
+								"bigquery://project:dataset.tableA: no issue",
+								"bigquery://project:dataset.tableB: no issue",
+								"bigquery://project:dataset.tableC: no issue",
+								"bigquery://project:dataset.tableD: no issue",
+							},
+							Success: true,
+						},
+						{
+							Stage:    dto.StageSourceDeprecationValidation,
+							Messages: []string{"error getting deprecated resources [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB, bigquery://project:dataset.tableC, bigquery://project:dataset.tableD] for job test-proj/jobB: context deadline exceeded"},
+							Success:  false,
+						},
+						{
+							Stage:    "window validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "compile validation for run",
+							Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "upstream validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+					},
+				}
+
+				actualResult, actualError := jobService.Validate(ctx, request)
+
+				assert.EqualValues(t, expectedResult["jobA"], actualResult["jobA"])
+				assert.EqualValues(t, expectedResult["jobB"], actualResult["jobB"])
+				assert.NoError(t, actualError)
+			})
+
+			t.Run("should return unsuccessful result and nil error when failed get deprecated sources", func(t *testing.T) {
+				tenantDetailsGetter := new(TenantDetailsGetter)
+				defer tenantDetailsGetter.AssertExpectations(t)
+
+				jobRepo := new(JobRepository)
+				defer jobRepo.AssertExpectations(t)
+
+				downstreamRepo := new(DownstreamRepository)
+				defer downstreamRepo.AssertExpectations(t)
+
+				upstreamResolver := new(UpstreamResolver)
+				defer upstreamResolver.AssertExpectations(t)
+
+				pluginService := NewPluginService(t)
+
+				jobRunInputCompiler := NewJobRunInputCompiler(t)
+				resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+				jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+					pluginService, upstreamResolver, tenantDetailsGetter, nil,
+					log, nil, compiler.NewEngine(),
+					jobRunInputCompiler, resourceExistenceChecker, nil,
+				)
+
+				resourceURND, err := resource.ParseURN("bigquery://project:dataset.tableD")
+				assert.NoError(t, err)
+
+				jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+				assert.NoError(t, err)
+				jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+				assert.NoError(t, err)
+
+				jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNC}, false)
+				jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []resource.URN{resourceURNA}, false)
+
+				upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+				jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+				jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
+
+				jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
+
+				tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+				pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+				sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
+				pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
+
+				// validateSourcesIsDeprecated
+				deprecatedURNs := []resource.URN{resourceURNA, resourceURNB}
+				resourceExistenceChecker.On("GetDeprecated", ctx, sampleTenant, sourcesToValidate).Return(deprecatedURNs, nil).Times(2)
+
+				jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
+
+				rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1}, nil)
+				assert.NoError(t, err)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
+
+				upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+				upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
+
+				resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURND).Return(rsc, nil)
+				resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURND).Return(true, nil)
+
+				upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+				request := dto.ValidateRequest{
+					Tenant:       sampleTenant,
+					JobSpecs:     []*job.Spec{jobSpecA, jobSpecB},
+					JobNames:     nil,
+					DeletionMode: false,
+				}
+
+				expectedResult := map[job.Name][]dto.ValidateResult{
+					"jobA": {
+						{
+							Stage:    "destination validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage: "source validation",
+							Messages: []string{
+								"bigquery://project:dataset.tableA: no issue",
+								"bigquery://project:dataset.tableB: no issue",
+								"bigquery://project:dataset.tableC: no issue",
+								"bigquery://project:dataset.tableD: no issue",
+							},
+							Success: true,
+						},
+						{
+							Stage:    dto.StageSourceDeprecationValidation,
+							Messages: []string{"job test-proj/jobA sources has deprecated: [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB]"},
+							Success:  false,
+						},
+						{
+							Stage:    "window validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "compile validation for run",
+							Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "upstream validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+					},
+					"jobB": {
+						{
+							Stage:    "destination validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage: "source validation",
+							Messages: []string{
+								"bigquery://project:dataset.tableA: no issue",
+								"bigquery://project:dataset.tableB: no issue",
+								"bigquery://project:dataset.tableC: no issue",
+								"bigquery://project:dataset.tableD: no issue",
+							},
+							Success: true,
+						},
+						{
+							Stage:    dto.StageSourceDeprecationValidation,
+							Messages: []string{"job test-proj/jobB sources has deprecated: [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB]"},
+							Success:  false,
+						},
+						{
+							Stage:    "window validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "compile validation for run",
+							Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+							Success:  true,
+						},
+						{
+							Stage:    "upstream validation",
+							Messages: []string{"no issue"},
+							Success:  true,
+						},
+					},
+				}
+
+				actualResult, actualError := jobService.Validate(ctx, request)
+
+				assert.EqualValues(t, expectedResult["jobA"], actualResult["jobA"])
+				assert.EqualValues(t, expectedResult["jobB"], actualResult["jobB"])
+				assert.NoError(t, actualError)
 			})
 		})
 	})
@@ -6274,6 +6629,37 @@ func (_m *ResourceExistenceChecker) GetByURN(ctx context.Context, tnnt tenant.Te
 
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, resource.URN) error); ok {
 		r1 = rf(ctx, tnnt, urn)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ExistInStore provides a mock function with given fields: ctx, tnnt, urn
+func (_m *ResourceExistenceChecker) GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]resource.URN, error) {
+	ret := _m.Called(ctx, tnnt, urns)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ExistInStore")
+	}
+
+	var r0 []resource.URN
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, ...resource.URN) ([]resource.URN, error)); ok {
+		return rf(ctx, tnnt, urns...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, ...resource.URN) []resource.URN); ok {
+		r0 = rf(ctx, tnnt, urns...)
+	} else {
+		r0, ok = ret.Get(0).([]resource.URN)
+		if !ok {
+
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, ...resource.URN) error); ok {
+		r1 = rf(ctx, tnnt, urns...)
 	} else {
 		r1 = ret.Error(1)
 	}

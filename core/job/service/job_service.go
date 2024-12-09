@@ -151,6 +151,7 @@ type JobRunInputCompiler interface {
 type ResourceExistenceChecker interface {
 	GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
 	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
+	GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]resource.URN, error)
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
@@ -1612,6 +1613,8 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	result = j.validateSource(ctx, tenantDetails, subjectJob.Spec())
 	output = append(output, result)
 
+	output = append(output, j.validateSourcesIsDeprecated(ctx, tenantDetails.ToTenant(), subjectJob))
+
 	result = j.validateWindow(tenantDetails, subjectJob.Spec().WindowConfig())
 	output = append(output, result)
 
@@ -1956,6 +1959,34 @@ func (*JobService) validateWindow(tenantDetails *tenant.WithDetails, windowConfi
 
 	return dto.ValidateResult{
 		Stage:    dto.StageWindowValidation,
+		Messages: []string{"no issue"},
+		Success:  true,
+	}
+}
+
+func (j *JobService) validateSourcesIsDeprecated(ctx context.Context, tnnt tenant.Tenant, subjectJob *job.Job) dto.ValidateResult {
+	const stage = dto.StageSourceDeprecationValidation
+
+	deprecated, err := j.resourceChecker.GetDeprecated(ctx, tnnt, subjectJob.Sources()...)
+	if err != nil {
+		j.logger.Error("error getting deprecated resources %s: %s", resource.URNs(subjectJob.Sources()).String(), err)
+		return dto.ValidateResult{
+			Stage:    stage,
+			Messages: []string{fmt.Sprintf("error getting deprecated resources %s for job %s: %s", resource.URNs(subjectJob.Sources()).String(), subjectJob.FullName(), err)},
+			Success:  false,
+		}
+	}
+
+	if len(deprecated) > 0 {
+		return dto.ValidateResult{
+			Stage:    stage,
+			Messages: []string{fmt.Sprintf("job %s sources has deprecated: %s", subjectJob.FullName(), resource.URNs(deprecated).String())},
+			Success:  false,
+		}
+	}
+
+	return dto.ValidateResult{
+		Stage:    stage,
 		Messages: []string{"no issue"},
 		Success:  true,
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -1769,6 +1770,75 @@ func TestResourceService(t *testing.T) {
 			actualResource, err := rscService.GetByURN(ctx, tnnt, urn)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedResource, actualResource)
+		})
+	})
+
+	t.Run("GetDeprecated", func(t *testing.T) {
+		urnA, err := resource.NewURN("bigquery", "project.dataset.tableA")
+		assert.NotNil(t, urnA)
+		assert.NoError(t, err)
+		urnB, err := resource.NewURN("bigquery", "project.dataset.tableB")
+		assert.NotNil(t, urnB)
+		assert.NoError(t, err)
+		urnC, err := resource.NewURN("redshift", "project.dataset.tableC")
+		assert.NotNil(t, urnC)
+		assert.NoError(t, err)
+
+		deprecated := &resource.Deprecated{
+			Reason:           "testing",
+			Date:             time.Date(2024, 12, 18, 0, 0, 0, 0, time.UTC),
+			ReplacementTable: "project.dataset.tableD",
+		}
+		resourceC, err := resource.NewResource(urnC.String(), "table", "redishift", tnnt, meta, spec, deprecated)
+		assert.NoError(t, err)
+		assert.NotNil(t, resourceC)
+		assert.NoError(t, resourceC.UpdateURN(urnC))
+
+		resourceURNsBQ := []string{urnA.GetName(), urnB.GetName()}
+		resourceURNsRS := []string{urnC.GetName()}
+
+		logger := log.NewLogrus()
+
+		t.Run("should return nil and nil error when urns is empty", func(t *testing.T) {
+			repo := newResourceRepository(t)
+
+			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
+
+			actual, err := rscService.GetDeprecated(ctx, tnnt)
+			assert.NoError(t, err)
+			assert.Nil(t, actual)
+		})
+
+		t.Run("should return nil and error when failed GetResources", func(t *testing.T) {
+			repo := newResourceRepository(t)
+			resourceURNs := []resource.URN{urnA, urnB}
+
+			repo.On("GetResources", ctx, tnnt, resource.Bigquery, resourceURNsBQ).
+				Return(nil, errors.New("unknown error"))
+
+			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
+
+			actual, err := rscService.GetDeprecated(ctx, tnnt, resourceURNs...)
+			assert.ErrorContains(t, err, "unknown error")
+			assert.Empty(t, actual)
+		})
+
+		t.Run("should return deprecated resources and error when GetResources sometimes failing", func(t *testing.T) {
+			repo := newResourceRepository(t)
+			resourceURNs := []resource.URN{urnA, urnB, urnC}
+
+			repo.On("GetResources", ctx, tnnt, resource.Bigquery, resourceURNsBQ).Return(nil, errors.New("unknown error"))
+
+			rsDeprecatedResources := []*resource.Resource{resourceC}
+			repo.On("GetResources", ctx, tnnt, resource.Store("redshift"), resourceURNsRS).Return(rsDeprecatedResources, nil)
+
+			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
+
+			expected := []resource.URN{urnC}
+
+			actual, err := rscService.GetDeprecated(ctx, tnnt, resourceURNs...)
+			assert.ErrorContains(t, err, "unknown error")
+			assert.ElementsMatch(t, actual, expected)
 		})
 	})
 }

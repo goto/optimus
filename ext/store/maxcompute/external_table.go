@@ -63,8 +63,8 @@ func (e ExternalTableHandle) Update(res *resource.Resource) error {
 }
 
 func (e ExternalTableHandle) Exists(tableName string) bool {
-	//TODO implement me
-	panic("implement me")
+	_, err := e.mcExternalTable.BatchLoadTables([]string{tableName})
+	return err == nil
 }
 
 func NewExternalTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcExternalTable McExternalTable) *ExternalTableHandle {

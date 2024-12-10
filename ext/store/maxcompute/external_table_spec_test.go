@@ -43,7 +43,6 @@ func TestRelationalExternalTable(t *testing.T) {
 			Source: &maxcompute.ExternalSource{
 				SourceType: "GOOGLE_SHEETS",
 				SourceURIs: []string{"https://google.com/sheets"},
-				Config:     maxcompute.ExternalSourceConfig{},
 			},
 		}
 		err := et.Validate()
@@ -61,7 +60,6 @@ func TestRelationalExternalTable(t *testing.T) {
 			Source: &maxcompute.ExternalSource{
 				SourceType: "GOOGLE_SHEETS",
 				SourceURIs: []string{"https://google.com/sheets"},
-				Config:     maxcompute.ExternalSourceConfig{},
 			},
 		}
 		err := et.Validate()
@@ -77,7 +75,6 @@ func TestExternalSourceValidate(t *testing.T) {
 			es := maxcompute.ExternalSource{
 				SourceType: "",
 				SourceURIs: []string{},
-				Config:     maxcompute.ExternalSourceConfig{},
 			}
 
 			err := es.Validate()
@@ -88,7 +85,6 @@ func TestExternalSourceValidate(t *testing.T) {
 			es := maxcompute.ExternalSource{
 				SourceType: "GOOGLE_SHEETS",
 				SourceURIs: []string{},
-				Config:     maxcompute.ExternalSourceConfig{},
 			}
 
 			err := es.Validate()
@@ -99,7 +95,6 @@ func TestExternalSourceValidate(t *testing.T) {
 			es := maxcompute.ExternalSource{
 				SourceType: "GOOGLE_SHEETS",
 				SourceURIs: []string{""},
-				Config:     maxcompute.ExternalSourceConfig{},
 			}
 
 			err := es.Validate()
@@ -109,9 +104,8 @@ func TestExternalSourceValidate(t *testing.T) {
 	})
 	t.Run("returns no error when valid", func(t *testing.T) {
 		es := maxcompute.ExternalSource{
-			SourceType: "GOOGLE_SHEETS",
+			SourceType: "CSV",
 			SourceURIs: []string{"https://google.com/sheets"},
-			Config:     maxcompute.ExternalSourceConfig{},
 		}
 
 		err := es.Validate()

@@ -57,15 +57,15 @@ func (e ExternalSource) Validate() error {
 	if e.SourceType == "" {
 		return errors.InvalidArgument(EntityExternalTable, "source type is empty")
 	}
-	if len(e.SourceURIs) == 0 {
-		return errors.InvalidArgument(EntityExternalTable, "source uri list is empty")
-	}
-
-	for _, uri := range e.SourceURIs {
-		if uri == "" {
-			return errors.InvalidArgument(EntityExternalTable, "uri is empty")
-		}
-	}
+	// TODO: Enable sourceURI validation with sheets
+	//if  len(e.SourceURIs) == 0 {
+	//	return errors.InvalidArgument(EntityExternalTable, "source uri list is empty")
+	//}
+	//for _, uri := range e.SourceURIs {
+	//	if uri == "" {
+	//		return errors.InvalidArgument(EntityExternalTable, "uri is empty")
+	//	}
+	//}
 
 	return nil
 }

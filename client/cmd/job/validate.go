@@ -18,9 +18,11 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/plan"
+	lerrors "github.com/goto/optimus/client/local/errors"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/job/dto"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -213,10 +215,49 @@ func (v *validateCommand) executeServerValidation(namespace *config.Namespace, j
 		success = false
 	}
 
+	if err := v.validateJobSourceIsDeprecated(fromServer, response); err != nil {
+		v.logger.Error("error returned when validating deprecated sources: %v", err)
+		return err
+	}
+
 	if !success {
 		return errors.New("encountered one or more errors")
 	}
 
+	return nil
+}
+
+// validateJobSourceIsDeprecated this only support for job spec is from local, due to needs check whether the source is existing or new
+func (*validateCommand) validateJobSourceIsDeprecated(fromServer bool, response *pb.ValidateResponse) error {
+	if fromServer {
+		return nil
+	}
+
+	var errList []string
+	var warnList []string
+
+	for _, results := range response.GetResultsByJobName() {
+		for _, result := range results.GetResults() {
+			skip := result == nil || result.GetSuccess() || !dto.StageSourceDeprecationValidation.Equal(result.GetName())
+			if skip {
+				continue
+			}
+
+			switch result.GetLevel() {
+			case pb.ValidateResponse_LEVEL_ERROR:
+				errList = append(errList, result.GetMessages()...)
+			case pb.ValidateResponse_LEVEL_WARNING:
+				warnList = append(warnList, result.GetMessages()...)
+			}
+		}
+	}
+
+	if len(errList) > 0 {
+		return lerrors.NewValidationErrorf("new job sources is deprecated: [%s]", strings.Join(errList, ", "))
+	}
+	if len(warnList) > 0 {
+		return lerrors.NewWarnErrorf("existing job sources is deprecated: [%s]", strings.Join(warnList, ", "))
+	}
 	return nil
 }
 

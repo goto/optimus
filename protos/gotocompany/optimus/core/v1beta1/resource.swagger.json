@@ -484,6 +484,19 @@
     }
   },
   "definitions": {
+    "corev1beta1Level": {
+      "type": "string",
+      "enum": [
+        "LEVEL_UNSPECIFIED",
+        "LEVEL_TRACE",
+        "LEVEL_DEBUG",
+        "LEVEL_INFO",
+        "LEVEL_WARNING",
+        "LEVEL_ERROR",
+        "LEVEL_FATAL"
+      ],
+      "default": "LEVEL_UNSPECIFIED"
+    },
     "corev1beta1ResourceStatus": {
       "type": "object",
       "properties": {
@@ -620,19 +633,6 @@
         }
       }
     },
-    "v1beta1Level": {
-      "type": "string",
-      "enum": [
-        "LEVEL_UNSPECIFIED",
-        "LEVEL_TRACE",
-        "LEVEL_DEBUG",
-        "LEVEL_INFO",
-        "LEVEL_WARNING",
-        "LEVEL_ERROR",
-        "LEVEL_FATAL"
-      ],
-      "default": "LEVEL_UNSPECIFIED"
-    },
     "v1beta1ListResourceSpecificationResponse": {
       "type": "object",
       "properties": {
@@ -648,7 +648,7 @@
       "type": "object",
       "properties": {
         "level": {
-          "$ref": "#/definitions/v1beta1Level"
+          "$ref": "#/definitions/corev1beta1Level"
         },
         "message": {
           "type": "string"

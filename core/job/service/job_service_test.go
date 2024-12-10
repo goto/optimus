@@ -6652,10 +6652,7 @@ func (_m *ResourceExistenceChecker) GetDeprecated(ctx context.Context, tnnt tena
 	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, ...resource.URN) []resource.URN); ok {
 		r0 = rf(ctx, tnnt, urns...)
 	} else {
-		r0, ok = ret.Get(0).([]resource.URN)
-		if !ok {
-
-		}
+		r0, _ = ret.Get(0).([]resource.URN)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, ...resource.URN) error); ok {

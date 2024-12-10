@@ -16,4 +16,13 @@ type ValidateResult struct {
 	Stage    ValidateStage
 	Messages []string
 	Success  bool
+	Level    *ValidateLevel
 }
+
+// TODO add this implementation for source deprecated
+type ValidateLevel string
+
+const (
+	ValidateLevelError   ValidateLevel = "error"
+	ValidateLevelWarning ValidateLevel = "warning"
+)

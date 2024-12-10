@@ -18,3 +18,5 @@ type ValidateStage string
 func (v ValidateStage) String() string {
 	return string(v)
 }
+
+func (v ValidateStage) Equal(compare string) bool { return string(v) == compare }

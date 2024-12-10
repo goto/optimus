@@ -1173,6 +1173,9 @@
         },
         "success": {
           "type": "boolean"
+        },
+        "level": {
+          "$ref": "#/definitions/v1beta1ValidateResponseLevel"
         }
       }
     },
@@ -1214,6 +1217,19 @@
           "$ref": "#/definitions/v1beta1HttpDependency"
         }
       }
+    },
+    "corev1beta1Level": {
+      "type": "string",
+      "enum": [
+        "LEVEL_UNSPECIFIED",
+        "LEVEL_TRACE",
+        "LEVEL_DEBUG",
+        "LEVEL_INFO",
+        "LEVEL_WARNING",
+        "LEVEL_ERROR",
+        "LEVEL_FATAL"
+      ],
+      "default": "LEVEL_UNSPECIFIED"
     },
     "protobufAny": {
       "type": "object",
@@ -1757,19 +1773,6 @@
       },
       "title": "JobTask is part of a job that dictates main transformation\neach job has exactly one task"
     },
-    "v1beta1Level": {
-      "type": "string",
-      "enum": [
-        "LEVEL_UNSPECIFIED",
-        "LEVEL_TRACE",
-        "LEVEL_DEBUG",
-        "LEVEL_INFO",
-        "LEVEL_WARNING",
-        "LEVEL_ERROR",
-        "LEVEL_FATAL"
-      ],
-      "default": "LEVEL_UNSPECIFIED"
-    },
     "v1beta1ListJobSpecificationResponse": {
       "type": "object",
       "properties": {
@@ -1785,7 +1788,7 @@
       "type": "object",
       "properties": {
         "level": {
-          "$ref": "#/definitions/v1beta1Level"
+          "$ref": "#/definitions/corev1beta1Level"
         },
         "message": {
           "type": "string"
@@ -1864,6 +1867,15 @@
           }
         }
       }
+    },
+    "v1beta1ValidateResponseLevel": {
+      "type": "string",
+      "enum": [
+        "LEVEL_UNSPECIFIED",
+        "LEVEL_WARNING",
+        "LEVEL_ERROR"
+      ],
+      "default": "LEVEL_UNSPECIFIED"
     }
   },
   "externalDocs": {

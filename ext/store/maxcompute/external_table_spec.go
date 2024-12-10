@@ -15,6 +15,8 @@ type ExternalTable struct {
 	Description string          `mapstructure:"description,omitempty"`
 	Schema      Schema          `mapstructure:"schema,omitempty"`
 	Source      *ExternalSource `mapstructure:"source,omitempty"`
+
+	Hints map[string]string `mapstructure:"hints,omitempty"`
 }
 
 func (e *ExternalTable) FullName() string {
@@ -43,7 +45,12 @@ type ExternalSource struct {
 	SourceURIs []string `mapstructure:"uris,omitempty"`
 
 	// Additional configs for CSV, GoogleSheets, LarkSheets formats.
-	Config ExternalSourceConfig `mapstructure:"config"`
+	SerdeProperties map[string]string `mapstructure:"serde_properties"`
+	TableProperties map[string]string `mapstructure:"table_properties"`
+
+	SyncInterval int64    `mapstructure:"sync_interval_in_hrs,omitempty"`
+	Jars         []string `mapstructure:"jars,omitempty"`
+	Location     string   `mapstructure:"location,omitempty"`
 }
 
 func (e ExternalSource) Validate() error {
@@ -61,10 +68,4 @@ func (e ExternalSource) Validate() error {
 	}
 
 	return nil
-}
-
-type ExternalSourceConfig struct {
-	Range           string `mapstructure:"range"`
-	SkipLeadingRows int64  `mapstructure:"skip_leading_rows"`
-	SyncInterval    int64  `mapstructure:"sync_interval_in_hrs"`
 }

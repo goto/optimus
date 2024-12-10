@@ -52,6 +52,14 @@ func (c *MaxComputeClient) TableHandleFrom(projectSchema ProjectSchema) TableRes
 	return NewTableHandle(c, s, t)
 }
 
+func (c *MaxComputeClient) ExternalTableHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
+	c.SetDefaultProjectName(projectSchema.Project)
+	c.SetCurrentSchemaName(projectSchema.Schema)
+	s := c.Schemas()
+	t := c.Tables()
+	return NewExternalTableHandle(c, s, t)
+}
+
 func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
 	c.SetDefaultProjectName(projectSchema.Project)
 	c.SetCurrentSchemaName(projectSchema.Schema)

@@ -32,6 +32,7 @@ type TableResourceHandle interface {
 type Client interface {
 	TableHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
+	ExternalTableHandleFrom(schema ProjectSchema) TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -75,6 +76,10 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		handle := odpsClient.ViewHandleFrom(projectSchema)
 		return handle.Create(res)
 
+	case KindExternalTable:
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema)
+		return handle.Create(res)
+
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
@@ -108,6 +113,10 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 		handle := odpsClient.ViewHandleFrom(projectSchema)
 		return handle.Update(res)
 
+	case KindExternalTable:
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema)
+		return handle.Update(res)
+
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
@@ -134,6 +143,14 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 		}
 		view.Name = r.Name()
 		return view.Validate()
+
+	case KindExternalTable:
+		extTable, err := ConvertSpecTo[ExternalTable](r)
+		if err != nil {
+			return err
+		}
+		extTable.Name = r.Name()
+		return extTable.Validate()
 
 	default:
 		return errors.InvalidArgument(resource.EntityResource, "unknown kind")
@@ -178,8 +195,9 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 	}
 
 	kindToHandleFn := map[string]func(projectSchema ProjectSchema) TableResourceHandle{
-		KindTable: client.TableHandleFrom,
-		KindView:  client.ViewHandleFrom,
+		KindTable:         client.TableHandleFrom,
+		KindView:          client.ViewHandleFrom,
+		KindExternalTable: client.ExternalTableHandleFrom,
 	}
 
 	for _, resourceHandleFn := range kindToHandleFn {

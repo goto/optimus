@@ -19,8 +19,11 @@ type ValidateResult struct {
 	Level    *ValidateLevel
 }
 
-// TODO add this implementation for source deprecated
 type ValidateLevel string
+
+func (level ValidateLevel) String() string { return string(level) }
+
+func (level ValidateLevel) Ptr() *ValidateLevel { return &level }
 
 const (
 	ValidateLevelError   ValidateLevel = "error"

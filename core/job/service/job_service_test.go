@@ -5087,6 +5087,8 @@ func TestJobService(t *testing.T) {
 				// validateSourcesIsDeprecated
 				deprecatedURNs := []resource.URN{resourceURNA, resourceURNB}
 				resourceExistenceChecker.On("GetDeprecated", ctx, sampleTenant, sourcesToValidate).Return(deprecatedURNs, nil).Times(2)
+				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobA.Spec().Name()).Return(jobA, nil).Once()
+				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobB.Spec().Name()).Return(jobB, nil).Once()
 
 				jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -5138,6 +5140,7 @@ func TestJobService(t *testing.T) {
 							Stage:    dto.StageSourceDeprecationValidation,
 							Messages: []string{"job test-proj/jobA sources has deprecated: [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB]"},
 							Success:  false,
+							Level:    dto.ValidateLevelError.Ptr(),
 						},
 						{
 							Stage:    "window validation",
@@ -5175,6 +5178,7 @@ func TestJobService(t *testing.T) {
 							Stage:    dto.StageSourceDeprecationValidation,
 							Messages: []string{"job test-proj/jobB sources has deprecated: [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB]"},
 							Success:  false,
+							Level:    dto.ValidateLevelError.Ptr(),
 						},
 						{
 							Stage:    "window validation",

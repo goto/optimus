@@ -244,9 +244,9 @@ func (*validateCommand) validateJobSourceIsDeprecated(fromServer bool, response 
 			}
 
 			switch result.GetLevel() {
-			case pb.ValidateResponse_LEVEL_ERROR:
+			case pb.Level_LEVEL_ERROR:
 				errList = append(errList, result.GetMessages()...)
-			case pb.ValidateResponse_LEVEL_WARNING:
+			case pb.Level_LEVEL_WARNING:
 				warnList = append(warnList, result.GetMessages()...)
 			}
 		}

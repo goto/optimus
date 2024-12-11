@@ -5085,7 +5085,27 @@ func TestJobService(t *testing.T) {
 				pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
 				// validateSourcesIsDeprecated
-				deprecatedURNs := []resource.URN{resourceURNA, resourceURNB}
+				const kindTable = "table"
+				hasDeprecated := &resource.Deprecated{
+					Reason:           "test",
+					Date:             time.Time{},
+					ReplacementTable: "replacement_table",
+				}
+				willDeprecated := &resource.Deprecated{
+					Reason:           "test",
+					Date:             time.Date(3000, 0, 0, 0, 0, 0, 0, time.UTC),
+					ReplacementTable: "replacement_table",
+				}
+				resourceSpec := map[string]any{"version": 1}
+				resourceMeta := &resource.Metadata{Version: 1}
+				resourceA, err := resource.NewResource(resourceURNA.String(), kindTable, resource.Store(resourceURNA.GetStore()), sampleTenant, resourceMeta, resourceSpec, hasDeprecated)
+				assert.NoError(t, err)
+				_ = resourceA.UpdateURN(resourceURNA)
+				resourceB, err := resource.NewResource(resourceURNB.String(), kindTable, resource.Store(resourceURNB.GetStore()), sampleTenant, resourceMeta, resourceSpec, willDeprecated)
+				assert.NoError(t, err)
+				_ = resourceB.UpdateURN(resourceURNB)
+
+				deprecatedURNs := []*resource.Resource{resourceA, resourceB}
 				resourceExistenceChecker.On("GetDeprecated", ctx, sampleTenant, sourcesToValidate).Return(deprecatedURNs, nil).Times(2)
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobA.Spec().Name()).Return(jobA, nil).Once()
 				jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), jobB.Spec().Name()).Return(jobB, nil).Once()
@@ -5137,10 +5157,13 @@ func TestJobService(t *testing.T) {
 							Success: true,
 						},
 						{
-							Stage:    dto.StageSourceDeprecationValidation,
-							Messages: []string{"job test-proj/jobA sources has deprecated: [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB]"},
-							Success:  false,
-							Level:    dto.ValidateLevelError.Ptr(),
+							Stage: dto.StageSourceDeprecationValidation,
+							Messages: []string{
+								"job test-proj/jobA with source bigquery://project:dataset.tableA has deprecated at 0001-01-01 with reason: test and will be replaced by replacement_table",
+								"job test-proj/jobA with source bigquery://project:dataset.tableB will be deprecated at 2999-11-30 with reason: test and will be replaced by replacement_table",
+							},
+							Success: false,
+							Level:   dto.ValidateLevelError.Ptr(),
 						},
 						{
 							Stage:    "window validation",
@@ -5175,10 +5198,13 @@ func TestJobService(t *testing.T) {
 							Success: true,
 						},
 						{
-							Stage:    dto.StageSourceDeprecationValidation,
-							Messages: []string{"job test-proj/jobB sources has deprecated: [bigquery://project:dataset.tableA, bigquery://project:dataset.tableB]"},
-							Success:  false,
-							Level:    dto.ValidateLevelError.Ptr(),
+							Stage: dto.StageSourceDeprecationValidation,
+							Messages: []string{
+								"job test-proj/jobB with source bigquery://project:dataset.tableA has deprecated at 0001-01-01 with reason: test and will be replaced by replacement_table",
+								"job test-proj/jobB with source bigquery://project:dataset.tableB will be deprecated at 2999-11-30 with reason: test and will be replaced by replacement_table",
+							},
+							Success: false,
+							Level:   dto.ValidateLevelError.Ptr(),
 						},
 						{
 							Stage:    "window validation",
@@ -6641,22 +6667,22 @@ func (_m *ResourceExistenceChecker) GetByURN(ctx context.Context, tnnt tenant.Te
 }
 
 // ExistInStore provides a mock function with given fields: ctx, tnnt, urn
-func (_m *ResourceExistenceChecker) GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]resource.URN, error) {
+func (_m *ResourceExistenceChecker) GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]*resource.Resource, error) {
 	ret := _m.Called(ctx, tnnt, urns)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ExistInStore")
 	}
 
-	var r0 []resource.URN
+	var r0 []*resource.Resource
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, ...resource.URN) ([]resource.URN, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, ...resource.URN) ([]*resource.Resource, error)); ok {
 		return rf(ctx, tnnt, urns...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, ...resource.URN) []resource.URN); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, ...resource.URN) []*resource.Resource); ok {
 		r0 = rf(ctx, tnnt, urns...)
 	} else {
-		r0, _ = ret.Get(0).([]resource.URN)
+		r0, _ = ret.Get(0).([]*resource.Resource)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, ...resource.URN) error); ok {

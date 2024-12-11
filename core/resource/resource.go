@@ -266,3 +266,13 @@ func FromExisting(existing *Resource, opts ...FromExistingOpt) *Resource {
 	}
 	return output
 }
+
+type Resources []*Resource
+
+func (rs Resources) GetURNs() URNs {
+	urns := make(URNs, 0, len(rs))
+	for _, r := range rs {
+		urns = append(urns, r.urn)
+	}
+	return urns
+}

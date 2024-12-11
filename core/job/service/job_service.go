@@ -151,7 +151,7 @@ type JobRunInputCompiler interface {
 type ResourceExistenceChecker interface {
 	GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
 	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
-	GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]resource.URN, error)
+	GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]*resource.Resource, error)
 }
 
 func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*job.Spec) ([]job.Name, error) {
@@ -1967,7 +1967,7 @@ func (*JobService) validateWindow(tenantDetails *tenant.WithDetails, windowConfi
 func (j *JobService) validateSourcesIsDeprecated(ctx context.Context, tnnt tenant.Tenant, subjectJob *job.Job) dto.ValidateResult {
 	const stage = dto.StageSourceDeprecationValidation
 
-	deprecated, err := j.resourceChecker.GetDeprecated(ctx, tnnt, subjectJob.Sources()...)
+	deprecatedResources, err := j.resourceChecker.GetDeprecated(ctx, tnnt, subjectJob.Sources()...)
 	if err != nil {
 		j.logger.Error("error getting deprecated resources %s: %s", resource.URNs(subjectJob.Sources()).String(), err)
 		return dto.ValidateResult{
@@ -1977,12 +1977,12 @@ func (j *JobService) validateSourcesIsDeprecated(ctx context.Context, tnnt tenan
 		}
 	}
 
-	if len(deprecated) > 0 {
+	if len(deprecatedResources) > 0 {
 		return dto.ValidateResult{
 			Stage:    stage,
-			Messages: []string{fmt.Sprintf("job %s sources has deprecated: %s", subjectJob.FullName(), resource.URNs(deprecated).String())},
+			Messages: j.buildDeprecatedSourceMessages(subjectJob, deprecatedResources),
 			Success:  false,
-			Level:    j.getJobSourceDeprecatedValidateLevel(ctx, tnnt, subjectJob, deprecated),
+			Level:    j.getJobSourceDeprecatedValidateLevel(ctx, tnnt, subjectJob, resource.Resources(deprecatedResources).GetURNs()),
 		}
 	}
 
@@ -1991,6 +1991,39 @@ func (j *JobService) validateSourcesIsDeprecated(ctx context.Context, tnnt tenan
 		Messages: []string{"no issue"},
 		Success:  true,
 	}
+}
+
+func (*JobService) buildDeprecatedSourceMessages(subjectJob *job.Job, deprecatedResources resource.Resources) []string {
+	builder := new(strings.Builder)
+	messages := make([]string, 0, len(deprecatedResources))
+
+	for _, deprecated := range deprecatedResources {
+		if deprecated.GetDeprecationInfo() == nil {
+			continue
+		}
+
+		builder.WriteString("job ")
+		builder.WriteString(subjectJob.FullName())
+		builder.WriteString(" with source ")
+		builder.WriteString(deprecated.URN().String())
+		if deprecated.GetDeprecationInfo().Date.After(time.Now()) {
+			builder.WriteString(" will be deprecated at ")
+		} else {
+			builder.WriteString(" has deprecated at ")
+		}
+		builder.WriteString(deprecated.GetDeprecationInfo().Date.Format(time.DateOnly))
+		builder.WriteString(" with reason: ")
+		builder.WriteString(deprecated.GetDeprecationInfo().Reason)
+		if deprecated.GetDeprecationInfo().ReplacementTable != "" {
+			builder.WriteString(" and will be replaced by ")
+			builder.WriteString(deprecated.GetDeprecationInfo().ReplacementTable)
+		}
+
+		messages = append(messages, builder.String())
+		builder.Reset()
+	}
+
+	return messages
 }
 
 func (j *JobService) getJobSourceDeprecatedValidateLevel(ctx context.Context, tnnt tenant.Tenant, subjectJob *job.Job, deprecatedURNs []resource.URN) *dto.ValidateLevel {

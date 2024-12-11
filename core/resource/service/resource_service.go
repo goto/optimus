@@ -424,7 +424,7 @@ func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, 
 	return rs.mgr.Exist(ctx, tnnt, urn)
 }
 
-func (rs ResourceService) GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]resource.URN, error) {
+func (rs ResourceService) GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]*resource.Resource, error) {
 	if len(urns) == 0 {
 		return nil, nil
 	}
@@ -434,7 +434,7 @@ func (rs ResourceService) GetDeprecated(ctx context.Context, tnnt tenant.Tenant,
 		resourceNamesByStore[urn.GetStore()] = append(resourceNamesByStore[urn.GetStore()], urn.GetName())
 	}
 
-	deprecatedURNs := make(resource.URNs, 0)
+	deprecatedResources := make([]*resource.Resource, 0)
 	me := errors.NewMultiError("error checking deprecated resources")
 	for store, names := range resourceNamesByStore {
 		resources, err := rs.repo.GetResources(ctx, tnnt, resource.Store(store), names)
@@ -444,12 +444,12 @@ func (rs ResourceService) GetDeprecated(ctx context.Context, tnnt tenant.Tenant,
 		}
 		for _, r := range resources {
 			if r.IsDeprecated() {
-				deprecatedURNs = append(deprecatedURNs, r.URN())
+				deprecatedResources = append(deprecatedResources, r)
 			}
 		}
 	}
 
-	return deprecatedURNs, me.ToErr()
+	return deprecatedResources, me.ToErr()
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic

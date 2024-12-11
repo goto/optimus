@@ -1834,7 +1834,7 @@ func TestResourceService(t *testing.T) {
 
 			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
 
-			expected := []resource.URN{urnC}
+			expected := []*resource.Resource{resourceC}
 
 			actual, err := rscService.GetDeprecated(ctx, tnnt, resourceURNs...)
 			assert.ErrorContains(t, err, "unknown error")

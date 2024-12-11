@@ -424,6 +424,34 @@ func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, 
 	return rs.mgr.Exist(ctx, tnnt, urn)
 }
 
+func (rs ResourceService) GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]resource.URN, error) {
+	if len(urns) == 0 {
+		return nil, nil
+	}
+
+	resourceNamesByStore := make(map[string][]string)
+	for _, urn := range urns {
+		resourceNamesByStore[urn.GetStore()] = append(resourceNamesByStore[urn.GetStore()], urn.GetName())
+	}
+
+	deprecatedURNs := make(resource.URNs, 0)
+	me := errors.NewMultiError("error checking deprecated resources")
+	for store, names := range resourceNamesByStore {
+		resources, err := rs.repo.GetResources(ctx, tnnt, resource.Store(store), names)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		for _, r := range resources {
+			if r.IsDeprecated() {
+				deprecatedURNs = append(deprecatedURNs, r.URN())
+			}
+		}
+	}
+
+	return deprecatedURNs, me.ToErr()
+}
+
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic
 	multiError := errors.NewMultiError("error batch updating resources")
 	for _, r := range incomings {

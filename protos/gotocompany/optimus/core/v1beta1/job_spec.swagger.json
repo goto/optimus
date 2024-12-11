@@ -1173,6 +1173,9 @@
         },
         "success": {
           "type": "boolean"
+        },
+        "level": {
+          "$ref": "#/definitions/v1beta1Level"
         }
       }
     },

@@ -85,3 +85,13 @@ func ParseURN(urn string) (URN, error) {
 func ZeroURN() URN {
 	return zeroURN
 }
+
+type URNs []URN
+
+func (u URNs) String() string {
+	var urns []string
+	for _, urn := range u {
+		urns = append(urns, urn.String())
+	}
+	return "[" + strings.Join(urns, ", ") + "]"
+}

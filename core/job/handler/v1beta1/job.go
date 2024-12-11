@@ -794,6 +794,23 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	).Add(float64(metricValue))
 }
 
+func toValidateLevelProto(level *dto.ValidateLevel) *pb.Level {
+	if level == nil {
+		return nil
+	}
+
+	var levelPb pb.Level
+	switch *level {
+	case dto.ValidateLevelError:
+		levelPb = pb.Level_LEVEL_ERROR
+	case dto.ValidateLevelWarning:
+		levelPb = pb.Level_LEVEL_WARNING
+	default:
+		levelPb = pb.Level_LEVEL_UNSPECIFIED
+	}
+	return &levelPb
+}
+
 func toValidateResultProto(result map[job.Name][]dto.ValidateResult) map[string]*pb.ValidateResponse_ResultList {
 	output := make(map[string]*pb.ValidateResponse_ResultList)
 	for jobName, validateResults := range result {
@@ -803,6 +820,7 @@ func toValidateResultProto(result map[job.Name][]dto.ValidateResult) map[string]
 				Name:     rst.Stage.String(),
 				Messages: rst.Messages,
 				Success:  rst.Success,
+				Level:    toValidateLevelProto(rst.Level),
 			}
 		}
 

@@ -18,7 +18,6 @@ const (
 )
 
 func handlerForFormat(format string) string {
-
 	switch strings.ToUpper(format) {
 	// the built-in text extractor for CSV and TSV
 	case CSV:
@@ -29,7 +28,7 @@ func handlerForFormat(format string) string {
 	// Extractors for inbuilt Open Source Data Formats
 	case JSON:
 		return "org.apache.hive.hcatalog.data.JsonSerDe"
-	//case "CUSTOM_CSV":
+	// case "CUSTOM_CSV":
 	//	return "org.apache.hadoop.hive.serde2.OpenCSVSerde"
 	case SeqFile:
 		return "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"

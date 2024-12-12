@@ -548,6 +548,8 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
 			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("ExternalTableHandleFrom", mock.Anything).Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.False(t, actualExist)
@@ -586,6 +588,11 @@ func (m *mockClient) TableHandleFrom(projectSchema maxcompute.ProjectSchema) max
 
 func (m *mockClient) ViewHandleFrom(projectSchema maxcompute.ProjectSchema) maxcompute.TableResourceHandle {
 	args := m.Called(projectSchema)
+	return args.Get(0).(maxcompute.TableResourceHandle)
+}
+
+func (m *mockClient) ExternalTableHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableResourceHandle {
+	args := m.Called(schema)
 	return args.Get(0).(maxcompute.TableResourceHandle)
 }
 

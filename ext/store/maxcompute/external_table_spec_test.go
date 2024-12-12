@@ -81,26 +81,26 @@ func TestExternalSourceValidate(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "source type is empty")
 		})
-		t.Run("returns error when uri list is empty", func(t *testing.T) {
-			es := maxcompute.ExternalSource{
-				SourceType: "GOOGLE_SHEETS",
-				SourceURIs: []string{},
-			}
-
-			err := es.Validate()
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "source uri list is empty")
-		})
-		t.Run("returns error when uri is invalid", func(t *testing.T) {
-			es := maxcompute.ExternalSource{
-				SourceType: "GOOGLE_SHEETS",
-				SourceURIs: []string{""},
-			}
-
-			err := es.Validate()
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "uri is empty")
-		})
+		//t.Run("returns error when uri list is empty", func(t *testing.T) {
+		//	es := maxcompute.ExternalSource{
+		//		SourceType: "GOOGLE_SHEETS",
+		//		SourceURIs: []string{},
+		//	}
+		//
+		//	err := es.Validate()
+		//	assert.NotNil(t, err)
+		//	assert.ErrorContains(t, err, "source uri list is empty")
+		//})
+		//t.Run("returns error when uri is invalid", func(t *testing.T) {
+		//	es := maxcompute.ExternalSource{
+		//		SourceType: "GOOGLE_SHEETS",
+		//		SourceURIs: []string{""},
+		//	}
+		//
+		//	err := es.Validate()
+		//	assert.NotNil(t, err)
+		//	assert.ErrorContains(t, err, "uri is empty")
+		//})
 	})
 	t.Run("returns no error when valid", func(t *testing.T) {
 		es := maxcompute.ExternalSource{

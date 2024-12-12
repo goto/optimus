@@ -57,8 +57,8 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	return nil
 }
 
-func (e ExternalTableHandle) Update(res *resource.Resource) error {
-	//TODO implement me
+func (ExternalTableHandle) Update(_ *resource.Resource) error {
+	// TODO implement me
 	panic("implement me")
 }
 

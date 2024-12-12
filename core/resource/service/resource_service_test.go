@@ -1794,9 +1794,6 @@ func TestResourceService(t *testing.T) {
 		assert.NotNil(t, resourceC)
 		assert.NoError(t, resourceC.UpdateURN(urnC))
 
-		resourceURNsBQ := []string{urnA.GetName(), urnB.GetName()}
-		resourceURNsRS := []string{urnC.GetName()}
-
 		logger := log.NewLogrus()
 
 		t.Run("should return nil and nil error when urns is empty", func(t *testing.T) {
@@ -1813,7 +1810,7 @@ func TestResourceService(t *testing.T) {
 			repo := newResourceRepository(t)
 			resourceURNs := []resource.URN{urnA, urnB}
 
-			repo.On("GetResources", ctx, tnnt, resource.Bigquery, resourceURNsBQ).
+			repo.On("GetResourcesByURNs", ctx, tnnt, resourceURNs).
 				Return(nil, errors.New("unknown error"))
 
 			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
@@ -1823,21 +1820,19 @@ func TestResourceService(t *testing.T) {
 			assert.Empty(t, actual)
 		})
 
-		t.Run("should return deprecated resources and error when GetResources sometimes failing", func(t *testing.T) {
+		t.Run("should return deprecated resources and nil error when found deprecated resources", func(t *testing.T) {
 			repo := newResourceRepository(t)
 			resourceURNs := []resource.URN{urnA, urnB, urnC}
 
-			repo.On("GetResources", ctx, tnnt, resource.Bigquery, resourceURNsBQ).Return(nil, errors.New("unknown error"))
-
 			rsDeprecatedResources := []*resource.Resource{resourceC}
-			repo.On("GetResources", ctx, tnnt, resource.Store("redshift"), resourceURNsRS).Return(rsDeprecatedResources, nil)
+			repo.On("GetResourcesByURNs", ctx, tnnt, resourceURNs).Return(rsDeprecatedResources, nil)
 
 			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
 
 			expected := []*resource.Resource{resourceC}
 
 			actual, err := rscService.GetDeprecated(ctx, tnnt, resourceURNs...)
-			assert.ErrorContains(t, err, "unknown error")
+			assert.NoError(t, err)
 			assert.ElementsMatch(t, actual, expected)
 		})
 	})
@@ -1893,6 +1888,14 @@ func (m *mockResourceRepository) ReadByURN(ctx context.Context, tnnt tenant.Tena
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*resource.Resource), args.Error(1)
+}
+
+func (m *mockResourceRepository) GetResourcesByURNs(ctx context.Context, tnnt tenant.Tenant, urns []resource.URN) ([]*resource.Resource, error) {
+	args := m.Called(ctx, tnnt, urns)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*resource.Resource), args.Error(1)
 }
 
 type mockConstructorTestingTNewResourceRepository interface {

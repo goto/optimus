@@ -33,6 +33,7 @@ type ResourceRepository interface {
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
+	GetResourcesByURNs(ctx context.Context, tnnt tenant.Tenant, urns []resource.URN) ([]*resource.Resource, error)
 }
 
 type ResourceManager interface {
@@ -429,27 +430,19 @@ func (rs ResourceService) GetDeprecated(ctx context.Context, tnnt tenant.Tenant,
 		return nil, nil
 	}
 
-	resourceNamesByStore := make(map[string][]string)
-	for _, urn := range urns {
-		resourceNamesByStore[urn.GetStore()] = append(resourceNamesByStore[urn.GetStore()], urn.GetName())
-	}
-
 	deprecatedResources := make([]*resource.Resource, 0)
-	me := errors.NewMultiError("error checking deprecated resources")
-	for store, names := range resourceNamesByStore {
-		resources, err := rs.repo.GetResources(ctx, tnnt, resource.Store(store), names)
-		if err != nil {
-			me.Append(err)
-			continue
-		}
-		for _, r := range resources {
-			if r.IsDeprecated() {
-				deprecatedResources = append(deprecatedResources, r)
-			}
+	resources, err := rs.repo.GetResourcesByURNs(ctx, tnnt, urns)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range resources {
+		if r.IsDeprecated() {
+			deprecatedResources = append(deprecatedResources, r)
 		}
 	}
 
-	return deprecatedResources, me.ToErr()
+	return deprecatedResources, nil
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic

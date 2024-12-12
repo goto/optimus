@@ -16,4 +16,16 @@ type ValidateResult struct {
 	Stage    ValidateStage
 	Messages []string
 	Success  bool
+	Level    *ValidateLevel
 }
+
+type ValidateLevel string
+
+func (level ValidateLevel) String() string { return string(level) }
+
+func (level ValidateLevel) Ptr() *ValidateLevel { return &level }
+
+const (
+	ValidateLevelError   ValidateLevel = "error"
+	ValidateLevelWarning ValidateLevel = "warning"
+)

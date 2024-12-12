@@ -372,3 +372,41 @@ func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resou
 
 	return FromModelToResource(&res)
 }
+
+func (r Repository) GetResourcesByURNs(ctx context.Context, tnnt tenant.Tenant, urns []resource.URN) ([]*resource.Resource, error) {
+	query := `
+		SELECT ` + resourceColumns + ` FROM resource
+		WHERE urn = any ($1) AND project_name = $2 AND namespace_name = $3 AND status NOT IN ($4, $5)
+		LIMIT 1
+	`
+	urnsParam := make([]string, 0, len(urns))
+	for _, urn := range urns {
+		urnsParam = append(urnsParam, urn.String())
+	}
+	args := []any{urnsParam, tnnt.ProjectName(), tnnt.NamespaceName(), resource.StatusDeleted, resource.StatusToDelete}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, fmt.Sprintf("error reading resource with urn: '%s' found for project:%s, namespace:%s ", urns, tnnt.ProjectName(), tnnt.NamespaceName()), err)
+	}
+
+	defer rows.Close()
+
+	var resources []*resource.Resource
+	for rows.Next() {
+		var res Resource
+		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.Deprecated, &res.CreatedAt, &res.UpdatedAt)
+		if err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error in GetResourcesByURNs", err)
+		}
+
+		resourceModel, err := FromModelToResource(&res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resourceModel)
+	}
+
+	return resources, nil
+}

@@ -73,8 +73,10 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 	}
 
 	var deprecated *resource.Deprecated
-	if err := json.Unmarshal(r.Deprecated, &deprecated); err != nil {
-		return nil, errors.Wrap(resource.EntityResource, "error unmarshalling deprecation info", err)
+	if r.Deprecated != nil {
+		if err := json.Unmarshal(r.Deprecated, &deprecated); err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error unmarshalling deprecation info", err)
+		}
 	}
 
 	output, err := resource.NewResource(r.FullName, r.Kind, store, tnnt, metadata, r.Spec, deprecated)

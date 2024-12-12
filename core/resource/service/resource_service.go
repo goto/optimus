@@ -33,6 +33,7 @@ type ResourceRepository interface {
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
+	GetResourcesByURNs(ctx context.Context, tnnt tenant.Tenant, urns []resource.URN) ([]*resource.Resource, error)
 }
 
 type ResourceManager interface {
@@ -422,6 +423,26 @@ func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, 
 	}
 
 	return rs.mgr.Exist(ctx, tnnt, urn)
+}
+
+func (rs ResourceService) GetDeprecated(ctx context.Context, tnnt tenant.Tenant, urns ...resource.URN) ([]*resource.Resource, error) {
+	if len(urns) == 0 {
+		return nil, nil
+	}
+
+	deprecatedResources := make([]*resource.Resource, 0)
+	resources, err := rs.repo.GetResourcesByURNs(ctx, tnnt, urns)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range resources {
+		if r.IsDeprecated() {
+			deprecatedResources = append(deprecatedResources, r)
+		}
+	}
+
+	return deprecatedResources, nil
 }
 
 func (rs ResourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, incomings []*resource.Resource, logWriter writer.LogWriter) error { // nolint:gocritic

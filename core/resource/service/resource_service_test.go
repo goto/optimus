@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -1771,6 +1772,70 @@ func TestResourceService(t *testing.T) {
 			assert.Equal(t, expectedResource, actualResource)
 		})
 	})
+
+	t.Run("GetDeprecated", func(t *testing.T) {
+		urnA, err := resource.NewURN("bigquery", "project.dataset.tableA")
+		assert.NotNil(t, urnA)
+		assert.NoError(t, err)
+		urnB, err := resource.NewURN("bigquery", "project.dataset.tableB")
+		assert.NotNil(t, urnB)
+		assert.NoError(t, err)
+		urnC, err := resource.NewURN("redshift", "project.dataset.tableC")
+		assert.NotNil(t, urnC)
+		assert.NoError(t, err)
+
+		deprecated := &resource.Deprecated{
+			Reason:           "testing",
+			Date:             time.Date(2024, 12, 18, 0, 0, 0, 0, time.UTC),
+			ReplacementTable: "project.dataset.tableD",
+		}
+		resourceC, err := resource.NewResource(urnC.String(), "table", "redishift", tnnt, meta, spec, deprecated)
+		assert.NoError(t, err)
+		assert.NotNil(t, resourceC)
+		assert.NoError(t, resourceC.UpdateURN(urnC))
+
+		logger := log.NewLogrus()
+
+		t.Run("should return nil and nil error when urns is empty", func(t *testing.T) {
+			repo := newResourceRepository(t)
+
+			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
+
+			actual, err := rscService.GetDeprecated(ctx, tnnt)
+			assert.NoError(t, err)
+			assert.Nil(t, actual)
+		})
+
+		t.Run("should return nil and error when failed GetResources", func(t *testing.T) {
+			repo := newResourceRepository(t)
+			resourceURNs := []resource.URN{urnA, urnB}
+
+			repo.On("GetResourcesByURNs", ctx, tnnt, resourceURNs).
+				Return(nil, errors.New("unknown error"))
+
+			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
+
+			actual, err := rscService.GetDeprecated(ctx, tnnt, resourceURNs...)
+			assert.ErrorContains(t, err, "unknown error")
+			assert.Empty(t, actual)
+		})
+
+		t.Run("should return deprecated resources and nil error when found deprecated resources", func(t *testing.T) {
+			repo := newResourceRepository(t)
+			resourceURNs := []resource.URN{urnA, urnB, urnC}
+
+			rsDeprecatedResources := []*resource.Resource{resourceC}
+			repo.On("GetResourcesByURNs", ctx, tnnt, resourceURNs).Return(rsDeprecatedResources, nil)
+
+			rscService := service.NewResourceService(logger, repo, nil, nil, nil, nil, nil, nil, nil)
+
+			expected := []*resource.Resource{resourceC}
+
+			actual, err := rscService.GetDeprecated(ctx, tnnt, resourceURNs...)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, actual, expected)
+		})
+	})
 }
 
 type mockResourceRepository struct {
@@ -1823,6 +1888,14 @@ func (m *mockResourceRepository) ReadByURN(ctx context.Context, tnnt tenant.Tena
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*resource.Resource), args.Error(1)
+}
+
+func (m *mockResourceRepository) GetResourcesByURNs(ctx context.Context, tnnt tenant.Tenant, urns []resource.URN) ([]*resource.Resource, error) {
+	args := m.Called(ctx, tnnt, urns)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*resource.Resource), args.Error(1)
 }
 
 type mockConstructorTestingTNewResourceRepository interface {

@@ -2030,10 +2030,12 @@ func (j *JobService) getJobSourceDeprecatedValidateLevel(ctx context.Context, tn
 	if len(deprecatedURNs) == 0 {
 		return nil
 	}
+
+	currentLevel := dto.ValidateLevelError
 	existingJob, err := j.jobRepo.GetByJobName(ctx, tnnt.ProjectName(), subjectJob.Spec().Name())
 	if err != nil {
 		j.logger.Error("error getting existing job %s: %s", subjectJob.Spec().Name(), err)
-		return nil
+		return &currentLevel
 	}
 
 	existingSourceByURN := make(map[resource.URN]struct{})
@@ -2041,11 +2043,10 @@ func (j *JobService) getJobSourceDeprecatedValidateLevel(ctx context.Context, tn
 		existingSourceByURN[source] = struct{}{}
 	}
 
-	currentLevel := dto.ValidateLevelWarning
 	for _, deprecatedURN := range deprecatedURNs {
 		_, existingSourceExists := existingSourceByURN[deprecatedURN]
-		if !existingSourceExists {
-			currentLevel = dto.ValidateLevelError
+		if existingSourceExists {
+			currentLevel = dto.ValidateLevelWarning
 		}
 	}
 	return &currentLevel

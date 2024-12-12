@@ -5204,7 +5204,7 @@ func TestJobService(t *testing.T) {
 								"job test-proj/jobB with source bigquery://project:dataset.tableB will be deprecated at 2999-11-30 with reason: test and will be replaced by replacement_table",
 							},
 							Success: false,
-							Level:   dto.ValidateLevelError.Ptr(),
+							Level:   dto.ValidateLevelWarning.Ptr(),
 						},
 						{
 							Stage:    "window validation",

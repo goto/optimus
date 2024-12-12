@@ -448,6 +448,29 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.EqualValues(t, resourceToCreate, actualResource)
 		})
 	})
+
+	t.Run("GetResourcesByURNs", func(t *testing.T) {
+		t.Run("should return resources with given URNs", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			urn, err := serviceResource.ParseURN("bigquery://project:dataset.table")
+			assert.NoError(t, err)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset.table", kindDataset, store, tnnt, meta, spec, nil)
+			assert.NoError(t, err)
+			err = resourceToCreate.UpdateURN(urn)
+			assert.NoError(t, err)
+
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			actual, err := repository.GetResourcesByURNs(ctx, tnnt, []serviceResource.URN{urn})
+			assert.NoError(t, err)
+			assert.Len(t, actual, 1)
+			assert.EqualValues(t, resourceToCreate, actual[0])
+		})
+	})
 }
 
 func insertTestResourceChangelog(pool *pgxpool.Pool, resourceName serviceResource.Name, projectName tenant.ProjectName, changelogs []*repoResource.ChangeLog) {

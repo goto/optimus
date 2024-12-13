@@ -29,6 +29,9 @@ func (m *mockMaxComputeTable) Create(schema tableschema.TableSchema, createIfNot
 
 func (m *mockMaxComputeTable) BatchLoadTables(tableNames []string) ([]*odps.Table, error) {
 	args := m.Called(tableNames)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).([]*odps.Table), args.Error(1)
 }
 

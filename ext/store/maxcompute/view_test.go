@@ -29,10 +29,6 @@ func TestViewHandle(t *testing.T) {
 
 	odpsInstance := odps.NewInstance(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, "")
 
-	normalTables := []*odps.Table{
-		odps.NewTable(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, schemaName, tableName),
-	}
-
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -234,7 +230,7 @@ func TestViewHandle(t *testing.T) {
 	t.Run("Exists", func(t *testing.T) {
 		t.Run("returns false when error in checking existing view", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{}, errors.New("error in get"))
+			table.On("BatchLoadTables", mock.Anything).Return(nil, errors.New("error in get"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
@@ -245,7 +241,8 @@ func TestViewHandle(t *testing.T) {
 		})
 		t.Run("returns true when checking existing tables", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
+			v1 := odps.NewTable(nil, projectName, schemaName, tableName)
+			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{v1}, nil)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)

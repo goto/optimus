@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func From(data [][]interface{}) (string, error) {
+func FromRecords(data [][]interface{}) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}

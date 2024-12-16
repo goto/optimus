@@ -12,7 +12,7 @@ var (
 
 type SheetsInfo struct {
 	SheetID string
-	Gid     string
+	GID     string
 }
 
 func FromURL(u1 string) (*SheetsInfo, error) {
@@ -29,6 +29,6 @@ func FromURL(u1 string) (*SheetsInfo, error) {
 
 	return &SheetsInfo{
 		SheetID: res[1],
-		Gid:     gid,
+		GID:     gid,
 	}, nil
 }

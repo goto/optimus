@@ -1797,6 +1797,14 @@ func (m *mockResourceRepository) ReadByFullName(ctx context.Context, tnnt tenant
 	return args.Get(0).(*resource.Resource), args.Error(1)
 }
 
+func (m *mockResourceRepository) GetAllExternal(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
+	args := m.Called(ctx, tnnt, store)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*resource.Resource), args.Error(1)
+}
+
 func (m *mockResourceRepository) Update(ctx context.Context, res *resource.Resource) error {
 	return m.Called(ctx, res).Error(0)
 }

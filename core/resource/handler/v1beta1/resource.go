@@ -35,6 +35,7 @@ type ResourceService interface {
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
 	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
+	GetAllExternal(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
 	Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource, logWriter writer.LogWriter) error
 	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
 }
@@ -179,6 +180,33 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 
 	return &pb.ListResourceSpecificationResponse{
 		Resources: resourceProtos,
+	}, nil
+}
+
+func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncExternalTablesRequest) (*pb.SyncExternalTablesResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "failed to list resource for ")
+	}
+
+	resources, err := rh.service.GetAllExternal(ctx, tnnt, resource.Bigquery)
+	if err != nil {
+		rh.l.Error("error getting all resources: %s", err)
+		return nil, errors.GRPCErr(err, "failed to list resource for "+resource.Bigquery.String())
+	}
+
+	for _, res := range resources {
+		spec := res.Spec()
+		source := spec["source"].(map[string]any)
+		urls := source["uris"].([]string)
+		destination := req.GetDestination()
+		rh.l.Info("Sync Sheets to OSS for resource: %s, SheetLinks: %s, to: %s \n", res.Name(), urls, destination)
+	}
+
+	return &pb.SyncExternalTablesResponse{
+		Success: true,
+		Message: fmt.Sprintf("successfully synced [%d] resources", len(resources)),
 	}, nil
 }
 

@@ -275,6 +275,35 @@ func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resou
 	return resources, nil
 }
 
+func (r Repository) GetAllExternal(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
+	getAllResources := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and namespace_name = $2 and store = $3 and kind = 'external_table'`
+	args := []any{tnnt.ProjectName(), tnnt.NamespaceName(), store}
+
+	rows, err := r.db.Query(ctx, getAllResources, args...)
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, "error in GetAllExternal", err)
+	}
+	defer rows.Close()
+
+	var resources []*resource.Resource
+	for rows.Next() {
+		var res Resource
+		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+		if err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error in GetAll", err)
+		}
+
+		resourceModel, err := FromModelToResource(&res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resourceModel)
+	}
+
+	return resources, nil
+}
+
 func (r Repository) GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error) {
 	getAllResources := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and namespace_name = $2 and 
 store = $3 AND full_name = any ($4) AND status NOT IN ($5, $6)`

@@ -1244,6 +1244,15 @@ func (r *resourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return resources, args.Error(1)
 }
 
+func (r *resourceService) GetAllExternal(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
+	args := r.Called(ctx, tnnt, store)
+	var rs []*resource.Resource
+	if args.Get(0) != nil {
+		rs = args.Get(0).([]*resource.Resource)
+	}
+	return rs, args.Error(1)
+}
+
 func (r *resourceService) Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource, logWriter writer.LogWriter) error {
 	args := r.Called(ctx, tnnt, store, resources, logWriter)
 	return args.Error(0)

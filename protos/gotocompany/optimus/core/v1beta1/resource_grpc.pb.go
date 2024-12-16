@@ -27,6 +27,7 @@ type ResourceServiceClient interface {
 	DeployResourceSpecification(ctx context.Context, opts ...grpc.CallOption) (ResourceService_DeployResourceSpecificationClient, error)
 	// ListResourceSpecification lists all resource specifications of a datastore in project
 	ListResourceSpecification(ctx context.Context, in *ListResourceSpecificationRequest, opts ...grpc.CallOption) (*ListResourceSpecificationResponse, error)
+	SyncExternalTables(ctx context.Context, in *SyncExternalTablesRequest, opts ...grpc.CallOption) (*SyncExternalTablesResponse, error)
 	// Database CRUD
 	// CreateResource registers a new resource of a namespace which belongs to a project
 	CreateResource(ctx context.Context, in *CreateResourceRequest, opts ...grpc.CallOption) (*CreateResourceResponse, error)
@@ -88,6 +89,15 @@ func (x *resourceServiceDeployResourceSpecificationClient) Recv() (*DeployResour
 func (c *resourceServiceClient) ListResourceSpecification(ctx context.Context, in *ListResourceSpecificationRequest, opts ...grpc.CallOption) (*ListResourceSpecificationResponse, error) {
 	out := new(ListResourceSpecificationResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ResourceService/ListResourceSpecification", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *resourceServiceClient) SyncExternalTables(ctx context.Context, in *SyncExternalTablesRequest, opts ...grpc.CallOption) (*SyncExternalTablesResponse, error) {
+	out := new(SyncExternalTablesResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ResourceService/SyncExternalTables", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +185,7 @@ type ResourceServiceServer interface {
 	DeployResourceSpecification(ResourceService_DeployResourceSpecificationServer) error
 	// ListResourceSpecification lists all resource specifications of a datastore in project
 	ListResourceSpecification(context.Context, *ListResourceSpecificationRequest) (*ListResourceSpecificationResponse, error)
+	SyncExternalTables(context.Context, *SyncExternalTablesRequest) (*SyncExternalTablesResponse, error)
 	// Database CRUD
 	// CreateResource registers a new resource of a namespace which belongs to a project
 	CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error)
@@ -204,6 +215,9 @@ func (UnimplementedResourceServiceServer) DeployResourceSpecification(ResourceSe
 }
 func (UnimplementedResourceServiceServer) ListResourceSpecification(context.Context, *ListResourceSpecificationRequest) (*ListResourceSpecificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListResourceSpecification not implemented")
+}
+func (UnimplementedResourceServiceServer) SyncExternalTables(context.Context, *SyncExternalTablesRequest) (*SyncExternalTablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SyncExternalTables not implemented")
 }
 func (UnimplementedResourceServiceServer) CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateResource not implemented")
@@ -282,6 +296,24 @@ func _ResourceService_ListResourceSpecification_Handler(srv interface{}, ctx con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ResourceServiceServer).ListResourceSpecification(ctx, req.(*ListResourceSpecificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ResourceService_SyncExternalTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncExternalTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ResourceServiceServer).SyncExternalTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.ResourceService/SyncExternalTables",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ResourceServiceServer).SyncExternalTables(ctx, req.(*SyncExternalTablesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -440,6 +472,10 @@ var ResourceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListResourceSpecification",
 			Handler:    _ResourceService_ListResourceSpecification_Handler,
+		},
+		{
+			MethodName: "SyncExternalTables",
+			Handler:    _ResourceService_SyncExternalTables_Handler,
 		},
 		{
 			MethodName: "CreateResource",

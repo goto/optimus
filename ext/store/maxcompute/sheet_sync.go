@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	GsheetCreds = ""
-	OSSCreds    = ""
-	ExtLocation = ""
-	putTimeOut  = time.Duration(time.Second * 10)
+	GsheetCredsKey = "GOOGLE_SHEETS_ACCOUNT"
+	OSSCredsKey    = "OSS_CREDS"
+	ExtLocation    = ""
+	putTimeOut     = time.Duration(time.Second * 10)
 )
 
 type SyncerService struct {
@@ -66,7 +66,7 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 }
 
 func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheetURI string, range_ string) (string, error) {
-	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCreds)
+	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +75,6 @@ func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheet
 	if err != nil {
 		return "", err
 	}
-
 	return sheets.GetAsCSV(sheetURI, range_)
 }
 
@@ -93,15 +92,18 @@ func (s *SyncerService) getBucketName(ctx context.Context, res *resource.Resourc
 }
 
 func (s *SyncerService) getObjectKey(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {
+	components, err := getURNComponent(res)
+	if err != nil {
+		return "", err
+	}
 	location, err := s.getLocation(ctx, res, et)
 	if err != nil {
 		return "", err
 	}
-
 	parts := strings.Split(location, "/")
 	if len(parts) > 4 {
 		path := strings.Join(parts[4:], "/")
-		return fmt.Sprintf("%s/%s.csv", path, res.Name().String()), nil
+		return fmt.Sprintf("%s%s.csv", path, components.Name), nil
 	}
 	return "", errors.New("unable to get object path from location")
 }
@@ -124,7 +126,7 @@ func (s *SyncerService) getLocation(ctx context.Context, res *resource.Resource,
 
 func (s *SyncerService) writeContentToLocation(ctx context.Context, tnnt tenant.Tenant, bucketName, objectKey, content string) error {
 	// Setup oss bucket writer
-	creds, err := s.secretProvider.GetSecret(ctx, tnnt, OSSCreds)
+	creds, err := s.secretProvider.GetSecret(ctx, tnnt, OSSCredsKey)
 	if err != nil {
 		return err
 	}
@@ -133,32 +135,11 @@ func (s *SyncerService) writeContentToLocation(ctx context.Context, tnnt tenant.
 		return err
 	}
 
-	// oss put request
-	var putStatus chan int64
-
-	resp, err := ossClient.PutObject(ctx, &oss.PutObjectRequest{
+	_, err = ossClient.PutObject(ctx, &oss.PutObjectRequest{
 		Bucket:      &bucketName,
 		Key:         &objectKey,
 		ContentType: oss.Ptr("text/csv"),
 		Body:        strings.NewReader(content),
-		ProgressFn: func(increment, transferred, total int64) {
-			putStatus <- total
-		},
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	for {
-		select {
-		case <-putStatus:
-			if resp.StatusCode != 200 {
-				return errors.New(fmt.Sprintf("error putting OSS object, status:%s", resp.Status))
-			}
-			return nil
-		case <-time.After(putTimeOut):
-			return errors.New("put timeout")
-		}
-
-	}
+	})
+	return err
 }

@@ -20,6 +20,8 @@ const (
 func handlerForFormat(format string) string {
 	switch strings.ToUpper(format) {
 	// the built-in text extractor for CSV and TSV
+	case GoogleSheet:
+		return "com.aliyun.odps.CsvStorageHandler"
 	case CSV:
 		return "com.aliyun.odps.CsvStorageHandler"
 	case TSV:

@@ -3,6 +3,7 @@ package gsheet
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
@@ -21,7 +22,7 @@ type GSheets struct {
 func NewGSheets(ctx context.Context, creds string) (*GSheets, error) {
 	srv, err := sheets.NewService(ctx, option.WithCredentialsJSON([]byte(creds)))
 	if err != nil {
-		return nil, errors.New("not able to create sheets service")
+		return nil, fmt.Errorf("not able to create sheets service err: %w", err)
 	}
 
 	return &GSheets{srv: srv}, nil

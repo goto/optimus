@@ -70,7 +70,11 @@ func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheet
 	if err != nil {
 		return "", err
 	}
+
 	sheets, err := gsheet.NewGSheets(ctx, secret.Value())
+	if err != nil {
+		return "", err
+	}
 
 	return sheets.GetAsCSV(sheetURI, range_)
 }

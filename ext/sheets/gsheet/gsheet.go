@@ -7,7 +7,7 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 
-	"github.com/goto/optimus/ext/format/csv"
+	"github.com/goto/optimus/ext/sheets/csv"
 )
 
 const (

@@ -43,9 +43,14 @@ type SecretProvider interface {
 	GetSecret(ctx context.Context, tnnt tenant.Tenant, key string) (*tenant.PlainTextSecret, error)
 }
 
+type TenantDetailsGetter interface {
+	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
+}
+
 type MaxCompute struct {
 	secretProvider SecretProvider
 	clientProvider ClientProvider
+	tenantGetter   TenantDetailsGetter
 }
 
 func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
@@ -77,6 +82,12 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		return handle.Create(res)
 
 	case KindExternalTable:
+		syncer := NewSyncer(m.secretProvider, m.tenantGetter)
+		err = syncer.Sync(ctx, res)
+		if err != nil {
+			return err
+		}
+
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema)
 		return handle.Create(res)
 
@@ -220,9 +231,10 @@ func startChildSpan(ctx context.Context, name string) (context.Context, trace.Sp
 	return tracer.Start(ctx, name)
 }
 
-func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider) *MaxCompute {
+func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter) *MaxCompute {
 	return &MaxCompute{
 		secretProvider: secretProvider,
 		clientProvider: clientProvider,
+		tenantGetter:   tenantProvider,
 	}
 }

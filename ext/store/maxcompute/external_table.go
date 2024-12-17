@@ -44,15 +44,15 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 
 	tableSchema, err := buildExternalTableSchema(table)
 	if err != nil {
-		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+res.FullName())
+		return errors.AddErrContext(err, EntityExternalTable, "failed to build table schema to create for "+res.FullName())
 	}
 
 	err = e.mcExternalTable.CreateExternal(tableSchema, false, table.Source.SerdeProperties, table.Source.Jars, table.Hints, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
-			return errors.AlreadyExists(EntityTable, "external table already exists on maxcompute: "+res.FullName())
+			return errors.AlreadyExists(EntityExternalTable, "external table already exists on maxcompute: "+res.FullName())
 		}
-		return errors.InternalError(EntityTable, "error while creating table on maxcompute", err)
+		return errors.InternalError(EntityExternalTable, "error while creating table on maxcompute", err)
 	}
 	return nil
 }

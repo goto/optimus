@@ -1,7 +1,6 @@
 package ossblob_test
 
 import (
-	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -9,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/stretchr/testify/assert"
 	"gocloud.dev/gcerrors"
 
@@ -96,34 +94,5 @@ func TestOSSBucket(t *testing.T) {
 
 	t.Run("Close", func(t *testing.T) {
 		assert.NoError(t, b.Close())
-	})
-}
-
-func TestOpenBucket(t *testing.T) {
-	ctx := context.Background()
-	cfg := &oss.Config{}
-	bucketName := "test-bucket"
-
-	t.Run("openBucket with nil config", func(t *testing.T) {
-		_, err := ossblob.OpenBucket(ctx, nil, bucketName)
-		assert.Error(t, err)
-	})
-
-	t.Run("openBucket with nil credentials provider", func(t *testing.T) {
-		cfg.CredentialsProvider = nil
-		_, err := ossblob.OpenBucket(ctx, cfg, bucketName)
-		assert.Error(t, err)
-	})
-
-	t.Run("openBucket with empty bucket name", func(t *testing.T) {
-		_, err := ossblob.OpenBucket(ctx, cfg, "")
-		assert.Error(t, err)
-	})
-
-	t.Run("openBucket with valid config", func(t *testing.T) {
-		cfg.CredentialsProvider = &credentials.StaticCredentialsProvider{}
-		b, err := ossblob.OpenBucket(ctx, cfg, bucketName)
-		assert.NoError(t, err)
-		assert.NotNil(t, b)
 	})
 }

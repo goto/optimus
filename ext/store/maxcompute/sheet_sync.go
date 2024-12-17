@@ -53,52 +53,16 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 		return err
 	}
 
-	// Setup oss bucket writer
-	creds, err := s.secretProvider.GetSecret(ctx, res.Tenant(), OSSCreds)
+	bucketName, err := s.getBucketName(ctx, res, et)
 	if err != nil {
 		return err
 	}
-	ossClient, err := bucket.NewOssClient(creds.Value())
-	if err != nil {
-		return err
-	}
-
-	// oss put request
-	var putStatus chan int64
-	bucketName := res.Name().String()
 	objectKey, err := s.getObjectKey(ctx, res, et)
 	if err != nil {
 		return err
 	}
-	contentType := "text/csv"
-	resp, err := ossClient.PutObject(ctx, &oss.PutObjectRequest{
-		Bucket:      &bucketName,
-		Key:         &objectKey,
-		ContentType: &contentType,
-		Body:        strings.NewReader(content),
-		ProgressFn: func(increment, transferred, total int64) {
-			putStatus <- total
-		},
-	}, nil)
-	if err != nil {
-		return err
-	}
 
-	for {
-		select {
-		case <-putStatus:
-			if resp.StatusCode != 200 {
-				return errors.New(fmt.Sprintf("error putting OSS object, status:%s", resp.Status))
-			}
-
-			return nil
-		case <-time.After(putTimeOut):
-			return errors.New("put timeout")
-		}
-
-	}
-
-	// log resp status
+	return s.writeContentToLocation(ctx, res.Tenant(), bucketName, objectKey, content)
 }
 
 func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheetURI string, range_ string) (string, error) {
@@ -111,12 +75,31 @@ func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheet
 	return sheets.GetAsCSV(sheetURI, range_)
 }
 
+func (s *SyncerService) getBucketName(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {
+	location, err := s.getLocation(ctx, res, et)
+	if err != nil {
+		return "", err
+	}
+	parts := strings.Split(location, "/")
+	if len(parts) > 3 {
+		bucketName := parts[3]
+		return bucketName, nil
+	}
+	return "", errors.New("unable to get bucketName from Location")
+}
+
 func (s *SyncerService) getObjectKey(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {
 	location, err := s.getLocation(ctx, res, et)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s/%s.csv", location, res.Name().String()), nil
+
+	parts := strings.Split(location, "/")
+	if len(parts) > 4 {
+		path := strings.Join(parts[4:], "/")
+		return fmt.Sprintf("%s/%s.csv", path, res.Name().String()), nil
+	}
+	return "", errors.New("unable to get object path from location")
 }
 
 func (s *SyncerService) getLocation(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {
@@ -135,6 +118,43 @@ func (s *SyncerService) getLocation(ctx context.Context, res *resource.Resource,
 	return location, nil
 }
 
-func WriteFileToLocation(context.Context, string) {
+func (s *SyncerService) writeContentToLocation(ctx context.Context, tnnt tenant.Tenant, bucketName, objectKey, content string) error {
+	// Setup oss bucket writer
+	creds, err := s.secretProvider.GetSecret(ctx, tnnt, OSSCreds)
+	if err != nil {
+		return err
+	}
+	ossClient, err := bucket.NewOssClient(creds.Value())
+	if err != nil {
+		return err
+	}
 
+	// oss put request
+	var putStatus chan int64
+
+	resp, err := ossClient.PutObject(ctx, &oss.PutObjectRequest{
+		Bucket:      &bucketName,
+		Key:         &objectKey,
+		ContentType: oss.Ptr("text/csv"),
+		Body:        strings.NewReader(content),
+		ProgressFn: func(increment, transferred, total int64) {
+			putStatus <- total
+		},
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-putStatus:
+			if resp.StatusCode != 200 {
+				return errors.New(fmt.Sprintf("error putting OSS object, status:%s", resp.Status))
+			}
+			return nil
+		case <-time.After(putTimeOut):
+			return errors.New("put timeout")
+		}
+
+	}
 }

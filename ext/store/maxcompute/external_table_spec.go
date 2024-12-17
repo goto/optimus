@@ -51,6 +51,7 @@ type ExternalSource struct {
 	SyncInterval int64    `mapstructure:"sync_interval_in_hrs,omitempty"`
 	Jars         []string `mapstructure:"jars,omitempty"`
 	Location     string   `mapstructure:"location,omitempty"`
+	Range        string   `mapstructure:"range,omitempty"`
 }
 
 func (e ExternalSource) Validate() error {

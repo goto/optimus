@@ -27,13 +27,16 @@ func NewGSheets(ctx context.Context, creds string) (*GSheets, error) {
 	return &GSheets{srv: srv}, nil
 }
 
-func (gs *GSheets) GetAsCSV(url string) (string, error) {
+func (gs *GSheets) GetAsCSV(url string, range_ string) (string, error) {
 	info, err := FromURL(url)
 	if err != nil {
 		return "", err
 	}
 
-	content, err := gs.getSheetContent(info.SheetID)
+	if range_ == "" {
+		range_ = readRange
+	}
+	content, err := gs.getSheetContent(info.SheetID, range_)
 	if err != nil {
 		return "", err
 	}
@@ -41,8 +44,8 @@ func (gs *GSheets) GetAsCSV(url string) (string, error) {
 	return csv.FromRecords(content)
 }
 
-func (gs *GSheets) getSheetContent(sheetID string) ([][]interface{}, error) {
-	resp, err := gs.srv.Spreadsheets.Values.Get(sheetID, readRange).Do()
+func (gs *GSheets) getSheetContent(sheetID string, range_ string) ([][]interface{}, error) {
+	resp, err := gs.srv.Spreadsheets.Values.Get(sheetID, range_).Do()
 	if err != nil {
 		return nil, err
 	}

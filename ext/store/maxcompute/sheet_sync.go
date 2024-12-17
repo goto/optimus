@@ -3,15 +3,23 @@ package maxcompute
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/bucket/oss"
 	"github.com/goto/optimus/ext/sheets/gsheet"
 )
 
 const (
 	GsheetCreds = ""
+	OSSCreds    = ""
 	ExtLocation = ""
+	putTimeOut  = time.Duration(time.Second * 10)
 )
 
 type SyncerService struct {
@@ -40,28 +48,75 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	uri := et.Source.SourceURIs[0]
 
 	// Get sheet content
-	_, err = s.getGsheet(ctx, res.Tenant(), uri)
+	content, err := s.getGsheet(ctx, res.Tenant(), uri, et.Source.Range)
 	if err != nil {
 		return err
 	}
 
 	// Setup oss bucket writer
+	creds, err := s.secretProvider.GetSecret(ctx, res.Tenant(), OSSCreds)
+	if err != nil {
+		return err
+	}
+	ossClient, err := bucket.NewOssClient(creds.Value())
+	if err != nil {
+		return err
+	}
 
-	// Get location to write, Write to oss bucket
-	//path := s.getLocation(ctx, res, et)
+	// oss put request
+	var putStatus chan int64
+	bucketName := res.Name().String()
+	objectKey, err := s.getObjectKey(ctx, res, et)
+	if err != nil {
+		return err
+	}
+	contentType := "text/csv"
+	resp, err := ossClient.PutObject(ctx, &oss.PutObjectRequest{
+		Bucket:      &bucketName,
+		Key:         &objectKey,
+		ContentType: &contentType,
+		Body:        strings.NewReader(content),
+		ProgressFn: func(increment, transferred, total int64) {
+			putStatus <- total
+		},
+	}, nil)
+	if err != nil {
+		return err
+	}
 
-	//WriteFileToLocation(ctx, path)
-	return nil
+	for {
+		select {
+		case <-putStatus:
+			if resp.StatusCode != 200 {
+				return errors.New(fmt.Sprintf("error putting OSS object, status:%s", resp.Status))
+			}
+
+			return nil
+		case <-time.After(putTimeOut):
+			return errors.New("put timeout")
+		}
+
+	}
+
+	// log resp status
 }
 
-func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheetURI string) (string, error) {
+func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheetURI string, range_ string) (string, error) {
 	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCreds)
 	if err != nil {
 		return "", err
 	}
 	sheets, err := gsheet.NewGSheets(ctx, secret.Value())
 
-	return sheets.GetAsCSV(sheetURI)
+	return sheets.GetAsCSV(sheetURI, range_)
+}
+
+func (s *SyncerService) getObjectKey(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {
+	location, err := s.getLocation(ctx, res, et)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%s.csv", location, res.Name().String()), nil
 }
 
 func (s *SyncerService) getLocation(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {

@@ -84,7 +84,7 @@ func (s *SyncerService) getBucketName(ctx context.Context, res *resource.Resourc
 		return "", err
 	}
 	parts := strings.Split(location, "/")
-	if len(parts) > 3 {
+	if len(parts) > 3 { // nolint:mnd
 		bucketName := parts[3]
 		return bucketName, nil
 	}
@@ -101,7 +101,7 @@ func (s *SyncerService) getObjectKey(ctx context.Context, res *resource.Resource
 		return "", err
 	}
 	parts := strings.Split(location, "/")
-	if len(parts) > 4 {
+	if len(parts) > 4 { // nolint:mnd
 		path := strings.Join(parts[4:], "/")
 		return fmt.Sprintf("%s%s.csv", path, components.Name), nil
 	}

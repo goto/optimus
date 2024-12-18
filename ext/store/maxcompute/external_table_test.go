@@ -2,7 +2,6 @@ package maxcompute_test
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
@@ -76,62 +75,17 @@ func TestExternalTableHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "invalid resource name: "+projectName+"."+schemaName)
 		})
-		t.Run("returns error when failed to create schema", func(t *testing.T) {
-			table := new(mockExternalTable)
-			schema := new(mockMaxComputeSchema)
-			schema.On("Create", schemaName, true, mock.Anything).Return(fmt.Errorf("error while creating schema on maxcompute"))
-			defer schema.AssertExpectations(t)
-			odpsIns := new(mockOdpsIns)
-			odpsIns.On("CurrentSchemaName").Return(schemaName)
-			defer odpsIns.AssertExpectations(t)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
 
-			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = tableHandle.Create(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "error while creating schema on maxcompute")
-		})
-		t.Run("returns error when use invalid table schema data type", func(t *testing.T) {
-			table := new(mockExternalTable)
-			schema := new(mockMaxComputeSchema)
-			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
-			defer schema.AssertExpectations(t)
-			odpsIns := new(mockOdpsIns)
-			odpsIns.On("CurrentSchemaName").Return(schemaName)
-			defer odpsIns.AssertExpectations(t)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
-
-			spec := map[string]any{
-				"description": "test create",
-				"source": map[string]any{
-					"type": "csv",
-				},
-				"schema": []map[string]any{
-					{
-						"name": "customer_id",
-						"type": "STRING_ERROR",
-					},
-				},
-			}
-			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = tableHandle.Create(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to build table schema to create for "+fullName)
-		})
 		t.Run("returns error when table already present on maxcompute", func(t *testing.T) {
 			existTableErr := errors.New("Table or view already exists - table or view proj.test_table is already defined")
 			table := new(mockExternalTable)
 			table.On("CreateExternal", mock.Anything, false, emptyStringMap, emptyJars, emptyStringMap, emptyStringMap).Return(existTableErr)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
-			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
+
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
-			odpsIns.On("CurrentSchemaName").Return(schemaName)
+
 			defer odpsIns.AssertExpectations(t)
 			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
 
@@ -147,10 +101,10 @@ func TestExternalTableHandle(t *testing.T) {
 			table.On("CreateExternal", mock.Anything, false, emptyStringMap, emptyJars, emptyStringMap, emptyStringMap).Return(errors.New("some error"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
-			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
+
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
-			odpsIns.On("CurrentSchemaName").Return(schemaName)
+
 			defer odpsIns.AssertExpectations(t)
 			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
 
@@ -166,10 +120,10 @@ func TestExternalTableHandle(t *testing.T) {
 			table.On("CreateExternal", mock.Anything, false, emptyStringMap, emptyJars, emptyStringMap, emptyStringMap).Return(nil)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
-			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
+
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
-			odpsIns.On("CurrentSchemaName").Return(schemaName)
+
 			defer odpsIns.AssertExpectations(t)
 			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
 

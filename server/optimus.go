@@ -396,7 +396,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
 
 	mcClientProvider := mcStore.NewClientProvider()
-	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider)
+	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider, tenantService)
 	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	// Tenant Handlers

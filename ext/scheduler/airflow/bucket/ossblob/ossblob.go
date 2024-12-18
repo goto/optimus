@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"gocloud.dev/blob"
 	"gocloud.dev/blob/driver"
 	"gocloud.dev/gcerrors"
 )
@@ -369,31 +368,6 @@ func (b *ossBucket) Copy(ctx context.Context, dstKey, srcKey string, _ *driver.C
 	})
 
 	return err
-}
-
-func openBucket(_ context.Context, cfg *oss.Config, bucketName string) (*ossBucket, error) {
-	if cfg == nil {
-		return nil, errors.New("ossblob.openBucket: oss config are required")
-	}
-	if cfg.CredentialsProvider == nil {
-		return nil, errors.New("ossblob.openBucket: credentials provider is required")
-	}
-	if bucketName == "" {
-		return nil, errors.New("ossblob.openBucket: bucketName is required")
-	}
-
-	client := oss.NewClient(cfg)
-
-	return NewOSSBucket(client, bucketName), nil
-}
-
-func OpenBucket(ctx context.Context, cfg *oss.Config, bucketName string) (*blob.Bucket, error) {
-	drv, err := openBucket(ctx, cfg, bucketName)
-	if err != nil {
-		return nil, err
-	}
-
-	return blob.NewBucket(drv), nil
 }
 
 func safeGet[T any](obj *T) T {

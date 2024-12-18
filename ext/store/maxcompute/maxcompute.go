@@ -32,6 +32,7 @@ type TableResourceHandle interface {
 type Client interface {
 	TableHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
+	ExternalTableHandleFrom(schema ProjectSchema) TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -42,9 +43,14 @@ type SecretProvider interface {
 	GetSecret(ctx context.Context, tnnt tenant.Tenant, key string) (*tenant.PlainTextSecret, error)
 }
 
+type TenantDetailsGetter interface {
+	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
+}
+
 type MaxCompute struct {
 	secretProvider SecretProvider
 	clientProvider ClientProvider
+	tenantGetter   TenantDetailsGetter
 }
 
 func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
@@ -73,6 +79,16 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 
 	case KindView:
 		handle := odpsClient.ViewHandleFrom(projectSchema)
+		return handle.Create(res)
+
+	case KindExternalTable:
+		syncer := NewSyncer(m.secretProvider, m.tenantGetter)
+		err = syncer.Sync(ctx, res)
+		if err != nil {
+			return err
+		}
+
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema)
 		return handle.Create(res)
 
 	default:
@@ -108,6 +124,10 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 		handle := odpsClient.ViewHandleFrom(projectSchema)
 		return handle.Update(res)
 
+	case KindExternalTable:
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema)
+		return handle.Update(res)
+
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
@@ -134,6 +154,14 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 		}
 		view.Name = r.Name()
 		return view.Validate()
+
+	case KindExternalTable:
+		extTable, err := ConvertSpecTo[ExternalTable](r)
+		if err != nil {
+			return err
+		}
+		extTable.Name = r.Name()
+		return extTable.Validate()
 
 	default:
 		return errors.InvalidArgument(resource.EntityResource, "unknown kind")
@@ -178,8 +206,9 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 	}
 
 	kindToHandleFn := map[string]func(projectSchema ProjectSchema) TableResourceHandle{
-		KindTable: client.TableHandleFrom,
-		KindView:  client.ViewHandleFrom,
+		KindTable:         client.TableHandleFrom,
+		KindView:          client.ViewHandleFrom,
+		KindExternalTable: client.ExternalTableHandleFrom,
 	}
 
 	for _, resourceHandleFn := range kindToHandleFn {
@@ -202,9 +231,10 @@ func startChildSpan(ctx context.Context, name string) (context.Context, trace.Sp
 	return tracer.Start(ctx, name)
 }
 
-func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider) *MaxCompute {
+func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter) *MaxCompute {
 	return &MaxCompute{
 		secretProvider: secretProvider,
 		clientProvider: clientProvider,
+		tenantGetter:   tenantProvider,
 	}
 }

@@ -8,10 +8,9 @@ import (
 	"gocloud.dev/blob"
 
 	"github.com/goto/optimus/core/tenant"
+	oss "github.com/goto/optimus/ext/bucket/oss"
 	"github.com/goto/optimus/ext/scheduler/airflow"
 	"github.com/goto/optimus/ext/scheduler/airflow/bucket/ossblob"
-
-	oss "github.com/goto/optimus/ext/bucket/oss"
 )
 
 func (f *Factory) GetOSSBucket(ctx context.Context, tnnt tenant.Tenant, parsedURL *url.URL) (airflow.Bucket, error) {

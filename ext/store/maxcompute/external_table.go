@@ -38,10 +38,6 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 		return err
 	}
 
-	//if err := e.mcSchema.Create(e.mcSQLExecutor.CurrentSchemaName(), true, ""); err != nil {
-	//	return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
-	//}
-
 	tableSchema, err := buildExternalTableSchema(table)
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build table schema to create for "+res.FullName())

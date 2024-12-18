@@ -11,7 +11,7 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/bucket/oss"
+	bucket "github.com/goto/optimus/ext/bucket/oss"
 	"github.com/goto/optimus/ext/sheets/gsheet"
 )
 
@@ -19,7 +19,7 @@ const (
 	GsheetCredsKey = "GOOGLE_SHEETS_ACCOUNT"
 	OSSCredsKey    = "OSS_CREDS"
 	ExtLocation    = ""
-	putTimeOut     = time.Duration(time.Second * 10)
+	putTimeOut     = time.Second * 10
 )
 
 type SyncerService struct {
@@ -65,7 +65,7 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	return s.writeContentToLocation(ctx, res.Tenant(), bucketName, objectKey, content)
 }
 
-func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheetURI string, range_ string) (string, error) {
+func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheetURI, sheetRange string) (string, error) {
 	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
 	if err != nil {
 		return "", err
@@ -75,7 +75,7 @@ func (s *SyncerService) getGsheet(ctx context.Context, tnnt tenant.Tenant, sheet
 	if err != nil {
 		return "", err
 	}
-	return sheets.GetAsCSV(sheetURI, range_)
+	return sheets.GetAsCSV(sheetURI, sheetRange)
 }
 
 func (s *SyncerService) getBucketName(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {

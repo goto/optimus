@@ -38,7 +38,7 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 		return err
 	}
 
-	if et.Source.SourceType != GoogleSheet {
+	if !strings.EqualFold(et.Source.SourceType, GoogleSheet) {
 		return nil
 	}
 
@@ -103,7 +103,7 @@ func (s *SyncerService) getObjectKey(ctx context.Context, res *resource.Resource
 	parts := strings.Split(location, "/")
 	if len(parts) > 4 { // nolint:mnd
 		path := strings.Join(parts[4:], "/")
-		return fmt.Sprintf("%s%s.csv", path, components.Name), nil
+		return fmt.Sprintf("%s%s/file.csv", path, components.Name), nil
 	}
 	return "", errors.New("unable to get object path from location")
 }

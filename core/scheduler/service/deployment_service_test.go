@@ -82,7 +82,7 @@ func TestDeploymentService(t *testing.T) {
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, nil, nil, nil, nil, nil, nil, nil, nil)
+				jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 			err := runService.UploadToScheduler(ctx, proj1Name)
 			assert.NotNil(t, err)
@@ -98,7 +98,7 @@ func TestDeploymentService(t *testing.T) {
 			defer priorityResolver.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, nil, nil, nil, nil, priorityResolver, nil, nil, nil)
+				jobRepo, nil, nil, nil, nil, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadToScheduler(ctx, proj1Name)
 			assert.NotNil(t, err)
@@ -119,7 +119,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadToScheduler(ctx, proj1Name)
 			assert.NotNil(t, err)
@@ -147,7 +147,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadToScheduler(ctx, proj1Name)
 			assert.Nil(t, err)
@@ -172,7 +172,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadToScheduler(ctx, proj1Name)
 			assert.NotNil(t, err)
@@ -196,7 +196,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Error(t, err)
@@ -218,7 +218,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Error(t, err)
@@ -241,7 +241,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Error(t, err)
@@ -255,7 +255,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil,
-				mScheduler, nil, nil, nil, nil)
+				mScheduler, nil, nil, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Error(t, err)
@@ -279,7 +279,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Nil(t, err)
@@ -302,7 +302,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Nil(t, err)
@@ -316,7 +316,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil,
-				mScheduler, nil, nil, nil, nil)
+				mScheduler, nil, nil, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Nil(t, err)

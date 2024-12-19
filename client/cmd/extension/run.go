@@ -17,7 +17,7 @@ func generateRunCommands(reservedCommandNames []string) []*cobra.Command {
 				Short: fmt.Sprintf("Execute [%s/%s@%s] extension",
 					owner.Name, project.Name, project.ActiveTagName,
 				),
-				RunE: func(cmd *cobra.Command, args []string) error {
+				RunE: func(_ *cobra.Command, args []string) error {
 					manager, err := getExtensionManager(true, reservedCommandNames...)
 					if err != nil {
 						return err

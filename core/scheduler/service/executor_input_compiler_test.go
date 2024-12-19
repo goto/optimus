@@ -147,7 +147,7 @@ func TestExecutorCompiler(t *testing.T) {
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
+				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
@@ -216,7 +216,7 @@ func TestExecutorCompiler(t *testing.T) {
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
+				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
@@ -273,7 +273,7 @@ func TestExecutorCompiler(t *testing.T) {
 					Configs: map[string]string{
 						"DSTART":               interval.Start().Format(time.RFC3339),
 						"DEND":                 interval.End().Format(time.RFC3339),
-						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
+						"EXECUTION_TIME":       executedAt.Format(time.DateTime),
 						"JOB_DESTINATION":      job.Destination.String(),
 						"some.config.compiled": "val.compiled",
 					},
@@ -325,7 +325,7 @@ func TestExecutorCompiler(t *testing.T) {
 					Configs: map[string]string{
 						"DSTART":               interval.Start().Format(time.RFC3339),
 						"DEND":                 interval.End().Format(time.RFC3339),
-						"EXECUTION_TIME":       executedAt.Format(time.RFC3339),
+						"EXECUTION_TIME":       executedAt.Format(time.DateTime),
 						"JOB_DESTINATION":      job.Destination.String(),
 						"some.config.compiled": "val.compiled",
 					},
@@ -399,7 +399,7 @@ func TestExecutorCompiler(t *testing.T) {
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
+				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
@@ -430,7 +430,7 @@ func TestExecutorCompiler(t *testing.T) {
 				Configs: map[string]string{
 					"DSTART":          interval.Start().Format(time.RFC3339),
 					"DEND":            interval.End().Format(time.RFC3339),
-					"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
+					"EXECUTION_TIME":  executedAt.Format(time.DateTime),
 					"JOB_DESTINATION": job.Destination.String(),
 					"hook.compiled":   "hook.val.compiled",
 					"JOB_LABELS":      "job_id=00000000-0000-0000-0000-000000000000,job_name=job1,namespace=ns1,project=proj1",
@@ -498,7 +498,7 @@ func TestExecutorCompiler(t *testing.T) {
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
+				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything
@@ -570,7 +570,7 @@ func TestExecutorCompiler(t *testing.T) {
 			systemDefinedVars := map[string]string{
 				"DSTART":          interval.Start().Format(time.RFC3339),
 				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.RFC3339),
+				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
 			}
 			taskContext := mock.Anything

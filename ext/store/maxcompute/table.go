@@ -21,6 +21,7 @@ type ColumnRecord struct {
 type McSQLExecutor interface {
 	ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error)
 	CurrentSchemaName() string
+	SetCurrentSchemaName(schemaName string)
 }
 
 type McSchema interface {

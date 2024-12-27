@@ -19,6 +19,7 @@ type McExternalTable interface {
 		hints, alias map[string]string,
 	) error
 	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
+	Delete(tableName string, ifExists bool) error
 }
 
 type ExternalTableHandle struct {
@@ -32,17 +33,17 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-
-	_, table.Name, err = getCompleteComponentName(res)
+	p, tableName, err := getCompleteComponentName(res)
 	if err != nil {
 		return err
 	}
 
-	tableSchema, err := buildExternalTableSchema(table)
+	tableSchema, err := buildExternalTableSchema(table, res.FullName())
+	table.Name = tableName
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build table schema to create for "+res.FullName())
 	}
-
+	e.mcSQLExecutor.SetCurrentSchemaName(p.Schema)
 	err = e.mcExternalTable.CreateExternal(tableSchema, false, table.Source.SerdeProperties, table.Source.Jars, table.Hints, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
@@ -53,9 +54,12 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	return nil
 }
 
-func (ExternalTableHandle) Update(_ *resource.Resource) error {
-	// TODO implement me
-	panic("implement me")
+func (e ExternalTableHandle) Update(res *resource.Resource) error {
+	err := e.mcExternalTable.Delete(res.FullName(), true)
+	if err != nil {
+		return err
+	}
+	return e.Create(res)
 }
 
 func (e ExternalTableHandle) Exists(tableName string) bool {
@@ -67,7 +71,15 @@ func NewExternalTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcEx
 	return &ExternalTableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcExternalTable: mcExternalTable}
 }
 
-func buildExternalTableSchema(t *ExternalTable) (tableschema.TableSchema, error) {
+func getLocation(source *ExternalSource, tableName string) string {
+	if !strings.EqualFold(source.SourceType, GoogleSheet) {
+		return source.Location
+	}
+	l, _ := strings.CutSuffix(source.Location, "/")
+	return l + "/" + tableName + "/"
+}
+
+func buildExternalTableSchema(t *ExternalTable, tableName string) (tableschema.TableSchema, error) {
 	handler := handlerForFormat(t.Source.SourceType)
 
 	builder := tableschema.NewSchemaBuilder()
@@ -75,7 +87,7 @@ func buildExternalTableSchema(t *ExternalTable) (tableschema.TableSchema, error)
 		Name(t.Name.String()).
 		Comment(t.Description).
 		StorageHandler(handler).
-		Location(t.Source.Location).
+		Location(getLocation(t.Source, tableName)).
 		TblProperties(t.Source.TableProperties)
 
 	err := externalTableColumns(t, builder)

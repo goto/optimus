@@ -63,6 +63,10 @@ func (m *mockOdpsIns) CurrentSchemaName() string {
 	return args.String(0)
 }
 
+func (m *mockOdpsIns) SetCurrentSchemaName(schemaName string) {
+	m.Called(schemaName)
+}
+
 func TestTableHandle(t *testing.T) {
 	accessID, accessKey, endpoint := "LNRJ5tH1XMSINW5J3TjYAvfX", "lAZBJhdkNbwVj3bej5BuhjwbdV0nSp", "http://service.ap-southeast-5.maxcompute.aliyun.com/api"
 	projectName, schemaName, tableName := "proj", "schema", "test_table"

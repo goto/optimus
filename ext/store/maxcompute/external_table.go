@@ -19,6 +19,7 @@ type McExternalTable interface {
 		hints, alias map[string]string,
 	) error
 	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
+	Delete(tableName string, ifExists bool) error
 }
 
 type ExternalTableHandle struct {
@@ -53,9 +54,12 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	return nil
 }
 
-func (ExternalTableHandle) Update(_ *resource.Resource) error {
-	// TODO implement me
-	panic("implement me")
+func (e ExternalTableHandle) Update(res *resource.Resource) error {
+	err := e.mcExternalTable.Delete(res.FullName(), true)
+	if err != nil {
+		return err
+	}
+	return e.Create(res)
 }
 
 func (e ExternalTableHandle) Exists(tableName string) bool {

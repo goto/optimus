@@ -48,7 +48,6 @@ func (gs *GSheets) getSheetContent(sheetID, sheetRange string) ([][]interface{},
 		batchGetCall = batchGetCall.Ranges(sheetRange)
 	}
 	resp, err := batchGetCall.Do()
-
 	if err != nil {
 		return nil, err
 	}

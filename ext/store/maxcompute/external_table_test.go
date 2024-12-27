@@ -85,8 +85,9 @@ func TestExternalTableHandle(t *testing.T) {
 
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
-
+			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
+
 			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
@@ -104,7 +105,7 @@ func TestExternalTableHandle(t *testing.T) {
 
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
-
+			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
 			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
 
@@ -123,7 +124,7 @@ func TestExternalTableHandle(t *testing.T) {
 
 			defer schema.AssertExpectations(t)
 			odpsIns := new(mockOdpsIns)
-
+			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
 			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
 
@@ -171,6 +172,11 @@ type mockExternalTable struct {
 
 func (m *mockExternalTable) CreateExternal(schema tableschema.TableSchema, createIfNotExists bool, serdeProperties map[string]string, jars []string, hints, alias map[string]string) error {
 	args := m.Called(schema, createIfNotExists, serdeProperties, jars, hints, alias)
+	return args.Error(0)
+}
+
+func (m *mockExternalTable) Delete(tableName string, ifExists bool) error {
+	args := m.Called(tableName, ifExists)
 	return args.Error(0)
 }
 

@@ -34,9 +34,6 @@ func (gs *GSheets) GetAsCSV(url, sheetRange string) (string, error) {
 		return "", err
 	}
 
-	if sheetRange == "" {
-		sheetRange = readRange
-	}
 	content, err := gs.getSheetContent(info.SheetID, sheetRange)
 	if err != nil {
 		return "", err
@@ -46,14 +43,35 @@ func (gs *GSheets) GetAsCSV(url, sheetRange string) (string, error) {
 }
 
 func (gs *GSheets) getSheetContent(sheetID, sheetRange string) ([][]interface{}, error) {
-	resp, err := gs.srv.Spreadsheets.Values.Get(sheetID, sheetRange).Do()
+	batchGetCall := gs.srv.Spreadsheets.Values.BatchGet(sheetID)
+	if sheetRange != "" {
+		batchGetCall = batchGetCall.Ranges(sheetRange)
+	}
+	resp, err := batchGetCall.Do()
+
 	if err != nil {
 		return nil, err
 	}
 
-	if len(resp.Values) == 0 {
-		return nil, errors.New("no data found in the sheet")
+	if len(resp.ValueRanges) == 0 {
+		return nil, errors.New("no sheets found in the spreadsheet ")
 	}
 
-	return resp.Values, nil
+	if len(resp.ValueRanges[0].Values) == 0 {
+		return nil, errors.New("no data found in the sheet[0]")
+	}
+	return resp.ValueRanges[0].Values, nil
+}
+
+func (gs *GSheets) GetSheetName(sheetID string) (string, error) {
+	spreadsheet, err := gs.srv.Spreadsheets.Get(sheetID).Do()
+	if err != nil {
+		return "", err
+	}
+
+	if len(spreadsheet.Sheets) == 0 {
+		return "", errors.New("no sub sheet found")
+	}
+	sid := spreadsheet.Sheets[0].Properties.Title
+	return sid, err
 }

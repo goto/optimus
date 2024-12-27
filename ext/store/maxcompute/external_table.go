@@ -36,8 +36,9 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
+
+	tableSchema, err := buildExternalTableSchema(table, res.FullName())
 	table.Name = tableName
-	tableSchema, err := buildExternalTableSchema(table, table.Name.String())
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build table schema to create for "+res.FullName())
 	}

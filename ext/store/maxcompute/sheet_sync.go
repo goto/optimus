@@ -92,10 +92,6 @@ func (s *SyncerService) getBucketName(ctx context.Context, res *resource.Resourc
 }
 
 func (s *SyncerService) getObjectKey(ctx context.Context, res *resource.Resource, et *ExternalTable) (string, error) {
-	components, err := getURNComponent(res)
-	if err != nil {
-		return "", err
-	}
 	location, err := s.getLocation(ctx, res, et)
 	if err != nil {
 		return "", err
@@ -103,7 +99,7 @@ func (s *SyncerService) getObjectKey(ctx context.Context, res *resource.Resource
 	parts := strings.Split(location, "/")
 	if len(parts) > 4 { // nolint:mnd
 		path := strings.Join(parts[4:], "/")
-		return fmt.Sprintf("%s%s/file.csv", path, components.Name), nil
+		return fmt.Sprintf("%s%s/file.csv", path, res.FullName()), nil
 	}
 	return "", errors.New("unable to get object path from location")
 }

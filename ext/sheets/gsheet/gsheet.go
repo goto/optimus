@@ -11,10 +11,6 @@ import (
 	"github.com/goto/optimus/ext/sheets/csv"
 )
 
-const (
-	readRange = "Sheet1"
-)
-
 type GSheets struct {
 	srv *sheets.Service
 }

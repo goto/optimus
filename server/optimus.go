@@ -35,6 +35,7 @@ import (
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
+	mcStore "github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
@@ -353,15 +354,16 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames, alertsHandler,
 	)
 
-	newJobRunService := schedulerService.NewJobRunService(
-		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
-		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
-	)
-
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
+
+	// Job run service
+	newJobRunService := schedulerService.NewJobRunService(
+		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
+		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService, pluginService,
+	)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)
@@ -392,6 +394,10 @@ func (s *OptimusServer) setupHandlers() error {
 	bqClientProvider := bqStore.NewClientProvider()
 	bigqueryStore := bqStore.NewBigqueryDataStore(tenantService, bqClientProvider)
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
+
+	mcClientProvider := mcStore.NewClientProvider()
+	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider, tenantService)
+	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	// Tenant Handlers
 	pb.RegisterSecretServiceServer(s.grpcServer, tHandler.NewSecretsHandler(s.logger, tSecretService))

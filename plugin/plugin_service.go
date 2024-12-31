@@ -13,11 +13,13 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
+	"github.com/goto/optimus/plugin/upstream_identifier/processor"
 	"github.com/goto/optimus/sdk/plugin"
 )
 
 const (
 	bqSvcAccKey = "BQ_SERVICE_ACCOUNT"
+	mcSvcAccKey = "MC_SERVICE_ACCOUNT"
 )
 
 type (
@@ -35,6 +37,7 @@ type EvaluatorFactory interface {
 
 type UpstreamIdentifierFactory interface {
 	GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
+	GetMaxcomputeUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (upstreamidentifier.UpstreamIdentifier, error)
 }
 
 type PluginService struct {
@@ -82,6 +85,39 @@ func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, e
 	return taskPlugin.Info(), nil
 }
 
+func (s PluginService) CleanAssets(_ context.Context, taskName string, compiledAssets map[string]string) (map[string]string, error) {
+	taskPlugin, err := s.pluginGetter.GetByName(taskName)
+	if err != nil {
+		return nil, err
+	}
+
+	assetParsers := taskPlugin.Info().AssetParsers
+	if assetParsers == nil {
+		// if plugin doesn't contain parser, then it doesn't contains any resources
+		s.l.Debug("plugin %s doesn't contain parser, clean up assets is not supported.", taskPlugin.Info().Name)
+		return compiledAssets, nil
+	}
+
+	// construct all possible resource from given parser
+	assetResources := deepCopyMap(compiledAssets)
+	for parserType, evaluatorSpecs := range assetParsers {
+		// generate cleaned resource from each evaluators
+		for _, evaluatorSpec := range evaluatorSpecs {
+			evaluator, err := s.getEvaluator(evaluatorSpec)
+			if err != nil {
+				return nil, err
+			}
+			// evaluate the asset and clean the query
+			rawResource := evaluator.Evaluate(compiledAssets)
+			switch parserType {
+			case plugin.MaxcomputeParser, plugin.BQParser:
+				assetResources[evaluatorSpec.FilePath] = processor.CleanQuery(rawResource)
+			}
+		}
+	}
+	return assetResources, nil
+}
+
 func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]resource.URN, error) {
 	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
@@ -108,20 +144,31 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 			evaluators = append(evaluators, evaluator)
 		}
 
-		if parserType != plugin.BQParser {
+		switch parserType {
+		case plugin.MaxcomputeParser:
+			svcAcc, ok := compiledConfig[mcSvcAccKey]
+			if !ok {
+				return nil, fmt.Errorf("secret " + mcSvcAccKey + " required to generate upstream is not found")
+			}
+			upstreamIdentifier, err := s.upstreamIdentifierFactory.GetMaxcomputeUpstreamIdentifier(ctx, svcAcc, evaluators...)
+			if err != nil {
+				return nil, err
+			}
+			upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
+		case plugin.BQParser:
+			svcAcc, ok := compiledConfig[bqSvcAccKey]
+			if !ok {
+				return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
+			}
+			upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
+			if err != nil {
+				return nil, err
+			}
+			upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
+		default:
 			s.l.Warn("parserType %s is not supported", parserType)
 			continue
 		}
-		// for now parser type is only scoped for bigquery, so that it uses bigquery as upstream identifier
-		svcAcc, ok := compiledConfig[bqSvcAccKey]
-		if !ok {
-			return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
-		}
-		upstreamIdentifier, err := s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
-		if err != nil {
-			return nil, err
-		}
-		upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
 	}
 
 	// identify all upstream resource urns by all identifier from given asset
@@ -212,4 +259,12 @@ func (s PluginService) getEvaluator(evaluator plugin.Evaluator) (evaluator.Evalu
 	}
 
 	return nil, fmt.Errorf("evaluator for filepath %s is not supported", evaluator.FilePath)
+}
+
+func deepCopyMap(m map[string]string) map[string]string {
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
 }

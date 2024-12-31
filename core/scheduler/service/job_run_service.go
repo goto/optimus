@@ -35,6 +35,10 @@ const (
 	scheduleDelay metricType = "schedule_delay"
 )
 
+const (
+	devEnableCleanUpQuery = "DEV__ENABLE_CLEAN_UP_QUERY"
+)
+
 var jobRunEventsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "operator_stats",
 	Help: "total job run events received",
@@ -99,6 +103,10 @@ type ProjectGetter interface {
 	Get(context.Context, tenant.ProjectName) (*tenant.Project, error)
 }
 
+type AssetCleaner interface {
+	CleanAssets(ctx context.Context, taskName string, compiledAssets map[string]string) (map[string]string, error)
+}
+
 type JobRunService struct {
 	l                log.Logger
 	repo             JobRunRepository
@@ -110,6 +118,7 @@ type JobRunService struct {
 	priorityResolver PriorityResolver
 	compiler         JobInputCompiler
 	projectGetter    ProjectGetter
+	assetCleaner     AssetCleaner
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
@@ -146,7 +155,20 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		details.Job.Task.Config[k] = v
 	}
 
-	return s.compiler.Compile(ctx, details, config, executedAt)
+	executorInput, err := s.compiler.Compile(ctx, details, config, executedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	if enable, ok := details.Job.Task.Config[devEnableCleanUpQuery]; ok && enable == "true" {
+		cleanedAssets, err := s.assetCleaner.CleanAssets(ctx, details.Job.Task.Name, executorInput.Files)
+		if err != nil {
+			return nil, err
+		}
+		executorInput.Files = cleanedAssets
+	}
+
+	return executorInput, nil
 }
 
 func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {
@@ -662,7 +684,7 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
 	operatorRunRepo OperatorRunRepository, scheduler Scheduler, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
-	projectGetter ProjectGetter,
+	projectGetter ProjectGetter, assetCleaner AssetCleaner,
 ) *JobRunService {
 	return &JobRunService{
 		l:                logger,
@@ -675,5 +697,6 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 		priorityResolver: resolver,
 		compiler:         compiler,
 		projectGetter:    projectGetter,
+		assetCleaner:     assetCleaner,
 	}
 }

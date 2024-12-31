@@ -15,6 +15,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -35,7 +36,8 @@ type ResourceService interface {
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
 	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
-	GetAllExternal(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
+	GetAllExternal(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]*resource.Resource, error)
+	Sync(ctx context.Context, res *resource.Resource) error
 	Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource, logWriter writer.LogWriter) error
 	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
 }
@@ -184,29 +186,37 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 }
 
 func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncExternalTablesRequest) (*pb.SyncExternalTablesResponse, error) {
-	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
-		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		rh.l.Error("invalid project name [%s]", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "failed to list resource for ")
 	}
 
-	resources, err := rh.service.GetAllExternal(ctx, tnnt, resource.Bigquery)
+	store := resource.Bigquery
+
+	resources, err := rh.service.GetAllExternal(ctx, projectName, store,
+		filter.WithString(filter.NamespaceName, req.GetNamespaceName()),
+		filter.WithString(filter.TableName, req.GetTableName()),
+	)
 	if err != nil {
 		rh.l.Error("error getting all resources: %s", err)
 		return nil, errors.GRPCErr(err, "failed to list resource for "+resource.Bigquery.String())
 	}
 
-	for _, res := range resources {
-		spec := res.Spec()
-		source := spec["source"].(map[string]any)
-		urls := source["uris"].([]string)
-		destination := req.GetDestination()
-		rh.l.Info("Sync Sheets to OSS for resource: %s, SheetLinks: %s, to: %s \n", res.Name(), urls, destination)
+	multiError := errors.NewMultiError("error batch syncing external tables")
+	var syncedSuccess []string
+	for _, r := range resources {
+		err := rh.service.Sync(ctx, r)
+		if err != nil {
+			multiError.Append(err)
+			continue
+		}
+		syncedSuccess = append(syncedSuccess, r.FullName())
 	}
 
 	return &pb.SyncExternalTablesResponse{
-		Success: true,
-		Message: fmt.Sprintf("successfully synced [%d] resources", len(resources)),
+		SuccessfullySynced: syncedSuccess,
+		Error:              multiError.Error(),
 	}, nil
 }
 

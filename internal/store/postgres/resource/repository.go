@@ -275,7 +275,7 @@ func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resou
 	return resources, nil
 }
 
-func (r Repository) GetAllExternal(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
+func (r Repository) GetAllExternal(ctx context.Context, tnnt *tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
 	getAllResources := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and namespace_name = $2 and store = $3 and kind = 'external_table'`
 	args := []any{tnnt.ProjectName(), tnnt.NamespaceName(), store}
 

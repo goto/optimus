@@ -482,7 +482,7 @@
             "schema": {
               "type": "object",
               "properties": {
-                "destination": {
+                "tableName": {
                   "type": "string"
                 }
               }
@@ -765,10 +765,13 @@
     "v1beta1SyncExternalTablesResponse": {
       "type": "object",
       "properties": {
-        "success": {
-          "type": "boolean"
+        "successfullySynced": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
-        "message": {
+        "error": {
           "type": "string"
         }
       }

@@ -21,19 +21,27 @@ func (MaxComputeClientProvider) Get(account string) (Client, error) {
 	return NewClient(account)
 }
 
+type MaxComputeCredentials struct {
+	AccessID    string `json:"access_id"`
+	AccessKey   string `json:"access_key"`
+	Endpoint    string `json:"mc_endpoint"`
+	ProjectName string `json:"project_name"`
+}
+
+func getMaxComputeCredential(jsonData string) (*MaxComputeCredentials, error) {
+	var creds MaxComputeCredentials
+	if err := json.Unmarshal([]byte(jsonData), &creds); err != nil {
+		return nil, err
+	}
+	return &creds, nil
+}
+
 type MaxComputeClient struct {
 	*odps.Odps
 }
 
-type maxComputeCredentials struct {
-	AccessID    string `json:"access_id"`
-	AccessKey   string `json:"access_key"`
-	Endpoint    string `json:"endpoint"`
-	ProjectName string `json:"project_name"`
-}
-
 func NewClient(svcAccount string) (*MaxComputeClient, error) {
-	cred, err := collectMaxComputeCredential([]byte(svcAccount))
+	cred, err := getMaxComputeCredential(svcAccount)
 	if err != nil {
 		return nil, errors.InternalError(store, "failed to read account", err)
 	}
@@ -81,13 +89,4 @@ func (c *MaxComputeClient) GetDDLView(_ context.Context, table string) (string, 
 		return t.Schema().ViewText, nil
 	}
 	return "", nil
-}
-
-func collectMaxComputeCredential(jsonData []byte) (*maxComputeCredentials, error) {
-	var creds maxComputeCredentials
-	if err := json.Unmarshal(jsonData, &creds); err != nil {
-		return nil, err
-	}
-
-	return &creds, nil
 }

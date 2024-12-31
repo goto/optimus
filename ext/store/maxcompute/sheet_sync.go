@@ -17,7 +17,7 @@ import (
 
 const (
 	GsheetCredsKey = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey    = "OSS_CREDS"
+	OSSCredsKey    = "ALI_CREDS"
 	ExtLocation    = ""
 	putTimeOut     = time.Second * 10
 )

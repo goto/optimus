@@ -208,9 +208,9 @@ func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncEx
 		if len(success) == 0 {
 			rh.l.Error("error syncing external tables: %s", err)
 			return nil, errors.GRPCErr(err, "failed to sync external table for "+store.String())
-		} else {
-			errMsg = err.Error()
 		}
+
+		errMsg = err.Error()
 	}
 
 	return &pb.SyncExternalTablesResponse{

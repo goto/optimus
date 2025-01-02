@@ -3,6 +3,7 @@ package gsheet
 import (
 	"errors"
 	"regexp"
+	"strconv"
 )
 
 var (
@@ -12,7 +13,7 @@ var (
 
 type SheetsInfo struct {
 	SheetID string
-	GID     string
+	GID     int64
 }
 
 func FromURL(u1 string) (*SheetsInfo, error) {
@@ -21,10 +22,13 @@ func FromURL(u1 string) (*SheetsInfo, error) {
 		return nil, errors.New("not able to get spreadsheetID")
 	}
 
-	gid := ""
+	gid := int64(-1)
 	res2 := gidRegex.FindStringSubmatch(u1)
 	if len(res2) > 1 && res2[1] != "" {
-		gid = res2[1]
+		gid1, err := strconv.ParseInt(res2[1], 10, 64)
+		if err == nil {
+			gid = gid1
+		}
 	}
 
 	return &SheetsInfo{

@@ -196,22 +196,26 @@ func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncEx
 	var opts []filter.FilterOpt
 	if req.GetNamespaceName() != "" {
 		opts = append(opts, filter.WithString(filter.NamespaceName, req.GetNamespaceName()))
-	}
-	if req.TableName != "" {
-		opts = append(opts, filter.WithString(filter.TableName, req.GetTableName()))
+
+		if req.TableName != "" {
+			opts = append(opts, filter.WithString(filter.TableName, req.GetTableName()))
+		}
 	}
 
+	errMsg := ""
 	success, err := rh.service.SyncExternalTables(ctx, projectName, store, opts...)
-	if len(success) == 0 {
-		if err != nil {
+	if err != nil {
+		if len(success) == 0 {
 			rh.l.Error("error syncing external tables: %s", err)
 			return nil, errors.GRPCErr(err, "failed to sync external table for "+store.String())
+		} else {
+			errMsg = err.Error()
 		}
 	}
 
 	return &pb.SyncExternalTablesResponse{
 		SuccessfullySynced: success,
-		Error:              err.Error(),
+		Error:              errMsg,
 	}, nil
 }
 

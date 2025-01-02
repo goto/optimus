@@ -22,5 +22,6 @@ func NewResourceCommand() *cobra.Command {
 	cmd.AddCommand(NewDeleteCommand())
 	cmd.AddCommand(NewUploadCommand())
 	cmd.AddCommand(NewPlanCommand())
+	cmd.AddCommand(NewSyncExternalCommand())
 	return cmd
 }

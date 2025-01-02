@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 const (
@@ -275,11 +276,24 @@ func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resou
 	return resources, nil
 }
 
-func (r Repository) GetAllExternal(ctx context.Context, tnnt *tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
-	getAllResources := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and namespace_name = $2 and store = $3 and kind = 'external_table'`
-	args := []any{tnnt.ProjectName(), tnnt.NamespaceName(), store}
+func (r Repository) GetExternal(ctx context.Context, projName tenant.ProjectName, store resource.Store, filters []filter.FilterOpt) ([]*resource.Resource, error) {
+	getExternal := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and store = $2 and kind = 'external_table'`
+	args := []any{projName, store}
 
-	rows, err := r.db.Query(ctx, getAllResources, args...)
+	f := filter.NewFilter(filters...)
+	if f.Contains(filter.NamespaceName) {
+		getExternal += " and namespace_name = $3"
+		namespaceName := f.GetStringValue(filter.NamespaceName)
+		args = append(args, namespaceName)
+
+		if f.Contains(filter.TableName) {
+			getExternal = " and full_name = $4"
+			tableName := f.GetStringValue(filter.TableName)
+			args = append(args, tableName)
+		}
+	}
+
+	rows, err := r.db.Query(ctx, getExternal, args...)
 	if err != nil {
 		return nil, errors.Wrap(resource.EntityResource, "error in GetAllExternal", err)
 	}

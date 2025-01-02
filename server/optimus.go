@@ -35,7 +35,6 @@ import (
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
-	"github.com/goto/optimus/ext/store/maxcompute"
 	mcStore "github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
@@ -366,7 +365,7 @@ func (s *OptimusServer) setupHandlers() error {
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService, pluginService,
 	)
 
-	syncer := maxcompute.NewSyncer(tenantService, tenantService)
+	syncer := mcStore.NewSyncer(tenantService, tenantService)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)

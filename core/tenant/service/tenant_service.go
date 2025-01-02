@@ -15,7 +15,6 @@ type ProjectGetter interface {
 
 type NamespaceGetter interface {
 	Get(context.Context, tenant.ProjectName, tenant.NamespaceName) (*tenant.Namespace, error)
-	GetAll(ctx context.Context, projectName tenant.ProjectName) ([]*tenant.Namespace, error)
 }
 
 type SecretsGetter interface {
@@ -64,28 +63,6 @@ func (t TenantService) GetProject(ctx context.Context, name tenant.ProjectName) 
 		return nil, errors.InvalidArgument(tenant.EntityTenant, "invalid project name")
 	}
 	return t.projGetter.Get(ctx, name)
-}
-
-func (t TenantService) GetAllTenantsByProjectName(ctx context.Context, name tenant.ProjectName) ([]*tenant.Tenant, error) {
-	if name == "" {
-		t.logger.Error("project name is empty")
-		return nil, errors.InvalidArgument(tenant.EntityTenant, "invalid project name")
-	}
-	namespaces, err := t.namespaceGetter.GetAll(ctx, name)
-	if err != nil {
-		t.logger.Error("unable to get namespace for the given project name: " + name.String())
-		return nil, errors.InvalidArgument(tenant.EntityTenant, "unable to get namespace for the given project name: "+name.String())
-	}
-	tenants := make([]*tenant.Tenant, len(namespaces))
-	for i, namespace := range namespaces {
-		tnnt, err := tenant.NewTenant(name.String(), namespace.Name().String())
-		if err != nil {
-			t.logger.Error("unable to tenant for project name: " + name.String())
-			return nil, errors.InvalidArgument(tenant.EntityTenant, "unable to get namespace for the given project name: "+name.String())
-		}
-		tenants[i] = &tnnt
-	}
-	return tenants, nil
 }
 
 func (t TenantService) GetSecrets(ctx context.Context, tnnt tenant.Tenant) ([]*tenant.PlainTextSecret, error) {

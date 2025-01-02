@@ -36,8 +36,7 @@ type ResourceService interface {
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
 	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
-	GetAllExternal(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]*resource.Resource, error)
-	Sync(ctx context.Context, res *resource.Resource) error
+	SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error)
 	Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource, logWriter writer.LogWriter) error
 	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
 }
@@ -192,31 +191,27 @@ func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncEx
 		return nil, errors.GRPCErr(err, "failed to list resource for ")
 	}
 
-	store := resource.Bigquery
+	store := resource.MaxCompute
 
-	resources, err := rh.service.GetAllExternal(ctx, projectName, store,
-		filter.WithString(filter.NamespaceName, req.GetNamespaceName()),
-		filter.WithString(filter.TableName, req.GetTableName()),
-	)
-	if err != nil {
-		rh.l.Error("error getting all resources: %s", err)
-		return nil, errors.GRPCErr(err, "failed to list resource for "+resource.Bigquery.String())
+	var opts []filter.FilterOpt
+	if req.GetNamespaceName() != "" {
+		opts = append(opts, filter.WithString(filter.NamespaceName, req.GetNamespaceName()))
+	}
+	if req.TableName != "" {
+		opts = append(opts, filter.WithString(filter.TableName, req.GetTableName()))
 	}
 
-	multiError := errors.NewMultiError("error batch syncing external tables")
-	var syncedSuccess []string
-	for _, r := range resources {
-		err := rh.service.Sync(ctx, r)
+	success, err := rh.service.SyncExternalTables(ctx, projectName, store, opts...)
+	if len(success) == 0 {
 		if err != nil {
-			multiError.Append(err)
-			continue
+			rh.l.Error("error syncing external tables: %s", err)
+			return nil, errors.GRPCErr(err, "failed to sync external table for "+store.String())
 		}
-		syncedSuccess = append(syncedSuccess, r.FullName())
 	}
 
 	return &pb.SyncExternalTablesResponse{
-		SuccessfullySynced: syncedSuccess,
-		Error:              multiError.Error(),
+		SuccessfullySynced: success,
+		Error:              err.Error(),
 	}, nil
 }
 

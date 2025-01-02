@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/resource/handler/v1beta1"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -1123,7 +1124,51 @@ func TestResourceHandler(t *testing.T) {
 			assert.Nil(t, res)
 		})
 	})
+	t.Run("SyncExternalTables", func(t *testing.T) {
+		t.Run("returns error when project name is invalid", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
+			req := &pb.SyncExternalTablesRequest{
+				ProjectName: "",
+			}
+
+			_, err := handler.SyncExternalTables(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "project name is empty")
+		})
+		t.Run("returns error when error from service", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("SyncExternalTables", ctx, tnnt.ProjectName(), resource.MaxCompute, mock.Anything).Return(nil, errors.New("unable to sync"))
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.SyncExternalTablesRequest{
+				ProjectName:   "proj",
+				NamespaceName: "ns",
+			}
+
+			_, err := handler.SyncExternalTables(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "unable to sync")
+		})
+		t.Run("returns successful resource list", func(t *testing.T) {
+			service := new(resourceService)
+			service.On("SyncExternalTables", ctx, tnnt.ProjectName(), resource.MaxCompute, mock.Anything).
+				Return([]string{"project.schema.externalTableName"}, errors.New("proj.schema.ext2 could not be synced"))
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.SyncExternalTablesRequest{
+				ProjectName:   "proj",
+				NamespaceName: "ns",
+			}
+
+			res, err := handler.SyncExternalTables(ctx, req)
+			assert.NoError(t, err)
+			assert.NotNil(t, res)
+			assert.Equal(t, "project.schema.externalTableName", res.SuccessfullySynced[0])
+			assert.Equal(t, "proj.schema.ext2 could not be synced", res.Error)
+		})
+	})
 	t.Run("GetResourceChangelogs", func(t *testing.T) {
 		resourceName := "project.dataset.test_table"
 
@@ -1244,11 +1289,11 @@ func (r *resourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return resources, args.Error(1)
 }
 
-func (r *resourceService) GetAllExternal(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
-	args := r.Called(ctx, tnnt, store)
-	var rs []*resource.Resource
+func (r *resourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error) {
+	args := r.Called(ctx, projectName, store, filters)
+	var rs []string
 	if args.Get(0) != nil {
-		rs = args.Get(0).([]*resource.Resource)
+		rs = args.Get(0).([]string)
 	}
 	return rs, args.Error(1)
 }

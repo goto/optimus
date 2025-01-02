@@ -32,7 +32,7 @@ type ResourceRepository interface {
 	ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
-	GetAllExternal(ctx context.Context, tnnt *tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
+	GetExternal(ctx context.Context, projName tenant.ProjectName, store resource.Store, filters []filter.FilterOpt) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
 }
@@ -65,7 +65,6 @@ type EventHandler interface {
 
 type TenantDetailsGetter interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
-	GetAllTenantsByProjectName(ctx context.Context, name tenant.ProjectName) ([]*tenant.Tenant, error)
 }
 
 type TemplateCompiler interface {
@@ -386,47 +385,27 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return rs.repo.ReadAll(ctx, tnnt, store, true)
 }
 
-func (rs ResourceService) GetAllExternal(ctx context.Context, proj tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]*resource.Resource, error) { // nolint:gocritic
-	f := filter.NewFilter(filters...)
-	if f.Contains(filter.NamespaceName) {
-		namespaceName := f.GetStringValue(filter.NamespaceName)
-		t, err := tenant.NewTenant(proj.String(), namespaceName)
-		if err != nil {
-			return nil, err
-		}
-
-		if f.Contains(filter.TableName) {
-			tableName := f.GetStringValue(filter.TableName)
-			resources, err := rs.repo.GetResources(ctx, t, store, []string{tableName})
-			if err != nil {
-				return nil, err
-			}
-			if len(resources) > 0 {
-				return []*resource.Resource{resources[0]}, nil
-			}
-			return nil, errors.NotFound(resource.EntityResource, "resource not found in DB")
-		}
-		return rs.repo.GetAllExternal(ctx, &t, store)
-	}
-
-	// query based on filters
-	tenants, err := rs.tenantDetailsGetter.GetAllTenantsByProjectName(ctx, proj)
+func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error) {
+	resources, err := rs.repo.GetExternal(ctx, projectName, store, filters)
 	if err != nil {
 		return nil, err
 	}
-	var externalResources []*resource.Resource
-	for _, t := range tenants {
-		resources, err := rs.repo.GetAllExternal(ctx, t, store)
-		if err != nil {
-			return nil, err
-		}
-		externalResources = append(externalResources, resources...)
+	if len(resources) == 0 {
+		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter")
 	}
-	return externalResources, nil
-}
 
-func (rs ResourceService) Sync(ctx context.Context, res *resource.Resource) error { // nolint:gocritic
-	return rs.syncer.Sync(ctx, res)
+	var successRes []string
+	multiError := errors.NewMultiError("error in external table sync")
+	for _, res := range resources {
+		syncErr := rs.syncer.Sync(ctx, res)
+		if syncErr != nil {
+			multiError.Append(syncErr)
+		} else {
+			successRes = append(successRes, res.FullName())
+		}
+	}
+
+	return successRes, multiError.ToErr()
 }
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic

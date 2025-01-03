@@ -82,7 +82,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		return handle.Create(res)
 
 	case KindExternalTable:
-		syncer := NewSyncer(m.secretProvider, m.tenantGetter)
+		syncer := NewSyncer(m.secretProvider)
 		err = syncer.Sync(ctx, res)
 		if err != nil {
 			return err

@@ -38,7 +38,7 @@ type ResourceRepository interface {
 }
 
 type Syncer interface {
-	Sync(ctx context.Context, res *resource.Resource) error
+	SyncBatch(ctx context.Context, resources []*resource.Resource) ([]string, error)
 }
 
 type ResourceManager interface {
@@ -394,18 +394,7 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter")
 	}
 
-	var successRes []string
-	multiError := errors.NewMultiError("error in external table sync")
-	for _, res := range resources {
-		syncErr := rs.syncer.Sync(ctx, res)
-		if syncErr != nil {
-			multiError.Append(syncErr)
-		} else {
-			successRes = append(successRes, res.FullName())
-		}
-	}
-
-	return successRes, multiError.ToErr()
+	return rs.syncer.SyncBatch(ctx, resources)
 }
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic

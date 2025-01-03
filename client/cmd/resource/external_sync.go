@@ -117,7 +117,7 @@ func (se *syncExternalCommand) RunE(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func (se *syncExternalCommand) triggerSync(apply pb.ResourceServiceClient, nsName string, resName string) error {
+func (se *syncExternalCommand) triggerSync(apply pb.ResourceServiceClient, nsName, resName string) error {
 	spinner := progressbar.NewProgressBar()
 	spinner.Start("please wait...")
 

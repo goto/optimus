@@ -30,7 +30,7 @@ func TestMaxComputeStore(t *testing.T) {
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(nil, errors.New("not found secret"))
 			defer secretProvider.AssertExpectations(t)
 
@@ -46,7 +46,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns error when not able to get client", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -64,7 +64,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns error when schema name is empty", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -85,7 +85,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns error when kind is invalid", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -107,7 +107,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("return success when calls appropriate handler for table", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -132,7 +132,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("return success when calls appropriate handler for view", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -159,7 +159,7 @@ func TestMaxComputeStore(t *testing.T) {
 	t.Run("Update", func(t *testing.T) {
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(nil, errors.New("not found secret"))
 			defer secretProvider.AssertExpectations(t)
 
@@ -175,7 +175,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns error when not able to get client", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -193,7 +193,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns error when schema name is empty", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -214,7 +214,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns error when kind is invalid", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -236,7 +236,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("return success when calls appropriate handler for table", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -261,7 +261,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("return success when calls appropriate handler for view", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -383,7 +383,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns false and error when secret is not provided", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(nil, errors.New("not found secret"))
 			defer secretProvider.AssertExpectations(t)
 
@@ -401,7 +401,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns false and error when not able to get client", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
@@ -419,7 +419,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns error when schema name is empty", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").
 				Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
@@ -441,7 +441,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns true and error when resource name is invalid", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)
@@ -465,7 +465,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns true and error when resource name is empty", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)
@@ -489,7 +489,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns true and nil when schema table resource does exist", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)
@@ -522,7 +522,7 @@ func TestMaxComputeStore(t *testing.T) {
 		})
 		t.Run("returns false and nil when schema table resource does not exist", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "ALI_CREDS").Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)

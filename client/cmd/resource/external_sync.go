@@ -139,14 +139,13 @@ func (se *syncExternalCommand) triggerSync(apply pb.ResourceServiceClient, nsNam
 		return fmt.Errorf("failed to sync resourcse: %w", err)
 	}
 
-	se.printStatus(response)
+	se.printStatus(response, nsName)
 	return nil
 }
 
-func (se *syncExternalCommand) printStatus(res *pb.SyncExternalTablesResponse) {
-	se.logger.Info("Sync finished")
+func (se *syncExternalCommand) printStatus(res *pb.SyncExternalTablesResponse, nsName string) {
 	if len(res.SuccessfullySynced) > 0 {
-		se.logger.Info("Resources with success")
+		se.logger.Info("Resources with success for %s", nsName)
 		for i, name := range res.SuccessfullySynced {
 			se.logger.Info("%d. %s", i+1, name)
 		}

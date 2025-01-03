@@ -20,6 +20,7 @@ const (
 	bitOnRunState            uint64 = 1 << 9
 	bitOnStartDate           uint64 = 1 << 10
 	bitOnEndDate             uint64 = 1 << 11
+	bitOnTableName           uint64 = 1 << 12
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 	RunState            = Operand(bitOnRunState)
 	StartDate           = Operand(bitOnStartDate)
 	EndDate             = Operand(bitOnEndDate)
+	TableName           = Operand(bitOnTableName)
 )
 
 func WithTime(operand Operand, value time.Time) FilterOpt {

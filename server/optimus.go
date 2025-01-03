@@ -35,6 +35,7 @@ import (
 	"github.com/goto/optimus/ext/notify/slack"
 	"github.com/goto/optimus/ext/notify/webhook"
 	bqStore "github.com/goto/optimus/ext/store/bigquery"
+	mcStore "github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
@@ -357,6 +358,7 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
 	)
+	syncer := mcStore.NewSyncer(tenantService, tenantService)
 
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
@@ -367,7 +369,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceRepository := resource.NewRepository(s.dbPool)
 	backupRepository := resource.NewBackupRepository(s.dbPool)
 	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
-	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler, tenantService, newEngine) // note: job service can be nil
+	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler, tenantService, newEngine, syncer) // note: job service can be nil
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
@@ -384,7 +386,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
 	// Resource Bounded Context
-	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine)
+	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 	resourceChangeLogService := rService.NewChangelogService(s.logger, resourceRepository)
 
@@ -392,6 +394,10 @@ func (s *OptimusServer) setupHandlers() error {
 	bqClientProvider := bqStore.NewClientProvider()
 	bigqueryStore := bqStore.NewBigqueryDataStore(tenantService, bqClientProvider)
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
+
+	mcClientProvider := mcStore.NewClientProvider()
+	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider, tenantService)
+	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	// Tenant Handlers
 	pb.RegisterSecretServiceServer(s.grpcServer, tHandler.NewSecretsHandler(s.logger, tSecretService))

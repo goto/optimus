@@ -82,9 +82,14 @@ func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUp
 	me := errors.NewMultiError("errorInUploadJobs")
 
 	if len(toUpdate) > 0 {
-		if err = s.resolveAndDeployJobs(ctx, tnnt, toUpdate); err == nil {
+		deployedJobs, err := s.resolveAndDeployJobs(ctx, tnnt, toUpdate)
+		if len(deployedJobs) > 0 && err == nil {
 			s.l.Info("[success] namespace: %s, project: %s, deployed %d jobs", tnnt.NamespaceName().String(),
-				tnnt.ProjectName().String(), len(toUpdate))
+				tnnt.ProjectName().String(), len(deployedJobs))
+		}
+		if len(deployedJobs) > 0 && err != nil {
+			s.l.Error("[failure] namespace: %s, project: %s, deployed %d jobs with failure: %s", tnnt.NamespaceName().String(),
+				tnnt.ProjectName().String(), len(deployedJobs), err.Error())
 		}
 		me.Append(err)
 	}
@@ -99,16 +104,24 @@ func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUp
 	return me.ToErr()
 }
 
-func (s *JobRunService) resolveAndDeployJobs(ctx context.Context, tnnt tenant.Tenant, toUpdate []string) error {
+func (s *JobRunService) resolveAndDeployJobs(ctx context.Context, tnnt tenant.Tenant, toUpdate []string) ([]*scheduler.JobWithDetails, error) {
+	me := errors.NewMultiError("errorInResolveAndDeployJobs")
 	allJobsWithDetails, err := s.jobRepo.GetJobs(ctx, tnnt.ProjectName(), toUpdate)
-	if err != nil || allJobsWithDetails == nil {
-		return err
+	if err != nil {
+		if allJobsWithDetails == nil {
+			return nil, err
+		}
+		me.Append(err)
 	}
 
-	if err := s.priorityResolver.Resolve(ctx, allJobsWithDetails); err != nil {
+	if err = s.priorityResolver.Resolve(ctx, allJobsWithDetails); err != nil {
 		s.l.Error("error priority resolving jobs: %s", err)
-		return err
+		me.Append(err)
+		return nil, me.ToErr()
 	}
 
-	return s.scheduler.DeployJobs(ctx, tnnt, allJobsWithDetails)
+	if err = s.scheduler.DeployJobs(ctx, tnnt, allJobsWithDetails); err != nil {
+		me.Append(err)
+	}
+	return allJobsWithDetails, me.ToErr()
 }

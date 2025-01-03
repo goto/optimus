@@ -445,6 +445,55 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/external-table/sync": {
+      "post": {
+        "operationId": "ResourceService_SyncExternalTables",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1SyncExternalTablesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "tableName": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "ResourceService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/resource/{resourceName}/changelog": {
       "get": {
         "summary": "GetResourceChangelogs get all the change logs for a specific resource",
@@ -516,7 +565,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -712,6 +761,20 @@
         }
       },
       "title": "ResourceSpecification are datastore specification representation of a resource"
+    },
+    "v1beta1SyncExternalTablesResponse": {
+      "type": "object",
+      "properties": {
+        "successfullySynced": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "type": "string"
+        }
+      }
     },
     "v1beta1UpdateResourceResponse": {
       "type": "object",

@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 )
 
@@ -31,8 +32,13 @@ type ResourceRepository interface {
 	ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
+	GetExternal(ctx context.Context, projName tenant.ProjectName, store resource.Store, filters []filter.FilterOpt) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
+}
+
+type Syncer interface {
+	Sync(ctx context.Context, res *resource.Resource) error
 }
 
 type ResourceManager interface {
@@ -78,6 +84,7 @@ type ResourceService struct {
 
 	tenantDetailsGetter TenantDetailsGetter
 	compileEngine       TemplateCompiler
+	syncer              Syncer
 }
 
 type AlertManager interface {
@@ -88,7 +95,7 @@ func NewResourceService(
 	logger log.Logger,
 	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
 	eventHandler EventHandler, downstreamResolver DownstreamResolver, alertManager AlertManager,
-	tenantDetailsGetter TenantDetailsGetter, compileEngine TemplateCompiler,
+	tenantDetailsGetter TenantDetailsGetter, compileEngine TemplateCompiler, syncer Syncer,
 ) *ResourceService {
 	return &ResourceService{
 		repo:                repo,
@@ -100,6 +107,7 @@ func NewResourceService(
 		alertHandler:        alertManager,
 		tenantDetailsGetter: tenantDetailsGetter,
 		compileEngine:       compileEngine,
+		syncer:              syncer,
 	}
 }
 
@@ -375,6 +383,29 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 
 func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
 	return rs.repo.ReadAll(ctx, tnnt, store, true)
+}
+
+func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error) {
+	resources, err := rs.repo.GetExternal(ctx, projectName, store, filters)
+	if err != nil {
+		return nil, err
+	}
+	if len(resources) == 0 {
+		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter")
+	}
+
+	var successRes []string
+	multiError := errors.NewMultiError("error in external table sync")
+	for _, res := range resources {
+		syncErr := rs.syncer.Sync(ctx, res)
+		if syncErr != nil {
+			multiError.Append(syncErr)
+		} else {
+			successRes = append(successRes, res.FullName())
+		}
+	}
+
+	return successRes, multiError.ToErr()
 }
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic

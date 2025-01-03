@@ -321,6 +321,30 @@ func TestDeploymentService(t *testing.T) {
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.Nil(t, err)
 		})
+		t.Run("should upload requested jobs even though there is invalid upstream in 1 job", func(t *testing.T) {
+			jobNamesToUpload := []string{"job1", "job3"}
+			var jobNamesToDelete []string
+			jobsToUpload := []*scheduler.JobWithDetails{jobsWithDetails[0], jobsWithDetails[2]}
+
+			jobRepo := new(JobRepository)
+			upstreamErr := "unresolved upstream for job1"
+			jobRepo.On("GetJobs", mock.Anything, proj1Name, jobNamesToUpload).Return(jobsToUpload, errors.New(upstreamErr))
+			defer jobRepo.AssertExpectations(t)
+
+			priorityResolver := new(mockPriorityResolver)
+			priorityResolver.On("Resolve", mock.Anything, jobsToUpload).Return(nil)
+			defer priorityResolver.AssertExpectations(t)
+
+			mScheduler := new(mockScheduler)
+			mScheduler.On("DeployJobs", mock.Anything, tnnt1, jobsToUpload).Return(nil)
+			defer mScheduler.AssertExpectations(t)
+
+			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
+				mScheduler, priorityResolver, nil, nil, nil)
+
+			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
+			assert.ErrorContains(t, err, upstreamErr)
+		})
 	})
 }
 

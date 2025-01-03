@@ -33,6 +33,7 @@ type syncExternalCommand struct {
 	namespaceName   string
 	projectName     string
 	resourceName    string
+	allNamespaces   bool
 }
 
 // NewSyncExternalCommand is to initiate sync of data for external table
@@ -57,6 +58,7 @@ func NewSyncExternalCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&sync.configFilePath, "config", "c", sync.configFilePath, "File path for client configuration")
 	cmd.Flags().StringVarP(&sync.resourceName, "resource-name", "R", "", "Selected resource of optimus project")
 	cmd.Flags().StringVarP(&sync.namespaceName, "namespace", "n", "", "Namespace name within project")
+	cmd.Flags().BoolVarP(&sync.allNamespaces, "all-namespaces", "A", false, "Run for all Namespace within project")
 	return cmd
 }
 
@@ -79,21 +81,6 @@ func (se *syncExternalCommand) RunE(_ *cobra.Command, _ []string) error {
 		se.projectName = se.clientConfig.Project.Name
 	}
 
-	var namespace *config.Namespace
-	// use flag or ask namespace name
-	if se.namespaceName == "" {
-		var err error
-		namespace, err = se.namespaceSurvey.AskToSelectNamespace(se.clientConfig)
-		if err != nil {
-			return err
-		}
-		se.namespaceName = namespace.Name
-	}
-
-	return se.triggerSync()
-}
-
-func (se *syncExternalCommand) triggerSync() error {
 	conn, err := se.connection.Create(se.clientConfig.Host)
 	if err != nil {
 		return err
@@ -102,13 +89,42 @@ func (se *syncExternalCommand) triggerSync() error {
 
 	apply := pb.NewResourceServiceClient(conn)
 
+	if !se.allNamespaces {
+		// use flag or ask namespace name
+		if se.namespaceName == "" {
+			namespace, err := se.namespaceSurvey.AskToSelectNamespace(se.clientConfig)
+			if err != nil {
+				return err
+			}
+			se.namespaceName = namespace.Name
+		}
+		return se.triggerSync(apply, se.namespaceName, se.resourceName)
+	}
+
+	if se.allNamespaces {
+		if se.resourceName != "" || se.namespaceName != "" {
+			se.logger.Warn("ignoring resource or namespace provided with all namespaces flag")
+		}
+
+		for _, namespace := range se.clientConfig.Namespaces {
+			err := se.triggerSync(apply, namespace.Name, "")
+			if err != nil {
+				se.logger.Error("Error while processing %s:\n%s", namespace.Name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (se *syncExternalCommand) triggerSync(apply pb.ResourceServiceClient, nsName string, resName string) error {
 	spinner := progressbar.NewProgressBar()
 	spinner.Start("please wait...")
 
 	syncExternalTablesRequest := pb.SyncExternalTablesRequest{
 		ProjectName:   se.projectName,
-		NamespaceName: se.namespaceName,
-		TableName:     se.resourceName,
+		NamespaceName: nsName,
+		TableName:     resName,
 	}
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), syncTimeout)

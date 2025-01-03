@@ -197,7 +197,7 @@ func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncEx
 	if req.GetNamespaceName() != "" {
 		opts = append(opts, filter.WithString(filter.NamespaceName, req.GetNamespaceName()))
 
-		if req.TableName != "" {
+		if req.GetTableName() != "" {
 			opts = append(opts, filter.WithString(filter.TableName, req.GetTableName()))
 		}
 	}

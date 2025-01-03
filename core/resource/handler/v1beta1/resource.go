@@ -15,6 +15,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -35,6 +36,7 @@ type ResourceService interface {
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
 	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
+	SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error)
 	Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource, logWriter writer.LogWriter) error
 	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
 }
@@ -179,6 +181,41 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 
 	return &pb.ListResourceSpecificationResponse{
 		Resources: resourceProtos,
+	}, nil
+}
+
+func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncExternalTablesRequest) (*pb.SyncExternalTablesResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		rh.l.Error("invalid project name [%s]", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "failed to list resource for ")
+	}
+
+	store := resource.MaxCompute
+
+	var opts []filter.FilterOpt
+	if req.GetNamespaceName() != "" {
+		opts = append(opts, filter.WithString(filter.NamespaceName, req.GetNamespaceName()))
+
+		if req.GetTableName() != "" {
+			opts = append(opts, filter.WithString(filter.TableName, req.GetTableName()))
+		}
+	}
+
+	errMsg := ""
+	success, err := rh.service.SyncExternalTables(ctx, projectName, store, opts...)
+	if err != nil {
+		if len(success) == 0 {
+			rh.l.Error("error syncing external tables: %s", err)
+			return nil, errors.GRPCErr(err, "failed to sync external table for "+store.String())
+		}
+
+		errMsg = err.Error()
+	}
+
+	return &pb.SyncExternalTablesResponse{
+		SuccessfullySynced: success,
+		Error:              errMsg,
 	}, nil
 }
 

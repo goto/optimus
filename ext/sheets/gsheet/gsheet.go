@@ -52,20 +52,28 @@ func (gs *GSheets) getSheetContent(sheetID, sheetRange string) ([][]interface{},
 		return nil, errors.New("no sheets found in the spreadsheet ")
 	}
 
-	if len(resp.ValueRanges[0].Values) == 0 {
-		return nil, errors.New("no data found in the sheet[0]")
-	}
 	return resp.ValueRanges[0].Values, nil
 }
 
-func (gs *GSheets) GetSheetName(sheetID string) (string, error) {
-	spreadsheet, err := gs.srv.Spreadsheets.Get(sheetID).Do()
+func (gs *GSheets) GetSheetName(sheetURL string) (string, error) {
+	sheetInfo, err := FromURL(sheetURL)
+	if err != nil {
+		fmt.Println(sheetURL, err.Error())
+		return "", err
+	}
+	spreadsheet, err := gs.srv.Spreadsheets.Get(sheetInfo.SheetID).Do()
 	if err != nil {
 		return "", err
 	}
 
 	if len(spreadsheet.Sheets) == 0 {
 		return "", errors.New("no sub sheet found")
+	}
+
+	for _, s := range spreadsheet.Sheets {
+		if s.Properties.SheetId == sheetInfo.GID {
+			return s.Properties.Title, nil
+		}
 	}
 	sid := spreadsheet.Sheets[0].Properties.Title
 	return sid, err

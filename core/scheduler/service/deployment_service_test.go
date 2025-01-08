@@ -340,7 +340,7 @@ func TestDeploymentService(t *testing.T) {
 			defer mScheduler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil,
-				mScheduler, priorityResolver, nil, nil, nil, nil)
+				mScheduler, priorityResolver, nil, nil, nil)
 
 			err := runService.UploadJobs(ctx, tnnt1, jobNamesToUpload, jobNamesToDelete)
 			assert.ErrorContains(t, err, upstreamErr)

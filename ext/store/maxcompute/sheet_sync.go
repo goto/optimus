@@ -43,9 +43,8 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 			err := processResource(ctx, sheets, ossClient, r)
 			if err != nil {
 				return pool.JobResult[string]{Err: err}
-			} else {
-				return pool.JobResult[string]{Output: r.FullName()}
 			}
+			return pool.JobResult[string]{Output: r.FullName()}
 		}
 		jobs = append(jobs, f1)
 	}

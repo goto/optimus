@@ -46,7 +46,8 @@ type (
 )
 
 const (
-	BQParser ParserType = "bq"
+	BQParser         ParserType = "bq"
+	MaxcomputeParser ParserType = "maxcompute"
 )
 
 type Evaluator struct {

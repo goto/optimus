@@ -195,7 +195,7 @@ func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSche
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
 		return nil, errors.GRPCErr(err, "unable to get projectName")
 	}
-	go func() {
+	go func() { //nolint: contextcheck
 		err = h.service.UploadToScheduler(context.Background(), projectName)
 		if err != nil {
 			h.l.Error("Finished upload to scheduler with error: %s", err)

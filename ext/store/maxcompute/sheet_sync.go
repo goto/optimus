@@ -55,7 +55,7 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	mu := errors.NewMultiError("error in batch sync")
 	for result := range resultsChan {
 		if result.Err != nil {
-			mu.Append(err)
+			mu.Append(result.Err)
 		} else {
 			successNames = append(successNames, result.Output)
 		}

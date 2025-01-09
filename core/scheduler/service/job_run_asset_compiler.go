@@ -42,16 +42,17 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *sched
 	inputFiles := job.Assets
 	method, ok1 := job.Task.Config["LOAD_METHOD"]
 	query, ok2 := job.Assets["query.sql"]
+	disableMultiQuery := strings.ToLower(job.Task.Config["DISABLE_MULTI_QUERY_GENERATION"])
 	if job.Task.Name == mc2mc { // mc2mc plugin uses query file path to locate the query file
 		pathOnAsset, found := strings.CutPrefix(job.Task.Config["QUERY_FILE_PATH"], "/data/in/")
 		if !found {
-			c.logger.Error(fmt.Sprintf("error compiling assets: query file path is not valid, %s, expect to have prefix %s, fallback to \"query.sql\"", job.Task.Config["QUERY_FILE_PATH"], "/data/in/"))
+			c.logger.Warn(fmt.Sprintf("error compiling assets: query file path is not valid, %s, expect to have prefix %s, fallback to \"query.sql\"", job.Task.Config["QUERY_FILE_PATH"], "/data/in/"))
 		} else {
 			query, ok2 = job.Assets[pathOnAsset]
 		}
 	}
 	// compile assets exclusive only for bq2bq and mc2mc plugin with replace load method and contains query.sql in asset
-	if ok1 && ok2 && method == "REPLACE" && (job.Task.Name == bq2bq || job.Task.Name == mc2mc) {
+	if ok1 && ok2 && method == "REPLACE" && (job.Task.Name == bq2bq || (job.Task.Name == mc2mc && disableMultiQuery != "true")) {
 		// check if task needs to override the compilation behaviour
 		compiledQuery, err := c.CompileQuery(interval.Start(), interval.End(), query, systemEnvVars)
 		if err != nil {

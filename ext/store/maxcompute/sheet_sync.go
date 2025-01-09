@@ -150,7 +150,7 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 	return writeToBucket(ctx, ossClient, bucketName, objectKey, content)
 }
 
-func getBucketNameAndPath(loc string, fullName string) (bucketName string, path string, err error) {
+func getBucketNameAndPath(loc string, fullName string) (bucketName string, path string, err error) { // nolint
 	if loc == "" {
 		err = errors.InvalidArgument(EntityExternalTable, "location for the external table is empty")
 		return

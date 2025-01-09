@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	accountKey = "DATASTORE_MAXCOMPUTE"
+	accountKey = "ALI_CREDS"
 	store      = "MaxComputeStore"
 
 	maxcomputeID = "maxcompute"

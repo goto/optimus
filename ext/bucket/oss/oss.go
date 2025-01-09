@@ -9,16 +9,25 @@ import (
 )
 
 type OSSCredentials struct {
-	AccessID      string `json:"access_key_id"`
-	AccessKey     string `json:"access_key_secret"`
-	Endpoint      string `json:"endpoint"`
+	AccessID      string `json:"access_id"`
+	AccessKey     string `json:"access_key"`
+	Endpoint      string `json:"oss_endpoint"`
 	ProjectName   string `json:"project_name"`
 	Region        string `json:"region"`
 	SecurityToken string `json:"security_token"`
 }
 
+func getOSSCredentials(jsonData string) (*OSSCredentials, error) {
+	var creds OSSCredentials
+	if err := json.Unmarshal([]byte(jsonData), &creds); err != nil {
+		return &OSSCredentials{}, err
+	}
+
+	return &creds, nil
+}
+
 func NewOssClient(creds string) (*oss.Client, error) {
-	cred, err := toOSSCredentials(creds)
+	cred, err := getOSSCredentials(creds)
 	if err != nil {
 		return nil, err
 	}
@@ -34,13 +43,4 @@ func NewOssClient(creds string) (*oss.Client, error) {
 	}
 
 	return oss.NewClient(cfg), nil
-}
-
-func toOSSCredentials(creds string) (OSSCredentials, error) {
-	var cred OSSCredentials
-	if err := json.Unmarshal([]byte(creds), &cred); err != nil {
-		return OSSCredentials{}, err
-	}
-
-	return cred, nil
 }

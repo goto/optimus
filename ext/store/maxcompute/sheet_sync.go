@@ -160,10 +160,8 @@ func getBucketNameAndPath(loc string, fullName string) (string, string, error) {
 		return "", "", errors.InvalidArgument(EntityExternalTable, "unable to parse url "+loc)
 	}
 
-	bucketName := parts[3]
-
 	path := strings.Join(parts[4:], "/")
-	return bucketName, fmt.Sprintf("%s%s/file.csv", path, fullName), nil
+	return parts[3], fmt.Sprintf("%s%s/file.csv", path, fullName), nil
 }
 
 func writeToBucket(ctx context.Context, client *oss.Client, bucketName, objectKey, content string) error {

@@ -58,7 +58,6 @@ func (gs *GSheets) getSheetContent(sheetID, sheetRange string) ([][]interface{},
 func (gs *GSheets) GetSheetName(sheetURL string) (string, error) {
 	sheetInfo, err := FromURL(sheetURL)
 	if err != nil {
-		fmt.Println(sheetURL, err.Error())
 		return "", err
 	}
 	spreadsheet, err := gs.srv.Spreadsheets.Get(sheetInfo.SheetID).Do()

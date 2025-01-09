@@ -21,15 +21,15 @@ func TestSheetInfo(t *testing.T) {
 
 		info, err := gsheet.FromURL(u1)
 		assert.Nil(t, err)
-		assert.Equal(t, info.SheetID, "abcedefgh")
-		assert.Equal(t, info.GID, "")
+		assert.Equal(t, "abcedefgh", info.SheetID)
+		assert.Equal(t, int64(-1), info.GID)
 	})
 	t.Run("return sheet info with sid and gid", func(t *testing.T) {
 		u1 := "https://docs.google.com/spreadsheets/d/abcdeghi/edit#gid=3726"
 
 		info, err := gsheet.FromURL(u1)
 		assert.Nil(t, err)
-		assert.Equal(t, info.SheetID, "abcdeghi")
-		assert.Equal(t, info.GID, "3726")
+		assert.Equal(t, "abcdeghi", info.SheetID)
+		assert.Equal(t, int64(3726), info.GID)
 	})
 }

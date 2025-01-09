@@ -150,18 +150,22 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 	return writeToBucket(ctx, ossClient, bucketName, objectKey, content)
 }
 
-func getBucketNameAndPath(loc string, fullName string) (string, string, error) {
+func getBucketNameAndPath(loc string, fullName string) (bucketName string, path string, err error) {
 	if loc == "" {
-		return "", "", errors.InvalidArgument(EntityExternalTable, "location for the external table is empty")
+		err = errors.InvalidArgument(EntityExternalTable, "location for the external table is empty")
+		return
 	}
 
 	parts := strings.Split(loc, "/")
 	if len(parts) < 4 { // nolint:mnd
-		return "", "", errors.InvalidArgument(EntityExternalTable, "unable to parse url "+loc)
+		err = errors.InvalidArgument(EntityExternalTable, "unable to parse url "+loc)
+		return
 	}
 
-	path := strings.Join(parts[4:], "/")
-	return parts[3], fmt.Sprintf("%s%s/file.csv", path, fullName), nil
+	bucketName = parts[3]
+	components := strings.Join(parts[4:], "/")
+	path = fmt.Sprintf("%s%s/file.csv", components, fullName)
+	return
 }
 
 func writeToBucket(ctx context.Context, client *oss.Client, bucketName, objectKey, content string) error {

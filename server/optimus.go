@@ -358,12 +358,13 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
 	)
-	syncer := mcStore.NewSyncer(tenantService, tenantService)
 
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
+
+	syncer := mcStore.NewSyncer(tenantService)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)

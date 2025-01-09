@@ -13,6 +13,7 @@ import (
 	bucket "github.com/goto/optimus/ext/bucket/oss"
 	"github.com/goto/optimus/ext/sheets/gsheet"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/pool"
 )
 
 const (
@@ -35,18 +36,33 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 		return nil, err
 	}
 
+	var jobs []func() pool.JobResult[string]
+	for _, r := range resources {
+		r := r
+		f1 := func() pool.JobResult[string] {
+			err := processResource(ctx, sheets, ossClient, r)
+			if err != nil {
+				return pool.JobResult[string]{Err: err}
+			} else {
+				return pool.JobResult[string]{Output: r.FullName()}
+			}
+		}
+		jobs = append(jobs, f1)
+	}
+
+	resultsChan := pool.RunWithWorkers(0, jobs)
+
 	var successNames []string
 	mu := errors.NewMultiError("error in batch sync")
-	for _, r := range resources {
-		err := processResource(ctx, sheets, ossClient, r)
-		if err != nil {
+	for result := range resultsChan {
+		if result.Err != nil {
 			mu.Append(err)
 		} else {
-			successNames = append(successNames, r.FullName())
+			successNames = append(successNames, result.Output)
 		}
 	}
 
-	return successNames, nil
+	return successNames, mu.ToErr()
 }
 
 func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {

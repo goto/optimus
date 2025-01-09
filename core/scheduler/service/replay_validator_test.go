@@ -109,7 +109,7 @@ func TestReplayValidator(t *testing.T) {
 			jobRepository := new(JobRepository)
 			defer jobRepository.AssertExpectations(t)
 
-			schEndTime := jobEndTime.Add(-1 * time.Second)
+			schEndTime := jobEndTime.Add(-25 * time.Hour)
 			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
@@ -120,6 +120,46 @@ func TestReplayValidator(t *testing.T) {
 			validator := service.NewValidator(replayRepository, sch, jobRepository)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.ErrorContains(t, err, "replay end date")
+		})
+		t.Run("should not return error if replay end date equals to job's end_date scheduled date", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			sch := new(mockReplayScheduler)
+			defer sch.AssertExpectations(t)
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+
+			jobAStartTimeStr := "2023-01-02T12:00:00Z"
+			jobAStartTime, _ := time.Parse(scheduler.ISODateFormat, jobAStartTimeStr)
+			jobAEndTime := jobAStartTime.Add(48 * time.Hour)
+			jobAEndScheduledTime := jobAEndTime.Add(24 * time.Hour)
+
+			replayJobAStartTime := jobCron.Next(jobStartTime)
+			replayJobAEndTime := jobAEndScheduledTime
+
+			replayJobAConfig := scheduler.NewReplayConfig(replayJobAStartTime, replayJobAEndTime, parallel, replayJobConfig, description)
+			replayJobAReq := scheduler.NewReplayRequest(jobName, tnnt, replayJobAConfig, scheduler.ReplayStateCreated)
+
+			replayJobARunsCriteria := &scheduler.JobRunsCriteria{
+				Name:      jobName.String(),
+				StartDate: replayJobAStartTime,
+				EndDate:   replayJobAEndTime,
+			}
+
+			jobRepository.On("GetJobDetails", ctx, replayReq.Tenant().ProjectName(), replayReq.JobName()).Return(&scheduler.JobWithDetails{
+				Schedule: &scheduler.Schedule{
+					StartDate: jobStartTime,
+					EndDate:   &jobAEndTime,
+				},
+			}, nil)
+			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(nil, nil)
+			sch.On("GetJobRuns", ctx, tnnt, replayJobARunsCriteria, jobCron).Return(nil, nil)
+
+			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			err := validator.Validate(ctx, replayJobAReq, jobCron)
+			assert.NoError(t, err)
 		})
 		t.Run("should return error if conflict replay found", func(t *testing.T) {
 			replayRepository := new(ReplayRepository)

@@ -79,7 +79,7 @@ func CreateIfDatasetDoesNotExist(ctx context.Context, client Client, dataset Dat
 		Labels:      map[string]string{"created_by": "optimus"},
 	}
 	spec := map[string]any{"description": backupMetadata.Description}
-	r, err := resource.NewResource(dataset.FullName(), KindDataset, resource.Bigquery, tenant.Tenant{}, backupMetadata, spec)
+	r, err := resource.NewResource(dataset.FullName(), KindDataset, resource.Bigquery, tenant.Tenant{}, backupMetadata, spec, nil)
 	if err != nil {
 		return err
 	}

@@ -189,7 +189,7 @@ init_container_{{$hookName}} = k8s.V1Container(
     image_pull_policy=IMAGE_PULL_POLICY,
     env=init_env_vars + [
         k8s.V1EnvVar(name="INSTANCE_TYPE", value='{{$.ExecutorHook}}'),
-        k8s.V1EnvVar(name="INSTANCE_NAME", value='{{$hookName}}'),
+        k8s.V1EnvVar(name="INSTANCE_NAME", value='{{$t.Name}}'),
     ],
     security_context=k8s.V1PodSecurityContext(run_as_user=0),
     volume_mounts=asset_volume_mounts,

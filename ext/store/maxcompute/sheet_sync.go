@@ -64,7 +64,7 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	return successNames, mu.ToErr()
 }
 
-func (s *SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
+func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {
 		return 0, err

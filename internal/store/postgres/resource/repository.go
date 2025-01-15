@@ -56,7 +56,7 @@ func (r Repository) Create(ctx context.Context, resourceModel *resource.Resource
 }
 
 func (r Repository) Update(ctx context.Context, resourceModel *resource.Resource) error {
-	// we should fetch include `deleted`, because it also used for re-create `deleted` state resource
+	// we should fetch include `deleted`, because it also used f or re-create `deleted` state resource
 	const excludeDeleted = false
 	existing, err := r.ReadByFullName(ctx, resourceModel.Tenant(), resourceModel.Store(), resourceModel.FullName(), excludeDeleted)
 	if err != nil {
@@ -235,7 +235,6 @@ func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, stor
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(resource.EntityResource, fmt.Sprintf("no resource: '%s' found for project:%s, namespace:%s ", fullName, tnnt.ProjectName(), tnnt.NamespaceName()))
 		}
-
 		return nil, errors.Wrap(resource.EntityResource, fmt.Sprintf("error reading resource: '%s' found for project:%s, namespace:%s ", fullName, tnnt.ProjectName(), tnnt.NamespaceName()), err)
 	}
 
@@ -366,6 +365,17 @@ func (r Repository) UpdateStatus(ctx context.Context, resources ...*resource.Res
 	}
 
 	return multiErr.ToErr()
+}
+
+func (r Repository) UpdateETLastSync(ctx context.Context, res *resource.Resource) error {
+	updateQuery := `UPDATE resource SET metadata=$1 WHERE project_name = $2 AND namespace_name = $3 AND store = $4 AND full_name = $5`
+
+	_, err := r.db.Exec(ctx, updateQuery, res.Metadata(), res.Tenant().ProjectName(), res.Tenant().NamespaceName(), res.Store(), res.FullName())
+	if err != nil {
+		return err
+	}
+
+	return errors.WrapIfErr(tenant.EntityNamespace, "error updating resource to database", err)
 }
 
 func (r Repository) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {

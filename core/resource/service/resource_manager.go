@@ -3,12 +3,17 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+)
+
+const (
+	KindExternalTable string = "external_table"
 )
 
 type DataStore interface {
@@ -25,10 +30,17 @@ type ResourceStatusRepo interface {
 	UpdateStatus(ctx context.Context, res ...*resource.Resource) error
 }
 
+type StatusRepo interface {
+	Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string) error
+	UpdateBulk(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error
+	GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error)
+}
+
 type ResourceMgr struct {
 	datastoreMap map[resource.Store]DataStore
 
-	repo ResourceStatusRepo
+	repo       ResourceStatusRepo
+	statusRepo StatusRepo
 
 	logger log.Logger
 }
@@ -53,6 +65,14 @@ func (m *ResourceMgr) CreateResource(ctx context.Context, res *resource.Resource
 			me.Append(err)
 		}
 	} else {
+		if store == resource.MaxCompute {
+			if res.Kind() == KindExternalTable {
+				err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName())
+				if err != nil {
+					m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
+				}
+			}
+		}
 		me.Append(res.MarkSuccess())
 	}
 
@@ -96,6 +116,15 @@ func (m *ResourceMgr) SyncResource(ctx context.Context, res *resource.Resource) 
 			return errors.AddErrContext(err, resource.EntityResource, "unable to create on datastore")
 		} else if errUpdate := datastore.Update(ctx, res); errUpdate != nil {
 			return errors.AddErrContext(errUpdate, resource.EntityResource, "unable to update on datastore")
+		}
+	} else {
+		if store == resource.MaxCompute {
+			if res.Kind() == KindExternalTable {
+				err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName())
+				if err != nil {
+					m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
+				}
+			}
 		}
 	}
 
@@ -179,10 +208,11 @@ func (m *ResourceMgr) Exist(ctx context.Context, tnnt tenant.Tenant, urn resourc
 	return datastore.Exist(ctx, tnnt, urn)
 }
 
-func NewResourceManager(repo ResourceStatusRepo, logger log.Logger) *ResourceMgr {
+func NewResourceManager(repo ResourceStatusRepo, statusRepo StatusRepo, logger log.Logger) *ResourceMgr {
 	return &ResourceMgr{
 		repo:         repo,
 		datastoreMap: map[resource.Store]DataStore{},
 		logger:       logger,
+		statusRepo:   statusRepo,
 	}
 }

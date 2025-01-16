@@ -44,6 +44,7 @@ import (
 	jRepo "github.com/goto/optimus/internal/store/postgres/job"
 	"github.com/goto/optimus/internal/store/postgres/resource"
 	schedulerRepo "github.com/goto/optimus/internal/store/postgres/scheduler"
+	"github.com/goto/optimus/internal/store/postgres/sync"
 	"github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/internal/telemetry"
 	"github.com/goto/optimus/plugin"
@@ -368,9 +369,10 @@ func (s *OptimusServer) setupHandlers() error {
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)
+	statusRepository := sync.NewStatusSyncRepository(s.dbPool)
 	backupRepository := resource.NewBackupRepository(s.dbPool)
-	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
-	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler, tenantService, newEngine, syncer) // note: job service can be nil
+	resourceManager := rService.NewResourceManager(resourceRepository, statusRepository, s.logger)
+	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler, tenantService, newEngine, syncer, statusRepository) // note: job service can be nil
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
@@ -387,7 +389,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
 	// Resource Bounded Context
-	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer)
+	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, statusRepository)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 	resourceChangeLogService := rService.NewChangelogService(s.logger, resourceRepository)
 

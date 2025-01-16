@@ -39,6 +39,7 @@ type ResourceRepository interface {
 
 type Syncer interface {
 	SyncBatch(ctx context.Context, resources []*resource.Resource) ([]string, error)
+	GetSyncInterval(res *resource.Resource) (int64, error)
 }
 
 type ResourceManager interface {
@@ -74,6 +75,7 @@ type TemplateCompiler interface {
 
 type ResourceService struct {
 	repo               ResourceRepository
+	statusRepo         StatusRepo
 	mgr                ResourceManager
 	refresher          DownstreamRefresher
 	downstreamResolver DownstreamResolver
@@ -95,7 +97,7 @@ func NewResourceService(
 	logger log.Logger,
 	repo ResourceRepository, downstreamRefresher DownstreamRefresher, mgr ResourceManager,
 	eventHandler EventHandler, downstreamResolver DownstreamResolver, alertManager AlertManager,
-	tenantDetailsGetter TenantDetailsGetter, compileEngine TemplateCompiler, syncer Syncer,
+	tenantDetailsGetter TenantDetailsGetter, compileEngine TemplateCompiler, syncer Syncer, statusRepo StatusRepo,
 ) *ResourceService {
 	return &ResourceService{
 		repo:                repo,
@@ -105,6 +107,7 @@ func NewResourceService(
 		logger:              logger,
 		eventHandler:        eventHandler,
 		alertHandler:        alertManager,
+		statusRepo:          statusRepo,
 		tenantDetailsGetter: tenantDetailsGetter,
 		compileEngine:       compileEngine,
 		syncer:              syncer,
@@ -385,6 +388,35 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return rs.repo.ReadAll(ctx, tnnt, store, true)
 }
 
+func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) ([]*resource.Resource, error) {
+	resourceNameList := make([]string, len(resources))
+	for i, res := range resources {
+		resourceNameList[i] = res.FullName()
+	}
+	lastUpdateMap, err := rs.statusRepo.GetLastUpdateTime(ctx, projectName, KindExternalTable, resourceNameList)
+	if err != nil {
+		return nil, err
+	}
+	var toUpdateResources []*resource.Resource
+	for _, r := range resources {
+		timeSinceLastUpdate, ok := lastUpdateMap[r.FullName()]
+		if !ok {
+			toUpdateResources = append(toUpdateResources, r)
+			continue
+		}
+
+		interval, err := rs.syncer.GetSyncInterval(r)
+		if err != nil {
+			rs.logger.Error("unable to get sync interval", err.Error())
+			continue
+		}
+		if time.Since(timeSinceLastUpdate) > time.Hour*time.Duration(interval) {
+			toUpdateResources = append(toUpdateResources, r)
+		}
+	}
+	return toUpdateResources, nil
+}
+
 func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error) {
 	resources, err := rs.repo.GetExternal(ctx, projectName, store, filters)
 	if err != nil {
@@ -394,7 +426,21 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter")
 	}
 
-	return rs.syncer.SyncBatch(ctx, resources)
+	toUpdateResource, err := rs.getExternalTablesDueForSync(ctx, projectName, resources)
+	if err != nil {
+		rs.logger.Error("unable to get tables due for syncing, err: ", err.Error())
+		return []string{}, err
+	}
+	if len(toUpdateResource) < 1 {
+		return []string{}, nil
+	}
+
+	successTables, err := rs.syncer.SyncBatch(ctx, toUpdateResource)
+	statusErr := rs.statusRepo.UpdateBulk(ctx, projectName, KindExternalTable, successTables)
+	if statusErr != nil {
+		rs.logger.Error("unable to update external table sync time for tables", strings.Join(successTables, ", "), " err:", statusErr.Error())
+	}
+	return successTables, err
 }
 
 func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error) { // nolint:gocritic

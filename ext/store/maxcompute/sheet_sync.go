@@ -64,6 +64,17 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	return successNames, mu.ToErr()
 }
 
+func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
+	et, err := ConvertSpecTo[ExternalTable](res)
+	if err != nil {
+		return 0, err
+	}
+	if et.Source == nil {
+		return 0, nil
+	}
+	return et.Source.SyncInterval, nil
+}
+
 func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {
 	// Check if external table is for sheets
 	et, err := ConvertSpecTo[ExternalTable](res)

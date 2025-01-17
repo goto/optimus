@@ -32,7 +32,7 @@ type TableResourceHandle interface {
 type Client interface {
 	TableHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
-	ExternalTableHandleFrom(schema ProjectSchema) TableResourceHandle
+	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter) TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -88,7 +88,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 			return err
 		}
 
-		handle := odpsClient.ExternalTableHandleFrom(projectSchema)
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
 		return handle.Create(res)
 
 	default:
@@ -125,7 +125,7 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 		return handle.Update(res)
 
 	case KindExternalTable:
-		handle := odpsClient.ExternalTableHandleFrom(projectSchema)
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
 		return handle.Update(res)
 
 	default:
@@ -206,9 +206,11 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 	}
 
 	kindToHandleFn := map[string]func(projectSchema ProjectSchema) TableResourceHandle{
-		KindTable:         client.TableHandleFrom,
-		KindView:          client.ViewHandleFrom,
-		KindExternalTable: client.ExternalTableHandleFrom,
+		KindTable: client.TableHandleFrom,
+		KindView:  client.ViewHandleFrom,
+		KindExternalTable: func(projectSchema ProjectSchema) TableResourceHandle {
+			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
+		},
 	}
 
 	for _, resourceHandleFn := range kindToHandleFn {

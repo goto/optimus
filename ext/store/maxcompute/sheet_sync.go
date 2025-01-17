@@ -20,14 +20,19 @@ const (
 	GsheetCredsKey = "GOOGLE_SHEETS_ACCOUNT"
 	OSSCredsKey    = "OSS_CREDS"
 	putTimeOut     = time.Second * 10
+	ExtLocation    = "EXT_LOCATION"
 )
 
 type SyncerService struct {
-	secretProvider SecretProvider
+	secretProvider      SecretProvider
+	tenantDetailsGetter TenantDetailsGetter
 }
 
-func NewSyncer(secretProvider SecretProvider) *SyncerService {
-	return &SyncerService{secretProvider: secretProvider}
+func NewSyncer(secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter) *SyncerService {
+	return &SyncerService{
+		secretProvider:      secretProvider,
+		tenantDetailsGetter: tenantDetailsGetter,
+	}
 }
 
 func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]string, error) {
@@ -36,11 +41,23 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 		return nil, err
 	}
 
+	tenantWithDetails, err := s.tenantDetailsGetter.GetDetails(ctx, resources[0].Tenant())
+	if err != nil {
+		return nil, err
+	}
+
+	commonLocaton, err := tenantWithDetails.GetConfig(ExtLocation)
+	if err != nil {
+		if !errors.IsErrorType(err, errors.ErrNotFound) {
+			return nil, err
+		}
+	}
+
 	var jobs []func() pool.JobResult[string]
 	for _, r := range resources {
 		r := r
 		f1 := func() pool.JobResult[string] {
-			err := processResource(ctx, sheets, ossClient, r)
+			err := processResource(ctx, sheets, ossClient, r, commonLocaton)
 			if err != nil {
 				return pool.JobResult[string]{Err: err}
 			}
@@ -100,8 +117,18 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	if err != nil {
 		return err
 	}
+	tenantWithDetails, err := s.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
+	if err != nil {
+		return err
+	}
+	commonLocaton, err := tenantWithDetails.GetConfig(ExtLocation)
+	if err != nil {
+		if !errors.IsErrorType(err, errors.ErrNotFound) {
+			return err
+		}
+	}
 
-	bucketName, objectKey, err := getBucketNameAndPath(et.Source.Location, res.FullName())
+	bucketName, objectKey, err := getBucketNameAndPath(et.Source.Location, res.FullName(), commonLocaton)
 	if err != nil {
 		return err
 	}
@@ -133,7 +160,7 @@ func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gs
 	return sheetClient, ossClient, nil
 }
 
-func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, res *resource.Resource) error {
+func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, res *resource.Resource, commonLocation string) error {
 	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {
 		return err
@@ -153,7 +180,7 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 		return err
 	}
 
-	bucketName, objectKey, err := getBucketNameAndPath(et.Source.Location, res.FullName())
+	bucketName, objectKey, err := getBucketNameAndPath(commonLocation, et.Source.Location, res.FullName())
 	if err != nil {
 		return err
 	}
@@ -161,10 +188,13 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 	return writeToBucket(ctx, ossClient, bucketName, objectKey, content)
 }
 
-func getBucketNameAndPath(loc string, fullName string) (bucketName string, path string, err error) { // nolint
+func getBucketNameAndPath(commonLocation, loc string, fullName string) (bucketName string, path string, err error) { // nolint
 	if loc == "" {
-		err = errors.InvalidArgument(EntityExternalTable, "location for the external table is empty")
-		return
+		if commonLocation == "" {
+			err = errors.InvalidArgument(EntityExternalTable, "location for the external table is empty")
+			return
+		}
+		loc = commonLocation
 	}
 
 	parts := strings.Split(loc, "/")
@@ -175,7 +205,7 @@ func getBucketNameAndPath(loc string, fullName string) (bucketName string, path 
 
 	bucketName = parts[3]
 	components := strings.Join(parts[4:], "/")
-	path = fmt.Sprintf("%s%s/file.csv", components, fullName)
+	path = fmt.Sprintf("%s/%s/file.csv", components, strings.ReplaceAll(fullName, ".", "/"))
 	return
 }
 

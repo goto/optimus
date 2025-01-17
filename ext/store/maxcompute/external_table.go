@@ -132,7 +132,7 @@ func externalTableColumns(t *ExternalTable, schemaBuilder *tableschema.SchemaBui
 	return t.Schema.ToMaxComputeColumns(partitionColNames, nil, schemaBuilder)
 }
 
-func ToOtherExternalSQLString(projectName string, schemaName string, serdeProperties map[string]string, schema tableschema.TableSchema, format string) (string, error) {
+func ToOtherExternalSQLString(projectName, schemaName string, serdeProperties map[string]string, schema tableschema.TableSchema, format string) (string, error) {
 	baseSQL, err := schema.ToBaseSQLString(projectName, schemaName, true, true)
 	if err != nil {
 		return "", errors.InternalError(EntityExternalTable, "failed to generate external SQL string", err)
@@ -149,7 +149,7 @@ func ToOtherExternalSQLString(projectName string, schemaName string, serdeProper
 
 		for key, value := range serdeProperties {
 			builder.WriteString(fmt.Sprintf("%s=%s", common.QuoteString(key), common.QuoteString(value)))
-			i += 1
+			i++
 			if i < n {
 				builder.WriteString(", ")
 			}

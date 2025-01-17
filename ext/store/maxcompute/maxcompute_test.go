@@ -516,7 +516,7 @@ func TestMaxComputeStore(t *testing.T) {
 			client.On("TableHandleFrom", mock.Anything).Return(tableHandle).Maybe()
 			tableHandle.On("Exists", mock.Anything).Return(true).Maybe()
 			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
-			viewHandle.On("Exists", mock.Anything).Return(true)
+			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.True(t, actualExist)

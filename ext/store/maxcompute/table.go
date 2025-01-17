@@ -60,6 +60,7 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+res.FullName())
 	}
 
+	fmt.Printf("Creating table %+v\n", tableSchema)
 	err = t.mcTable.Create(tableSchema, false, table.Hints, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
@@ -133,7 +134,10 @@ func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
 		return tableschema.TableSchema{}, err
 	}
 
-	return builder.Build(), nil
+	if t.Type == "" || t.Type == "common" {
+		return builder.Build(), nil
+	}
+	return builder.TblProperties(map[string]string{"transactional": "true"}).Build(), nil
 }
 
 func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
@@ -142,7 +146,7 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 		partitionColNames = utils.ListToMap(t.Partition.Columns)
 	}
 
-	return t.Schema.ToMaxComputeColumns(partitionColNames, t.Cluster, schemaBuilder)
+	return t.Schema.ToMaxComputeColumns(partitionColNames, t.Cluster, schemaBuilder, t.Type)
 }
 
 func generateUpdateQuery(incoming, existing tableschema.TableSchema, schemaName string) ([]string, error) {
@@ -181,7 +185,7 @@ func trackSchema(parent string, column tableschema.Column, columnCollection map[
 			Name:            column.Name,
 			Type:            column.Type,
 			Comment:         column.Comment,
-			IsNullable:      true,
+			NotNull:         false,
 			HasDefaultValue: false,
 		}, columnCollection, columnList, isExistingTable)
 
@@ -198,7 +202,7 @@ func trackSchema(parent string, column tableschema.Column, columnCollection map[
 				tableschema.Column{
 					Name:            field.Name,
 					Type:            field.Type,
-					IsNullable:      true,
+					NotNull:         false,
 					HasDefaultValue: false,
 				},
 				columnCollection,
@@ -240,7 +244,7 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 	for _, incomingColumnRecord := range incoming {
 		columnFound, ok := existing[incomingColumnRecord.columnStructure]
 		if !ok {
-			if !incomingColumnRecord.columnValue.IsNullable {
+			if incomingColumnRecord.columnValue.NotNull {
 				return fmt.Errorf("unable to add new required column")
 			}
 			segment := fmt.Sprintf("if not exists %s %s", incomingColumnRecord.columnStructure, incomingColumnRecord.columnValue.Type.Name())
@@ -251,9 +255,9 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 			continue
 		}
 
-		if columnFound.IsNullable && !incomingColumnRecord.columnValue.IsNullable {
+		if !columnFound.NotNull && incomingColumnRecord.columnValue.NotNull {
 			return fmt.Errorf("unable to modify column mode from nullable to required")
-		} else if !columnFound.IsNullable && incomingColumnRecord.columnValue.IsNullable {
+		} else if columnFound.NotNull && !incomingColumnRecord.columnValue.NotNull {
 			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s null;", schemaName, tableName, columnFound.Name))
 		}
 

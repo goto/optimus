@@ -31,8 +31,6 @@ func TestViewHandle(t *testing.T) {
 		odps.NewTable(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, schemaName, tableName),
 	}
 
-	odpsInstance := odps.NewInstance(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, "")
-
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
 			table := new(mockMaxComputeTable)

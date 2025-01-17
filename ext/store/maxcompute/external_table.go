@@ -42,12 +42,14 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 		return err
 	}
 	location, err := e.getLocation(context.Background(), table.Source, res)
-
+	if err != nil {
+		return errors.AddErrContext(err, EntityExternalTable, "failed to get source location for "+res.FullName())
+	}
 	tSchema, err := buildExternalTableSchema(table, location)
-	table.Name = tableName
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build table schema to create for "+res.FullName())
 	}
+	table.Name = tableName
 	e.mcSQLExecutor.SetCurrentSchemaName(p.Schema)
 	if !(tSchema.StorageHandler == CSVHandler || tSchema.StorageHandler == TSVHandler) {
 		return e.createOtherTypeExternalTable(p, table, tSchema)

@@ -365,7 +365,7 @@ func (s *OptimusServer) setupHandlers() error {
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
 
-	syncer := mcStore.NewSyncer(tenantService)
+	syncer := mcStore.NewSyncer(tenantService, tenantService)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)

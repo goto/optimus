@@ -511,10 +511,12 @@ func TestMaxComputeStore(t *testing.T) {
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
 
+			client.On("ExternalTableHandleFrom", mock.Anything).Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
 			client.On("TableHandleFrom", mock.Anything).Return(tableHandle).Maybe()
-			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
-			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle)
-			viewHandle.On("Exists", mock.Anything).Return(true)
+			tableHandle.On("Exists", mock.Anything).Return(true).Maybe()
+			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
+			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.True(t, actualExist)

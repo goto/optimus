@@ -3,6 +3,11 @@ package maxcompute
 import "strings"
 
 const (
+	CSVHandler = "com.aliyun.odps.CsvStorageHandler"
+	TSVHandler = "com.aliyun.odps.TsvStorageHandler"
+)
+
+const (
 	CSV         string = "CSV"
 	TSV         string = "TSV"
 	JSON        string = "JSON"
@@ -21,11 +26,11 @@ func handlerForFormat(format string) string {
 	switch strings.ToUpper(format) {
 	// the built-in text extractor for CSV and TSV
 	case GoogleSheet:
-		return "com.aliyun.odps.CsvStorageHandler"
+		return CSVHandler
 	case CSV:
-		return "com.aliyun.odps.CsvStorageHandler"
+		return CSVHandler
 	case TSV:
-		return "com.aliyun.odps.TsvStorageHandler"
+		return TSVHandler
 
 	// Extractors for inbuilt Open Source Data Formats
 	case JSON:

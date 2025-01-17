@@ -1,6 +1,7 @@
 package maxcompute_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -44,7 +45,8 @@ func TestExternalTableHandle(t *testing.T) {
 			table := new(mockExternalTable)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, tenantDetailsGetter)
 
 			spec := map[string]any{
 				"description": []string{"test create"},
@@ -66,7 +68,8 @@ func TestExternalTableHandle(t *testing.T) {
 			table := new(mockExternalTable)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
+
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil)
 
 			res, err := resource.NewResource(projectName+"."+schemaName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -88,7 +91,7 @@ func TestExternalTableHandle(t *testing.T) {
 			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
 
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -107,7 +110,7 @@ func TestExternalTableHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -126,7 +129,7 @@ func TestExternalTableHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -144,7 +147,7 @@ func TestExternalTableHandle(t *testing.T) {
 
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil)
 
 			exists := tableHandle.Exists(tableName)
 			assert.False(t, exists)
@@ -158,7 +161,7 @@ func TestExternalTableHandle(t *testing.T) {
 			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{extTab}, nil)
 			defer table.AssertExpectations(t)
 
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table)
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil)
 
 			exists := tableHandle.Exists(tableName)
 			assert.True(t, exists)
@@ -186,4 +189,13 @@ func (m *mockExternalTable) BatchLoadTables(tableNames []string) ([]*odps.Table,
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*odps.Table), args.Error(1)
+}
+
+type mockTenantDetailsGetter struct {
+	mock.Mock
+}
+
+func (m *mockTenantDetailsGetter) GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error) {
+	args := m.Called(ctx, tnnt)
+	return args.Get(0).(*tenant.WithDetails), args.Error(1)
 }

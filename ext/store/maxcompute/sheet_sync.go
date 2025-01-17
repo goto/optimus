@@ -128,7 +128,7 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 		}
 	}
 
-	bucketName, objectKey, err := getBucketNameAndPath(et.Source.Location, res.FullName(), commonLocaton)
+	bucketName, objectKey, err := getBucketNameAndPath(commonLocaton, et.Source.Location, res.FullName())
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 func getBucketNameAndPath(commonLocation, loc string, fullName string) (bucketName string, path string, err error) { // nolint
 	if loc == "" {
 		if commonLocation == "" {
-			err = errors.InvalidArgument(EntityExternalTable, "location for the external table is empty")
+			err = errors.NotFound(EntityExternalTable, "location for the external table is empty")
 			return
 		}
 		loc = commonLocation
@@ -205,7 +205,7 @@ func getBucketNameAndPath(commonLocation, loc string, fullName string) (bucketNa
 
 	bucketName = parts[3]
 	components := strings.Join(parts[4:], "/")
-	path = fmt.Sprintf("%s/%s/file.csv", components, strings.ReplaceAll(fullName, ".", "/"))
+	path = fmt.Sprintf("%s/%s/file.csv", strings.TrimSuffix(components, "/"), strings.ReplaceAll(fullName, ".", "/"))
 	return
 }
 

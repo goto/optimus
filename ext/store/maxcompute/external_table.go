@@ -1,6 +1,7 @@
 package maxcompute
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -25,9 +26,10 @@ type McExternalTable interface {
 }
 
 type ExternalTableHandle struct {
-	mcSQLExecutor   McSQLExecutor
-	mcSchema        McSchema
-	mcExternalTable McExternalTable
+	mcSQLExecutor       McSQLExecutor
+	mcSchema            McSchema
+	mcExternalTable     McExternalTable
+	tenantDetailsGetter TenantDetailsGetter
 }
 
 func (e ExternalTableHandle) Create(res *resource.Resource) error {
@@ -39,12 +41,15 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-
-	tSchema, err := buildExternalTableSchema(table, res.FullName())
-	table.Name = tableName
+	location, err := e.getLocation(context.Background(), table.Source, res)
+	if err != nil {
+		return errors.AddErrContext(err, EntityExternalTable, "failed to get source location for "+res.FullName())
+	}
+	tSchema, err := buildExternalTableSchema(table, location)
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build table schema to create for "+res.FullName())
 	}
+	table.Name = tableName
 	e.mcSQLExecutor.SetCurrentSchemaName(p.Schema)
 	if !(tSchema.StorageHandler == CSVHandler || tSchema.StorageHandler == TSVHandler) {
 		return e.createOtherTypeExternalTable(p, table, tSchema)
@@ -95,19 +100,33 @@ func (e ExternalTableHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func NewExternalTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcExternalTable McExternalTable) *ExternalTableHandle {
-	return &ExternalTableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcExternalTable: mcExternalTable}
+func NewExternalTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcExternalTable McExternalTable, getter TenantDetailsGetter) *ExternalTableHandle {
+	return &ExternalTableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcExternalTable: mcExternalTable, tenantDetailsGetter: getter}
 }
 
-func getLocation(source *ExternalSource, tableName string) string {
+func (e ExternalTableHandle) getLocation(ctx context.Context, source *ExternalSource, res *resource.Resource) (string, error) {
 	if !strings.EqualFold(source.SourceType, GoogleSheet) {
-		return source.Location
+		return source.Location, nil
 	}
-	l, _ := strings.CutSuffix(source.Location, "/")
-	return l + "/" + tableName + "/"
+
+	loc := source.Location
+	if loc == "" {
+		tenantWithDetails, err := e.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
+		if err != nil {
+			return "", err
+		}
+		commonLoc := tenantWithDetails.GetConfigs()[ExtLocation]
+		if commonLoc == "" {
+			err = errors.NotFound(EntityExternalTable, "location for the external table is empty")
+			return "", err
+		}
+		loc = commonLoc
+	}
+
+	return fmt.Sprintf("%s/%s/", strings.TrimSuffix(loc, "/"), strings.ReplaceAll(res.FullName(), ".", "/")), nil
 }
 
-func buildExternalTableSchema(t *ExternalTable, tableName string) (tableschema.TableSchema, error) {
+func buildExternalTableSchema(t *ExternalTable, location string) (tableschema.TableSchema, error) {
 	handler := handlerForFormat(t.Source.SourceType)
 
 	builder := tableschema.NewSchemaBuilder()
@@ -115,7 +134,7 @@ func buildExternalTableSchema(t *ExternalTable, tableName string) (tableschema.T
 		Name(t.Name.String()).
 		Comment(t.Description).
 		StorageHandler(handler).
-		Location(getLocation(t.Source, tableName)).
+		Location(location).
 		TblProperties(t.Source.TableProperties)
 
 	err := externalTableColumns(t, builder)

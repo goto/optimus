@@ -47,7 +47,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 
 	i.Run("should return error if error encountered during extracting remote metadata", func() {
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return nil, errors.New("extraction failed")
 			},
 		}
@@ -70,7 +70,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 
 	i.Run("should return error if no parser could recognize remote path", func() {
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return nil, model.ErrUnrecognizedRemotePath
 			},
 		}
@@ -93,7 +93,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 
 	i.Run("should return error if error loading manifest", func() {
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return &model.Metadata{}, nil
 			},
 		}
@@ -122,7 +122,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -153,7 +153,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -190,7 +190,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProjectName:  "optimus-extension-valor",
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -248,7 +248,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			TagName:      "",
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -305,7 +305,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			TagName:      "",
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -359,7 +359,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -398,7 +398,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -439,7 +439,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -481,7 +481,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}
@@ -525,7 +525,7 @@ func (i *InstallManagerTestSuite) TestInstall() {
 			ProviderName: provider,
 		}
 		factory.ParseRegistry = []model.Parser{
-			func(remotePath string) (*model.Metadata, error) {
+			func(_ string) (*model.Metadata, error) {
 				return metadata, nil
 			},
 		}

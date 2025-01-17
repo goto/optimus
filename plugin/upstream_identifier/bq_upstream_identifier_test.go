@@ -85,7 +85,7 @@ func TestIdentifyResources(t *testing.T) {
 		defer bqExtractorFunc.AssertExpectations(t)
 
 		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
-		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"bigquery://project1:dataset1.name1"})
+		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1.dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, mock.Anything).Return(nil, errors.New("some error"))
 
 		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
@@ -105,9 +105,8 @@ func TestIdentifyResources(t *testing.T) {
 		defer bqExtractorFunc.AssertExpectations(t)
 
 		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
-		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"broken://project1;dataset1.name1"})
-		// bq extractor should receives empty resource urn, since the urn construction is fail
-		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{}).Return(map[bigquery.ResourceURN]string{}, nil)
+		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1;dataset1.name1"})
+		// bq extractor should not be executed since the result of parser is empty
 
 		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
@@ -135,13 +134,13 @@ func TestIdentifyResources(t *testing.T) {
 		sqlView2 := "select 1 from `project1.dataset1.name1` join `project1.dataset1.name3` on true"
 
 		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
-		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"bigquery://project1:dataset1.name1"})
+		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1.dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN1}).Return(map[bigquery.ResourceURN]string{resourceURN1: sqlView1}, nil)
 
-		parserFunc.On("Execute", sqlView1).Return([]string{"bigquery://project1:dataset1.name2"})
+		parserFunc.On("Execute", sqlView1).Return([]string{"project1.dataset1.name2"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN2}).Return(map[bigquery.ResourceURN]string{resourceURN2: sqlView2}, nil)
 
-		parserFunc.On("Execute", sqlView2).Return([]string{"bigquery://project1:dataset1.name1", "bigquery://project1:dataset1.name3"})
+		parserFunc.On("Execute", sqlView2).Return([]string{"project1.dataset1.name1", "project1.dataset1.name3"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN1, resourceURN3}).Return(map[bigquery.ResourceURN]string{resourceURN1: sqlView1, resourceURN3: ""}, nil)
 
 		parserFunc.On("Execute", "").Return([]string{})
@@ -172,13 +171,13 @@ func TestIdentifyResources(t *testing.T) {
 		sqlView2 := "select 1 from `project1.dataset1.name3`"
 
 		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
-		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"bigquery://project1:dataset1.name1"})
+		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1.dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN1}).Return(map[bigquery.ResourceURN]string{resourceURN1: sqlView1}, nil)
 
-		parserFunc.On("Execute", sqlView1).Return([]string{"bigquery://project1:dataset1.name2", "bigquery://project1:dataset1.name3"})
+		parserFunc.On("Execute", sqlView1).Return([]string{"project1.dataset1.name2", "project1.dataset1.name3"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN2, resourceURN3}).Return(map[bigquery.ResourceURN]string{resourceURN2: sqlView2, resourceURN3: ""}, nil)
 
-		parserFunc.On("Execute", sqlView2).Return([]string{"bigquery://project1:dataset1.name3"})
+		parserFunc.On("Execute", sqlView2).Return([]string{"project1.dataset1.name3"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN3}).Return(map[bigquery.ResourceURN]string{resourceURN3: ""}, nil)
 
 		parserFunc.On("Execute", "").Return([]string{})

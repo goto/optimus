@@ -53,7 +53,7 @@ func (s *ScheduleSpec) getPreviousSchedule(currTime, startTime time.Time) time.T
 }
 
 func (s *ScheduleSpec) getEarliestTimeToStartCron(currTime time.Time) time.Time {
-	initialDelay := -time.Hour * 24 * 7 //nolint:gomnd
+	initialDelay := -time.Hour * 24 * 7 //nolint:mnd
 	startTime := currTime
 	for {
 		startTime = startTime.Add(initialDelay)

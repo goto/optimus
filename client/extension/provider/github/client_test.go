@@ -51,7 +51,7 @@ func (c *ClientTestSuite) TestDownloadRelease() {
 	c.Run("should return nil and error if response status is not ok", func() {
 		testPath := "/gojek/optimus-extension-valor"
 
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Add("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 		})
@@ -69,7 +69,7 @@ func (c *ClientTestSuite) TestDownloadRelease() {
 		testPath := "/gojek/optimus-extension-valor"
 		message := "invalid-content"
 
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			content := []byte(message)
 
 			w.Header().Add("Content-Type", "application/json")
@@ -90,7 +90,7 @@ func (c *ClientTestSuite) TestDownloadRelease() {
 		testPath := "/gojek/optimus-extension-valor"
 		release := &github.Release{}
 
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			content, _ := json.Marshal(release)
 
 			w.Header().Add("Content-Type", "application/json")
@@ -129,7 +129,7 @@ func (c *ClientTestSuite) TestDownloadAsset() {
 		server := httptest.NewServer(router)
 		defer server.Close()
 
-		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, _ *http.Request) {
 			content := []byte(message)
 
 			w.Header().Add("Content-Type", "application/json")
@@ -152,7 +152,7 @@ func (c *ClientTestSuite) TestDownloadAsset() {
 		defer server.Close()
 
 		releaseAPIPath := server.URL + testReleasePath
-		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, _ *http.Request) {
 			content, _ := json.Marshal(release)
 
 			w.Header().Add("Content-Type", "application/json")
@@ -182,7 +182,7 @@ func (c *ClientTestSuite) TestDownloadAsset() {
 		defer server.Close()
 
 		releaseAPIPath := server.URL + testReleasePath
-		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, _ *http.Request) {
 			content, _ := json.Marshal(release)
 
 			w.Header().Add("Content-Type", "application/json")
@@ -212,7 +212,7 @@ func (c *ClientTestSuite) TestDownloadAsset() {
 		defer server.Close()
 
 		releaseAPIPath := server.URL + testReleasePath
-		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, _ *http.Request) {
 			content, _ := json.Marshal(release)
 
 			w.Header().Add("Content-Type", "application/json")
@@ -222,7 +222,7 @@ func (c *ClientTestSuite) TestDownloadAsset() {
 		testAssetPath := release.Assets[0].BrowserDownloadURL
 		assetAPIPath := server.URL + testAssetPath
 		release.Assets[0].BrowserDownloadURL = assetAPIPath
-		router.HandleFunc(testAssetPath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(testAssetPath, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Add("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 		})
@@ -250,7 +250,7 @@ func (c *ClientTestSuite) TestDownloadAsset() {
 		defer server.Close()
 
 		releaseAPIPath := server.URL + testReleasePath
-		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(testReleasePath, func(w http.ResponseWriter, _ *http.Request) {
 			content, _ := json.Marshal(release)
 
 			w.Header().Add("Content-Type", "application/json")
@@ -260,7 +260,7 @@ func (c *ClientTestSuite) TestDownloadAsset() {
 		testAssetPath := release.Assets[0].BrowserDownloadURL
 		assetAPIPath := server.URL + testAssetPath
 		release.Assets[0].BrowserDownloadURL = assetAPIPath
-		router.HandleFunc(testAssetPath, func(w http.ResponseWriter, r *http.Request) {
+		router.HandleFunc(testAssetPath, func(w http.ResponseWriter, _ *http.Request) {
 			content := []byte(assetPayload)
 
 			w.Header().Add("Content-Type", "application/json")

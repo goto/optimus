@@ -70,7 +70,9 @@ func (e ExternalTableHandle) createOtherTypeExternalTable(ps ProjectSchema, et *
 	if err != nil {
 		return err
 	}
-
+	if et.Hints == nil {
+		et.Hints = make(map[string]string)
+	}
 	et.Hints["odps.namespace.schema"] = "true"
 	inst, err := e.mcSQLExecutor.ExecSQlWithHints(sql, et.Hints)
 	if err != nil {

@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	GsheetCredsKey = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey    = "OSS_CREDS"
-	putTimeOut     = time.Second * 10
-	ExtLocation    = "EXT_LOCATION"
+	GsheetCredsKey  = "GOOGLE_SHEETS_ACCOUNT"
+	OSSCredsKey     = "OSS_CREDS"
+	putTimeOut      = time.Second * 10
+	ExtLocation     = "EXT_LOCATION"
+	MaxSyncInterval = 24
 )
 
 type SyncerService struct {
@@ -87,7 +88,10 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 		return 0, err
 	}
 	if et.Source == nil {
-		return 0, nil
+		return 0, errors.NotFound(EntityExternalTable, "source is empty for "+res.FullName())
+	}
+	if et.Source.SyncInterval < 1 || et.Source.SyncInterval > MaxSyncInterval {
+		return MaxSyncInterval, nil
 	}
 	return et.Source.SyncInterval, nil
 }

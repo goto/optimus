@@ -90,7 +90,13 @@ func (e ExternalTableHandle) createOtherTypeExternalTable(ps ProjectSchema, et *
 }
 
 func (e ExternalTableHandle) Update(res *resource.Resource) error {
-	err := e.mcExternalTable.Delete(res.FullName(), true)
+	p, tableName, err := getCompleteComponentName(res)
+	if err != nil {
+		return err
+	}
+
+	e.mcSQLExecutor.SetCurrentSchemaName(p.Schema)
+	err = e.mcExternalTable.Delete(tableName.String(), true)
 	if err != nil {
 		return err
 	}

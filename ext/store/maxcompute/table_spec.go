@@ -30,6 +30,7 @@ type Table struct {
 	Cluster     *Cluster   `mapstructure:"cluster,omitempty"`
 	Partition   *Partition `mapstructure:"partition,omitempty"`
 	Lifecycle   int        `mapstructure:"lifecycle,omitempty"`
+	Type        string     `mapstructure:"type,omitempty"`
 
 	Hints       map[string]string      `mapstructure:"hints,omitempty"`
 	ExtraConfig map[string]interface{} `mapstructure:",remain"`

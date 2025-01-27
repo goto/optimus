@@ -2,14 +2,19 @@ package gsheet
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
+	"time"
 
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 
 	"github.com/goto/optimus/ext/sheets/csv"
+	"github.com/goto/optimus/internal/errors"
 )
+
+var delays = []int{10, 30, 90}
 
 type GSheets struct {
 	srv *sheets.Service
@@ -44,16 +49,27 @@ func (gs *GSheets) getSheetContent(sheetID, sheetRange string) ([][]interface{},
 		batchGetCall = batchGetCall.Ranges(sheetRange)
 	}
 
-	resp, err := batchGetCall.Do()
-	if err != nil {
-		return nil, err
+	for _, d := range delays {
+		resp, err := batchGetCall.Do()
+		if err != nil {
+			var batchErr *googleapi.Error
+			if errors.As(err, &batchErr) && batchErr.Code == http.StatusTooManyRequests {
+				// When too many request, sleep delay sec and try again once
+				time.Sleep(time.Second * time.Duration(d))
+				continue
+			}
+
+			return nil, err
+		}
+
+		if len(resp.ValueRanges) == 0 {
+			return nil, errors.InvalidArgument("sheets", "no sheets found in the spreadsheet ")
+		}
+
+		return resp.ValueRanges[0].Values, nil
 	}
 
-	if len(resp.ValueRanges) == 0 {
-		return nil, errors.New("no sheets found in the spreadsheet ")
-	}
-
-	return resp.ValueRanges[0].Values, nil
+	return nil, errors.InternalError("sheets", "failed all the retry attempts", nil)
 }
 
 func (gs *GSheets) GetSheetName(sheetURL string) (string, error) {
@@ -67,7 +83,7 @@ func (gs *GSheets) GetSheetName(sheetURL string) (string, error) {
 	}
 
 	if len(spreadsheet.Sheets) == 0 {
-		return "", errors.New("no sub sheet found")
+		return "", errors.InvalidArgument("sheets", "no sub sheet found")
 	}
 
 	for _, s := range spreadsheet.Sheets {

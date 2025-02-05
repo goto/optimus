@@ -85,7 +85,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		syncer := NewSyncer(m.secretProvider, m.tenantGetter)
 		err = syncer.Sync(ctx, res)
 		if err != nil {
-			return err
+			return errors.Wrap(EntityExternalTable, "unable to sync", err)
 		}
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter)

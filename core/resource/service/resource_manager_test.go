@@ -603,8 +603,8 @@ type mockStatusRepo struct {
 	mock.Mock
 }
 
-func (m *mockStatusRepo) Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string) error {
-	args := m.Called(ctx, projectName, entityType, identifier)
+func (m *mockStatusRepo) Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error {
+	args := m.Called(ctx, projectName, entityType, identifier, remarks, success)
 	return args.Error(0)
 }
 

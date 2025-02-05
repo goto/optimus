@@ -36,7 +36,7 @@ func NewSyncer(secretProvider SecretProvider, tenantDetailsGetter TenantDetailsG
 	}
 }
 
-func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]string, error) {
+func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error) {
 	sheets, ossClient, err := s.getClients(ctx, resources[0].Tenant())
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 		f1 := func() pool.JobResult[string] {
 			err := processResource(ctx, sheets, ossClient, r, commonLocaton)
 			if err != nil {
-				return pool.JobResult[string]{Err: err}
+				return pool.JobResult[string]{Output: r.FullName(), Err: err}
 			}
 			return pool.JobResult[string]{Output: r.FullName()}
 		}
@@ -69,17 +69,23 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 
 	resultsChan := pool.RunWithWorkers(0, jobs)
 
-	var successNames []string
+	var syncStatus []resource.SyncStatus
 	mu := errors.NewMultiError("error in batch sync")
 	for result := range resultsChan {
+		var errMsg string
+		success := true
 		if result.Err != nil {
 			mu.Append(result.Err)
-		} else {
-			successNames = append(successNames, result.Output)
+			errMsg = result.Err.Error()
+			success = false
 		}
+		syncStatus = append(syncStatus, resource.SyncStatus{
+			ResourceName: result.Output,
+			Success:      success,
+			ErrorMsg:     errMsg,
+		})
 	}
-
-	return successNames, mu.ToErr()
+	return syncStatus, mu.ToErr()
 }
 
 func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {

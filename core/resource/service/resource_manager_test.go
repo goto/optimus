@@ -608,8 +608,8 @@ func (m *mockStatusRepo) Upsert(ctx context.Context, projectName tenant.ProjectN
 	return args.Error(0)
 }
 
-func (m *mockStatusRepo) UpdateBulk(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error {
-	args := m.Called(ctx, projectName, entityType, identifiers)
+func (m *mockStatusRepo) UpdateBulk(ctx context.Context, projectName tenant.ProjectName, entityType string, syncStatus []resource.SyncStatus) error {
+	args := m.Called(ctx, projectName, entityType, syncStatus)
 	return args.Error(0)
 }
 

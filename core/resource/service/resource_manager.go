@@ -31,8 +31,8 @@ type ResourceStatusRepo interface {
 }
 
 type StatusRepo interface {
-	Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string) error
-	UpdateBulk(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error
+	Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error
+	UpdateBulk(ctx context.Context, projectName tenant.ProjectName, entityType string, syncStatus []resource.SyncStatus) error
 	GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error)
 }
 
@@ -55,25 +55,30 @@ func (m *ResourceMgr) CreateResource(ctx context.Context, res *resource.Resource
 	}
 
 	me := errors.NewMultiError("error in create resource")
-	if err := datastore.Create(ctx, res); err != nil {
+	err := datastore.Create(ctx, res)
+	if err != nil {
 		m.logger.Error("error creating resource [%s] to datastore [%s]: %s", res.FullName(), store.String(), err)
-
 		if errors.IsErrorType(err, errors.ErrAlreadyExists) {
 			me.Append(res.MarkExistInStore())
 		} else {
-			me.Append(res.MarkFailure())
 			me.Append(err)
+			me.Append(res.MarkFailure())
 		}
 	} else {
-		if store == resource.MaxCompute {
-			if res.Kind() == KindExternalTable {
-				err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName())
-				if err != nil {
-					m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
-				}
-			}
-		}
 		me.Append(res.MarkSuccess())
+	}
+	if store == resource.MaxCompute && res.Kind() == KindExternalTable {
+		successStatus := true
+		remarks := make(map[string]string)
+		if err != nil {
+			remarks["error"] = err.Error()
+			successStatus = false
+		}
+		err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), remarks, successStatus)
+		if err != nil {
+			m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
+			me.Append(fmt.Errorf("unable to update external table sync time for table: %s, err: %s", res.FullName(), err.Error()))
+		}
 	}
 
 	me.Append(m.repo.UpdateStatus(ctx, res))
@@ -111,20 +116,24 @@ func (m *ResourceMgr) SyncResource(ctx context.Context, res *resource.Resource) 
 		return errors.InternalError(resource.EntityResource, msg, nil)
 	}
 
-	if err := datastore.Create(ctx, res); err != nil {
+	err := datastore.Create(ctx, res)
+	if err != nil {
 		if !errors.IsErrorType(err, errors.ErrAlreadyExists) {
 			return errors.AddErrContext(err, resource.EntityResource, "unable to create on datastore")
 		} else if errUpdate := datastore.Update(ctx, res); errUpdate != nil {
 			return errors.AddErrContext(errUpdate, resource.EntityResource, "unable to update on datastore")
 		}
-	} else {
-		if store == resource.MaxCompute {
-			if res.Kind() == KindExternalTable {
-				err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName())
-				if err != nil {
-					m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
-				}
-			}
+	}
+	if store == resource.MaxCompute && res.Kind() == KindExternalTable {
+		successStatus := true
+		remarks := make(map[string]string)
+		if err != nil {
+			remarks["error"] = err.Error()
+			successStatus = false
+		}
+		err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), remarks, successStatus)
+		if err != nil {
+			m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
 		}
 	}
 

@@ -51,6 +51,12 @@ type AlertAttrs struct {
 	EventType ChangeType
 }
 
+type SyncStatus struct {
+	ResourceName string
+	Success      bool
+	ErrorMsg     string
+}
+
 func (m *Metadata) Validate() error {
 	if m == nil {
 		return errors.InvalidArgument(EntityResource, "metadata is nil")

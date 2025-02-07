@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strings"
 	"time"
@@ -77,7 +78,7 @@ func (s StatusRepository) GetLastUpdateTime(ctx context.Context, projectName ten
 
 	for rows.Next() {
 		var identifier string
-		var lastUpdate time.Time
+		var lastUpdate sql.NullTime
 		err := rows.Scan(&identifier, &lastUpdate)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -86,7 +87,7 @@ func (s StatusRepository) GetLastUpdateTime(ctx context.Context, projectName ten
 			return nil, errors.Wrap(entitySyncStatus, "error while getting last sync update status", err)
 		}
 
-		lastUpdateMap[identifier] = lastUpdate
+		lastUpdateMap[identifier] = lastUpdate.Time
 	}
 	return lastUpdateMap, nil
 }

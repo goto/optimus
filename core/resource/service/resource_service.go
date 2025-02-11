@@ -436,7 +436,7 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 			return []string{}, err
 		}
 	}
-	
+
 	if len(toUpdateResource) < 1 {
 		return []string{}, nil
 	}

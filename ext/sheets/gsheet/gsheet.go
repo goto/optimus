@@ -44,7 +44,10 @@ func (gs *GSheets) GetAsCSV(url, sheetRange string) (string, error) {
 }
 
 func (gs *GSheets) getSheetContent(sheetID, sheetRange string) ([][]interface{}, error) {
-	batchGetCall := gs.srv.Spreadsheets.Values.BatchGet(sheetID)
+	batchGetCall := gs.srv.Spreadsheets.Values.BatchGet(sheetID).
+		DateTimeRenderOption("FORMATTED_STRING").
+		ValueRenderOption("UNFORMATTED_VALUE")
+
 	if sheetRange != "" {
 		batchGetCall = batchGetCall.Ranges(sheetRange)
 	}

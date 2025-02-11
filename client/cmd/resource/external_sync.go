@@ -34,6 +34,7 @@ type syncExternalCommand struct {
 	projectName     string
 	resourceName    string
 	allNamespaces   bool
+	force           bool
 }
 
 // NewSyncExternalCommand is to initiate sync of data for external table
@@ -59,6 +60,7 @@ func NewSyncExternalCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&sync.resourceName, "resource-name", "R", "", "Selected resource of optimus project")
 	cmd.Flags().StringVarP(&sync.namespaceName, "namespace", "n", "", "Namespace name within project")
 	cmd.Flags().BoolVarP(&sync.allNamespaces, "all-namespaces", "A", false, "Run for all Namespace within project")
+	cmd.Flags().BoolVarP(&sync.force, "force", "f", false, "-f --force, Skip sync interval check")
 	return cmd
 }
 
@@ -125,6 +127,7 @@ func (se *syncExternalCommand) triggerSync(apply pb.ResourceServiceClient, nsNam
 		ProjectName:   se.projectName,
 		NamespaceName: nsName,
 		TableName:     resName,
+		Force:         se.force,
 	}
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), syncTimeout)

@@ -1139,7 +1139,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when error from service", func(t *testing.T) {
 			service := new(resourceService)
-			service.On("SyncExternalTables", ctx, tnnt.ProjectName(), resource.MaxCompute, mock.Anything).Return(nil, errors.New("unable to sync"))
+			service.On("SyncExternalTables", ctx, tnnt.ProjectName(), resource.MaxCompute, false, mock.Anything).Return(nil, errors.New("unable to sync"))
 			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.SyncExternalTablesRequest{
@@ -1153,7 +1153,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns successful resource list", func(t *testing.T) {
 			service := new(resourceService)
-			service.On("SyncExternalTables", ctx, tnnt.ProjectName(), resource.MaxCompute, mock.Anything).
+			service.On("SyncExternalTables", ctx, tnnt.ProjectName(), resource.MaxCompute, false, mock.Anything).
 				Return([]string{"project.schema.externalTableName"}, errors.New("proj.schema.ext2 could not be synced"))
 			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
@@ -1289,8 +1289,8 @@ func (r *resourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return resources, args.Error(1)
 }
 
-func (r *resourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error) {
-	args := r.Called(ctx, projectName, store, filters)
+func (r *resourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, force bool, filters ...filter.FilterOpt) ([]string, error) {
+	args := r.Called(ctx, projectName, store, force, filters)
 	var rs []string
 	if args.Get(0) != nil {
 		rs = args.Get(0).([]string)

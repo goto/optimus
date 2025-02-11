@@ -417,7 +417,7 @@ func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, proje
 	return toUpdateResources, nil
 }
 
-func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error) {
+func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, skipIntervalCheck bool, filters ...filter.FilterOpt) ([]string, error) {
 	resources, err := rs.repo.GetExternal(ctx, projectName, store, filters)
 	if err != nil {
 		return nil, err
@@ -426,11 +426,17 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter")
 	}
 
-	toUpdateResource, err := rs.getExternalTablesDueForSync(ctx, projectName, resources)
-	if err != nil {
-		rs.logger.Error("unable to get tables due for syncing, err: ", err.Error())
-		return []string{}, err
+	var toUpdateResource []*resource.Resource
+	if skipIntervalCheck {
+		toUpdateResource = resources
+	} else {
+		toUpdateResource, err = rs.getExternalTablesDueForSync(ctx, projectName, resources)
+		if err != nil {
+			rs.logger.Error("unable to get tables due for syncing, err: ", err.Error())
+			return []string{}, err
+		}
 	}
+	
 	if len(toUpdateResource) < 1 {
 		return []string{}, nil
 	}

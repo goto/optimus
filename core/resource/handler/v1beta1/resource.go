@@ -36,7 +36,7 @@ type ResourceService interface {
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
 	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
-	SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]string, error)
+	SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, skipInterval bool, filters ...filter.FilterOpt) ([]string, error)
 	Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource, logWriter writer.LogWriter) error
 	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
 }
@@ -203,7 +203,7 @@ func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncEx
 	}
 
 	errMsg := ""
-	success, err := rh.service.SyncExternalTables(ctx, projectName, store, opts...)
+	success, err := rh.service.SyncExternalTables(ctx, projectName, store, req.GetForce(), opts...)
 	if err != nil {
 		if len(success) == 0 {
 			rh.l.Error("error syncing external tables: %s", err)

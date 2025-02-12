@@ -115,6 +115,8 @@ type Field struct {
 	DefaultValue string `mapstructure:"default_value,omitempty"`
 	Required     bool   `mapstructure:"required,omitempty"`
 
+	SourceTimeFormat string `mapstructure:"SourceTimeFormat,omitempty"`
+
 	Decimal      *Decimal   `mapstructure:"decimal,omitempty"`
 	Char         *Char      `mapstructure:"char,omitempty"`
 	VarChar      *VarChar   `mapstructure:"varchar,omitempty"`

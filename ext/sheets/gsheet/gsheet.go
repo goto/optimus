@@ -29,24 +29,27 @@ func NewGSheets(ctx context.Context, creds string) (*GSheets, error) {
 	return &GSheets{srv: srv}, nil
 }
 
-func (gs *GSheets) GetAsCSV(url, sheetRange string) (string, error) {
+func (gs *GSheets) GetAsCSV(url, sheetRange string, withFormatOptions bool, formatFn func(int, any) string) (string, error) {
 	info, err := FromURL(url)
 	if err != nil {
 		return "", err
 	}
 
-	content, err := gs.getSheetContent(info.SheetID, sheetRange)
+	content, err := gs.getSheetContent(info.SheetID, sheetRange, withFormatOptions)
 	if err != nil {
 		return "", err
 	}
 
-	return csv.FromRecords(content)
+	return csv.FromRecords(content, formatFn)
 }
 
-func (gs *GSheets) getSheetContent(sheetID, sheetRange string) ([][]interface{}, error) {
-	batchGetCall := gs.srv.Spreadsheets.Values.BatchGet(sheetID).
-		DateTimeRenderOption("FORMATTED_STRING").
-		ValueRenderOption("UNFORMATTED_VALUE")
+func (gs *GSheets) getSheetContent(sheetID, sheetRange string, withFormatOptions bool) ([][]interface{}, error) {
+	batchGetCall := gs.srv.Spreadsheets.Values.BatchGet(sheetID)
+	if withFormatOptions {
+		batchGetCall = batchGetCall.
+			DateTimeRenderOption("FORMATTED_STRING").
+			ValueRenderOption("UNFORMATTED_VALUE")
+	}
 
 	if sheetRange != "" {
 		batchGetCall = batchGetCall.Ranges(sheetRange)

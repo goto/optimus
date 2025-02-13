@@ -105,6 +105,9 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 }
 
 func formatSheetData(colIndex int, data any, schema Schema) string {
+	if data == nil {
+		return ""
+	}
 	colSchema := schema[colIndex]
 	switch colSchema.Type {
 	case "BIGINT", "TINYINT", "SMALLINT", "INT":
@@ -154,7 +157,6 @@ func formatSheetData(colIndex int, data any, schema Schema) string {
 			return parsedTime.Format(outPutFormat)
 		}
 		return s
-
 	default:
 		s, ok := data.(string)
 		if !ok {

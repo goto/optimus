@@ -115,7 +115,7 @@ type Field struct {
 	DefaultValue string `mapstructure:"default_value,omitempty"`
 	Required     bool   `mapstructure:"required,omitempty"`
 
-	SourceTimeFormat string `mapstructure:"SourceTimeFormat,omitempty"`
+	SourceTimeFormat string `mapstructure:"source_time_format,omitempty"`
 
 	Decimal      *Decimal   `mapstructure:"decimal,omitempty"`
 	Char         *Char      `mapstructure:"char,omitempty"`

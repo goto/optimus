@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func FromRecords(data [][]interface{}) (string, error) {
+func FromRecords(data [][]interface{}, formatFn func(colIndex int, data any) string) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
@@ -15,11 +15,17 @@ func FromRecords(data [][]interface{}) (string, error) {
 	for _, row := range data {
 		var currRow []string
 		i := 0
-		for _, r1 := range row {
+		for columnIndex, r1 := range row {
 			i++
-			s, ok := r1.(string)
-			if !ok {
-				s = ""
+			var s string
+			if formatFn != nil {
+				s = formatFn(columnIndex, r1)
+			} else {
+				var ok bool
+				s, ok = r1.(string)
+				if !ok {
+					s = ""
+				}
 			}
 			currRow = append(currRow, s)
 		}

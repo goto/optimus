@@ -3,6 +3,7 @@ package maxcompute
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/goto/optimus/ext/sheets/gsheet"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/pool"
+	"github.com/goto/optimus/internal/utils"
 )
 
 const (
@@ -102,6 +104,68 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 	return et.Source.SyncInterval, nil
 }
 
+func formatSheetData(colIndex int, data any, schema Schema) string {
+	if data == nil {
+		return ""
+	}
+	colSchema := schema[colIndex]
+	switch colSchema.Type {
+	case "BIGINT", "TINYINT", "SMALLINT", "INT":
+		s, ok := data.(float64)
+		if !ok {
+			return ""
+		}
+		return strconv.FormatInt(int64(s), 10)
+	case "DOUBLE", "DECIMAL", "FLOAT":
+		s, ok := data.(float64)
+		if !ok {
+			return ""
+		}
+		precision := 4
+		if colSchema.Decimal != nil {
+			precision = int(colSchema.Decimal.Scale)
+		}
+		return strconv.FormatFloat(s, 'f', precision, 64)
+	case "BOOLEAN":
+		s, ok := data.(string)
+		if !ok {
+			return "False"
+		}
+		if utils.ConvertToBoolean(s) {
+			return "True"
+		}
+		return "False"
+	case "DATETIME", "DATE", "TIMESTAMP", "TIMESTAMP_NTZ":
+		s, ok := data.(string)
+		if !ok {
+			return ""
+		}
+		if colSchema.SourceTimeFormat != "" {
+			goTimeLayout := utils.ConvertTimeToGoLayout(colSchema.SourceTimeFormat)
+			parsedTime, err := time.Parse(goTimeLayout, s)
+			if err != nil {
+				return s
+			}
+			var outPutFormat string
+			if colSchema.Type == "DATE" {
+				outPutFormat = time.DateOnly
+			} else if colSchema.Type == "DATETIME" {
+				outPutFormat = time.DateTime
+			} else if colSchema.Type == "TIMESTAMP" || colSchema.Type == "TIMESTAMP_NTZ" {
+				outPutFormat = "2006-01-02 15:04:05.000000000"
+			}
+			return parsedTime.Format(outPutFormat)
+		}
+		return s
+	default:
+		s, ok := data.(string)
+		if !ok {
+			return ""
+		}
+		return s
+	}
+}
+
 func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {
 	// Check if external table is for sheets
 	et, err := ConvertSpecTo[ExternalTable](res)
@@ -123,7 +187,15 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 		return err
 	}
 
-	content, err := sheets.GetAsCSV(uri, et.Source.Range)
+	var getUnformattedValues bool
+	var formatFn func(int, any) string
+	if et.Source.ProcessData {
+		getUnformattedValues = true
+		formatFn = func(index int, a any) string {
+			return formatSheetData(index, a, et.Schema)
+		}
+	}
+	content, err := sheets.GetAsCSV(uri, et.Source.Range, getUnformattedValues, formatFn)
 	if err != nil {
 		return err
 	}
@@ -185,7 +257,16 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 	}
 	uri := et.Source.SourceURIs[0]
 
-	content, err := sheetSrv.GetAsCSV(uri, et.Source.Range)
+	var getUnformattedValues bool
+	var formatFn func(int, any) string
+	if et.Source.ProcessData {
+		getUnformattedValues = true
+		formatFn = func(index int, a any) string {
+			return formatSheetData(index, a, et.Schema)
+		}
+	}
+
+	content, err := sheetSrv.GetAsCSV(uri, et.Source.Range, getUnformattedValues, formatFn)
 	if err != nil {
 		return err
 	}

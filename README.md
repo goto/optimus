@@ -70,7 +70,7 @@ Explore the following resources to get started with Optimus:
 - [Guides](https://goto.github.io/optimus/docs/guides/create-job/) provides guidance on using Optimus.
 - [Concepts](https://goto.github.io/optimus/docs/concepts/overview/) describes all important Optimus concepts.
 - [Reference](https://goto.github.io/optimus/docs/reference/api/) contains details about configurations, metrics and other aspects of Optimus.
-- [Contribute](https://goto.github.io/optimus/docs/contribute/contributing/) contains resources for anyone who wants to contribute to Optimus.
+- [Contribute](https://goto.github.io/optimus/docs/contribute/contribution-process) contains resources for anyone who wants to contribute to Optimus.
 
 ## Running locally
 
@@ -99,7 +99,7 @@ Optimus service can be started with
 $ ./optimus serve
 ```
 
-`serve` command has few required configurations that needs to be set for it to start. Read more about it in [getting started](https://goto.github.io/optimus/docs/getting-started/configuration).
+`serve` command has few required configurations that needs to be set for it to start. Read more about it in [getting started](https://goto.github.io/optimus/docs/getting-started/quick-start).
 
 ## Compatibility
 
@@ -109,7 +109,7 @@ Optimus is currently undergoing heavy development with frequent, breaking API ch
 
 Development of Optimus happens in the open on GitHub, and we are grateful to the community for contributing bugfixes and improvements. Read below to learn how you can take part in improving Optimus.
 
-Read our [contributing guide](https://goto.github.io/optimus/docs/contribute/contributing) to learn about our development process, how to propose bugfixes and improvements, and how to build and test your changes to Optimus.
+Read our [contributing guide](https://goto.github.io/optimus/docs/contribute/contribution-process) to learn about our development process, how to propose bugfixes and improvements, and how to build and test your changes to Optimus.
 
 To help you get your feet wet and get you familiar with our contribution process, we have a list of [good first issues](https://github.com/goto/optimus/labels/good%20first%20issue) that contain bugs which have a relatively limited scope. This is a great place to get started.
 

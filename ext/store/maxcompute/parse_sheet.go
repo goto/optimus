@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
 )
 
@@ -27,17 +28,17 @@ func parseBool(data any) string {
 	return "False"
 }
 
-func parseInt(data any) string {
+func parseInt(data any) (string, error) {
 	switch data.(type) {
 	case float64:
-		return strconv.FormatInt(int64(data.(float64)), 10)
+		return strconv.FormatInt(int64(data.(float64)), 10), nil
 	case string:
 		s := data.(string)
 		if s == "" { // empty column
-			return s
+			return s, nil
 		}
 	}
-	return "error herer"
+	return "", errors.InvalidArgument()
 }
 
 func parseFloat(data any, precision int) string {
@@ -103,7 +104,7 @@ func formatSheetData(colIndex int, data any, schema Schema) string {
 	case "BOOLEAN":
 		return parseBool(data)
 	case "DATETIME", "DATE", "TIMESTAMP", "TIMESTAMP_NTZ":
-		return parseDate(data, colSchema.SourceTimeFormat)
+		return parseDate(data, colSchema.SourceTimeFormat, colSchema.Type)
 	default:
 		s, ok := data.(string)
 		if !ok {

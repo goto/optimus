@@ -48,11 +48,11 @@ type ExternalSource struct {
 	SerdeProperties map[string]string `mapstructure:"serde_properties"`
 	TableProperties map[string]string `mapstructure:"table_properties"`
 
-	SyncInterval int64    `mapstructure:"sync_interval_in_hrs,omitempty"`
-	ProcessData  bool     `mapstructure:"process_data,omitempty"`
-	Jars         []string `mapstructure:"jars,omitempty"`
-	Location     string   `mapstructure:"location,omitempty"`
-	Range        string   `mapstructure:"range,omitempty"`
+	SyncInterval     int64    `mapstructure:"sync_interval_in_hrs,omitempty"`
+	GetFormattedDate bool     `mapstructure:"fetch_formatted_datetime,omitempty"`
+	Jars             []string `mapstructure:"jars,omitempty"`
+	Location         string   `mapstructure:"location,omitempty"`
+	Range            string   `mapstructure:"range,omitempty"`
 }
 
 func (e ExternalSource) Validate() error {

@@ -2,35 +2,33 @@ package csv
 
 import (
 	"encoding/csv"
+	"fmt"
 	"strings"
+
+	"github.com/goto/optimus/internal/errors"
 )
 
-func FromRecords(data [][]interface{}, formatFn func(colIndex int, data any) string) (string, error) {
+func FromRecords(data [][]interface{}, formatFn func(rowIndex, colIndex int, data any) (string, error)) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
 
 	lenRecords := len(data[0])
 	var allRecords [][]string
-	for _, row := range data {
+	for rowIndex, row := range data {
 		var currRow []string
 		i := 0
 		for columnIndex, r1 := range row {
 			i++
-			var s string
-			if formatFn != nil {
-				s = formatFn(columnIndex, r1)
-			} else {
-				var ok bool
-				s, ok = r1.(string)
-				if !ok {
-					s = ""
-				}
+			s, err := formatFn(rowIndex, columnIndex, r1)
+			err = errors.WrapIfErr("CSVFormatter", fmt.Sprintf(" at row : %d", rowIndex), err)
+			if err != nil {
+				return "", err
 			}
 			currRow = append(currRow, s)
 		}
 		for i < lenRecords {
-			currRow = append(currRow, "")
+			currRow = append(currRow, "") // add empty column data
 			i++
 		}
 		allRecords = append(allRecords, currRow)

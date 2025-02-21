@@ -121,7 +121,7 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, error)
 			return s, nil
 		}
 		value, err := formatSheetData(colIndex, data, et.Schema)
-		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("for column Index:%d, Column Name: %s", colIndex, et.Schema[colIndex].Name), err)
+		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("for column Index:%d", colIndex), err)
 		return value, err
 	})
 }

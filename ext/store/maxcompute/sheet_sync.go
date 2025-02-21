@@ -15,15 +15,15 @@ import (
 	"github.com/goto/optimus/ext/sheets/gsheet"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/pool"
-	"github.com/goto/optimus/internal/utils"
 )
 
 const (
-	GsheetCredsKey  = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey     = "OSS_CREDS"
-	putTimeOut      = time.Second * 10
-	ExtLocation     = "EXT_LOCATION"
-	MaxSyncInterval = 24
+	GsheetCredsKey    = "GOOGLE_SHEETS_ACCOUNT"
+	OSSCredsKey       = "OSS_CREDS"
+	putTimeOut        = time.Second * 10
+	ExtLocation       = "EXT_LOCATION"
+	MaxSyncInterval   = 24
+	headersCountSerde = "odps.text.option.header.lines.count"
 )
 
 type SyncerService struct {
@@ -104,66 +104,26 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 	return et.Source.SyncInterval, nil
 }
 
-func formatSheetData(colIndex int, data any, schema Schema) string {
-	if data == nil {
-		return ""
+func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, error) {
+	headers := 0
+	if val, ok := et.Source.SerdeProperties[headersCountSerde]; ok && val != "" {
+		num, err := strconv.Atoi(val)
+		if err != nil {
+			return "", errors.InvalidArgument(EntityExternalTable, "")
+		}
+		headers = num
 	}
-	colSchema := schema[colIndex]
-	switch colSchema.Type {
-	case "BIGINT", "TINYINT", "SMALLINT", "INT":
-		s, ok := data.(float64)
-		if !ok {
-			return ""
+
+	uri := et.Source.SourceURIs[0]
+	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, func(rowIndex, colIndex int, data any) (string, error) {
+		if rowIndex < headers {
+			s, _ := ParseString(data) // ignore header parsing error, as headers will be ignored in data
+			return s, nil
 		}
-		return strconv.FormatInt(int64(s), 10)
-	case "DOUBLE", "DECIMAL", "FLOAT":
-		s, ok := data.(float64)
-		if !ok {
-			return ""
-		}
-		precision := 4
-		if colSchema.Decimal != nil {
-			precision = int(colSchema.Decimal.Scale)
-		}
-		return strconv.FormatFloat(s, 'f', precision, 64)
-	case "BOOLEAN":
-		s, ok := data.(string)
-		if !ok {
-			return "False"
-		}
-		if utils.ConvertToBoolean(s) {
-			return "True"
-		}
-		return "False"
-	case "DATETIME", "DATE", "TIMESTAMP", "TIMESTAMP_NTZ":
-		s, ok := data.(string)
-		if !ok {
-			return ""
-		}
-		if colSchema.SourceTimeFormat != "" {
-			goTimeLayout := utils.ConvertTimeToGoLayout(colSchema.SourceTimeFormat)
-			parsedTime, err := time.Parse(goTimeLayout, s)
-			if err != nil {
-				return s
-			}
-			var outPutFormat string
-			if colSchema.Type == "DATE" {
-				outPutFormat = time.DateOnly
-			} else if colSchema.Type == "DATETIME" {
-				outPutFormat = time.DateTime
-			} else if colSchema.Type == "TIMESTAMP" || colSchema.Type == "TIMESTAMP_NTZ" {
-				outPutFormat = "2006-01-02 15:04:05.000000000"
-			}
-			return parsedTime.Format(outPutFormat)
-		}
-		return s
-	default:
-		s, ok := data.(string)
-		if !ok {
-			return ""
-		}
-		return s
-	}
+		value, err := formatSheetData(colIndex, data, et.Schema)
+		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("for column Index:%d, Column Name: %s", colIndex, et.Schema[colIndex].Name), err)
+		return value, err
+	})
 }
 
 func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {
@@ -180,25 +140,17 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	if len(et.Source.SourceURIs) == 0 {
 		return errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Sheet")
 	}
-	uri := et.Source.SourceURIs[0]
 
 	sheets, ossClient, err := s.getClients(ctx, res.Tenant())
 	if err != nil {
 		return err
 	}
 
-	var getUnformattedValues bool
-	var formatFn func(int, any) string
-	if et.Source.ProcessData {
-		getUnformattedValues = true
-		formatFn = func(index int, a any) string {
-			return formatSheetData(index, a, et.Schema)
-		}
-	}
-	content, err := sheets.GetAsCSV(uri, et.Source.Range, getUnformattedValues, formatFn)
+	content, err := getGSheetContent(et, sheets)
 	if err != nil {
 		return err
 	}
+
 	tenantWithDetails, err := s.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
 	if err != nil {
 		return err
@@ -255,18 +207,8 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 	if len(et.Source.SourceURIs) == 0 {
 		return errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Sheet")
 	}
-	uri := et.Source.SourceURIs[0]
 
-	var getUnformattedValues bool
-	var formatFn func(int, any) string
-	if et.Source.ProcessData {
-		getUnformattedValues = true
-		formatFn = func(index int, a any) string {
-			return formatSheetData(index, a, et.Schema)
-		}
-	}
-
-	content, err := sheetSrv.GetAsCSV(uri, et.Source.Range, getUnformattedValues, formatFn)
+	content, err := getGSheetContent(et, sheetSrv)
 	if err != nil {
 		return err
 	}

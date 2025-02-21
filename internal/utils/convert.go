@@ -32,7 +32,7 @@ func ConvertToStringMap(inputs map[string]interface{}) (map[string]string, error
 
 var (
 	timePattern = regexp.MustCompile(`YYYY|YY|MMMM|MMM|MM|M|DDDD|DDD|DD|_D|D|ddd|__d|hh|h|am\/pm|AM\/PM|AM|PM|am|pm|mm|m|ss|s|\.s|TTT|±hhmmss|±hh\:mm\:ss|±hhmm|±hh\:mm|±hh|Zhhmmss|Zhh\:mm\:ss|Zhh:mm|Zhhmm|Zhh|`)
-	truePattern = regexp.MustCompile(`true|t|1|yes|y`)
+	truePattern = regexp.MustCompile(`^true$|^t$|^1$|^yes$|^y$`)
 )
 
 var formatMap = map[string]string{

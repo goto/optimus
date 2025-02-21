@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	EntityFormatter = "CSVFormatter"
+	EntityFormatter   = "CSVFormatter"
+	millisecondsInDay = 86400000
 )
 
 var googleSheetsStartTimeReference = time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC) // Google Sheets API returns serialised days since 1899-12-30
@@ -63,7 +64,7 @@ func ParseDateTime(data any, sourceTimeFormat, outPutType string) (string, error
 	var parsedTime time.Time
 	switch data := data.(type) {
 	case float64:
-		milliSeconds := int(data * 86400000)
+		milliSeconds := int(data * millisecondsInDay)
 		parsedTime = googleSheetsStartTimeReference.Add(time.Millisecond * time.Duration(milliSeconds))
 	case string:
 		if data == "" || sourceTimeFormat == "" {

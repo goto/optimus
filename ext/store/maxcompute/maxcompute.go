@@ -17,6 +17,8 @@ const (
 	store      = "MaxComputeStore"
 
 	maxcomputeID = "maxcompute"
+
+	accountMaskPolicyKey = "DATASTORE_MAXCOMPUTE_MASK_POLICY"
 )
 
 type ResourceHandle interface {
@@ -30,9 +32,10 @@ type TableResourceHandle interface {
 }
 
 type Client interface {
-	TableHandleFrom(projectSchema ProjectSchema) TableResourceHandle
+	TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter) TableResourceHandle
+	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema) TableMaskingPolicyHandle
 }
 
 type ClientProvider interface {
@@ -62,12 +65,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "maxcompute/CreateResource")
 	defer span.End()
 
-	account, err := m.secretProvider.GetSecret(spanCtx, res.Tenant(), accountKey)
-	if err != nil {
-		return err
-	}
-
-	odpsClient, err := m.clientProvider.Get(account.Value())
+	odpsClient, err := m.initializeClient(spanCtx, res.Tenant(), accountKey)
 	if err != nil {
 		return err
 	}
@@ -79,7 +77,12 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 
 	switch res.Kind() {
 	case KindTable:
-		handle := odpsClient.TableHandleFrom(projectSchema)
+		maskingPolicyClient, err := m.initializeClient(spanCtx, res.Tenant(), accountMaskPolicyKey)
+		if err != nil {
+			maskingPolicyClient = odpsClient
+		}
+
+		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema))
 		return handle.Create(res)
 
 	case KindView:
@@ -100,16 +103,20 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 	}
 }
 
+func (m MaxCompute) initializeClient(ctx context.Context, tnnt tenant.Tenant, accountKey string) (Client, error) {
+	account, err := m.secretProvider.GetSecret(ctx, tnnt, accountKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.clientProvider.Get(account.Value())
+}
+
 func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "maxcompute/UpdateResource")
 	defer span.End()
 
-	account, err := m.secretProvider.GetSecret(spanCtx, res.Tenant(), accountKey)
-	if err != nil {
-		return err
-	}
-
-	odpsClient, err := m.clientProvider.Get(account.Value())
+	odpsClient, err := m.initializeClient(spanCtx, res.Tenant(), accountKey)
 	if err != nil {
 		return err
 	}
@@ -121,7 +128,12 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 
 	switch res.Kind() {
 	case KindTable:
-		handle := odpsClient.TableHandleFrom(projectSchema)
+		maskingPolicyClient, err := m.initializeClient(spanCtx, res.Tenant(), accountMaskPolicyKey)
+		if err != nil {
+			maskingPolicyClient = odpsClient
+		}
+
+		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema))
 		return handle.Update(res)
 
 	case KindView:
@@ -186,12 +198,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		return false, errors.InvalidArgument(store, msg)
 	}
 
-	account, err := m.secretProvider.GetSecret(spanCtx, tnnt, accountKey)
-	if err != nil {
-		return false, err
-	}
-
-	client, err := m.clientProvider.Get(account.Value())
+	client, err := m.initializeClient(spanCtx, tnnt, accountKey)
 	if err != nil {
 		return false, err
 	}
@@ -207,8 +214,15 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 	}
 
 	kindToHandleFn := map[string]func(projectSchema ProjectSchema) TableResourceHandle{
-		KindTable: client.TableHandleFrom,
-		KindView:  client.ViewHandleFrom,
+		KindTable: func(projectSchema ProjectSchema) TableResourceHandle {
+			maskingPolicyClient, err := m.initializeClient(spanCtx, tnnt, accountMaskPolicyKey)
+			if err != nil {
+				maskingPolicyClient = client
+			}
+
+			return client.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema))
+		},
+		KindView: client.ViewHandleFrom,
 		KindExternalTable: func(projectSchema ProjectSchema) TableResourceHandle {
 			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
 		},

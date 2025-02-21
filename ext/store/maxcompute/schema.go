@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/datatype"
@@ -19,6 +20,8 @@ const (
 	KindView          string = "view"
 	KindSchema        string = "schema"
 	KindExternalTable string = "external_table"
+
+	allowedColumnMaskPolicyPattern = `^[a-zA-Z0-9_-]+$`
 )
 
 type Schema []*Field
@@ -123,6 +126,10 @@ type Field struct {
 	StructSchema []Field    `mapstructure:"struct,omitempty"`
 	ArraySchema  *Field     `mapstructure:"array,omitempty"`
 	MapSchema    *MapSchema `mapstructure:"map,omitempty"`
+
+	// masking policy fields
+	MaskPolicy   string `mapstructure:"mask_policy,omitempty"`
+	UnmaskPolicy string `mapstructure:"unmask_policy,omitempty"`
 }
 
 func (f *Field) Validate() error {
@@ -226,6 +233,8 @@ func (f *Field) validateNode(checkName bool) error {
 		mu.Append(errors.InvalidArgument(resourceSchema, "unknown field type for "+f.Name))
 	}
 
+	mu.Append(f.validateColumnMaskingPolicy())
+
 	switch typeCode {
 	case datatype.TypeUnknown:
 		mu.Append(errors.InvalidArgument(resourceSchema, "unknown data type: "+f.Type))
@@ -275,6 +284,23 @@ func (f *Field) validateNode(checkName bool) error {
 		}
 	default:
 		// other data types do not require special properties
+	}
+
+	return mu.ToErr()
+}
+
+func (f *Field) validateColumnMaskingPolicy() error {
+	mu := errors.NewMultiError("mask policy validation")
+	if f.MaskPolicy != "" {
+		if matched, _ := regexp.MatchString(allowedColumnMaskPolicyPattern, f.MaskPolicy); !matched {
+			mu.Append(errors.InvalidArgument(resourceSchema, "mask policy contains invalid characters"))
+		}
+	}
+
+	if f.UnmaskPolicy != "" {
+		if matched, _ := regexp.MatchString(allowedColumnMaskPolicyPattern, f.UnmaskPolicy); !matched {
+			mu.Append(errors.InvalidArgument(resourceSchema, "unmask policy contains invalid characters"))
+		}
 	}
 
 	return mu.ToErr()

@@ -19,6 +19,7 @@ func TestMaxComputeStore(t *testing.T) {
 	fullName := projectName + "." + schemaName + "." + tableName
 	tnnt, _ := tenant.NewTenant(projectName, "ns")
 	pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
+	maskingPolicySecret, _ := tenant.NewPlainTextSecret("masking_policy_secret_name", "masking_policy_secret_value")
 	store := resource.MaxCompute
 	metadata := resource.Metadata{
 		Version:     1,
@@ -114,6 +115,8 @@ func TestMaxComputeStore(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
 			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
 				Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE_MASK_POLICY").
+				Return(maskingPolicySecret, nil)
 			defer secretProvider.AssertExpectations(t)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, store, tnnt, &metadata, spec)
@@ -123,12 +126,18 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle.On("Create", res).Return(nil)
 			defer tableHandle.AssertExpectations(t)
 
+			maskingPolicyClient := new(mockClient)
+			maskingPolicyHandle := new(mockTableMaskingPolicyHandle)
+			maskingPolicyClient.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(maskingPolicyHandle)
+			defer maskingPolicyClient.AssertExpectations(t)
+
 			client := new(mockClient)
-			client.On("TableHandleFrom", mock.Anything).Return(tableHandle)
+			client.On("TableHandleFrom", mock.Anything, maskingPolicyHandle).Return(tableHandle)
 			defer client.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			clientProvider.On("Get", maskingPolicySecret.Value()).Return(maskingPolicyClient, nil)
 			defer clientProvider.AssertExpectations(t)
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider, nil, nil)
@@ -243,6 +252,8 @@ func TestMaxComputeStore(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
 			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
 				Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE_MASK_POLICY").
+				Return(maskingPolicySecret, nil)
 			defer secretProvider.AssertExpectations(t)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, store, tnnt, &metadata, spec)
@@ -252,12 +263,18 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle.On("Update", res).Return(nil)
 			defer tableHandle.AssertExpectations(t)
 
+			maskingPolicyClient := new(mockClient)
+			maskingPolicyHandle := new(mockTableMaskingPolicyHandle)
+			maskingPolicyClient.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(maskingPolicyHandle)
+			defer maskingPolicyClient.AssertExpectations(t)
+
 			client := new(mockClient)
-			client.On("TableHandleFrom", mock.Anything).Return(tableHandle)
+			client.On("TableHandleFrom", mock.Anything, maskingPolicyHandle).Return(tableHandle)
 			defer client.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			clientProvider.On("Get", maskingPolicySecret.Value()).Return(maskingPolicyClient, nil)
 			defer clientProvider.AssertExpectations(t)
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider, nil, nil)
@@ -500,6 +517,8 @@ func TestMaxComputeStore(t *testing.T) {
 		t.Run("returns true and nil when schema table resource does exist", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
 			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE_MASK_POLICY").
+				Return(maskingPolicySecret, nil).Maybe()
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)
@@ -507,13 +526,16 @@ func TestMaxComputeStore(t *testing.T) {
 
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			clientProvider.On("Get", maskingPolicySecret.Value()).Return(client, nil).Maybe()
 			defer clientProvider.AssertExpectations(t)
 
+			mpHandle := new(mockTableMaskingPolicyHandle)
 			tableHandle := new(mockTableResourceHandle)
 			viewHandle := new(mockTableResourceHandle)
 			defer func() {
 				tableHandle.AssertExpectations(t)
 				viewHandle.AssertExpectations(t)
+				mpHandle.AssertExpectations(t)
 			}()
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider, nil, nil)
@@ -521,9 +543,10 @@ func TestMaxComputeStore(t *testing.T) {
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
 
+			client.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(mpHandle).Maybe()
 			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
-			client.On("TableHandleFrom", mock.Anything).Return(tableHandle).Maybe()
+			client.On("TableHandleFrom", mock.Anything, mpHandle).Return(tableHandle).Maybe()
 			tableHandle.On("Exists", mock.Anything).Return(true).Maybe()
 			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
@@ -535,6 +558,8 @@ func TestMaxComputeStore(t *testing.T) {
 		t.Run("returns false and nil when schema table resource does not exist", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
 			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE_MASK_POLICY").
+				Return(maskingPolicySecret, nil).Maybe()
 			defer secretProvider.AssertExpectations(t)
 
 			client := new(mockClient)
@@ -542,13 +567,16 @@ func TestMaxComputeStore(t *testing.T) {
 
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			clientProvider.On("Get", maskingPolicySecret.Value()).Return(client, nil).Maybe()
 			defer clientProvider.AssertExpectations(t)
 
+			mpHandle := new(mockTableMaskingPolicyHandle)
 			tableHandle := new(mockTableResourceHandle)
 			viewHandle := new(mockTableResourceHandle)
 			defer func() {
 				tableHandle.AssertExpectations(t)
 				viewHandle.AssertExpectations(t)
+				defer mpHandle.AssertExpectations(t)
 			}()
 
 			mcStore := maxcompute.NewMaxComputeDataStore(secretProvider, clientProvider, nil, nil)
@@ -556,7 +584,8 @@ func TestMaxComputeStore(t *testing.T) {
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
 
-			client.On("TableHandleFrom", mock.Anything).Return(tableHandle).Maybe()
+			client.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(mpHandle).Maybe()
+			client.On("TableHandleFrom", mock.Anything, mpHandle).Return(tableHandle).Maybe()
 			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
 			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
@@ -593,8 +622,8 @@ type mockClient struct {
 	mock.Mock
 }
 
-func (m *mockClient) TableHandleFrom(projectSchema maxcompute.ProjectSchema) maxcompute.TableResourceHandle {
-	args := m.Called(projectSchema)
+func (m *mockClient) TableHandleFrom(projectSchema maxcompute.ProjectSchema, maskingPolicyHandle maxcompute.TableMaskingPolicyHandle) maxcompute.TableResourceHandle {
+	args := m.Called(projectSchema, maskingPolicyHandle)
 	return args.Get(0).(maxcompute.TableResourceHandle)
 }
 
@@ -606,6 +635,11 @@ func (m *mockClient) ViewHandleFrom(projectSchema maxcompute.ProjectSchema) maxc
 func (m *mockClient) ExternalTableHandleFrom(schema maxcompute.ProjectSchema, tenantDetailsGetter maxcompute.TenantDetailsGetter) maxcompute.TableResourceHandle {
 	args := m.Called(schema, tenantDetailsGetter)
 	return args.Get(0).(maxcompute.TableResourceHandle)
+}
+
+func (m *mockClient) TableMaskingPolicyHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableMaskingPolicyHandle {
+	args := m.Called(schema)
+	return args.Get(0).(maxcompute.TableMaskingPolicyHandle)
 }
 
 type mockClientProvider struct {

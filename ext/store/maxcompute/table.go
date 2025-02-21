@@ -33,10 +33,15 @@ type McTable interface {
 	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
 }
 
+type TableMaskingPolicyHandle interface {
+	Process(table *Table) error
+}
+
 type TableHandle struct {
-	mcSQLExecutor McSQLExecutor
-	mcSchema      McSchema
-	mcTable       McTable
+	mcSQLExecutor       McSQLExecutor
+	mcSchema            McSchema
+	mcTable             McTable
+	maskingPolicyHandle TableMaskingPolicyHandle
 }
 
 func (t TableHandle) Create(res *resource.Resource) error {
@@ -61,6 +66,12 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		}
 		return errors.InternalError(EntityTable, "error while creating table on maxcompute", err)
 	}
+
+	err = t.maskingPolicyHandle.Process(table)
+	if err != nil {
+		return errors.InternalError(EntityTable, "error while processing masking policy on maxcompute table: "+res.FullName(), err)
+	}
+
 	return nil
 }
 
@@ -100,6 +111,11 @@ func (t TableHandle) Update(res *resource.Resource) error {
 		if err = ins.WaitForSuccess(); err != nil {
 			return errors.InternalError(EntityTable, "error while execute sql query on maxcompute", err)
 		}
+	}
+
+	err = t.maskingPolicyHandle.Process(table)
+	if err != nil {
+		return errors.InternalError(EntityTable, "error while processing masking policy on maxcompute table: "+res.FullName(), err)
 	}
 
 	return nil
@@ -276,6 +292,6 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 	return nil
 }
 
-func NewTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcTable McTable) *TableHandle {
-	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcTable: mcTable}
+func NewTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcTable McTable, maskingPolicyHandle TableMaskingPolicyHandle) *TableHandle {
+	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcTable: mcTable, maskingPolicyHandle: maskingPolicyHandle}
 }

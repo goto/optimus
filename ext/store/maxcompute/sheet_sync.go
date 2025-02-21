@@ -117,7 +117,7 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, error)
 	uri := et.Source.SourceURIs[0]
 	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, func(rowIndex, colIndex int, data any) (string, error) {
 		if rowIndex < headers {
-			s, _ := parseString(data) // ignore header parsing error, as headers will be ignored in data
+			s, _ := ParseString(data) // ignore header parsing error, as headers will be ignored in data
 			return s, nil
 		}
 		value, err := formatSheetData(colIndex, data, et.Schema)
@@ -212,7 +212,6 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 	if err != nil {
 		return err
 	}
-	fmt.Println(content)
 
 	bucketName, objectKey, err := getBucketNameAndPath(commonLocation, et.Source.Location, res.FullName())
 	if err != nil {

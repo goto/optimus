@@ -106,6 +106,9 @@ func formatSheetData(colIndex int, data any, schema Schema) (string, error) {
 	if data == nil {
 		return "", nil
 	}
+	if colIndex >= len(schema) {
+		return "", nil
+	}
 	colSchema := schema[colIndex]
 	switch colSchema.Type {
 	case "BIGINT", "TINYINT", "SMALLINT", "INT":

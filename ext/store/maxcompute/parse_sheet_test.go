@@ -8,12 +8,45 @@ import (
 	"github.com/goto/optimus/ext/store/maxcompute"
 )
 
-func TestParseInt(t *testing.T) {
-	t.Run("should return formatted int string when input is float64", func(t *testing.T) {
-		data := 123.00
-		expected := "123"
+func TestParseNum(t *testing.T) {
+	t.Run("should return formatted float string with given precision, rounding off if needed", func(t *testing.T) {
+		data := 123.456789
+		precision := 3
+		expected := "123.457"
 
-		result, err := maxcompute.ParseInt(data)
+		result, err := maxcompute.ParseNum(data, precision)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("should parseNumber", func(t *testing.T) {
+		data := int16(1333)
+		precision := 6
+
+		result, err := maxcompute.ParseNum(data, precision)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "1333.000000", result)
+	})
+
+	t.Run("should return formatted float string with given precision when input is float64", func(t *testing.T) {
+		data := 123.1
+		precision := 6
+		expected := "123.100000"
+
+		result, err := maxcompute.ParseNum(data, precision)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("should return formatted float string with given precision when input is float64", func(t *testing.T) {
+		data := 123.234000
+		precision := -1
+		expected := "123.234"
+
+		result, err := maxcompute.ParseNum(data, precision)
 
 		assert.NoError(t, err)
 		assert.Equal(t, expected, result)
@@ -22,8 +55,9 @@ func TestParseInt(t *testing.T) {
 	t.Run("should return empty string when input is empty string", func(t *testing.T) {
 		data := ""
 		expected := ""
+		precision := 2
 
-		result, err := maxcompute.ParseInt(data)
+		result, err := maxcompute.ParseNum(data, precision)
 
 		assert.NoError(t, err)
 		assert.Equal(t, expected, result)
@@ -31,11 +65,21 @@ func TestParseInt(t *testing.T) {
 
 	t.Run("should return error when input is invalid type", func(t *testing.T) {
 		data := true
+		precision := 2
 
-		result, err := maxcompute.ParseInt(data)
-
-		assert.Error(t, err)
+		result, err := maxcompute.ParseNum(data, precision)
+		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseFloat: invalid incoming data type for Parsing Float, Got:bool, expected: Number/String")
 		assert.Equal(t, "", result)
+	})
+
+	t.Run("should return formatted int string when input is float64", func(t *testing.T) {
+		data := 123.00
+		expected := "123"
+
+		result, err := maxcompute.ParseNum(data, -1)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, result)
 	})
 }
 
@@ -50,12 +94,21 @@ func TestParseString(t *testing.T) {
 		assert.Equal(t, expected, result)
 	})
 
-	t.Run("should return error when input is not a string", func(t *testing.T) {
-		data := 123.00
-		result, err := maxcompute.ParseString(data)
+	t.Run("should return floating string upto the least significant digit", func(t *testing.T) {
+		t.Run("123.10", func(t *testing.T) {
+			data := 123.10
+			result, err := maxcompute.ParseString(data)
 
-		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseString: invalid incoming data type for Parsing Got:float64, expected: String")
-		assert.Equal(t, "", result)
+			assert.NoError(t, err)
+			assert.Equal(t, "123.1", result)
+		})
+		t.Run("123.00", func(t *testing.T) {
+			data := 123.00
+			result, err := maxcompute.ParseString(data)
+
+			assert.NoError(t, err)
+			assert.Equal(t, "123", result)
+		})
 	})
 
 	t.Run("should return empty string when input is an empty string", func(t *testing.T) {
@@ -161,71 +214,6 @@ func TestParseDateTime(t *testing.T) {
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
 
 		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseDateTime: unrecognised output format Got: UNKNOWN")
-		assert.Equal(t, "", result)
-	})
-}
-
-func TestParseFloat(t *testing.T) {
-	t.Run("should return formatted float string with given precision when input is float64", func(t *testing.T) {
-		data := 123.456789
-		precision := 6
-		expected := "123.456789"
-
-		result, err := maxcompute.ParseFloat(data, precision)
-
-		assert.NoError(t, err)
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("should return error given precision when input is int", func(t *testing.T) {
-		data := 123
-		precision := 6
-
-		result, err := maxcompute.ParseFloat(data, precision)
-
-		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseFloat: invalid incoming data type for Parsing Float, Got:int, expected: Float64/String")
-		assert.Equal(t, "", result)
-	})
-
-	t.Run("should return formatted float string with given precision when input is float64", func(t *testing.T) {
-		data := float64(123)
-		precision := 6
-		expected := "123.000000"
-
-		result, err := maxcompute.ParseFloat(data, precision)
-
-		assert.NoError(t, err)
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("should return formatted float string with given precision when input is float64", func(t *testing.T) {
-		data := 123.234
-		precision := 4
-		expected := "123.2340"
-
-		result, err := maxcompute.ParseFloat(data, precision)
-
-		assert.NoError(t, err)
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("should return empty string when input is empty string", func(t *testing.T) {
-		data := ""
-		expected := ""
-		precision := 2
-
-		result, err := maxcompute.ParseFloat(data, precision)
-
-		assert.NoError(t, err)
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("should return error when input is invalid type", func(t *testing.T) {
-		data := true
-		precision := 2
-
-		result, err := maxcompute.ParseFloat(data, precision)
-		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseFloat: invalid incoming data type for Parsing Float, Got:bool, expected: Float64/String")
 		assert.Equal(t, "", result)
 	})
 }

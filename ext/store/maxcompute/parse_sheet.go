@@ -36,20 +36,20 @@ func ParseBool(data any) (string, error) {
 	return "False", nil
 }
 
-func ParseInt(data any) (string, error) {
+func ParseNum(data any, precision int) (string, error) {
 	switch data := data.(type) {
-	case float64:
-		return strconv.FormatInt(int64(data), 10), nil
-	case string:
-		if data == "" { // empty column
-			return data, nil
-		}
-	}
-	return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("parseInt: invalid incoming data type for Parsing Int, Got:%s, expected: %s", reflect.TypeOf(data), "Float64"))
-}
-
-func ParseFloat(data any, precision int) (string, error) {
-	switch data := data.(type) {
+	case int:
+		return strconv.FormatFloat(float64(data), 'f', precision, 64), nil
+	case int8:
+		return strconv.FormatFloat(float64(data), 'f', precision, 64), nil
+	case int16:
+		return strconv.FormatFloat(float64(data), 'f', precision, 64), nil
+	case int32:
+		return strconv.FormatFloat(float64(data), 'f', precision, 64), nil
+	case int64:
+		return strconv.FormatFloat(float64(data), 'f', precision, 64), nil
+	case float32:
+		return strconv.FormatFloat(float64(data), 'f', precision, 64), nil
 	case float64:
 		return strconv.FormatFloat(data, 'f', precision, 64), nil
 	case string:
@@ -57,7 +57,7 @@ func ParseFloat(data any, precision int) (string, error) {
 			return data, nil
 		}
 	}
-	return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseFloat: invalid incoming data type for Parsing Float, Got:%s, expected: %s", reflect.TypeOf(data), "Float64/String"))
+	return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseFloat: invalid incoming data type for Parsing Float, Got:%s, expected: %s", reflect.TypeOf(data), "Number/String"))
 }
 
 func ParseDateTime(data any, sourceTimeFormat, outPutType string) (string, error) {
@@ -95,11 +95,14 @@ func ParseDateTime(data any, sourceTimeFormat, outPutType string) (string, error
 }
 
 func ParseString(data any) (string, error) {
-	s, ok := data.(string)
-	if !ok {
-		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseString: invalid incoming data type for Parsing Got:%s, expected: %s", reflect.TypeOf(data), "String"))
+	switch v := data.(type) {
+	case float32, float64, int8, int16, int32, int64:
+		return ParseNum(v, -1)
+	case string:
+		return v, nil
+	default:
+		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseString: invalid incoming data type for Parsing Got:%s", reflect.TypeOf(data)))
 	}
-	return s, nil
 }
 
 func formatSheetData(colIndex int, data any, schema Schema) (string, error) {
@@ -111,14 +114,12 @@ func formatSheetData(colIndex int, data any, schema Schema) (string, error) {
 	}
 	colSchema := schema[colIndex]
 	switch colSchema.Type {
-	case "BIGINT", "TINYINT", "SMALLINT", "INT":
-		return ParseInt(data)
-	case "DOUBLE", "DECIMAL", "FLOAT":
-		precision := 14 // this is the default precision
+	case "BIGINT", "TINYINT", "SMALLINT", "INT", "DOUBLE", "DECIMAL", "FLOAT":
+		precision := -1
 		if colSchema.Decimal != nil {
 			precision = int(colSchema.Decimal.Scale)
 		}
-		return ParseFloat(data, precision)
+		return ParseNum(data, precision)
 	case "BOOLEAN":
 		return ParseBool(data)
 	case "DATETIME", "DATE", "TIMESTAMP", "TIMESTAMP_NTZ":

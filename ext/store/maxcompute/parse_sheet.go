@@ -114,7 +114,9 @@ func formatSheetData(colIndex int, data any, schema Schema) (string, error) {
 	}
 	colSchema := schema[colIndex]
 	switch colSchema.Type {
-	case "BIGINT", "TINYINT", "SMALLINT", "INT", "DOUBLE", "DECIMAL", "FLOAT":
+	case "BIGINT", "TINYINT", "SMALLINT", "INT":
+		return ParseNum(data, 0)
+	case "DOUBLE", "DECIMAL", "FLOAT":
 		precision := -1
 		if colSchema.Decimal != nil {
 			precision = int(colSchema.Decimal.Scale)

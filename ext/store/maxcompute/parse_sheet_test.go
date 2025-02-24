@@ -20,20 +20,10 @@ func TestParseNum(t *testing.T) {
 		assert.Equal(t, expected, result)
 	})
 
-	t.Run("should parseNumber", func(t *testing.T) {
-		data := int16(1333)
-		precision := 6
-
-		result, err := maxcompute.ParseNum(data, precision)
-
-		assert.NoError(t, err)
-		assert.Equal(t, "1333.000000", result)
-	})
-
 	t.Run("should return formatted float string with given precision when input is float64", func(t *testing.T) {
 		data := 123.1
-		precision := 6
-		expected := "123.100000"
+		precision := 0
+		expected := "123"
 
 		result, err := maxcompute.ParseNum(data, precision)
 
@@ -42,9 +32,9 @@ func TestParseNum(t *testing.T) {
 	})
 
 	t.Run("should return formatted float string with given precision when input is float64", func(t *testing.T) {
-		data := 123.234000
-		precision := -1
-		expected := "123.234"
+		data := 123.734000
+		precision := 0
+		expected := "124"
 
 		result, err := maxcompute.ParseNum(data, precision)
 
@@ -75,6 +65,15 @@ func TestParseNum(t *testing.T) {
 	t.Run("should return formatted int string when input is float64", func(t *testing.T) {
 		data := 123.00
 		expected := "123"
+
+		result, err := maxcompute.ParseNum(data, -1)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, result)
+	})
+	t.Run("should return formatted int string when input is float64", func(t *testing.T) {
+		data := 123.30
+		expected := "123.3"
 
 		result, err := maxcompute.ParseNum(data, -1)
 

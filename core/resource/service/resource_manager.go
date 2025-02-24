@@ -31,16 +31,13 @@ type ResourceStatusRepo interface {
 }
 
 type StatusRepo interface {
-	Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error
-	UpdateBulk(ctx context.Context, projectName tenant.ProjectName, entityType string, syncStatus []resource.SyncStatus) error
 	GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error)
 }
 
 type ResourceMgr struct {
 	datastoreMap map[resource.Store]DataStore
 
-	repo       ResourceStatusRepo
-	statusRepo StatusRepo
+	repo ResourceStatusRepo
 
 	logger log.Logger
 }
@@ -66,19 +63,6 @@ func (m *ResourceMgr) CreateResource(ctx context.Context, res *resource.Resource
 		}
 	} else {
 		me.Append(res.MarkSuccess())
-	}
-	if store == resource.MaxCompute && res.Kind() == KindExternalTable {
-		successStatus := true
-		remarks := make(map[string]string)
-		if err != nil {
-			remarks["error"] = err.Error()
-			successStatus = false
-		}
-		err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), remarks, successStatus)
-		if err != nil {
-			m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
-			me.Append(fmt.Errorf("unable to update external table sync time for table: %s, err: %s", res.FullName(), err.Error()))
-		}
 	}
 
 	me.Append(m.repo.UpdateStatus(ctx, res))
@@ -122,18 +106,6 @@ func (m *ResourceMgr) SyncResource(ctx context.Context, res *resource.Resource) 
 			return errors.AddErrContext(err, resource.EntityResource, "unable to create on datastore")
 		} else if errUpdate := datastore.Update(ctx, res); errUpdate != nil {
 			return errors.AddErrContext(errUpdate, resource.EntityResource, "unable to update on datastore")
-		}
-	}
-	if store == resource.MaxCompute && res.Kind() == KindExternalTable {
-		successStatus := true
-		remarks := make(map[string]string)
-		if err != nil {
-			remarks["error"] = err.Error()
-			successStatus = false
-		}
-		err := m.statusRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), remarks, successStatus)
-		if err != nil {
-			m.logger.Error("unable to update external table sync time for table", res.FullName(), " err:", err.Error())
 		}
 	}
 
@@ -217,11 +189,10 @@ func (m *ResourceMgr) Exist(ctx context.Context, tnnt tenant.Tenant, urn resourc
 	return datastore.Exist(ctx, tnnt, urn)
 }
 
-func NewResourceManager(repo ResourceStatusRepo, statusRepo StatusRepo, logger log.Logger) *ResourceMgr {
+func NewResourceManager(repo ResourceStatusRepo, logger log.Logger) *ResourceMgr {
 	return &ResourceMgr{
 		repo:         repo,
 		datastoreMap: map[resource.Store]DataStore{},
 		logger:       logger,
-		statusRepo:   statusRepo,
 	}
 }

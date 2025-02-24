@@ -29,12 +29,14 @@ const (
 type SyncerService struct {
 	secretProvider      SecretProvider
 	tenantDetailsGetter TenantDetailsGetter
+	SyncRepo            SyncRepo
 }
 
-func NewSyncer(secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter) *SyncerService {
+func NewSyncer(secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter, syncRepo SyncRepo) *SyncerService {
 	return &SyncerService{
 		secretProvider:      secretProvider,
 		tenantDetailsGetter: tenantDetailsGetter,
+		SyncRepo:            syncRepo,
 	}
 }
 
@@ -49,7 +51,7 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 		return nil, err
 	}
 
-	commonLocaton, err := tenantWithDetails.GetConfig(ExtLocation)
+	commonLocation, err := tenantWithDetails.GetConfig(ExtLocation)
 	if err != nil {
 		if !errors.IsErrorType(err, errors.ErrNotFound) {
 			return nil, err
@@ -60,7 +62,13 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	for _, r := range resources {
 		r := r
 		f1 := func() pool.JobResult[string] {
-			err := processResource(ctx, sheets, ossClient, r, commonLocaton)
+			err := processResource(ctx, sheets, ossClient, r, commonLocation)
+			if err != nil {
+				err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", r.FullName()), err)
+				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), map[string]string{"error": err.Error()}, false)
+			} else {
+				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), map[string]string{}, true)
+			}
 			if err != nil {
 				return pool.JobResult[string]{Output: r.FullName(), Err: err}
 			}
@@ -127,47 +135,29 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, error)
 }
 
 func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {
-	// Check if external table is for sheets
-	et, err := ConvertSpecTo[ExternalTable](res)
-	if err != nil {
-		return err
-	}
-
-	if !strings.EqualFold(et.Source.SourceType, GoogleSheet) {
-		return nil
-	}
-
-	if len(et.Source.SourceURIs) == 0 {
-		return errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Sheet")
-	}
-
 	sheets, ossClient, err := s.getClients(ctx, res.Tenant())
 	if err != nil {
 		return err
 	}
-
-	content, err := getGSheetContent(et, sheets)
-	if err != nil {
-		return err
-	}
-
 	tenantWithDetails, err := s.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
 	if err != nil {
 		return err
 	}
-	commonLocaton, err := tenantWithDetails.GetConfig(ExtLocation)
+	commonLocation, err := tenantWithDetails.GetConfig(ExtLocation)
 	if err != nil {
 		if !errors.IsErrorType(err, errors.ErrNotFound) {
 			return err
 		}
 	}
 
-	bucketName, objectKey, err := getBucketNameAndPath(commonLocaton, et.Source.Location, res.FullName())
+	err = processResource(ctx, sheets, ossClient, res, commonLocation)
 	if err != nil {
-		return err
+		err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", res.FullName()), err)
+		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), map[string]string{"error": err.Error()}, false)
+	} else {
+		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), map[string]string{}, true)
 	}
-
-	return writeToBucket(ctx, ossClient, bucketName, objectKey, content)
+	return err
 }
 
 func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gsheet.GSheets, *oss.Client, error) {

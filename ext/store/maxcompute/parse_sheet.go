@@ -126,7 +126,7 @@ func formatSheetData(colIndex int, data any, schema Schema) (string, error) {
 		return ParseDateTime(data, colSchema.SourceTimeFormat, colSchema.Type)
 	default:
 		val, err := ParseString(data)
-		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("invalid data type for Parsing MaxCompute:'%s', Got:'%s', expected: String", colSchema.Type, reflect.TypeOf(data)), err)
+		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("Parsing MaxCompute:'%s'", colSchema.Type), err)
 		return val, err
 	}
 }

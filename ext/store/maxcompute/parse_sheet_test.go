@@ -58,7 +58,7 @@ func TestParseNum(t *testing.T) {
 		precision := 2
 
 		result, err := maxcompute.ParseNum(data, precision)
-		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseFloat: invalid incoming data type for Parsing Float, Got:bool, expected: Number/String")
+		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseFloat: invalid incoming data: [true] type for Parsing Float, Got:bool")
 		assert.Equal(t, "", result)
 	})
 
@@ -201,7 +201,7 @@ func TestParseDateTime(t *testing.T) {
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
 
-		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseDateTime: invalid incoming data type for Parsing DateTime/Date, Got:bool, expected: Float64/String")
+		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: ParseDateTime: invalid incoming data: [true] type for Parsing DateTime/Date, Got:bool")
 		assert.Equal(t, "", result)
 	})
 
@@ -339,7 +339,7 @@ func TestParseBool(t *testing.T) {
 
 		result, err := maxcompute.ParseBool(data)
 
-		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: parseBool: invalid incoming data type for Parsing Bool, Got:int, expected: Bool/String")
+		assert.ErrorContains(t, err, "invalid argument for entity CSVFormatter: parseBool: invalid incoming data: [123] type for Parsing Bool, Got:int")
 		assert.Equal(t, "", result)
 	})
 }

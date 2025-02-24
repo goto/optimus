@@ -28,7 +28,7 @@ func ParseBool(data any) (string, error) {
 		}
 		val = utils.ConvertToBoolean(data)
 	default:
-		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("parseBool: invalid incoming data type for Parsing Bool, Got:%s, expected: %s", reflect.TypeOf(data), "Bool/String"))
+		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("parseBool: invalid incoming data: [%v] type for Parsing Bool, Got:%s", data, reflect.TypeOf(data)))
 	}
 	if val {
 		return "True", nil
@@ -57,7 +57,7 @@ func ParseNum(data any, precision int) (string, error) {
 			return data, nil
 		}
 	}
-	return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseFloat: invalid incoming data type for Parsing Float, Got:%s, expected: %s", reflect.TypeOf(data), "Number/String"))
+	return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseFloat: invalid incoming data: [%v] type for Parsing Float, Got:%s", data, reflect.TypeOf(data)))
 }
 
 func ParseDateTime(data any, sourceTimeFormat, outPutType string) (string, error) {
@@ -77,7 +77,7 @@ func ParseDateTime(data any, sourceTimeFormat, outPutType string) (string, error
 			return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: invalid source_time_format, Got: '%s', Corresponding goTimeLayout: '%s'", sourceTimeFormat, goTimeLayout))
 		}
 	default:
-		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: invalid incoming data type for Parsing DateTime/Date, Got:%s, expected: %s", reflect.TypeOf(data), "Float64/String"))
+		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: invalid incoming data: [%v] type for Parsing DateTime/Date, Got:%s", data, reflect.TypeOf(data)))
 	}
 	var outPutFormat string
 	switch outPutType {
@@ -98,10 +98,12 @@ func ParseString(data any) (string, error) {
 	switch v := data.(type) {
 	case float32, float64, int8, int16, int32, int64:
 		return ParseNum(v, -1)
+	case bool:
+		return ParseBool(v)
 	case string:
 		return v, nil
 	default:
-		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseString: invalid incoming data type for Parsing Got:%s", reflect.TypeOf(data)))
+		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseString: invalid incoming data: [%v] type for Parsing Got:%s", data, reflect.TypeOf(data)))
 	}
 }
 

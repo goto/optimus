@@ -448,10 +448,6 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 			successTables = append(successTables, i.ResourceName)
 		}
 	}
-	statusErr := rs.statusRepo.UpdateBulk(ctx, projectName, KindExternalTable, syncStatus)
-	if statusErr != nil {
-		rs.logger.Error("unable to update external table sync time for tables", strings.Join(successTables, ", "), " err:", statusErr.Error())
-	}
 	return successTables, err
 }
 

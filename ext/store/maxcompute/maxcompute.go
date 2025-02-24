@@ -47,10 +47,15 @@ type TenantDetailsGetter interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 }
 
+type SyncRepo interface {
+	Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error
+}
+
 type MaxCompute struct {
 	secretProvider SecretProvider
 	clientProvider ClientProvider
 	tenantGetter   TenantDetailsGetter
+	SyncRepo       SyncRepo
 }
 
 func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
@@ -82,7 +87,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		return handle.Create(res)
 
 	case KindExternalTable:
-		syncer := NewSyncer(m.secretProvider, m.tenantGetter)
+		syncer := NewSyncer(m.secretProvider, m.tenantGetter, m.SyncRepo)
 		err = syncer.Sync(ctx, res)
 		if err != nil {
 			return errors.Wrap(EntityExternalTable, "unable to sync", err)
@@ -90,7 +95,6 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
 		return handle.Create(res)
-
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
@@ -233,10 +237,11 @@ func startChildSpan(ctx context.Context, name string) (context.Context, trace.Sp
 	return tracer.Start(ctx, name)
 }
 
-func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter) *MaxCompute {
+func NewMaxComputeDataStore(secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter, syncRepo SyncRepo) *MaxCompute {
 	return &MaxCompute{
 		secretProvider: secretProvider,
 		clientProvider: clientProvider,
 		tenantGetter:   tenantProvider,
+		SyncRepo:       syncRepo,
 	}
 }

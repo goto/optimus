@@ -364,15 +364,16 @@ func (s *OptimusServer) setupHandlers() error {
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
+	syncStatusRepository := sync.NewStatusSyncRepository(s.dbPool)
 
-	syncer := mcStore.NewSyncer(tenantService, tenantService)
+	syncer := mcStore.NewSyncer(tenantService, tenantService, syncStatusRepository)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)
-	statusRepository := sync.NewStatusSyncRepository(s.dbPool)
+
 	backupRepository := resource.NewBackupRepository(s.dbPool)
-	resourceManager := rService.NewResourceManager(resourceRepository, statusRepository, s.logger)
-	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler, tenantService, newEngine, syncer, statusRepository) // note: job service can be nil
+	resourceManager := rService.NewResourceManager(resourceRepository, s.logger)
+	secondaryResourceService := rService.NewResourceService(s.logger, resourceRepository, nil, resourceManager, s.eventHandler, nil, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository) // note: job service can be nil
 
 	// Job Bounded Context Setup
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
@@ -389,7 +390,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
 	// Resource Bounded Context
-	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, statusRepository)
+	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
 	resourceChangeLogService := rService.NewChangelogService(s.logger, resourceRepository)
 
@@ -399,7 +400,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
 
 	mcClientProvider := mcStore.NewClientProvider()
-	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider, tenantService)
+	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider, tenantService, syncStatusRepository)
 	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	// Tenant Handlers

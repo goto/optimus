@@ -56,6 +56,9 @@ func ParseNum(data any, precision int) (string, error) {
 		if data == "" { // empty column
 			return data, nil
 		}
+		if utils.IsNumber(data) { // to handle very large numbers
+			return data, nil
+		}
 	}
 	return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseFloat: invalid incoming data: [%v] type for Parsing Float, Got:%s", data, reflect.TypeOf(data)))
 }

@@ -33,6 +33,7 @@ func ConvertToStringMap(inputs map[string]interface{}) (map[string]string, error
 var (
 	timePattern = regexp.MustCompile(`YYYY|YY|MMMM|MMM|MM|M|DDDD|DDD|DD|_D|D|ddd|__d|hh|h|am\/pm|AM\/PM|AM|PM|am|pm|mm|m|ss|s|\.s|TTT|±hhmmss|±hh\:mm\:ss|±hhmm|±hh\:mm|±hh|Zhhmmss|Zhh\:mm\:ss|Zhh:mm|Zhhmm|Zhh|`)
 	truePattern = regexp.MustCompile(`^true$|^t$|^1$|^yes$|^y$`)
+	numberRegex = regexp.MustCompile(`^[-+]?\d*(\.\d+)?$`)
 )
 
 var formatMap = map[string]string{
@@ -59,4 +60,8 @@ func ConvertTimeToGoLayout(format string) string {
 
 func ConvertToBoolean(input string) bool {
 	return truePattern.MatchString(strings.ToLower(input))
+}
+
+func IsNumber(input string) bool {
+	return numberRegex.MatchString(strings.ToLower(input))
 }

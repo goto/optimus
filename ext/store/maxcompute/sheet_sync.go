@@ -24,6 +24,7 @@ const (
 	ExtLocation       = "EXT_LOCATION"
 	MaxSyncInterval   = 24
 	headersCountSerde = "odps.text.option.header.lines.count"
+	useQuoteSerde     = "odps.text.option.use.quote"
 )
 
 type SyncerService struct {
@@ -62,12 +63,17 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	for _, r := range resources {
 		r := r
 		f1 := func() pool.JobResult[string] {
-			err := processResource(ctx, sheets, ossClient, r, commonLocation)
+			quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, r, commonLocation)
+			syncStatusRemarks := map[string]string{}
+			if quoteSerdeMissing {
+				syncStatusRemarks["quoteSerdeMissing"] = "True"
+			}
 			if err != nil {
 				err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", r.FullName()), err)
-				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), map[string]string{"error": err.Error()}, false)
+				syncStatusRemarks["error"] = err.Error()
+				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, false)
 			} else {
-				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), map[string]string{}, true)
+				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, true)
 			}
 			if err != nil {
 				return pool.JobResult[string]{Output: r.FullName(), Err: err}
@@ -112,12 +118,12 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 	return et.Source.SyncInterval, nil
 }
 
-func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, error) {
+func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, error) {
 	headers := 0
 	if val, ok := et.Source.SerdeProperties[headersCountSerde]; ok && val != "" {
 		num, err := strconv.Atoi(val)
 		if err != nil {
-			return "", errors.InvalidArgument(EntityExternalTable, "")
+			return "", false, errors.InvalidArgument(EntityExternalTable, "")
 		}
 		headers = num
 	}
@@ -150,12 +156,17 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 		}
 	}
 
-	err = processResource(ctx, sheets, ossClient, res, commonLocation)
+	quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, res, commonLocation)
+	syncStatusRemarks := map[string]string{}
+	if quoteSerdeMissing {
+		syncStatusRemarks["quoteSerdeMissing"] = "True"
+	}
 	if err != nil {
 		err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", res.FullName()), err)
-		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), map[string]string{"error": err.Error()}, false)
+		syncStatusRemarks["error"] = err.Error()
+		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), syncStatusRemarks, false)
 	} else {
-		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), map[string]string{}, true)
+		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), syncStatusRemarks, true)
 	}
 	return err
 }
@@ -184,31 +195,40 @@ func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gs
 	return sheetClient, ossClient, nil
 }
 
-func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, res *resource.Resource, commonLocation string) error {
+func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, res *resource.Resource, commonLocation string) (bool, error) {
 	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if !strings.EqualFold(et.Source.SourceType, GoogleSheet) {
-		return nil
+		return false, nil
 	}
 
 	if len(et.Source.SourceURIs) == 0 {
-		return errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Sheet")
+		return false, errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Sheet")
 	}
 
-	content, err := getGSheetContent(et, sheetSrv)
+	content, fileNeedQuoteSerde, err := getGSheetContent(et, sheetSrv)
 	if err != nil {
-		return err
+		return fileNeedQuoteSerde, err
+	}
+	var quoteSerdeMissing bool
+	if fileNeedQuoteSerde {
+		if val, ok := et.Source.SerdeProperties[useQuoteSerde]; ok {
+			boolVal, _ := strconv.ParseBool(val)
+			quoteSerdeMissing = !boolVal
+		} else {
+			quoteSerdeMissing = true
+		}
 	}
 
 	bucketName, objectKey, err := getBucketNameAndPath(commonLocation, et.Source.Location, res.FullName())
 	if err != nil {
-		return err
+		return quoteSerdeMissing, err
 	}
 
-	return writeToBucket(ctx, ossClient, bucketName, objectKey, content)
+	return quoteSerdeMissing, writeToBucket(ctx, ossClient, bucketName, objectKey, content)
 }
 
 func getBucketNameAndPath(commonLocation, loc string, fullName string) (bucketName string, path string, err error) { // nolint

@@ -29,15 +29,15 @@ func NewGSheets(ctx context.Context, creds string) (*GSheets, error) {
 	return &GSheets{srv: srv}, nil
 }
 
-func (gs *GSheets) GetAsCSV(url, sheetRange string, getFormattedDateTime bool, formatFn func(int, int, any) (string, error)) (string, error) {
+func (gs *GSheets) GetAsCSV(url, sheetRange string, getFormattedDateTime bool, formatFn func(int, int, any) (string, error)) (string, bool, error) {
 	info, err := FromURL(url)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	content, err := gs.getSheetContent(info.SheetID, sheetRange, getFormattedDateTime)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	return csv.FromRecords(content, formatFn)

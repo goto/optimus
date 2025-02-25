@@ -31,7 +31,7 @@ func ConvertToStringMap(inputs map[string]interface{}) (map[string]string, error
 }
 
 var (
-	timePattern = regexp.MustCompile(`YYYY|YY|MMMM|MMM|MM|M|DDDD|DDD|DD|_D|D|ddd|__d|hh|h|am\/pm|AM\/PM|AM|PM|am|pm|mm|m|ss|s|\.s|TTT|±hhmmss|±hh\:mm\:ss|±hhmm|±hh\:mm|±hh|Zhhmmss|Zhh\:mm\:ss|Zhh:mm|Zhhmm|Zhh|`)
+	timePattern = regexp.MustCompile(`YYYY|YY|MMMM|MMM|MM|M|DDDD|DDD|DD|_D|D|ddd|__d|hh|h|am\/pm|AM\/PM|AM|PM|am|pm|mm|m|ss|s|u|n|TTT|±hhmmss|±hh\:mm\:ss|±hhmm|±hh\:mm|±hh|Zhhmmss|Zhh\:mm\:ss|Zhh:mm|Zhhmm|Zhh|`)
 	truePattern = regexp.MustCompile(`^true$|^t$|^1$|^yes$|^y$`)
 	numberRegex = regexp.MustCompile(`^[-+]?\d*(\.\d+)?$`)
 )
@@ -43,7 +43,9 @@ var formatMap = map[string]string{
 	"hh": "15", "h": "3",
 	"am": "pm", "pm": "pm", "AM": "PM", "PM": "PM", "am/pm": "pm", "AM/PM": "PM",
 	"mm": "04", "m": "4",
-	"ss": "05", "s": "5", ".s": ".000000000",
+	"ss": "05", "s": "5",
+	"u":       "000000",
+	"n":       "000000000",
 	"TTT":     "MST",
 	"±hhmmss": "-070000", "±hh:mm:ss": "-07:00:00", "±hhmm": "-0700", "±hh:mm": "-07:00", "±hh": "-07",
 	"Zhhmmss": "Z070000", "Zhh:mm:ss": "Z07:00:00", "Zhhmm": "Z0700", "Zhh:mm": "Z07:00", "Zhh": "Z07",

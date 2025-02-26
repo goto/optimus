@@ -77,7 +77,7 @@ func ParseDateTime(data any, sourceTimeFormat, outPutType string) (string, error
 		goTimeLayout := utils.ConvertTimeToGoLayout(sourceTimeFormat)
 		parsedTime, err = time.Parse(goTimeLayout, data)
 		if err != nil {
-			return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: invalid source_time_format, Got: '%s', Corresponding goTimeLayout: '%s'", sourceTimeFormat, goTimeLayout))
+			return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: error parsing date time , source_time_format: '%s', Corresponding goTimeLayout: '%s', incomming Data: '%s'", sourceTimeFormat, goTimeLayout, data))
 		}
 	default:
 		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: invalid incoming data: [%v] type for Parsing DateTime/Date, Got:%s", data, reflect.TypeOf(data)))

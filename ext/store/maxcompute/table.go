@@ -45,24 +45,19 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		return err
 	}
 
-	_, table.Name, err = getCompleteComponentName(res)
-	if err != nil {
-		return err
-	}
-
 	if err := t.mcSchema.Create(t.mcSQLExecutor.CurrentSchemaName(), true, ""); err != nil {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
 
 	tableSchema, err := buildTableSchema(table)
 	if err != nil {
-		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+res.FullName())
+		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+table.FullName())
 	}
 
 	err = t.mcTable.Create(tableSchema, false, table.Hints, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
-			return errors.AlreadyExists(EntityTable, "table already exists on maxcompute: "+res.FullName())
+			return errors.AlreadyExists(EntityTable, "table already exists on maxcompute: "+table.FullName())
 		}
 		return errors.InternalError(EntityTable, "error while creating table on maxcompute", err)
 	}
@@ -70,21 +65,16 @@ func (t TableHandle) Create(res *resource.Resource) error {
 }
 
 func (t TableHandle) Update(res *resource.Resource) error {
-	projectSchema, tableName, err := getCompleteComponentName(res)
-	if err != nil {
-		return err
-	}
-
-	existing, err := t.mcTable.BatchLoadTables([]string{tableName.String()})
-	if err != nil {
-		return errors.InternalError(EntityTable, "error while get table on maxcompute", err)
-	}
-	existingSchema := existing[0].Schema()
-
 	table, err := ConvertSpecTo[Table](res)
 	if err != nil {
 		return err
 	}
+
+	existing, err := t.mcTable.BatchLoadTables([]string{table.Name})
+	if err != nil {
+		return errors.InternalError(EntityTable, "error while get table on maxcompute", err)
+	}
+	existingSchema := existing[0].Schema()
 
 	if table.Hints == nil {
 		table.Hints = make(map[string]string)
@@ -93,18 +83,18 @@ func (t TableHandle) Update(res *resource.Resource) error {
 
 	tableSchema, err := buildTableSchema(table)
 	if err != nil {
-		return errors.AddErrContext(err, EntityTable, "failed to build table schema to update for "+res.FullName())
+		return errors.AddErrContext(err, EntityTable, "failed to build table schema to update for "+table.FullName())
 	}
 
-	sqlTasks, err := generateUpdateQuery(tableSchema, existingSchema, projectSchema.Schema)
+	sqlTasks, err := generateUpdateQuery(tableSchema, existingSchema, table.Database)
 	if err != nil {
-		return errors.AddErrContext(err, EntityTable, "invalid schema for table "+res.FullName())
+		return errors.AddErrContext(err, EntityTable, "invalid schema for table "+table.FullName())
 	}
 
 	for _, task := range sqlTasks {
 		ins, err := t.mcSQLExecutor.ExecSQlWithHints(task, table.Hints)
 		if err != nil {
-			return errors.AddErrContext(err, EntityTable, "failed to create sql task to update for "+res.FullName())
+			return errors.AddErrContext(err, EntityTable, "failed to create sql task to update for "+table.FullName())
 		}
 
 		if err = ins.WaitForSuccess(); err != nil {
@@ -123,7 +113,7 @@ func (t TableHandle) Exists(tableName string) bool {
 func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
 	builder := tableschema.NewSchemaBuilder()
 	builder.
-		Name(t.Name.String()).
+		Name(t.Name).
 		Comment(t.Description).
 		Lifecycle(t.Lifecycle)
 

@@ -1,7 +1,8 @@
 package maxcompute
 
 import (
-	"github.com/goto/optimus/core/resource"
+	"fmt"
+
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -10,20 +11,26 @@ const (
 )
 
 type View struct {
-	Name resource.Name
+	Name     string `mapstructure:"name,omitempty"`
+	Project  string `mapstructure:"project,omitempty"`
+	Database string `mapstructure:"database,omitempty"`
 
 	Description string   `mapstructure:"description,omitempty"`
 	Columns     []string `mapstructure:"columns,omitempty"`
 	ViewQuery   string   `mapstructure:"view_query,omitempty"`
 }
 
+func (v *View) FullName() string {
+	return fmt.Sprintf("%s.%s.%s", v.Project, v.Database, v.Name)
+}
+
 func (v *View) Validate() error {
 	if v.ViewQuery == "" {
-		return errors.InvalidArgument(EntityView, "view query is empty for "+v.Name.String())
+		return errors.InvalidArgument(EntityView, "view query is empty for "+v.FullName())
 	}
 
 	if len(v.Columns) == 0 {
-		return errors.InvalidArgument(EntityView, "column names not provided for "+v.Name.String())
+		return errors.InvalidArgument(EntityView, "column names not provided for "+v.FullName())
 	}
 
 	return nil

@@ -12,7 +12,9 @@ func TestRelationalExternalTable(t *testing.T) {
 	t.Run("when invalid", func(t *testing.T) {
 		t.Run("fails validation when schema is invalid", func(t *testing.T) {
 			et := maxcompute.ExternalTable{
-				Name:        "t-optimus.playground.test-sheet",
+				Name:        "test-sheet",
+				Database:    "playground",
+				Project:     "t-optimus",
 				Description: "",
 				Schema: maxcompute.Schema{{
 					Name: "", Type: "table",
@@ -24,7 +26,9 @@ func TestRelationalExternalTable(t *testing.T) {
 		})
 		t.Run("fails validation when source is invalid", func(t *testing.T) {
 			et := maxcompute.ExternalTable{
-				Name:        "t-optimus.playground.test-sheet",
+				Name:        "test-sheet",
+				Database:    "playground",
+				Project:     "t-optimus",
 				Description: "",
 				Schema: maxcompute.Schema{
 					{Name: "id", Type: "string"},
@@ -38,7 +42,9 @@ func TestRelationalExternalTable(t *testing.T) {
 	})
 	t.Run("passes validations for with empty schema", func(t *testing.T) {
 		et := maxcompute.ExternalTable{
-			Name:        "t-optimus.playground.test-sheet",
+			Name:        "test-sheet",
+			Database:    "playground",
+			Project:     "t-optimus",
 			Description: "",
 			Source: &maxcompute.ExternalSource{
 				SourceType: "GOOGLE_SHEETS",
@@ -52,7 +58,9 @@ func TestRelationalExternalTable(t *testing.T) {
 	})
 	t.Run("passes validations for valid configuration", func(t *testing.T) {
 		et := maxcompute.ExternalTable{
-			Name:        "t-optimus.playground.test-sheet",
+			Name:        "test-sheet",
+			Database:    "playground",
+			Project:     "t-optimus",
 			Description: "",
 			Schema: maxcompute.Schema{
 				{Name: "id", Type: "string"},

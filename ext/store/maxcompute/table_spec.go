@@ -1,7 +1,8 @@
 package maxcompute
 
 import (
-	"github.com/goto/optimus/core/resource"
+	"fmt"
+
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -20,7 +21,9 @@ ExtraConfig:
 	alias: alias for table to be passed to table, map<string, string>
 */
 type Table struct {
-	Name resource.Name
+	Name     string `mapstructure:"name,omitempty"`
+	Project  string `mapstructure:"project,omitempty"`
+	Database string `mapstructure:"database,omitempty"`
 
 	Description string     `mapstructure:"description,omitempty"`
 	Schema      Schema     `mapstructure:"schema,omitempty"`
@@ -33,7 +36,7 @@ type Table struct {
 }
 
 func (t *Table) FullName() string {
-	return t.Name.String()
+	return fmt.Sprintf("%s.%s.%s", t.Project, t.Database, t.Name)
 }
 
 func (t *Table) Validate() error {

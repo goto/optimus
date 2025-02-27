@@ -148,7 +148,6 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 		if err != nil {
 			return err
 		}
-		table.Name = r.Name()
 		return table.Validate()
 
 	case KindView:
@@ -156,7 +155,6 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 		if err != nil {
 			return err
 		}
-		view.Name = r.Name()
 		return view.Validate()
 
 	case KindExternalTable:
@@ -164,7 +162,6 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 		if err != nil {
 			return err
 		}
-		extTable.Name = r.Name()
 		return extTable.Validate()
 
 	default:

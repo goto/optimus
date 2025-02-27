@@ -172,7 +172,7 @@ func getURNComponent(res *resource.Resource) (ResourceURN, error) {
 	return spec, nil
 }
 
-func getCompleteComponentName(res *resource.Resource) (ProjectSchema, resource.Name, error) {
+func getCompleteComponentName(res *resource.Resource) (ProjectSchema, resource.Name, error) { //nolint: unparam
 	if res.Version() == resource.ResourceSpecV2 {
 		mcURN, err := getURNComponent(res)
 		if err != nil {

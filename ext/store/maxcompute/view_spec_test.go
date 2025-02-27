@@ -39,6 +39,6 @@ func TestRelationalView(t *testing.T) {
 		err := view.Validate()
 		assert.Nil(t, err)
 
-		assert.Equal(t, "playground.customer", view.Name.String())
+		assert.Equal(t, "customer", view.Name)
 	})
 }

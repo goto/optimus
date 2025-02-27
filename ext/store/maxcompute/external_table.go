@@ -38,7 +38,7 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 		return err
 	}
 
-	location, err := e.getLocation(context.Background(), et.Source, res)
+	location, err := e.getLocation(context.Background(), et, res)
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to get source location for "+et.FullName())
 	}

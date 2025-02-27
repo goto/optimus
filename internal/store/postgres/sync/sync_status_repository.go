@@ -70,7 +70,7 @@ func (s StatusRepository) Upsert(ctx context.Context, projectName tenant.Project
 
 func (s StatusRepository) GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error) {
 	lastUpdateMap := make(map[string]time.Time)
-	getQuery := "select identifier, last_update_time from  sync_status where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "')"
+	getQuery := "select identifier, last_update_time from  sync_status where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "') order by last_update_time asc"
 	rows, err := s.db.Query(ctx, getQuery, projectName, entityType)
 	if err != nil {
 		return nil, errors.Wrap(entitySyncStatus, "error while getting last sync update status", err)

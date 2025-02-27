@@ -37,7 +37,7 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
-	p, tableName, err := getCompleteComponentName(res)
+	p, _, err := getCompleteComponentName(res)
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build table schema to create for "+res.FullName())
 	}
-	table.Name = tableName
+
 	e.mcSQLExecutor.SetCurrentSchemaName(p.Schema)
 	if !(tSchema.StorageHandler == CSVHandler || tSchema.StorageHandler == TSVHandler) {
 		return e.createOtherTypeExternalTable(p, table, tSchema)
@@ -139,7 +139,7 @@ func buildExternalTableSchema(t *ExternalTable, location string) (tableschema.Ta
 
 	builder := tableschema.NewSchemaBuilder()
 	builder.
-		Name(t.Name.String()).
+		Name(t.Name).
 		Comment(t.Description).
 		StorageHandler(handler).
 		Location(location).

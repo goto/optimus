@@ -164,7 +164,6 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 		if err != nil {
 			return err
 		}
-		extTable.Name = r.Name()
 		return extTable.Validate()
 
 	default:

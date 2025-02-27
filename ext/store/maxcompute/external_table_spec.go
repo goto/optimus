@@ -1,7 +1,8 @@
 package maxcompute
 
 import (
-	"github.com/goto/optimus/core/resource"
+	"fmt"
+
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -10,7 +11,9 @@ const (
 )
 
 type ExternalTable struct {
-	Name resource.Name
+	Name     string `mapstructure:"name,omitempty"`
+	Project  string `mapstructure:"project,omitempty"`
+	Database string `mapstructure:"database,omitempty"`
 
 	Description string          `mapstructure:"description,omitempty"`
 	Schema      Schema          `mapstructure:"schema,omitempty"`
@@ -20,7 +23,7 @@ type ExternalTable struct {
 }
 
 func (e *ExternalTable) FullName() string {
-	return e.Name.String()
+	return fmt.Sprintf("%s.%s.%s", e.Project, e.Database, e.Name)
 }
 
 func (e *ExternalTable) Validate() error {

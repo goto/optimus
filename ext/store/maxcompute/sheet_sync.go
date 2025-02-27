@@ -63,7 +63,11 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	for _, r := range resources {
 		r := r
 		f1 := func() pool.JobResult[string] {
-			quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, r, commonLocation)
+			et, err := ConvertSpecTo[ExternalTable](r)
+			if err != nil {
+				return pool.JobResult[string]{Output: r.FullName(), Err: err}
+			}
+			quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, et, commonLocation)
 			syncStatusRemarks := map[string]string{}
 			if quoteSerdeMissing {
 				syncStatusRemarks["quoteSerdeMissing"] = "True"
@@ -71,6 +75,7 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 			if err != nil {
 				err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", r.FullName()), err)
 				syncStatusRemarks["error"] = err.Error()
+				syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
 				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, false)
 			} else {
 				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, true)
@@ -155,8 +160,11 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 			return err
 		}
 	}
-
-	quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, res, commonLocation)
+	et, err := ConvertSpecTo[ExternalTable](res)
+	if err != nil {
+		return err
+	}
+	quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, et, commonLocation)
 	syncStatusRemarks := map[string]string{}
 	if quoteSerdeMissing {
 		syncStatusRemarks["quoteSerdeMissing"] = "True"
@@ -164,6 +172,7 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	if err != nil {
 		err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", res.FullName()), err)
 		syncStatusRemarks["error"] = err.Error()
+		syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
 		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), syncStatusRemarks, false)
 	} else {
 		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), syncStatusRemarks, true)
@@ -195,12 +204,7 @@ func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gs
 	return sheetClient, ossClient, nil
 }
 
-func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, res *resource.Resource, commonLocation string) (bool, error) {
-	et, err := ConvertSpecTo[ExternalTable](res)
-	if err != nil {
-		return false, err
-	}
-
+func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, et *ExternalTable, commonLocation string) (bool, error) {
 	if !strings.EqualFold(et.Source.SourceType, GoogleSheet) {
 		return false, nil
 	}
@@ -223,7 +227,7 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 		}
 	}
 
-	bucketName, objectKey, err := getBucketNameAndPath(commonLocation, et.Source.Location, res.FullName())
+	bucketName, objectKey, err := getBucketNameAndPath(commonLocation, et.Source.Location, et.FullName())
 	if err != nil {
 		return quoteSerdeMissing, err
 	}

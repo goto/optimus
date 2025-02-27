@@ -26,6 +26,9 @@ func TestExternalTableHandle(t *testing.T) {
 		Labels:      map[string]string{"owner": "optimus"},
 	}
 	spec := map[string]any{
+		"name":        tableName,
+		"database":    schemaName,
+		"project":     projectName,
 		"description": "test create",
 		"schema": []map[string]any{
 			{
@@ -64,20 +67,6 @@ func TestExternalTableHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
 		})
-		t.Run("returns error when table name is empty", func(t *testing.T) {
-			table := new(mockExternalTable)
-			schema := new(mockMaxComputeSchema)
-			odpsIns := new(mockOdpsIns)
-
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil)
-
-			res, err := resource.NewResource(projectName+"."+schemaName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = tableHandle.Create(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "invalid resource name: "+projectName+"."+schemaName)
-		})
 
 		t.Run("returns error when table already present on maxcompute", func(t *testing.T) {
 			existTableErr := errors.New("Table or view already exists - table or view proj.test_table is already defined")
@@ -98,7 +87,7 @@ func TestExternalTableHandle(t *testing.T) {
 
 			err = tableHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "table already exists on maxcompute: "+fullName)
+			assert.ErrorContains(t, err, "external table already exists on maxcompute: "+fullName)
 		})
 		t.Run("returns error when table creation returns error", func(t *testing.T) {
 			table := new(mockExternalTable)
@@ -117,7 +106,7 @@ func TestExternalTableHandle(t *testing.T) {
 
 			err = tableHandle.Create(res)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "error while creating table on maxcompute")
+			assert.ErrorContains(t, err, "error while creating external table on maxcompute")
 		})
 		t.Run("return success when create the external table", func(t *testing.T) {
 			table := new(mockExternalTable)

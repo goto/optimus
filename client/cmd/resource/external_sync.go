@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	syncTimeout = time.Minute * 15
+	syncTimeout = time.Minute * 25
 )
 
 type syncExternalCommand struct {

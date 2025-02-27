@@ -100,28 +100,7 @@ func TestTableHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
 		})
-		t.Run("returns error when table name is empty", func(t *testing.T) {
-			table := new(mockMaxComputeTable)
-			schema := new(mockMaxComputeSchema)
-			odpsIns := new(mockOdpsIns)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
-			spec := map[string]any{
-				"description": "test create",
-				"schema": []map[string]any{
-					{
-						"name": "customer_id",
-						"type": "STRING",
-					},
-				},
-			}
-			res, err := resource.NewResource(projectName+"."+schemaName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = tableHandle.Create(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "invalid resource name: "+projectName+"."+schemaName)
-		})
 		t.Run("returns error when failed to create schema", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			schema := new(mockMaxComputeSchema)
@@ -133,6 +112,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test create",
 				"schema": []map[string]any{
 					{
@@ -159,6 +141,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test create",
 				"schema": []map[string]any{
 					{
@@ -191,6 +176,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test create",
 				"schema": []map[string]any{
 					{
@@ -222,6 +210,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test create",
 				"schema": []map[string]any{
 					{
@@ -253,6 +244,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test create",
 				"schema": []map[string]any{
 					{
@@ -281,51 +275,10 @@ func TestTableHandle(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		t.Run("returns error when table name is empty", func(t *testing.T) {
-			table := new(mockMaxComputeTable)
-			schema := new(mockMaxComputeSchema)
-			odpsIns := new(mockOdpsIns)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
-
-			spec := map[string]any{
-				"description": "test create",
-				"schema": []map[string]any{
-					{
-						"name": "customer_id",
-						"type": "STRING",
-					},
-				},
-			}
-			res, err := resource.NewResource(projectName+"."+schemaName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = tableHandle.Update(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "invalid resource name: "+projectName+"."+schemaName)
-		})
-		t.Run("returns error when table is not found on maxcompute", func(t *testing.T) {
-			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return(normalTables, fmt.Errorf("table not found"))
-			defer table.AssertExpectations(t)
-			schema := new(mockMaxComputeSchema)
-			odpsIns := new(mockOdpsIns)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
-
-			spec := map[string]any{"description": []string{"test update"}}
-			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = tableHandle.Update(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "error while get table on maxcompute")
-		})
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
-			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
-			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, nil)
 
 			spec := map[string]any{"description": []string{"test update"}}
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
@@ -344,6 +297,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test update",
 				"schema": []map[string]any{
 					{
@@ -368,6 +324,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test update",
 				"schema": []map[string]any{
 					{
@@ -421,6 +380,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":     tableName,
+				"database": schemaName,
+				"project":  projectName,
 				"schema": []map[string]any{
 					{
 						"name":          "customer_id",
@@ -448,6 +410,9 @@ func TestTableHandle(t *testing.T) {
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":     tableName,
+				"database": schemaName,
+				"project":  projectName,
 				"schema": []map[string]any{
 					{
 						"name": "customer_id",

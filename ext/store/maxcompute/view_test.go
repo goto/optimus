@@ -44,24 +44,7 @@ func TestViewHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
 		})
-		t.Run("returns error when view name is empty", func(t *testing.T) {
-			table := new(mockMaxComputeTable)
-			schema := new(mockMaxComputeSchema)
-			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
-			spec := map[string]any{
-				"description": "test create",
-				"columns":     []string{"customer_id", "customer_name", "product_name"},
-				"view_query":  "select * from test_customer;",
-			}
-			res, err := resource.NewResource(projectName+"."+schemaName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = viewHandle.Create(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "invalid resource name: "+projectName+"."+schemaName)
-		})
 		t.Run("returns error when failed to create schema", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			schema := new(mockMaxComputeSchema)
@@ -73,6 +56,9 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
 				"description": "test create",
 				"columns":     []string{"customer_id", "customer_name", "product_name"},
 				"view_query":  "select * from test_customer;",
@@ -96,6 +82,9 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
 				"description": "test create",
 				"columns":     []string{"customer_id", "customer_name", "product_name"},
 				"view_query":  "select from test_customer;",
@@ -119,6 +108,9 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
 				"description": "test create",
 				"view_query":  "select * from test_customer",
 			}
@@ -132,24 +124,6 @@ func TestViewHandle(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		t.Run("returns error when view name is empty", func(t *testing.T) {
-			table := new(mockMaxComputeTable)
-			schema := new(mockMaxComputeSchema)
-			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
-
-			spec := map[string]any{
-				"description": "test update",
-				"columns":     []string{"customer_id", "customer_name", "product_name"},
-				"view_query":  "select * from test_customer;",
-			}
-			res, err := resource.NewResource(projectName+"."+schemaName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
-			assert.Nil(t, err)
-
-			err = viewHandle.Update(res)
-			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "invalid resource name: "+projectName+"."+schemaName)
-		})
 		t.Run("returns error when view is not found", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{}, fmt.Errorf("view is not found"))
@@ -158,7 +132,7 @@ func TestViewHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
-			spec := map[string]any{"description": []string{"test update"}}
+			spec := map[string]any{"description": "test update"}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
@@ -167,12 +141,9 @@ func TestViewHandle(t *testing.T) {
 			assert.ErrorContains(t, err, "error while get view on maxcompute")
 		})
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
-			table := new(mockMaxComputeTable)
-			table.On("BatchLoadTables", mock.Anything).Return([]*odps.Table{}, nil)
-			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, nil)
 
 			spec := map[string]any{"description": []string{"test update"}}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
@@ -193,6 +164,9 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
 				"description": "test update",
 				"columns":     []string{"customer_id", "customer_name", "product_name"},
 				"view_query":  "select * from test_customer;",
@@ -215,6 +189,9 @@ func TestViewHandle(t *testing.T) {
 			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
 
 			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
 				"description": "test update",
 				"view_query":  "select * from test_customer",
 			}
@@ -268,7 +245,8 @@ func TestToViewSQL(t *testing.T) {
 			name: "create_view",
 			args: args{
 				v: &maxcompute.View{
-					Name:        "schema.test_view",
+					Name:        "test_view",
+					Database:    "schema",
 					Description: "Create Test View",
 					Columns:     []string{"a", "b", "c"},
 					ViewQuery:   "select a, b, c from t1",
@@ -285,7 +263,9 @@ func TestToViewSQL(t *testing.T) {
 			name: "create_view_missing_description",
 			args: args{
 				v: &maxcompute.View{
-					Name:      "schema.test_view",
+					Name:      "test_view",
+					Database:  "schema",
+					Project:   "proj",
 					Columns:   []string{"a", "b", "c"},
 					ViewQuery: "select a, b, c from t1",
 				},

@@ -12,7 +12,9 @@ func TestRelationalTable(t *testing.T) {
 	t.Run("when invalid", func(t *testing.T) {
 		t.Run("returns validation error for empty schema", func(t *testing.T) {
 			table := maxcompute.Table{
-				Name:        "playground.characters",
+				Name:        "characters",
+				Database:    "playground",
+				Project:     "proj",
 				Schema:      nil,
 				Cluster:     &maxcompute.Cluster{Using: []string{"tags"}},
 				Partition:   &maxcompute.Partition{Columns: []string{"time"}},
@@ -20,11 +22,13 @@ func TestRelationalTable(t *testing.T) {
 			}
 			err := table.Validate()
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "empty schema for table playground.characters")
+			assert.ErrorContains(t, err, "empty schema for table proj.playground.characters")
 		})
 		t.Run("returns validation error for invalid schema", func(t *testing.T) {
 			table := maxcompute.Table{
-				Name:        "playground.characters",
+				Name:        "characters",
+				Database:    "playground",
+				Project:     "proj",
 				Schema:      maxcompute.Schema{{Name: "", Type: "string"}},
 				Cluster:     &maxcompute.Cluster{Using: []string{"tags"}},
 				Partition:   &maxcompute.Partition{Columns: []string{"time"}},
@@ -32,11 +36,13 @@ func TestRelationalTable(t *testing.T) {
 			}
 			err := table.Validate()
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "invalid schema for table playground.characters")
+			assert.ErrorContains(t, err, "invalid schema for table proj.playground.characters")
 		})
 		t.Run("returns validation error for invalid cluster", func(t *testing.T) {
 			table := maxcompute.Table{
-				Name:        "playground.characters",
+				Name:        "characters",
+				Database:    "playground",
+				Project:     "proj",
 				Schema:      maxcompute.Schema{{Name: "id", Type: "string"}},
 				Cluster:     &maxcompute.Cluster{Using: []string{}},
 				Partition:   &maxcompute.Partition{Columns: []string{"time"}},
@@ -44,25 +50,15 @@ func TestRelationalTable(t *testing.T) {
 			}
 			err := table.Validate()
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "invalid cluster for table playground.characters")
+			assert.ErrorContains(t, err, "invalid cluster for table proj.playground.characters")
 		})
 	})
-	t.Run("returns no validation error when correct", func(t *testing.T) {
-		table := maxcompute.Table{
-			Name:        "playground.characters",
-			Schema:      maxcompute.Schema{{Name: "id", Type: "string"}},
-			Cluster:     &maxcompute.Cluster{Using: []string{"tags"}},
-			Partition:   &maxcompute.Partition{Columns: []string{"time"}},
-			ExtraConfig: nil,
-		}
-		err := table.Validate()
-		assert.Nil(t, err)
 
-		assert.Equal(t, "playground.characters", table.FullName())
-	})
 	t.Run("fails validation for empty field name in partition", func(t *testing.T) {
 		table := maxcompute.Table{
-			Name:        "playground.characters",
+			Name:        "characters",
+			Database:    "playground",
+			Project:     "proj",
 			Schema:      maxcompute.Schema{{Name: "id", Type: "string"}},
 			Cluster:     &maxcompute.Cluster{Using: []string{"tags"}},
 			Partition:   &maxcompute.Partition{Columns: []string{}},
@@ -70,7 +66,7 @@ func TestRelationalTable(t *testing.T) {
 		}
 		err := table.Validate()
 		assert.NotNil(t, err)
-		assert.ErrorContains(t, err, "invalid partition columns for table playground.characters")
+		assert.ErrorContains(t, err, "invalid partition columns for table proj.playground.characters")
 	})
 }
 

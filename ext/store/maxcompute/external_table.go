@@ -44,7 +44,7 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	}
 	tSchema, err := buildExternalTableSchema(et, location)
 	if err != nil {
-		return errors.AddErrContext(err, EntityExternalTable, "failed to build et schema to create for "+et.FullName())
+		return errors.AddErrContext(err, EntityExternalTable, "failed to build external table schema to create for "+et.FullName())
 	}
 
 	e.mcSQLExecutor.SetCurrentSchemaName(et.Database)
@@ -55,9 +55,9 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	err = e.mcExternalTable.CreateExternal(tSchema, false, et.Source.SerdeProperties, et.Source.Jars, et.Hints, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
-			return errors.AlreadyExists(EntityExternalTable, "external et already exists on maxcompute: "+et.FullName())
+			return errors.AlreadyExists(EntityExternalTable, "external table already exists on maxcompute: "+et.FullName())
 		}
-		return errors.InternalError(EntityExternalTable, "error while creating et on maxcompute", err)
+		return errors.InternalError(EntityExternalTable, "error while creating external table on maxcompute", err)
 	}
 	return nil
 }

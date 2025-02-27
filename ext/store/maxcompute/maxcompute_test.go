@@ -25,7 +25,12 @@ func TestMaxComputeStore(t *testing.T) {
 		Description: "resource description",
 		Labels:      map[string]string{"owner": "optimus"},
 	}
-	spec := map[string]any{"description": "resource"}
+	spec := map[string]any{
+		"name":        tableName,
+		"database":    schemaName,
+		"project":     projectName,
+		"description": "resource",
+	}
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
@@ -289,7 +294,12 @@ func TestMaxComputeStore(t *testing.T) {
 		invalidSpec := map[string]any{
 			"description": map[string]any{"some": "desc"},
 		}
-		specWithoutValues := map[string]any{"a": "b"}
+		specWithoutValues := map[string]any{
+			"name":     tableName,
+			"database": schemaName,
+			"project":  projectName,
+			"a":        "b",
+		}
 		t.Run("returns error when resource kind is invalid", func(t *testing.T) {
 			res, err := resource.NewResource(fullName, "unknown", store, tnnt, &metadata, invalidSpec)
 			assert.Nil(t, err)

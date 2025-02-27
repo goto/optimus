@@ -11,27 +11,32 @@ import (
 func TestRelationalView(t *testing.T) {
 	t.Run("return validation error when query is empty", func(t *testing.T) {
 		view := maxcompute.View{
-			Name:      "playground.customer",
+			Name:      "customer",
+			Project:   "proj",
+			Database:  "playground",
 			ViewQuery: "",
 		}
 
 		err := view.Validate()
 		assert.NotNil(t, err)
-		assert.ErrorContains(t, err, "view query is empty for playground.customer")
+		assert.ErrorContains(t, err, "view query is empty for proj.playground.customer")
 	})
 	t.Run("return validation error when column names are empty", func(t *testing.T) {
 		view := maxcompute.View{
-			Name:      "playground.customer",
+			Name:      "customer",
+			Project:   "proj",
+			Database:  "playground",
 			ViewQuery: "select * from `playground.customer`",
 		}
 
 		err := view.Validate()
 		assert.NotNil(t, err)
-		assert.ErrorContains(t, err, "column names not provided for playground.customer")
+		assert.ErrorContains(t, err, "column names not provided for proj.playground.customer")
 	})
 	t.Run("has no validation error for correct view", func(t *testing.T) {
 		view := maxcompute.View{
-			Name:      "playground.customer",
+			Name:      "customer",
+			Database:  "playground",
 			ViewQuery: "select * from `playground.customer_table`",
 			Columns:   []string{"id", "name"},
 		}

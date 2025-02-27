@@ -1,18 +1,16 @@
 package maxcompute
 
 import (
-	"bytes"
 	"strings"
-	"text/template"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
+	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
 )
 
 type ViewSQLExecutor interface {
-	ExecSQl(sql string, hints ...map[string]string) (*odps.Instance, error)
 	CurrentSchemaName() string
 }
 
@@ -21,6 +19,7 @@ type ViewSchema interface {
 }
 
 type ViewTable interface {
+	CreateView(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool) error
 	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
 }
 
@@ -36,7 +35,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 		return err
 	}
 
-	projectSchema, viewName, err := getCompleteComponentName(res)
+	_, view.Name, err = getCompleteComponentName(res)
 	if err != nil {
 		return err
 	}
@@ -45,22 +44,8 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
 
-	view.Name, err = resource.NameFrom(projectSchema.Schema + "." + viewName.String())
-	if err != nil {
-		return err
-	}
-
-	sql, err := ToViewSQL(view)
-	if err != nil {
-		return errors.AddErrContext(err, EntityView, "failed to build view sql query to create view "+res.FullName())
-	}
-
-	inst, err := v.viewSQLExecutor.ExecSQl(sql)
-	if err != nil {
-		return errors.AddErrContext(err, EntityView, "failed to create sql task to create view "+res.FullName())
-	}
-
-	if err = inst.WaitForSuccess(); err != nil {
+	viewSchema := buildViewSchema(view)
+	if err := v.viewTable.CreateView(viewSchema, false, false, false); err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityView, "view already exists on maxcompute: "+res.FullName())
 		}
@@ -71,7 +56,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 }
 
 func (v ViewHandle) Update(res *resource.Resource) error {
-	projectSchema, viewName, err := getCompleteComponentName(res)
+	_, viewName, err := getCompleteComponentName(res)
 	if err != nil {
 		return err
 	}
@@ -85,23 +70,10 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 	if err != nil {
 		return err
 	}
+	view.Name = viewName
 
-	view.Name, err = resource.NameFrom(projectSchema.Schema + "." + viewName.String())
-	if err != nil {
-		return err
-	}
-
-	sql, err := ToViewSQL(view)
-	if err != nil {
-		return errors.AddErrContext(err, EntityView, "failed to build view sql query to update view "+res.FullName())
-	}
-
-	inst, err := v.viewSQLExecutor.ExecSQl(sql)
-	if err != nil {
-		return errors.AddErrContext(err, EntityView, "failed to create sql task to update view "+res.FullName())
-	}
-
-	if err = inst.WaitForSuccess(); err != nil {
+	viewSchema := buildViewSchema(view)
+	if err := v.viewTable.CreateView(viewSchema, true, false, false); err != nil {
 		return errors.InternalError(EntityView, "failed to update view "+res.FullName(), err)
 	}
 
@@ -113,31 +85,15 @@ func (v ViewHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func ToViewSQL(v *View) (string, error) {
-	fns := template.FuncMap{
-		"join": func(sep string, s []string) string {
-			return strings.Join(s, sep)
-		},
-	}
+func buildViewSchema(v *View) tableschema.TableSchema {
+	builder := tableschema.NewSchemaBuilder()
+	builder.Name(v.Name.String()).
+		Comment(v.Description).
+		Lifecycle(v.Lifecycle).
+		IsVirtualView(true).
+		ViewText(v.ViewQuery)
 
-	tplStr := `create or replace view {{ .Name.String }}
-    ({{ join ", " .Columns }}) {{ if .Description }} 
-    comment '{{ .Description}}' {{ end }} 
-    as
-	{{ .ViewQuery}};`
-
-	tpl, err := template.New("DDL_UPSERT_VIEW").Funcs(fns).Parse(tplStr)
-	if err != nil {
-		return "", err
-	}
-
-	var out bytes.Buffer
-	err = tpl.Execute(&out, v)
-	if err != nil {
-		return "", err
-	}
-
-	return out.String(), nil
+	return builder.Build()
 }
 
 func NewViewHandle(viewSQLExecutor ViewSQLExecutor, viewSchema ViewSchema, viewTable ViewTable) *ViewHandle {

@@ -115,7 +115,7 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 		return 0, err
 	}
 	if et.Source == nil {
-		return 0, errors.NotFound(EntityExternalTable, "source is empty for "+res.FullName())
+		return 0, errors.NotFound(EntityExternalTable, "source is empty for "+et.FullName())
 	}
 	if et.Source.SyncInterval < 1 || et.Source.SyncInterval > MaxSyncInterval {
 		return MaxSyncInterval, nil
@@ -170,12 +170,12 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 		syncStatusRemarks["quoteSerdeMissing"] = "True"
 	}
 	if err != nil {
-		err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", res.FullName()), err)
+		err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", et.FullName()), err)
 		syncStatusRemarks["error"] = err.Error()
 		syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
-		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), syncStatusRemarks, false)
+		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, et.FullName(), syncStatusRemarks, false)
 	} else {
-		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, res.FullName(), syncStatusRemarks, true)
+		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, et.FullName(), syncStatusRemarks, true)
 	}
 	return err
 }

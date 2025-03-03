@@ -140,6 +140,14 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, 
 			return s, nil
 		}
 		value, err := formatSheetData(colIndex, data, et.Schema)
+		if err != nil {
+			if d, ok := data.(string); ok {
+				if strings.HasPrefix(d, "#REF!") || strings.HasPrefix(d, "#N/A") {
+					err = nil
+					value = ""
+				}
+			}
+		}
 		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("for column Index:%d", colIndex), err)
 		return value, err
 	})

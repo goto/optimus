@@ -125,7 +125,7 @@ func TestParseDateTime(t *testing.T) {
 	t.Run("should return formatted date string when input is float64", func(t *testing.T) {
 		data := 44197.23415 // corresponds to 2021-01-01
 		expected := "2021-01-01"
-		sourceTimeFormat := ""
+		sourceTimeFormat := []string{""}
 		outPutType := "DATE"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
@@ -137,7 +137,7 @@ func TestParseDateTime(t *testing.T) {
 	t.Run("should return formatted datetime string when input is float64", func(t *testing.T) {
 		data := 44197.521 // corresponds to 2021-01-01 12:00:00
 		expected := "2021-01-01 12:30:14"
-		sourceTimeFormat := ""
+		sourceTimeFormat := []string{""}
 		outPutType := "DATETIME"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
@@ -149,7 +149,7 @@ func TestParseDateTime(t *testing.T) {
 	t.Run("should return formatted timestamp string when input is float64", func(t *testing.T) {
 		data := 44197.5 // corresponds to 2021-01-01 12:00:00
 		expected := "2021-01-01 12:00:00.000000000"
-		sourceTimeFormat := ""
+		sourceTimeFormat := []string{""}
 		outPutType := "TIMESTAMP"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
@@ -161,7 +161,7 @@ func TestParseDateTime(t *testing.T) {
 	t.Run("should return formatted date string when input is string", func(t *testing.T) {
 		data := "2023/05-01"
 		expected := "2023-05-01"
-		sourceTimeFormat := "YYYY/MM-DD"
+		sourceTimeFormat := []string{"YYYY/MM-DD"}
 		outPutType := "DATE"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
@@ -173,7 +173,7 @@ func TestParseDateTime(t *testing.T) {
 	t.Run("should return error when input string has invalid format", func(t *testing.T) {
 		data := "Jan/23/01"
 		expected := "2001-01-23"
-		sourceTimeFormat := "MMM/DD/YY"
+		sourceTimeFormat := []string{"MMM/DD/YY"}
 		outPutType := "DATE"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
@@ -185,7 +185,7 @@ func TestParseDateTime(t *testing.T) {
 	t.Run("should return empty string when input is empty string", func(t *testing.T) {
 		data := ""
 		expected := ""
-		sourceTimeFormat := "yyyy-MM-dd"
+		sourceTimeFormat := []string{"yyyy-MM-dd"}
 		outPutType := "DATE"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
@@ -196,7 +196,7 @@ func TestParseDateTime(t *testing.T) {
 
 	t.Run("should return error when input is invalid type", func(t *testing.T) {
 		data := true
-		sourceTimeFormat := "yyyy-MM-dd"
+		sourceTimeFormat := []string{"yyyy-MM-dd"}
 		outPutType := "DATE"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)
@@ -207,7 +207,7 @@ func TestParseDateTime(t *testing.T) {
 
 	t.Run("should return error when output type is unrecognized", func(t *testing.T) {
 		data := 44197.0 // corresponds to 2021-01-01
-		sourceTimeFormat := ""
+		sourceTimeFormat := []string{""}
 		outPutType := "UNKNOWN"
 
 		result, err := maxcompute.ParseDateTime(data, sourceTimeFormat, outPutType)

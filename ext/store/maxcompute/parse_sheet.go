@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/goto/optimus/internal/errors"
@@ -63,21 +64,28 @@ func ParseNum(data any, precision int) (string, error) {
 	return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseFloat: invalid incoming data: [%v] type for Parsing Float, Got:%s", data, reflect.TypeOf(data)))
 }
 
-func ParseDateTime(data any, sourceTimeFormat, outPutType string) (string, error) {
+func ParseDateTime(data any, sourceTimeFormats []string, outPutType string) (string, error) {
 	var parsedTime time.Time
 	switch data := data.(type) {
 	case float64:
 		milliSeconds := int(data * millisecondsInDay)
 		parsedTime = googleSheetsStartTimeReference.Add(time.Millisecond * time.Duration(milliSeconds))
 	case string:
-		if data == "" || sourceTimeFormat == "" {
+		if data == "" || len(sourceTimeFormats) == 0 {
 			return data, nil
 		}
 		var err error
-		goTimeLayout := utils.ConvertTimeToGoLayout(sourceTimeFormat)
-		parsedTime, err = time.Parse(goTimeLayout, data)
+		var goTimeLayouts []string
+		for _, format := range sourceTimeFormats {
+			goTimeLayout := utils.ConvertTimeToGoLayout(format)
+			parsedTime, err = time.Parse(goTimeLayout, data)
+			if err == nil {
+				break
+			}
+			goTimeLayouts = append(goTimeLayouts, goTimeLayout)
+		}
 		if err != nil {
-			return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: error parsing date time , source_time_format: '%s', Corresponding goTimeLayout: '%s', incomming Data: '%s'", sourceTimeFormat, goTimeLayout, data))
+			return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: error parsing date time, tried source_time_formats: [%s], Corresponding goTimeLayout: [%s], incomming Data: '%s'", strings.Join(sourceTimeFormats, " | "), strings.Join(goTimeLayouts, " | "), data))
 		}
 	default:
 		return "", errors.InvalidArgument(EntityFormatter, fmt.Sprintf("ParseDateTime: invalid incoming data: [%v] type for Parsing DateTime/Date, Got:%s", data, reflect.TypeOf(data)))
@@ -130,7 +138,13 @@ func formatSheetData(colIndex int, data any, schema Schema) (string, error) {
 	case "BOOLEAN":
 		return ParseBool(data)
 	case "DATETIME", "DATE", "TIMESTAMP", "TIMESTAMP_NTZ":
-		return ParseDateTime(data, colSchema.SourceTimeFormat, colSchema.Type)
+		var sourceTimeFormats []string
+		if colSchema.SourceTimeFormat != "" {
+			sourceTimeFormats = append(sourceTimeFormats, colSchema.SourceTimeFormat)
+		} else {
+			sourceTimeFormats = colSchema.SourceTimeFormats
+		}
+		return ParseDateTime(data, sourceTimeFormats, colSchema.Type)
 	default:
 		val, err := ParseString(data)
 		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("Parsing MaxCompute:'%s'", colSchema.Type), err)

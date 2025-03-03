@@ -44,12 +44,12 @@ func NewClient(svcAccount string) (*MaxComputeClient, error) {
 	return &MaxComputeClient{odpsIns}, nil
 }
 
-func (c *MaxComputeClient) TableHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
+func (c *MaxComputeClient) TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle {
 	c.SetDefaultProjectName(projectSchema.Project)
 	c.SetCurrentSchemaName(projectSchema.Schema)
 	s := c.Schemas()
 	t := c.Tables()
-	return NewTableHandle(c, s, t)
+	return NewTableHandle(c, s, t, maskingPolicyHandle)
 }
 
 func (c *MaxComputeClient) ExternalTableHandleFrom(projectSchema ProjectSchema, getter TenantDetailsGetter) TableResourceHandle {
@@ -66,6 +66,14 @@ func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableReso
 	s := c.Schemas()
 	t := c.Tables()
 	return NewViewHandle(c, s, t)
+}
+
+func (c *MaxComputeClient) TableMaskingPolicyHandleFrom(projectSchema ProjectSchema) TableMaskingPolicyHandle {
+	c.SetDefaultProjectName(projectSchema.Project)
+	c.SetCurrentSchemaName(projectSchema.Schema)
+	t := c.Tables()
+	w := McTableWrapper{t}
+	return NewMaskingPolicyHandle(c, w)
 }
 
 func (c *MaxComputeClient) GetDDLView(_ context.Context, table string) (string, error) {

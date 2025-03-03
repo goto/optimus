@@ -442,6 +442,29 @@ func TestFieldValidate(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "unknown field type")
 		})
+		t.Run("returns error when mask policy has invalid characters", func(t *testing.T) {
+			f := maxcompute.Field{
+				Name:       "name",
+				Type:       "string",
+				MaskPolicy: "mask_policy@@",
+			}
+
+			err := f.Validate()
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "mask policy contains invalid characters")
+		})
+		t.Run("returns error when unmask policy has invalid characters", func(t *testing.T) {
+			f := maxcompute.Field{
+				Name:         "name",
+				Type:         "string",
+				MaskPolicy:   "mask_policy",
+				UnmaskPolicy: "unmask_policy@@",
+			}
+
+			err := f.Validate()
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "unmask policy contains invalid characters")
+		})
 	})
 	t.Run("return success when field schema is valid", func(t *testing.T) {
 		f := maxcompute.Field{

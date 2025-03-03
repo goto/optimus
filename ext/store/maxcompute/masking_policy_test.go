@@ -16,7 +16,6 @@ func TestMaskingPolicyHandle(t *testing.T) {
 	accessID, accessKey, endpoint := "access_id", "access_key", "http://service.ap-southeast-5.maxcompute.aliyun.com/api"
 	projectName, schemaName, tableName := "proj", "schema", "test"
 	odpsInstance := odps.NewInstance(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, "")
-	tableFullName := "proj.schema.test"
 
 	tbl := maxcompute.Table{
 		Name:     tableName,
@@ -32,7 +31,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 	t.Run("Process", func(t *testing.T) {
 		t.Run("returns error when not able to get table", func(t *testing.T) {
 			mockTables := new(mockMcTables)
-			mockTables.On("BatchLoadTables", []string{tableFullName}).Return(nil, errors.New("error fetching table detail"))
+			mockTables.On("BatchLoadTables", []string{tableName}).Return(nil, errors.New("error fetching table detail"))
 			defer mockTables.AssertExpectations(t)
 
 			mockSQLExecutor := new(mockOdpsIns)
@@ -50,7 +49,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			defer mockTableIns.AssertExpectations(t)
 
 			mockTables := new(mockMcTables)
-			mockTables.On("BatchLoadTables", []string{tableFullName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
+			mockTables.On("BatchLoadTables", []string{tableName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
 			defer mockTables.AssertExpectations(t)
 
 			mockSQLExecutor := new(mockOdpsIns)
@@ -69,7 +68,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			defer mockTableIns.AssertExpectations(t)
 
 			mockTables := new(mockMcTables)
-			mockTables.On("BatchLoadTables", []string{tableFullName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
+			mockTables.On("BatchLoadTables", []string{tableName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
 			defer mockTables.AssertExpectations(t)
 
 			mockSQLExecutor := new(mockOdpsIns)
@@ -91,7 +90,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			defer mockTableIns.AssertExpectations(t)
 
 			mockTables := new(mockMcTables)
-			mockTables.On("BatchLoadTables", []string{tableFullName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
+			mockTables.On("BatchLoadTables", []string{tableName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
 			defer mockTables.AssertExpectations(t)
 
 			mockSQLExecutor := new(mockOdpsIns)
@@ -116,7 +115,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			defer mockTableIns.AssertExpectations(t)
 
 			mockTables := new(mockMcTables)
-			mockTables.On("BatchLoadTables", []string{tableFullName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
+			mockTables.On("BatchLoadTables", []string{tableName}).Return([]maxcompute.McTableInstance{mockTableIns}, nil)
 			defer mockTables.AssertExpectations(t)
 
 			mockSQLExecutor := new(mockOdpsIns)

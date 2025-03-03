@@ -38,7 +38,7 @@ func NewMaskingPolicyHandle(mcSQLExecutor McSQLExecutor, mcTables McTables) Tabl
 
 func (h MaskingPolicyHandle) Process(table *Table) error {
 	newMaskPolicies := h.getNewMaskPolicies(table)
-	existingMaskPolicies, err := h.getExistingMaskPolicies(table.FullName())
+	existingMaskPolicies, err := h.getExistingMaskPolicies(table.Name)
 	if err != nil {
 		return err
 	}

@@ -27,6 +27,15 @@ const (
 	useQuoteSerde     = "odps.text.option.use.quote"
 )
 
+var validInfinityValues = map[string]struct{}{
+	"Infinity":  {},
+	"+Infinity": {},
+	"-Infinity": {},
+	"+Inf":      {},
+	"Inf":       {},
+	"-Inf":      {},
+}
+
 type SyncerService struct {
 	secretProvider      SecretProvider
 	tenantDetailsGetter TenantDetailsGetter
@@ -145,6 +154,11 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, 
 				if strings.HasPrefix(d, "#REF!") || strings.HasPrefix(d, "#N/A") {
 					err = nil
 					value = ""
+				} else {
+					if _, ok := validInfinityValues[d]; ok { // check infinity
+						err = nil
+						value = d
+					}
 				}
 			}
 		}

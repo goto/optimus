@@ -37,7 +37,7 @@ func TestWindowFactory(t *testing.T) {
 			config, err := window.NewPresetConfig("yesterday")
 			assert.NoError(t, err)
 
-			_, err = window.From[Preset](config, "", func(name string) (Preset, error) {
+			_, err = window.From[Preset](config, "", func(_ string) (Preset, error) {
 				return Preset{}, errors.New("cannot get window")
 			})
 			assert.Error(t, err)
@@ -46,7 +46,7 @@ func TestWindowFactory(t *testing.T) {
 			config, err := window.NewPresetConfig("yesterday")
 			assert.NoError(t, err)
 
-			w, err := window.From[Preset](config, "", func(name string) (Preset, error) {
+			w, err := window.From[Preset](config, "", func(_ string) (Preset, error) {
 				conf := window.SimpleConfig{
 					Size:       "1d",
 					ShiftBy:    "",
@@ -70,7 +70,7 @@ func TestWindowFactory(t *testing.T) {
 			config, err := window.NewConfig("1d", "", "", "")
 			assert.NoError(t, err)
 
-			w, err := window.From[Preset](config, "", func(name string) (Preset, error) {
+			w, err := window.From[Preset](config, "", func(_ string) (Preset, error) {
 				return Preset{
 					Name:   "yesterday",
 					config: config.GetSimpleConfig(),

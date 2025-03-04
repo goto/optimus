@@ -16,7 +16,7 @@ type windowV2 struct {
 }
 
 func (windowV2) GetVersion() int {
-	return 2 //nolint:gomnd
+	return 2 //nolint:mnd
 }
 
 func (w windowV2) Validate() error {

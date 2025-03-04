@@ -51,6 +51,12 @@ type AlertAttrs struct {
 	EventType ChangeType
 }
 
+type SyncStatus struct {
+	ResourceName string
+	Success      bool
+	ErrorMsg     string
+}
+
 func (m *Metadata) Validate() error {
 	if m == nil {
 		return errors.InvalidArgument(EntityResource, "metadata is nil")
@@ -78,6 +84,7 @@ func NameFrom(name string) (Name, error) {
 	return Name(cleaned), nil
 }
 
+// Deprecated: Sections is deprecated. move to warehouse
 func (n Name) Sections() []string {
 	return strings.Split(n.String(), nameSectionSeparator)
 }

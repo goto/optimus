@@ -3,12 +3,17 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+)
+
+const (
+	KindExternalTable string = "external_table"
 )
 
 type DataStore interface {
@@ -23,6 +28,10 @@ type DataStore interface {
 
 type ResourceStatusRepo interface {
 	UpdateStatus(ctx context.Context, res ...*resource.Resource) error
+}
+
+type StatusRepo interface {
+	GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error)
 }
 
 type ResourceMgr struct {
@@ -43,14 +52,14 @@ func (m *ResourceMgr) CreateResource(ctx context.Context, res *resource.Resource
 	}
 
 	me := errors.NewMultiError("error in create resource")
-	if err := datastore.Create(ctx, res); err != nil {
+	err := datastore.Create(ctx, res)
+	if err != nil {
 		m.logger.Error("error creating resource [%s] to datastore [%s]: %s", res.FullName(), store.String(), err)
-
 		if errors.IsErrorType(err, errors.ErrAlreadyExists) {
 			me.Append(res.MarkExistInStore())
 		} else {
-			me.Append(res.MarkFailure())
 			me.Append(err)
+			me.Append(res.MarkFailure())
 		}
 	} else {
 		me.Append(res.MarkSuccess())
@@ -91,7 +100,8 @@ func (m *ResourceMgr) SyncResource(ctx context.Context, res *resource.Resource) 
 		return errors.InternalError(resource.EntityResource, msg, nil)
 	}
 
-	if err := datastore.Create(ctx, res); err != nil {
+	err := datastore.Create(ctx, res)
+	if err != nil {
 		if !errors.IsErrorType(err, errors.ErrAlreadyExists) {
 			return errors.AddErrContext(err, resource.EntityResource, "unable to create on datastore")
 		} else if errUpdate := datastore.Update(ctx, res); errUpdate != nil {

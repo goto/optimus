@@ -11,15 +11,19 @@ import (
 
 	serviceResource "github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/store/bigquery"
 	"github.com/goto/optimus/internal/errors"
 	repoResource "github.com/goto/optimus/internal/store/postgres/resource"
 	tenantPostgres "github.com/goto/optimus/internal/store/postgres/tenant"
+	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/tests/setup"
 )
 
 func TestPostgresResourceRepository(t *testing.T) {
 	ctx := context.Background()
 	tnnt, err := tenant.NewTenant("t-optimus-1", "n-optimus-1")
+	assert.NoError(t, err)
+	tnnt2, err := tenant.NewTenant("t-optimus-1", "n-optimus-2")
 	assert.NoError(t, err)
 	spec := map[string]any{
 		"description": "spec for test",
@@ -231,6 +235,63 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NotEmpty(t, actualResources)
 			assert.NoError(t, actualError)
 			assert.EqualValues(t, []*serviceResource.Resource{resourceToCreate}, actualResources)
+		})
+	})
+
+	t.Run("ReadExternal", func(t *testing.T) {
+		t.Run("returns resources for project if no filter", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset.table1", bigquery.KindExternalTable, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			actualResources, actualError := repository.GetExternal(ctx, tnnt.ProjectName(), store, nil)
+			assert.NoError(t, actualError)
+			assert.Equal(t, len(actualResources), 1)
+		})
+
+		t.Run("returns resource for namespaces if specified", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset.table1", bigquery.KindExternalTable, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+			resourceToCreate2, err := serviceResource.NewResource("project.dataset.table2", bigquery.KindExternalTable, store, tnnt2, meta, spec)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, resourceToCreate2)
+			assert.NoError(t, err)
+
+			opts := []filter.FilterOpt{filter.WithString(filter.NamespaceName, tnnt.NamespaceName().String())}
+			actualResources, actualError := repository.GetExternal(ctx, tnnt.ProjectName(), store, opts)
+			assert.NoError(t, actualError)
+			assert.Equal(t, len(actualResources), 1)
+		})
+		t.Run("returns resource for table if specified", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreate, err := serviceResource.NewResource("project.dataset.table1", bigquery.KindExternalTable, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+			resourceToCreate2, err := serviceResource.NewResource("project.dataset.table2", bigquery.KindExternalTable, store, tnnt2, meta, spec)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, resourceToCreate2)
+			assert.NoError(t, err)
+
+			opts := []filter.FilterOpt{
+				filter.WithString(filter.NamespaceName, tnnt.NamespaceName().String()),
+				filter.WithString(filter.TableName, resourceToCreate.FullName()),
+			}
+			actualResources, actualError := repository.GetExternal(ctx, tnnt.ProjectName(), store, opts)
+			assert.NoError(t, actualError)
+			assert.Equal(t, len(actualResources), 1)
 		})
 	})
 

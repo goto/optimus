@@ -14,6 +14,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 const (
@@ -234,7 +235,6 @@ func (r Repository) ReadByFullName(ctx context.Context, tnnt tenant.Tenant, stor
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(resource.EntityResource, fmt.Sprintf("no resource: '%s' found for project:%s, namespace:%s ", fullName, tnnt.ProjectName(), tnnt.NamespaceName()))
 		}
-
 		return nil, errors.Wrap(resource.EntityResource, fmt.Sprintf("error reading resource: '%s' found for project:%s, namespace:%s ", fullName, tnnt.ProjectName(), tnnt.NamespaceName()), err)
 	}
 
@@ -253,6 +253,48 @@ func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resou
 	rows, err := r.db.Query(ctx, getAllResources, args...)
 	if err != nil {
 		return nil, errors.Wrap(resource.EntityResource, "error in ReadAll", err)
+	}
+	defer rows.Close()
+
+	var resources []*resource.Resource
+	for rows.Next() {
+		var res Resource
+		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+		if err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error in GetAll", err)
+		}
+
+		resourceModel, err := FromModelToResource(&res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resourceModel)
+	}
+
+	return resources, nil
+}
+
+func (r Repository) GetExternal(ctx context.Context, projName tenant.ProjectName, store resource.Store, filters []filter.FilterOpt) ([]*resource.Resource, error) {
+	getExternal := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and store = $2 and kind = 'external_table' AND status NOT IN ($3, $4)`
+	args := []any{projName, store, resource.StatusDeleted, resource.StatusToDelete}
+
+	f := filter.NewFilter(filters...)
+	if f.Contains(filter.NamespaceName) {
+		getExternal += " and namespace_name = $5"
+		namespaceName := f.GetStringValue(filter.NamespaceName)
+		args = append(args, namespaceName)
+
+		if f.Contains(filter.TableName) {
+			getExternal += " and full_name = $6"
+			tableName := f.GetStringValue(filter.TableName)
+			args = append(args, tableName)
+		}
+	}
+
+	rows, err := r.db.Query(ctx, getExternal, args...)
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, "error in GetExternal", err)
 	}
 	defer rows.Close()
 
@@ -323,6 +365,17 @@ func (r Repository) UpdateStatus(ctx context.Context, resources ...*resource.Res
 	}
 
 	return multiErr.ToErr()
+}
+
+func (r Repository) UpdateETLastSync(ctx context.Context, res *resource.Resource) error {
+	updateQuery := `UPDATE resource SET metadata=$1 WHERE project_name = $2 AND namespace_name = $3 AND store = $4 AND full_name = $5`
+
+	_, err := r.db.Exec(ctx, updateQuery, res.Metadata(), res.Tenant().ProjectName(), res.Tenant().NamespaceName(), res.Store(), res.FullName())
+	if err != nil {
+		return err
+	}
+
+	return errors.WrapIfErr(tenant.EntityNamespace, "error updating resource to database", err)
 }
 
 func (r Repository) GetChangelogs(ctx context.Context, projectName tenant.ProjectName, resourceName resource.Name) ([]*resource.ChangeLog, error) {

@@ -100,9 +100,9 @@ func ToViewSQL(v *View) (string, error) {
 		},
 	}
 
-	tplStr := `create or replace view {{ .Database }}.{{ .Name }} {{ if .Columns }}
-	({{ join ", " .Columns }}) {{ end }} {{ if .Description }} 
-	comment '{{ .Description}}' {{ end }} 
+	tplStr := `create or replace view {{ .Database }}.{{ .Name }}{{ if .Columns }}
+	({{ join ", " .Columns }}){{ end }}{{ if .Description }}
+	comment '{{ .Description}}'{{ end }}
 	as
 	{{ .ViewQuery}};`
 

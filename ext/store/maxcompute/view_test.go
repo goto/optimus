@@ -253,9 +253,9 @@ func TestToViewSQL(t *testing.T) {
 				},
 			},
 			want: `create or replace view schema.test_view
-    (a, b, c)  
-    comment 'Create Test View'  
-    as
+	(a, b, c)
+	comment 'Create Test View'
+	as
 	select a, b, c from t1;`,
 			wantErr: nil,
 		},
@@ -271,8 +271,8 @@ func TestToViewSQL(t *testing.T) {
 				},
 			},
 			want: `create or replace view schema.test_view
-    (a, b, c)  
-    as
+	(a, b, c)
+	as
 	select a, b, c from t1;`,
 			wantErr: nil,
 		},

@@ -29,9 +29,5 @@ func (v *View) Validate() error {
 		return errors.InvalidArgument(EntityView, "view query is empty for "+v.FullName())
 	}
 
-	if len(v.Columns) == 0 {
-		return errors.InvalidArgument(EntityView, "column names not provided for "+v.FullName())
-	}
-
 	return nil
 }

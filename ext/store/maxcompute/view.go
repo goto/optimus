@@ -100,10 +100,10 @@ func ToViewSQL(v *View) (string, error) {
 		},
 	}
 
-	tplStr := `create or replace view {{ .Database }}.{{ .Name }}
-    ({{ join ", " .Columns }}) {{ if .Description }} 
-    comment '{{ .Description}}' {{ end }} 
-    as
+	tplStr := `create or replace view {{ .Database }}.{{ .Name }} {{ if .Columns }}
+	({{ join ", " .Columns }}) {{ end }} {{ if .Description }} 
+	comment '{{ .Description}}' {{ end }} 
+	as
 	{{ .ViewQuery}};`
 
 	tpl, err := template.New("DDL_UPSERT_VIEW").Funcs(fns).Parse(tplStr)

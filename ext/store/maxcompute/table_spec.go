@@ -31,8 +31,9 @@ type Table struct {
 	Partition   *Partition `mapstructure:"partition,omitempty"`
 	Lifecycle   int        `mapstructure:"lifecycle,omitempty"`
 
-	Hints       map[string]string      `mapstructure:"hints,omitempty"`
-	ExtraConfig map[string]interface{} `mapstructure:",remain"`
+	TableProperties map[string]string      `mapstructure:"table_properties,omitempty"`
+	Hints           map[string]string      `mapstructure:"hints,omitempty"`
+	ExtraConfig     map[string]interface{} `mapstructure:",remain"`
 }
 
 func (t *Table) FullName() string {

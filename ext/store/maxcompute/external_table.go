@@ -153,7 +153,7 @@ func buildExternalTableSchema(t *ExternalTable, location string) (tableschema.Ta
 func externalTableColumns(t *ExternalTable, schemaBuilder *tableschema.SchemaBuilder) error {
 	partitionColNames := map[string]struct{}{}
 
-	return t.Schema.ToMaxComputeColumns(partitionColNames, nil, schemaBuilder)
+	return t.Schema.ToMaxComputeColumns(partitionColNames, nil, schemaBuilder, "external")
 }
 
 func ToOtherExternalSQLString(projectName, schemaName string, serdeProperties map[string]string, schema tableschema.TableSchema, format string) (string, error) {

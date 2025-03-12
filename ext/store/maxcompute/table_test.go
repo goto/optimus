@@ -35,6 +35,11 @@ func (m *mockMaxComputeTable) BatchLoadTables(tableNames []string) ([]*odps.Tabl
 	return args.Get(0).([]*odps.Table), args.Error(1)
 }
 
+func (m *mockMaxComputeTable) CreateView(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool) error {
+	args := m.Called(schema, orReplace, createIfNotExists, buildDeferred)
+	return args.Error(0)
+}
+
 type mockMaxComputeSchema struct {
 	mock.Mock
 }
@@ -46,11 +51,6 @@ func (m *mockMaxComputeSchema) Create(schemaName string, createIfNotExists bool,
 
 type mockOdpsIns struct {
 	mock.Mock
-}
-
-func (m *mockOdpsIns) ExecSQl(sql string, hints ...map[string]string) (*odps.Instance, error) { // nolint
-	args := m.Called(sql)
-	return args.Get(0).(*odps.Instance), args.Error(1)
 }
 
 func (m *mockOdpsIns) ExecSQlWithHints(sql string, hints map[string]string) (*odps.Instance, error) { // nolint
@@ -246,7 +246,7 @@ func TestTableHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "error while creating table on maxcompute")
 		})
-		t.Run("return success when create the resource with partition", func(t *testing.T) {
+		t.Run("return success when create common table with partition", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("Create", mock.Anything, false, emptyStringMap, emptyStringMap).Return(nil)
 			defer table.AssertExpectations(t)
@@ -287,6 +287,50 @@ func TestTableHandle(t *testing.T) {
 				"partition": map[string]any{
 					"field": []string{"customer_id"},
 				},
+			}
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = tableHandle.Create(res)
+			assert.Nil(t, err)
+		})
+		t.Run("return success when create transactional or delta table with partition", func(t *testing.T) {
+			table := new(mockMaxComputeTable)
+			table.On("Create", mock.Anything, false, emptyStringMap, emptyStringMap).Return(nil)
+			defer table.AssertExpectations(t)
+			schema := new(mockMaxComputeSchema)
+			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
+			defer schema.AssertExpectations(t)
+			odpsIns := new(mockOdpsIns)
+			odpsIns.On("CurrentSchemaName").Return(schemaName)
+			defer odpsIns.AssertExpectations(t)
+
+			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
+			tableMaskingPolicyHandle.On("Process", mock.Anything).Return(nil)
+			defer tableMaskingPolicyHandle.AssertExpectations(t)
+
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+
+			spec := map[string]any{
+				"description": "test create",
+				"schema": []map[string]any{
+					{
+						"name": "customer_id",
+						"type": "STRING",
+					},
+					{
+						"name": "customer_name",
+						"type": "STRING",
+					},
+					{
+						"name": "product_name",
+						"type": "STRING",
+					},
+				},
+				"partition": map[string]any{
+					"field": []string{"customer_id"},
+				},
+				"type": "transactional",
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)

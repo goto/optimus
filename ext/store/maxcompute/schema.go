@@ -36,7 +36,7 @@ func (s Schema) Validate() error {
 	return nil
 }
 
-func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, clusterColumn *Cluster, schemaBuilder *tableschema.SchemaBuilder) error {
+func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, clusterColumn *Cluster, schemaBuilder *tableschema.SchemaBuilder, tableType string) error {
 	mu := errors.NewMultiError("converting to max compute column")
 
 	clusterColumnAllowed := map[string]struct{}{}
@@ -48,47 +48,53 @@ func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, cluster
 		}
 
 		if _, ok := partitionColumn[f.Name]; ok {
-			schemaBuilder.PartitionColumn(column)
+			schemaBuilder.PartitionColumn(tableschema.Column{
+				Name:               "_partition_value",
+				Type:               datatype.StringType,
+				GenerateExpression: tableschema.NewTruncTime(column.Name, tableschema.DAY),
+			})
 		} else {
-			schemaBuilder.Column(column)
 			clusterColumnAllowed[column.Name] = struct{}{}
 		}
+		schemaBuilder.Column(column)
 	}
 
-	if clusterColumn != nil && len(clusterColumn.Using) != 0 {
-		if clusterColumn.Type == "" {
-			clusterColumn.Type = tableschema.CLUSTER_TYPE.Hash
-		}
-		schemaBuilder.ClusterType(clusterColumn.Type)
-
-		if clusterColumn.Type == tableschema.CLUSTER_TYPE.Hash {
-			if clusterColumn.Buckets == 0 {
-				mu.Append(errors.InvalidArgument(resourceSchema, "number of cluster buckets is needed for hash type clustering"))
-				return mu.ToErr()
+	if tableType == "" || tableType == "common" {
+		if clusterColumn != nil && len(clusterColumn.Using) != 0 {
+			if clusterColumn.Type == "" {
+				clusterColumn.Type = tableschema.CLUSTER_TYPE.Hash
 			}
-			schemaBuilder.ClusterBucketNum(clusterColumn.Buckets)
-		}
+			schemaBuilder.ClusterType(clusterColumn.Type)
 
-		sortClusterAllowed := map[string]struct{}{}
-		for _, column := range clusterColumn.Using {
-			if _, ok := clusterColumnAllowed[column]; !ok {
-				mu.Append(errors.InvalidArgument(resourceSchema, fmt.Sprintf("cluster column %s not found in normal column", column)))
-				return mu.ToErr()
-			}
-			sortClusterAllowed[column] = struct{}{}
-		}
-		schemaBuilder.ClusterColumns(clusterColumn.Using)
-
-		if len(clusterColumn.SortBy) != 0 {
-			var sortClusterColumn []tableschema.SortColumn
-			for _, sortColumn := range clusterColumn.SortBy {
-				if _, ok := sortClusterAllowed[sortColumn.Name]; !ok {
-					mu.Append(errors.InvalidArgument(resourceSchema, fmt.Sprintf("sort column %s not found in cluster column", sortColumn.Name)))
+			if clusterColumn.Type == tableschema.CLUSTER_TYPE.Hash {
+				if clusterColumn.Buckets == 0 {
+					mu.Append(errors.InvalidArgument(resourceSchema, "number of cluster buckets is needed for hash type clustering"))
 					return mu.ToErr()
 				}
-				sortClusterColumn = append(sortClusterColumn, tableschema.SortColumn{Name: sortColumn.Name, Order: tableschema.SortOrder(sortColumn.Order)})
+				schemaBuilder.ClusterBucketNum(clusterColumn.Buckets)
 			}
-			schemaBuilder.ClusterSortColumns(sortClusterColumn)
+
+			sortClusterAllowed := map[string]struct{}{}
+			for _, column := range clusterColumn.Using {
+				if _, ok := clusterColumnAllowed[column]; !ok {
+					mu.Append(errors.InvalidArgument(resourceSchema, fmt.Sprintf("cluster column %s not found in normal column", column)))
+					return mu.ToErr()
+				}
+				sortClusterAllowed[column] = struct{}{}
+			}
+			schemaBuilder.ClusterColumns(clusterColumn.Using)
+
+			if len(clusterColumn.SortBy) != 0 {
+				var sortClusterColumn []tableschema.SortColumn
+				for _, sortColumn := range clusterColumn.SortBy {
+					if _, ok := sortClusterAllowed[sortColumn.Name]; !ok {
+						mu.Append(errors.InvalidArgument(resourceSchema, fmt.Sprintf("sort column %s not found in cluster column", sortColumn.Name)))
+						return mu.ToErr()
+					}
+					sortClusterColumn = append(sortClusterColumn, tableschema.SortColumn{Name: sortColumn.Name, Order: tableschema.SortOrder(sortColumn.Order)})
+				}
+				schemaBuilder.ClusterSortColumns(sortClusterColumn)
+			}
 		}
 	}
 
@@ -203,11 +209,11 @@ func (f *Field) ToColumn() (tableschema.Column, error) {
 		Type:           dataType,
 		Comment:        f.Description,
 		ExtendedLabels: nil,
-		IsNullable:     true,
+		NotNull:        false,
 	}
 
 	if f.Required {
-		c1.IsNullable = false
+		c1.NotNull = true
 	}
 
 	if f.DefaultValue != "" {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
+	"github.com/aliyun/aliyun-odps-go-sdk/odps/common"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/datatype"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 
@@ -138,7 +139,10 @@ func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
 		return tableschema.TableSchema{}, err
 	}
 
-	return builder.Build(), nil
+	if t.Type == "" || t.Type == "common" {
+		return builder.Build(), nil
+	}
+	return builder.TblProperties(map[string]string{"transactional": "true"}).Build(), nil
 }
 
 func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
@@ -147,13 +151,13 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 		partitionColNames = utils.ListToMap(t.Partition.Columns)
 	}
 
-	return t.Schema.ToMaxComputeColumns(partitionColNames, t.Cluster, schemaBuilder)
+	return t.Schema.ToMaxComputeColumns(partitionColNames, t.Cluster, schemaBuilder, t.Type)
 }
 
 func generateUpdateQuery(incoming, existing tableschema.TableSchema, schemaName string) ([]string, error) {
 	var sqlTasks []string
 	if incoming.Comment != existing.Comment {
-		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set comment '%s';", schemaName, existing.TableName, incoming.Comment))
+		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set comment %s;", schemaName, existing.TableName, common.QuoteString(incoming.Comment)))
 	}
 
 	if incoming.Lifecycle != existing.Lifecycle {
@@ -186,7 +190,7 @@ func trackSchema(parent string, column tableschema.Column, columnCollection map[
 			Name:            column.Name,
 			Type:            column.Type,
 			Comment:         column.Comment,
-			IsNullable:      true,
+			NotNull:         false,
 			HasDefaultValue: false,
 		}, columnCollection, columnList, isExistingTable)
 
@@ -203,7 +207,7 @@ func trackSchema(parent string, column tableschema.Column, columnCollection map[
 				tableschema.Column{
 					Name:            field.Name,
 					Type:            field.Type,
-					IsNullable:      true,
+					NotNull:         false,
 					HasDefaultValue: false,
 				},
 				columnCollection,
@@ -232,12 +236,12 @@ func storeColumn(key string, column tableschema.Column, columnCollection map[str
 
 func specifyColumnStructure(parent, columnName string, isArrayStruct bool) string {
 	if parent == "" {
-		return columnName
+		return fmt.Sprintf("`%s`", columnName)
 	}
 	if isArrayStruct {
-		return fmt.Sprintf("%s.element.%s", parent, columnName)
+		return fmt.Sprintf("%s.element.`%s`", parent, columnName)
 	}
-	return fmt.Sprintf("%s.%s", parent, columnName)
+	return fmt.Sprintf("%s.`%s`", parent, columnName)
 }
 
 func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnRecord, existing map[string]tableschema.Column, sqlTasks *[]string) error {
@@ -245,23 +249,20 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 	for _, incomingColumnRecord := range incoming {
 		columnFound, ok := existing[incomingColumnRecord.columnStructure]
 		if !ok {
-			if !incomingColumnRecord.columnValue.IsNullable {
+			if incomingColumnRecord.columnValue.NotNull {
 				return fmt.Errorf("unable to add new required column")
 			}
 			segment := fmt.Sprintf("if not exists %s %s", incomingColumnRecord.columnStructure, incomingColumnRecord.columnValue.Type.Name())
-			if incomingColumnRecord.columnValue.HasDefaultValue {
-				segment += fmt.Sprintf(" default %s", incomingColumnRecord.columnValue.DefaultValue)
-			}
 			if incomingColumnRecord.columnValue.Comment != "" {
-				segment += fmt.Sprintf(" comment '%s'", incomingColumnRecord.columnValue.Comment)
+				segment += fmt.Sprintf(" comment %s", common.QuoteString(incomingColumnRecord.columnValue.Comment))
 			}
 			columnAddition = append(columnAddition, segment)
 			continue
 		}
 
-		if columnFound.IsNullable && !incomingColumnRecord.columnValue.IsNullable {
+		if !columnFound.NotNull && incomingColumnRecord.columnValue.NotNull {
 			return fmt.Errorf("unable to modify column mode from nullable to required")
-		} else if !columnFound.IsNullable && incomingColumnRecord.columnValue.IsNullable {
+		} else if columnFound.NotNull && !incomingColumnRecord.columnValue.NotNull {
 			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s null;", schemaName, tableName, columnFound.Name))
 		}
 
@@ -270,8 +271,8 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 		}
 
 		if incomingColumnRecord.columnValue.Comment != columnFound.Comment {
-			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment '%s';",
-				schemaName, tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, incomingColumnRecord.columnValue.Comment))
+			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment %s;",
+				schemaName, tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, common.QuoteString(incomingColumnRecord.columnValue.Comment)))
 		}
 		delete(existing, incomingColumnRecord.columnStructure)
 	}

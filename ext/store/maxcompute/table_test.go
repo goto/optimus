@@ -304,7 +304,12 @@ func TestTableHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table)
+
+			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
+			tableMaskingPolicyHandle.On("Process", mock.Anything).Return(nil)
+			defer tableMaskingPolicyHandle.AssertExpectations(t)
+
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
 
 			spec := map[string]any{
 				"description": "test create",

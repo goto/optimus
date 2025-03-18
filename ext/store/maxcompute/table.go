@@ -132,7 +132,8 @@ func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
 	builder.
 		Name(t.Name).
 		Comment(t.Description).
-		Lifecycle(t.Lifecycle)
+		Lifecycle(t.Lifecycle).
+		TblProperties(t.TableProperties)
 
 	err := populateColumns(t, builder)
 	if err != nil {

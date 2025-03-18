@@ -287,6 +287,9 @@ func TestTableHandle(t *testing.T) {
 				"partition": map[string]any{
 					"field": []string{"customer_id"},
 				},
+				"table_properties": map[string]string{
+					"config": "value",
+				},
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)

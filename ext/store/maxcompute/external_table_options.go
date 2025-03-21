@@ -19,6 +19,7 @@ const (
 	Parquet     string = "PARQUET"
 	Avro        string = "AVRO"
 	GoogleSheet string = "GOOGLE_SHEETS"
+	GoogleDrive string = "GOOGLE_DRIVE"
 	LarkSheets  string = "LARK_SHEETS"
 )
 
@@ -51,6 +52,7 @@ func handlerForFormat(format string) string {
 		return "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
 	case Avro:
 		return "org.apache.hadoop.hive.serde2.avro.AvroSerDe"
+	default:
+		return CSVHandler
 	}
-	return ""
 }

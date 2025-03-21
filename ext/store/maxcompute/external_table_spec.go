@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/goto/optimus/internal/errors"
 )
@@ -44,8 +45,9 @@ func (e *ExternalTable) Validate() error {
 }
 
 type ExternalSource struct {
-	SourceType string   `mapstructure:"type,omitempty"`
-	SourceURIs []string `mapstructure:"uris,omitempty"`
+	SourceType  string   `mapstructure:"type,omitempty"`
+	ContentType string   `mapstructure:"content_type,omitempty"`
+	SourceURIs  []string `mapstructure:"uris,omitempty"`
 
 	// Additional configs for CSV, GoogleSheets, LarkSheets formats.
 	SerdeProperties map[string]string `mapstructure:"serde_properties"`
@@ -59,18 +61,20 @@ type ExternalSource struct {
 }
 
 func (e ExternalSource) Validate() error {
-	if e.SourceType == "" {
+	switch strings.ToUpper(e.SourceType) {
+	case GoogleSheet, GoogleDrive:
+		if len(e.SourceURIs) == 0 {
+			return errors.InvalidArgument(EntityExternalTable, "source uri list is empty")
+		}
+		for _, uri := range e.SourceURIs {
+			if uri == "" {
+				return errors.InvalidArgument(EntityExternalTable, "uri is empty")
+			}
+		}
+		return nil
+	case "":
 		return errors.InvalidArgument(EntityExternalTable, "source type is empty")
+	default:
+		return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("got: [%s]", e.SourceType))
 	}
-	// TODO: Enable sourceURI validation with sheets
-	// if  len(e.SourceURIs) == 0 {
-	//	return errors.InvalidArgument(EntityExternalTable, "source uri list is empty")
-	//}
-	// for _, uri := range e.SourceURIs {
-	//	if uri == "" {
-	//		return errors.InvalidArgument(EntityExternalTable, "uri is empty")
-	//	}
-	//}
-
-	return nil
 }

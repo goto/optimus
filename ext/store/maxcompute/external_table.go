@@ -110,29 +110,29 @@ func NewExternalTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcEx
 }
 
 func (e ExternalTableHandle) getLocation(ctx context.Context, et *ExternalTable, res *resource.Resource) (string, error) {
-	if !strings.EqualFold(et.Source.SourceType, GoogleSheet) {
+	switch strings.ToUpper(et.Source.SourceType) {
+	case GoogleSheet, GoogleDrive:
+		loc := et.Source.Location
+		if loc == "" {
+			tenantWithDetails, err := e.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
+			if err != nil {
+				return "", err
+			}
+			commonLoc := tenantWithDetails.GetConfigs()[ExtLocation]
+			if commonLoc == "" {
+				err = errors.NotFound(EntityExternalTable, "location for the external table is empty")
+				return "", err
+			}
+			loc = commonLoc
+		}
+		return fmt.Sprintf("%s/%s/", strings.TrimSuffix(loc, "/"), strings.ReplaceAll(et.FullName(), ".", "/")), nil
+	default:
 		return et.Source.Location, nil
 	}
-
-	loc := et.Source.Location
-	if loc == "" {
-		tenantWithDetails, err := e.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
-		if err != nil {
-			return "", err
-		}
-		commonLoc := tenantWithDetails.GetConfigs()[ExtLocation]
-		if commonLoc == "" {
-			err = errors.NotFound(EntityExternalTable, "location for the external table is empty")
-			return "", err
-		}
-		loc = commonLoc
-	}
-
-	return fmt.Sprintf("%s/%s/", strings.TrimSuffix(loc, "/"), strings.ReplaceAll(et.FullName(), ".", "/")), nil
 }
 
 func buildExternalTableSchema(t *ExternalTable, location string) (tableschema.TableSchema, error) {
-	handler := handlerForFormat(t.Source.SourceType)
+	handler := handlerForFormat(t.Source.ContentType)
 
 	builder := tableschema.NewSchemaBuilder()
 	builder.

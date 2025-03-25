@@ -24,7 +24,7 @@ func NewGDrives(ctx context.Context, creds string) (*GDrive, error) {
 
 // DownloadFile downloads a file from Google Drive
 func (gd *GDrive) DownloadFile(fileID string) ([]byte, error) {
-	resp, err := gd.srv.Files.Get(fileID).Download()
+	resp, err := gd.srv.Files.Get(fileID).SupportsAllDrives(true).Download()
 	if err != nil {
 		return nil, fmt.Errorf("failed to download file: %w", err)
 	}
@@ -33,7 +33,7 @@ func (gd *GDrive) DownloadFile(fileID string) ([]byte, error) {
 }
 
 func (gd *GDrive) GetFilesMeta(folderID string) (*drive.FileList, error) {
-	return gd.srv.Files.List().Q(fmt.Sprintf("'%s' in parents", folderID)).
+	return gd.srv.Files.List().Q(fmt.Sprintf("'%s' in parents", folderID)).SupportsAllDrives(true).
 		Fields("files(createdTime,driveId,fileExtension,fullFileExtension,id,kind,lastModifyingUser,mimeType,modifiedTime,name,originalFilename,owners,permissions,properties,webContentLink)").
 		Do()
 }
@@ -44,7 +44,7 @@ func (gd *GDrive) ListDriveEntity(url string) (string, *drive.File, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	file, err := gd.srv.Files.Get(fileID).
+	file, err := gd.srv.Files.Get(fileID).SupportsAllDrives(true).
 		Fields("createdTime", "driveId", "fileExtension", "fullFileExtension",
 			"id", "kind", "lastModifyingUser", "mimeType", "modifiedTime", "name",
 			"originalFilename", "owners", "permissions", "properties", "webContentLink").Do()

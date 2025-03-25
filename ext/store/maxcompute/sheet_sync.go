@@ -3,28 +3,32 @@ package maxcompute
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
+	"google.golang.org/api/drive/v3"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	bucket "github.com/goto/optimus/ext/bucket/oss"
+	"github.com/goto/optimus/ext/sheets/gdrive"
 	"github.com/goto/optimus/ext/sheets/gsheet"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/pool"
 )
 
 const (
-	GsheetCredsKey    = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey       = "OSS_CREDS"
-	putTimeOut        = time.Second * 10
-	ExtLocation       = "EXT_LOCATION"
-	MaxSyncInterval   = 24
-	headersCountSerde = "odps.text.option.header.lines.count"
-	useQuoteSerde     = "odps.text.option.use.quote"
+	GsheetCredsKey       = "GOOGLE_SHEETS_ACCOUNT"
+	OSSCredsKey          = "OSS_CREDS"
+	putTimeOut           = time.Second * 10
+	ExtLocation          = "EXT_LOCATION"
+	MaxSyncInterval      = 24
+	headersCountSerde    = "odps.text.option.header.lines.count"
+	useQuoteSerde        = "odps.text.option.use.quote"
+	maxFileSizeSupported = 300000000 // bytes
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -51,7 +55,7 @@ func NewSyncer(secretProvider SecretProvider, tenantDetailsGetter TenantDetailsG
 }
 
 func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error) {
-	sheets, ossClient, err := s.getClients(ctx, resources[0].Tenant())
+	sheets, ossClient, drive, err := s.getClients(ctx, resources[0].Tenant())
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +80,7 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 			if err != nil {
 				return pool.JobResult[string]{Output: r.FullName(), Err: err}
 			}
-			quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, et, commonLocation)
+			quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, drive, et, commonLocation)
 			syncStatusRemarks := map[string]string{}
 			if quoteSerdeMissing {
 				syncStatusRemarks["quoteSerdeMissing"] = "True"
@@ -168,7 +172,7 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, 
 }
 
 func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {
-	sheets, ossClient, err := s.getClients(ctx, res.Tenant())
+	sheets, ossClient, drive, err := s.getClients(ctx, res.Tenant())
 	if err != nil {
 		return err
 	}
@@ -186,7 +190,7 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	if err != nil {
 		return err
 	}
-	quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, et, commonLocation)
+	quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, drive, et, commonLocation)
 	syncStatusRemarks := map[string]string{}
 	if quoteSerdeMissing {
 		syncStatusRemarks["quoteSerdeMissing"] = "True"
@@ -202,35 +206,36 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	return err
 }
 
-func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gsheet.GSheets, *oss.Client, error) {
+func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gsheet.GSheets, *oss.Client, *gdrive.GDrive, error) {
 	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	sheetClient, err := gsheet.NewGSheets(ctx, secret.Value())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	creds, err := s.secretProvider.GetSecret(ctx, tnnt, OSSCredsKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	ossClient, err := bucket.NewOssClient(creds.Value())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return sheetClient, ossClient, nil
+	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value())
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("not able to create drive service err: %w", err)
+	}
+
+	return sheetClient, ossClient, driveSrv, nil
 }
 
-func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, et *ExternalTable, commonLocation string) (bool, error) {
-	if !strings.EqualFold(et.Source.SourceType, GoogleSheet) {
-		return false, nil
-	}
-
+func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, et *ExternalTable, commonLocation string) (bool, error) {
 	if len(et.Source.SourceURIs) == 0 {
 		return false, errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Sheet")
 	}
@@ -249,15 +254,96 @@ func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *o
 		}
 	}
 
-	bucketName, objectKey, err := getBucketNameAndPath(commonLocation, et.Source.Location, et.FullName())
+	bucketName, objectPath, err := getBucketNameAndPath(commonLocation, et.Source.Location, et.FullName())
 	if err != nil {
 		return quoteSerdeMissing, err
 	}
-
+	objectKey := objectPath + "file.csv"
+	err = deleteFolderFromBucket(ctx, ossClient, bucketName, objectPath)
+	if err != nil {
+		return fileNeedQuoteSerde, err
+	}
 	return quoteSerdeMissing, writeToBucket(ctx, ossClient, bucketName, objectKey, content)
 }
 
-func getBucketNameAndPath(commonLocation, loc string, fullName string) (bucketName string, path string, err error) { // nolint
+func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFile *drive.File, ossClient *oss.Client, bucketName, objectName, contentType string) error {
+	if !strings.EqualFold(driveFile.FileExtension, contentType) {
+		return nil
+	}
+	if driveFile.Size > maxFileSizeSupported {
+		return errors.InvalidArgument("", fmt.Sprintf("file size:[%d] mb, greated than limit:[%d] mb", driveFile.Size/10^6, maxFileSizeSupported/10^6))
+	}
+	content, err := driveClient.DownloadFile(driveFile.Id)
+	if err != nil {
+		return err
+	}
+	return writeToBucket(ctx, ossClient, bucketName, objectName, string(content))
+}
+
+func SyncDriveFolderToOSS(ctx context.Context, driveClient *gdrive.GDrive, ossClient *oss.Client, folderID, bucketName, destination, contentType string) error {
+	driveFiles, err := driveClient.GetFilesMeta(folderID)
+	if err != nil {
+		return err
+	}
+	for _, driveFile := range driveFiles.Files {
+		objectName := filepath.Join(destination, driveFile.Name)
+		if strings.EqualFold(driveFile.MimeType, gdrive.TypeFolder) {
+			err = SyncDriveFolderToOSS(ctx, driveClient, ossClient, driveFile.Id, bucketName, objectName, contentType)
+			if err != nil {
+				return err
+			}
+		}
+		err = SyncDriveFileToOSS(ctx, driveClient, driveFile, ossClient, bucketName, objectName, contentType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func syncFromDrive(ctx context.Context, driveSrv *gdrive.GDrive, ossClient *oss.Client, et *ExternalTable, bucketName, objectPath string) error {
+	fileType, driveFile, err := driveSrv.ListDriveEntity(et.Source.SourceURIs[0])
+	if err != nil {
+		return err
+	}
+	if fileType == "folder" {
+		return SyncDriveFolderToOSS(ctx, driveSrv, ossClient, driveFile.Id, bucketName, objectPath, et.Source.ContentType)
+	}
+	objectName := filepath.Join(objectPath, driveFile.Name)
+	return SyncDriveFileToOSS(ctx, driveSrv, driveFile, ossClient, bucketName, objectName, et.Source.ContentType)
+}
+
+func processGoogleDrive(ctx context.Context, driveSrv *gdrive.GDrive, ossClient *oss.Client, et *ExternalTable, commonLocation string) error {
+	if len(et.Source.SourceURIs) == 0 {
+		return errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Drive")
+	}
+
+	bucketName, objectPath, err := getBucketNameAndPath(commonLocation, et.Source.Location, et.FullName())
+	if err != nil {
+		return err
+	}
+
+	err = deleteFolderFromBucket(ctx, ossClient, bucketName, objectPath)
+	if err != nil {
+		return err
+	}
+
+	return syncFromDrive(ctx, driveSrv, ossClient, et, bucketName, objectPath)
+}
+
+func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, drive *gdrive.GDrive, et *ExternalTable, commonLocation string) (bool, error) {
+	switch strings.ToUpper(et.Source.SourceType) {
+	case GoogleSheet:
+		return processGoogleSheet(ctx, sheetSrv, ossClient, et, commonLocation)
+	case GoogleDrive:
+		err := processGoogleDrive(ctx, drive, ossClient, et, commonLocation)
+		return false, err
+	default:
+		return false, nil
+	}
+}
+
+func getBucketNameAndPath(commonLocation, loc, fullName string) (bucketName, path string, err error) { // nolint
 	if loc == "" {
 		if commonLocation == "" {
 			err = errors.NotFound(EntityExternalTable, "location for the external table is empty")
@@ -274,8 +360,33 @@ func getBucketNameAndPath(commonLocation, loc string, fullName string) (bucketNa
 
 	bucketName = parts[3]
 	components := strings.Join(parts[4:], "/")
-	path = fmt.Sprintf("%s/%s/file.csv", strings.TrimSuffix(components, "/"), strings.ReplaceAll(fullName, ".", "/"))
+	path = fmt.Sprintf("%s/%s/", strings.TrimSuffix(components, "/"), strings.ReplaceAll(fullName, ".", "/"))
 	return
+}
+
+func deleteFolderFromBucket(ctx context.Context, client *oss.Client, bucketName, folderPrefix string) error {
+	result, err := client.ListObjectsV2(ctx, &oss.ListObjectsV2Request{
+		Bucket: &bucketName,
+		Prefix: &folderPrefix,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Delete objects if any
+	if len(result.Contents) > 0 {
+		for _, obj := range result.Contents {
+			keyToDelete := *obj.Key
+			_, err := client.DeleteObject(ctx, &oss.DeleteObjectRequest{
+				Bucket: &bucketName,
+				Key:    &keyToDelete,
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func writeToBucket(ctx context.Context, client *oss.Client, bucketName, objectKey, content string) error {

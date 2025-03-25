@@ -112,7 +112,7 @@ func TestExternalSourceValidate(t *testing.T) {
 	})
 	t.Run("returns no error when valid", func(t *testing.T) {
 		es := maxcompute.ExternalSource{
-			SourceType: "CSV",
+			SourceType: "GOOGLE_DRIVE",
 			SourceURIs: []string{"https://google.com/sheets"},
 		}
 

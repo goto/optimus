@@ -34,7 +34,7 @@ func (gd *GDrive) DownloadFile(fileID string) ([]byte, error) {
 
 func (gd *GDrive) GetFilesMeta(folderID string) (*drive.FileList, error) {
 	return gd.srv.Files.List().Q(fmt.Sprintf("'%s' in parents", folderID)).SupportsAllDrives(true).
-		Fields("files(createdTime,driveId,fileExtension,fullFileExtension,id,kind,lastModifyingUser,mimeType,modifiedTime,name,originalFilename,owners,permissions,properties,webContentLink)").
+		Fields("files(fileExtension, id, mimeType, modifiedTime, name, properties, size)").
 		Do()
 }
 
@@ -45,9 +45,7 @@ func (gd *GDrive) ListDriveEntity(url string) (string, *drive.File, error) {
 		return "", nil, err
 	}
 	file, err := gd.srv.Files.Get(fileID).SupportsAllDrives(true).
-		Fields("createdTime", "driveId", "fileExtension", "fullFileExtension",
-			"id", "kind", "lastModifyingUser", "mimeType", "modifiedTime", "name",
-			"originalFilename", "owners", "permissions", "properties", "webContentLink").Do()
+		Fields("fileExtension", "id", "mimeType", "modifiedTime", "name", "properties", "size").Do()
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to get file metadata: %w", err)
 	}

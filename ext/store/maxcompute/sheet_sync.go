@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	GsheetCredsKey    = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey       = "OSS_CREDS"
-	putTimeOut        = time.Second * 10
-	ExtLocation       = "EXT_LOCATION"
-	MaxSyncInterval   = 24
-	headersCountSerde = "odps.text.option.header.lines.count"
-	useQuoteSerde     = "odps.text.option.use.quote"
+	GsheetCredsKey       = "GOOGLE_SHEETS_ACCOUNT"
+	OSSCredsKey          = "OSS_CREDS"
+	putTimeOut           = time.Second * 10
+	ExtLocation          = "EXT_LOCATION"
+	MaxSyncInterval      = 24
+	headersCountSerde    = "odps.text.option.header.lines.count"
+	useQuoteSerde        = "odps.text.option.use.quote"
+	maxFileSizeSupported = 300000000 // bytes
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -268,6 +269,9 @@ func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient
 func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFile *drive.File, ossClient *oss.Client, bucketName, objectName, contentType string) error {
 	if !strings.EqualFold(driveFile.FileExtension, contentType) {
 		return nil
+	}
+	if driveFile.Size > maxFileSizeSupported {
+		return errors.InvalidArgument("", fmt.Sprintf("file size:[%d] mb, greated than limit:[%d] mb", driveFile.Size/10^6, maxFileSizeSupported/10^6))
 	}
 	content, err := driveClient.DownloadFile(driveFile.Id)
 	if err != nil {

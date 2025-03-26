@@ -28,7 +28,7 @@ const (
 	MaxSyncInterval      = 24
 	headersCountSerde    = "odps.text.option.header.lines.count"
 	useQuoteSerde        = "odps.text.option.use.quote"
-	maxFileSizeSupported = 300000000 // bytes
+	maxFileSizeSupported = 300 // Mega Bytes
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -306,8 +306,8 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 	if !strings.EqualFold(driveFile.FileExtension, contentType) {
 		return nil
 	}
-	if driveFile.Size > maxFileSizeSupported {
-		return errors.InvalidArgument("", fmt.Sprintf("file size:[%d] mb, greated than limit:[%d] mb", driveFile.Size/10^6, maxFileSizeSupported/10^6))
+	if driveFile.Size > (maxFileSizeSupported * 1000000) {
+		return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("file size:[%d] mb, greated than limit:[%d] mb", driveFile.Size/1000000, maxFileSizeSupported))
 	}
 	content, err := driveClient.DownloadFile(driveFile.Id)
 	if err != nil {

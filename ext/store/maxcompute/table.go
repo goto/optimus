@@ -164,7 +164,7 @@ func generateUpdateQuery(incoming, existing tableschema.TableSchema, schemaName 
 	if incoming.Lifecycle != existing.Lifecycle {
 		if incoming.Lifecycle <= 0 && existing.Lifecycle >= 0 {
 			sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s disable lifecycle;", schemaName, existing.TableName))
-		} else if existing.Lifecycle > 0 {
+		} else if incoming.Lifecycle > 0 {
 			sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set lifecycle %d;", schemaName, existing.TableName, incoming.Lifecycle))
 		}
 	}

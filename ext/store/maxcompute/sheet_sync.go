@@ -127,20 +127,21 @@ func (s *SyncerService) GetETSourceLastModified(ctx context.Context, res *resour
 	if err != nil {
 		return time.Time{}, err
 	}
-	if et.Source == nil {
-		return time.Time{}, errors.NotFound(EntityExternalTable, "source is empty for "+et.FullName())
-	}
+	switch strings.ToUpper(et.Source.SourceType) {
+	case GoogleSheet, GoogleDrive:
+		driveClient, err := s.getDriveClient(ctx, res.Tenant())
+		if err != nil {
+			return time.Time{}, errors.InternalError(EntityExternalTable, "unable to get google drive Client", err)
+		}
 
-	driveClient, err := s.getDriveClient(ctx, res.Tenant())
-	if err != nil {
-		return time.Time{}, errors.InternalError(EntityExternalTable, "unable to get google drive Client", err)
+		lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
+		if err != nil {
+			return time.Time{}, err
+		}
+		return *lastModified, nil
+	default:
+		return time.Time{}, errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive")
 	}
-
-	lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
-	if err != nil {
-		return time.Time{}, err
-	}
-	return *lastModified, nil
 }
 
 func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {

@@ -40,6 +40,7 @@ type ResourceRepository interface {
 type Syncer interface {
 	SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error)
 	GetSyncInterval(res *resource.Resource) (int64, error)
+	GetETSourceLastModified(ctx context.Context, res *resource.Resource) (time.Time, error)
 }
 
 type ResourceManager interface {
@@ -399,18 +400,18 @@ func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, proje
 	}
 	var toUpdateResources []*resource.Resource
 	for _, r := range resources {
-		timeSinceLastUpdate, ok := lastUpdateMap[r.FullName()]
+		lastSyncedAt, ok := lastUpdateMap[r.FullName()]
 		if !ok {
 			toUpdateResources = append(toUpdateResources, r)
 			continue
 		}
-
-		interval, err := rs.syncer.GetSyncInterval(r)
+		lastModified, err := rs.syncer.GetETSourceLastModified(ctx, r)
 		if err != nil {
-			rs.logger.Error("unable to get sync interval", err.Error())
+			rs.logger.Error("unable to get last modified time", err.Error())
+			toUpdateResources = append(toUpdateResources, r)
 			continue
 		}
-		if time.Since(timeSinceLastUpdate) > time.Hour*time.Duration(interval) {
+		if lastModified.After(lastSyncedAt) {
 			toUpdateResources = append(toUpdateResources, r)
 		}
 	}

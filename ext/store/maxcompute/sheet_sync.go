@@ -122,6 +122,27 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	return syncStatus, mu.ToErr()
 }
 
+func (s *SyncerService) GetETSourceLastModified(ctx context.Context, res *resource.Resource) (time.Time, error) {
+	et, err := ConvertSpecTo[ExternalTable](res)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if et.Source == nil {
+		return time.Time{}, errors.NotFound(EntityExternalTable, "source is empty for "+et.FullName())
+	}
+
+	driveClient, err := s.getDriveClient(ctx, res.Tenant())
+	if err != nil {
+		return time.Time{}, errors.InternalError(EntityExternalTable, "unable to get google drive Client", err)
+	}
+
+	lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
+	if err != nil {
+		return time.Time{}, err
+	}
+	return *lastModified, nil
+}
+
 func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {
@@ -206,6 +227,20 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	return err
 }
 
+func (s *SyncerService) getDriveClient(ctx context.Context, tnnt tenant.Tenant) (*gdrive.GDrive, error) {
+	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
+	if err != nil {
+		return nil, err
+	}
+
+	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value())
+	if err != nil {
+		return nil, fmt.Errorf("not able to create drive service err: %w", err)
+	}
+
+	return driveSrv, nil
+}
+
 func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gsheet.GSheets, *oss.Client, *gdrive.GDrive, error) {
 	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
 	if err != nil {
@@ -281,7 +316,7 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 }
 
 func SyncDriveFolderToOSS(ctx context.Context, driveClient *gdrive.GDrive, ossClient *oss.Client, folderID, bucketName, destination, contentType string) error {
-	driveFiles, err := driveClient.GetFilesMeta(folderID)
+	driveFiles, err := driveClient.FolderListShow(folderID)
 	if err != nil {
 		return err
 	}

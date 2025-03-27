@@ -28,7 +28,7 @@ const (
 	MaxSyncInterval      = 24
 	headersCountSerde    = "odps.text.option.header.lines.count"
 	useQuoteSerde        = "odps.text.option.use.quote"
-	maxFileSizeSupported = 300000000 // bytes
+	maxFileSizeSupported = 300 // Mega Bytes
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -122,6 +122,28 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	return syncStatus, mu.ToErr()
 }
 
+func (s *SyncerService) GetETSourceLastModified(ctx context.Context, res *resource.Resource) (time.Time, error) {
+	et, err := ConvertSpecTo[ExternalTable](res)
+	if err != nil {
+		return time.Time{}, err
+	}
+	switch strings.ToUpper(et.Source.SourceType) {
+	case GoogleSheet, GoogleDrive:
+		driveClient, err := s.getDriveClient(ctx, res.Tenant())
+		if err != nil {
+			return time.Time{}, errors.InternalError(EntityExternalTable, "unable to get google drive Client", err)
+		}
+
+		lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
+		if err != nil {
+			return time.Time{}, err
+		}
+		return *lastModified, nil
+	default:
+		return time.Time{}, errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive")
+	}
+}
+
 func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {
@@ -206,6 +228,20 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	return err
 }
 
+func (s *SyncerService) getDriveClient(ctx context.Context, tnnt tenant.Tenant) (*gdrive.GDrive, error) {
+	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
+	if err != nil {
+		return nil, err
+	}
+
+	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value())
+	if err != nil {
+		return nil, fmt.Errorf("not able to create drive service err: %w", err)
+	}
+
+	return driveSrv, nil
+}
+
 func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gsheet.GSheets, *oss.Client, *gdrive.GDrive, error) {
 	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
 	if err != nil {
@@ -270,8 +306,8 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 	if !strings.EqualFold(driveFile.FileExtension, contentType) {
 		return nil
 	}
-	if driveFile.Size > maxFileSizeSupported {
-		return errors.InvalidArgument("", fmt.Sprintf("file size:[%d] mb, greated than limit:[%d] mb", driveFile.Size/10^6, maxFileSizeSupported/10^6))
+	if driveFile.Size > (maxFileSizeSupported * 1000000) {
+		return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("file size:[%d] mb, greated than limit:[%d] mb", driveFile.Size/1000000, maxFileSizeSupported))
 	}
 	content, err := driveClient.DownloadFile(driveFile.Id)
 	if err != nil {
@@ -281,7 +317,7 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 }
 
 func SyncDriveFolderToOSS(ctx context.Context, driveClient *gdrive.GDrive, ossClient *oss.Client, folderID, bucketName, destination, contentType string) error {
-	driveFiles, err := driveClient.GetFilesMeta(folderID)
+	driveFiles, err := driveClient.FolderListShow(folderID)
 	if err != nil {
 		return err
 	}

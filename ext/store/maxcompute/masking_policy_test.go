@@ -37,7 +37,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			mockSQLExecutor := new(mockOdpsIns)
 
 			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
-			err := handle.Process(&tbl)
+			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "error while get table on maxcompute")
@@ -55,7 +55,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			mockSQLExecutor := new(mockOdpsIns)
 
 			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
-			err := handle.Process(&tbl)
+			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "error while loading table from maxcompute")
@@ -74,7 +74,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			mockSQLExecutor := new(mockOdpsIns)
 
 			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
-			err := handle.Process(&tbl)
+			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "error while getting column mask info from maxcompute")
@@ -99,7 +99,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			defer mockSQLExecutor.AssertExpectations(t)
 
 			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
-			err := handle.Process(&tbl)
+			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "error when applying masking policies")
@@ -127,7 +127,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			defer mockSQLExecutor.AssertExpectations(t)
 
 			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
-			err := handle.Process(&tbl)
+			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "error when applying masking policies")

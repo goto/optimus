@@ -24,6 +24,13 @@ type maskingPolicyTracker struct {
 	ToDelete   []string
 }
 
+type maskingPolicyTaskTracker struct {
+	ColumnName    string
+	MaskingPolicy string
+	Action        string
+	SQLTask       string
+}
+
 type MaskingPolicyHandle struct {
 	mcSQLExecutor McSQLExecutor
 	mcTable       McTables
@@ -36,21 +43,21 @@ func NewMaskingPolicyHandle(mcSQLExecutor McSQLExecutor, mcTables McTables) Tabl
 	}
 }
 
-func (h MaskingPolicyHandle) Process(table *Table) error {
-	newMaskPolicies := h.getNewMaskPolicies(table)
-	existingMaskPolicies, err := h.getExistingMaskPolicies(table.Name)
+func (h MaskingPolicyHandle) Process(tableName string, schema Schema) error {
+	newMaskPolicies := h.getNewMaskPolicies(schema)
+	existingMaskPolicies, err := h.getExistingMaskPolicies(tableName)
 	if err != nil {
 		return err
 	}
 
 	tracker := compareMaskPolicies(newMaskPolicies, existingMaskPolicies)
 
-	return h.applyMaskPolicyChanges(tracker, table.Name)
+	return h.applyMaskPolicyChanges(tracker, tableName)
 }
 
-func (MaskingPolicyHandle) getNewMaskPolicies(table *Table) []odps.ColumnMaskInfo {
+func (MaskingPolicyHandle) getNewMaskPolicies(schema Schema) []odps.ColumnMaskInfo {
 	newMaskPolicies := []odps.ColumnMaskInfo{}
-	for _, column := range table.Schema {
+	for _, column := range schema {
 		if column.MaskPolicy == "" && column.UnmaskPolicy == "" {
 			continue
 		}
@@ -92,29 +99,41 @@ func (h MaskingPolicyHandle) getExistingMaskPolicies(tableName string) ([]odps.C
 }
 
 func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackers []maskingPolicyTracker, tableName string) error {
-	sqlTasks := []string{}
+	sqlTasks := []maskingPolicyTaskTracker{}
 	schemaName := h.mcSQLExecutor.CurrentSchemaName()
 
 	for _, t := range trackers {
 		for _, policy := range t.ToDelete {
-			sqlTasks = append(sqlTasks, fmt.Sprintf("APPLY DATA MASKING POLICY %s UNBIND FROM TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName))
+			sqlTasks = append(sqlTasks, maskingPolicyTaskTracker{
+				ColumnName:    t.ColumnName,
+				MaskingPolicy: policy,
+				Action:        "delete",
+				SQLTask:       fmt.Sprintf("APPLY DATA MASKING POLICY %s UNBIND FROM TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName),
+			})
 		}
 
 		for _, policy := range t.ToCreate {
-			sqlTasks = append(sqlTasks, fmt.Sprintf("APPLY DATA MASKING POLICY %s BIND TO TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName))
+			sqlTasks = append(sqlTasks, maskingPolicyTaskTracker{
+				ColumnName:    t.ColumnName,
+				MaskingPolicy: policy,
+				Action:        "create",
+				SQLTask:       fmt.Sprintf("APPLY DATA MASKING POLICY %s BIND TO TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName),
+			})
 		}
 	}
 
 	me := errors.NewMultiError("error when applying masking policies")
 	for _, task := range sqlTasks {
-		ins, err := h.mcSQLExecutor.ExecSQlWithHints(task, nil)
+		ins, err := h.mcSQLExecutor.ExecSQlWithHints(task.SQLTask, nil)
 		if err != nil {
-			me.Append(err)
+			me.Append(fmt.Errorf("failed to apply %s masking policy %s for %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
 			continue
 		}
 
 		err = ins.WaitForSuccess()
-		me.Append(err)
+		if err != nil {
+			me.Append(fmt.Errorf("failed to apply %s masking policy %s for %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
+		}
 	}
 
 	return me.ToErr()

@@ -29,6 +29,7 @@ type ExternalTableHandle struct {
 	mcSQLExecutor       McSQLExecutor
 	mcSchema            McSchema
 	mcExternalTable     McExternalTable
+	maskingPolicyHandle TableMaskingPolicyHandle
 	tenantDetailsGetter TenantDetailsGetter
 }
 
@@ -59,6 +60,12 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 		}
 		return errors.InternalError(EntityExternalTable, "error while creating external table on maxcompute", err)
 	}
+
+	err = e.maskingPolicyHandle.Process(et.Name, et.Schema)
+	if err != nil {
+		return errors.AddErrContext(err, EntityExternalTable, "failed to apply masking policy for "+et.FullName())
+	}
+
 	return nil
 }
 
@@ -83,6 +90,11 @@ func (e ExternalTableHandle) createOtherTypeExternalTable(et *ExternalTable, tSc
 		return errors.InternalError(EntityExternalTable, "failed to create external table "+et.FullName(), err)
 	}
 
+	err = e.maskingPolicyHandle.Process(et.Name, et.Schema)
+	if err != nil {
+		return errors.AddErrContext(err, EntityExternalTable, "failed to apply masking policy for "+et.FullName())
+	}
+
 	return nil
 }
 
@@ -105,8 +117,20 @@ func (e ExternalTableHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func NewExternalTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcExternalTable McExternalTable, getter TenantDetailsGetter) *ExternalTableHandle {
-	return &ExternalTableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcExternalTable: mcExternalTable, tenantDetailsGetter: getter}
+func NewExternalTableHandle(
+	mcSQLExecutor McSQLExecutor,
+	mcSchema McSchema,
+	mcExternalTable McExternalTable,
+	getter TenantDetailsGetter,
+	maskingPolicyHandle TableMaskingPolicyHandle,
+) *ExternalTableHandle {
+	return &ExternalTableHandle{
+		mcSQLExecutor:       mcSQLExecutor,
+		mcSchema:            mcSchema,
+		mcExternalTable:     mcExternalTable,
+		tenantDetailsGetter: getter,
+		maskingPolicyHandle: maskingPolicyHandle,
+	}
 }
 
 func (e ExternalTableHandle) getLocation(ctx context.Context, et *ExternalTable, res *resource.Resource) (string, error) {

@@ -78,5 +78,6 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 
 		output.UpdateURN(urn)
 	}
+	output.SetUpdateAt(r.UpdatedAt)
 	return output, err
 }

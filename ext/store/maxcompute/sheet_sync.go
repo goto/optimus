@@ -54,6 +54,10 @@ func NewSyncer(secretProvider SecretProvider, tenantDetailsGetter TenantDetailsG
 	}
 }
 
+func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.ProjectName, identifiers []string) error {
+	return s.SyncRepo.Touch(ctx, projectName, KindExternalTable, identifiers)
+}
+
 func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error) {
 	sheets, ossClient, drive, err := s.getClients(ctx, resources[0].Tenant())
 	if err != nil {

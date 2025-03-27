@@ -52,6 +52,7 @@ type TenantDetailsGetter interface {
 
 type SyncRepo interface {
 	Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error
+	Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, identifier []string) error
 }
 
 type MaxCompute struct {

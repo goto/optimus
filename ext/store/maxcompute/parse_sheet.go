@@ -68,8 +68,15 @@ func ParseDateTime(data any, sourceTimeFormats []string, outPutType string) (str
 	var parsedTime time.Time
 	switch data := data.(type) {
 	case float64:
-		milliSeconds := int(data * millisecondsInDay)
-		parsedTime = googleSheetsStartTimeReference.Add(time.Millisecond * time.Duration(milliSeconds))
+		timeObj := googleSheetsStartTimeReference
+		batchSize := 36500 * int64(millisecondsInDay) // 100 year batch Size
+		milliSeconds := int64(data * millisecondsInDay)
+		batchCount := int(milliSeconds / batchSize)
+		remainingMillis := milliSeconds % batchSize
+		for i := 0; i < batchCount; i++ {
+			timeObj = timeObj.Add(time.Millisecond * time.Duration(batchSize))
+		}
+		parsedTime = timeObj.Add(time.Millisecond * time.Duration(remainingMillis))
 	case string:
 		if data == "" || len(sourceTimeFormats) == 0 {
 			return data, nil

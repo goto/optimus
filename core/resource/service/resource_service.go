@@ -39,6 +39,7 @@ type ResourceRepository interface {
 
 type Syncer interface {
 	SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error)
+	TouchUnModified(ctx context.Context, project tenant.ProjectName, identifiers []string) error
 	GetSyncInterval(res *resource.Resource) (int64, error)
 	GetETSourceLastModified(ctx context.Context, res *resource.Resource) (time.Time, error)
 }
@@ -389,22 +390,28 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return rs.repo.ReadAll(ctx, tnnt, store, true)
 }
 
-func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) ([]*resource.Resource, error) {
+func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) ([]*resource.Resource, []*resource.Resource, error) {
 	resourceNameList := make([]string, len(resources))
 	for i, res := range resources {
 		resourceNameList[i] = res.FullName()
 	}
 	lastUpdateMap, err := rs.statusRepo.GetLastUpdateTime(ctx, projectName, KindExternalTable, resourceNameList)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var toUpdateResources []*resource.Resource
+	var unModifiedSinceUpdate []*resource.Resource
 	for _, r := range resources {
 		lastSyncedAt, ok := lastUpdateMap[r.FullName()]
 		if !ok {
 			toUpdateResources = append(toUpdateResources, r)
 			continue
 		}
+		if r.GetUpdateAt().After(lastSyncedAt) {
+			toUpdateResources = append(toUpdateResources, r)
+			continue
+		}
+
 		lastModified, err := rs.syncer.GetETSourceLastModified(ctx, r)
 		if err != nil {
 			rs.logger.Error("unable to get last modified time", err.Error())
@@ -413,9 +420,11 @@ func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, proje
 		}
 		if lastModified.After(lastSyncedAt) {
 			toUpdateResources = append(toUpdateResources, r)
+		} else {
+			unModifiedSinceUpdate = append(unModifiedSinceUpdate, r)
 		}
 	}
-	return toUpdateResources, nil
+	return toUpdateResources, unModifiedSinceUpdate, nil
 }
 
 func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, skipIntervalCheck bool, filters ...filter.FilterOpt) ([]string, error) {
@@ -427,17 +436,24 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter")
 	}
 
-	var toUpdateResource []*resource.Resource
+	var toUpdateResource, tablesWithUnmodifiedSource []*resource.Resource
 	if skipIntervalCheck {
 		toUpdateResource = resources
 	} else {
-		toUpdateResource, err = rs.getExternalTablesDueForSync(ctx, projectName, resources)
+		toUpdateResource, tablesWithUnmodifiedSource, err = rs.getExternalTablesDueForSync(ctx, projectName, resources)
 		if err != nil {
 			rs.logger.Error("unable to get tables due for syncing, err: ", err.Error())
 			return []string{}, err
 		}
 	}
-
+	var identifierList []string
+	for _, res := range tablesWithUnmodifiedSource {
+		identifierList = append(identifierList, res.FullName())
+	}
+	err = rs.syncer.TouchUnModified(ctx, projectName, identifierList)
+	if err != nil {
+		return nil, err
+	}
 	if len(toUpdateResource) < 1 {
 		return []string{}, nil
 	}

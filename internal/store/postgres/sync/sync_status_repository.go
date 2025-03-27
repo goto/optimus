@@ -48,6 +48,16 @@ func (s StatusRepository) create(ctx context.Context, projectName tenant.Project
 	return nil
 }
 
+func (s StatusRepository) Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error {
+	identifierString := strings.Join(identifiers, "'.'")
+	updateQuery := `update sync_status set last_sync_attempt = NOW(), unmodified = true  where  project_name=$1 and entity_type=$2 and identifier  in ('` + identifierString + `')`
+	_, err := s.db.Exec(ctx, updateQuery, projectName, entityType)
+	if err != nil {
+		return errors.Wrap(entitySyncStatus, "unable to update status entry", err)
+	}
+	return nil
+}
+
 func (s StatusRepository) Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error {
 	var updateSyncSuccess string
 	if success {

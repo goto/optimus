@@ -105,7 +105,8 @@ type Resource struct {
 	spec     map[string]any
 	metadata *Metadata
 
-	status Status
+	status    Status
+	updatedAt time.Time
 }
 
 func (r *Resource) GetUpdateImpact(incoming *Resource) UpdateImpact {
@@ -113,6 +114,14 @@ func (r *Resource) GetUpdateImpact(incoming *Resource) UpdateImpact {
 		return ResourceDataPipeLineImpact
 	}
 	return UnspecifiedImpactChange
+}
+
+func (r *Resource) GetUpdateAt() time.Time {
+	return r.updatedAt
+}
+
+func (r *Resource) SetUpdateAt(t time.Time) {
+	r.updatedAt = t
 }
 
 func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *Metadata, spec map[string]any) (*Resource, error) {

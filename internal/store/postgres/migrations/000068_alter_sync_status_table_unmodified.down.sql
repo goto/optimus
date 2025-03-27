@@ -1,0 +1,1 @@
+ALTER TABLE sync_status DROP COLUMN IF EXISTS unmodified;

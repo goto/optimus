@@ -1,1 +1,0 @@
-ALTER TABLE sync_status ADD COLUMN IF NOT EXISTS unmodified boolean;

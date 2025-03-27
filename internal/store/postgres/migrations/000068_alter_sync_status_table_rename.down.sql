@@ -1,0 +1,1 @@
+ALTER TABLE sync_status RENAME COLUMN last_modified TO last_update_time;

@@ -154,4 +154,5 @@ func TruncateTablesWith(pool *pgxpool.Pool) {
 	pool.Exec(ctx, "TRUNCATE TABLE job_deployment CASCADE")
 
 	pool.Exec(ctx, "TRUNCATE TABLE job_upstream CASCADE")
+	pool.Exec(ctx, "TRUNCATE TABLE sync_status CASCADE")
 }

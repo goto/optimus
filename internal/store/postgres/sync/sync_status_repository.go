@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	syncColumnsToStore = `project_name, entity_type, identifier, last_update_time, last_sync_attempt, remarks`
+	syncColumnsToStore = `project_name, entity_type, identifier, last_modified, last_sync_attempt, remarks`
 	syncColumns        = `id, ` + syncColumnsToStore
 
 	entitySyncStatus = "SYNC_STATUS"
@@ -49,8 +49,7 @@ func (s StatusRepository) create(ctx context.Context, projectName tenant.Project
 }
 
 func (s StatusRepository) Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error {
-	identifierString := strings.Join(identifiers, "'.'")
-	updateQuery := `update sync_status set last_sync_attempt = NOW(), unmodified = true  where  project_name=$1 and entity_type=$2 and identifier  in ('` + identifierString + `')`
+	updateQuery := `update sync_status set last_sync_attempt = NOW() where  project_name=$1 and entity_type=$2 and identifier  in ('` + strings.Join(identifiers, "', '") + `')`
 	_, err := s.db.Exec(ctx, updateQuery, projectName, entityType)
 	if err != nil {
 		return errors.Wrap(entitySyncStatus, "unable to update status entry", err)
@@ -61,7 +60,7 @@ func (s StatusRepository) Touch(ctx context.Context, projectName tenant.ProjectN
 func (s StatusRepository) Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error {
 	var updateSyncSuccess string
 	if success {
-		updateSyncSuccess = ", last_update_time = NOW() "
+		updateSyncSuccess = ", last_modified = NOW() "
 	}
 	remarksByte, err := json.Marshal(remarks)
 	if err != nil {
@@ -80,7 +79,7 @@ func (s StatusRepository) Upsert(ctx context.Context, projectName tenant.Project
 
 func (s StatusRepository) GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error) {
 	lastUpdateMap := make(map[string]time.Time)
-	getQuery := "select identifier, last_update_time from  sync_status where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "') order by last_update_time asc"
+	getQuery := "select identifier, last_modified from  sync_status where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "') order by last_modified asc"
 	rows, err := s.db.Query(ctx, getQuery, projectName, entityType)
 	if err != nil {
 		return nil, errors.Wrap(entitySyncStatus, "error while getting last sync update status", err)
@@ -106,7 +105,7 @@ func (s StatusRepository) UpdateBatch(ctx context.Context, projectName tenant.Pr
 	if len(identifiers) < 1 {
 		return nil
 	}
-	updateQuery := "update sync_status set last_update_time = NOW() where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "')"
+	updateQuery := "update sync_status set last_modified = NOW() where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "')"
 	tag, err := s.db.Exec(ctx, updateQuery, projectName, entityType)
 	if err != nil {
 		return errors.Wrap(entitySyncStatus, "unable to update status entry", err)

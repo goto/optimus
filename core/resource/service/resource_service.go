@@ -433,7 +433,15 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 		return nil, err
 	}
 	if len(resources) == 0 {
-		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter")
+		var filterString string
+		f := filter.NewFilter(filters...)
+		if f.Contains(filter.NamespaceName) {
+			filterString += "Namespace Name = " + f.GetStringValue(filter.NamespaceName)
+		}
+		if f.Contains(filter.TableName) {
+			filterString += " Table Name = " + f.GetStringValue(filter.TableName)
+		}
+		return nil, errors.InvalidArgument(resource.EntityResource, "no resources found for filter: "+filterString)
 	}
 
 	var toUpdateResource, tablesWithUnmodifiedSource []*resource.Resource
@@ -450,9 +458,10 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 	for _, res := range tablesWithUnmodifiedSource {
 		identifierList = append(identifierList, res.FullName())
 	}
+	rs.logger.Info(fmt.Sprintf("Found %d unmodified sources", len(tablesWithUnmodifiedSource)))
 	err = rs.syncer.TouchUnModified(ctx, projectName, identifierList)
 	if err != nil {
-		return nil, err
+		rs.logger.Error("unable to update Unmodified Tables last sync attempt, err:", err.Error())
 	}
 	if len(toUpdateResource) < 1 {
 		return []string{}, nil

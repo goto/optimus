@@ -55,6 +55,7 @@ type ExternalSource struct {
 
 	SyncInterval     int64    `mapstructure:"sync_interval_in_hrs,omitempty"`
 	GetFormattedDate bool     `mapstructure:"fetch_formatted_datetime,omitempty"`
+	GetFormattedData bool     `mapstructure:"fetch_formatted_data,omitempty"`
 	Jars             []string `mapstructure:"jars,omitempty"`
 	Location         string   `mapstructure:"location,omitempty"`
 	Range            string   `mapstructure:"range,omitempty"`

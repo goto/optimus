@@ -173,7 +173,7 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, 
 	}
 
 	uri := et.Source.SourceURIs[0]
-	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, func(rowIndex, colIndex int, data any) (string, error) {
+	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, et.Source.GetFormattedData, func(rowIndex, colIndex int, data any) (string, error) {
 		if rowIndex < headers {
 			s, _ := ParseString(data) // ignore header parsing error, as headers will be ignored in data
 			return s, nil

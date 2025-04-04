@@ -29,13 +29,13 @@ func NewGSheets(ctx context.Context, creds string) (*GSheets, error) {
 	return &GSheets{srv: srv}, nil
 }
 
-func (gs *GSheets) GetAsCSV(url, sheetRange string, getFormattedDateTime bool, formatFn func(int, int, any) (string, error)) (string, bool, error) {
+func (gs *GSheets) GetAsCSV(url, sheetRange string, getFormattedDateTime, getFormattedData bool, formatFn func(int, int, any) (string, error)) (string, bool, error) {
 	info, err := FromURL(url)
 	if err != nil {
 		return "", false, err
 	}
 
-	content, err := gs.getSheetContent(info.SheetID, sheetRange, getFormattedDateTime)
+	content, err := gs.getSheetContent(info.SheetID, sheetRange, getFormattedDateTime, getFormattedData)
 	if err != nil {
 		return "", false, err
 	}
@@ -43,12 +43,15 @@ func (gs *GSheets) GetAsCSV(url, sheetRange string, getFormattedDateTime bool, f
 	return csv.FromRecords(content, formatFn)
 }
 
-func (gs *GSheets) getSheetContent(sheetID, sheetRange string, getFormattedDateTime bool) ([][]interface{}, error) {
+func (gs *GSheets) getSheetContent(sheetID, sheetRange string, getFormattedDateTime, getFormattedData bool) ([][]interface{}, error) {
 	batchGetCall := gs.srv.Spreadsheets.Values.BatchGet(sheetID)
-	batchGetCall = batchGetCall.ValueRenderOption("UNFORMATTED_VALUE")
-
-	if getFormattedDateTime {
-		batchGetCall = batchGetCall.DateTimeRenderOption("FORMATTED_STRING")
+	if getFormattedData {
+		batchGetCall = batchGetCall.ValueRenderOption("FORMATTED_VALUE")
+	} else {
+		batchGetCall = batchGetCall.ValueRenderOption("UNFORMATTED_VALUE")
+		if getFormattedDateTime {
+			batchGetCall = batchGetCall.DateTimeRenderOption("FORMATTED_STRING")
+		}
 	}
 
 	if sheetRange != "" {

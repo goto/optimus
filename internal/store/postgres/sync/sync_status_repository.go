@@ -48,7 +48,8 @@ func (s StatusRepository) create(ctx context.Context, projectName tenant.Project
 	return nil
 }
 
-func (s StatusRepository) Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error {
+func (s StatusRepository) Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) error {
+	identifiers := getIdentifiersFromResources(resources)
 	updateQuery := `update sync_status set last_sync_attempt = NOW() where  project_name=$1 and entity_type=$2 and identifier  in ('` + strings.Join(identifiers, "', '") + `')`
 	_, err := s.db.Exec(ctx, updateQuery, projectName, entityType)
 	if err != nil {
@@ -77,8 +78,17 @@ func (s StatusRepository) Upsert(ctx context.Context, projectName tenant.Project
 	return nil
 }
 
-func (s StatusRepository) GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error) {
+func getIdentifiersFromResources(resources []*resource.Resource) []string {
+	identifiers := make([]string, len(resources))
+	for i, res := range resources {
+		identifiers[i] = res.FullName()
+	}
+	return identifiers
+}
+
+func (s StatusRepository) GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) (map[string]time.Time, error) {
 	lastUpdateMap := make(map[string]time.Time)
+	identifiers := getIdentifiersFromResources(resources)
 	getQuery := "select identifier, last_modified from  sync_status where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "') order by last_modified asc"
 	rows, err := s.db.Query(ctx, getQuery, projectName, entityType)
 	if err != nil {
@@ -95,7 +105,6 @@ func (s StatusRepository) GetLastUpdateTime(ctx context.Context, projectName ten
 			}
 			return nil, errors.Wrap(entitySyncStatus, "error while getting last sync update status", err)
 		}
-
 		lastUpdateMap[identifier] = lastUpdate.Time
 	}
 	return lastUpdateMap, nil

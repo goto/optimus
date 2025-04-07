@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	columnsToStore  = `full_name, kind, store, status, urn, project_name, namespace_name, metadata, spec, created_at, updated_at`
-	resourceColumns = `id, ` + columnsToStore
+	columnsToStore   = `full_name, kind, store, status, urn, project_name, namespace_name, metadata, spec, created_at, updated_at`
+	resColumnsPrefix = `rs.full_name, rs.kind, rs.store, rs.status, rs.urn, rs.project_name, rs.namespace_name, rs.metadata, rs.spec, rs.created_at, rs.updated_at`
+	resourceColumns  = `id, ` + columnsToStore
 
 	changelogColumnsToStore = `entity_type, name, project_name, change_type, changes, created_at`
 	changelogColumnsToFetch = `changes, change_type, created_at`
@@ -317,6 +318,35 @@ func (r Repository) GetExternal(ctx context.Context, projName tenant.ProjectName
 	return resources, nil
 }
 
+func (r Repository) GetAllExternal(ctx context.Context, store resource.Store) ([]*resource.Resource, error) {
+	getExternal := `SELECT ` + resourceColumns + ` FROM resource WHERE store = $1 and kind = 'external_table' AND status NOT IN ($2, $3, $4)`
+	args := []any{store, resource.StatusDeleted, resource.StatusToDelete, resource.StatusCreateFailure}
+
+	rows, err := r.db.Query(ctx, getExternal, args...)
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, "error in GetExternal", err)
+	}
+	defer rows.Close()
+
+	var resources []*resource.Resource
+	for rows.Next() {
+		var res Resource
+		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+		if err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error in GetAll", err)
+		}
+
+		resourceModel, err := FromModelToResource(&res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resourceModel)
+	}
+
+	return resources, nil
+}
+
 func (r Repository) GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error) {
 	getAllResources := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and namespace_name = $2 and 
 store = $3 AND full_name = any ($4) AND status NOT IN ($5, $6)`
@@ -424,4 +454,32 @@ func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resou
 	}
 
 	return FromModelToResource(&res)
+}
+
+func (r Repository) GetExternalCreatAuthFailures(ctx context.Context) ([]*resource.Resource, error) {
+	query := `select ` + resColumnsPrefix + ` from resource rs join sync_status ss on rs.full_name = ss.identifier  where rs.status = $1 and rs.store = $2 and kind = 'external_table' and ss.remarks ->> 'error' LIKE '%googleapi: Error%';`
+
+	rows, err := r.db.Query(ctx, query, resource.StatusCreateFailure, resource.MaxCompute)
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, "error in ReadAll", err)
+	}
+	defer rows.Close()
+
+	var resources []*resource.Resource
+	for rows.Next() {
+		var res Resource
+		err = rows.Scan(&res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+		if err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error in GetAll", err)
+		}
+
+		resourceModel, err := FromModelToResource(&res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resourceModel)
+	}
+
+	return resources, nil
 }

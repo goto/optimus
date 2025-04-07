@@ -31,7 +31,7 @@ type ResourceStatusRepo interface {
 }
 
 type StatusRepo interface {
-	GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) (map[string]time.Time, error)
+	GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) (map[string]time.Time, error)
 }
 
 type ResourceMgr struct {

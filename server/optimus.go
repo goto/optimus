@@ -366,7 +366,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
 	syncStatusRepository := sync.NewStatusSyncRepository(s.dbPool)
 
-	syncer := mcStore.NewSyncer(tenantService, tenantService, syncStatusRepository)
+	syncer := mcStore.NewSyncer(s.logger, tenantService, tenantService, syncStatusRepository)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)
@@ -400,8 +400,19 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
 
 	mcClientProvider := mcStore.NewClientProvider()
-	maxComputeStore := mcStore.NewMaxComputeDataStore(tenantService, mcClientProvider, tenantService, syncStatusRepository)
+	maxComputeStore := mcStore.NewMaxComputeDataStore(s.logger, tenantService, mcClientProvider, tenantService, syncStatusRepository)
 	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
+
+	resourceWorkerCtx, closeResourceWorker := context.WithCancel(context.Background())
+	s.cleanupFn = append(s.cleanupFn, closeResourceWorker)
+
+	resourceWorker := rService.NewResourceWorker(s.logger, resourceRepository, syncer, resourceManager, primaryResourceService)
+	if s.conf.ExternalTables.AccessIssuesRetryInterval > 0 {
+		go resourceWorker.RetrySheetsAccessIssues(resourceWorkerCtx, s.conf.ExternalTables.AccessIssuesRetryInterval)
+	}
+	if s.conf.ExternalTables.SourceSyncInterval > 0 {
+		go resourceWorker.SyncExternalSheets(resourceWorkerCtx, s.conf.ExternalTables.SourceSyncInterval)
+	}
 
 	// Tenant Handlers
 	pb.RegisterSecretServiceServer(s.grpcServer, tHandler.NewSecretsHandler(s.logger, tSecretService))

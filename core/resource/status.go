@@ -2,11 +2,18 @@ package resource
 
 import (
 	"strings"
+	"time"
 
 	"github.com/goto/optimus/core/tenant"
 )
 
 type Status string
+
+type SourceModifiedTimeStatus struct {
+	FullName         string
+	LastModifiedTime time.Time
+	Err              error
+}
 
 const (
 	StatusUnknown           Status = "unknown"

@@ -33,6 +33,10 @@ func (r *Resource) MarkSkipped() error {
 	return errors.InvalidStateTransition(EntityResource, msg)
 }
 
+func (r *Resource) MarkStatusUnknown() {
+	r.status = StatusUnknown
+}
+
 func (r *Resource) MarkToCreate() error {
 	if r.status == StatusValidationSuccess {
 		r.status = StatusToCreate

@@ -1805,6 +1805,16 @@ func (m *mockResourceRepository) GetExternal(ctx context.Context, projName tenan
 	return args.Get(0).([]*resource.Resource), args.Error(1)
 }
 
+func (m *mockResourceRepository) GetAllExternal(ctx context.Context, store resource.Store) ([]*resource.Resource, error) {
+	args := m.Called(ctx, store)
+	return args.Get(0).([]*resource.Resource), args.Error(1)
+}
+
+func (m *mockResourceRepository) GetExternalCreatAuthFailures(ctx context.Context) ([]*resource.Resource, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]*resource.Resource), args.Error(1)
+}
+
 func (m *mockResourceRepository) Update(ctx context.Context, res *resource.Resource) error {
 	return m.Called(ctx, res).Error(0)
 }

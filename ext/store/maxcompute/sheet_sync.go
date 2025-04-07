@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
+	"github.com/goto/salt/log"
 	"google.golang.org/api/drive/v3"
 
 	"github.com/goto/optimus/core/resource"
@@ -41,21 +42,23 @@ var validInfinityValues = map[string]struct{}{
 }
 
 type SyncerService struct {
+	logger              log.Logger
 	secretProvider      SecretProvider
 	tenantDetailsGetter TenantDetailsGetter
 	SyncRepo            SyncRepo
 }
 
-func NewSyncer(secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter, syncRepo SyncRepo) *SyncerService {
+func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter, syncRepo SyncRepo) *SyncerService {
 	return &SyncerService{
+		logger:              log,
 		secretProvider:      secretProvider,
 		tenantDetailsGetter: tenantDetailsGetter,
 		SyncRepo:            syncRepo,
 	}
 }
 
-func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.ProjectName, identifiers []string) error {
-	return s.SyncRepo.Touch(ctx, projectName, KindExternalTable, identifiers)
+func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) error {
+	return s.SyncRepo.Touch(ctx, projectName, KindExternalTable, resources)
 }
 
 func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error) {
@@ -126,26 +129,56 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 	return syncStatus, mu.ToErr()
 }
 
-func (s *SyncerService) GetETSourceLastModified(ctx context.Context, res *resource.Resource) (time.Time, error) {
-	et, err := ConvertSpecTo[ExternalTable](res)
-	if err != nil {
-		return time.Time{}, err
+func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error) {
+	var response []resource.SourceModifiedTimeStatus
+	driveClient, clientErr := s.getDriveClient(ctx, tnnt)
+	if clientErr != nil {
+		return nil, errors.InternalError(EntityExternalTable, "unable to get google drive Client", clientErr)
 	}
-	switch strings.ToUpper(et.Source.SourceType) {
-	case GoogleSheet, GoogleDrive:
-		driveClient, err := s.getDriveClient(ctx, res.Tenant())
+	var jobs []func() pool.JobResult[resource.SourceModifiedTimeStatus]
+	for _, res := range resources {
+		et, err := ConvertSpecTo[ExternalTable](res)
 		if err != nil {
-			return time.Time{}, errors.InternalError(EntityExternalTable, "unable to get google drive Client", err)
+			response = append(response, resource.SourceModifiedTimeStatus{
+				FullName: res.FullName(),
+				Err:      err,
+			})
+			continue
 		}
+		switch strings.ToUpper(et.Source.SourceType) {
+		case GoogleSheet, GoogleDrive:
+			jobs = append(jobs, func() pool.JobResult[resource.SourceModifiedTimeStatus] {
+				lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
+				if err != nil {
+					return pool.JobResult[resource.SourceModifiedTimeStatus]{
+						Output: resource.SourceModifiedTimeStatus{
+							FullName: res.FullName(),
+							Err:      errors.InvalidArgument(EntityExternalTable, err.Error()),
+						},
+						Err: errors.InvalidArgument(EntityExternalTable, err.Error()),
+					}
+				}
+				return pool.JobResult[resource.SourceModifiedTimeStatus]{
+					Output: resource.SourceModifiedTimeStatus{
+						FullName:         res.FullName(),
+						LastModifiedTime: *lastModified,
+					},
+				}
+			})
 
-		lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
-		if err != nil {
-			return time.Time{}, err
+		default:
+			response = append(response, resource.SourceModifiedTimeStatus{
+				FullName: res.FullName(),
+				Err:      errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive"),
+			})
 		}
-		return *lastModified, nil
-	default:
-		return time.Time{}, errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive")
 	}
+	resultsChan := pool.RunWithWorkers(10, jobs)
+	for result := range resultsChan {
+		response = append(response, result.Output)
+	}
+
+	return response, nil
 }
 
 func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {

@@ -42,7 +42,7 @@ func RunWithWorkers[T any](workerCount int, fn []func() JobResult[T]) <-chan Job
 	wg.Wait()
 	close(jobResultChannel)
 
-	fmt.Printf("Took %s", time.Since(start)) // nolint
+	fmt.Printf("Took %s\n", time.Since(start)) // nolint
 	return jobResultChannel
 }
 

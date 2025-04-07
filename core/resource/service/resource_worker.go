@@ -106,6 +106,19 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 					w.logger.Warn(fmt.Sprintf("[RetrySheetsAccessIssues] auth issue not yet resolved for resource [%s], got error: [%s]", res.FullName(), lastUpdateTimeMap[res.FullName()].Err))
 					continue
 				}
+				res.MarkStatusUnknown()
+				if err := w.resService.mgr.Validate(res); err != nil {
+					w.logger.Warn(fmt.Sprintf("[RetrySheetsAccessIssues] resource [%s], found validation issues, got error: [%s]", res.FullName(), err.Error()))
+					continue
+				}
+				if err := res.MarkValidationSuccess(); err != nil {
+					w.logger.Warn(fmt.Sprintf("[RetrySheetsAccessIssues] resource [%s], err: [%s]", res.FullName(), err.Error()))
+					continue
+				}
+				if err := res.MarkToCreate(); err != nil {
+					w.logger.Warn(fmt.Sprintf("[RetrySheetsAccessIssues] resource [%s], err: [%s]", res.FullName(), err.Error()))
+					continue
+				}
 				err := w.mgr.CreateResource(ctx, res)
 				if err != nil {
 					w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to recreate resource [%s], err:[%s]", res.FullName(), err.Error()))

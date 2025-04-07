@@ -93,7 +93,6 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 				syncStatusRemarks["quoteSerdeMissing"] = "True"
 			}
 			if err != nil {
-				err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", r.FullName()), err)
 				syncStatusRemarks["error"] = err.Error()
 				syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
 				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, false)
@@ -200,7 +199,7 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, 
 	if val, ok := et.Source.SerdeProperties[headersCountSerde]; ok && val != "" {
 		num, err := strconv.Atoi(val)
 		if err != nil {
-			return "", false, errors.InvalidArgument(EntityExternalTable, "")
+			return "", false, errors.InvalidArgument(EntityExternalTable, "unable to parse "+headersCountSerde)
 		}
 		headers = num
 	}
@@ -255,7 +254,6 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 		syncStatusRemarks["quoteSerdeMissing"] = "True"
 	}
 	if err != nil {
-		err = errors.Wrap(EntityExternalTable, fmt.Sprintf("Resource: %s", et.FullName()), err)
 		syncStatusRemarks["error"] = err.Error()
 		syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
 		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, et.FullName(), syncStatusRemarks, false)

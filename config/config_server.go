@@ -10,7 +10,7 @@ type ServerConfig struct {
 	Plugin           PluginConfig         `mapstructure:"plugin"`
 	Replay           ReplayConfig         `mapstructure:"replay"`
 	Publisher        *Publisher           `mapstructure:"publisher"`
-	ExternalTables   ExternalTablesConfig `mapstructure:"externalTables"`
+	ExternalTables   ExternalTablesConfig `mapstructure:"external_tables"`
 }
 
 type Serve struct {

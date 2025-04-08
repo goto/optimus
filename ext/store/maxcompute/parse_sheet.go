@@ -65,7 +65,11 @@ func ParseDateTime(data any, sourceTimeFormats []string, outPutType string) (str
 	var parsedTime time.Time
 	switch data := data.(type) {
 	case float64:
-		parsedTime = utils.ConvertLotus123SerialToTime(data)
+		precision := time.Second
+		if outPutType == "TIMESTAMP" || outPutType == "TIMESTAMP_NTZ" {
+			precision = time.Millisecond
+		}
+		parsedTime = utils.ConvertLotus123SerialToTime(data, precision)
 	case string:
 		if data == "" || len(sourceTimeFormats) == 0 {
 			return data, nil

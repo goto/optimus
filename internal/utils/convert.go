@@ -66,8 +66,12 @@ func ConvertTimeToGoLayout(format string) string {
 	})
 }
 
-func ConvertLotus123SerialToTime(lotus123Serial float64) time.Time {
+func ConvertLotus123SerialToTime(lotus123Serial float64, precision time.Duration) time.Time {
 	timeObj := lotus123StartTimeReference
+
+	// Convert precision to a float64 factor (e.g., milliseconds = 86_400_000 units per day)
+	unitsPerDay := float64(24 * time.Hour / precision)
+	totalUnits := int64(math.Ceil(lotus123Serial * unitsPerDay))
 
 	// Add time in batches to prevent overflow.
 	//
@@ -83,16 +87,16 @@ func ConvertLotus123SerialToTime(lotus123Serial float64) time.Time {
 	// Solution:
 	// Split the total milliseconds into manageable batches and add them incrementally.
 	// We use a batch size of 100 years (36500 days) worth of milliseconds.
-	batchSize := 36500 * int64(millisecondsInDay)
-	milliSeconds := int64(math.Ceil(lotus123Serial * float64(millisecondsInDay)))
-	batchCount := int(milliSeconds / batchSize)
-	remainingMillis := milliSeconds % batchSize
+	batchDays := int64(36500)
+	batchSize := batchDays * int64(unitsPerDay)
+	batchCount := totalUnits / batchSize
+	remainingUnits := totalUnits % batchSize
 
-	for i := 0; i < batchCount; i++ {
-		timeObj = timeObj.Add(time.Millisecond * time.Duration(batchSize))
+	for i := int64(0); i < batchCount; i++ {
+		timeObj = timeObj.Add(precision * time.Duration(batchSize))
 	}
 
-	return timeObj.Add(time.Millisecond * time.Duration(remainingMillis))
+	return timeObj.Add(precision * time.Duration(remainingUnits))
 }
 
 func ConvertToBoolean(input string) bool {

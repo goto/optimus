@@ -12,8 +12,6 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 )
 
-const millisecondsInDay = 86400000
-
 var lotus123StartTimeReference = time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC) // Google Sheets API returns serialised days since 1899-12-30
 
 func ConvertToStringMap(inputs map[string]interface{}) (map[string]string, error) {
@@ -71,7 +69,7 @@ func ConvertLotus123SerialToTime(lotus123Serial float64, precision time.Duration
 
 	// Convert precision to a float64 factor (e.g., milliseconds = 86_400_000 units per day)
 	unitsPerDay := float64(24 * time.Hour / precision)
-	totalUnits := int64(math.Ceil(lotus123Serial * unitsPerDay))
+	totalUnits := int64(math.Round(lotus123Serial * unitsPerDay))
 
 	// Add time in batches to prevent overflow.
 	//

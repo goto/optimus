@@ -2,13 +2,19 @@ package utils
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 )
+
+const millisecondsInDay = 86400000
+
+var lotus123StartTimeReference = time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC) // Google Sheets API returns serialised days since 1899-12-30
 
 func ConvertToStringMap(inputs map[string]interface{}) (map[string]string, error) {
 	conv := map[string]string{}
@@ -58,6 +64,35 @@ func ConvertTimeToGoLayout(format string) string {
 		}
 		return match
 	})
+}
+
+func ConvertLotus123SerialToTime(lotus123Serial float64) time.Time {
+	timeObj := lotus123StartTimeReference
+
+	// Add time in batches to prevent overflow.
+	//
+	// Background:
+	// The Lotus 1-2-3 serial date system uses a floating-point number where the integer
+	// part represents days and the fractional part represents the time of day.
+	// We convert this to milliseconds since a reference start date.
+	//
+	// Problem:
+	// When the serial represents a far future date (e.g., year 3000), the total number
+	// of milliseconds becomes too large to safely add using time.Duration due to overflow.
+	//
+	// Solution:
+	// Split the total milliseconds into manageable batches and add them incrementally.
+	// We use a batch size of 100 years (36500 days) worth of milliseconds.
+	batchSize := 36500 * int64(millisecondsInDay)
+	milliSeconds := int64(math.Ceil(lotus123Serial * float64(millisecondsInDay)))
+	batchCount := int(milliSeconds / batchSize)
+	remainingMillis := milliSeconds % batchSize
+
+	for i := 0; i < batchCount; i++ {
+		timeObj = timeObj.Add(time.Millisecond * time.Duration(batchSize))
+	}
+
+	return timeObj.Add(time.Millisecond * time.Duration(remainingMillis))
 }
 
 func ConvertToBoolean(input string) bool {

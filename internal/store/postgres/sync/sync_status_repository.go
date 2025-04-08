@@ -137,7 +137,7 @@ func (s StatusRepository) UpdateBulk(ctx context.Context, projectName tenant.Pro
 		if !i.Success {
 			remarks["error"] = i.ErrorMsg
 		}
-		me.Append(s.Upsert(ctx, projectName, entityType, i.ResourceName, remarks, i.Success))
+		me.Append(s.Upsert(ctx, projectName, entityType, i.Resource.FullName(), remarks, i.Success))
 	}
 
 	return me.ToErr()

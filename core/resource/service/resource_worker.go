@@ -46,7 +46,7 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to get all external resources, err:%s", err.Error()))
 		}
 
-		toUpdateResource, tablesWithUnmodifiedSource, err := w.resService.getExternalTablesDueForSync(ctx, allResources)
+		toUpdateResources, tablesWithUnmodifiedSource, err := w.resService.getExternalTablesDueForSync(ctx, allResources)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] unable to get tables due for syncing, err:%s", err.Error()))
 			continue
@@ -56,21 +56,26 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 			w.resService.updateLastCheckedUnSyncedETs(ctx, tnnt.ProjectName(), resources)
 		}
 		var sheetsSyncedCount int
-		syncStatus, err := w.resService.syncer.SyncBatch(ctx, toUpdateResource)
+		syncStatus, err := w.resService.syncer.SyncBatch(ctx, toUpdateResources)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] unable to sync external sheets, err:%s", err.Error()))
 		}
 		for _, i := range syncStatus {
 			if i.Success {
 				sheetsSyncedCount++
-				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] successfully synced source for Res: %s", i.ResourceName))
+				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] successfully synced source for Res: %s", i.Resource.FullName()))
 			} else {
-				// also raise Lark Alert here
-				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to sync resource for Res: %s, err: %s", i.ResourceName, i.ErrorMsg))
+				w.resService.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
+					URN:       i.Resource.FullName(),
+					Tenant:    i.Resource.Tenant(),
+					EventType: "Sync Failure",
+					Message:   err.Error(),
+				})
+				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to sync resource for Res: %s, err: %s", i.Resource.FullName(), i.ErrorMsg))
 			}
 		}
 
-		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", sheetsSyncedCount, len(toUpdateResource), time.Since(start).String()))
+		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", sheetsSyncedCount, len(toUpdateResources), time.Since(start).String()))
 	}
 }
 
@@ -122,6 +127,12 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 				err := w.mgr.CreateResource(ctx, res)
 				if err != nil {
 					w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to recreate resource [%s], err:[%s]", res.FullName(), err.Error()))
+					w.resService.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
+						URN:       res.FullName(),
+						Tenant:    res.Tenant(),
+						EventType: "ReCreate Failure",
+						Message:   err.Error(),
+					})
 					continue
 				}
 				w.logger.Info(fmt.Sprintf("[RetrySheetsAccessIssues] resource:[%s] Successfully recreated", res.FullName()))

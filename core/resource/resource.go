@@ -51,10 +51,17 @@ type AlertAttrs struct {
 	EventType ChangeType
 }
 
+type ETAlertAttrs struct {
+	URN       string
+	Tenant    tenant.Tenant
+	EventType string
+	Message   string
+}
+
 type SyncStatus struct {
-	ResourceName string
-	Success      bool
-	ErrorMsg     string
+	Resource *Resource
+	Success  bool
+	ErrorMsg string
 }
 
 func (m *Metadata) Validate() error {

@@ -16,6 +16,7 @@ const (
 
 	replayTemplate              = "optimus-job-replay"
 	optimusChangeTemplate       = "optimus-change"
+	externalTables              = "external-tables"
 	failureAlertTemplate        = "optimus-job-failure"
 	slaAlertTemplate            = "optimus-job-sla-miss"
 	successNotificationTemplate = "optimus-job-success"
@@ -181,6 +182,23 @@ func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 		Labels: map[string]string{
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.EventType.String()),
+		},
+	})
+}
+
+func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
+	a.relay(&AlertPayload{
+		Project: attr.Tenant.ProjectName().String(),
+		LogTag:  attr.EventType + "-" + attr.URN,
+		Data: map[string]string{
+			"table_name": attr.URN,
+			"event_type": attr.EventType,
+			"message":    attr.Message,
+		},
+		Template: externalTables,
+		Labels: map[string]string{
+			"team":     attr.Tenant.NamespaceName().String(),
+			"severity": "WARNING",
 		},
 	})
 }

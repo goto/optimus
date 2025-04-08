@@ -71,8 +71,8 @@ type mockTableMaskingPolicyHandle struct {
 	mock.Mock
 }
 
-func (m *mockTableMaskingPolicyHandle) Process(table *maxcompute.Table) error {
-	args := m.Called(table)
+func (m *mockTableMaskingPolicyHandle) Process(tableName string, schema maxcompute.Schema) error {
+	args := m.Called(tableName, schema)
 	return args.Error(0)
 }
 
@@ -260,7 +260,7 @@ func TestTableHandle(t *testing.T) {
 			defer odpsIns.AssertExpectations(t)
 
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableMaskingPolicyHandle.On("Process", mock.Anything).Return(nil)
+			tableMaskingPolicyHandle.On("Process", tableName, mock.Anything).Return(nil)
 			defer tableMaskingPolicyHandle.AssertExpectations(t)
 
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
@@ -309,12 +309,15 @@ func TestTableHandle(t *testing.T) {
 			defer odpsIns.AssertExpectations(t)
 
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableMaskingPolicyHandle.On("Process", mock.Anything).Return(nil)
+			tableMaskingPolicyHandle.On("Process", tableName, mock.Anything).Return(nil)
 			defer tableMaskingPolicyHandle.AssertExpectations(t)
 
 			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
 
 			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
 				"description": "test create",
 				"schema": []map[string]any{
 					{

@@ -35,7 +35,7 @@ type TableResourceHandle interface {
 type Client interface {
 	TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
-	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter) TableResourceHandle
+	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
 	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema) TableMaskingPolicyHandle
 }
 
@@ -99,7 +99,13 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 			return errors.Wrap(EntityExternalTable, "unable to sync", err)
 		}
 
-		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
+		maskingPolicyClient, err := m.initializeClient(spanCtx, res.Tenant(), accountMaskPolicyKey)
+		if err != nil {
+			maskingPolicyClient = odpsClient
+		}
+		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		return handle.Create(res)
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
@@ -144,7 +150,13 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 		return handle.Update(res)
 
 	case KindExternalTable:
-		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
+		maskingPolicyClient, err := m.initializeClient(spanCtx, res.Tenant(), accountMaskPolicyKey)
+		if err != nil {
+			maskingPolicyClient = odpsClient
+		}
+		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		return handle.Update(res)
 
 	default:
@@ -222,12 +234,19 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			if err != nil {
 				maskingPolicyClient = client
 			}
+			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
 
-			return client.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema))
+			return client.TableHandleFrom(projectSchema, maskingPolicyHandle)
 		},
 		KindView: client.ViewHandleFrom,
 		KindExternalTable: func(projectSchema ProjectSchema) TableResourceHandle {
-			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter)
+			maskingPolicyClient, err := m.initializeClient(spanCtx, tnnt, accountMaskPolicyKey)
+			if err != nil {
+				maskingPolicyClient = client
+			}
+			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+
+			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		},
 	}
 

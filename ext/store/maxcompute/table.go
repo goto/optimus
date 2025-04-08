@@ -35,7 +35,7 @@ type McTable interface {
 }
 
 type TableMaskingPolicyHandle interface {
-	Process(table *Table) error
+	Process(tableName string, schema Schema) error
 }
 
 type TableHandle struct {
@@ -68,7 +68,7 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		return errors.InternalError(EntityTable, "error while creating table on maxcompute", err)
 	}
 
-	err = t.maskingPolicyHandle.Process(table)
+	err = t.maskingPolicyHandle.Process(table.Name, table.Schema)
 	if err != nil {
 		return errors.InternalError(EntityTable, "error while processing masking policy on maxcompute table: "+res.FullName(), err)
 	}
@@ -114,7 +114,7 @@ func (t TableHandle) Update(res *resource.Resource) error {
 		}
 	}
 
-	err = t.maskingPolicyHandle.Process(table)
+	err = t.maskingPolicyHandle.Process(table.Name, table.Schema)
 	if err != nil {
 		return errors.InternalError(EntityTable, "error while processing masking policy on maxcompute table: "+res.FullName(), err)
 	}

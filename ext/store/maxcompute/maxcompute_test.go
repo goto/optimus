@@ -546,7 +546,7 @@ func TestMaxComputeStore(t *testing.T) {
 			assert.NoError(t, err)
 
 			client.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(mpHandle).Maybe()
-			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(viewHandle).Maybe()
+			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything, mpHandle).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
 			client.On("TableHandleFrom", mock.Anything, mpHandle).Return(tableHandle).Maybe()
 			tableHandle.On("Exists", mock.Anything).Return(true).Maybe()
@@ -591,7 +591,7 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
 			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
-			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything).Return(viewHandle).Maybe()
+			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything, mpHandle).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
@@ -634,8 +634,8 @@ func (m *mockClient) ViewHandleFrom(projectSchema maxcompute.ProjectSchema) maxc
 	return args.Get(0).(maxcompute.TableResourceHandle)
 }
 
-func (m *mockClient) ExternalTableHandleFrom(schema maxcompute.ProjectSchema, tenantDetailsGetter maxcompute.TenantDetailsGetter) maxcompute.TableResourceHandle {
-	args := m.Called(schema, tenantDetailsGetter)
+func (m *mockClient) ExternalTableHandleFrom(schema maxcompute.ProjectSchema, tenantDetailsGetter maxcompute.TenantDetailsGetter, maskingPolicyHandle maxcompute.TableMaskingPolicyHandle) maxcompute.TableResourceHandle {
+	args := m.Called(schema, tenantDetailsGetter, maskingPolicyHandle)
 	return args.Get(0).(maxcompute.TableResourceHandle)
 }
 

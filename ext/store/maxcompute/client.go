@@ -52,12 +52,12 @@ func (c *MaxComputeClient) TableHandleFrom(projectSchema ProjectSchema, maskingP
 	return NewTableHandle(c, s, t, maskingPolicyHandle)
 }
 
-func (c *MaxComputeClient) ExternalTableHandleFrom(projectSchema ProjectSchema, getter TenantDetailsGetter) TableResourceHandle {
+func (c *MaxComputeClient) ExternalTableHandleFrom(projectSchema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle {
 	c.SetDefaultProjectName(projectSchema.Project)
 	c.SetCurrentSchemaName(projectSchema.Schema)
 	s := c.Schemas()
 	t := c.Tables()
-	return NewExternalTableHandle(c, s, t, getter)
+	return NewExternalTableHandle(c, s, t, getter, maskingPolicyHandle)
 }
 
 func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle {

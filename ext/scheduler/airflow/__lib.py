@@ -61,6 +61,7 @@ def get_scheduled_at(context):
 class SuperKubernetesPodOperator(KubernetesPodOperator):
     def __init__(self, *args, **kwargs):
         kwargs["startup_timeout_seconds"] = STARTUP_TIMEOUT_IN_SECS
+        kwargs["log_events_on_failure"] = True
         super(SuperKubernetesPodOperator, self).__init__(*args, **kwargs)
         self.do_xcom_push = kwargs.get('do_xcom_push')
         self.namespace = kwargs.get('namespace')

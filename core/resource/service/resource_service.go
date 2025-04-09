@@ -95,6 +95,7 @@ type ResourceService struct {
 
 type AlertManager interface {
 	SendResourceEvent(attr *resource.AlertAttrs)
+	SendExternalTableEvent(attr *resource.ETAlertAttrs)
 }
 
 func NewResourceService(
@@ -160,6 +161,14 @@ func (rs ResourceService) Create(ctx context.Context, incoming *resource.Resourc
 	}
 
 	if err := rs.mgr.CreateResource(ctx, incoming); err != nil {
+		if incoming.Kind() == KindExternalTable {
+			rs.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
+				URN:       incoming.FullName(),
+				Tenant:    incoming.Tenant(),
+				EventType: "Create Failure",
+				Message:   err.Error(),
+			})
+		}
 		rs.logger.Error("error creating resource [%s] to manager: %s", incoming.FullName(), err)
 		return err
 	}
@@ -500,7 +509,7 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 	var successTables []string
 	for _, i := range syncStatus {
 		if i.Success {
-			successTables = append(successTables, i.ResourceName)
+			successTables = append(successTables, i.Resource.FullName())
 		}
 	}
 	return successTables, err

@@ -79,13 +79,13 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 		}
 	}
 
-	var jobs []func() pool.JobResult[string]
+	var jobs []func() pool.JobResult[*resource.Resource]
 	for _, r := range resources {
 		r := r
-		f1 := func() pool.JobResult[string] {
+		f1 := func() pool.JobResult[*resource.Resource] {
 			et, err := ConvertSpecTo[ExternalTable](r)
 			if err != nil {
-				return pool.JobResult[string]{Output: r.FullName(), Err: err}
+				return pool.JobResult[*resource.Resource]{Output: r, Err: err}
 			}
 			quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, drive, et, commonLocation)
 			syncStatusRemarks := map[string]string{}
@@ -100,9 +100,9 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, true)
 			}
 			if err != nil {
-				return pool.JobResult[string]{Output: r.FullName(), Err: err}
+				return pool.JobResult[*resource.Resource]{Output: r, Err: err}
 			}
-			return pool.JobResult[string]{Output: r.FullName()}
+			return pool.JobResult[*resource.Resource]{Output: r}
 		}
 		jobs = append(jobs, f1)
 	}
@@ -120,9 +120,9 @@ func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Res
 			success = false
 		}
 		syncStatus = append(syncStatus, resource.SyncStatus{
-			ResourceName: result.Output,
-			Success:      success,
-			ErrorMsg:     errMsg,
+			Resource: result.Output,
+			Success:  success,
+			ErrorMsg: errMsg,
 		})
 	}
 	return syncStatus, mu.ToErr()

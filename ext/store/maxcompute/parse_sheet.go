@@ -12,11 +12,8 @@ import (
 )
 
 const (
-	EntityFormatter   = "CSVFormatter"
-	millisecondsInDay = 86400000
+	EntityFormatter = "CSVFormatter"
 )
-
-var googleSheetsStartTimeReference = time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC) // Google Sheets API returns serialised days since 1899-12-30
 
 func ParseBool(data any) (string, error) {
 	var val bool
@@ -68,21 +65,14 @@ func ParseDateTime(data any, sourceTimeFormats []string, outPutType string) (str
 	var parsedTime time.Time
 	switch data := data.(type) {
 	case float64:
-		timeObj := googleSheetsStartTimeReference
-		batchSize := 36500 * int64(millisecondsInDay) // 100 year batch Size
-		milliSeconds := int64(data * millisecondsInDay)
-		batchCount := int(milliSeconds / batchSize)
-		remainingMillis := milliSeconds % batchSize
-		for i := 0; i < batchCount; i++ {
-			timeObj = timeObj.Add(time.Millisecond * time.Duration(batchSize))
-		}
-		parsedTime = timeObj.Add(time.Millisecond * time.Duration(remainingMillis))
+		precision := time.Second // since google sheets does not store precision higher than 1 second
+		parsedTime = utils.ConvertLotus123SerialToTime(data, precision)
 	case string:
 		if data == "" || len(sourceTimeFormats) == 0 {
 			return data, nil
 		}
 		var err error
-		var goTimeLayouts []string
+		var goTimeLayouts []string // for logging what all layouts were tried in case of failure
 		for _, format := range sourceTimeFormats {
 			goTimeLayout := utils.ConvertTimeToGoLayout(format)
 			parsedTime, err = time.Parse(goTimeLayout, data)

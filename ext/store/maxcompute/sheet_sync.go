@@ -22,14 +22,13 @@ import (
 )
 
 const (
-	GsheetCredsKey       = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey          = "OSS_CREDS"
-	putTimeOut           = time.Second * 10
-	ExtLocation          = "EXT_LOCATION"
-	MaxSyncInterval      = 24
-	headersCountSerde    = "odps.text.option.header.lines.count"
-	useQuoteSerde        = "odps.text.option.use.quote"
-	maxFileSizeSupported = 300 // Mega Bytes
+	GsheetCredsKey    = "GOOGLE_SHEETS_ACCOUNT"
+	OSSCredsKey       = "OSS_CREDS"
+	putTimeOut        = time.Second * 10
+	ExtLocation       = "EXT_LOCATION"
+	MaxSyncInterval   = 24
+	headersCountSerde = "odps.text.option.header.lines.count"
+	useQuoteSerde     = "odps.text.option.use.quote"
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -42,18 +41,20 @@ var validInfinityValues = map[string]struct{}{
 }
 
 type SyncerService struct {
-	logger              log.Logger
-	secretProvider      SecretProvider
-	tenantDetailsGetter TenantDetailsGetter
-	SyncRepo            SyncRepo
+	logger               log.Logger
+	secretProvider       SecretProvider
+	tenantDetailsGetter  TenantDetailsGetter
+	SyncRepo             SyncRepo
+	maxFileSizeSupported int
 }
 
-func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter, syncRepo SyncRepo) *SyncerService {
+func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter, syncRepo SyncRepo, maxFileSizeSupported int) *SyncerService {
 	return &SyncerService{
-		logger:              log,
-		secretProvider:      secretProvider,
-		tenantDetailsGetter: tenantDetailsGetter,
-		SyncRepo:            syncRepo,
+		logger:               log,
+		secretProvider:       secretProvider,
+		tenantDetailsGetter:  tenantDetailsGetter,
+		SyncRepo:             syncRepo,
+		maxFileSizeSupported: maxFileSizeSupported,
 	}
 }
 
@@ -269,7 +270,7 @@ func (s *SyncerService) getDriveClient(ctx context.Context, tnnt tenant.Tenant) 
 		return nil, err
 	}
 
-	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value())
+	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported)
 	if err != nil {
 		return nil, fmt.Errorf("not able to create drive service err: %w", err)
 	}
@@ -298,7 +299,7 @@ func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gs
 		return nil, nil, nil, err
 	}
 
-	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value())
+	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("not able to create drive service err: %w", err)
 	}
@@ -341,8 +342,8 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 	if !strings.EqualFold(driveFile.FileExtension, contentType) {
 		return nil
 	}
-	if driveFile.Size > (maxFileSizeSupported * 1000000) {
-		return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("file size:[%d] mb, greated than limit:[%d] mb", driveFile.Size/1000000, maxFileSizeSupported))
+	if !driveClient.IsWithinDownloadLimit(driveFile) {
+		return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("file size:[%d] mb, greated than configured limit", driveFile.Size/1000000))
 	}
 	content, err := driveClient.DownloadFile(driveFile.Id)
 	if err != nil {

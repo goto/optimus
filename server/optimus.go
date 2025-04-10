@@ -366,7 +366,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
 	syncStatusRepository := sync.NewStatusSyncRepository(s.dbPool)
 
-	syncer := mcStore.NewSyncer(s.logger, tenantService, tenantService, syncStatusRepository)
+	syncer := mcStore.NewSyncer(s.logger, tenantService, tenantService, syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)
@@ -400,7 +400,7 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
 
 	mcClientProvider := mcStore.NewClientProvider()
-	maxComputeStore := mcStore.NewMaxComputeDataStore(s.logger, tenantService, mcClientProvider, tenantService, syncStatusRepository)
+	maxComputeStore := mcStore.NewMaxComputeDataStore(s.logger, tenantService, mcClientProvider, tenantService, syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported)
 	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	resourceWorkerCtx, closeResourceWorker := context.WithCancel(context.Background())

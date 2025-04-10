@@ -10,17 +10,36 @@ import (
 	"google.golang.org/api/option"
 )
 
+const EntityDriveClient = "DriveClient"
+
 type GDrive struct {
-	srv *drive.Service
+	srv                       *drive.Service
+	maxFileSizeSupportedBytes int64
 }
 
-func NewGDrives(ctx context.Context, creds string) (*GDrive, error) {
+func NewGDrives(ctx context.Context, creds string, maxFileSizeSupportedMB int) (*GDrive, error) {
 	driveSrv, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(creds)))
 	if err != nil {
 		return nil, fmt.Errorf("not able to create drive service err: %w", err)
 	}
 
-	return &GDrive{srv: driveSrv}, nil
+	return &GDrive{
+		srv:                       driveSrv,
+		maxFileSizeSupportedBytes: int64(maxFileSizeSupportedMB) * 1000000,
+	}, nil
+}
+
+// IsWithinDownloadLimit checks whether the given file's size is within the permissible download limit.
+// Returns true if no limit is set or if the file size is below the configured maximum.
+func (gd *GDrive) IsWithinDownloadLimit(file *drive.File) bool {
+	if gd.maxFileSizeSupportedBytes == 0 {
+		// No file size limit is configured; allow download
+		return true
+	}
+	if file.Size <= gd.maxFileSizeSupportedBytes {
+		return true
+	}
+	return false
 }
 
 // DownloadFile downloads a file from Google Drive

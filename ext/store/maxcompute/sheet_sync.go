@@ -342,7 +342,7 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 	if !strings.EqualFold(driveFile.FileExtension, contentType) {
 		return nil
 	}
-	if driveClient.IsWithinDownloadLimit(driveFile) {
+	if !driveClient.IsWithinDownloadLimit(driveFile) {
 		return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("file size:[%d] mb, greated than configured limit", driveFile.Size/1000000))
 	}
 	content, err := driveClient.DownloadFile(driveFile.Id)

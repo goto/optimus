@@ -445,6 +445,7 @@ WITH static_upstreams AS (
 	WHERE project_name = $1
     AND name = any ($2)
 	AND j.deleted_at IS NULL
+	AND state != 'disabled'
 ), 
 
 inferred_upstreams AS (
@@ -454,6 +455,7 @@ inferred_upstreams AS (
 	WHERE project_name = $1
 	AND name = any ($2)
 	AND j.deleted_at IS NULL
+	AND state != 'disabled'
 )
 
 SELECT
@@ -471,6 +473,7 @@ JOIN job j ON
 	(su.static_upstream = j.name and su.project_name = j.project_name) OR
 	(su.static_upstream = j.project_name || '/' ||j.name)
 WHERE j.deleted_at IS NULL
+AND j.state != 'disabled'
 
 UNION ALL
 
@@ -486,7 +489,8 @@ SELECT
 	false AS upstream_external
 FROM inferred_upstreams id
 JOIN job j ON id.source = j.destination
-WHERE j.deleted_at IS NULL;`
+WHERE j.deleted_at IS NULL
+AND j.state != 'disabled';`
 
 	rows, err := j.db.Query(ctx, query, projectName, jobNames)
 	if err != nil {

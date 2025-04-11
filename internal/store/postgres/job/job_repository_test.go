@@ -1112,6 +1112,30 @@ func TestPostgresJobRepository(t *testing.T) {
 		})
 	})
 
+	t.Run("GetAllEnabledByResourceDestination", func(t *testing.T) {
+		t.Run("returns only enabled jobs excluding the disabled jobs", func(t *testing.T) {
+			db := dbSetup()
+
+			jobSpecA, err := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNY, []resource.URN{resourceURNB, resourceURNC}, false)
+			jobSpecB, err := job.NewSpecBuilder(jobVersion, "sample-job-B", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNY, []resource.URN{resourceURNC}, false)
+
+			jobRepo := postgres.NewJobRepository(db)
+			_, err = jobRepo.Add(ctx, []*job.Job{jobA, jobB})
+			assert.NoError(t, err)
+
+			err = jobRepo.SyncState(ctx, sampleTenant, []job.Name{jobSpecB.Name()}, nil)
+			assert.NoError(t, err)
+
+			actual, err := jobRepo.GetAllEnabledByResourceDestination(ctx, resourceURNY)
+			assert.NoError(t, err)
+			assert.Equal(t, []*job.Job{jobA}, actual)
+		})
+	})
+
 	t.Run("GetUpstreams", func(t *testing.T) {
 		t.Run("returns upstream given project and job name", func(t *testing.T) {
 			// TODO: test is failing for nullable fields in upstream

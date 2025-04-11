@@ -71,7 +71,7 @@ func (i internalUpstreamResolver) resolveInferredUpstream(ctx context.Context, s
 	var internalUpstream []*job.Upstream
 	me := errors.NewMultiError("resolve internal inferred upstream errors")
 	for _, source := range sources {
-		jobUpstreams, err := i.jobRepository.GetAllByResourceDestination(ctx, source)
+		jobUpstreams, err := i.jobRepository.GetAllEnabledByResourceDestination(ctx, source)
 		me.Append(err)
 		if len(jobUpstreams) == 0 {
 			continue

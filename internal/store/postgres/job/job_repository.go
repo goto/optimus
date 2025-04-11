@@ -26,6 +26,8 @@ const (
 	task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 
 	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at, is_dirty`
+
+	enabledOnlyStatement = ` AND state != 'disabled'`
 )
 
 var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -668,9 +670,20 @@ func (j JobRepository) GetAllByProjectName(ctx context.Context, projectName tena
 }
 
 func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
+	return j.getAllByResourceDestination(ctx, resourceDestination, false)
+}
+
+func (j JobRepository) GetAllEnabledByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
+	return j.getAllByResourceDestination(ctx, resourceDestination, true)
+}
+
+func (j JobRepository) getAllByResourceDestination(ctx context.Context, resourceDestination resource.URN, enabledOnly bool) ([]*job.Job, error) {
 	me := errors.NewMultiError("get all job specs by resource destination")
 
-	getAllByDestination := `SELECT ` + jobColumns + ` FROM job WHERE destination = $1 AND deleted_at IS NULL;`
+	getAllByDestination := `SELECT ` + jobColumns + ` FROM job WHERE destination = $1 AND deleted_at IS NULL`
+	if enabledOnly {
+		getAllByDestination += enabledOnlyStatement
+	}
 
 	rows, err := j.db.Query(ctx, getAllByDestination, resourceDestination.String())
 	if err != nil {

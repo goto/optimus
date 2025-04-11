@@ -646,11 +646,19 @@ type JobRepository struct {
 	mock.Mock
 }
 
-// GetAllByResourceDestination provides a mock function with given fields: ctx, resourceDestination
-func (_m *JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
+// GetAllEnabledByResourceDestination provides a mock function with given fields: ctx, resourceDestination
+func (_m *JobRepository) GetAllEnabledByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
 	ret := _m.Called(ctx, resourceDestination)
 
+	if len(ret) == 0 {
+		panic("no return value specified for GetAllEnabledByResourceDestination")
+	}
+
 	var r0 []*job.Job
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, resource.URN) ([]*job.Job, error)); ok {
+		return rf(ctx, resourceDestination)
+	}
 	if rf, ok := ret.Get(0).(func(context.Context, resource.URN) []*job.Job); ok {
 		r0 = rf(ctx, resourceDestination)
 	} else {
@@ -659,7 +667,6 @@ func (_m *JobRepository) GetAllByResourceDestination(ctx context.Context, resour
 		}
 	}
 
-	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, resource.URN) error); ok {
 		r1 = rf(ctx, resourceDestination)
 	} else {

@@ -676,11 +676,19 @@ func (_m *JobRepository) GetAllEnabledByResourceDestination(ctx context.Context,
 	return r0, r1
 }
 
-// GetByJobName provides a mock function with given fields: ctx, projectName, jobName
-func (_m *JobRepository) GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {
+// GetEnabledJobByName provides a mock function with given fields: ctx, projectName, jobName
+func (_m *JobRepository) GetEnabledJobByName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {
 	ret := _m.Called(ctx, projectName, jobName)
 
+	if len(ret) == 0 {
+		panic("no return value specified for GetEnabledJobByName")
+	}
+
 	var r0 *job.Job
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, job.Name) (*job.Job, error)); ok {
+		return rf(ctx, projectName, jobName)
+	}
 	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, job.Name) *job.Job); ok {
 		r0 = rf(ctx, projectName, jobName)
 	} else {
@@ -689,7 +697,6 @@ func (_m *JobRepository) GetByJobName(ctx context.Context, projectName tenant.Pr
 		}
 	}
 
-	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, job.Name) error); ok {
 		r1 = rf(ctx, projectName, jobName)
 	} else {

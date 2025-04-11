@@ -1024,6 +1024,32 @@ func TestPostgresJobRepository(t *testing.T) {
 		})
 	})
 
+	t.Run("GetEnabledJobByName", func(t *testing.T) {
+		t.Run("should not return job if it is disabled", func(t *testing.T) {
+			db := dbSetup()
+
+			jobSpecA, err := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNB, resourceURNC}, false)
+
+			jobRepo := postgres.NewJobRepository(db)
+			_, err = jobRepo.Add(ctx, []*job.Job{jobA})
+			assert.NoError(t, err)
+
+			actual, err := jobRepo.GetEnabledJobByName(ctx, sampleTenant.ProjectName(), "sample-job-A")
+			assert.NoError(t, err)
+			assert.NotNil(t, actual)
+			assert.Equal(t, jobA, actual)
+
+			err = jobRepo.SyncState(ctx, sampleTenant, []job.Name{jobSpecA.Name()}, nil)
+			assert.NoError(t, err)
+
+			actual, err = jobRepo.GetEnabledJobByName(ctx, sampleTenant.ProjectName(), "sample-job-A")
+			assert.Error(t, err)
+			assert.Nil(t, actual)
+		})
+	})
+
 	t.Run("GetAllByProjectName", func(t *testing.T) {
 		t.Run("returns no error when get all jobs success", func(t *testing.T) {
 			db := dbSetup()

@@ -57,7 +57,7 @@ func (j JobRepository) Add(ctx context.Context, jobs []*job.Job) ([]*job.Job, er
 }
 
 func (j JobRepository) insertJobSpec(ctx context.Context, jobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
+	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false, false)
 	if err != nil {
 		if errors.IsErrorType(err, errors.ErrNotFound) {
 			return j.triggerInsert(ctx, jobEntity)
@@ -237,7 +237,7 @@ WHERE
 }
 
 func (j JobRepository) preCheckUpdate(ctx context.Context, jobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
+	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false, false)
 	if err != nil && errors.IsErrorType(err, errors.ErrNotFound) {
 		return errors.NewError(errors.ErrNotFound, job.EntityJob, fmt.Sprintf("job %s not exists yet", jobEntity.Spec().Name()))
 	}
@@ -343,7 +343,7 @@ func (j JobRepository) computeAndPersistChangeLog(ctx context.Context, existingJ
 }
 
 func (j JobRepository) updateAndPersistChangelog(ctx context.Context, incomingJobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, incomingJobEntity.ProjectName(), incomingJobEntity.Spec().Name(), false)
+	existingJob, err := j.get(ctx, incomingJobEntity.ProjectName(), incomingJobEntity.Spec().Name(), false, false)
 	if err != nil {
 		return err
 	}
@@ -396,12 +396,16 @@ WHERE
 	return nil
 }
 
-func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, onlyActiveJob bool) (*Spec, error) {
+func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, onlyActiveJob bool, onlyEnabledJob bool) (*Spec, error) {
 	getJobByNameAtProject := `SELECT ` + jobColumns + ` FROM job WHERE name = $1 AND project_name = $2`
 
 	if onlyActiveJob {
 		jobDeletedFilter := " AND deleted_at IS NULL"
 		getJobByNameAtProject += jobDeletedFilter
+	}
+
+	if onlyEnabledJob {
+		getJobByNameAtProject += enabledOnlyStatement
 	}
 
 	spec, err := FromRow(j.db.QueryRow(ctx, getJobByNameAtProject, jobName.String(), projectName.String()))
@@ -625,7 +629,21 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 }
 
 func (j JobRepository) GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {
-	spec, err := j.get(ctx, projectName, jobName, true)
+	spec, err := j.get(ctx, projectName, jobName, true, false)
+	if err != nil {
+		return nil, err
+	}
+
+	job, err := specToJob(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	return job, nil
+}
+
+func (j JobRepository) GetEnabledJobByName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {
+	spec, err := j.get(ctx, projectName, jobName, true, true)
 	if err != nil {
 		return nil, err
 	}

@@ -417,17 +417,17 @@ func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, resou
 		if err != nil {
 			return nil, nil, err
 		}
-		rs.logger.Info("[getExternalTablesDueForSync] Fetched last Resource Sync time list ")
+		rs.logger.Info("[ON DB] Fetched last Resource Sync time list ")
 		for resName, updateTime := range lastUpdateMap {
-			rs.logger.Info(fmt.Sprintf("[getExternalTablesDueForSync] resource: %s, lastUpdateTime: %s ", resName, updateTime.String()))
+			rs.logger.Info(fmt.Sprintf("[ON DB] resource: %s, lastUpdateTime in DB: %s ", resName, updateTime.String()))
 		}
 		lastModifiedList, err := rs.syncer.GetETSourceLastModified(ctx, tnnt, res)
-		rs.logger.Info("[getExternalTablesDueForSync] Fetched last resource update time list ")
+		rs.logger.Info("[On Drive] Fetched last resource update time list ")
 		for _, modifiedTimeStatus := range lastModifiedList {
 			if modifiedTimeStatus.Err == nil {
-				rs.logger.Info(fmt.Sprintf("[getExternalTablesDueForSync] resource: %s, lastUpdateTime: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.LastModifiedTime))
+				rs.logger.Info(fmt.Sprintf("[On Drive] resource: %s, lastUpdateTime: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.LastModifiedTime))
 			} else {
-				rs.logger.Error(fmt.Sprintf("[getExternalTablesDueForSync] resource: %s, error: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.Err.Error()))
+				rs.logger.Error(fmt.Sprintf("[On Drive] resource: %s, error: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.Err.Error()))
 			}
 		}
 		if err != nil {

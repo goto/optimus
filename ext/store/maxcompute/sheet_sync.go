@@ -137,10 +137,11 @@ func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant
 	}
 	var jobs []func() pool.JobResult[resource.SourceModifiedTimeStatus]
 	for _, res := range resources {
-		et, err := ConvertSpecTo[ExternalTable](res)
+		r := res
+		et, err := ConvertSpecTo[ExternalTable](r)
 		if err != nil {
 			response = append(response, resource.SourceModifiedTimeStatus{
-				FullName: res.FullName(),
+				FullName: r.FullName(),
 				Err:      err,
 			})
 			continue
@@ -152,7 +153,7 @@ func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant
 				if err != nil {
 					return pool.JobResult[resource.SourceModifiedTimeStatus]{
 						Output: resource.SourceModifiedTimeStatus{
-							FullName: res.FullName(),
+							FullName: r.FullName(),
 							Err:      errors.InvalidArgument(EntityExternalTable, err.Error()),
 						},
 						Err: errors.InvalidArgument(EntityExternalTable, err.Error()),
@@ -160,7 +161,7 @@ func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant
 				}
 				return pool.JobResult[resource.SourceModifiedTimeStatus]{
 					Output: resource.SourceModifiedTimeStatus{
-						FullName:         res.FullName(),
+						FullName:         r.FullName(),
 						LastModifiedTime: *lastModified,
 					},
 				}
@@ -168,7 +169,7 @@ func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant
 
 		default:
 			response = append(response, resource.SourceModifiedTimeStatus{
-				FullName: res.FullName(),
+				FullName: r.FullName(),
 				Err:      errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive"),
 			})
 		}

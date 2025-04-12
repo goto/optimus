@@ -150,6 +150,7 @@ func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant
 			jobs = append(jobs, func() pool.JobResult[resource.SourceModifiedTimeStatus] {
 				lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
 				if err != nil {
+					s.logger.Error(fmt.Sprintf("[CheckLastModified] checked res: %s, err: %s", res.FullName(), err.Error()))
 					return pool.JobResult[resource.SourceModifiedTimeStatus]{
 						Output: resource.SourceModifiedTimeStatus{
 							FullName: res.FullName(),
@@ -158,6 +159,7 @@ func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant
 						Err: errors.InvalidArgument(EntityExternalTable, err.Error()),
 					}
 				}
+				s.logger.Info(fmt.Sprintf("[CheckLastModified] checked res: %s, lastModified: %s", res.FullName(), lastModified.String()))
 				return pool.JobResult[resource.SourceModifiedTimeStatus]{
 					Output: resource.SourceModifiedTimeStatus{
 						FullName:         res.FullName(),

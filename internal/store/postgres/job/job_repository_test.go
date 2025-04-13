@@ -668,6 +668,56 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, expectedUpstreams, upstreams[jobSpecA.Name()])
 		})
+		t.Run("returns job with only active static and inferred upstreams", func(t *testing.T) {
+			db := dbSetup()
+
+			tenantDetails, err := tenant.NewTenantDetails(proj, namespace, nil)
+			assert.NoError(t, err)
+
+			upstreamBName := job.SpecUpstreamNameFrom("test-proj/sample-job-B")
+			upstreamDName := job.SpecUpstreamNameFrom("test-proj/sample-job-D")
+			jobAUpstream, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{upstreamBName, upstreamDName}).Build()
+			jobSpecA, _ := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, customConfig, jobTask).
+				WithDescription(jobDescription).
+				WithSpecUpstream(jobAUpstream).
+				Build()
+			jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNC, resourceURNE}, false)
+
+			jobSpecB, err := job.NewSpecBuilder(jobVersion, "sample-job-B", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, nil, false)
+
+			jobSpecC, err := job.NewSpecBuilder(jobVersion, "sample-job-C", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobC := job.NewJob(sampleTenant, jobSpecC, resourceURNC, nil, false)
+
+			jobSpecD, err := job.NewSpecBuilder(jobVersion, "sample-job-D", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobD := job.NewJob(sampleTenant, jobSpecD, resourceURND, nil, false)
+
+			jobSpecE, err := job.NewSpecBuilder(jobVersion, "sample-job-E", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobE := job.NewJob(sampleTenant, jobSpecE, resourceURNE, nil, false)
+
+			jobRepo := postgres.NewJobRepository(db)
+			_, err = jobRepo.Add(ctx, []*job.Job{jobA, jobB, jobC, jobD, jobE})
+			assert.NoError(t, err)
+
+			err = jobRepo.SyncState(ctx, tenantDetails.ToTenant(), []job.Name{jobSpecD.Name(), jobSpecE.Name()}, nil)
+			assert.NoError(t, err)
+
+			upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", jobB.Destination(), tenantDetails.ToTenant(), "static", taskName, false)
+			upstreamC := job.NewUpstreamResolved(jobSpecC.Name(), "", jobC.Destination(), tenantDetails.ToTenant(), "inferred", taskName, false)
+
+			expectedUpstreams := []*job.Upstream{
+				upstreamB,
+				upstreamC,
+			}
+
+			upstreams, err := jobRepo.ResolveUpstreams(ctx, proj.Name(), []job.Name{jobSpecA.Name()})
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, expectedUpstreams, upstreams[jobSpecA.Name()])
+		})
 	})
 
 	t.Run("ReplaceUpstreams", func(t *testing.T) {
@@ -974,6 +1024,32 @@ func TestPostgresJobRepository(t *testing.T) {
 		})
 	})
 
+	t.Run("GetEnabledJobByName", func(t *testing.T) {
+		t.Run("should not return job if it is disabled", func(t *testing.T) {
+			db := dbSetup()
+
+			jobSpecA, err := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNB, resourceURNC}, false)
+
+			jobRepo := postgres.NewJobRepository(db)
+			_, err = jobRepo.Add(ctx, []*job.Job{jobA})
+			assert.NoError(t, err)
+
+			actual, err := jobRepo.GetEnabledJobByName(ctx, sampleTenant.ProjectName(), "sample-job-A")
+			assert.NoError(t, err)
+			assert.NotNil(t, actual)
+			assert.Equal(t, jobA, actual)
+
+			err = jobRepo.SyncState(ctx, sampleTenant, []job.Name{jobSpecA.Name()}, nil)
+			assert.NoError(t, err)
+
+			actual, err = jobRepo.GetEnabledJobByName(ctx, sampleTenant.ProjectName(), "sample-job-A")
+			assert.Error(t, err)
+			assert.Nil(t, actual)
+		})
+	})
+
 	t.Run("GetAllByProjectName", func(t *testing.T) {
 		t.Run("returns no error when get all jobs success", func(t *testing.T) {
 			db := dbSetup()
@@ -1057,6 +1133,30 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.NoError(t, err)
 
 			actual, err := jobRepo.GetAllByResourceDestination(ctx, resourceURNY)
+			assert.NoError(t, err)
+			assert.Equal(t, []*job.Job{jobA}, actual)
+		})
+	})
+
+	t.Run("GetAllEnabledByResourceDestination", func(t *testing.T) {
+		t.Run("returns only enabled jobs excluding the disabled jobs", func(t *testing.T) {
+			db := dbSetup()
+
+			jobSpecA, err := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNY, []resource.URN{resourceURNB, resourceURNC}, false)
+			jobSpecB, err := job.NewSpecBuilder(jobVersion, "sample-job-B", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNY, []resource.URN{resourceURNC}, false)
+
+			jobRepo := postgres.NewJobRepository(db)
+			_, err = jobRepo.Add(ctx, []*job.Job{jobA, jobB})
+			assert.NoError(t, err)
+
+			err = jobRepo.SyncState(ctx, sampleTenant, []job.Name{jobSpecB.Name()}, nil)
+			assert.NoError(t, err)
+
+			actual, err := jobRepo.GetAllEnabledByResourceDestination(ctx, resourceURNY)
 			assert.NoError(t, err)
 			assert.Equal(t, []*job.Job{jobA}, actual)
 		})

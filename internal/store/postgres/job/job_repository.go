@@ -26,6 +26,8 @@ const (
 	task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 
 	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at, is_dirty`
+
+	enabledOnlyStatement = ` AND state != 'disabled'`
 )
 
 var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -55,7 +57,7 @@ func (j JobRepository) Add(ctx context.Context, jobs []*job.Job) ([]*job.Job, er
 }
 
 func (j JobRepository) insertJobSpec(ctx context.Context, jobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
+	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false, false)
 	if err != nil {
 		if errors.IsErrorType(err, errors.ErrNotFound) {
 			return j.triggerInsert(ctx, jobEntity)
@@ -235,7 +237,7 @@ WHERE
 }
 
 func (j JobRepository) preCheckUpdate(ctx context.Context, jobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false)
+	existingJob, err := j.get(ctx, jobEntity.ProjectName(), jobEntity.Spec().Name(), false, false)
 	if err != nil && errors.IsErrorType(err, errors.ErrNotFound) {
 		return errors.NewError(errors.ErrNotFound, job.EntityJob, fmt.Sprintf("job %s not exists yet", jobEntity.Spec().Name()))
 	}
@@ -341,7 +343,7 @@ func (j JobRepository) computeAndPersistChangeLog(ctx context.Context, existingJ
 }
 
 func (j JobRepository) updateAndPersistChangelog(ctx context.Context, incomingJobEntity *job.Job) error {
-	existingJob, err := j.get(ctx, incomingJobEntity.ProjectName(), incomingJobEntity.Spec().Name(), false)
+	existingJob, err := j.get(ctx, incomingJobEntity.ProjectName(), incomingJobEntity.Spec().Name(), false, false)
 	if err != nil {
 		return err
 	}
@@ -394,12 +396,16 @@ WHERE
 	return nil
 }
 
-func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, onlyActiveJob bool) (*Spec, error) {
+func (j JobRepository) get(ctx context.Context, projectName tenant.ProjectName, jobName job.Name, onlyActiveJob bool, onlyEnabledJob bool) (*Spec, error) {
 	getJobByNameAtProject := `SELECT ` + jobColumns + ` FROM job WHERE name = $1 AND project_name = $2`
 
 	if onlyActiveJob {
 		jobDeletedFilter := " AND deleted_at IS NULL"
 		getJobByNameAtProject += jobDeletedFilter
+	}
+
+	if onlyEnabledJob {
+		getJobByNameAtProject += enabledOnlyStatement
 	}
 
 	spec, err := FromRow(j.db.QueryRow(ctx, getJobByNameAtProject, jobName.String(), projectName.String()))
@@ -445,6 +451,7 @@ WITH static_upstreams AS (
 	WHERE project_name = $1
     AND name = any ($2)
 	AND j.deleted_at IS NULL
+	AND state != 'disabled'
 ), 
 
 inferred_upstreams AS (
@@ -454,6 +461,7 @@ inferred_upstreams AS (
 	WHERE project_name = $1
 	AND name = any ($2)
 	AND j.deleted_at IS NULL
+	AND state != 'disabled'
 )
 
 SELECT
@@ -471,6 +479,7 @@ JOIN job j ON
 	(su.static_upstream = j.name and su.project_name = j.project_name) OR
 	(su.static_upstream = j.project_name || '/' ||j.name)
 WHERE j.deleted_at IS NULL
+AND j.state != 'disabled'
 
 UNION ALL
 
@@ -486,7 +495,8 @@ SELECT
 	false AS upstream_external
 FROM inferred_upstreams id
 JOIN job j ON id.source = j.destination
-WHERE j.deleted_at IS NULL;`
+WHERE j.deleted_at IS NULL
+AND j.state != 'disabled';`
 
 	rows, err := j.db.Query(ctx, query, projectName, jobNames)
 	if err != nil {
@@ -619,7 +629,21 @@ func (JobRepository) toUpstreams(storeUpstreams []*JobWithUpstream) ([]*job.Upst
 }
 
 func (j JobRepository) GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {
-	spec, err := j.get(ctx, projectName, jobName, true)
+	spec, err := j.get(ctx, projectName, jobName, true, false)
+	if err != nil {
+		return nil, err
+	}
+
+	job, err := specToJob(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	return job, nil
+}
+
+func (j JobRepository) GetEnabledJobByName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error) {
+	spec, err := j.get(ctx, projectName, jobName, true, true)
 	if err != nil {
 		return nil, err
 	}
@@ -664,9 +688,20 @@ func (j JobRepository) GetAllByProjectName(ctx context.Context, projectName tena
 }
 
 func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
+	return j.getAllByResourceDestination(ctx, resourceDestination, false)
+}
+
+func (j JobRepository) GetAllEnabledByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error) {
+	return j.getAllByResourceDestination(ctx, resourceDestination, true)
+}
+
+func (j JobRepository) getAllByResourceDestination(ctx context.Context, resourceDestination resource.URN, enabledOnly bool) ([]*job.Job, error) {
 	me := errors.NewMultiError("get all job specs by resource destination")
 
-	getAllByDestination := `SELECT ` + jobColumns + ` FROM job WHERE destination = $1 AND deleted_at IS NULL;`
+	getAllByDestination := `SELECT ` + jobColumns + ` FROM job WHERE destination = $1 AND deleted_at IS NULL`
+	if enabledOnly {
+		getAllByDestination += enabledOnlyStatement
+	}
 
 	rows, err := j.db.Query(ctx, getAllByDestination, resourceDestination.String())
 	if err != nil {

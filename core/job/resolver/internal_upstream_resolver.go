@@ -71,7 +71,7 @@ func (i internalUpstreamResolver) resolveInferredUpstream(ctx context.Context, s
 	var internalUpstream []*job.Upstream
 	me := errors.NewMultiError("resolve internal inferred upstream errors")
 	for _, source := range sources {
-		jobUpstreams, err := i.jobRepository.GetAllByResourceDestination(ctx, source)
+		jobUpstreams, err := i.jobRepository.GetAllEnabledByResourceDestination(ctx, source)
 		me.Append(err)
 		if len(jobUpstreams) == 0 {
 			continue
@@ -91,7 +91,7 @@ func (i internalUpstreamResolver) resolveStaticUpstream(ctx context.Context, pro
 			me.Append(err)
 			continue
 		}
-		jobUpstream, err := i.jobRepository.GetByJobName(ctx, projectName, upstreamJobName)
+		jobUpstream, err := i.jobRepository.GetEnabledJobByName(ctx, projectName, upstreamJobName)
 		if err != nil || jobUpstream == nil {
 			me.Append(err)
 			continue

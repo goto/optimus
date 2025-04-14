@@ -88,7 +88,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 
 	httpRegex := regexp.MustCompile(`^(http|https)://`)
 	if httpRegex.MatchString(e.SchedulerHost) {
-		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, jobName)
+		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", strings.TrimRight(e.SchedulerHost, "/"), jobName)
 	}
 
 	var template string

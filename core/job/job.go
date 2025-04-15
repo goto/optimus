@@ -63,6 +63,7 @@ type Job struct {
 	sources     []resource.URN
 
 	isDirty bool
+	state   State
 }
 
 func (j *Job) Tenant() tenant.Tenant {
@@ -71,6 +72,18 @@ func (j *Job) Tenant() tenant.Tenant {
 
 func (j *Job) Spec() *Spec {
 	return j.spec
+}
+
+func (j *Job) State() State {
+	return j.state
+}
+
+func (j *Job) IsEnabled() bool {
+	return j.State() == ENABLED
+}
+
+func (j *Job) IsDisabled() bool {
+	return j.State() == DISABLED
 }
 
 func (j *Job) GetName() string {
@@ -213,8 +226,8 @@ func (j *Job) ProjectName() tenant.ProjectName {
 	return j.Tenant().ProjectName()
 }
 
-func NewJob(tenant tenant.Tenant, spec *Spec, destination resource.URN, sources []resource.URN, isDirty bool) *Job {
-	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty}
+func NewJob(tenant tenant.Tenant, spec *Spec, destination resource.URN, sources []resource.URN, isDirty bool, state State) *Job {
+	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty, state: state}
 }
 
 type Jobs []*Job
@@ -223,6 +236,14 @@ func (j Jobs) GetJobNames() []Name {
 	jobNames := make([]Name, len(j))
 	for i, job := range j {
 		jobNames[i] = job.spec.Name()
+	}
+	return jobNames
+}
+
+func (j Jobs) GetJobNamesSring() []string {
+	jobNames := make([]string, len(j))
+	for i, job := range j {
+		jobNames[i] = job.spec.Name().String()
 	}
 	return jobNames
 }

@@ -231,7 +231,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	source, err := resource.ParseURN("store://resource-3")
 	assert.NoError(t, err)
-	jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{source}, false)
+	jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{source}, false, job.ENABLED)
 
 	jobSpecB, err := job.NewSpecBuilder(jobVersion, jobBName, jobOwner, jobSchedule, customConfig, jobTask).
 		WithDescription(jobDescription).
@@ -244,7 +244,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	resourceURNB, err := resource.ParseURN("store://dev.resource.sample_b")
 	assert.NoError(t, err)
-	jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, nil, false)
+	jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, nil, false, job.ENABLED)
 
 	jobs := []*job.Job{jobA, jobB}
 

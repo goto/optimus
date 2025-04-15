@@ -1716,6 +1716,11 @@ func (ms *mockScheduler) DeployJobs(ctx context.Context, t tenant.Tenant, jobs [
 	return args.Error(0)
 }
 
+func (ms *mockScheduler) GetJobState(ctx context.Context, t tenant.Tenant) (map[string]bool, error) {
+	args := ms.Called(ctx, t)
+	return args.Get(0).(map[string]bool), args.Error(1)
+}
+
 func (ms *mockScheduler) ListJobs(ctx context.Context, t tenant.Tenant) ([]string, error) {
 	args := ms.Called(ctx, t)
 	return args.Get(0).([]string), args.Error(1)

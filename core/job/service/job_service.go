@@ -103,7 +103,8 @@ type TenantDetailsGetter interface {
 
 type JobDeploymentService interface {
 	UploadJobs(ctx context.Context, jobTenant tenant.Tenant, toUpdate, toDelete []string) error
-	UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error
+	UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state job.State) error
+	GetJobSchedulerState(ctx context.Context, tnnt tenant.Tenant) (map[string]bool, error)
 }
 
 type JobRepository interface {
@@ -117,6 +118,7 @@ type JobRepository interface {
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 	GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error)
 	GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error)
+	GetAll(ctx context.Context) ([]*job.Job, error)
 	GetAllByProjectName(ctx context.Context, projectName tenant.ProjectName) ([]*job.Job, error)
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
@@ -360,7 +362,7 @@ func (*JobService) getUpsertResults(specsUnmodified []*job.Spec, upsertedJobs []
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
-	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant, jobNames, jobState.String())
+	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant, jobNames, jobState)
 	if err != nil {
 		return err
 	}
@@ -1176,7 +1178,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		return nil, err
 	}
 
-	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false), nil
+	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false, job.DISABLED), nil
 }
 
 func (*JobService) buildDAGTree(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) *tree.MultiRootTree {

@@ -89,6 +89,7 @@ type Scheduler interface {
 	ListJobs(ctx context.Context, t tenant.Tenant) ([]string, error)
 	DeleteJobs(ctx context.Context, t tenant.Tenant, jobsToDelete []string) error
 	UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error
+	GetJobState(ctx context.Context, tnnt tenant.Tenant) (map[string]bool, error)
 }
 
 type EventHandler interface {

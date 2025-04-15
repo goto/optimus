@@ -18,6 +18,10 @@ func (t Tenant) ProjectName() ProjectName {
 	return t.projName
 }
 
+func (t Tenant) String() string {
+	return fmt.Sprintf("%s:%s", t.projName, t.nsName)
+}
+
 func (t Tenant) NamespaceName() NamespaceName {
 	return t.nsName
 }

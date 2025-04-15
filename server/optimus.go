@@ -387,6 +387,13 @@ func (s *OptimusServer) setupHandlers() error {
 		jobInputCompiler, secondaryResourceService, alertsHandler,
 	)
 
+	jobWorker := jService.NewJobWorker(s.logger, jJobRepo, newJobRunService)
+	jobWorkerCtx, closeJobWorker := context.WithCancel(context.Background())
+	s.cleanupFn = append(s.cleanupFn, closeJobWorker)
+	if s.conf.JobSyncIntervalMinutes > 0 {
+		go jobWorker.SyncJobStatus(jobWorkerCtx, 10)
+	}
+
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
 	// Resource Bounded Context

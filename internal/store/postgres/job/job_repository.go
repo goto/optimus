@@ -25,7 +25,7 @@ const (
 	jobColumnsToStore = `name, version, owner, description, labels, schedule, alert, webhook, static_upstreams, http_upstreams, 
 	task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 
-	jobColumns = `id, ` + jobColumnsToStore + `, deleted_at, is_dirty`
+	jobColumns = `id, state, ` + jobColumnsToStore + `, deleted_at, is_dirty`
 )
 
 var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -726,7 +726,11 @@ func specToJob(spec *Spec) (*job.Job, error) {
 		sources = append(sources, resourceURN)
 	}
 
-	return job.NewJob(tenantName, jobSpec, destination, sources, spec.IsDirty), nil
+	state, err := job.StateFrom(spec.State)
+	if err != nil {
+		return nil, err
+	}
+	return job.NewJob(tenantName, jobSpec, destination, sources, spec.IsDirty, state), nil
 }
 
 type JobWithUpstream struct {
@@ -940,6 +944,37 @@ func (j JobRepository) softDelete(ctx context.Context, projectName tenant.Projec
 		return errors.NewError(errors.ErrInternalError, job.EntityJob, fmt.Sprintf("job %s failed to be deleted", jobName.String()))
 	}
 	return nil
+}
+
+func (j JobRepository) GetAll(ctx context.Context) ([]*job.Job, error) {
+	me := errors.NewMultiError("get all job specs by project name errors")
+
+	getAll := `SELECT ` + jobColumns + ` FROM job WHERE deleted_at IS NULL;`
+
+	rows, err := j.db.Query(ctx, getAll)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "error while all jobs ", err)
+	}
+	defer rows.Close()
+
+	var jobs []*job.Job
+	for rows.Next() {
+		spec, err := FromRow(rows)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		jobSpec, err := specToJob(spec)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		jobs = append(jobs, jobSpec)
+	}
+
+	return jobs, me.ToErr()
 }
 
 func (j JobRepository) GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error) {

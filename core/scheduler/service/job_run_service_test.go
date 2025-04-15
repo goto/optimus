@@ -1716,8 +1716,8 @@ func (ms *mockScheduler) DeployJobs(ctx context.Context, t tenant.Tenant, jobs [
 	return args.Error(0)
 }
 
-func (ms *mockScheduler) GetJobState(ctx context.Context, t tenant.Tenant) (map[string]bool, error) {
-	args := ms.Called(ctx, t)
+func (ms *mockScheduler) GetJobState(ctx context.Context, p tenant.ProjectName) (map[string]bool, error) {
+	args := ms.Called(ctx, p)
 	return args.Get(0).(map[string]bool), args.Error(1)
 }
 
@@ -1731,8 +1731,8 @@ func (ms *mockScheduler) DeleteJobs(ctx context.Context, t tenant.Tenant, jobsTo
 	return args.Error(0)
 }
 
-func (ms *mockScheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []job.Name, state string) error {
-	args := ms.Called(ctx, tnnt, jobNames, state)
+func (ms *mockScheduler) UpdateJobState(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name, state string) error {
+	args := ms.Called(ctx, projectName, jobNames, state)
 	return args.Error(0)
 }
 

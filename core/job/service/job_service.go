@@ -103,8 +103,8 @@ type TenantDetailsGetter interface {
 
 type JobDeploymentService interface {
 	UploadJobs(ctx context.Context, jobTenant tenant.Tenant, toUpdate, toDelete []string) error
-	UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state job.State) error
-	GetJobSchedulerState(ctx context.Context, tnnt tenant.Tenant) (map[string]bool, error)
+	UpdateJobScheduleState(ctx context.Context, project tenant.ProjectName, jobName []job.Name, state job.State) error
+	GetJobSchedulerState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error)
 }
 
 type JobRepository interface {
@@ -362,7 +362,7 @@ func (*JobService) getUpsertResults(specsUnmodified []*job.Spec, upsertedJobs []
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
-	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant, jobNames, jobState)
+	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant.ProjectName(), jobNames, jobState)
 	if err != nil {
 		return err
 	}

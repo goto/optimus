@@ -74,12 +74,12 @@ func (s *JobRunService) cleanPerNamespace(ctx context.Context, t tenant.Tenant, 
 	return s.scheduler.DeleteJobs(ctx, t, jobsToDelete)
 }
 
-func (s *JobRunService) UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state job.State) error {
-	return s.scheduler.UpdateJobState(ctx, tnnt, jobName, state.String())
+func (s *JobRunService) UpdateJobScheduleState(ctx context.Context, projectName tenant.ProjectName, jobName []job.Name, state job.State) error {
+	return s.scheduler.UpdateJobState(ctx, projectName, jobName, state.String())
 }
 
-func (s *JobRunService) GetJobSchedulerState(ctx context.Context, tnnt tenant.Tenant) (map[string]bool, error) {
-	return s.scheduler.GetJobState(ctx, tnnt)
+func (s *JobRunService) GetJobSchedulerState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error) {
+	return s.scheduler.GetJobState(ctx, projectName)
 }
 
 func (s *JobRunService) UploadJobs(ctx context.Context, tnnt tenant.Tenant, toUpdate, toDelete []string) (err error) {

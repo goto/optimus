@@ -261,15 +261,15 @@ class SuperExternalTaskSensor(BaseSensorOperator):
             upstream_schedule , start_date,end_date, scheduler_state = self.get_upstream_job_information()
             if scheduler_state == 'disabled':
                 log.info("Bypassing upstream check as upstream job state is paused in scheduler")
-                return true
+                return True
 
-            if start_date > time.Now():
+            if start_date > schedule_time:
                 log.info("Bypassing upstream check as upstream job start_date is in future, i.e. start_date: '{}'".format(start_date))
-                return true
+                return True
 
-            if end_date < time.Now():
+            if end_date < schedule_time:
                 log.info("Bypassing upstream check as upstream job end_date has already been passed, i.e. end_date: '{}'".format(end_date))
-                return true
+                return True
 
         except Exception as e:
             self.log.warning("error while fetching upstream schedule :: {}".format(e))

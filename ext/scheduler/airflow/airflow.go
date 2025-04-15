@@ -343,7 +343,7 @@ func (s *Scheduler) fetchJobRunBatch(ctx context.Context, tnnt tenant.Tenant, jo
 
 	req := airflowRequest{path: dagStatusBatchURL, method: http.MethodPost, body: reqBody}
 
-	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
 	if err != nil {
 		return nil, err
 	}
@@ -385,11 +385,11 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 }
 
 // GetJobState sets the state of jobs disabled on scheduler
-func (s *Scheduler) GetJobState(ctx context.Context, tnnt tenant.Tenant) (map[string]bool, error) {
-	spanCtx, span := startChildSpan(ctx, "UpdateJobState")
+func (s *Scheduler) GetJobState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error) {
+	spanCtx, span := startChildSpan(ctx, "GetJobState")
 	defer span.End()
 
-	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	schdAuth, err := s.getSchedulerAuth(ctx, projectName)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +417,7 @@ func (s *Scheduler) GetJobState(ctx context.Context, tnnt tenant.Tenant) (map[st
 }
 
 // UpdateJobState set the state of jobs as enabled / disabled on scheduler
-func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobNames []job.Name, state string) error {
+func (s *Scheduler) UpdateJobState(ctx context.Context, project tenant.ProjectName, jobNames []job.Name, state string) error {
 	spanCtx, span := startChildSpan(ctx, "UpdateJobState")
 	defer span.End()
 
@@ -429,7 +429,7 @@ func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobN
 		data = []byte(`{"is_paused": true}`)
 	}
 
-	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	schdAuth, err := s.getSchedulerAuth(ctx, project)
 	if err != nil {
 		return err
 	}
@@ -478,8 +478,8 @@ func getDagRunRequest(jobQuery *scheduler.JobRunsCriteria, jobCron *cron.Schedul
 	}
 }
 
-func (s *Scheduler) getSchedulerAuth(ctx context.Context, tnnt tenant.Tenant) (SchedulerAuth, error) {
-	project, err := s.projectGetter.Get(ctx, tnnt.ProjectName())
+func (s *Scheduler) getSchedulerAuth(ctx context.Context, projectName tenant.ProjectName) (SchedulerAuth, error) {
+	project, err := s.projectGetter.Get(ctx, projectName)
 	if err != nil {
 		return SchedulerAuth{}, err
 	}
@@ -489,7 +489,7 @@ func (s *Scheduler) getSchedulerAuth(ctx context.Context, tnnt tenant.Tenant) (S
 		return SchedulerAuth{}, err
 	}
 
-	auth, err := s.secretGetter.Get(ctx, tnnt.ProjectName(), tnnt.NamespaceName().String(), tenant.SecretSchedulerAuth)
+	auth, err := s.secretGetter.Get(ctx, projectName, "", tenant.SecretSchedulerAuth)
 	if err != nil {
 		return SchedulerAuth{}, err
 	}
@@ -517,7 +517,7 @@ func (s *Scheduler) ClearBatch(ctx context.Context, tnnt tenant.Tenant, jobName 
 		method: http.MethodPost,
 		body:   data,
 	}
-	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
 	if err != nil {
 		return err
 	}
@@ -537,7 +537,7 @@ func (s *Scheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName s
 		method: http.MethodPatch,
 		body:   data,
 	}
-	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
 	if err != nil {
 		return err
 	}
@@ -561,7 +561,7 @@ func (s *Scheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName s
 		method: http.MethodPost,
 		body:   data,
 	}
-	schdAuth, err := s.getSchedulerAuth(ctx, tnnt)
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
 	if err != nil {
 		return err
 	}

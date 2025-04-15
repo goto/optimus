@@ -5272,7 +5272,7 @@ func TestJobService(t *testing.T) {
 		updateRemark := "job disable remark"
 		t.Run("should fail if scheduler state change request fails", func(t *testing.T) {
 			jobDeploymentService := new(JobDeploymentService)
-			jobDeploymentService.On("UpdateJobScheduleState", ctx, sampleTenant, jobsToUpdateState, state).Return(fmt.Errorf("some error in update Job State"))
+			jobDeploymentService.On("UpdateJobScheduleState", ctx, sampleTenant.ProjectName(), jobsToUpdateState, state).Return(fmt.Errorf("some error in update Job State"))
 			defer jobDeploymentService.AssertExpectations(t)
 
 			jobService := service.NewJobService(nil, nil, nil, nil, nil, nil, nil, nil, jobDeploymentService, nil, nil, nil, nil)
@@ -5282,7 +5282,7 @@ func TestJobService(t *testing.T) {
 
 		t.Run("should fail if update state in job table fails", func(t *testing.T) {
 			jobDeploymentService := new(JobDeploymentService)
-			jobDeploymentService.On("UpdateJobScheduleState", ctx, sampleTenant, jobsToUpdateState, state).Return(nil)
+			jobDeploymentService.On("UpdateJobScheduleState", ctx, sampleTenant.ProjectName(), jobsToUpdateState, state).Return(nil)
 			defer jobDeploymentService.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
@@ -5296,7 +5296,7 @@ func TestJobService(t *testing.T) {
 
 		t.Run("should pass when no error in scheduler update and repo update", func(t *testing.T) {
 			jobDeploymentService := new(JobDeploymentService)
-			jobDeploymentService.On("UpdateJobScheduleState", ctx, sampleTenant, jobsToUpdateState, state).Return(nil)
+			jobDeploymentService.On("UpdateJobScheduleState", ctx, sampleTenant.ProjectName(), jobsToUpdateState, state).Return(nil)
 			defer jobDeploymentService.AssertExpectations(t)
 
 			jobRepo := new(JobRepository)
@@ -6160,13 +6160,13 @@ func (_m *JobDeploymentService) UploadJobs(ctx context.Context, jobTenant tenant
 	return r0
 }
 
-func (_m *JobDeploymentService) UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobNames []job.Name, state job.State) error {
-	args := _m.Called(ctx, tnnt, jobNames, state)
+func (_m *JobDeploymentService) UpdateJobScheduleState(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name, state job.State) error {
+	args := _m.Called(ctx, projectName, jobNames, state)
 	return args.Error(0)
 }
 
-func (_m *JobDeploymentService) GetJobSchedulerState(ctx context.Context, tnnt tenant.Tenant) (map[string]bool, error) {
-	args := _m.Called(ctx, tnnt)
+func (_m *JobDeploymentService) GetJobSchedulerState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error) {
+	args := _m.Called(ctx, projectName)
 	return args.Get(0).(map[string]bool), args.Error(1)
 }
 

@@ -27,17 +27,17 @@ func NewJobWorker(logger log.Logger, repo JobRepository, jobDeploymentService Jo
 	}
 }
 
-func groupByTenant(jobs []*job.Job) map[tenant.Tenant][]*job.Job {
-	grouped := make(map[tenant.Tenant][]*job.Job)
+func groupByProject(jobs []*job.Job) map[tenant.ProjectName][]*job.Job {
+	grouped := make(map[tenant.ProjectName][]*job.Job)
 	for _, j := range jobs {
 		tnnt := j.Tenant()
-		grouped[tnnt] = append(grouped[tnnt], j)
+		grouped[tnnt.ProjectName()] = append(grouped[tnnt.ProjectName()], j)
 	}
 	return grouped
 }
 
-func (w *JobWorker) SyncJobStatusByTenant(ctx context.Context, tnnt tenant.Tenant, jobs []*job.Job) error {
-	jobSchedulerStates, err := w.jobDeploymentService.GetJobSchedulerState(ctx, tnnt)
+func (w *JobWorker) SyncJobStatusByTenant(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job) error {
+	jobSchedulerStates, err := w.jobDeploymentService.GetJobSchedulerState(ctx, projectName)
 	if err != nil {
 		return err
 	}
@@ -57,12 +57,12 @@ func (w *JobWorker) SyncJobStatusByTenant(ctx context.Context, tnnt tenant.Tenan
 
 	if len(toDisable) > 0 {
 		w.logger.Info(fmt.Sprintf("[SyncJobStatus] Job Status changed to disabled on scheduler jobs: %s", strings.Join(toDisable.GetJobNamesSring(), ", ")))
-		err = w.jobDeploymentService.UpdateJobScheduleState(ctx, tnnt, toDisable.GetJobNames(), job.DISABLED)
+		err = w.jobDeploymentService.UpdateJobScheduleState(ctx, projectName, toDisable.GetJobNames(), job.DISABLED)
 		multierror.Append(err)
 	}
 	if len(toEnable) > 0 {
 		w.logger.Info(fmt.Sprintf("[SyncJobStatus] Job Status changed to enabled on scheduler jobs: %s", strings.Join(toEnable.GetJobNamesSring(), ", ")))
-		err = w.jobDeploymentService.UpdateJobScheduleState(ctx, tnnt, toEnable.GetJobNames(), job.ENABLED)
+		err = w.jobDeploymentService.UpdateJobScheduleState(ctx, projectName, toEnable.GetJobNames(), job.ENABLED)
 		multierror.Append(err)
 	}
 	return multierror.ToErr()
@@ -82,11 +82,11 @@ func (w *JobWorker) SyncJobStatus(ctx context.Context, statusSyncInterval int64)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[SyncJobStatus] failed to get all jobs, err:%s", err.Error()))
 		}
-		jobsByTenant := groupByTenant(allJobs)
+		jobsByProject := groupByProject(allJobs)
 
-		for tnnt, jobs := range jobsByTenant {
-			err = w.SyncJobStatusByTenant(ctx, tnnt, jobs)
-			w.logger.Error(fmt.Sprintf("[SyncJobStatus] SyncJobStatusByTenant failed for tenant: %s, err:%s", tnnt, err.Error()))
+		for projectName, jobs := range jobsByProject {
+			err = w.SyncJobStatusByTenant(ctx, projectName, jobs)
+			w.logger.Error(fmt.Sprintf("[SyncJobStatus] SyncJobStatusByTenant failed for Project: %s, err:%s", projectName, err.Error()))
 		}
 
 		w.logger.Info(fmt.Sprintf("[SyncJobStatus] finished syncing jobs status, Total Time: %s", time.Since(start).String()))

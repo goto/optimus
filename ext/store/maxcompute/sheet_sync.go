@@ -63,6 +63,9 @@ func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.
 }
 
 func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error) {
+	if len(resources) == 0 {
+		return []resource.SyncStatus{}, nil
+	}
 	sheets, ossClient, drive, err := s.getClients(ctx, resources[0].Tenant())
 	if err != nil {
 		return nil, err

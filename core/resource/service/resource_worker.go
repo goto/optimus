@@ -56,6 +56,10 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 			w.resService.updateLastCheckedUnSyncedETs(ctx, tnnt.ProjectName(), resources)
 		}
 		var sheetsSyncedCount int
+		if len(toUpdateResources) < 1 {
+			w.logger.Info("[SyncExternalSheets] Founds no Sheets to be updated")
+			continue
+		}
 		syncStatus, err := w.resService.syncer.SyncBatch(ctx, toUpdateResources)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] unable to sync external sheets, err:%s", err.Error()))

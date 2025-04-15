@@ -77,7 +77,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobBDestination := resourceURNB
 			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
-			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true, job.ENABLED)
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobB}
 
@@ -102,7 +102,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobBDestination := resourceURNB
 			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
-			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true, job.ENABLED)
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobB}
 
@@ -128,7 +128,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobBDestination := resourceURNB
 			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
-			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true, job.ENABLED)
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobB}
 
@@ -153,11 +153,11 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobAUpstreams := []resource.URN{resourceURNF} // unresolved inferred dependency
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 
 			jobBDestination := resourceURNB
 			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
-			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true, job.ENABLED)
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobA, jobB}
 
@@ -189,11 +189,11 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobAUpstreams := []resource.URN{resourceURNF} // unresolved inferred dependency
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 
 			jobBDestination := resourceURNB
 			jobBUpstreams := []resource.URN{resourceURNG} // unresolved inferred dependency
-			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true, job.ENABLED)
+			jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBUpstreams, true)
 
 			jobs := []*job.Job{jobA, jobB}
 
@@ -237,7 +237,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobAUpstreams := []resource.URN{resourceURNB}
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
 			upstreamB := job.NewUpstreamResolved("job-B", "", resourceURNB, sampleTenant, "inferred", taskName, false)
@@ -273,7 +273,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobAUpstreams := []resource.URN{resourceURNB, resourceURND}
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
 			unresolvedUpstreams := []*job.Upstream{
@@ -313,7 +313,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobAUpstreams := []resource.URN{resourceURNB}
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
 			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return(nil, errors.New("internal error"))
@@ -343,7 +343,7 @@ func TestUpstreamResolver(t *testing.T) {
 			jobADestination := resourceURNA
 			jobAUpstreams := []resource.URN{resourceURNB, resourceURND}
 
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
 			unresolvedUpstreams := []*job.Upstream{
@@ -385,7 +385,7 @@ func TestUpstreamResolver(t *testing.T) {
 			jobADestination := resourceURNA
 			jobAUpstreams := []resource.URN{resourceURNB, resourceURND}
 
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobAUpstreams, false)
 			jobs := []*job.Job{jobA}
 
 			unresolvedUpstreams := []*job.Upstream{
@@ -428,7 +428,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobASources := []resource.URN{resourceURNB, resourceURND}
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			unresolvedUpstreams := []*job.Upstream{
 				job.NewUpstreamUnresolvedStatic("job-C", project.Name()),
@@ -469,7 +469,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobASources := []resource.URN{resourceURNB, resourceURND}
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			unresolvedUpstreams := []*job.Upstream{
 				job.NewUpstreamUnresolvedInferred(resourceURNB),
@@ -510,7 +510,7 @@ func TestUpstreamResolver(t *testing.T) {
 
 			jobADestination := resourceURNA
 			jobASources := []resource.URN{resourceURNB, resourceURND}
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			unresolvedUpstreams := []*job.Upstream{
 				job.NewUpstreamUnresolvedStatic("job-C", project.Name()),

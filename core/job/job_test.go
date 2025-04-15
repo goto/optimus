@@ -36,13 +36,13 @@ func TestEntityJob(t *testing.T) {
 	jobADestination, _ := resource.ParseURN("store://project.dataset.sample-a")
 	jobASource, _ := resource.ParseURN("store://project.dataset.sample-b")
 	jobASources := []resource.URN{jobASource}
-	jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+	jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 	specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 	jobBDestination, _ := resource.ParseURN("store://project.dataset.sample-b")
 	jobBSource, _ := resource.ParseURN("store://project.dataset.sample-c")
 	jobBSources := []resource.URN{jobBSource}
-	jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBSources, false, job.ENABLED)
+	jobB := job.NewJob(sampleTenant, specB, jobBDestination, jobBSources, false)
 
 	t.Run("GetJobNames", func(t *testing.T) {
 		t.Run("should return list of names", func(t *testing.T) {
@@ -320,7 +320,7 @@ func TestEntityJob(t *testing.T) {
 			jobCDestination, _ := resource.ParseURN("store://project.dataset.sample-c")
 			jobCSource, _ := resource.ParseURN("store://project.dataset.sample-c")
 			jobCSources := []resource.URN{jobCSource}
-			jobC := job.NewJob(sampleTenant, specC, jobCDestination, jobCSources, false, job.ENABLED)
+			jobC := job.NewJob(sampleTenant, specC, jobCDestination, jobCSources, false)
 
 			assert.Equal(t, sampleTenant, jobC.Tenant())
 			assert.Equal(t, specC, jobC.Spec())
@@ -443,7 +443,7 @@ func TestEntityJob(t *testing.T) {
 			jobTaskPython := job.NewTask("python", jobTaskConfig)
 			upstreamsSpecA, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"test-proj/"}).Build()
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTaskPython).WithSpecUpstream(upstreamsSpecA).Build()
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			jobWithUpstream, err := jobA.GetJobWithUnresolvedUpstream()
 			assert.ErrorContains(t, err, "failed to get static upstreams to resolve")
@@ -453,7 +453,7 @@ func TestEntityJob(t *testing.T) {
 			jobTaskPython := job.NewTask("python", jobTaskConfig)
 			upstreamsSpecA, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"/job-C"}).Build()
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTaskPython).WithSpecUpstream(upstreamsSpecA).Build()
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			jobWithUpstream, err := jobA.GetJobWithUnresolvedUpstream()
 			assert.ErrorContains(t, err, "failed to get static upstreams to resolve")
@@ -463,7 +463,7 @@ func TestEntityJob(t *testing.T) {
 			jobTaskPython := job.NewTask("python", jobTaskConfig)
 			upstreamsSpecA, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"test-proj/job-C"}).Build()
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTaskPython).WithSpecUpstream(upstreamsSpecA).Build()
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 
 			jobWithUpstreams, err := jobA.GetJobWithUnresolvedUpstream()
 			assert.NoError(t, err)
@@ -476,7 +476,7 @@ func TestEntityJob(t *testing.T) {
 			jobTaskPython := job.NewTask("python", jobTaskConfig)
 			upstreamsSpecA, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"/job-C"}).Build()
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTaskPython).WithSpecUpstream(upstreamsSpecA).Build()
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 			jobs := job.Jobs([]*job.Job{jobA, jobB})
 
 			jobsWithUpstreams, err := jobs.GetJobsWithUnresolvedUpstreams()
@@ -487,7 +487,7 @@ func TestEntityJob(t *testing.T) {
 			jobTaskPython := job.NewTask("python", jobTaskConfig)
 			upstreamsSpecA, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"test-proj/job-C"}).Build()
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTaskPython).WithSpecUpstream(upstreamsSpecA).Build()
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
 			jobs := job.Jobs([]*job.Job{jobA, jobB})
 
 			jobsWithUpstreams, err := jobs.GetJobsWithUnresolvedUpstreams()
@@ -499,8 +499,8 @@ func TestEntityJob(t *testing.T) {
 		t.Run("should return deduplicate jobs when there's duplication", func(t *testing.T) {
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
-			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false, job.ENABLED)
-			jobB := job.NewJob(sampleTenant, specB, jobADestination, jobASources, false, job.ENABLED)
+			jobA := job.NewJob(sampleTenant, specA, jobADestination, jobASources, false)
+			jobB := job.NewJob(sampleTenant, specB, jobADestination, jobASources, false)
 
 			jobs := []*job.Job{jobA, jobB, jobB, jobA}
 			deduplicated := job.Jobs(jobs).Deduplicate()

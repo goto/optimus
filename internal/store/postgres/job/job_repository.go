@@ -726,11 +726,11 @@ func specToJob(spec *Spec) (*job.Job, error) {
 		sources = append(sources, resourceURN)
 	}
 
-	state, err := job.StateFrom(spec.State)
-	if err != nil {
-		return nil, err
-	}
-	return job.NewJob(tenantName, jobSpec, destination, sources, spec.IsDirty, state), nil
+	jobObj := job.NewJob(tenantName, jobSpec, destination, sources, spec.IsDirty)
+
+	err = jobObj.SetState(spec.State)
+
+	return jobObj, err
 }
 
 type JobWithUpstream struct {

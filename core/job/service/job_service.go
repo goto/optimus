@@ -1178,7 +1178,7 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 		return nil, err
 	}
 
-	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false, job.DISABLED), nil
+	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false), nil
 }
 
 func (*JobService) buildDAGTree(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) *tree.MultiRootTree {

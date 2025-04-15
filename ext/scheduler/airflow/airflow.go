@@ -34,8 +34,7 @@ const (
 	EntityAirflow = "Airflow"
 
 	dagStatusBatchURL = "api/v1/dags/~/dagRuns/list"
-	dagURL            = "api/v1/dags/%s"
-	allPausedDagsURL  = "api/v1/dags"
+	dagURL            = "api/v1/dags"
 	dagRunClearURL    = "api/v1/dags/%s/clearTaskInstances"
 	dagRunCreateURL   = "api/v1/dags/%s/dagRuns"
 	dagRunModifyURL   = "api/v1/dags/%s/dagRuns/%s"
@@ -395,7 +394,7 @@ func (s *Scheduler) GetJobState(ctx context.Context, tnnt tenant.Tenant) (map[st
 		return nil, err
 	}
 	req := airflowRequest{
-		path:   allPausedDagsURL,
+		path:   dagURL,
 		method: http.MethodGet,
 	}
 	resp, err := s.client.Invoke(spanCtx, req, schdAuth)
@@ -438,7 +437,7 @@ func (s *Scheduler) UpdateJobState(ctx context.Context, tnnt tenant.Tenant, jobN
 	for _, jobName := range jobNames {
 		go func(jobName job.Name) {
 			req := airflowRequest{
-				path:   fmt.Sprintf(dagURL, jobName),
+				path:   path.Join(dagURL, jobName.String()),
 				method: http.MethodPatch,
 				body:   data,
 			}

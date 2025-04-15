@@ -78,6 +78,15 @@ func (j *Job) State() State {
 	return j.state
 }
 
+func (j *Job) SetState(state string) error {
+	stateObj, err := StateFrom(state)
+	if err != nil {
+		return err
+	}
+	j.state = stateObj
+	return nil
+}
+
 func (j *Job) IsEnabled() bool {
 	return j.State() == ENABLED
 }
@@ -226,8 +235,8 @@ func (j *Job) ProjectName() tenant.ProjectName {
 	return j.Tenant().ProjectName()
 }
 
-func NewJob(tenant tenant.Tenant, spec *Spec, destination resource.URN, sources []resource.URN, isDirty bool, state State) *Job {
-	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty, state: state}
+func NewJob(tenant tenant.Tenant, spec *Spec, destination resource.URN, sources []resource.URN, isDirty bool) *Job {
+	return &Job{tenant: tenant, spec: spec, destination: destination, sources: sources, isDirty: isDirty}
 }
 
 type Jobs []*Job

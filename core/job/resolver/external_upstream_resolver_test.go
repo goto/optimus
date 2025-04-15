@@ -44,7 +44,7 @@ func TestExternalUpstreamResolver(t *testing.T) {
 	resourceURND, err := resource.ParseURN("store://resource-D")
 	assert.NoError(t, err)
 
-	jobA := job.NewJob(sampleTenant, specA, resource.ZeroURN(), []resource.URN{resourceURNC}, false, job.ENABLED)
+	jobA := job.NewJob(sampleTenant, specA, resource.ZeroURN(), []resource.URN{resourceURNC}, false)
 
 	t.Run("BulkResolve", func(t *testing.T) {
 		t.Run("resolves upstream externally", func(t *testing.T) {

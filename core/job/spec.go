@@ -254,9 +254,9 @@ func StateFrom(name string) (State, error) {
 		return "", errors.InvalidArgument(EntityJob, "state is empty")
 	}
 	switch name {
-	case "JOB_STATE_ENABLED":
+	case "JOB_STATE_ENABLED", "enabled":
 		return ENABLED, nil
-	case "JOB_STATE_DISABLED":
+	case "JOB_STATE_DISABLED", "disabled":
 		return DISABLED, nil
 	default:
 		return "", errors.InvalidArgument(EntityJob, "invalid state")

@@ -24,6 +24,7 @@ type Spec struct {
 	Owner       string
 	Description string
 	Labels      map[string]string
+	State       string
 
 	Schedule   json.RawMessage
 	WindowSpec json.RawMessage
@@ -696,7 +697,7 @@ func FromChangelogRow(row pgx.Row) (*ChangeLog, error) {
 func FromRow(row pgx.Row) (*Spec, error) {
 	var js Spec
 
-	err := row.Scan(&js.ID, &js.Name, &js.Version, &js.Owner, &js.Description,
+	err := row.Scan(&js.ID, &js.State, &js.Name, &js.Version, &js.Owner, &js.Description,
 		&js.Labels, &js.Schedule, &js.Alert, &js.Webhook, &js.StaticUpstreams, &js.HTTPUpstreams,
 		&js.TaskName, &js.TaskConfig, &js.WindowSpec, &js.Assets, &js.Hooks, &js.Metadata, &js.Destination, &js.Sources,
 		&js.ProjectName, &js.NamespaceName, &js.CreatedAt, &js.UpdatedAt, &js.DeletedAt, &js.IsDirty)

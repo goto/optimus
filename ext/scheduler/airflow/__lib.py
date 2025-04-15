@@ -159,7 +159,7 @@ class OptimusAPIClient:
         self._raise_error_if_request_failed(response)
         return response.json()
 
-    def get_job_metadata(self, execution_date, namespace, project, job) -> dict:
+    def get_job_metadata(self, namespace, project, job) -> dict:
         url = '{optimus_host}/api/v1beta1/project/{project_name}/namespace/{namespace_name}/job/{job_name}'.format(
             optimus_host=self.host,
             namespace_name=namespace,
@@ -258,7 +258,19 @@ class SuperExternalTaskSensor(BaseSensorOperator):
                 log.info("Bypassing upstream check as job_config contains IGNORE_UPSTREAM=True")
                 return True
         try:
-            upstream_schedule = self.get_schedule_interval(schedule_time)
+            upstream_schedule , start_date,end_date, scheduler_state = self.get_upstream_job_information()
+            if scheduler_state == 'disabled':
+                log.info("Bypassing upstream check as upstream job state is paused in scheduler")
+                return True
+
+            if start_date > schedule_time:
+                log.info("Bypassing upstream check as upstream job start_date is in future, i.e. start_date: '{}'".format(start_date))
+                return True
+
+            if end_date < schedule_time:
+                log.info("Bypassing upstream check as upstream job end_date has already been passed, i.e. end_date: '{}'".format(end_date))
+                return True
+
         except Exception as e:
             self.log.warning("error while fetching upstream schedule :: {}".format(e))
             context[SCHEDULER_ERR_MSG] = "error while fetching upstream schedule :: {}".format(e)
@@ -275,7 +287,6 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self.log.info("waiting for upstream runs between: {} - {} schedule times of airflow dag run".format(
             schedule_time_window_start, schedule_time_window_end))
 
-        # a = 0/0
         if not self._are_all_job_runs_successful(schedule_time_window_start, schedule_time_window_end):
             self.log.warning("unable to find enough successful executions for upstream '{}' in "
                              "'{}' dated between {} and {}(inclusive), rescheduling sensor".
@@ -291,12 +302,14 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         last_upstream_execution_date = c.get_prev(datetime)
         return last_upstream_schedule_time, last_upstream_execution_date
 
-    def get_schedule_interval(self, schedule_time):
-        schedule_time_str = schedule_time.strftime(TIMESTAMP_FORMAT)
-        job_metadata = self._upstream_optimus_client.get_job_metadata(schedule_time_str, self.upstream_optimus_namespace,
+    def get_upstream_job_information(self):
+        job_metadata = self._upstream_optimus_client.get_job_metadata(self.upstream_optimus_namespace,
                                                              self.upstream_optimus_project, self.upstream_optimus_job)
         upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
-        return upstream_schedule
+        start_date = self._parse_datetime(job_metadata['spec']['stat_date'])
+        end_date = self._parse_datetime(job_metadata['spec']['end_date'])
+        status = job_metadata['spec']['scheduler_state']
+        return upstream_schedule, start_date, end_date, scheduler_state
 
     # TODO the api will be updated with getJobRuns even though the field here refers to scheduledAt
     #  it points to execution_date

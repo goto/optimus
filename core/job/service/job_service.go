@@ -103,7 +103,8 @@ type TenantDetailsGetter interface {
 
 type JobDeploymentService interface {
 	UploadJobs(ctx context.Context, jobTenant tenant.Tenant, toUpdate, toDelete []string) error
-	UpdateJobScheduleState(ctx context.Context, tnnt tenant.Tenant, jobName []job.Name, state string) error
+	UpdateJobScheduleState(ctx context.Context, project tenant.ProjectName, jobName []job.Name, state job.State) error
+	GetJobSchedulerState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error)
 }
 
 type JobRepository interface {
@@ -117,6 +118,7 @@ type JobRepository interface {
 	GetByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) (*job.Job, error)
 	GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error)
 	GetAllByTenant(ctx context.Context, jobTenant tenant.Tenant) ([]*job.Job, error)
+	GetAll(ctx context.Context) ([]*job.Job, error)
 	GetAllByProjectName(ctx context.Context, projectName tenant.ProjectName) ([]*job.Job, error)
 	SyncState(ctx context.Context, jobTenant tenant.Tenant, disabledJobNames, enabledJobNames []job.Name) error
 	UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error
@@ -360,7 +362,7 @@ func (*JobService) getUpsertResults(specsUnmodified []*job.Spec, upsertedJobs []
 }
 
 func (j *JobService) UpdateState(ctx context.Context, jobTenant tenant.Tenant, jobNames []job.Name, jobState job.State, remark string) error {
-	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant, jobNames, jobState.String())
+	err := j.jobDeploymentService.UpdateJobScheduleState(ctx, jobTenant.ProjectName(), jobNames, jobState)
 	if err != nil {
 		return err
 	}

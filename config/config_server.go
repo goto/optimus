@@ -1,16 +1,17 @@
 package config
 
 type ServerConfig struct {
-	Version          Version              `mapstructure:"version"`
-	Log              LogConfig            `mapstructure:"log"`
-	Serve            Serve                `mapstructure:"serve"`
-	Telemetry        TelemetryConfig      `mapstructure:"telemetry"`
-	Alerting         AlertingConfig       `mapstructure:"alerting"`
-	ResourceManagers []ResourceManager    `mapstructure:"resource_managers"`
-	Plugin           PluginConfig         `mapstructure:"plugin"`
-	Replay           ReplayConfig         `mapstructure:"replay"`
-	Publisher        *Publisher           `mapstructure:"publisher"`
-	ExternalTables   ExternalTablesConfig `mapstructure:"external_tables"`
+	Version                Version              `mapstructure:"version"`
+	Log                    LogConfig            `mapstructure:"log"`
+	Serve                  Serve                `mapstructure:"serve"`
+	Telemetry              TelemetryConfig      `mapstructure:"telemetry"`
+	Alerting               AlertingConfig       `mapstructure:"alerting"`
+	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
+	Plugin                 PluginConfig         `mapstructure:"plugin"`
+	Replay                 ReplayConfig         `mapstructure:"replay"`
+	Publisher              *Publisher           `mapstructure:"publisher"`
+	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
+	ExternalTables         ExternalTablesConfig `mapstructure:"external_tables"`
 }
 
 type Serve struct {

@@ -63,6 +63,7 @@ type Job struct {
 	sources     []resource.URN
 
 	isDirty bool
+	state   State
 }
 
 func (j *Job) Tenant() tenant.Tenant {
@@ -71,6 +72,27 @@ func (j *Job) Tenant() tenant.Tenant {
 
 func (j *Job) Spec() *Spec {
 	return j.spec
+}
+
+func (j *Job) State() State {
+	return j.state
+}
+
+func (j *Job) SetState(state string) error {
+	stateObj, err := StateFrom(state)
+	if err != nil {
+		return err
+	}
+	j.state = stateObj
+	return nil
+}
+
+func (j *Job) IsEnabled() bool {
+	return j.State() == ENABLED
+}
+
+func (j *Job) IsDisabled() bool {
+	return j.State() == DISABLED
 }
 
 func (j *Job) GetName() string {
@@ -223,6 +245,14 @@ func (j Jobs) GetJobNames() []Name {
 	jobNames := make([]Name, len(j))
 	for i, job := range j {
 		jobNames[i] = job.spec.Name()
+	}
+	return jobNames
+}
+
+func (j Jobs) GetJobNamesSring() []string {
+	jobNames := make([]string, len(j))
+	for i, job := range j {
+		jobNames[i] = job.spec.Name().String()
 	}
 	return jobNames
 }

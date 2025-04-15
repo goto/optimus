@@ -175,6 +175,9 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.NoError(t, err)
 			jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, nil, false)
 
+			jobA.SetState(job.ENABLED.String())
+			jobB.SetState(job.ENABLED.String())
+
 			jobs := []*job.Job{jobA, jobB}
 
 			jobRepo := postgres.NewJobRepository(db)
@@ -947,6 +950,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			actual, err := jobRepo.GetByJobName(ctx, sampleTenant.ProjectName(), "sample-job-A")
 			assert.NoError(t, err)
 			assert.NotNil(t, actual)
+			jobA.SetState(job.ENABLED.String())
 			assert.Equal(t, jobA, actual)
 		})
 		t.Run("should not return job if it is soft deleted", func(t *testing.T) {
@@ -959,6 +963,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			jobRepo := postgres.NewJobRepository(db)
 			_, err = jobRepo.Add(ctx, []*job.Job{jobA})
 			assert.NoError(t, err)
+			jobA.SetState(job.ENABLED.String())
 
 			actual, err := jobRepo.GetByJobName(ctx, sampleTenant.ProjectName(), "sample-job-A")
 			assert.NoError(t, err)
@@ -988,6 +993,8 @@ func TestPostgresJobRepository(t *testing.T) {
 			jobRepo := postgres.NewJobRepository(db)
 			_, err = jobRepo.Add(ctx, []*job.Job{jobA, jobB})
 			assert.NoError(t, err)
+			jobA.SetState(job.ENABLED.String())
+			jobB.SetState(job.ENABLED.String())
 
 			actual, err := jobRepo.GetAllByProjectName(ctx, sampleTenant.ProjectName())
 			assert.NoError(t, err)
@@ -1014,6 +1021,8 @@ func TestPostgresJobRepository(t *testing.T) {
 
 			actual, err := jobRepo.GetAllByProjectName(ctx, sampleTenant.ProjectName())
 			assert.NoError(t, err)
+			jobA.SetState(job.ENABLED.String())
+
 			assert.Equal(t, []*job.Job{jobA}, actual)
 		})
 	})
@@ -1030,6 +1039,9 @@ func TestPostgresJobRepository(t *testing.T) {
 			jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNY, []resource.URN{resourceURNC}, false)
 
 			jobRepo := postgres.NewJobRepository(db)
+			jobA.SetState(job.ENABLED.String())
+			jobB.SetState(job.ENABLED.String())
+
 			_, err = jobRepo.Add(ctx, []*job.Job{jobA, jobB})
 			assert.NoError(t, err)
 
@@ -1058,6 +1070,8 @@ func TestPostgresJobRepository(t *testing.T) {
 
 			actual, err := jobRepo.GetAllByResourceDestination(ctx, resourceURNY)
 			assert.NoError(t, err)
+			jobA.SetState(job.ENABLED.String())
+
 			assert.Equal(t, []*job.Job{jobA}, actual)
 		})
 	})

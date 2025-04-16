@@ -51,7 +51,8 @@ const (
 )
 
 type Evaluator struct {
-	FilePath string `yaml:"filepath"`
+	Env      string `yaml:"env,omitempty"`
+	FilePath string `yaml:"filepath,omitempty"`
 	Selector string `yaml:"selector,omitempty"`
 }
 

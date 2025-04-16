@@ -21,7 +21,7 @@ type yamlPathEvaluator struct {
 // Evaluator returns the rawResource eg. query string given assets
 // it returns whatever inside the defined filepath and its selector
 // valid selector is defined from this BNF https://github.com/vmware-labs/yaml-jsonpath#syntax
-func (e yamlPathEvaluator) Evaluate(assets map[string]string) string {
+func (e yamlPathEvaluator) Evaluate(assets map[string]string, _ map[string]string) string {
 	cleanedFilePath := filepath.Base(e.filepath)
 	raw, ok := assets[cleanedFilePath]
 	if !ok {

@@ -20,7 +20,7 @@ func TestNewBQUpstreamIdentifier(t *testing.T) {
 	bqExtractorFunc := func(context.Context, []bigquery.ResourceURN) (map[bigquery.ResourceURN]string, error) {
 		return nil, nil // nolint: nilnil
 	}
-	evaluatorFunc := func(map[string]string) string { return "" }
+	evaluatorFunc := func(map[string]string, map[string]string) string { return "" }
 	t.Run("should return error when logger is nil", func(t *testing.T) {
 		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(nil, parserFunc, bqExtractorFunc, evaluatorFunc)
 		assert.ErrorContains(t, err, "logger is nil")
@@ -59,25 +59,26 @@ func TestIdentifyResources(t *testing.T) {
 	assets := map[string]string{
 		"./query.sql": "select 1 from `project1.dataset1.name1`",
 	}
+	config := map[string]string{}
 	t.Run("should return empty resources when evaluator couldn't evaluate the asset", func(t *testing.T) {
-		evaluatorFunc := new(EvalAssetFunc)
+		evaluatorFunc := new(EvalFunc)
 		defer evaluatorFunc.AssertExpectations(t)
 		parserFunc := new(ParserFunc)
 		defer parserFunc.AssertExpectations(t)
 		bqExtractorFunc := new(BQExtractorFunc)
 		defer bqExtractorFunc.AssertExpectations(t)
 
-		evaluatorFunc.On("Execute", assets).Return("")
+		evaluatorFunc.On("Execute", assets, config).Return("")
 		bqUpstreamIdentifier, err := upstreamidentifier.NewBQUpstreamIdentifier(logger, parserFunc.Execute, bqExtractorFunc.Execute, evaluatorFunc.Execute)
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets, config)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
 	t.Run("should return empty resource and error when extractor fail to extract", func(t *testing.T) {
-		evaluatorFunc := new(EvalAssetFunc)
+		evaluatorFunc := new(EvalFunc)
 		defer evaluatorFunc.AssertExpectations(t)
 		parserFunc := new(ParserFunc)
 		defer parserFunc.AssertExpectations(t)
@@ -92,12 +93,12 @@ func TestIdentifyResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets, config)
 		assert.Error(t, err)
 		assert.Empty(t, resourceURNs)
 	})
 	t.Run("should skip the urn if parser passed with wrong urn formt", func(t *testing.T) {
-		evaluatorFunc := new(EvalAssetFunc)
+		evaluatorFunc := new(EvalFunc)
 		defer evaluatorFunc.AssertExpectations(t)
 		parserFunc := new(ParserFunc)
 		defer parserFunc.AssertExpectations(t)
@@ -112,7 +113,7 @@ func TestIdentifyResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets, config)
 		assert.NoError(t, err)
 		assert.Empty(t, resourceURNs)
 	})
@@ -120,7 +121,7 @@ func TestIdentifyResources(t *testing.T) {
 		// project1.dataset1.name1 -view-> select 1 from `project1.dataset1.name2`
 		// project1.dataset1.name2 -view-> select 1 from `project1.dataset1.name1` join `project1.dataset1.name3` on true
 		// project1.dataset1.name3 -table-
-		evaluatorFunc := new(EvalAssetFunc)
+		evaluatorFunc := new(EvalFunc)
 		defer evaluatorFunc.AssertExpectations(t)
 		parserFunc := new(ParserFunc)
 		defer parserFunc.AssertExpectations(t)
@@ -149,7 +150,7 @@ func TestIdentifyResources(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, bqUpstreamIdentifier)
 
-		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets, config)
 		assert.ErrorContains(t, err, "circular reference is detected")
 		assert.Empty(t, resourceURNs)
 	})
@@ -157,7 +158,7 @@ func TestIdentifyResources(t *testing.T) {
 		// project1.dataset1.name1 -view-> select 1 from `project1.dataset1.name2` join `project1.dataset1.name3` on true
 		// project1.dataset1.name2 -view-> select 1 from `project1.dataset1.name3`
 		// project1.dataset1.name3 -table-
-		evaluatorFunc := new(EvalAssetFunc)
+		evaluatorFunc := new(EvalFunc)
 		defer evaluatorFunc.AssertExpectations(t)
 		parserFunc := new(ParserFunc)
 		defer parserFunc.AssertExpectations(t)
@@ -194,7 +195,7 @@ func TestIdentifyResources(t *testing.T) {
 		assert.NoError(t, err)
 
 		expectedResourceURNs := []resource.URN{urn1, urn2, urn3}
-		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets)
+		resourceURNs, err := bqUpstreamIdentifier.IdentifyResources(ctx, assets, config)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)
 		assert.ElementsMatch(t, resourceURNs, expectedResourceURNs)
@@ -232,23 +233,41 @@ func (_m *BQExtractorFunc) Execute(_a0 context.Context, _a1 []bigquery.ResourceU
 	return r0, r1
 }
 
-// EvalAssetFunc is an autogenerated mock type for the EvalAssetFunc type
-type EvalAssetFunc struct {
+// EvalFunc is an autogenerated mock type for the EvalFunc type
+type EvalFunc struct {
 	mock.Mock
 }
 
-// Execute provides a mock function with given fields: assets
-func (_m *EvalAssetFunc) Execute(assets map[string]string) string {
-	ret := _m.Called(assets)
+// Execute provides a mock function with given fields: assets, config
+func (_m *EvalFunc) Execute(assets map[string]string, config map[string]string) string {
+	ret := _m.Called(assets, config)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Execute")
+	}
 
 	var r0 string
-	if rf, ok := ret.Get(0).(func(map[string]string) string); ok {
-		r0 = rf(assets)
+	if rf, ok := ret.Get(0).(func(map[string]string, map[string]string) string); ok {
+		r0 = rf(assets, config)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
 	return r0
+}
+
+// NewEvalFunc creates a new instance of EvalFunc. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// The first argument is typically a *testing.T value.
+func NewEvalFunc(t interface {
+	mock.TestingT
+	Cleanup(func())
+}) *EvalFunc {
+	mock := &EvalFunc{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
 }
 
 // ParserFunc is an autogenerated mock type for the ParserFunc type

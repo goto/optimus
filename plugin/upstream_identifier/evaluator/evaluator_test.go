@@ -47,14 +47,14 @@ func TestGetFileEvaluator(t *testing.T) {
 			assets := map[string]string{
 				"not_target.sql": "select 1",
 			}
-			rawResource := fileEvaluator.Evaluate(assets)
+			rawResource := fileEvaluator.Evaluate(assets, map[string]string{})
 			assert.Empty(t, rawResource)
 		})
 		t.Run("should return correct content when asset has targeted filepath", func(t *testing.T) {
 			assets := map[string]string{
 				"query.sql": "select 1",
 			}
-			rawResource := fileEvaluator.Evaluate(assets)
+			rawResource := fileEvaluator.Evaluate(assets, map[string]string{})
 			assert.NotEmpty(t, rawResource)
 		})
 	})
@@ -107,7 +107,7 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			assets := map[string]string{
 				"not_target.yaml": "query: select 1",
 			}
-			rawResource := yamlpathEvaluator.Evaluate(assets)
+			rawResource := yamlpathEvaluator.Evaluate(assets, map[string]string{})
 			assert.Empty(t, rawResource)
 		})
 		t.Run("should return empty when yaml content is malformed", func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			assets := map[string]string{
 				"config.yaml": "%%malformed:s",
 			}
-			rawResource := yamlpathEvaluator.Evaluate(assets)
+			rawResource := yamlpathEvaluator.Evaluate(assets, map[string]string{})
 			assert.Empty(t, rawResource)
 		})
 		t.Run("should return empty when couldn't find targeted value", func(t *testing.T) {
@@ -130,7 +130,7 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
-			rawResource := yamlpathEvaluator.Evaluate(assets)
+			rawResource := yamlpathEvaluator.Evaluate(assets, map[string]string{})
 			assert.Empty(t, rawResource)
 		})
 		t.Run("should return correct content when could find targeted value", func(t *testing.T) {
@@ -140,7 +140,7 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
-			rawResource := yamlpathEvaluator.Evaluate(assets)
+			rawResource := yamlpathEvaluator.Evaluate(assets, map[string]string{})
 			assert.NotEmpty(t, rawResource)
 			assert.Equal(t, "SELECT * FROM `project1.dataset1.table1`", rawResource)
 		})
@@ -151,7 +151,7 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
-			rawResource := yamlpathEvaluator.Evaluate(assets)
+			rawResource := yamlpathEvaluator.Evaluate(assets, map[string]string{})
 			assert.NotEmpty(t, rawResource)
 			assert.Equal(t, "SELECT * FROM `project2.dataset2.table2`", rawResource)
 		})
@@ -162,7 +162,7 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
-			rawResource := yamlpathEvaluator.Evaluate(assets)
+			rawResource := yamlpathEvaluator.Evaluate(assets, map[string]string{})
 			assert.NotEmpty(t, rawResource)
 			assert.Equal(t, "SELECT * FROM `project3.dataset3.table3`\nSELECT * FROM `project4.dataset4.table4`", rawResource)
 		})
@@ -173,7 +173,7 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, yamlpathEvaluator)
 
-			rawResource := yamlpathEvaluator.Evaluate(assets)
+			rawResource := yamlpathEvaluator.Evaluate(assets, map[string]string{})
 			assert.NotEmpty(t, rawResource)
 			assert.Equal(t, "SELECT * FROM `project5.dataset5.table5`\nSELECT * FROM `project6.dataset6.table6`", rawResource)
 		})

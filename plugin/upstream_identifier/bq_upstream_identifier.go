@@ -21,16 +21,16 @@ type BQUpstreamIdentifier struct {
 	logger         log.Logger
 	parserFunc     ParserFunc
 	extractorFunc  extractorFunc
-	evaluatorFuncs []EvalAssetFunc
+	evaluatorFuncs []EvalFunc
 }
 
-func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
+func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string, config map[string]string) ([]resource.URN, error) {
 	resourcesAccumulation := []*bigquery.ResourceURNWithUpstreams{}
 
 	// generate resource urn with upstream from each evaluator
 	me := errors.NewMultiError("identify resource errors")
 	for _, evaluatorFunc := range g.evaluatorFuncs {
-		query := evaluatorFunc(assets)
+		query := evaluatorFunc(assets, config)
 		if query == "" {
 			continue
 		}
@@ -104,7 +104,7 @@ func (g BQUpstreamIdentifier) identifyResources(ctx context.Context, query strin
 	return resources, me.ToErr()
 }
 
-func NewBQUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, bqExtractorFunc BQExtractorFunc, evaluatorFuncs ...EvalAssetFunc) (*BQUpstreamIdentifier, error) {
+func NewBQUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, bqExtractorFunc BQExtractorFunc, evaluatorFuncs ...EvalFunc) (*BQUpstreamIdentifier, error) {
 	me := errors.NewMultiError("create bq upstream generator errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
@@ -115,7 +115,7 @@ func NewBQUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, bqExtract
 	if bqExtractorFunc == nil {
 		me.Append(fmt.Errorf("bqExtractorFunc is nil"))
 	}
-	sanitizedEvaluatorFuncs := []EvalAssetFunc{}
+	sanitizedEvaluatorFuncs := []EvalFunc{}
 	for _, evaluatorFunc := range evaluatorFuncs {
 		if evaluatorFunc != nil {
 			sanitizedEvaluatorFuncs = append(sanitizedEvaluatorFuncs, evaluatorFunc)

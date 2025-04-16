@@ -16,7 +16,7 @@ type fileEvaluator struct {
 
 // Evaluator returns the rawResource eg. query string given assets
 // it returns whatever inside the defined filepath
-func (e fileEvaluator) Evaluate(assets map[string]string) string {
+func (e fileEvaluator) Evaluate(assets map[string]string, _ map[string]string) string {
 	cleanedFilePath := filepath.Base(e.filepath)
 	rawResource, ok := assets[cleanedFilePath]
 	if !ok {

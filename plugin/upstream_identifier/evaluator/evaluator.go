@@ -7,7 +7,7 @@ import (
 )
 
 type Evaluator interface {
-	Evaluate(assets map[string]string) (rawResource string)
+	Evaluate(assets map[string]string, config map[string]string) (rawResource string)
 }
 
 type EvaluatorFactory struct {
@@ -20,6 +20,10 @@ func (e EvaluatorFactory) GetFileEvaluator(filepath string) (Evaluator, error) {
 
 func (e EvaluatorFactory) GetYamlPathEvaluator(filepath, selector string) (Evaluator, error) {
 	return newYamlPathEvaluator(e.logger, filepath, selector)
+}
+
+func (e EvaluatorFactory) GetEnvEvaluator(env string) (Evaluator, error) {
+	return newEnvEvaluator(e.logger, env)
 }
 
 func NewEvaluatorFactory(logger log.Logger) (*EvaluatorFactory, error) {

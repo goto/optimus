@@ -14,10 +14,10 @@ type MaxcomputeUpstreamIdentifier struct {
 	logger         log.Logger
 	parserFunc     ParserFunc
 	extractorFunc  ExtractorFunc
-	evaluatorFuncs []EvalAssetFunc
+	evaluatorFuncs []EvalFunc
 }
 
-func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, extractorFunc ExtractorFunc, evaluatorFuncs ...EvalAssetFunc) (*MaxcomputeUpstreamIdentifier, error) {
+func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, extractorFunc ExtractorFunc, evaluatorFuncs ...EvalFunc) (*MaxcomputeUpstreamIdentifier, error) {
 	me := errors.NewMultiError("create maxcompute upstream generator errors")
 	if logger == nil {
 		me.Append(fmt.Errorf("logger is nil"))
@@ -28,7 +28,7 @@ func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, e
 	if parserFunc == nil {
 		me.Append(fmt.Errorf("parserFunc is nil"))
 	}
-	sanitizedEvaluatorFuncs := []EvalAssetFunc{}
+	sanitizedEvaluatorFuncs := []EvalFunc{}
 	for _, evaluatorFunc := range evaluatorFuncs {
 		if evaluatorFunc != nil {
 			sanitizedEvaluatorFuncs = append(sanitizedEvaluatorFuncs, evaluatorFunc)
@@ -48,12 +48,12 @@ func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, e
 	}, nil
 }
 
-func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
+func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string, config map[string]string) ([]resource.URN, error) {
 	resources := []string{}
 
 	// generate resource urn with upstream from each evaluator
 	for _, evaluatorFunc := range g.evaluatorFuncs {
-		query := evaluatorFunc(assets)
+		query := evaluatorFunc(assets, config)
 		if query == "" {
 			continue
 		}

@@ -17,8 +17,8 @@ import (
 type (
 	// ParserFunc parses given raw and return list of resource urns
 	ParserFunc func(rawResource string) (resources []string)
-	// EvalAssetFunc returns raw string from a given asset
-	EvalAssetFunc func(assets map[string]string) (rawResource string)
+	// EvalFunc returns raw string from a given asset
+	EvalFunc func(assets map[string]string, config map[string]string) (rawResource string)
 	// ExtractorFunc extracts the ddl from the given resource urns
 	ExtractorFunc func(ctx context.Context, resources []string) (map[string]string, error)
 )
@@ -28,7 +28,7 @@ type UpstreamIdentifierFactory struct {
 }
 
 type UpstreamIdentifier interface {
-	IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error)
+	IdentifyResources(ctx context.Context, assets map[string]string, config map[string]string) ([]resource.URN, error)
 }
 
 func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context, svcAcc string, evaluators ...evaluator.Evaluator) (UpstreamIdentifier, error) {
@@ -40,7 +40,7 @@ func (u *UpstreamIdentifierFactory) GetBQUpstreamIdentifier(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	evaluatorFuncs := make([]EvalAssetFunc, len(evaluators))
+	evaluatorFuncs := make([]EvalFunc, len(evaluators))
 	for i, evaluator := range evaluators {
 		evaluatorFuncs[i] = evaluator.Evaluate
 	}
@@ -59,7 +59,7 @@ func (u *UpstreamIdentifierFactory) GetMaxcomputeUpstreamIdentifier(_ context.Co
 		return nil, err
 	}
 
-	evaluatorFuncs := make([]EvalAssetFunc, len(evaluators))
+	evaluatorFuncs := make([]EvalFunc, len(evaluators))
 	for i, evaluator := range evaluators {
 		evaluatorFuncs[i] = evaluator.Evaluate
 	}

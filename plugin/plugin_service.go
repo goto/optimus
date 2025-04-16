@@ -32,6 +32,7 @@ type PluginGetter interface {
 type EvaluatorFactory interface {
 	GetFileEvaluator(filepath string) (evaluator.Evaluator, error)
 	GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
+	GetEnvEvaluator(env string) (evaluator.Evaluator, error)
 }
 
 type UpstreamIdentifierFactory interface {
@@ -141,7 +142,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	var resourceURNs []resource.URN
 	me := errors.NewMultiError("identify upstream errors")
 	for _, upstreamIdentifier := range upstreamIdentifiers {
-		currentResourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, assets)
+		currentResourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, assets, compiledConfig)
 		if err != nil {
 			s.l.Error("error when identify upstream")
 			me.Append(err)
@@ -215,13 +216,15 @@ func generateResourceURNFromTemplate(tmpl *template.Template, config map[string]
 }
 
 func (s PluginService) getEvaluator(evaluator plugin.Evaluator) (evaluator.Evaluator, error) {
-	if evaluator.Selector == "" {
+	if evaluator.Selector == "" && evaluator.FilePath != "" {
 		return s.evaluatorFactory.GetFileEvaluator(evaluator.FilePath)
-	}
-
-	fileExension := filepath.Ext(evaluator.FilePath)
-	if fileExension == ".yaml" || fileExension == ".yml" {
-		return s.evaluatorFactory.GetYamlPathEvaluator(evaluator.FilePath, evaluator.Selector)
+	} else if evaluator.Selector != "" && evaluator.FilePath != "" {
+		fileExension := filepath.Ext(evaluator.FilePath)
+		if fileExension == ".yaml" || fileExension == ".yml" {
+			return s.evaluatorFactory.GetYamlPathEvaluator(evaluator.FilePath, evaluator.Selector)
+		}
+	} else if evaluator.Env != "" {
+		return s.evaluatorFactory.GetEnvEvaluator(evaluator.Env)
 	}
 
 	return nil, fmt.Errorf("evaluator for filepath %s is not supported", evaluator.FilePath)

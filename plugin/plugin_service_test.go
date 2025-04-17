@@ -311,7 +311,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
-		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]resource.URN{urn1}, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets, config).Return([]resource.URN{urn1}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -331,6 +331,12 @@ func TestIdentifyUpstreams(t *testing.T) {
 		defer evaluator.AssertExpectations(t)
 		upstreamIdentifier := NewUpstreamIdentifier(t)
 
+		configTask := map[string]string{}
+		configTask["BQ_SERVICE_ACCOUNT"] = "service_account_value"
+		configTask["PROJECT"] = "proj"
+		configTask["DATASET"] = "datas"
+		configTask["TABLE"] = "table2"
+
 		pluginYamlTestWithDestinationTemplate, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_destination_template.yaml")
 		assert.NoError(t, err)
 		pluginTestWithDestinationTemplate := &p.Plugin{
@@ -339,16 +345,11 @@ func TestIdentifyUpstreams(t *testing.T) {
 		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithDestinationTemplate, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
-		upstreamIdentifier.On("IdentifyResources", ctx, assets).Return([]resource.URN{urn1, urn2}, nil)
+		upstreamIdentifier.On("IdentifyResources", ctx, assets, configTask).Return([]resource.URN{urn1, urn2}, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
 
-		configTask := map[string]string{}
-		configTask["BQ_SERVICE_ACCOUNT"] = "service_account_value"
-		configTask["PROJECT"] = "proj"
-		configTask["DATASET"] = "datas"
-		configTask["TABLE"] = "table2"
 		resourceURNs, err := pluginService.IdentifyUpstreams(ctx, taskName, configTask, assets)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resourceURNs)
@@ -660,7 +661,7 @@ func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (evaluator.Evaluat
 }
 
 // GetYamlPathEvaluator provides a mock function with given fields: filepath, selector
-func (_m *EvaluatorFactory) GetYamlPathEvaluator(filepath string, selector string) (evaluator.Evaluator, error) {
+func (_m *EvaluatorFactory) GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error) {
 	ret := _m.Called(filepath, selector)
 
 	if len(ret) == 0 {
@@ -694,7 +695,8 @@ func (_m *EvaluatorFactory) GetYamlPathEvaluator(filepath string, selector strin
 func NewEvaluatorFactory(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *EvaluatorFactory {
+},
+) *EvaluatorFactory {
 	mock := &EvaluatorFactory{}
 	mock.Mock.Test(t)
 
@@ -708,13 +710,17 @@ type Evaluator struct {
 	mock.Mock
 }
 
-// Evaluate provides a mock function with given fields: assets
-func (_m *Evaluator) Evaluate(assets map[string]string) string {
-	ret := _m.Called(assets)
+// Evaluate provides a mock function with given fields: assets, config
+func (_m *Evaluator) Evaluate(assets, config map[string]string) string {
+	ret := _m.Called(assets, config)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Evaluate")
+	}
 
 	var r0 string
-	if rf, ok := ret.Get(0).(func(map[string]string) string); ok {
-		r0 = rf(assets)
+	if rf, ok := ret.Get(0).(func(map[string]string, map[string]string) string); ok {
+		r0 = rf(assets, config)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
@@ -727,9 +733,9 @@ type UpstreamIdentifier struct {
 	mock.Mock
 }
 
-// IdentifyResources provides a mock function with given fields: ctx, assets
-func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string) ([]resource.URN, error) {
-	ret := _m.Called(ctx, assets)
+// IdentifyResources provides a mock function with given fields: ctx, assets, config
+func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets, config map[string]string) ([]resource.URN, error) {
+	ret := _m.Called(ctx, assets, config)
 
 	if len(ret) == 0 {
 		panic("no return value specified for IdentifyResources")
@@ -737,19 +743,19 @@ func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[
 
 	var r0 []resource.URN
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) ([]resource.URN, error)); ok {
-		return rf(ctx, assets)
+	if rf, ok := ret.Get(0).(func(context.Context, map[string]string, map[string]string) ([]resource.URN, error)); ok {
+		return rf(ctx, assets, config)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) []resource.URN); ok {
-		r0 = rf(ctx, assets)
+	if rf, ok := ret.Get(0).(func(context.Context, map[string]string, map[string]string) []resource.URN); ok {
+		r0 = rf(ctx, assets, config)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]resource.URN)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, map[string]string) error); ok {
-		r1 = rf(ctx, assets)
+	if rf, ok := ret.Get(1).(func(context.Context, map[string]string, map[string]string) error); ok {
+		r1 = rf(ctx, assets, config)
 	} else {
 		r1 = ret.Error(1)
 	}

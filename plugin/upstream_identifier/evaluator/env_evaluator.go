@@ -5,8 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/salt/log"
+
+	"github.com/goto/optimus/internal/errors"
 )
 
 var likelyPath = regexp.MustCompile(`(?i)^([a-zA-Z]:\\|\.{0,2}[\\/]|\/).+`)
@@ -34,7 +35,7 @@ func newEnvEvaluator(logger log.Logger, env string) (*envEvaluator, error) {
 	}, nil
 }
 
-func (e *envEvaluator) Evaluate(assets map[string]string, config map[string]string) string {
+func (e *envEvaluator) Evaluate(assets, config map[string]string) string {
 	// env evaluator returns the env as the rawResource
 	// this is used to identify the upstream by env
 	query := config[e.env]

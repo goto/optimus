@@ -85,7 +85,7 @@ func TestIdentifyResources(t *testing.T) {
 		bqExtractorFunc := new(BQExtractorFunc)
 		defer bqExtractorFunc.AssertExpectations(t)
 
-		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
+		evaluatorFunc.On("Execute", assets, config).Return(assets["./query.sql"])
 		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1.dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, mock.Anything).Return(nil, errors.New("some error"))
 
@@ -105,7 +105,7 @@ func TestIdentifyResources(t *testing.T) {
 		bqExtractorFunc := new(BQExtractorFunc)
 		defer bqExtractorFunc.AssertExpectations(t)
 
-		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
+		evaluatorFunc.On("Execute", assets, config).Return(assets["./query.sql"])
 		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1;dataset1.name1"})
 		// bq extractor should not be executed since the result of parser is empty
 
@@ -134,7 +134,7 @@ func TestIdentifyResources(t *testing.T) {
 		sqlView1 := "select 1 from `project1.dataset1.name2`"
 		sqlView2 := "select 1 from `project1.dataset1.name1` join `project1.dataset1.name3` on true"
 
-		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
+		evaluatorFunc.On("Execute", assets, config).Return(assets["./query.sql"])
 		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1.dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN1}).Return(map[bigquery.ResourceURN]string{resourceURN1: sqlView1}, nil)
 
@@ -171,7 +171,7 @@ func TestIdentifyResources(t *testing.T) {
 		sqlView1 := "select 1 from `project1.dataset1.name2`"
 		sqlView2 := "select 1 from `project1.dataset1.name3`"
 
-		evaluatorFunc.On("Execute", assets).Return(assets["./query.sql"])
+		evaluatorFunc.On("Execute", assets, config).Return(assets["./query.sql"])
 		parserFunc.On("Execute", assets["./query.sql"]).Return([]string{"project1.dataset1.name1"})
 		bqExtractorFunc.On("Execute", ctx, []bigquery.ResourceURN{resourceURN1}).Return(map[bigquery.ResourceURN]string{resourceURN1: sqlView1}, nil)
 
@@ -239,7 +239,7 @@ type EvalFunc struct {
 }
 
 // Execute provides a mock function with given fields: assets, config
-func (_m *EvalFunc) Execute(assets map[string]string, config map[string]string) string {
+func (_m *EvalFunc) Execute(assets, config map[string]string) string {
 	ret := _m.Called(assets, config)
 
 	if len(ret) == 0 {
@@ -261,7 +261,8 @@ func (_m *EvalFunc) Execute(assets map[string]string, config map[string]string) 
 func NewEvalFunc(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *EvalFunc {
+},
+) *EvalFunc {
 	mock := &EvalFunc{}
 	mock.Mock.Test(t)
 

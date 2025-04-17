@@ -24,7 +24,7 @@ type BQUpstreamIdentifier struct {
 	evaluatorFuncs []EvalFunc
 }
 
-func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string, config map[string]string) ([]resource.URN, error) {
+func (g BQUpstreamIdentifier) IdentifyResources(ctx context.Context, assets, config map[string]string) ([]resource.URN, error) {
 	resourcesAccumulation := []*bigquery.ResourceURNWithUpstreams{}
 
 	// generate resource urn with upstream from each evaluator

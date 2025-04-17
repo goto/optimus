@@ -48,7 +48,7 @@ func NewMaxcomputeUpstreamIdentifier(logger log.Logger, parserFunc ParserFunc, e
 	}, nil
 }
 
-func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, assets map[string]string, config map[string]string) ([]resource.URN, error) {
+func (g MaxcomputeUpstreamIdentifier) IdentifyResources(ctx context.Context, assets, config map[string]string) ([]resource.URN, error) {
 	resources := []string{}
 
 	// generate resource urn with upstream from each evaluator

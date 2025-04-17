@@ -7,7 +7,7 @@ import (
 )
 
 type Evaluator interface {
-	Evaluate(assets map[string]string, config map[string]string) (rawResource string)
+	Evaluate(assets, config map[string]string) (rawResource string)
 }
 
 type EvaluatorFactory struct {

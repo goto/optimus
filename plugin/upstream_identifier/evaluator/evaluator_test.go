@@ -179,3 +179,48 @@ func TestGetYamlPathEvaluator(t *testing.T) {
 		})
 	})
 }
+
+func TestEnvEvaluator(t *testing.T) {
+	logger := log.NewNoop()
+	e, err := evaluator.NewEvaluatorFactory(logger)
+	assert.NoError(t, err)
+	assert.NotNil(t, e)
+	t.Run("should return error when env is empty", func(t *testing.T) {
+		t.Skip()
+		envEvaluator, err := e.GetEnvEvaluator("")
+		assert.Error(t, err)
+		assert.Nil(t, envEvaluator)
+	})
+	t.Run("should return env evaluator", func(t *testing.T) {
+		t.Skip()
+		envEvaluator, err := e.GetEnvEvaluator("MC__QUERY")
+		assert.NoError(t, err)
+		assert.NotNil(t, envEvaluator)
+	})
+	t.Run("Evaluate", func(t *testing.T) {
+		config := map[string]string{
+			"MC__QUERY":           "SELECT * FROM `project1.dataset1.table1`",
+			"MC__QUERY_FILE_PATH": "/data/in/query.sql",
+		}
+		t.Run("should return query defined in the env", func(t *testing.T) {
+			envEvaluator, err := e.GetEnvEvaluator("MC__QUERY")
+			assert.NoError(t, err)
+			assert.NotNil(t, envEvaluator)
+			assets := map[string]string{}
+			rawResource := envEvaluator.Evaluate(assets, config)
+			assert.NotEmpty(t, rawResource)
+			assert.Equal(t, "SELECT * FROM `project1.dataset1.table1`", rawResource)
+		})
+		t.Run("should return query from asset", func(t *testing.T) {
+			envEvaluator, err := e.GetEnvEvaluator("MC__QUERY_FILE_PATH")
+			assert.NoError(t, err)
+			assert.NotNil(t, envEvaluator)
+			assets := map[string]string{
+				"query.sql": "select 1",
+			}
+			rawResource := envEvaluator.Evaluate(assets, config)
+			assert.NotEmpty(t, rawResource)
+			assert.Equal(t, "select 1", rawResource)
+		})
+	})
+}

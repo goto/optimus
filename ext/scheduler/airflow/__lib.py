@@ -260,16 +260,17 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         try:
             upstream_schedule , start_date,end_date, scheduler_state = self.get_upstream_job_information()
             bypassDisabledJobs = bool(Variable.get("bypass_disabled_jobs", default_var=True))
+            log.info("Variable  bypass_disabled_jobs: '{}'".format(bypassDisabledJobs)
             if bypassDisabledJobs:
-                if scheduler_state == 'disabled':
+                if scheduler_state != "" and scheduler_state == 'disabled':
                     log.info("Bypassing upstream check as upstream job state is paused in scheduler")
                     return True
 
-                if start_date > schedule_time:
+                if start_date != "" and  self._parse_datetime(start_date) > schedule_time:
                     log.info("Bypassing upstream check as upstream job start_date is in future, i.e. start_date: '{}'".format(start_date))
                     return True
 
-                if end_date < schedule_time:
+                if end_date != "" and self._parse_datetime(end_date) < schedule_time:
                     log.info("Bypassing upstream check as upstream job end_date has already been passed, i.e. end_date: '{}'".format(end_date))
                     return True
 
@@ -308,10 +309,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         job_metadata = self._upstream_optimus_client.get_job_metadata(self.upstream_optimus_namespace,
                                                              self.upstream_optimus_project, self.upstream_optimus_job)
         upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
-        start_date = self._parse_datetime(job_metadata['spec']['start_date'])
-        end_date = self._parse_datetime(job_metadata['spec']['end_date'])
-        scheduler_state = job_metadata['spec']['scheduler_state']
-        return upstream_schedule, start_date, end_date, scheduler_state
+        return upstream_schedule, job_metadata['spec']['startDate'], job_metadata['spec']['endDate'], job_metadata['spec']['schedulerState']
 
     # TODO the api will be updated with getJobRuns even though the field here refers to scheduledAt
     #  it points to execution_date

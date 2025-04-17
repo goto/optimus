@@ -306,7 +306,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         job_metadata = self._upstream_optimus_client.get_job_metadata(self.upstream_optimus_namespace,
                                                              self.upstream_optimus_project, self.upstream_optimus_job)
         upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
-        start_date = self._parse_datetime(job_metadata['spec']['stat_date'])
+        start_date = self._parse_datetime(job_metadata['spec']['start_date'])
         end_date = self._parse_datetime(job_metadata['spec']['end_date'])
         status = job_metadata['spec']['scheduler_state']
         return upstream_schedule, start_date, end_date, scheduler_state

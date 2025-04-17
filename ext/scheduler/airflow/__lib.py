@@ -260,7 +260,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         try:
             upstream_schedule , start_date,end_date, scheduler_state = self.get_upstream_job_information()
             bypassDisabledJobs = bool(Variable.get("bypass_disabled_jobs", default_var=True))
-            log.info("Variable  bypass_disabled_jobs: '{}'".format(bypassDisabledJobs)
+            log.info("Variable  bypass_disabled_jobs: '{}'".format(bypassDisabledJobs))
             if bypassDisabledJobs:
                 if scheduler_state != "" and scheduler_state == 'disabled':
                     log.info("Bypassing upstream check as upstream job state is paused in scheduler")

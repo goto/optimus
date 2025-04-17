@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +55,12 @@ const (
 	metricJobStateFailed  = "failed"
 )
 
-type DAGInfo struct {
+type DAGs struct {
+	DAGS         []DAGObj `json:"dags"`
+	TotalEntries int      `json:"total_entries"`
+}
+
+type DAGObj struct {
 	DAGDisplayName              string   `json:"dag_display_name"`
 	DAGID                       string   `json:"dag_id"`
 	DefaultView                 string   `json:"default_view"`
@@ -384,32 +391,63 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 	return getJobRuns(dagRunList, jobCron)
 }
 
+func (s *Scheduler) fetchJobs(ctx context.Context, schdAuth SchedulerAuth, offset int) (*DAGs, error) {
+	params := url.Values{}
+	params.Add("limit", "100") // Default and max is 100
+	params.Add("order_by", "dag_id")
+	params.Add("offset", strconv.Itoa(offset))
+	req := airflowRequest{
+		path:   dagURL,
+		method: http.MethodGet,
+		query:  params.Encode(),
+	}
+
+	resp, err := s.client.Invoke(ctx, req, schdAuth)
+	if err != nil {
+		return nil, err
+	}
+
+	var dagsInfo DAGs
+	err = json.Unmarshal(resp, &dagsInfo)
+	if err != nil {
+		return nil, err
+	}
+	return &dagsInfo, nil
+}
+
+func (s *Scheduler) fetchAllJobs(ctx context.Context, schdAuth SchedulerAuth) (*DAGs, error) {
+	var offset int
+	var allDags DAGs
+	for {
+		fetchResp, err := s.fetchJobs(ctx, schdAuth, offset)
+		if err != nil {
+			return nil, err
+		}
+		allDags.DAGS = append(allDags.DAGS, fetchResp.DAGS...)
+		if len(allDags.DAGS) < fetchResp.TotalEntries {
+			offset = len(allDags.DAGS)
+			continue
+		}
+		break
+	}
+	return &allDags, nil
+}
+
 // GetJobState sets the state of jobs disabled on scheduler
 func (s *Scheduler) GetJobState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error) {
 	spanCtx, span := startChildSpan(ctx, "GetJobState")
 	defer span.End()
 
-	schdAuth, err := s.getSchedulerAuth(ctx, projectName)
+	schdAuth, err := s.getSchedulerAuth(spanCtx, projectName)
 	if err != nil {
 		return nil, err
 	}
-	req := airflowRequest{
-		path:   dagURL,
-		method: http.MethodGet,
-	}
-	resp, err := s.client.Invoke(spanCtx, req, schdAuth)
+	dagsInfo, err := s.fetchAllJobs(spanCtx, schdAuth)
 	if err != nil {
 		return nil, err
 	}
-
-	var dagsInfo []DAGInfo
-	err = json.Unmarshal(resp, &dagsInfo)
-	if err != nil {
-		return nil, err
-	}
-
 	jobToStatusMap := make(map[string]bool)
-	for _, dag := range dagsInfo {
+	for _, dag := range dagsInfo.DAGS {
 		jobToStatusMap[dag.DAGID] = dag.IsPaused
 	}
 

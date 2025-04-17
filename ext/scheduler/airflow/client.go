@@ -25,6 +25,7 @@ const (
 
 type airflowRequest struct {
 	path   string
+	query  string
 	method string
 	body   []byte
 }
@@ -74,7 +75,7 @@ func NewAirflowClient() *ClientAirflow {
 func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth SchedulerAuth) ([]byte, error) {
 	var resp []byte
 
-	endpoint := buildEndPoint(auth.host, r.path)
+	endpoint := buildEndPoint(auth.host, r.path, r.query)
 	request, err := http.NewRequestWithContext(ctx, r.method, endpoint, bytes.NewBuffer(r.body))
 	if err != nil {
 		return resp, fmt.Errorf("failed to build http request for %s due to %w", endpoint, err)
@@ -103,12 +104,13 @@ func parseResponse(resp *http.Response) ([]byte, error) {
 	return body, nil
 }
 
-func buildEndPoint(host, path string) string {
+func buildEndPoint(host, path, query string) string {
 	host = strings.Trim(host, "/")
 	u := &url.URL{
-		Scheme: "http",
-		Host:   host,
-		Path:   path,
+		Scheme:   "http",
+		Host:     host,
+		Path:     path,
+		RawQuery: query,
 	}
 	return u.String()
 }

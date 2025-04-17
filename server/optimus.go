@@ -391,7 +391,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jobWorkerCtx, closeJobWorker := context.WithCancel(context.Background())
 	s.cleanupFn = append(s.cleanupFn, closeJobWorker)
 	if s.conf.JobSyncIntervalMinutes > 0 {
-		go jobWorker.SyncJobStatus(jobWorkerCtx, 10)
+		go jobWorker.SyncJobStatus(jobWorkerCtx, s.conf.JobSyncIntervalMinutes)
 	}
 
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)

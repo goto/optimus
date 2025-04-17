@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from typing import Any, Dict, Optional
 
@@ -331,7 +331,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         return True
 
     def _parse_date(self, timestamp):
-        return datetime.strptime(timestamp, DATE_FORMAT)
+        return datetime.strptime(timestamp, DATE_FORMAT).replace(tzinfo=timezone.utc)
 
     def _parse_datetime(self, timestamp) -> datetime:
         try:

@@ -27,6 +27,7 @@ log.setLevel(logging.INFO)
 # UTC time zone as a tzinfo instance.
 utc = pendulum.timezone('UTC')
 
+DATE_FORMAT = "%Y-%m-%d"
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 TIMESTAMP_MS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
@@ -266,11 +267,11 @@ class SuperExternalTaskSensor(BaseSensorOperator):
                     log.info("Bypassing upstream check as upstream job state is paused in scheduler")
                     return True
 
-                if start_date != "" and  self._parse_datetime(start_date) > schedule_time:
+                if start_date != "" and  self._parse_date(start_date) > schedule_time:
                     log.info("Bypassing upstream check as upstream job start_date is in future, i.e. start_date: '{}'".format(start_date))
                     return True
 
-                if end_date != "" and self._parse_datetime(end_date) < schedule_time:
+                if end_date != "" and self._parse_date(end_date) < schedule_time:
                     log.info("Bypassing upstream check as upstream job end_date has already been passed, i.e. end_date: '{}'".format(end_date))
                     return True
 
@@ -328,6 +329,9 @@ class SuperExternalTaskSensor(BaseSensorOperator):
                 self.log.info("failed for run :: {}".format(job_run))
                 return False
         return True
+
+    def _parse_date(self, timestamp):
+        return datetime.strptime(timestamp, DATE_FORMAT)
 
     def _parse_datetime(self, timestamp) -> datetime:
         try:

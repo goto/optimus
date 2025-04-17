@@ -308,7 +308,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
         start_date = self._parse_datetime(job_metadata['spec']['start_date'])
         end_date = self._parse_datetime(job_metadata['spec']['end_date'])
-        status = job_metadata['spec']['scheduler_state']
+        scheduler_state = job_metadata['spec']['scheduler_state']
         return upstream_schedule, start_date, end_date, scheduler_state
 
     # TODO the api will be updated with getJobRuns even though the field here refers to scheduledAt

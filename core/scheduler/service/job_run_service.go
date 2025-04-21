@@ -202,6 +202,19 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		s.l.Error("invalid job query: %s", err)
 		return nil, err
 	}
+
+	if criteria.StartDate.Before(jobWithDetails.Schedule.StartDate) {
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] request criteria StartDate:[%s] is earlier than Job StartDate:[%s], "+
+			"truncating request criteria StartDate to Job StartDate", criteria.StartDate.String(), jobWithDetails.Schedule.StartDate.String()))
+		criteria.StartDate = jobWithDetails.Schedule.StartDate
+	}
+
+	if criteria.StartDate.After(criteria.EndDate) {
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] request criteria EndDate:[%s] is earlier than request criteria StartDate:[%s], "+
+			"truncating req criteria EndDate to req StartDate", criteria.EndDate.String(), criteria.StartDate.String()))
+		criteria.EndDate = criteria.StartDate
+	}
+
 	expectedRuns := getExpectedRuns(jobCron, criteria.StartDate, criteria.EndDate)
 
 	actualRuns, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
@@ -355,9 +368,6 @@ func validateJobQuery(jobQuery *scheduler.JobRunsCriteria, jobWithDetails *sched
 	jobStartDate := jobWithDetails.Schedule.StartDate
 	if jobStartDate.IsZero() {
 		return errors.InternalError(scheduler.EntityJobRun, "job schedule startDate not found in job", nil)
-	}
-	if jobQuery.StartDate.Before(jobStartDate) || jobQuery.EndDate.Before(jobStartDate) {
-		return errors.InvalidArgument(scheduler.EntityJobRun, "invalid date range, interval contains dates before job start")
 	}
 	return nil
 }

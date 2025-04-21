@@ -1176,7 +1176,7 @@ func TestJobRunService(t *testing.T) {
 					Version: 1,
 				},
 				Schedule: &scheduler.Schedule{
-					StartDate: startDate.Add(-time.Hour * 24),
+					StartDate: startDate.Add(-time.Hour * 24), // one Day back
 					EndDate:   nil,
 					Interval:  "0 12 * * *",
 				},
@@ -1184,7 +1184,7 @@ func TestJobRunService(t *testing.T) {
 
 			jobQuery := &scheduler.JobRunsCriteria{
 				Name:      "sample_select",
-				StartDate: startDate.Add(-time.Hour * 24 * 2),
+				StartDate: startDate.Add(-time.Hour * 24 * 2), // 2 days before the JobStart Time
 				EndDate:   endDate,
 				Filter:    []string{"success"},
 			}
@@ -1193,11 +1193,32 @@ func TestJobRunService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil)
+			criteria := &scheduler.JobRunsCriteria{
+				Name:      "sample_select",
+				StartDate: jobWithDetails.Schedule.StartDate,
+				EndDate:   endDate,
+				Filter:    []string{"success"},
+			}
+
+			runs := []*scheduler.JobRunStatus{
+				{
+					State:       scheduler.StateSuccess,
+					ScheduledAt: time.Date(2022, 3, 18, 12, 0, 0, 0, time.UTC),
+					// this run will be filtered by the merge logic as this is not expected
+				},
+				{
+					State:       scheduler.StateSuccess,
+					ScheduledAt: time.Date(2022, 3, 19, 12, 0, 0, 0, time.UTC),
+				},
+			}
+			sch := new(mockScheduler)
+			sch.On("GetJobRuns", ctx, tnnt, criteria, jobCron).Return(runs, nil)
+			defer sch.AssertExpectations(t)
+
+			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
 			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
-			assert.Error(t, err)
-			assert.ErrorContains(t, err, "invalid date range, interval contains dates before job start")
-			assert.Nil(t, returnedRuns)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(returnedRuns))
 		})
 		t.Run("should not able to get job runs when invalid cron interval present at DB", func(t *testing.T) {
 			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())

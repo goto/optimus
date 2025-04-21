@@ -6,6 +6,7 @@ scheduler:
   livenessProbe:
     initialDelaySeconds: 100
     timeoutSeconds: 200
+    command: ["bash", "-c", "airflow jobs check --job-type SchedulerJob --allow-multiple --limit 100"]
     # failureThreshold: 5
     # periodSeconds: 60
   extraVolumes: # this will create the volume from the directory
@@ -13,10 +14,6 @@ scheduler:
       hostPath:
           path: /tmp/colima/dags
           type: Directory
-  livenessProbe:
-    command: ["bash", "-c", "airflow jobs check --job-type SchedulerJob --allow-multiple --limit 100"]
-    initialDelaySeconds: 10
-    timeoutSeconds: 60
 config:
   core:
     dags_folder: /opt/airflow/dags
@@ -45,8 +42,8 @@ extraEnv: |
 uid: 1000
 
 executor: "LocalExecutor"
-airflowVersion: "2.1.3"
-defaultAirflowTag: "2.1.3"
+airflowVersion: "2.9.3"
+defaultAirflowTag: "2.9.3"
 
 workers:
   persistence:

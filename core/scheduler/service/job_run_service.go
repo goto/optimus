@@ -174,7 +174,7 @@ func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tena
 	return []*scheduler.JobRun{jobRun}, nil
 }
 
-func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
+func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, requestCriteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
 	jobWithDetails, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
 		msg := fmt.Sprintf("unable to get job details for jobName: %s, project:%s", jobName, projectName)
@@ -193,18 +193,25 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		return nil, errors.InternalError(scheduler.EntityJobRun, msg, nil)
 	}
 
-	if criteria.OnlyLastRun {
+	if requestCriteria.OnlyLastRun {
 		s.l.Warn("getting last run only")
-		return s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
+		return s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)
 	}
-	err = validateJobQuery(criteria, jobWithDetails)
+	criteria, err := s.cleanupJobQuery(*requestCriteria, jobWithDetails)
 	if err != nil {
 		s.l.Error("invalid job query: %s", err)
 		return nil, err
 	}
+
+	if criteria.EndDate.Before(criteria.StartDate) {
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s], criteria EndDate:[%s] is before criteria StartDate:[%s], incomming Request Criteria : [%#v]",
+			jobWithDetails.Name, criteria.EndDate.String(), criteria.StartDate.String(), requestCriteria))
+		return []*scheduler.JobRunStatus{}, nil
+	}
+
 	expectedRuns := getExpectedRuns(jobCron, criteria.StartDate, criteria.EndDate)
 
-	actualRuns, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, criteria, jobCron)
+	actualRuns, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, &criteria, jobCron)
 	if err != nil {
 		s.l.Error("unable to get job runs from airflow err: %s", err)
 		actualRuns = []*scheduler.JobRunStatus{}
@@ -351,15 +358,25 @@ func createFilterSet(filter []string) map[string]struct{} {
 	return m
 }
 
-func validateJobQuery(jobQuery *scheduler.JobRunsCriteria, jobWithDetails *scheduler.JobWithDetails) error {
+func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteria, jobWithDetails *scheduler.JobWithDetails) (scheduler.JobRunsCriteria, error) {
 	jobStartDate := jobWithDetails.Schedule.StartDate
 	if jobStartDate.IsZero() {
-		return errors.InternalError(scheduler.EntityJobRun, "job schedule startDate not found in job", nil)
+		return requestCriteria, errors.InternalError(scheduler.EntityJobRun, "job schedule startDate not found in job", nil)
 	}
-	if jobQuery.StartDate.Before(jobStartDate) || jobQuery.EndDate.Before(jobStartDate) {
-		return errors.InvalidArgument(scheduler.EntityJobRun, "invalid date range, interval contains dates before job start")
+
+	if requestCriteria.StartDate.Before(jobStartDate) {
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria StartDate:[%s] is earlier than Job StartDate:[%s], "+
+			"truncating request criteria StartDate to Job StartDate", jobWithDetails.Name, requestCriteria.StartDate.String(), jobWithDetails.Schedule.StartDate.String()))
+		requestCriteria.StartDate = jobStartDate
 	}
-	return nil
+
+	if jobWithDetails.Schedule.EndDate != nil && requestCriteria.EndDate.After(*jobWithDetails.Schedule.EndDate) {
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria End:[%s] is after Job EndDate:[%s], "+
+			"truncating request criteria EndDate to Job EndDate", jobWithDetails.Name, requestCriteria.EndDate.String(), jobWithDetails.Schedule.EndDate.String()))
+		requestCriteria.EndDate = *jobWithDetails.Schedule.EndDate
+	}
+
+	return requestCriteria, nil
 }
 
 func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error {

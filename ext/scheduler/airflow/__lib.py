@@ -259,11 +259,11 @@ class SuperExternalTaskSensor(BaseSensorOperator):
                 log.info("Bypassing upstream check as job_config contains IGNORE_UPSTREAM=True")
                 return True
         try:
-            upstream_schedule , start_date,end_date, scheduler_state = self.get_upstream_job_information()
+            upstream_schedule ,  scheduler_state = self.get_upstream_job_information()
             bypassDisabledJobs = bool(Variable.get("bypass_disabled_jobs", default_var=True))
             log.info("Variable  bypass_disabled_jobs: '{}'".format(bypassDisabledJobs))
             if bypassDisabledJobs:
-                if scheduler_state != "" and scheduler_state == 'disabled':
+                if scheduler_state == 'disabled':
                     log.info("Bypassing upstream check as upstream job state is paused in scheduler")
                     return True
 
@@ -302,7 +302,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         job_metadata = self._upstream_optimus_client.get_job_metadata(self.upstream_optimus_namespace,
                                                              self.upstream_optimus_project, self.upstream_optimus_job)
         upstream_schedule = lookup_non_standard_cron_expression(job_metadata['spec']['interval'])
-        return upstream_schedule, job_metadata['spec']['startDate'], job_metadata['spec']['endDate'], job_metadata['spec']['schedulerState']
+        return upstream_schedule, job_metadata['spec']['schedulerState']
 
     # TODO the api will be updated with getJobRuns even though the field here refers to scheduledAt
     #  it points to execution_date

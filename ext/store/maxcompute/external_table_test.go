@@ -19,6 +19,9 @@ func TestExternalTableHandle(t *testing.T) {
 	projectName, schemaName, tableName := "proj", "schema", "test_table"
 	fullName := projectName + "." + schemaName + "." + tableName
 	mcStore := resource.MaxCompute
+	serdePropertiesMap := map[string]string{
+		maxcompute.UseQuoteSerde: "true",
+	}
 	tnnt, _ := tenant.NewTenant(projectName, "ns")
 	metadata := resource.Metadata{
 		Version:     1,
@@ -72,7 +75,8 @@ func TestExternalTableHandle(t *testing.T) {
 		t.Run("returns error when table already present on maxcompute", func(t *testing.T) {
 			existTableErr := errors.New("Table or view already exists - table or view proj.test_table is already defined")
 			table := new(mockExternalTable)
-			table.On("CreateExternal", mock.Anything, false, emptyStringMap, emptyJars, emptyStringMap, emptyStringMap).Return(existTableErr)
+
+			table.On("CreateExternal", mock.Anything, false, serdePropertiesMap, emptyJars, emptyStringMap, emptyStringMap).Return(existTableErr)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 
@@ -92,7 +96,7 @@ func TestExternalTableHandle(t *testing.T) {
 		})
 		t.Run("returns error when table creation returns error", func(t *testing.T) {
 			table := new(mockExternalTable)
-			table.On("CreateExternal", mock.Anything, false, emptyStringMap, emptyJars, emptyStringMap, emptyStringMap).Return(errors.New("some error"))
+			table.On("CreateExternal", mock.Anything, false, serdePropertiesMap, emptyJars, emptyStringMap, emptyStringMap).Return(errors.New("some error"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 
@@ -111,7 +115,7 @@ func TestExternalTableHandle(t *testing.T) {
 		})
 		t.Run("return success when create the external table with mask policy", func(t *testing.T) {
 			table := new(mockExternalTable)
-			table.On("CreateExternal", mock.Anything, false, emptyStringMap, emptyJars, emptyStringMap, emptyStringMap).Return(nil)
+			table.On("CreateExternal", mock.Anything, false, serdePropertiesMap, emptyJars, emptyStringMap, emptyStringMap).Return(nil)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 

@@ -34,8 +34,11 @@ type ExternalTableHandle struct {
 }
 
 func addQuoteSerde(serdeProperties map[string]string) map[string]string {
-	if _, ok := serdeProperties[useQuoteSerde]; !ok {
-		serdeProperties[useQuoteSerde] = "true"
+	if serdeProperties == nil {
+		serdeProperties = make(map[string]string)
+	}
+	if _, ok := serdeProperties[UseQuoteSerde]; !ok {
+		serdeProperties[UseQuoteSerde] = "true"
 	}
 	return serdeProperties
 }

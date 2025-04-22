@@ -28,7 +28,7 @@ const (
 	ExtLocation       = "EXT_LOCATION"
 	MaxSyncInterval   = 24
 	headersCountSerde = "odps.text.option.header.lines.count"
-	useQuoteSerde     = "odps.text.option.use.quote"
+	UseQuoteSerde     = "odps.text.option.use.quote"
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -322,7 +322,7 @@ func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient
 	}
 	var quoteSerdeMissing bool
 	if fileNeedQuoteSerde {
-		if val, ok := et.Source.SerdeProperties[useQuoteSerde]; ok {
+		if val, ok := et.Source.SerdeProperties[UseQuoteSerde]; ok {
 			boolVal, _ := strconv.ParseBool(val)
 			quoteSerdeMissing = !boolVal
 		} else {

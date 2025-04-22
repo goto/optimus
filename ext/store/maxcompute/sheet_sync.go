@@ -209,6 +209,8 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, 
 		headers = num
 	}
 
+	et.Source.GetFormattedDate = et.Source.GetFormattedDate || !et.Schema.ContainsDateTimeColumns()
+
 	uri := et.Source.SourceURIs[0]
 	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, et.Source.GetFormattedData, func(rowIndex, colIndex int, data any) (string, error) {
 		if rowIndex < headers {

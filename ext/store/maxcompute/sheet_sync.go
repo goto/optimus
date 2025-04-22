@@ -255,11 +255,9 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	if err != nil {
 		return err
 	}
-	quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, drive, et, commonLocation)
+	_, err = processResource(ctx, sheets, ossClient, drive, et, commonLocation)
 	syncStatusRemarks := map[string]string{}
-	if quoteSerdeMissing {
-		syncStatusRemarks["quoteSerdeMissing"] = "True"
-	}
+
 	if err != nil {
 		syncStatusRemarks["error"] = err.Error()
 		syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]

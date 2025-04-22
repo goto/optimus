@@ -174,7 +174,11 @@ func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tena
 	return []*scheduler.JobRun{jobRun}, nil
 }
 
+<<<<<<< HEAD
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, requestCriteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error) {
+=======
+func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, requestCriteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
+>>>>>>> 7ab74b2f587c5113e729954ee5f1134269072fcb
 	jobWithDetails, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
 		msg := fmt.Sprintf("unable to get job details for jobName: %s, project:%s", jobName, projectName)
@@ -193,6 +197,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		return nil, "", errors.InternalError(scheduler.EntityJobRun, msg, nil)
 	}
 
+<<<<<<< HEAD
 	if jobWithDetails.Job.IsDryRun() {
 		return []*scheduler.JobRunStatus{}, "Job Configured as Dry Run, Skipping Sensor Checks", nil
 	}
@@ -203,6 +208,13 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		return runs, "getting last run only", err
 	}
 	criteria, msg, err := s.cleanupJobQuery(*requestCriteria, jobWithDetails)
+=======
+	if requestCriteria.OnlyLastRun {
+		s.l.Warn("getting last run only")
+		return s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)
+	}
+	criteria, err := s.cleanupJobQuery(*requestCriteria, jobWithDetails)
+>>>>>>> 7ab74b2f587c5113e729954ee5f1134269072fcb
 	if err != nil {
 		msg += fmt.Sprintf("invalid job query: %s\n", err)
 		s.l.Error(msg)
@@ -210,10 +222,16 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	}
 
 	if criteria.EndDate.Before(criteria.StartDate) {
+<<<<<<< HEAD
 		msg += fmt.Sprintf("[GetJobRuns] for job:[%s], criteria EndDate:[%s] is before criteria StartDate:[%s], incomming Request Criteria : [%#v]\n",
 			jobWithDetails.Name, criteria.EndDate.String(), criteria.StartDate.String(), requestCriteria)
 		s.l.Warn(msg)
 		return []*scheduler.JobRunStatus{}, msg, nil
+=======
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s], criteria EndDate:[%s] is before criteria StartDate:[%s], incomming Request Criteria : [%#v]",
+			jobWithDetails.Name, criteria.EndDate.String(), criteria.StartDate.String(), requestCriteria))
+		return []*scheduler.JobRunStatus{}, nil
+>>>>>>> 7ab74b2f587c5113e729954ee5f1134269072fcb
 	}
 
 	expectedRuns := getExpectedRuns(jobCron, criteria.StartDate, criteria.EndDate)
@@ -365,6 +383,7 @@ func createFilterSet(filter []string) map[string]struct{} {
 	return m
 }
 
+<<<<<<< HEAD
 func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteria, jobWithDetails *scheduler.JobWithDetails) (scheduler.JobRunsCriteria, string, error) {
 	scheduleStartTime, err := jobWithDetails.Schedule.GetScheduleStartTime()
 	if err != nil {
@@ -386,6 +405,27 @@ func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteri
 	}
 
 	return requestCriteria, msg, nil
+=======
+func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteria, jobWithDetails *scheduler.JobWithDetails) (scheduler.JobRunsCriteria, error) {
+	jobStartDate := jobWithDetails.Schedule.StartDate
+	if jobStartDate.IsZero() {
+		return requestCriteria, errors.InternalError(scheduler.EntityJobRun, "job schedule startDate not found in job", nil)
+	}
+
+	if requestCriteria.StartDate.Before(jobStartDate) {
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria StartDate:[%s] is earlier than Job StartDate:[%s], "+
+			"truncating request criteria StartDate to Job StartDate", jobWithDetails.Name, requestCriteria.StartDate.String(), jobWithDetails.Schedule.StartDate.String()))
+		requestCriteria.StartDate = jobStartDate
+	}
+
+	if jobWithDetails.Schedule.EndDate != nil && requestCriteria.EndDate.After(*jobWithDetails.Schedule.EndDate) {
+		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria End:[%s] is after Job EndDate:[%s], "+
+			"truncating request criteria EndDate to Job EndDate", jobWithDetails.Name, requestCriteria.EndDate.String(), jobWithDetails.Schedule.EndDate.String()))
+		requestCriteria.EndDate = *jobWithDetails.Schedule.EndDate
+	}
+
+	return requestCriteria, nil
+>>>>>>> 7ab74b2f587c5113e729954ee5f1134269072fcb
 }
 
 func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error {

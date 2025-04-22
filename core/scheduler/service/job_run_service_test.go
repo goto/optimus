@@ -1217,6 +1217,7 @@ func TestJobRunService(t *testing.T) {
 				{
 					State:       scheduler.StateSuccess,
 					ScheduledAt: time.Date(2022, 3, 19, 12, 0, 0, 0, time.UTC),
+<<<<<<< HEAD
 					// this run will be filtered by the merge logic as this is not expected
 				},
 				{
@@ -1227,6 +1228,8 @@ func TestJobRunService(t *testing.T) {
 				{
 					State:       scheduler.StateSuccess,
 					ScheduledAt: time.Date(2022, 3, 21, 12, 0, 0, 0, time.UTC),
+=======
+>>>>>>> 7ab74b2f587c5113e729954ee5f1134269072fcb
 				},
 			}
 			sch := new(mockScheduler)
@@ -1234,9 +1237,15 @@ func TestJobRunService(t *testing.T) {
 			defer sch.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
+<<<<<<< HEAD
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Nil(t, err)
 			assert.Equal(t, 2, len(returnedRuns))
+=======
+			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(returnedRuns))
+>>>>>>> 7ab74b2f587c5113e729954ee5f1134269072fcb
 		})
 		t.Run("should not able to get job runs when invalid cron interval present at DB", func(t *testing.T) {
 			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())

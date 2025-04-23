@@ -301,7 +301,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
             jobs_obj = self._optimus_client.get_jobs(self.project_name, self.job_name)
             if check_dry_run_config(jobs_obj):
                 log.info("Bypassing upstream check as job configured in DRY_RUN mode")
-                return true
+                return True
         except Exception as e:
             self.log.warning("error while fetching upstream schedule :: {}".format(e))
 

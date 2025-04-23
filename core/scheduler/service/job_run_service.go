@@ -193,10 +193,6 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		return nil, "", errors.InternalError(scheduler.EntityJobRun, msg, nil)
 	}
 
-	if jobWithDetails.Job.IsDryRun() {
-		return []*scheduler.JobRunStatus{}, "Job Configured as Dry Run, Skipping Sensor Checks", nil
-	}
-
 	if requestCriteria.OnlyLastRun {
 		s.l.Warn("getting last run only")
 		runs, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)

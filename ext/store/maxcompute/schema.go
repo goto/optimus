@@ -36,6 +36,18 @@ func (s Schema) Validate() error {
 	return nil
 }
 
+func (s Schema) ContainsDateTimeColumns() bool {
+	for _, field := range s {
+		switch field.Type {
+		case "DATE", "DATETIME", "TIMESTAMP", "TIMESTAMP_NTZ":
+			return true
+		default:
+			continue
+		}
+	}
+	return false
+}
+
 func (s Schema) ToMaxComputeColumns(partitionColumn map[string]struct{}, clusterColumn *Cluster, schemaBuilder *tableschema.SchemaBuilder, tableType string) error {
 	mu := errors.NewMultiError("converting to max compute column")
 

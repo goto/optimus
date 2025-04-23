@@ -28,7 +28,7 @@ const (
 	ExtLocation       = "EXT_LOCATION"
 	MaxSyncInterval   = 24
 	headersCountSerde = "odps.text.option.header.lines.count"
-	useQuoteSerde     = "odps.text.option.use.quote"
+	UseQuoteSerde     = "odps.text.option.use.quote"
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -209,6 +209,8 @@ func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, 
 		headers = num
 	}
 
+	et.Source.GetFormattedDate = et.Source.GetFormattedDate || !et.Schema.ContainsDateTimeColumns()
+
 	uri := et.Source.SourceURIs[0]
 	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, et.Source.GetFormattedData, func(rowIndex, colIndex int, data any) (string, error) {
 		if rowIndex < headers {
@@ -253,11 +255,9 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 	if err != nil {
 		return err
 	}
-	quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, drive, et, commonLocation)
+	_, err = processResource(ctx, sheets, ossClient, drive, et, commonLocation)
 	syncStatusRemarks := map[string]string{}
-	if quoteSerdeMissing {
-		syncStatusRemarks["quoteSerdeMissing"] = "True"
-	}
+
 	if err != nil {
 		syncStatusRemarks["error"] = err.Error()
 		syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
@@ -322,7 +322,7 @@ func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient
 	}
 	var quoteSerdeMissing bool
 	if fileNeedQuoteSerde {
-		if val, ok := et.Source.SerdeProperties[useQuoteSerde]; ok {
+		if val, ok := et.Source.SerdeProperties[UseQuoteSerde]; ok {
 			boolVal, _ := strconv.ParseBool(val)
 			quoteSerdeMissing = !boolVal
 		} else {

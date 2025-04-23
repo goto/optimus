@@ -73,7 +73,7 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 					URN:       i.Resource.FullName(),
 					Tenant:    i.Resource.Tenant(),
 					EventType: "Sync Failure",
-					Message:   err.Error(),
+					Message:   i.ErrorMsg,
 				})
 				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to sync resource for Res: %s, err: %s", i.Resource.FullName(), i.ErrorMsg))
 			}

@@ -33,6 +33,16 @@ type ExternalTableHandle struct {
 	tenantDetailsGetter TenantDetailsGetter
 }
 
+func addQuoteSerde(serdeProperties map[string]string) map[string]string {
+	if serdeProperties == nil {
+		serdeProperties = make(map[string]string)
+	}
+	if _, ok := serdeProperties[UseQuoteSerde]; !ok {
+		serdeProperties[UseQuoteSerde] = "true"
+	}
+	return serdeProperties
+}
+
 func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {
@@ -53,7 +63,7 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 		return e.createOtherTypeExternalTable(et, tSchema)
 	}
 
-	err = e.mcExternalTable.CreateExternal(tSchema, false, et.Source.SerdeProperties, et.Source.Jars, et.Hints, nil)
+	err = e.mcExternalTable.CreateExternal(tSchema, false, addQuoteSerde(et.Source.SerdeProperties), et.Source.Jars, et.Hints, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityExternalTable, "external table already exists on maxcompute: "+et.FullName())

@@ -43,6 +43,13 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				},
 			},
 			{
+				Name:       "simple query with headers set",
+				InputQuery: "set odps.sql.allow = true;\nselect * from `data-engineering`.testing.table1",
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "table1"),
+				},
+			},
+			{
 				Name:       "simple query with quotes in schema / dataset",
 				InputQuery: "select * from data-engineering.`testing`.table1",
 				ExpectedTables: []string{

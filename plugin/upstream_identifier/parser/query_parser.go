@@ -25,6 +25,8 @@ var (
 			// ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
 			"(?i)(?:CREATE)\\s*(?:OR\\s+REPLACE)?\\s*(?:VIEW|(?:TEMP\\s+)?TABLE)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?" + // to ignore
 			"|" +
+			"(?i)(?:SET)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-\\*?]+`?)`?" + // to ignore
+			"|" +
 			"(?i)(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-]+`?)`?\\s*(?:AS)?")
 
 	singleLineCommentsPattern = regexp.MustCompile(`(--.*)`)
@@ -60,15 +62,17 @@ func ParseTopLevelUpstreamsFromQuery(query string) []string {
 			ignoreUpstreamIdx, tableIdx = 11, 12
 		case "create":
 			ignoreUpstreamIdx, tableIdx = 13, 14
-		default:
+		case "set":
 			ignoreUpstreamIdx, tableIdx = 15, 16
+		default:
+			ignoreUpstreamIdx, tableIdx = 17, 18
 		}
 
 		if strings.TrimSpace(match[ignoreUpstreamIdx]) == "@ignoreupstream" {
 			continue
 		}
 
-		if clause == "create" || clause == "merge" || clause == "insert" || clause == "delete" {
+		if clause == "create" || clause == "merge" || clause == "insert" || clause == "delete" || clause == "set" {
 			continue
 		}
 

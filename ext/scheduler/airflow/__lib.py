@@ -316,6 +316,8 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         except Exception as e:
             self.log.warning("error while fetching job runs :: {}".format(e))
             raise AirflowException(e)
+        if api_response['message'] != "":
+            self.log.info(api_response['message'])
         for job_run in api_response['jobRuns']:
             if job_run['state'] != 'success':
                 self.log.info("failed for run :: {}".format(job_run))

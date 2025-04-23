@@ -298,7 +298,7 @@ func TestJobRunHandler(t *testing.T) {
 				Filter:    []string{"success"},
 			}
 			jobRunService := new(mockJobRunService)
-			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, nil)
+			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, "", nil)
 			defer jobRunService.AssertExpectations(t)
 
 			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil)
@@ -343,7 +343,7 @@ func TestJobRunHandler(t *testing.T) {
 				Filter:    []string{"success"},
 			}
 			jobRunService := new(mockJobRunService)
-			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, nil)
+			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, "", nil)
 			defer jobRunService.AssertExpectations(t)
 
 			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil)
@@ -381,7 +381,7 @@ func TestJobRunHandler(t *testing.T) {
 				OnlyLastRun: true,
 			}
 			jobRunService := new(mockJobRunService)
-			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(nil, fmt.Errorf("some random error"))
+			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(nil, "", fmt.Errorf("some random error"))
 			defer jobRunService.AssertExpectations(t)
 
 			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil)
@@ -829,12 +829,12 @@ func (m *mockJobRunService) GetJobRunsByFilter(ctx context.Context, projectName 
 	return args.Get(0).([]*scheduler.JobRun), args.Error(1)
 }
 
-func (m *mockJobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
+func (m *mockJobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error) {
 	args := m.Called(ctx, projectName, jobName, criteria)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, "", args.Error(2)
 	}
-	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
+	return args.Get(0).([]*scheduler.JobRunStatus), "", args.Error(2)
 }
 
 func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error) {

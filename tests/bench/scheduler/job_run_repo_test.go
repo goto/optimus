@@ -14,6 +14,7 @@ import (
 	serviceJob "github.com/goto/optimus/core/job"
 	serviceScheduler "github.com/goto/optimus/core/scheduler"
 	serviceTenant "github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/interval"
 	repoJob "github.com/goto/optimus/internal/store/postgres/job"
 	repoScheduler "github.com/goto/optimus/internal/store/postgres/scheduler"
 	repoTenant "github.com/goto/optimus/internal/store/postgres/tenant"
@@ -22,6 +23,10 @@ import (
 
 func BenchmarkJobRunRepository(b *testing.B) {
 	const maxNumberOfJobRuns = 64
+	currentTime := time.Now().UTC()
+	start := currentTime.Truncate(time.Hour * 24)
+	end := start.Add(time.Hour * 24)
+	intr := interval.NewInterval(start, end)
 
 	transporterKafkaBrokerKey := "KAFKA_BROKERS"
 	config := map[string]string{
@@ -76,7 +81,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 		}
 	})
@@ -98,7 +103,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 
 			scheduledAts[i] = scheduledAt
@@ -134,7 +139,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 
 			storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForJobRun, scheduledAt)
@@ -169,7 +174,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 		assert.NoError(b, err)
 
 		scheduledAt := time.Now()
-		actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, int64(time.Second))
+		actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, actualError)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForJobRun, scheduledAt)
@@ -202,7 +207,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 
 			scheduledAts[i] = scheduledAt

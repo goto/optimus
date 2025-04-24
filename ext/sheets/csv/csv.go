@@ -10,12 +10,12 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-func FromRecords(data [][]interface{}, formatFn func(rowIndex, colIndex int, data any) (string, error)) (string, bool, error) {
+func FromRecords(data [][]interface{}, columnCount int, formatFn func(rowIndex, colIndex int, data any) (string, error)) (string, bool, error) {
 	if len(data) == 0 {
 		return "", false, nil
 	}
 
-	lenRecords := len(data[0])
+	lenRecords := columnCount
 	var allRecords [][]string
 	for rowIndex, row := range data {
 		var currRow []string
@@ -28,6 +28,9 @@ func FromRecords(data [][]interface{}, formatFn func(rowIndex, colIndex int, dat
 				return "", false, err
 			}
 			currRow = append(currRow, s)
+			if i == lenRecords {
+				break
+			}
 		}
 		for i < lenRecords {
 			currRow = append(currRow, "") // add empty column data

@@ -1,0 +1,2 @@
+ALTER TABLE job_run DROP COLUMN IF NOT EXISTS window_start;
+ALTER TABLE job_run DROP COLUMN IF NOT EXISTS window_end;

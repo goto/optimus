@@ -58,7 +58,7 @@ type JobRunRepository interface {
 	GetLatestRun(ctx context.Context, project tenant.ProjectName, name scheduler.JobName, status *scheduler.State) (*scheduler.JobRun, error)
 	GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, status *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error)
 	GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error)
-	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, slaDefinitionInSec int64) error
+	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, interval interval.Interval, slaDefinitionInSec int64) error
 	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
 	UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error
@@ -395,7 +395,23 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		s.l.Error("error getting sla duration: %s", err)
 		return err
 	}
-	err = s.repo.Create(ctx, tenant, jobName, scheduledAt, slaDefinitionInSec)
+
+	project, err := s.projectGetter.Get(ctx, job.Job.Tenant.ProjectName())
+	if err != nil {
+		return err
+	}
+
+	w, err := getWindow(project, job)
+	if err != nil {
+		return err
+	}
+
+	windowInterval, err := w.GetInterval(scheduledAt)
+	if err != nil {
+		return err
+	}
+
+	err = s.repo.Create(ctx, tenant, jobName, scheduledAt, windowInterval, slaDefinitionInSec)
 	if err != nil {
 		s.l.Error("error creating job run: %s", err)
 		return err

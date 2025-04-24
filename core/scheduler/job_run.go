@@ -43,6 +43,8 @@ type JobRun struct {
 	SLAAlert      bool
 	StartTime     time.Time
 	EndTime       *time.Time
+	WindowStart   *time.Time
+	WindowEnd     *time.Time
 	SLADefinition int64
 
 	Monitoring map[string]any

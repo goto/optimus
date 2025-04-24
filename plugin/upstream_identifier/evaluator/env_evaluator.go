@@ -41,10 +41,16 @@ func (e *envEvaluator) Evaluate(assets, config map[string]string) string {
 	query := config[e.env]
 	if likelyPath.MatchString(config[e.env]) {
 		path := config[e.env]
-		if q, ok := assets[strings.TrimPrefix(path, "/data/in/")]; !ok {
+		queries := []string{}
+		for currPath, asset := range assets {
+			if strings.HasPrefix(currPath, strings.TrimPrefix(path, "/data/in/")) {
+				queries = append(queries, asset)
+			}
+		}
+		if len(queries) == 0 {
 			e.logger.Error("filepath %s not exist on asset, use direct value", path)
 		} else {
-			query = q
+			query = strings.Join(queries, "\n")
 		}
 	}
 	return query

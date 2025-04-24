@@ -160,6 +160,15 @@ class OptimusAPIClient:
         self._raise_error_if_request_failed(response)
         return response.json()
 
+    def get_jobs(self, project, job) -> dict:
+        url = '{optimus_host}/api/v1beta1/jobs?project_name={project_name}&job_name={job_name}'.format(
+            optimus_host=self.host,
+            project_name=project,
+            job_name=job)
+        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        self._raise_error_if_request_failed(response)
+        return response.json()
+
     def get_job_metadata(self, namespace, project, job) -> dict:
         url = '{optimus_host}/api/v1beta1/project/{project_name}/namespace/{namespace_name}/job/{job_name}'.format(
             optimus_host=self.host,
@@ -227,6 +236,42 @@ class JobSpecTaskWindow:
     def _fetch_task_window(self, scheduled_at: str) -> dict:
         return self._optimus_client.get_task_window(self.project_name, self.job_name, scheduled_at)
 
+def check_dry_run_config(response):
+    accepted_values = {"true", "yes", "y"}
+
+    # Check if 'jobSpecificationResponses' exists and is a non-empty list
+    job_specs = response.get("jobSpecificationResponses")
+    if not isinstance(job_specs, list) or len(job_specs) == 0:
+        print("Missing or empty 'jobSpecificationResponses'")
+        return False
+
+    first_spec = job_specs[0]
+    if not isinstance(first_spec, dict):
+        print("First jobSpecificationResponse is not a valid object")
+        return False
+
+    # Check if 'job' exists and is a dictionary
+    job = first_spec.get("job")
+    if not isinstance(job, dict):
+        print("Missing or invalid 'job' in first jobSpecificationResponse")
+        return False
+
+    # Check if 'config' exists and is a list
+    config_list = job.get("config")
+    if not isinstance(config_list, list):
+        print("Missing or invalid 'config' in job")
+        return False
+
+    for item in config_list:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        value = item.get("value")
+        if name == "DRY_RUN" and isinstance(value, str):
+            if value.strip().lower() in accepted_values:
+                return True
+
+    return False
 
 class SuperExternalTaskSensor(BaseSensorOperator):
 
@@ -252,11 +297,19 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         self._upstream_optimus_client = OptimusAPIClient(upstream_optimus_hostname)
 
     def poke(self, context):
+        try:
+            jobs_obj = self._optimus_client.get_jobs(self.project_name, self.job_name)
+            if check_dry_run_config(jobs_obj):
+                log.info("Bypassing upstream check as job configured in DRY_RUN mode")
+                return True
+        except Exception as e:
+            self.log.warning("error while fetching upstream schedule :: {}".format(e))
+
         schedule_time = get_scheduled_at(context)
         job_config = self._optimus_client.get_job_replay_config(self.project_name, self.job_name, schedule_time)
         if 'IGNORE_UPSTREAM' in job_config.keys():
             if job_config['IGNORE_UPSTREAM'] == "True":
-                log.info("Bypassing upstream check as job_config contains IGNORE_UPSTREAM=True")
+                log.info("Bypassing upstream check as replay_config contains IGNORE_UPSTREAM=True")
                 return True
         try:
             upstream_schedule ,  scheduler_state = self.get_upstream_job_information()
@@ -316,6 +369,8 @@ class SuperExternalTaskSensor(BaseSensorOperator):
         except Exception as e:
             self.log.warning("error while fetching job runs :: {}".format(e))
             raise AirflowException(e)
+        if api_response['message'] != "":
+            self.log.info(api_response['message'])
         for job_run in api_response['jobRuns']:
             if job_run['state'] != 'success':
                 self.log.info("failed for run :: {}".format(job_run))

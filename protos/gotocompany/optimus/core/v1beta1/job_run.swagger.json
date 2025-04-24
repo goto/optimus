@@ -506,6 +506,9 @@
           "items": {
             "$ref": "#/definitions/v1beta1JobRun"
           }
+        },
+        "message": {
+          "type": "string"
         }
       }
     },

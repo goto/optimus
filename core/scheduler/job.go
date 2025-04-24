@@ -10,7 +10,9 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/cron"
 	"github.com/goto/optimus/internal/lib/window"
+	"github.com/goto/optimus/internal/utils"
 )
 
 type (
@@ -62,6 +64,16 @@ type Job struct {
 
 	WindowConfig window.Config
 	Assets       map[string]string
+}
+
+func (j *Job) IsDryRun() bool {
+	if j.Task == nil {
+		return false
+	}
+	if val, ok := j.Task.Config["DRY_RUN"]; ok {
+		return utils.ConvertToBoolean(strings.ToLower(val))
+	}
+	return false
 }
 
 func (j *Job) GetHook(hookName string) (*Hook, error) {
@@ -145,6 +157,40 @@ type Schedule struct {
 	StartDate     time.Time
 	EndDate       *time.Time
 	Interval      string
+}
+
+func (s *Schedule) GetLogicalStartTime() (time.Time, error) {
+	interval := s.Interval
+	if interval == "" {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "cannot get job schedule start date, job interval is empty")
+	}
+	jobCron, err := cron.ParseCronSchedule(interval)
+	if err != nil {
+		msg := fmt.Sprintf("unable to parse job cron interval: %s", err)
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, msg)
+	}
+
+	logicalStartTime := jobCron.Next(s.StartDate.Add(-time.Second * 1))
+	return logicalStartTime, nil
+}
+
+func (s *Schedule) GetScheduleStartTime() (time.Time, error) {
+	if s.StartDate.IsZero() {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "job schedule startDate not found in job")
+	}
+	interval := s.Interval
+	if interval == "" {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "cannot get job schedule start date, job interval is empty")
+	}
+	jobCron, err := cron.ParseCronSchedule(interval)
+	if err != nil {
+		msg := fmt.Sprintf("unable to parse job cron interval: %s", err)
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, msg)
+	}
+
+	logicalStartTime := jobCron.Next(s.StartDate.Add(-time.Second * 1))
+	scheduleStartTime := jobCron.Next(logicalStartTime)
+	return scheduleStartTime, nil
 }
 
 func (j *JobWithDetails) GetLabelsAsString() string {

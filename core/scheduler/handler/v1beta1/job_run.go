@@ -19,7 +19,7 @@ type JobRunService interface {
 	JobRunInput(context.Context, tenant.ProjectName, scheduler.JobName, scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 	UpdateJobState(context.Context, *scheduler.Event) error
 	GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error)
-	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error)
+	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
 }
@@ -151,7 +151,8 @@ func (h JobRunHandler) JobRun(ctx context.Context, req *pb.JobRunRequest) (*pb.J
 	}
 
 	var jobRuns []*scheduler.JobRunStatus
-	jobRuns, err = h.service.GetJobRuns(ctx, projectName, jobName, criteria)
+	var msg string
+	jobRuns, msg, err = h.service.GetJobRuns(ctx, projectName, jobName, criteria)
 	if err != nil {
 		h.l.Error("error getting job runs: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
@@ -165,7 +166,10 @@ func (h JobRunHandler) JobRun(ctx context.Context, req *pb.JobRunRequest) (*pb.J
 			ScheduledAt: ts,
 		})
 	}
-	return &pb.JobRunResponse{JobRuns: runs}, nil
+	return &pb.JobRunResponse{
+		JobRuns: runs,
+		Message: msg,
+	}, nil
 }
 
 func buildCriteriaForJobRun(req *pb.JobRunRequest) (*scheduler.JobRunsCriteria, error) {

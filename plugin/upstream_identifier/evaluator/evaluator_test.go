@@ -222,5 +222,20 @@ func TestEnvEvaluator(t *testing.T) {
 			assert.NotEmpty(t, rawResource)
 			assert.Equal(t, "select 1", rawResource)
 		})
+		t.Run("should return query from asset from folder", func(t *testing.T) {
+			envEvaluator, err := e.GetEnvEvaluator("MC__QUERY_FILE_PATH")
+			assert.NoError(t, err)
+			assert.NotNil(t, envEvaluator)
+			assets := map[string]string{
+				"sample/query1.sql": "select 1",
+				"sample/query2.sql": "select 2",
+			}
+			config2 := map[string]string{
+				"MC__QUERY_FILE_PATH": "/data/in/sample",
+			}
+			rawResource := envEvaluator.Evaluate(assets, config2)
+			assert.NotEmpty(t, rawResource)
+			assert.Equal(t, "select 1\nselect 2", rawResource)
+		})
 	})
 }

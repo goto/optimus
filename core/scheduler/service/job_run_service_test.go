@@ -985,7 +985,7 @@ func TestJobRunService(t *testing.T) {
 
 			runService := service.NewJobRunService(logger,
 				jobRepo, nil, nil, nil, nil, nil, nil, nil, nil)
-			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, criteria)
+			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, criteria)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "unable to get job details for jobName: sample_select, project:proj")
 			assert.Nil(t, returnedRuns)
@@ -1007,10 +1007,10 @@ func TestJobRunService(t *testing.T) {
 					Interval:  "0 12 * * *",
 				},
 			}
-
+			scheduleStartDate, _ := time.Parse(time.RFC3339, "2022-03-20T12:00:00+00:00")
 			criteria := &scheduler.JobRunsCriteria{
 				Name:      "sample_select",
-				StartDate: startDate,
+				StartDate: scheduleStartDate,
 				EndDate:   endDate,
 				Filter:    []string{"success"},
 			}
@@ -1023,7 +1023,9 @@ func TestJobRunService(t *testing.T) {
 
 			runService := service.NewJobRunService(logger,
 				jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
-			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, criteria)
+			var err error
+			var returnedRuns []*scheduler.JobRunStatus
+			returnedRuns, _, err = runService.GetJobRuns(ctx, projName, jobName, criteria)
 			assert.Nil(t, err)
 			assert.Nil(t, returnedRuns)
 		})
@@ -1064,12 +1066,14 @@ func TestJobRunService(t *testing.T) {
 				runs           []*scheduler.JobRunStatus
 				expectedResult []*scheduler.JobRunStatus
 			}
+			scheduleStartTime, err := jobWithDetails.Schedule.GetScheduleStartTime()
+			assert.Nil(t, err)
 			for _, scenario := range []cases{
 				{
 					description: "filtering based on success",
 					input: &scheduler.JobRunsCriteria{
 						Name:      "sample_select",
-						StartDate: startDate,
+						StartDate: scheduleStartTime,
 						EndDate:   endDate,
 						Filter:    []string{scheduler.StateSuccess.String()},
 					},
@@ -1081,7 +1085,7 @@ func TestJobRunService(t *testing.T) {
 					description: "filtering based on failed",
 					input: &scheduler.JobRunsCriteria{
 						Name:      "sample_select",
-						StartDate: startDate,
+						StartDate: scheduleStartTime,
 						EndDate:   endDate,
 						Filter:    []string{scheduler.StateFailed.String()},
 					},
@@ -1092,7 +1096,7 @@ func TestJobRunService(t *testing.T) {
 					description: "no filterRuns applied",
 					input: &scheduler.JobRunsCriteria{
 						Name:      "sample_select",
-						StartDate: startDate,
+						StartDate: scheduleStartTime,
 						EndDate:   endDate,
 						Filter:    []string{},
 					},
@@ -1104,7 +1108,7 @@ func TestJobRunService(t *testing.T) {
 					description: "filtering based on pending",
 					input: &scheduler.JobRunsCriteria{
 						Name:      "sample_select",
-						StartDate: startDate,
+						StartDate: scheduleStartTime,
 						EndDate:   endDate,
 						Filter:    []string{scheduler.StatePending.String()},
 					},
@@ -1116,7 +1120,7 @@ func TestJobRunService(t *testing.T) {
 					description: "when some job instances are not started by scheduler and filtered based on pending status",
 					input: &scheduler.JobRunsCriteria{
 						Name:      "sample_select",
-						StartDate: startDate,
+						StartDate: scheduleStartTime,
 						EndDate:   endDate,
 						Filter:    []string{scheduler.StatePending.String()},
 					},
@@ -1128,7 +1132,7 @@ func TestJobRunService(t *testing.T) {
 					description: "when some job instances are not started by scheduler and filtered based on success status",
 					input: &scheduler.JobRunsCriteria{
 						Name:      "sample_select",
-						StartDate: startDate,
+						StartDate: scheduleStartTime,
 						EndDate:   endDate,
 						Filter:    []string{scheduler.StateSuccess.String()},
 					},
@@ -1140,7 +1144,7 @@ func TestJobRunService(t *testing.T) {
 					description: "when some job instances are not started by scheduler and no filterRuns applied",
 					input: &scheduler.JobRunsCriteria{
 						Name:      "sample_select",
-						StartDate: startDate,
+						StartDate: scheduleStartTime,
 						EndDate:   endDate,
 						Filter:    []string{},
 					},
@@ -1158,7 +1162,7 @@ func TestJobRunService(t *testing.T) {
 					defer jobRepo.AssertExpectations(t)
 					runService := service.NewJobRunService(logger,
 						jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
-					returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, scenario.input)
+					returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, scenario.input)
 					assert.Nil(t, err)
 					assert.Equal(t, scenario.expectedResult, returnedRuns)
 				})
@@ -1192,14 +1196,18 @@ func TestJobRunService(t *testing.T) {
 			jobRepo := new(JobRepository)
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
-
+			scheduleStartTime, err := jobWithDetails.Schedule.GetScheduleStartTime()
+			assert.Nil(t, err)
 			criteria := &scheduler.JobRunsCriteria{
 				Name:      "sample_select",
-				StartDate: jobWithDetails.Schedule.StartDate,
+				StartDate: scheduleStartTime,
 				EndDate:   endDate,
 				Filter:    []string{"success"},
 			}
 
+			// job start date is  2022-03-19T02:00:00+00:00
+			// interval : daily At 12:00
+			// first schedule time will be 2022-03-20T12:00:00+00:00
 			runs := []*scheduler.JobRunStatus{
 				{
 					State:       scheduler.StateSuccess,
@@ -1209,6 +1217,16 @@ func TestJobRunService(t *testing.T) {
 				{
 					State:       scheduler.StateSuccess,
 					ScheduledAt: time.Date(2022, 3, 19, 12, 0, 0, 0, time.UTC),
+					// this run will be filtered by the merge logic as this is not expected
+				},
+				{
+					State:       scheduler.StateSuccess,
+					ScheduledAt: time.Date(2022, 3, 20, 12, 0, 0, 0, time.UTC),
+					//	 this is the first schedule time
+				},
+				{
+					State:       scheduler.StateSuccess,
+					ScheduledAt: time.Date(2022, 3, 21, 12, 0, 0, 0, time.UTC),
 				},
 			}
 			sch := new(mockScheduler)
@@ -1216,9 +1234,9 @@ func TestJobRunService(t *testing.T) {
 			defer sch.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
-			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
+			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Nil(t, err)
-			assert.Equal(t, 1, len(returnedRuns))
+			assert.Equal(t, 2, len(returnedRuns))
 		})
 		t.Run("should not able to get job runs when invalid cron interval present at DB", func(t *testing.T) {
 			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
@@ -1250,7 +1268,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil)
-			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
+			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "unable to parse job cron interval: expected exactly 5 fields, found 2: [invalid interval]")
 			assert.Nil(t, returnedRuns)
@@ -1284,7 +1302,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil)
-			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
+			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "cannot get job runs, job interval is empty")
 			assert.Nil(t, returnedRuns)
@@ -1305,10 +1323,11 @@ func TestJobRunService(t *testing.T) {
 					Interval: "0 12 * * *",
 				},
 			}
-
+			scheduleStartTime, err := jobWithDetails.Schedule.GetScheduleStartTime()
+			assert.Error(t, err)
 			jobQuery := &scheduler.JobRunsCriteria{
 				Name:      "sample_select",
-				StartDate: startDate,
+				StartDate: scheduleStartTime,
 				EndDate:   endDate,
 				Filter:    []string{"success"},
 			}
@@ -1316,7 +1335,7 @@ func TestJobRunService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil)
-			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
+			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "job schedule startDate not found in job")
 			assert.Nil(t, returnedRuns)
@@ -1359,7 +1378,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
-			returnedRuns, err := runService.GetJobRuns(ctx, projName, jobName, criteria)
+			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, criteria)
 			assert.Nil(t, err)
 			assert.Equal(t, runs, returnedRuns)
 		})

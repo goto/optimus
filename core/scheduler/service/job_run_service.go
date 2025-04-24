@@ -174,39 +174,42 @@ func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tena
 	return []*scheduler.JobRun{jobRun}, nil
 }
 
-func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, requestCriteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, error) {
+func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, requestCriteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error) {
 	jobWithDetails, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
 		msg := fmt.Sprintf("unable to get job details for jobName: %s, project:%s", jobName, projectName)
 		s.l.Error(msg)
-		return nil, errors.AddErrContext(err, scheduler.EntityJobRun, msg)
+		return nil, "", errors.AddErrContext(err, scheduler.EntityJobRun, msg)
 	}
 	interval := jobWithDetails.Schedule.Interval
 	if interval == "" {
 		s.l.Error("job schedule interval is empty")
-		return nil, errors.InvalidArgument(scheduler.EntityJobRun, "cannot get job runs, job interval is empty")
+		return nil, "", errors.InvalidArgument(scheduler.EntityJobRun, "cannot get job runs, job interval is empty")
 	}
 	jobCron, err := cron.ParseCronSchedule(interval)
 	if err != nil {
 		msg := fmt.Sprintf("unable to parse job cron interval: %s", err)
 		s.l.Error(msg)
-		return nil, errors.InternalError(scheduler.EntityJobRun, msg, nil)
+		return nil, "", errors.InternalError(scheduler.EntityJobRun, msg, nil)
 	}
 
 	if requestCriteria.OnlyLastRun {
 		s.l.Warn("getting last run only")
-		return s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)
+		runs, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)
+		return runs, "getting last run only", err
 	}
-	criteria, err := s.cleanupJobQuery(*requestCriteria, jobWithDetails)
+	criteria, msg, err := s.cleanupJobQuery(*requestCriteria, jobWithDetails)
 	if err != nil {
-		s.l.Error("invalid job query: %s", err)
-		return nil, err
+		msg += fmt.Sprintf("invalid job query: %s\n", err)
+		s.l.Error(msg)
+		return nil, msg, err
 	}
 
 	if criteria.EndDate.Before(criteria.StartDate) {
-		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s], criteria EndDate:[%s] is before criteria StartDate:[%s], incomming Request Criteria : [%#v]",
-			jobWithDetails.Name, criteria.EndDate.String(), criteria.StartDate.String(), requestCriteria))
-		return []*scheduler.JobRunStatus{}, nil
+		msg += fmt.Sprintf("[GetJobRuns] for job:[%s], criteria EndDate:[%s] is before criteria StartDate:[%s], incomming Request Criteria : [%#v]\n",
+			jobWithDetails.Name, criteria.EndDate.String(), criteria.StartDate.String(), requestCriteria)
+		s.l.Warn(msg)
+		return []*scheduler.JobRunStatus{}, msg, nil
 	}
 
 	expectedRuns := getExpectedRuns(jobCron, criteria.StartDate, criteria.EndDate)
@@ -220,7 +223,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 
 	result := filterRuns(totalRuns, createFilterSet(criteria.Filter))
 
-	return result, nil
+	return result, msg, nil
 }
 
 func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error) {
@@ -358,25 +361,27 @@ func createFilterSet(filter []string) map[string]struct{} {
 	return m
 }
 
-func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteria, jobWithDetails *scheduler.JobWithDetails) (scheduler.JobRunsCriteria, error) {
-	jobStartDate := jobWithDetails.Schedule.StartDate
-	if jobStartDate.IsZero() {
-		return requestCriteria, errors.InternalError(scheduler.EntityJobRun, "job schedule startDate not found in job", nil)
+func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteria, jobWithDetails *scheduler.JobWithDetails) (scheduler.JobRunsCriteria, string, error) {
+	scheduleStartTime, err := jobWithDetails.Schedule.GetScheduleStartTime()
+	if err != nil {
+		return requestCriteria, "", err
 	}
-
-	if requestCriteria.StartDate.Before(jobStartDate) {
-		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria StartDate:[%s] is earlier than Job StartDate:[%s], "+
-			"truncating request criteria StartDate to Job StartDate", jobWithDetails.Name, requestCriteria.StartDate.String(), jobWithDetails.Schedule.StartDate.String()))
-		requestCriteria.StartDate = jobStartDate
+	var msg string
+	if requestCriteria.StartDate.Before(scheduleStartTime) {
+		msg += fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria StartDate:[%s] is earlier than Job StartDate:[%s], "+
+			"truncating request criteria StartDate to Job StartDate \n", jobWithDetails.Name, requestCriteria.StartDate.String(), jobWithDetails.Schedule.StartDate.String())
+		s.l.Warn(msg)
+		requestCriteria.StartDate = scheduleStartTime
 	}
 
 	if jobWithDetails.Schedule.EndDate != nil && requestCriteria.EndDate.After(*jobWithDetails.Schedule.EndDate) {
-		s.l.Warn(fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria End:[%s] is after Job EndDate:[%s], "+
-			"truncating request criteria EndDate to Job EndDate", jobWithDetails.Name, requestCriteria.EndDate.String(), jobWithDetails.Schedule.EndDate.String()))
+		msg += fmt.Sprintf("[GetJobRuns] for job:[%s] , request criteria End:[%s] is after Job EndDate:[%s], "+
+			"truncating request criteria EndDate to Job EndDate \n", jobWithDetails.Name, requestCriteria.EndDate.String(), jobWithDetails.Schedule.EndDate.String())
+		s.l.Warn(msg)
 		requestCriteria.EndDate = *jobWithDetails.Schedule.EndDate
 	}
 
-	return requestCriteria, nil
+	return requestCriteria, msg, nil
 }
 
 func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error {

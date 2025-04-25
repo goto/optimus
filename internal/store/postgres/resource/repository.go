@@ -456,8 +456,8 @@ func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resou
 	return FromModelToResource(&res)
 }
 
-func (r Repository) GetExternalCreatAuthFailures(ctx context.Context) ([]*resource.Resource, error) {
-	query := `select ` + resColumnsPrefix + ` from resource rs join sync_status ss on rs.full_name = ss.identifier  where rs.status = $1 and rs.store = $2 and kind = 'external_table' and ss.remarks ->> 'error' LIKE '%googleapi: Error%';`
+func (r Repository) GetExternalCreatFailures(ctx context.Context) ([]*resource.Resource, error) {
+	query := `select ` + resColumnsPrefix + ` from resource rs join sync_status ss on rs.full_name = ss.identifier  where rs.status = $1 and rs.store = $2 and kind = 'external_table' and ( ss.remarks ->> 'error' LIKE '%googleapi: Error%' or ss.remarks ->> 'error' LIKE '%CSVFormatter%' );`
 
 	rows, err := r.db.Query(ctx, query, resource.StatusCreateFailure, resource.MaxCompute)
 	if err != nil {

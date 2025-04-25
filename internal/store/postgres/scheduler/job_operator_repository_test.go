@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/interval"
 	postgres "github.com/goto/optimus/internal/store/postgres/scheduler"
 )
 
@@ -23,13 +24,16 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 	operatorStartTime := currentTime
 	operatorEndTime := currentTime.Add(time.Hour)
 	slaDefinitionInSec := int64(3600) // seconds
+	start := currentTime.Truncate(time.Hour * 24)
+	end := start.Add(time.Hour * 24)
+	intr := interval.NewInterval(start, end)
 
 	t.Run("CreateOperatorRun", func(t *testing.T) {
 		t.Run("creates a operator run", func(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db)
-			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 
 			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
@@ -49,7 +53,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db)
-			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 
 			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
@@ -64,7 +68,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db)
-			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 
 			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
@@ -82,7 +86,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db)
-			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, slaDefinitionInSec)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 
 			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)

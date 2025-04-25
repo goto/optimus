@@ -14,10 +14,11 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/interval"
 )
 
 const (
-	columnsToStore = `job_name, namespace_name, project_name, scheduled_at, start_time, end_time, status, sla_definition, sla_alert`
+	columnsToStore = `job_name, namespace_name, project_name, scheduled_at, start_time, end_time, window_start, window_end, status, sla_definition, sla_alert`
 	jobRunColumns  = `id, ` + columnsToStore + `, monitoring`
 	dbTimeFormat   = "2006-01-02 15:04:05.000000"
 )
@@ -36,6 +37,8 @@ type jobRun struct {
 	ScheduledAt time.Time
 	StartTime   time.Time
 	EndTime     *time.Time
+	WindowStart *time.Time
+	WindowEnd   *time.Time
 
 	Status        string
 	SLAAlert      bool
@@ -71,6 +74,8 @@ func (j *jobRun) toJobRun() (*scheduler.JobRun, error) {
 		SLAAlert:      j.SLAAlert,
 		StartTime:     j.StartTime,
 		EndTime:       j.EndTime,
+		WindowStart:   j.WindowStart,
+		WindowEnd:     j.WindowEnd,
 		SLADefinition: j.SLADefinition,
 		Monitoring:    monitoring,
 	}, nil
@@ -81,7 +86,7 @@ func (j *JobRunRepository) GetByID(ctx context.Context, id scheduler.JobRunID) (
 	getJobRunByID := `SELECT ` + jobRunColumns + ` FROM job_run where id = $1`
 	err := j.db.QueryRow(ctx, getJobRunByID, id.UUID()).
 		Scan(&jr.ID, &jr.JobName, &jr.NamespaceName, &jr.ProjectName, &jr.ScheduledAt, &jr.StartTime, &jr.EndTime,
-			&jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring)
+			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityJobRun, "no record for job run id "+id.UUID().String())
@@ -100,7 +105,7 @@ func (j *JobRunRepository) GetLatestRun(ctx context.Context, project tenant.Proj
 	getLatestRun := fmt.Sprintf("SELECT %s, created_at FROM job_run j where project_name = $1 and job_name = $2 %s order by scheduled_at desc limit 1", jobRunColumns, stateClause)
 	err := j.db.QueryRow(ctx, getLatestRun, project, jobName).
 		Scan(&jr.ID, &jr.JobName, &jr.NamespaceName, &jr.ProjectName, &jr.ScheduledAt, &jr.StartTime, &jr.EndTime,
-			&jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
+			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityJobRun, "no record for job:"+jobName.String()+stateClause)
@@ -124,7 +129,7 @@ func (j *JobRunRepository) GetRunsByTimeRange(ctx context.Context, project tenan
 	for rows.Next() {
 		var jr jobRun
 		err := rows.Scan(&jr.ID, &jr.JobName, &jr.NamespaceName, &jr.ProjectName, &jr.ScheduledAt, &jr.StartTime, &jr.EndTime,
-			&jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
+			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return []*scheduler.JobRun{}, nil
@@ -146,7 +151,7 @@ func (j *JobRunRepository) GetByScheduledAt(ctx context.Context, t tenant.Tenant
 	getJobRunByScheduledAt := `SELECT ` + jobRunColumns + `, created_at FROM job_run j where project_name = $1 and namespace_name = $2 and job_name = $3 and scheduled_at = $4 order by created_at desc limit 1`
 	err := j.db.QueryRow(ctx, getJobRunByScheduledAt, t.ProjectName(), t.NamespaceName(), jobName, scheduledAt).
 		Scan(&jr.ID, &jr.JobName, &jr.NamespaceName, &jr.ProjectName, &jr.ScheduledAt, &jr.StartTime, &jr.EndTime,
-			&jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
+			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityJobRun, "no record for job:"+jobName.String()+" scheduled at: "+scheduledAt.String())
@@ -171,7 +176,7 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 	for rows.Next() {
 		var jr jobRun
 		err := rows.Scan(&jr.ID, &jr.JobName, &jr.NamespaceName, &jr.ProjectName, &jr.ScheduledAt, &jr.StartTime, &jr.EndTime,
-			&jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
+			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, errors.NotFound(scheduler.EntityJobRun, "no record of job run :"+jobName.String()+" for schedule Times : "+strings.Join(scheduledTimesString, ", "))
@@ -230,10 +235,10 @@ func (j *JobRunRepository) UpdateMonitoring(ctx context.Context, jobRunID uuid.U
 	return errors.WrapIfErr(scheduler.EntityJobRun, "cannot update monitoring", err)
 }
 
-func (j *JobRunRepository) Create(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, slaDefinitionInSec int64) error {
+func (j *JobRunRepository) Create(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, window interval.Interval, slaDefinitionInSec int64) error {
 	// TODO: startTime should be event time
-	insertJobRun := `INSERT INTO job_run (` + columnsToStore + `, created_at, updated_at) values ($1, $2, $3, $4, NOW(), null, $5, $6, FALSE, NOW(), NOW()) ON CONFLICT DO NOTHING`
-	_, err := j.db.Exec(ctx, insertJobRun, jobName, t.NamespaceName(), t.ProjectName(), scheduledAt, scheduler.StateRunning, slaDefinitionInSec)
+	insertJobRun := `INSERT INTO job_run (` + columnsToStore + `, created_at, updated_at) values ($1, $2, $3, $4, NOW(), null, $5, $6, $7, $8, FALSE, NOW(), NOW()) ON CONFLICT DO NOTHING`
+	_, err := j.db.Exec(ctx, insertJobRun, jobName, t.NamespaceName(), t.ProjectName(), scheduledAt, window.Start(), window.End(), scheduler.StateRunning, slaDefinitionInSec)
 	return errors.WrapIfErr(scheduler.EntityJobRun, "unable to create job run", err)
 }
 

@@ -14,6 +14,7 @@ import (
 	serviceJob "github.com/goto/optimus/core/job"
 	serviceScheduler "github.com/goto/optimus/core/scheduler"
 	serviceTenant "github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/interval"
 	repoJob "github.com/goto/optimus/internal/store/postgres/job"
 	repoScheduler "github.com/goto/optimus/internal/store/postgres/scheduler"
 	repoTenant "github.com/goto/optimus/internal/store/postgres/tenant"
@@ -22,6 +23,10 @@ import (
 
 func BenchmarkOperatorRunRepository(b *testing.B) {
 	const maxNumberOfOperatorRuns = 64
+	currentTime := time.Now().UTC()
+	start := currentTime.Truncate(time.Hour * 24)
+	end := start.Add(time.Hour * 24)
+	intr := interval.NewInterval(start, end)
 
 	transporterKafkaBrokerKey := "KAFKA_BROKERS"
 	config := map[string]string{
@@ -74,7 +79,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 
 		scheduledAt := time.Now()
 
-		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, int64(time.Second))
+		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, err)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForRun, scheduledAt)
@@ -106,7 +111,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 
 		scheduledAt := time.Now()
 
-		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, int64(time.Second))
+		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, err)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForRun, scheduledAt)
@@ -150,7 +155,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 
 		scheduledAt := time.Now()
 
-		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, int64(time.Second))
+		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, err)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForRun, scheduledAt)

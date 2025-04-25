@@ -36,7 +36,7 @@ type ResourceRepository interface {
 	GetAllExternal(ctx context.Context, store resource.Store) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
-	GetExternalCreatAuthFailures(ctx context.Context) ([]*resource.Resource, error)
+	GetExternalCreatFailures(ctx context.Context) ([]*resource.Resource, error)
 }
 
 type Syncer interface {

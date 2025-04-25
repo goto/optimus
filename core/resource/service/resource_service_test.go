@@ -1810,7 +1810,7 @@ func (m *mockResourceRepository) GetAllExternal(ctx context.Context, store resou
 	return args.Get(0).([]*resource.Resource), args.Error(1)
 }
 
-func (m *mockResourceRepository) GetExternalCreatAuthFailures(ctx context.Context) ([]*resource.Resource, error) {
+func (m *mockResourceRepository) GetExternalCreatFailures(ctx context.Context) ([]*resource.Resource, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]*resource.Resource), args.Error(1)
 }

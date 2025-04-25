@@ -93,7 +93,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 		}
 
 		// get replay requests from DB
-		failedResources, err := w.repo.GetExternalCreatAuthFailures(ctx)
+		failedResources, err := w.repo.GetExternalCreatFailures(ctx)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to scan for resources with status create failure due to auth, err:%s", err.Error()))
 			continue

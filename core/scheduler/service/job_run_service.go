@@ -45,6 +45,16 @@ var jobRunDdurationsBreakdownSeconds = promauto.NewGaugeVec(prometheus.GaugeOpts
 	Help: "operator wise time spent",
 }, []string{"project", "namespace", "job", "type"})
 
+var jobRunStatusV1 = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "job_run_status_v1",
+	Help: "status of the runs for sensor",
+}, []string{"project", "job"})
+
+var jobRunStatusV2 = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "job_run_status_v2",
+	Help: "status of the runs for sensor",
+}, []string{"project", "job"})
+
 type JobRepository interface {
 	GetJob(ctx context.Context, name tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
 	GetJobDetails(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.JobWithDetails, error)
@@ -198,6 +208,17 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		runs, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)
 		return runs, "getting last run only", err
 	}
+
+	project, err := s.projectGetter.Get(ctx, projectName)
+	if err != nil {
+		return nil, "", err
+	}
+
+	w, err := getWindow(project, jobWithDetails)
+	if err != nil {
+		return nil, "", err
+	}
+
 	criteria, msg, err := s.cleanupJobQuery(*requestCriteria, jobWithDetails)
 	if err != nil {
 		msg += fmt.Sprintf("invalid job query: %s\n", err)
@@ -209,7 +230,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		msg += fmt.Sprintf("[GetJobRuns] for job:[%s], criteria EndDate:[%s] is before criteria StartDate:[%s], incomming Request Criteria : [%#v]\n",
 			jobWithDetails.Name, criteria.EndDate.String(), criteria.StartDate.String(), requestCriteria)
 		s.l.Warn(msg)
-		return []*scheduler.JobRunStatus{}, msg, nil
+		return scheduler.JobRunStatusList{}, msg, nil
 	}
 
 	expectedRuns := getExpectedRuns(jobCron, criteria.StartDate, criteria.EndDate)
@@ -219,11 +240,52 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		s.l.Error("unable to get job runs from airflow err: %s", err)
 		actualRuns = []*scheduler.JobRunStatus{}
 	}
-	totalRuns := mergeRuns(expectedRuns, actualRuns)
 
+	result, c1 := filterRunsV1(expectedRuns, actualRuns, criteria)
+	jobRunStatusV1.WithLabelValues(string(projectName), jobName.String()).Set(float64(c1))
+
+	result2, c2 := FilterRunsV2(expectedRuns, actualRuns, criteria, w)
+	jobRunStatusV2.WithLabelValues(string(projectName), jobName.String()).Set(float64(c2))
+
+	if c1 > c2 {
+		return result, msg, nil
+	}
+
+	return result2, msg, nil
+}
+
+func filterRunsV1(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria scheduler.JobRunsCriteria) (scheduler.JobRunStatusList, int) {
+	totalRuns := mergeRuns(expectedRuns, actualRuns) // main function to target
+
+	// FilterRuns does not do anything, filter is empty
 	result := filterRuns(totalRuns, createFilterSet(criteria.Filter))
+	count := result.GetSuccessRuns()
+	return result, count
+}
 
-	return result, msg, nil
+func FilterRunsV2(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria scheduler.JobRunsCriteria, w window.Window) (scheduler.JobRunStatusList, int) {
+	expectedRange := createIntervals(expectedRuns, w)
+	actualRange := createIntervals(actualRuns, w)
+
+	updatedRange := expectedRange.UpdateDataFrom(actualRange)
+	result := filterRuns(updatedRange.Values(), createFilterSet(criteria.Filter))
+	count := result.GetSuccessRuns()
+	return result, count
+}
+
+func createIntervals(runs scheduler.JobRunStatusList, w window.Window) interval.Range[*scheduler.JobRunStatus] {
+	ranges := interval.Range[*scheduler.JobRunStatus]{}
+	for _, run := range runs.GetSortedRunsByScheduledAt() {
+		i1, err := w.GetInterval(run.ScheduledAt.UTC())
+		if err != nil {
+			continue
+		}
+		ranges = append(ranges, interval.Data[*scheduler.JobRunStatus]{
+			In:   i1,
+			Data: run,
+		})
+	}
+	return ranges
 }
 
 func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error) {
@@ -340,7 +402,7 @@ func actualRunMap(runs []*scheduler.JobRunStatus) map[string]scheduler.JobRunSta
 	return m
 }
 
-func filterRuns(runs []*scheduler.JobRunStatus, filter map[string]struct{}) []*scheduler.JobRunStatus {
+func filterRuns(runs []*scheduler.JobRunStatus, filter map[string]struct{}) scheduler.JobRunStatusList {
 	var filteredRuns []*scheduler.JobRunStatus
 	if len(filter) == 0 {
 		return runs

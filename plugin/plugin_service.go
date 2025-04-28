@@ -19,7 +19,7 @@ import (
 const (
 	bqSvcAccKey  = "BQ_SERVICE_ACCOUNT"
 	mcSvcAccKey  = "MC_SERVICE_ACCOUNT"
-	mcSvcAccKey2 = "MC__SERVICE_ACCOUNT" // used for non mc2mc (TODO: svc account should be configurable in plugin spec)
+	mcSvcAccKey2 = "MC__CREDENTIALS" // used for non mc2mc (TODO: svc account should be configurable in plugin spec)
 )
 
 type (

@@ -136,7 +136,7 @@ func createRange[V any](schedules []time.Time, cw window.CustomWindow, v V) inte
 	for _, s := range schedules {
 		intr, err := cw.GetInterval(s)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(err) // nolint: forbidigo
 		} else {
 			r1 = append(r1, interval.Data[V]{
 				Data: v,
@@ -153,7 +153,6 @@ func sortTime(a, b time.Time) int {
 	}
 	if a.After(b) {
 		return 1
-	} else {
-		return -1
 	}
+	return -1
 }

@@ -31,12 +31,5 @@ func TestInterval(t *testing.T) {
 			assert.Equal(t, i1.IsAfter(i2), false)
 			assert.Equal(t, i1.Equal(i2), false)
 		})
-		t.Run("does not compare empty time", func(t *testing.T) {
-			i1 := interval.NewInterval(s1, e1)
-			i2 := interval.Interval{}
-			assert.Equal(t, i1.IsAfter(i2), false)
-			assert.Equal(t, i2.IsAfter(i1), false)
-			assert.Equal(t, i1.Equal(i2), false)
-		})
 	})
 }

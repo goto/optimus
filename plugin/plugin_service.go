@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	bqSvcAccKey = "BQ_SERVICE_ACCOUNT"
-	mcSvcAccKey = "MC_SERVICE_ACCOUNT"
+	bqSvcAccKey  = "BQ_SERVICE_ACCOUNT"
+	mcSvcAccKey  = "MC_SERVICE_ACCOUNT"
+	mcSvcAccKey2 = "MC__CREDENTIALS" // used for non mc2mc (TODO: svc account should be configurable in plugin spec)
 )
 
 type (
@@ -115,7 +116,11 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 		case plugin.MaxcomputeParser:
 			svcAcc, ok := compiledConfig[mcSvcAccKey]
 			if !ok {
-				return nil, fmt.Errorf("secret " + mcSvcAccKey + " required to generate upstream is not found")
+				s.l.Warn("secret " + mcSvcAccKey + " not found, trying to use " + mcSvcAccKey2)
+				svcAcc, ok = compiledConfig[mcSvcAccKey2]
+				if !ok {
+					return nil, fmt.Errorf("secret " + mcSvcAccKey + " or " + mcSvcAccKey2 + " required to generate upstream is not found")
+				}
 			}
 			upstreamIdentifier, err := s.upstreamIdentifierFactory.GetMaxcomputeUpstreamIdentifier(ctx, svcAcc, evaluators...)
 			if err != nil {

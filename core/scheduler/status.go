@@ -222,6 +222,16 @@ func (j JobRunStatusList) getJobRunStatusSummaryMap() map[State]int {
 	return stateMap
 }
 
+func (j JobRunStatusList) GetSuccessRuns() int {
+	count := 0
+	for _, run := range j {
+		if run.State == StateSuccess {
+			count++
+		}
+	}
+	return count
+}
+
 func (j JobRunStatusList) IsAllTerminated() bool {
 	for _, run := range j {
 		if run.State == StateSuccess || run.State == StateFailed {

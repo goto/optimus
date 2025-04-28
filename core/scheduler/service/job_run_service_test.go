@@ -1059,6 +1059,10 @@ func TestJobRunService(t *testing.T) {
 				EndDate:   endDate,
 				Filter:    []string{"success"},
 			}
+			projectGetter := new(mockProjectGetter)
+			defer projectGetter.AssertExpectations(t)
+			projectGetter.On("Get", ctx, projName).Return(project, nil)
+
 			sch := new(mockScheduler)
 			sch.On("GetJobRuns", ctx, tnnt, criteria, jobCron).Return([]*scheduler.JobRunStatus{}, nil)
 			defer sch.AssertExpectations(t)
@@ -1067,7 +1071,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
+				jobRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter)
 			var err error
 			var returnedRuns []*scheduler.JobRunStatus
 			returnedRuns, _, err = runService.GetJobRuns(ctx, projName, jobName, criteria)
@@ -1205,8 +1209,12 @@ func TestJobRunService(t *testing.T) {
 					jobRepo := new(JobRepository)
 					jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 					defer jobRepo.AssertExpectations(t)
+					projectGetter := new(mockProjectGetter)
+					defer projectGetter.AssertExpectations(t)
+					projectGetter.On("Get", ctx, projName).Return(project, nil)
+
 					runService := service.NewJobRunService(logger,
-						jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
+						jobRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter)
 					returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, scenario.input)
 					assert.Nil(t, err)
 					assert.Equal(t, scenario.expectedResult, returnedRuns)
@@ -1237,6 +1245,10 @@ func TestJobRunService(t *testing.T) {
 				EndDate:   endDate,
 				Filter:    []string{"success"},
 			}
+
+			projectGetter := new(mockProjectGetter)
+			defer projectGetter.AssertExpectations(t)
+			projectGetter.On("Get", ctx, projName).Return(project, nil)
 
 			jobRepo := new(JobRepository)
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
@@ -1278,7 +1290,7 @@ func TestJobRunService(t *testing.T) {
 			sch.On("GetJobRuns", ctx, tnnt, criteria, jobCron).Return(runs, nil)
 			defer sch.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, sch, nil, nil, nil, nil)
+			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Nil(t, err)
 			assert.Equal(t, 2, len(returnedRuns))
@@ -1376,10 +1388,13 @@ func TestJobRunService(t *testing.T) {
 				EndDate:   endDate,
 				Filter:    []string{"success"},
 			}
+			projectGetter := new(mockProjectGetter)
+			defer projectGetter.AssertExpectations(t)
+			projectGetter.On("Get", ctx, projName).Return(project, nil)
 			jobRepo := new(JobRepository)
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
-			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil)
+			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "job schedule startDate not found in job")

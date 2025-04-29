@@ -147,7 +147,7 @@ type UpstreamResolver interface {
 }
 
 type JobRunInputCompiler interface {
-	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 }
 
 type ResourceExistenceChecker interface {
@@ -1848,7 +1848,7 @@ func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, desti
 	jobWithDetails := j.getSchedulerJobWithDetail(subjectJob, destination)
 	for _, config := range runConfigs {
 		var msg string
-		if _, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, config, referenceTime); err != nil {
+		if _, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, config); err != nil {
 			success = false
 
 			msg = fmt.Sprintf("compiling [%s] with type [%s] failed with error: %v", config.Executor.Name, config.Executor.Type.String(), err)

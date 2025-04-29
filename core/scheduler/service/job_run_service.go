@@ -52,7 +52,6 @@ type JobRepository interface {
 }
 
 type JobRunRepository interface {
-	GetByID(ctx context.Context, id scheduler.JobRunID) (*scheduler.JobRun, error)
 	GetByScheduledAt(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
 	GetLatestRun(ctx context.Context, project tenant.ProjectName, name scheduler.JobName, status *scheduler.State) (*scheduler.JobRun, error)
 	GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, status *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error)
@@ -75,7 +74,7 @@ type OperatorRunRepository interface {
 }
 
 type JobInputCompiler interface {
-	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 }
 
 type PriorityResolver interface {
@@ -118,25 +117,7 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		s.l.Error("error getting job [%s]: %s", jobName, err)
 		return nil, err
 	}
-	// TODO: Use scheduled_at instead of executed_at for computations, for deterministic calculations
-	// Todo: later, always return scheduleTime, for scheduleTimes greater than a given date
-	var jobRun *scheduler.JobRun
-	if config.JobRunID.IsEmpty() {
-		s.l.Warn("getting job run by scheduled at")
-		jobRun, err = s.repo.GetByScheduledAt(ctx, details.Job.Tenant, jobName, config.ScheduledAt)
-	} else {
-		s.l.Warn("getting job run by id")
-		jobRun, err = s.repo.GetByID(ctx, config.JobRunID)
-	}
 
-	var executedAt time.Time
-	if err != nil { // Fallback for executed_at to scheduled_at
-		executedAt = config.ScheduledAt
-		s.l.Warn("suppressed error is encountered when getting job run: %s", err)
-	} else {
-		executedAt = jobRun.StartTime
-	}
-	// Additional task config from existing replay
 	replayJobConfig, err := s.replayRepo.GetReplayJobConfig(ctx, details.Job.Tenant, details.Job.Name, config.ScheduledAt)
 	if err != nil {
 		s.l.Error("error getting replay job config from db: %s", err)
@@ -146,7 +127,7 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		details.Job.Task.Config[k] = v
 	}
 
-	return s.compiler.Compile(ctx, details, config, executedAt)
+	return s.compiler.Compile(ctx, details, config)
 }
 
 func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {

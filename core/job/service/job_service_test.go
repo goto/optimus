@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -6175,8 +6174,8 @@ type JobRunInputCompiler struct {
 }
 
 // Compile provides a mock function with given fields: ctx, job, config, executedAt
-func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
-	ret := _m.Called(ctx, job, config, executedAt)
+func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
+	ret := _m.Called(ctx, job, config)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Compile")
@@ -6184,19 +6183,19 @@ func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWi
 
 	var r0 *scheduler.ExecutorInput
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) (*scheduler.ExecutorInput, error)); ok {
-		return rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig) (*scheduler.ExecutorInput, error)); ok {
+		return rf(ctx, job, config)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) *scheduler.ExecutorInput); ok {
-		r0 = rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig) *scheduler.ExecutorInput); ok {
+		r0 = rf(ctx, job, config)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*scheduler.ExecutorInput)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) error); ok {
-		r1 = rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(1).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig) error); ok {
+		r1 = rf(ctx, job, config)
 	} else {
 		r1 = ret.Error(1)
 	}

@@ -67,7 +67,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, nil, nil, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour))
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "get details error")
@@ -107,7 +107,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, nil, nil, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour))
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "invalid value for unit 2, accepted values are [h,d,w,M,y]")
@@ -148,7 +148,6 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			intr, err := win.GetInterval(config.ScheduledAt)
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          intr.Start().Format(time.RFC3339),
 				"DEND":            intr.End().Format(time.RFC3339),
@@ -169,7 +168,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer assetCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "CompileJobRunAssets error")
@@ -223,7 +222,6 @@ func TestExecutorCompiler(t *testing.T) {
 			intr, err := win.GetInterval(config.ScheduledAt)
 			assert.NoError(t, err)
 
-			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          intr.Start().Format(time.RFC3339),
 				"DEND":            intr.End().Format(time.RFC3339),
@@ -248,7 +246,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler := new(mockAssetCompiler)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "some.config compilation error")
@@ -264,7 +262,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler := new(mockAssetCompiler)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "secret.config compilation error")
@@ -281,7 +279,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, intr, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 				assert.Nil(t, err)
 				expectedInputExecutor := &scheduler.ExecutorInput{
@@ -337,7 +335,7 @@ func TestExecutorCompiler(t *testing.T) {
 
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompilerNew, logger)
 
-				inputExecutorResp, err := inputCompiler.Compile(ctx, &detailsNew, config, executedAt)
+				inputExecutorResp, err := inputCompiler.Compile(ctx, &detailsNew, config)
 				assert.Nil(t, err)
 
 				expectedInputExecutor := &scheduler.ExecutorInput{
@@ -420,7 +418,6 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			intr, err := win.GetInterval(config.ScheduledAt)
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          intr.Start().Format(time.RFC3339),
 				"DEND":            intr.End().Format(time.RFC3339),
@@ -452,7 +449,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.Nil(t, err)
 			expectedInputExecutor := &scheduler.ExecutorInput{
@@ -528,7 +525,6 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			intr, err := win.GetInterval(config.ScheduledAt)
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          intr.Start().Format(time.RFC3339),
 				"DEND":            intr.End().Format(time.RFC3339),
@@ -559,7 +555,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "error in compiling hook template")
@@ -605,7 +601,6 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.NoError(t, err)
 			intr, err := win.GetInterval(config.ScheduledAt)
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
 				"DSTART":          intr.Start().Format(time.RFC3339),
 				"DEND":            intr.End().Format(time.RFC3339),
@@ -633,7 +628,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.Nil(t, inputExecutorResp)

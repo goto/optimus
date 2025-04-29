@@ -770,128 +770,6 @@ func TestJobRunService(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "some error")
 		})
-		t.Run("should get jobRunByScheduledAt if job run id is not given", func(t *testing.T) {
-			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
-			job := scheduler.Job{
-				Name:   jobName,
-				Tenant: tnnt,
-				Task: &scheduler.Task{
-					Config: map[string]string{},
-				},
-			}
-			details := scheduler.JobWithDetails{Job: &job}
-
-			someScheduleTime := todayDate.Add(time.Hour * 24 * -1)
-			executedAt := todayDate.Add(time.Hour * 23 * -1)
-			startTime := executedAt
-			runConfig := scheduler.RunConfig{
-				Executor:    scheduler.Executor{},
-				ScheduledAt: someScheduleTime,
-				JobRunID:    scheduler.JobRunID{},
-			}
-
-			jobRepo := new(JobRepository)
-			jobRepo.On("GetJobDetails", ctx, projName, jobName).
-				Return(&details, nil)
-			defer jobRepo.AssertExpectations(t)
-
-			jobRun := scheduler.JobRun{
-				JobName:   jobName,
-				Tenant:    tnnt,
-				StartTime: startTime,
-			}
-			jobRunRepo := new(mockJobRunRepository)
-			jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, someScheduleTime).
-				Return(&jobRun, nil)
-			defer jobRunRepo.AssertExpectations(t)
-
-			dummyExecutorInput := scheduler.ExecutorInput{
-				Configs: scheduler.ConfigMap{
-					"someKey": "someValue",
-				},
-			}
-			jobToCompile := job
-			jobToCompile.Task.Config["EXECUTION_PROJECT"] = "example"
-			jobToCompileDetails := scheduler.JobWithDetails{Job: &jobToCompile}
-
-			jobReplayRepo := new(ReplayRepository)
-			jobReplayRepo.On("GetReplayJobConfig", ctx, tnnt, jobName, someScheduleTime).Return(map[string]string{"EXECUTION_PROJECT": "example"}, nil)
-			defer jobReplayRepo.AssertExpectations(t)
-
-			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt).
-				Return(&dummyExecutorInput, nil)
-			defer jobInputCompiler.AssertExpectations(t)
-
-			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, jobInputCompiler, nil, nil)
-			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
-
-			assert.Equal(t, &dummyExecutorInput, executorInput)
-			assert.Nil(t, err)
-		})
-		t.Run("should use GetByID if job run id is given", func(t *testing.T) {
-			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
-			job := scheduler.Job{
-				Name:   jobName,
-				Tenant: tnnt,
-				Task: &scheduler.Task{
-					Config: map[string]string{},
-				},
-			}
-			details := scheduler.JobWithDetails{Job: &job}
-
-			someScheduleTime := todayDate.Add(time.Hour * 24 * -1)
-			executedAt := todayDate.Add(time.Hour * 23 * -1)
-			startTime := executedAt
-			jobRunID := scheduler.JobRunID(uuid.New())
-			runConfig := scheduler.RunConfig{
-				Executor:    scheduler.Executor{},
-				ScheduledAt: someScheduleTime,
-				JobRunID:    jobRunID,
-			}
-
-			jobRepo := new(JobRepository)
-			jobRepo.On("GetJobDetails", ctx, projName, jobName).
-				Return(&details, nil)
-			defer jobRepo.AssertExpectations(t)
-
-			jobRun := scheduler.JobRun{
-				JobName:   jobName,
-				Tenant:    tnnt,
-				StartTime: startTime,
-			}
-			jobRunRepo := new(mockJobRunRepository)
-			jobRunRepo.On("GetByID", ctx, jobRunID).
-				Return(&jobRun, nil)
-			defer jobRunRepo.AssertExpectations(t)
-
-			dummyExecutorInput := scheduler.ExecutorInput{
-				Configs: scheduler.ConfigMap{
-					"someKey": "someValue",
-				},
-			}
-
-			jobToCompile := job
-			jobToCompile.Task.Config["EXECUTION_PROJECT"] = "example"
-			jobToCompileDetails := scheduler.JobWithDetails{Job: &jobToCompile}
-
-			jobReplayRepo := new(ReplayRepository)
-			jobReplayRepo.On("GetReplayJobConfig", ctx, tnnt, jobName, someScheduleTime).Return(map[string]string{"EXECUTION_PROJECT": "example"}, nil)
-			defer jobReplayRepo.AssertExpectations(t)
-
-			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt).
-				Return(&dummyExecutorInput, nil)
-			defer jobInputCompiler.AssertExpectations(t)
-
-			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, jobInputCompiler, nil, nil)
-			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
-
-			assert.Equal(t, &dummyExecutorInput, executorInput)
-			assert.Nil(t, err)
-		})
 		t.Run("should handle if job run is not found , and fallback to execution time being schedule time", func(t *testing.T) {
 			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
 			job := scheduler.Job{
@@ -916,11 +794,6 @@ func TestJobRunService(t *testing.T) {
 				Return(&details, nil)
 			defer jobRepo.AssertExpectations(t)
 
-			jobRunRepo := new(mockJobRunRepository)
-			jobRunRepo.On("GetByID", ctx, jobRunID).
-				Return(&scheduler.JobRun{}, errors.NotFound(scheduler.EntityJobRun, "no record for job:"+jobName.String()))
-			defer jobRunRepo.AssertExpectations(t)
-
 			dummyExecutorInput := scheduler.ExecutorInput{
 				Configs: scheduler.ConfigMap{
 					"someKey": "someValue",
@@ -936,70 +809,16 @@ func TestJobRunService(t *testing.T) {
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, jobInputCompiler, nil, nil)
+				jobRepo, nil, jobReplayRepo, nil, nil, nil, jobInputCompiler, nil, nil)
 			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
 
 			assert.Equal(t, &dummyExecutorInput, executorInput)
 			assert.Nil(t, err)
-		})
-		t.Run("should not return error if get job run fails", func(t *testing.T) {
-			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
-			job := scheduler.Job{
-				Name:   jobName,
-				Tenant: tnnt,
-				Task: &scheduler.Task{
-					Config: map[string]string{},
-				},
-			}
-			details := scheduler.JobWithDetails{Job: &job}
-
-			someScheduleTime := todayDate.Add(time.Hour * 24 * -1)
-			jobRunID := scheduler.JobRunID(uuid.New())
-			runConfig := scheduler.RunConfig{
-				Executor:    scheduler.Executor{},
-				ScheduledAt: someScheduleTime,
-				JobRunID:    jobRunID,
-			}
-
-			jobRepo := new(JobRepository)
-			jobRepo.On("GetJobDetails", ctx, projName, jobName).
-				Return(&details, nil)
-			defer jobRepo.AssertExpectations(t)
-
-			jobRunRepo := new(mockJobRunRepository)
-			jobRunRepo.On("GetByID", ctx, jobRunID).
-				Return(&scheduler.JobRun{}, fmt.Errorf("some error other than not found error "))
-			defer jobRunRepo.AssertExpectations(t)
-
-			dummyExecutorInput := scheduler.ExecutorInput{
-				Configs: scheduler.ConfigMap{
-					"someKey": "someValue",
-				},
-			}
-			jobToCompile := job
-			jobToCompile.Task.Config["EXECUTION_PROJECT"] = "example"
-			jobToCompileDetails := scheduler.JobWithDetails{Job: &jobToCompile}
-
-			jobReplayRepo := new(ReplayRepository)
-			jobReplayRepo.On("GetReplayJobConfig", ctx, tnnt, jobName, someScheduleTime).Return(map[string]string{"EXECUTION_PROJECT": "example"}, nil)
-			defer jobReplayRepo.AssertExpectations(t)
-
-			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime).
-				Return(&dummyExecutorInput, nil)
-			defer jobInputCompiler.AssertExpectations(t)
-
-			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, jobInputCompiler, nil, nil)
-			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
-
-			assert.Nil(t, err)
-			assert.Equal(t, &dummyExecutorInput, executorInput)
 		})
 	})
 
@@ -1661,8 +1480,8 @@ type mockJobInputCompiler struct {
 	mock.Mock
 }
 
-func (m *mockJobInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
-	args := m.Called(ctx, job, config, executedAt)
+func (m *mockJobInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
+	args := m.Called(ctx, job, config)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -1671,14 +1490,6 @@ func (m *mockJobInputCompiler) Compile(ctx context.Context, job *scheduler.JobWi
 
 type mockJobRunRepository struct {
 	mock.Mock
-}
-
-func (m *mockJobRunRepository) GetByID(ctx context.Context, id scheduler.JobRunID) (*scheduler.JobRun, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*scheduler.JobRun), args.Error(1)
 }
 
 func (m *mockJobRunRepository) GetByScheduledAt(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error) {

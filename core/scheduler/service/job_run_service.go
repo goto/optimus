@@ -21,7 +21,6 @@ import (
 	"github.com/goto/optimus/internal/lib/duration"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils/filter"
 )
 
@@ -256,52 +255,27 @@ func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobW
 		return w.GetInterval(referenceTime)
 	}
 
-	if windowConfig.Type() == window.Preset || windowConfig.GetVersion() == window.NewWindowVersion {
-		var config window.SimpleConfig
-		if windowConfig.Type() == window.Preset {
-			preset, err := project.GetPreset(windowConfig.Preset)
-			if err != nil {
-				s.l.Error("error getting preset [%s] for project [%s]: %v", windowConfig.Preset, project.Name(), err)
-				return interval.Interval{}, err
-			}
-
-			config = preset.Config()
-		} else {
-			config = windowConfig.GetSimpleConfig()
-		}
-
-		config.ShiftBy = ""
-		config.TruncateTo = string(duration.None)
-
-		cw, err := window.FromCustomConfig(config)
+	var config window.SimpleConfig
+	if windowConfig.Type() == window.Preset {
+		preset, err := project.GetPreset(windowConfig.Preset)
 		if err != nil {
+			s.l.Error("error getting preset [%s] for project [%s]: %v", windowConfig.Preset, project.Name(), err)
 			return interval.Interval{}, err
 		}
-		return cw.GetInterval(referenceTime)
+
+		config = preset.Config()
+	} else {
+		config = windowConfig.GetSimpleConfig()
 	}
 
-	w, err := models.NewWindow(windowConfig.GetVersion(), "", "0", windowConfig.GetSize())
-	if err != nil {
-		s.l.Error("error initializing window: %v", err)
-		return interval.Interval{}, err
-	}
+	config.ShiftBy = ""
+	config.TruncateTo = string(duration.None)
 
-	if err := w.Validate(); err != nil {
-		s.l.Error("error validating window: %v", err)
-		return interval.Interval{}, err
-	}
-
-	startTime, err := w.GetStartTime(referenceTime)
+	cw, err := window.FromCustomConfig(config)
 	if err != nil {
 		return interval.Interval{}, err
 	}
-
-	endTime, err := w.GetEndTime(referenceTime)
-	if err != nil {
-		return interval.Interval{}, err
-	}
-
-	return interval.NewInterval(startTime, endTime), nil
+	return cw.GetInterval(referenceTime)
 }
 
 func getExpectedRuns(spec *cron.ScheduleSpec, startTime, endTime time.Time) []*scheduler.JobRunStatus {

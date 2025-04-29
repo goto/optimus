@@ -6,7 +6,6 @@ import (
 
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/duration"
-	"github.com/goto/optimus/internal/models"
 )
 
 const NewWindowVersion = 3
@@ -30,44 +29,7 @@ type Config struct {
 	windowType Type
 
 	Preset string
-	// kept for backward compatibility, will be removed later
-	Window models.Window
-
 	simple SimpleConfig
-}
-
-// Following functions are for backward compatibility
-
-func (c Config) GetSize() string { // nolint: gocritic
-	if c.Window == nil {
-		return c.simple.Size
-	}
-
-	return c.Window.GetSize()
-}
-
-func (c Config) GetOffset() string { // nolint: gocritic
-	if c.Window == nil {
-		return c.simple.ShiftBy
-	}
-
-	return c.Window.GetOffset()
-}
-
-func (c Config) GetTruncateTo() string { // nolint: gocritic
-	if c.Window == nil {
-		return c.simple.TruncateTo
-	}
-
-	return c.Window.GetTruncateTo()
-}
-
-func (c Config) GetVersion() int {
-	if c.Window == nil {
-		return NewWindowVersion
-	}
-
-	return c.Window.GetVersion()
 }
 
 func (c Config) GetSimpleConfig() SimpleConfig {
@@ -84,13 +46,6 @@ func NewPresetConfig(preset string) (Config, error) {
 		windowType: Preset,
 		Preset:     presetName,
 	}, nil
-}
-
-func NewCustomConfig(w models.Window) Config {
-	return Config{
-		windowType: Custom,
-		Window:     w,
-	}
 }
 
 func NewSimpleConfig(size, shiftBy, location, truncateTo string) (SimpleConfig, error) {

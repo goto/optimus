@@ -15,7 +15,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 )
 
 func TestJobAssetsCompiler(t *testing.T) {
@@ -28,8 +27,7 @@ func TestJobAssetsCompiler(t *testing.T) {
 	tnnt, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
 	currentTime := time.Now()
 	scheduleTime := currentTime.Add(-time.Hour)
-	w1, _ := models.NewWindow(2, "d", "1h", "24h")
-	windowConfig1 := window.NewCustomConfig(w1)
+	w1, _ := window.NewConfig("1d", "1h", "", "")
 
 	job := &scheduler.Job{
 		Name:   "jobName",
@@ -42,14 +40,15 @@ func TestJobAssetsCompiler(t *testing.T) {
 			},
 		},
 		Hooks:        nil,
-		WindowConfig: windowConfig1,
+		WindowConfig: w1,
 		Assets: map[string]string{
 			"assetName": "assetValue",
 			"query.sql": "select 1;",
 		},
 	}
-	w2 := window.FromBaseWindow(w1)
-	interval, err := w2.GetInterval(scheduleTime)
+	win, err := window.FromCustomConfig(w1.GetSimpleConfig())
+	assert.NoError(t, err)
+	interval, err := win.GetInterval(scheduleTime)
 	assert.NoError(t, err)
 
 	executedAt := currentTime.Add(time.Hour)

@@ -117,9 +117,8 @@ func (*JobSpecTestSuite) getCompleteJobSpec() model.JobSpec {
 				"taskkey": "taskvalue",
 			},
 			Window: model.JobSpecTaskWindow{
-				Size:       "24h",
-				Offset:     "1h",
-				TruncateTo: "d",
+				Size:    "1d",
+				ShiftBy: "1h",
 			},
 		},
 		Asset: map[string]string{
@@ -209,9 +208,10 @@ func (*JobSpecTestSuite) getCompleteJobSpecProto() *pb.JobSpecification {
 				Value: "taskvalue",
 			},
 		},
-		WindowSize:       "24h",
-		WindowOffset:     "1h",
-		WindowTruncateTo: "d",
+		Window: &pb.JobSpecification_Window{
+			Size:    "1d",
+			ShiftBy: "1h",
+		},
 		Assets: map[string]string{
 			"query.sql": "SELECT * FROM example",
 		},

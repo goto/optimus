@@ -40,7 +40,7 @@ func (gs *GSheets) GetAsCSV(url, sheetRange string, getFormattedDateTime, getFor
 		return "", false, err
 	}
 
-	return csv.FromRecords(content, columnCount, formatFn)
+	return csv.FromRecords[any](content, columnCount, formatFn)
 }
 
 func (gs *GSheets) getSheetContent(sheetID, sheetRange string, getFormattedDateTime, getFormattedData bool) ([][]interface{}, error) {

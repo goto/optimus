@@ -15,6 +15,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	bucket "github.com/goto/optimus/ext/bucket/oss"
+	"github.com/goto/optimus/ext/sheets/csv"
 	"github.com/goto/optimus/ext/sheets/gdrive"
 	"github.com/goto/optimus/ext/sheets/gsheet"
 	"github.com/goto/optimus/internal/errors"
@@ -200,13 +201,9 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 }
 
 func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, error) {
-	headers := 0
-	if val, ok := et.Source.SerdeProperties[headersCountSerde]; ok && val != "" {
-		num, err := strconv.Atoi(val)
-		if err != nil {
-			return "", false, errors.InvalidArgument(EntityExternalTable, "unable to parse "+headersCountSerde)
-		}
-		headers = num
+	headers, err := et.Source.GetHeaderCount()
+	if err != nil {
+		return "", false, err
 	}
 
 	et.Source.GetFormattedDate = et.Source.GetFormattedDate || !et.Schema.ContainsDateTimeColumns()
@@ -343,8 +340,45 @@ func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient
 	return quoteSerdeMissing, writeToBucket(ctx, ossClient, bucketName, objectKey, content)
 }
 
-func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFile *drive.File, ossClient *oss.Client, bucketName, objectName, contentType string) error {
-	if !strings.EqualFold(driveFile.FileExtension, contentType) {
+func cleanCsvContent(data string, et *ExternalTable) (string, error) {
+	records, err := csv.FromString(data)
+	if err != nil {
+		return "", err
+	}
+	headers, err := et.Source.GetHeaderCount()
+	if err != nil {
+		return "", err
+	}
+	columnCount := len(et.Schema)
+	var output string
+	output, _, err = csv.FromRecords[string](records, columnCount, func(rowIndex, colIndex int, data any) (string, error) {
+		if rowIndex < headers {
+			s, _ := ParseString(data) // ignore header parsing error, as headers will be ignored in data
+			return s, nil
+		}
+		value, err := formatSheetData(colIndex, data, et.Schema)
+		if err != nil {
+			if d, ok := data.(string); ok {
+				if strings.HasPrefix(d, "#REF!") || strings.HasPrefix(d, "#N/A") {
+					err = nil
+					value = ""
+				} else {
+					if _, ok := validInfinityValues[d]; ok { // check infinity
+						err = nil
+						value = d
+					}
+				}
+			}
+		}
+		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("for column Index:%d", colIndex), err)
+		return value, err
+	})
+
+	return output, err
+}
+
+func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFile *drive.File, ossClient *oss.Client, bucketName, objectName string, et *ExternalTable) error {
+	if !strings.EqualFold(driveFile.FileExtension, et.Source.ContentType) {
 		return nil
 	}
 	if !driveClient.IsWithinDownloadLimit(driveFile) {
@@ -354,10 +388,19 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 	if err != nil {
 		return err
 	}
-	return writeToBucket(ctx, ossClient, bucketName, objectName, string(content))
+	var contentToSync string
+	if strings.EqualFold(et.Source.ContentType, CSV) {
+		contentToSync, err = cleanCsvContent(string(content), et)
+		if err != nil {
+			return err
+		}
+	} else {
+		contentToSync = string(content)
+	}
+	return writeToBucket(ctx, ossClient, bucketName, objectName, contentToSync)
 }
 
-func SyncDriveFolderToOSS(ctx context.Context, driveClient *gdrive.GDrive, ossClient *oss.Client, folderID, bucketName, destination, contentType string) error {
+func SyncDriveFolderToOSS(ctx context.Context, driveClient *gdrive.GDrive, ossClient *oss.Client, folderID, bucketName, destination string, et *ExternalTable) error {
 	driveFiles, err := driveClient.FolderListShow(folderID)
 	if err != nil {
 		return err
@@ -365,12 +408,12 @@ func SyncDriveFolderToOSS(ctx context.Context, driveClient *gdrive.GDrive, ossCl
 	for _, driveFile := range driveFiles.Files {
 		objectName := filepath.Join(destination, driveFile.Name)
 		if strings.EqualFold(driveFile.MimeType, gdrive.TypeFolder) {
-			err = SyncDriveFolderToOSS(ctx, driveClient, ossClient, driveFile.Id, bucketName, objectName, contentType)
+			err = SyncDriveFolderToOSS(ctx, driveClient, ossClient, driveFile.Id, bucketName, objectName, et)
 			if err != nil {
 				return err
 			}
 		}
-		err = SyncDriveFileToOSS(ctx, driveClient, driveFile, ossClient, bucketName, objectName, contentType)
+		err = SyncDriveFileToOSS(ctx, driveClient, driveFile, ossClient, bucketName, objectName, et)
 		if err != nil {
 			return err
 		}
@@ -384,10 +427,10 @@ func syncFromDrive(ctx context.Context, driveSrv *gdrive.GDrive, ossClient *oss.
 		return err
 	}
 	if fileType == "folder" {
-		return SyncDriveFolderToOSS(ctx, driveSrv, ossClient, driveFile.Id, bucketName, objectPath, et.Source.ContentType)
+		return SyncDriveFolderToOSS(ctx, driveSrv, ossClient, driveFile.Id, bucketName, objectPath, et)
 	}
 	objectName := filepath.Join(objectPath, driveFile.Name)
-	return SyncDriveFileToOSS(ctx, driveSrv, driveFile, ossClient, bucketName, objectName, et.Source.ContentType)
+	return SyncDriveFileToOSS(ctx, driveSrv, driveFile, ossClient, bucketName, objectName, et)
 }
 
 func processGoogleDrive(ctx context.Context, driveSrv *gdrive.GDrive, ossClient *oss.Client, et *ExternalTable, commonLocation string) error {

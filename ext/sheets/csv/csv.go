@@ -3,6 +3,7 @@ package csv
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -10,7 +11,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-func FromRecords(data [][]interface{}, columnCount int, formatFn func(rowIndex, colIndex int, data any) (string, error)) (string, bool, error) {
+func FromRecords[T any](data [][]T, columnCount int, formatFn func(rowIndex, colIndex int, data any) (string, error)) (string, bool, error) {
 	if len(data) == 0 {
 		return "", false, nil
 	}
@@ -77,6 +78,22 @@ func FileNeedQuoteSerde(content [][]string) bool {
 		}
 	}
 	return false
+}
+
+func FromString(data string) ([][]string, error) {
+	reader := csv.NewReader(strings.NewReader(data))
+	var records [][]string
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
 
 func FromData(records [][]string) (string, error) {

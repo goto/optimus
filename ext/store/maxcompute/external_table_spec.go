@@ -2,6 +2,7 @@ package maxcompute
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/goto/optimus/internal/errors"
@@ -56,9 +57,22 @@ type ExternalSource struct {
 	SyncInterval     int64    `mapstructure:"sync_interval_in_hrs,omitempty"`
 	GetFormattedDate bool     `mapstructure:"fetch_formatted_datetime,omitempty"`
 	GetFormattedData bool     `mapstructure:"fetch_formatted_data,omitempty"`
+	CleanGDriveCSV   bool     `mapstructure:"clean_gdrive_csv,omitempty"`
 	Jars             []string `mapstructure:"jars,omitempty"`
 	Location         string   `mapstructure:"location,omitempty"`
 	Range            string   `mapstructure:"range,omitempty"`
+}
+
+func (e ExternalSource) GetHeaderCount() (int, error) {
+	headers := 0
+	if val, ok := e.SerdeProperties[headersCountSerde]; ok && val != "" {
+		num, err := strconv.Atoi(val)
+		if err != nil {
+			return 0, errors.InvalidArgument(EntityExternalTable, "unable to parse "+headersCountSerde)
+		}
+		headers = num
+	}
+	return headers, nil
 }
 
 func (e ExternalSource) Validate() error {

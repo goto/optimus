@@ -38,7 +38,7 @@ var (
 	timePattern         = regexp.MustCompile(`YYYY|YY|MMMM|MMM|MM|M|DDDD|DDD|DD|_D|D|ddd|__d|hh|h|am\/pm|AM\/PM|AM|PM|am|pm|mm|m|ss|s|u|n|TTT|±hhmmss|±hh\:mm\:ss|±hhmm|±hh\:mm|±hh|Zhhmmss|Zhh\:mm\:ss|Zhh:mm|Zhhmm|Zhh|`)
 	truePattern         = regexp.MustCompile(`^true$|^t$|^1$|^yes$|^y$`)
 	numberRegex         = regexp.MustCompile(`^[-+]?\d*(\.\d+)?$`)
-	numberExtendedRegex = regexp.MustCompile(`^-?[0-9,]+(?:\.[0-9]+)?$`)
+	numberExtendedRegex = regexp.MustCompile(`^-?[0-9,]*(?:\.[0-9]+)?$`)
 )
 
 var formatMap = map[string]string{

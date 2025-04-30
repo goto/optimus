@@ -13,19 +13,21 @@ import (
 const EntityDriveClient = "DriveClient"
 
 type GDrive struct {
-	srv                       *drive.Service
-	maxFileSizeSupportedBytes int64
+	srv                            *drive.Service
+	maxFileSizeSupportedBytes      int64
+	driveFileCleanupSizeLimitBytes int64
 }
 
-func NewGDrives(ctx context.Context, creds string, maxFileSizeSupportedMB int) (*GDrive, error) {
+func NewGDrives(ctx context.Context, creds string, maxFileSizeSupportedMB, driveFileCleanupSizeLimitMB int) (*GDrive, error) {
 	driveSrv, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(creds)))
 	if err != nil {
 		return nil, fmt.Errorf("not able to create drive service err: %w", err)
 	}
 
 	return &GDrive{
-		srv:                       driveSrv,
-		maxFileSizeSupportedBytes: int64(maxFileSizeSupportedMB) * 1000000,
+		srv:                            driveSrv,
+		maxFileSizeSupportedBytes:      int64(maxFileSizeSupportedMB) * 1000000,
+		driveFileCleanupSizeLimitBytes: int64(driveFileCleanupSizeLimitMB) * 1000000,
 	}, nil
 }
 
@@ -37,6 +39,19 @@ func (gd *GDrive) IsWithinDownloadLimit(file *drive.File) bool {
 		return true
 	}
 	if file.Size <= gd.maxFileSizeSupportedBytes {
+		return true
+	}
+	return false
+}
+
+// IsWithinParseLimit checks whether the given file's size is within the permissible parse limit.
+// Returns true if no limit is set or if the file size is below the configured maximum.
+func (gd *GDrive) IsWithinParseLimit(file *drive.File) bool {
+	if gd.driveFileCleanupSizeLimitBytes == 0 {
+		// No parse size limit is configured; allow parsing
+		return true
+	}
+	if file.Size <= gd.driveFileCleanupSizeLimitBytes {
 		return true
 	}
 	return false

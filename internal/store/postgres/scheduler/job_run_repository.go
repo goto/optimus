@@ -115,6 +115,33 @@ func (j *JobRunRepository) GetLatestRun(ctx context.Context, project tenant.Proj
 	return jr.toJobRun()
 }
 
+func (j *JobRunRepository) GetRunsByInterval(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, interval interval.Interval) ([]*scheduler.JobRun, error) {
+	var jobRunList []*scheduler.JobRun
+
+	getRuns := fmt.Sprintf("SELECT %s FROM job_run j where project_name = $1 and job_name = $2 and window_end >= $3 and window_start <= $4", jobRunColumns)
+	rows, err := j.db.Query(ctx, getRuns, project, jobName, interval.Start(), interval.End())
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs", err)
+	}
+	for rows.Next() {
+		var jr jobRun
+		err := rows.Scan(&jr.ID, &jr.JobName, &jr.NamespaceName, &jr.ProjectName, &jr.ScheduledAt, &jr.StartTime, &jr.EndTime,
+			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return []*scheduler.JobRun{}, nil
+			}
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting run", err)
+		}
+		jobRun, err := jr.toJobRun()
+		if err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs", err)
+		}
+		jobRunList = append(jobRunList, jobRun)
+	}
+	return jobRunList, nil
+}
+
 func (j *JobRunRepository) GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, runState *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error) {
 	var jobRunList []*scheduler.JobRun
 	var stateClause string

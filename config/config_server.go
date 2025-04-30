@@ -46,7 +46,8 @@ type AlertingConfig struct {
 type ExternalTablesConfig struct {
 	AccessIssuesRetryInterval int64 `mapstructure:"access_issues_retry_interval_minutes"`
 	SourceSyncInterval        int64 `mapstructure:"source_sync_interval_minutes"`
-	MaxFileSizeSupported      int   `mapstructure:"max_drive_file_size"`
+	MaxFileSizeSupported      int   `mapstructure:"max_drive_file_size_mb"`
+	DriveFileCleanupSizeLimit int   `mapstructure:"drive_file_cleanup_size_limit_mb"`
 }
 
 type EventManagerConfig struct {

@@ -42,20 +42,24 @@ var validInfinityValues = map[string]struct{}{
 }
 
 type SyncerService struct {
-	logger               log.Logger
-	secretProvider       SecretProvider
-	tenantDetailsGetter  TenantDetailsGetter
-	SyncRepo             SyncRepo
-	maxFileSizeSupported int
+	logger                    log.Logger
+	secretProvider            SecretProvider
+	tenantDetailsGetter       TenantDetailsGetter
+	SyncRepo                  SyncRepo
+	maxFileSizeSupported      int
+	driveFileCleanupSizeLimit int
 }
 
-func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter, syncRepo SyncRepo, maxFileSizeSupported int) *SyncerService {
+func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter,
+	syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int,
+) *SyncerService {
 	return &SyncerService{
-		logger:               log,
-		secretProvider:       secretProvider,
-		tenantDetailsGetter:  tenantDetailsGetter,
-		SyncRepo:             syncRepo,
-		maxFileSizeSupported: maxFileSizeSupported,
+		logger:                    log,
+		secretProvider:            secretProvider,
+		tenantDetailsGetter:       tenantDetailsGetter,
+		SyncRepo:                  syncRepo,
+		maxFileSizeSupported:      maxFileSizeSupported,
+		driveFileCleanupSizeLimit: driveFileCleanupSizeLimit,
 	}
 }
 
@@ -272,7 +276,7 @@ func (s *SyncerService) getDriveClient(ctx context.Context, tnnt tenant.Tenant) 
 		return nil, err
 	}
 
-	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported)
+	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported, s.driveFileCleanupSizeLimit)
 	if err != nil {
 		return nil, fmt.Errorf("not able to create drive service err: %w", err)
 	}
@@ -301,7 +305,7 @@ func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gs
 		return nil, nil, nil, err
 	}
 
-	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported)
+	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported, s.driveFileCleanupSizeLimit)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("not able to create drive service err: %w", err)
 	}
@@ -389,7 +393,10 @@ func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFi
 		return err
 	}
 	var contentToSync string
-	if strings.EqualFold(et.Source.ContentType, CSV) {
+	if et.Source.CleanGDriveCSV && strings.EqualFold(et.Source.ContentType, CSV) {
+		if !driveClient.IsWithinParseLimit(driveFile) {
+			return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("external table source option 'clean_gdrive_csv' is enabled, but the file size (%d MB) exceeds the server's configured driveFileCleanupSizeLimit", driveFile.Size/1000000))
+		}
 		contentToSync, err = cleanCsvContent(string(content), et)
 		if err != nil {
 			return err

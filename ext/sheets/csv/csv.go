@@ -82,6 +82,7 @@ func FileNeedQuoteSerde(content [][]string) bool {
 
 func FromString(data string) ([][]string, error) {
 	reader := csv.NewReader(strings.NewReader(data))
+	reader.FieldsPerRecord = -1
 	var records [][]string
 	for {
 		record, err := reader.Read()

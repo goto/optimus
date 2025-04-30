@@ -192,6 +192,7 @@ func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tena
 	return []*scheduler.JobRun{jobRun}, nil
 }
 
+// Used in the flow for sensor
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, requestCriteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error) {
 	jobWithDetails, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
@@ -325,7 +326,7 @@ func (s *JobRunService) FilterRunsV3(ctx context.Context, tnnt tenant.Tenant, cr
 	jobRuns, err := s.repo.GetRunsByInterval(ctx, tnnt.ProjectName(), name, intr)
 	if err != nil {
 		s.l.Error("Error getting job runs from db")
-		return nil, 0
+		return nil, -1
 	}
 
 	r1 := createRangesFromRuns(jobRuns)
@@ -352,10 +353,8 @@ func createRangesFromRuns(runs []*scheduler.JobRun) interval.Range[*scheduler.Jo
 		v, ok := mapping[in]
 		if !ok {
 			mapping[in] = status
-		} else {
-			if v.State != scheduler.StateSuccess {
-				mapping[in] = status
-			}
+		} else if v.State != scheduler.StateSuccess {
+			mapping[in] = status
 		}
 	}
 	ranges := interval.Range[*scheduler.JobRunStatus]{}
@@ -375,6 +374,7 @@ func fillMissingIntervals(r1 interval.Range[*scheduler.JobRunStatus], expected i
 
 	missing := []interval.Data[*scheduler.JobRunStatus]{}
 	currentStart := expected.Start()
+	currentEnd := time.Time{}
 	for _, r := range r1 {
 		if r.In.Start().After(currentStart) {
 			missing = append(missing, interval.Data[*scheduler.JobRunStatus]{
@@ -386,7 +386,19 @@ func fillMissingIntervals(r1 interval.Range[*scheduler.JobRunStatus], expected i
 			})
 		}
 		currentStart = r.In.End()
+		currentEnd = r.In.End()
 	}
+
+	if currentEnd.Before(expected.End()) {
+		missing = append(missing, interval.Data[*scheduler.JobRunStatus]{
+			In: interval.NewInterval(currentEnd, expected.End()),
+			Data: &scheduler.JobRunStatus{
+				ScheduledAt: currentEnd,
+				State:       scheduler.StatePending,
+			},
+		})
+	}
+
 	return append(r1, missing...)
 }
 

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -908,7 +907,7 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 	}
 }
 
-func max1[T cmp.Ordered](x T, y ...T) T {
+func max1(x int, y ...int) int {
 	m1 := x
 	for _, t := range y {
 		if t > m1 {

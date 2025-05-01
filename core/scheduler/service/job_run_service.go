@@ -46,20 +46,10 @@ var jobRunDdurationsBreakdownSeconds = promauto.NewGaugeVec(prometheus.GaugeOpts
 	Help: "operator wise time spent",
 }, []string{"project", "namespace", "job", "type"})
 
-var jobRunStatusV1 = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "job_run_status_v1",
+var jobRunStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "job_run_status",
 	Help: "status of the runs for sensor",
-}, []string{"project", "job"})
-
-var jobRunStatusV2 = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "job_run_status_v2",
-	Help: "status of the runs for sensor",
-}, []string{"project", "job"})
-
-var jobRunStatusV3 = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "job_run_status_v3",
-	Help: "status of the runs for sensor",
-}, []string{"project", "job"})
+}, []string{"project", "job", "version"})
 
 type JobRepository interface {
 	GetJob(ctx context.Context, name tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
@@ -191,7 +181,6 @@ func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tena
 	return []*scheduler.JobRun{jobRun}, nil
 }
 
-// Used in the flow for sensor
 func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, requestCriteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error) {
 	jobWithDetails, err := s.jobRepo.GetJobDetails(ctx, projectName, jobName)
 	if err != nil {
@@ -248,13 +237,13 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	}
 
 	result, c1 := filterRunsV1(expectedRuns, actualRuns, criteria)
-	jobRunStatusV1.WithLabelValues(string(projectName), jobName.String()).Set(float64(c1))
+	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V1").Set(float64(c1))
 
 	result2, c2 := filterRunsV2(expectedRuns, actualRuns, criteria, w)
-	jobRunStatusV2.WithLabelValues(string(projectName), jobName.String()).Set(float64(c2))
+	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V2").Set(float64(c2))
 
 	result3, c3 := s.FilterRunsV3(ctx, jobWithDetails.Job.Tenant, criteria)
-	jobRunStatusV3.WithLabelValues(string(projectName), jobName.String()).Set(float64(c3))
+	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
 
 	m1 := max1(c1, c2, c3)
 	if m1 == c3 {
@@ -279,7 +268,7 @@ func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requ
 		}
 		response = []*scheduler.JobRunStatus{r1}
 		c1 = response.GetSuccessRuns()
-		jobRunStatusV3.WithLabelValues(tnnt.ProjectName().String(), name.String()).Set(float64(c1))
+		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V3").Set(float64(c1))
 	} else {
 		s.l.Error("Error getting run from db")
 	}
@@ -293,7 +282,7 @@ func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requ
 		if c2 > c1 {
 			response = lst
 		}
-		jobRunStatusV1.WithLabelValues(tnnt.ProjectName().String(), name.String()).Set(float64(c2))
+		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V1").Set(float64(c2))
 	} else {
 		s.l.Error("Error getting job runs from airflow")
 	}

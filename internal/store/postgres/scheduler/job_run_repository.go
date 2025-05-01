@@ -65,6 +65,18 @@ func (j *jobRun) toJobRun() (*scheduler.JobRun, error) {
 			return nil, errors.AddErrContext(err, scheduler.EntityJobRun, "invalid monitoring values in database")
 		}
 	}
+	var windowStart *time.Time
+	if j.WindowStart != nil {
+		t1 := j.WindowStart.UTC()
+		windowStart = &t1
+	}
+
+	var windowEnd *time.Time
+	if j.WindowEnd != nil {
+		t2 := j.WindowEnd.UTC()
+		windowEnd = &t2
+	}
+
 	return &scheduler.JobRun{
 		ID:            j.ID,
 		JobName:       scheduler.JobName(j.JobName),
@@ -74,8 +86,8 @@ func (j *jobRun) toJobRun() (*scheduler.JobRun, error) {
 		SLAAlert:      j.SLAAlert,
 		StartTime:     j.StartTime,
 		EndTime:       j.EndTime,
-		WindowStart:   j.WindowStart,
-		WindowEnd:     j.WindowEnd,
+		WindowStart:   windowStart,
+		WindowEnd:     windowEnd,
 		SLADefinition: j.SLADefinition,
 		Monitoring:    monitoring,
 	}, nil

@@ -221,8 +221,8 @@ func TestPostgresJobRunRepository(t *testing.T) {
 			jobRuns, err := jobRunRepo.GetRunsByInterval(ctx, tnnt.ProjectName(), jobAName, intr)
 			assert.Nil(t, err)
 			assert.Len(t, jobRuns, 1)
-			assert.Equal(t, intr.Start(), jobRuns[0].WindowStart)
-			assert.Equal(t, intr.End(), jobRuns[0].WindowEnd)
+			assert.Equal(t, intr.Start(), *jobRuns[0].WindowStart)
+			assert.Equal(t, intr.End(), *jobRuns[0].WindowEnd)
 		})
 		t.Run("returns empty list if no job runs found in the interval", func(t *testing.T) {
 			db := dbSetup()

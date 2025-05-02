@@ -21,6 +21,7 @@ const (
 	GoogleSheet string = "GOOGLE_SHEETS"
 	GoogleDrive string = "GOOGLE_DRIVE"
 	LarkSheets  string = "LARK_SHEETS"
+	OSS         string = "OSS"
 )
 
 func handlerForFormat(format string) string {

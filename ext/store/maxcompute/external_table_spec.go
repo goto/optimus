@@ -87,6 +87,12 @@ func (e ExternalSource) Validate() error {
 			}
 		}
 		return nil
+	case OSS:
+		if len(e.SourceURIs) != 0 {
+			return errors.InvalidArgument(EntityExternalTable, "source uri list is not empty, "+
+				"Found `Source.Type` `OSS`. For `Source.Type` `OSS`, server only reads from `Source.Location` or default locations configured in Project Config, `ext_location`")
+		}
+		return nil
 	case "":
 		return errors.InvalidArgument(EntityExternalTable, "source type is empty")
 	default:

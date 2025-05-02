@@ -14,7 +14,6 @@ import (
 	"github.com/goto/optimus/ext/scheduler/airflow/dag"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/sdk/plugin"
 	"github.com/goto/optimus/sdk/plugin/mock"
 )
@@ -136,8 +135,7 @@ func setProject(tnnt tenant.Tenant, airflowVersion string) *tenant.Project {
 }
 
 func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
-	w1, err := models.NewWindow(1, "d", "0", "1h")
-	window1 := window.NewCustomConfig(w1)
+	window1, err := window.NewConfig("1h", "", "", "d")
 	if err != nil {
 		panic(err)
 	}

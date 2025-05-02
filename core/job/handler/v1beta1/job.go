@@ -10,13 +10,11 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/dto"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -431,45 +429,6 @@ func (jh *JobHandler) ListJobSpecification(ctx context.Context, req *pb.ListJobS
 	return &pb.ListJobSpecificationResponse{
 		Jobs: jobSpecificationProtos,
 	}, merr
-}
-
-func (jh *JobHandler) GetWindow(_ context.Context, req *pb.GetWindowRequest) (*pb.GetWindowResponse, error) {
-	// TODO: the default version to be deprecated & made mandatory in future releases
-	version := 1
-	if err := req.GetScheduledAt().CheckValid(); err != nil {
-		jh.l.Error("scheduled at is invalid: %s", err)
-		return nil, fmt.Errorf("%w: failed to parse schedule time %s", err, req.GetScheduledAt())
-	}
-
-	if req.Version != 0 {
-		version = int(req.Version)
-	}
-	window, err := models.NewWindow(version, req.GetTruncateTo(), req.GetOffset(), req.GetSize())
-	if err != nil {
-		jh.l.Error("error initializing window with version [%d]: %s", req.Version, err)
-		return nil, err
-	}
-	if err := window.Validate(); err != nil {
-		jh.l.Error("error validating window: %s", err)
-		return nil, err
-	}
-
-	me := errors.NewMultiError("get window errors")
-
-	startTime, err := window.GetStartTime(req.GetScheduledAt().AsTime())
-	me.Append(err)
-
-	endTime, err := window.GetEndTime(req.GetScheduledAt().AsTime())
-	me.Append(err)
-
-	if len(me.Errors) > 0 {
-		return nil, me
-	}
-
-	return &pb.GetWindowResponse{
-		Start: timestamppb.New(startTime),
-		End:   timestamppb.New(endTime),
-	}, nil
 }
 
 func (jh *JobHandler) ReplaceAllJobSpecifications(stream pb.JobSpecificationService_ReplaceAllJobSpecificationsServer) error {

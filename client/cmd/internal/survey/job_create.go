@@ -25,7 +25,7 @@ const (
 
 const (
 	ISODateLayout         = "2006-01-02"
-	jobSpecDefaultVersion = 2
+	jobSpecDefaultVersion = 3
 )
 
 var (
@@ -295,18 +295,18 @@ func (j *JobCreateSurvey) askWindowCustomQuestion() (model.JobSpecTaskWindow, er
 			},
 		},
 		{
-			Name: "window_offset",
+			Name: "window_shift_by",
 			Prompt: &survey.Input{
-				Message: "Window offset: ",
+				Message: "Window shift_by: ",
 				Default: "0",
-				Help:    "Configures the window offset",
+				Help:    "Configures the window shift_by",
 			},
 		},
 		{
 			Name: "window_size",
 			Prompt: &survey.Input{
 				Message: "Window size: ",
-				Default: "24h",
+				Default: "1d",
 				Help:    "Configures the window size",
 			},
 		},
@@ -326,25 +326,12 @@ func (j *JobCreateSurvey) askWindowCustomQuestion() (model.JobSpecTaskWindow, er
 		}
 
 		truncateTo := baseInputs["window_truncate_to"]
-		offset := baseInputs["window_offset"]
+		shiftBy := baseInputs["window_shift_by"]
 		size := baseInputs["window_size"]
-
-		window, err := models.NewWindow(jobSpecDefaultVersion, truncateTo, offset, size)
-		if err != nil {
-			j.logger.Error("error building window based on the configuration: %v", err)
-			j.logger.Info("Please try again")
-			continue
-		}
-
-		if _, err := window.GetStartTime(time.Now()); err != nil {
-			j.logger.Error("error validating window on start time: %v", err)
-			j.logger.Info("Please try again")
-			continue
-		}
 
 		return model.JobSpecTaskWindow{
 			TruncateTo: truncateTo,
-			Offset:     offset,
+			ShiftBy:    shiftBy,
 			Size:       size,
 		}, nil
 	}

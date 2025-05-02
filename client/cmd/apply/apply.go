@@ -20,6 +20,7 @@ import (
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -31,6 +32,7 @@ const (
 type applyCommand struct {
 	logger                 log.Logger
 	connection             connection.Connection
+	errors                 *errors.MultiError
 	config                 *config.ClientConfig
 	jobSpecReadWriter      local.SpecReadWriter[*model.JobSpec]
 	resourceSpecReadWriter local.SpecReadWriter[*model.ResourceSpec]
@@ -73,6 +75,7 @@ func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	c.errors = errors.NewMultiError("ErrorsInApplyCommand")
 	if conf == nil {
 		return fmt.Errorf("config should be specified")
 	}
@@ -162,6 +165,10 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	plans.Resource.Migrate = plans.Resource.Migrate.DeletePlansByNames(migratedResources...)
 	plans.Resource.Update = plans.Resource.Update.DeletePlansByNames(updatedResources...)
 
+	if c.errors.ToErr() != nil {
+		return errors.InternalError("ErrorsInApplyCommand", "encountered errors in apply flow", nil)
+	}
+
 	if err := c.savePlans(plans); err != nil {
 		return err
 	}
@@ -179,6 +186,7 @@ func (c *applyCommand) printSuccess(namespaceName, operation, kind, name string)
 
 func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause string) {
 	c.logger.Error("[%s] %s: %s %s ❌", namespaceName, operation, kind, name)
+	c.errors.Append(fmt.Errorf("[%s] %s: %s %s ❌", namespaceName, operation, kind, name))
 	if c.verbose && cause != "" {
 		c.logger.Error(cause)
 	}
@@ -187,6 +195,7 @@ func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause s
 
 func (c *applyCommand) printFailedAll(operation, kind, cause string) {
 	c.logger.Error("[all] %s: %s %s ❌", operation, kind)
+	c.errors.Append(fmt.Errorf("[all] %s: %s %s ❌", operation, kind, cause))
 	if c.verbose && cause != "" {
 		c.logger.Error(cause)
 	}
@@ -228,6 +237,7 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 	for _, request := range requests {
 		response, err := client.AddJobSpecifications(ctx, request)
 		if err != nil {
+			c.errors.Append(err)
 			for _, spec := range request.GetSpecs() {
 				c.printFailed(request.NamespaceName, "create", "job", spec.GetName(), "")
 			}
@@ -276,6 +286,7 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 			c.logger.Info(response.GetLog())
 		}
 		if err != nil {
+			c.errors.Append(err)
 			for _, spec := range request.GetSpecs() {
 				c.printFailed(request.NamespaceName, "update", "job", spec.GetName(), "")
 			}
@@ -339,6 +350,7 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResourceName())
 		if err != nil {
 			c.printFailed(request.NamespaceName, "migrate", "resource", resourceName, err.Error())
+			c.errors.Append(err)
 			continue
 		}
 		c.printSuccess(request.NamespaceName, "migrate", "resource", resourceName)
@@ -368,6 +380,7 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
 		if err != nil {
 			c.logger.Error(err.Error())
+			c.errors.Append(err)
 			continue
 		}
 		jobsToBeSend = append(jobsToBeSend, jobSpec.ToProto())
@@ -392,6 +405,7 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
 		if err != nil {
 			c.logger.Error(err.Error())
+			c.errors.Append(err)
 			continue
 		}
 		jobsToBeSend = append(jobsToBeSend, jobSpec.ToProto())
@@ -430,10 +444,12 @@ func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans p
 		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
 		if err != nil {
 			c.logger.Error(err.Error())
+			c.errors.Append(err)
 			continue
 		}
 		if currentPlan.OldNamespace == nil {
 			c.logger.Error(fmt.Sprintf("old namespace on job %s could not be nil", jobSpec.Name))
+			c.errors.Append(err)
 			continue
 		}
 		jobsToBeMigrated = append(jobsToBeMigrated, &pb.ChangeJobNamespaceRequest{
@@ -463,11 +479,13 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
 			if err != nil {
 				c.logger.Error(err.Error())
+				c.errors.Append(err)
 				continue
 			}
 			resourceSpecProto, err := resourceSpec.ToProto()
 			if err != nil {
 				c.logger.Error(err.Error())
+				c.errors.Append(err)
 				continue
 			}
 			resourcesToBeCreate = append(resourcesToBeCreate, &pb.CreateResourceRequest{
@@ -488,11 +506,13 @@ func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, pla
 			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
 			if err != nil {
 				c.logger.Error(err.Error())
+				c.errors.Append(err)
 				continue
 			}
 			resourceSpecProto, err := resourceSpec.ToProto()
 			if err != nil {
 				c.logger.Error(err.Error())
+				c.errors.Append(err)
 				continue
 			}
 			resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{
@@ -530,15 +550,18 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
 			if err != nil {
 				c.logger.Error(err.Error())
+				c.errors.Append(err)
 				continue
 			}
 			if currentPlan.OldNamespace == nil {
 				c.logger.Error(fmt.Sprintf("old namespace on resource %s could not be nil", resourceSpec.Name))
+				c.errors.Append(err)
 				continue
 			}
 			resourceSpecProto, err := resourceSpec.ToProto()
 			if err != nil {
 				c.logger.Error(fmt.Sprintf("resource %s could not be converted to proto", resourceSpec.Name))
+				c.errors.Append(err)
 				continue
 			}
 			resourcesToBeMigrated = append(resourcesToBeMigrated, &pb.ChangeResourceNamespaceRequest{

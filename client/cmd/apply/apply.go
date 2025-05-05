@@ -186,7 +186,6 @@ func (c *applyCommand) printSuccess(namespaceName, operation, kind, name string)
 
 func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause string) {
 	c.logger.Error("[%s] %s: %s %s ❌", namespaceName, operation, kind, name)
-	c.errors.Append(fmt.Errorf("[%s] %s: %s %s ❌", namespaceName, operation, kind, name))
 	if c.verbose && cause != "" {
 		c.logger.Error(cause)
 	}
@@ -195,7 +194,6 @@ func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause s
 
 func (c *applyCommand) printFailedAll(operation, kind, cause string) {
 	c.logger.Error("[all] %s: %s %s ❌", operation, kind)
-	c.errors.Append(fmt.Errorf("[all] %s: %s %s ❌", operation, kind, cause))
 	if c.verbose && cause != "" {
 		c.logger.Error(cause)
 	}
@@ -209,6 +207,7 @@ func (c *applyCommand) executeJobBulkDelete(ctx context.Context, client pb.JobSp
 
 	response, err := client.BulkDeleteJobs(ctx, request)
 	if err != nil {
+		c.errors.Append(err)
 		c.printFailedAll("bulk-delete", "job", err.Error())
 		return nil
 	}
@@ -225,6 +224,7 @@ func (c *applyCommand) executeJobBulkDelete(ctx context.Context, client pb.JobSp
 			c.printSuccess(jobToDelete.NamespaceName, "bulk-delete", "job", jobToDelete.JobName)
 			deletedJobs = append(deletedJobs, jobToDelete.JobName)
 		} else {
+			c.errors.Append(errors.InternalError("ApplyCommand", "finished bulk without success", nil))
 			c.printFailed(jobToDelete.NamespaceName, "bulk-delete", "job", jobToDelete.JobName, result.GetMessage())
 		}
 	}
@@ -253,6 +253,7 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 		}
 		for _, spec := range request.GetSpecs() {
 			if _, ok := isJobSuccess[spec.GetName()]; !ok {
+				c.errors.Append(errors.InternalError("ApplyCommand", "", nil))
 				c.printFailed(request.NamespaceName, "create", "job", spec.GetName(), "")
 			}
 		}
@@ -269,6 +270,7 @@ func (c *applyCommand) executeJobMigrate(ctx context.Context, client pb.JobSpeci
 	for _, request := range requests {
 		_, err := client.ChangeJobNamespace(ctx, request)
 		if err != nil {
+			c.errors.Append(err)
 			c.printFailed(request.NamespaceName, "migrate", "job", request.GetJobName(), err.Error())
 			continue
 		}
@@ -302,6 +304,7 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 		}
 		for _, spec := range request.GetSpecs() {
 			if _, ok := isJobSuccess[spec.GetName()]; !ok {
+				c.errors.Append(errors.InternalError("ApplyCommand", "job not success", nil))
 				c.printFailed(request.NamespaceName, "update", "job", spec.GetName(), "")
 			}
 		}
@@ -319,6 +322,7 @@ func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.Reso
 		_, err := client.DeleteResource(ctx, request)
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResourceName())
 		if err != nil {
+			c.errors.Append(err)
 			c.printFailed(request.NamespaceName, "delete", "resource", resourceName, err.Error())
 			continue
 		}
@@ -334,6 +338,7 @@ func (c *applyCommand) executeResourceAdd(ctx context.Context, client pb.Resourc
 		_, err := client.CreateResource(ctx, request)
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResource().GetName())
 		if err != nil {
+			c.errors.Append(err)
 			c.printFailed(request.NamespaceName, "add", "resource", resourceName, err.Error())
 			continue
 		}
@@ -349,8 +354,8 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 		_, err := client.ChangeResourceNamespace(ctx, request)
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResourceName())
 		if err != nil {
-			c.printFailed(request.NamespaceName, "migrate", "resource", resourceName, err.Error())
 			c.errors.Append(err)
+			c.printFailed(request.NamespaceName, "migrate", "resource", resourceName, err.Error())
 			continue
 		}
 		c.printSuccess(request.NamespaceName, "migrate", "resource", resourceName)
@@ -365,6 +370,7 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 		_, err := client.UpdateResource(ctx, request)
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResource().GetName())
 		if err != nil {
+			c.errors.Append(err)
 			c.printFailed(request.NamespaceName, "update", "resource", resourceName, err.Error())
 			continue
 		}

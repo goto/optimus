@@ -37,18 +37,18 @@ func (w *ResourceWorker) UpdateResources(ctx context.Context, resources []*resou
 		start := time.Now()
 		var sheetsSyncedCount int
 		if len(toUpdateResources) < 1 {
-			w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] Founds no Sheets to be updated", t.String()))
+			w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] Founds no Sheets to be updated", t))
 			continue
 		}
 
 		syncStatus, err := w.resService.syncer.SyncBatch(ctx, t, toUpdateResources)
 		if err != nil {
-			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] [] unable to sync external sheets, err:%s", err.Error()))
+			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] [%s] unable to sync external sheets, err:%s", t, err.Error()))
 		}
 		for _, i := range syncStatus {
 			if i.Success {
 				sheetsSyncedCount++
-				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] successfully synced source for Res: %s", i.Resource.FullName()))
+				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] successfully synced source for Res: %s", i.Resource.Tenant(), i.Resource.FullName()))
 			} else {
 				w.resService.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
 					URN:       i.Resource.FullName(),
@@ -56,11 +56,11 @@ func (w *ResourceWorker) UpdateResources(ctx context.Context, resources []*resou
 					EventType: "Sync Failure",
 					Message:   i.ErrorMsg,
 				})
-				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to sync resource for Res: %s, err: %s", i.Resource.FullName(), i.ErrorMsg))
+				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] [%s] failed to sync resource for Res: %s, err: %s", i.Resource.Tenant(), i.Resource.FullName(), i.ErrorMsg))
 			}
 		}
 
-		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", sheetsSyncedCount, len(toUpdateResources), time.Since(start).String()))
+		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", t, sheetsSyncedCount, len(toUpdateResources), time.Since(start).String()))
 	}
 }
 
@@ -91,7 +91,6 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 		}
 
 		w.UpdateResources(ctx, toUpdateResources)
-
 	}
 }
 

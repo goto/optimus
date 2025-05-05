@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,15 +46,10 @@ var jobRunDdurationsBreakdownSeconds = promauto.NewGaugeVec(prometheus.GaugeOpts
 	Help: "operator wise time spent",
 }, []string{"project", "namespace", "job", "type"})
 
-var jobRunStatusV1 = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "job_run_status_v1",
+var jobRunStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "job_run_status",
 	Help: "status of the runs for sensor",
-}, []string{"project", "job"})
-
-var jobRunStatusV2 = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "job_run_status_v2",
-	Help: "status of the runs for sensor",
-}, []string{"project", "job"})
+}, []string{"project", "job", "version"})
 
 type JobRepository interface {
 	GetJob(ctx context.Context, name tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
@@ -67,6 +63,7 @@ type JobRunRepository interface {
 	GetByScheduledAt(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
 	GetLatestRun(ctx context.Context, project tenant.ProjectName, name scheduler.JobName, status *scheduler.State) (*scheduler.JobRun, error)
 	GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, status *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error)
+	GetRunsByInterval(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, interval interval.Interval) ([]*scheduler.JobRun, error)
 	GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error)
 	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, interval interval.Interval, slaDefinitionInSec int64) error
 	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error
@@ -204,9 +201,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	}
 
 	if requestCriteria.OnlyLastRun {
-		s.l.Warn("getting last run only")
-		runs, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)
-		return runs, "getting last run only", err
+		return s.getLastRun(ctx, jobWithDetails.Job.Tenant, requestCriteria, jobCron)
 	}
 
 	project, err := s.projectGetter.Get(ctx, projectName)
@@ -242,16 +237,56 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	}
 
 	result, c1 := filterRunsV1(expectedRuns, actualRuns, criteria)
-	jobRunStatusV1.WithLabelValues(string(projectName), jobName.String()).Set(float64(c1))
+	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V1").Set(float64(c1))
 
-	result2, c2 := FilterRunsV2(expectedRuns, actualRuns, criteria, w)
-	jobRunStatusV2.WithLabelValues(string(projectName), jobName.String()).Set(float64(c2))
+	result2, c2 := filterRunsV2(expectedRuns, actualRuns, criteria, w)
+	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V2").Set(float64(c2))
 
-	if c1 > c2 {
-		return result, msg, nil
+	result3, c3 := s.FilterRunsV3(ctx, jobWithDetails.Job.Tenant, criteria)
+	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
+
+	m1 := max1(c1, c2, c3)
+	if m1 == c3 {
+		return result3, msg, nil
+	}
+	if m1 == c2 {
+		return result2, msg, nil
+	}
+	return result, msg, nil
+}
+
+func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requestCriteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, string, error) {
+	response := scheduler.JobRunStatusList{}
+	c1 := 0
+	msg := "getting last run only"
+	name := scheduler.JobName(requestCriteria.Name)
+	run, err := s.repo.GetLatestRun(ctx, tnnt.ProjectName(), name, nil)
+	if err == nil {
+		r1 := &scheduler.JobRunStatus{
+			ScheduledAt: run.ScheduledAt,
+			State:       run.State,
+		}
+		response = []*scheduler.JobRunStatus{r1}
+		c1 = response.GetSuccessRuns()
+		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V3").Set(float64(c1))
+	} else {
+		s.l.Error("Error getting run from db")
 	}
 
-	return result2, msg, nil
+	s.l.Warn(msg)
+	c2 := 0
+	runs, err2 := s.scheduler.GetJobRuns(ctx, tnnt, requestCriteria, jobCron)
+	if err2 == nil {
+		lst := scheduler.JobRunStatusList(runs)
+		c2 = lst.GetSuccessRuns()
+		if c2 > c1 {
+			response = lst
+		}
+		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V1").Set(float64(c2))
+	} else {
+		s.l.Error("Error getting job runs from airflow")
+	}
+	return response, msg, nil
 }
 
 func filterRunsV1(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria scheduler.JobRunsCriteria) (scheduler.JobRunStatusList, int) {
@@ -263,7 +298,7 @@ func filterRunsV1(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria 
 	return result, count
 }
 
-func FilterRunsV2(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria scheduler.JobRunsCriteria, w window.Window) (scheduler.JobRunStatusList, int) {
+func filterRunsV2(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria scheduler.JobRunsCriteria, w window.Window) (scheduler.JobRunStatusList, int) {
 	expectedRange := createIntervals(expectedRuns, w)
 	actualRange := createIntervals(actualRuns, w)
 
@@ -271,6 +306,88 @@ func FilterRunsV2(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria 
 	result := filterRuns(updatedRange.Values(), createFilterSet(criteria.Filter))
 	count := result.GetSuccessRuns()
 	return result, count
+}
+
+func (s *JobRunService) FilterRunsV3(ctx context.Context, tnnt tenant.Tenant, criteria scheduler.JobRunsCriteria) (scheduler.JobRunStatusList, int) {
+	name := scheduler.JobName(criteria.Name)
+	intr := interval.NewInterval(criteria.StartDate, criteria.EndDate)
+	jobRuns, err := s.repo.GetRunsByInterval(ctx, tnnt.ProjectName(), name, intr)
+	if err != nil {
+		s.l.Error("Error getting job runs from db")
+		return nil, -1
+	}
+
+	r1 := createRangesFromRuns(jobRuns)
+	r2 := fillMissingIntervals(r1, intr)
+	result := filterRuns(r2.Values(), createFilterSet(criteria.Filter))
+	count := result.GetSuccessRuns()
+	return result, count
+}
+
+func createRangesFromRuns(runs []*scheduler.JobRun) interval.Range[*scheduler.JobRunStatus] {
+	mapping := map[interval.Interval]*scheduler.JobRunStatus{}
+	for _, run := range runs {
+		start := run.WindowStart
+		end := run.WindowEnd
+		if start == nil || end == nil {
+			continue
+		}
+
+		in := interval.NewInterval(*start, *end)
+		status := &scheduler.JobRunStatus{
+			ScheduledAt: run.ScheduledAt,
+			State:       run.State,
+		}
+		v, ok := mapping[in]
+		if !ok {
+			mapping[in] = status
+		} else if v.State != scheduler.StateSuccess {
+			mapping[in] = status
+		}
+	}
+	ranges := interval.Range[*scheduler.JobRunStatus]{}
+	for in, v := range mapping {
+		ranges = append(ranges, interval.Data[*scheduler.JobRunStatus]{
+			In:   in,
+			Data: v,
+		})
+	}
+	return ranges
+}
+
+func fillMissingIntervals(r1 interval.Range[*scheduler.JobRunStatus], expected interval.Interval) interval.Range[*scheduler.JobRunStatus] {
+	sort.Slice(r1, func(i, j int) bool {
+		return r1[i].In.Start().Before(r1[j].In.Start())
+	})
+
+	missing := []interval.Data[*scheduler.JobRunStatus]{}
+	currentStart := expected.Start()
+	currentEnd := time.Time{}
+	for _, r := range r1 {
+		if r.In.Start().After(currentStart) {
+			missing = append(missing, interval.Data[*scheduler.JobRunStatus]{
+				In: interval.NewInterval(currentStart, r.In.Start()),
+				Data: &scheduler.JobRunStatus{
+					ScheduledAt: r.In.Start(),
+					State:       scheduler.StatePending,
+				},
+			})
+		}
+		currentStart = r.In.End()
+		currentEnd = r.In.End()
+	}
+
+	if currentEnd.Before(expected.End()) {
+		missing = append(missing, interval.Data[*scheduler.JobRunStatus]{
+			In: interval.NewInterval(currentEnd, expected.End()),
+			Data: &scheduler.JobRunStatus{
+				ScheduledAt: currentEnd,
+				State:       scheduler.StatePending,
+			},
+		})
+	}
+
+	return append(r1, missing...)
 }
 
 func createIntervals(runs scheduler.JobRunStatusList, w window.Window) interval.Range[*scheduler.JobRunStatus] {
@@ -777,4 +894,14 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 		compiler:         compiler,
 		projectGetter:    projectGetter,
 	}
+}
+
+func max1(x int, y ...int) int {
+	m1 := x
+	for _, t := range y {
+		if t > m1 {
+			m1 = t
+		}
+	}
+	return m1
 }

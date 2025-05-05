@@ -202,6 +202,70 @@ func (j *JobSpecReadWriterTestSuite) TestReadByName() {
 	})
 }
 
+func (j *JobSpecReadWriterTestSuite) TestReadByDirPath() {
+	j.Run("should return nil and error if no path is provided", func() {
+		specFS := afero.NewMemMapFs()
+		specReadWriter := specio.NewTestJobSpecReadWriter(specFS)
+
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath("")
+
+		j.Assert().Nil(actualJobSpec)
+		j.Assert().EqualError(actualError, "dir path is empty")
+	})
+
+	j.Run("should return nil and error if there's no specified job spec under the path", func() {
+		specFS := afero.NewMemMapFs()
+		specReadWriter := specio.NewTestJobSpecReadWriter(specFS)
+
+		dirPath := "namespace/dir"
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath(dirPath)
+
+		j.Assert().Nil(actualJobSpec)
+		j.Assert().Error(actualError)
+	})
+
+	j.Run("should return nil and error if reading a malformed spec", func() {
+		specFS := j.createMalformedSpec("root/ns1/jobs/example1")
+		specReadWriter := specio.NewTestJobSpecReadWriter(specFS)
+
+		dirPath := "root/ns1/jobs/example1"
+
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath(dirPath)
+
+		j.Assert().Nil(actualJobSpec)
+		j.Assert().ErrorContains(actualError, "yaml: unmarshal errors")
+	})
+
+	j.Run("should return spec if valid spec is found inside the provided dir", func() {
+		specFS := j.createValidSpecFS("root/ns1/jobs/example1")
+		specReadWriter := specio.NewTestJobSpecReadWriter(specFS)
+
+		dirPath := "root/ns1/jobs/example1"
+		name := "example1"
+
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath(dirPath)
+
+		j.Assert().NoError(actualError)
+		j.Assert().Equal(name, actualJobSpec.Name)
+	})
+
+	j.Run("should return merged spec if valid spec found & parent spec also found", func() {
+		specFS := j.createValidSpecFS("root/ns1/jobs/example1")
+		j.attachValidParentSpec(specFS, "root/ns1")
+		specReadWriter := specio.NewTestJobSpecReadWriter(specFS)
+
+		dirPath := "root/ns1/jobs/example1"
+		name := "example1"
+
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath(dirPath)
+
+		j.Assert().NoError(actualError)
+		j.Assert().Equal(name, actualJobSpec.Name)
+		// parent spec overrides behavior.retry.count
+		j.Assert().Equal(3, actualJobSpec.Behavior.Retry.Count)
+	})
+}
+
 func (j *JobSpecReadWriterTestSuite) TestWrite() {
 	j.Run("return error if file path is empty", func() {
 		specFS := afero.NewMemMapFs()
@@ -362,6 +426,32 @@ hooks: []`
 	}
 
 	return specFS
+}
+
+func (j *JobSpecReadWriterTestSuite) createMalformedSpec(specDirPaths ...string) afero.Fs {
+	templateJobSpec := `version: 1
+name: test
+name: test2`
+
+	specFS := afero.NewMemMapFs()
+
+	for _, specDirPath := range specDirPaths {
+		jobSpecFilePath := filepath.Join(specDirPath, "job.yaml")
+		j.writeTo(specFS, jobSpecFilePath, templateJobSpec)
+	}
+	return specFS
+}
+
+func (j *JobSpecReadWriterTestSuite) attachValidParentSpec(fs afero.Fs, specDirPaths ...string) {
+	templateJobSpec := `behavior:
+  retry:
+    count: 3`
+
+	for _, specDirPath := range specDirPaths {
+		jobSpecFilePath := filepath.Join(specDirPath, "this.yaml")
+
+		j.writeTo(fs, jobSpecFilePath, templateJobSpec)
+	}
 }
 
 func (*JobSpecReadWriterTestSuite) writeTo(fs afero.Fs, filePath, content string) error {

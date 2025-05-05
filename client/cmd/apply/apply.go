@@ -383,7 +383,7 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.Plan) []*pb.AddJobSpecificationsRequest {
 	jobsToBeSend := []*pb.JobSpecification{}
 	for _, currentPlan := range plans.Job.Create.GetByNamespace(namespace.Name) {
-		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
+		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
 			c.logger.Error(err.Error())
 			c.errors.Append(err)
@@ -408,7 +408,7 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans plan.Plan) []*pb.UpdateJobSpecificationsRequest {
 	jobsToBeSend := []*pb.JobSpecification{}
 	for _, currentPlan := range plans.Job.Update.GetByNamespace(namespace.Name) {
-		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
+		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
 			c.logger.Error(err.Error())
 			c.errors.Append(err)
@@ -447,7 +447,7 @@ func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans p
 	jobsToBeUpdated := []*pb.JobSpecification{}
 
 	for _, currentPlan := range plans.Job.Migrate.GetByNamespace(namespace.Name) {
-		jobSpec, err := c.jobSpecReadWriter.ReadByName(".", currentPlan.Name)
+		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
 			c.logger.Error(err.Error())
 			c.errors.Append(err)
@@ -481,26 +481,24 @@ func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans p
 func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans plan.Plan) []*pb.CreateResourceRequest {
 	resourcesToBeCreate := []*pb.CreateResourceRequest{}
 	for _, currentPlan := range plans.Resource.Create.GetByNamespace(namespace.Name) {
-		for _, ds := range namespace.Datastore {
-			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
-			if err != nil {
-				c.logger.Error(err.Error())
-				c.errors.Append(err)
-				continue
-			}
-			resourceSpecProto, err := resourceSpec.ToProto()
-			if err != nil {
-				c.logger.Error(err.Error())
-				c.errors.Append(err)
-				continue
-			}
-			resourcesToBeCreate = append(resourcesToBeCreate, &pb.CreateResourceRequest{
-				ProjectName:   c.config.Project.Name,
-				NamespaceName: namespace.Name,
-				DatastoreName: currentPlan.Datastore,
-				Resource:      resourceSpecProto,
-			})
+		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
+		if err != nil {
+			c.logger.Error(err.Error())
+			c.errors.Append(err)
+			continue
 		}
+		resourceSpecProto, err := resourceSpec.ToProto()
+		if err != nil {
+			c.logger.Error(err.Error())
+			c.errors.Append(err)
+			continue
+		}
+		resourcesToBeCreate = append(resourcesToBeCreate, &pb.CreateResourceRequest{
+			ProjectName:   c.config.Project.Name,
+			NamespaceName: namespace.Name,
+			DatastoreName: currentPlan.Datastore,
+			Resource:      resourceSpecProto,
+		})
 	}
 	return resourcesToBeCreate
 }
@@ -508,26 +506,24 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, plans plan.Plan) []*pb.UpdateResourceRequest {
 	resourcesToBeUpdate := []*pb.UpdateResourceRequest{}
 	for _, currentPlan := range plans.Resource.Update.GetByNamespace(namespace.Name) {
-		for _, ds := range namespace.Datastore {
-			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
-			if err != nil {
-				c.logger.Error(err.Error())
-				c.errors.Append(err)
-				continue
-			}
-			resourceSpecProto, err := resourceSpec.ToProto()
-			if err != nil {
-				c.logger.Error(err.Error())
-				c.errors.Append(err)
-				continue
-			}
-			resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{
-				ProjectName:   c.config.Project.Name,
-				NamespaceName: namespace.Name,
-				DatastoreName: currentPlan.Datastore,
-				Resource:      resourceSpecProto,
-			})
+		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
+		if err != nil {
+			c.logger.Error(err.Error())
+			c.errors.Append(err)
+			continue
 		}
+		resourceSpecProto, err := resourceSpec.ToProto()
+		if err != nil {
+			c.logger.Error(err.Error())
+			c.errors.Append(err)
+			continue
+		}
+		resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{
+			ProjectName:   c.config.Project.Name,
+			NamespaceName: namespace.Name,
+			DatastoreName: currentPlan.Datastore,
+			Resource:      resourceSpecProto,
+		})
 	}
 	return resourcesToBeUpdate
 }
@@ -552,38 +548,36 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 	resourcesToBeUpdated := []*pb.UpdateResourceRequest{}
 
 	for _, currentPlan := range plans.Resource.Migrate.GetByNamespace(namespace.Name) {
-		for _, ds := range namespace.Datastore {
-			resourceSpec, err := c.resourceSpecReadWriter.ReadByName(ds.Path, currentPlan.Name)
-			if err != nil {
-				c.logger.Error(err.Error())
-				c.errors.Append(err)
-				continue
-			}
-			if currentPlan.OldNamespace == nil {
-				c.logger.Error(fmt.Sprintf("old namespace on resource %s could not be nil", resourceSpec.Name))
-				c.errors.Append(err)
-				continue
-			}
-			resourceSpecProto, err := resourceSpec.ToProto()
-			if err != nil {
-				c.logger.Error(fmt.Sprintf("resource %s could not be converted to proto", resourceSpec.Name))
-				c.errors.Append(err)
-				continue
-			}
-			resourcesToBeMigrated = append(resourcesToBeMigrated, &pb.ChangeResourceNamespaceRequest{
-				ProjectName:      c.config.Project.Name,
-				NamespaceName:    *currentPlan.OldNamespace,
-				NewNamespaceName: namespace.Name,
-				ResourceName:     resourceSpec.Name,
-				DatastoreName:    currentPlan.Datastore,
-			})
-			resourcesToBeUpdated = append(resourcesToBeUpdated, &pb.UpdateResourceRequest{
-				ProjectName:   c.config.Project.Name,
-				NamespaceName: namespace.Name,
-				Resource:      resourceSpecProto,
-				DatastoreName: currentPlan.Datastore,
-			})
+		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
+		if err != nil {
+			c.logger.Error(err.Error())
+			c.errors.Append(err)
+			continue
 		}
+		if currentPlan.OldNamespace == nil {
+			c.logger.Error(fmt.Sprintf("old namespace on resource %s could not be nil", resourceSpec.Name))
+			c.errors.Append(err)
+			continue
+		}
+		resourceSpecProto, err := resourceSpec.ToProto()
+		if err != nil {
+			c.logger.Error(fmt.Sprintf("resource %s could not be converted to proto", resourceSpec.Name))
+			c.errors.Append(err)
+			continue
+		}
+		resourcesToBeMigrated = append(resourcesToBeMigrated, &pb.ChangeResourceNamespaceRequest{
+			ProjectName:      c.config.Project.Name,
+			NamespaceName:    *currentPlan.OldNamespace,
+			NewNamespaceName: namespace.Name,
+			ResourceName:     resourceSpec.Name,
+			DatastoreName:    currentPlan.Datastore,
+		})
+		resourcesToBeUpdated = append(resourcesToBeUpdated, &pb.UpdateResourceRequest{
+			ProjectName:   c.config.Project.Name,
+			NamespaceName: namespace.Name,
+			Resource:      resourceSpecProto,
+			DatastoreName: currentPlan.Datastore,
+		})
 	}
 
 	return resourcesToBeMigrated, resourcesToBeUpdated

@@ -30,6 +30,40 @@ func NewResourceWorker(logger log.Logger, repo ResourceRepository, syncer Syncer
 	}
 }
 
+func (w *ResourceWorker) UpdateResources(ctx context.Context, resources []*resource.Resource) {
+	mapTenantResources := groupByTenant(resources)
+
+	for t, toUpdateResources := range mapTenantResources {
+		start := time.Now()
+		var sheetsSyncedCount int
+		if len(toUpdateResources) < 1 {
+			w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] Founds no Sheets to be updated", t))
+			continue
+		}
+
+		syncStatus, err := w.resService.syncer.SyncBatch(ctx, t, toUpdateResources)
+		if err != nil {
+			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] [%s] unable to sync external sheets, err:%s", t, err.Error()))
+		}
+		for _, i := range syncStatus {
+			if i.Success {
+				sheetsSyncedCount++
+				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] successfully synced source for Res: %s", i.Resource.Tenant(), i.Resource.FullName()))
+			} else {
+				w.resService.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
+					URN:       i.Resource.FullName(),
+					Tenant:    i.Resource.Tenant(),
+					EventType: "Sync Failure",
+					Message:   i.ErrorMsg,
+				})
+				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] [%s] failed to sync resource for Res: %s, err: %s", i.Resource.Tenant(), i.Resource.FullName(), i.ErrorMsg))
+			}
+		}
+
+		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", t, sheetsSyncedCount, len(toUpdateResources), time.Since(start).String()))
+	}
+}
+
 func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInterval int64) {
 	for {
 		select {
@@ -40,7 +74,7 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 		}
 
 		w.logger.Info("[SyncExternalSheets] starting to sync external sheets")
-		start := time.Now()
+
 		allResources, err := w.repo.GetAllExternal(ctx, resource.MaxCompute)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to get all external resources, err:%s", err.Error()))
@@ -51,35 +85,12 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] unable to get tables due for syncing, err:%s", err.Error()))
 			continue
 		}
-		mapTenantResources := groupByTenant(tablesWithUnmodifiedSource)
-		for tnnt, resources := range mapTenantResources {
+		mapTenantUnmodifiedResources := groupByTenant(tablesWithUnmodifiedSource)
+		for tnnt, resources := range mapTenantUnmodifiedResources {
 			w.resService.updateLastCheckedUnSyncedETs(ctx, tnnt.ProjectName(), resources)
 		}
-		var sheetsSyncedCount int
-		if len(toUpdateResources) < 1 {
-			w.logger.Info("[SyncExternalSheets] Founds no Sheets to be updated")
-			continue
-		}
-		syncStatus, err := w.resService.syncer.SyncBatch(ctx, toUpdateResources)
-		if err != nil {
-			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] unable to sync external sheets, err:%s", err.Error()))
-		}
-		for _, i := range syncStatus {
-			if i.Success {
-				sheetsSyncedCount++
-				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] successfully synced source for Res: %s", i.Resource.FullName()))
-			} else {
-				w.resService.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
-					URN:       i.Resource.FullName(),
-					Tenant:    i.Resource.Tenant(),
-					EventType: "Sync Failure",
-					Message:   i.ErrorMsg,
-				})
-				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to sync resource for Res: %s, err: %s", i.Resource.FullName(), i.ErrorMsg))
-			}
-		}
 
-		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", sheetsSyncedCount, len(toUpdateResources), time.Since(start).String()))
+		w.UpdateResources(ctx, toUpdateResources)
 	}
 }
 

@@ -67,16 +67,16 @@ func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.
 	return s.SyncRepo.Touch(ctx, projectName, KindExternalTable, resources)
 }
 
-func (s *SyncerService) SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error) {
+func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SyncStatus, error) {
 	if len(resources) == 0 {
 		return []resource.SyncStatus{}, nil
 	}
-	sheets, ossClient, drive, err := s.getClients(ctx, resources[0].Tenant())
+	sheets, ossClient, drive, err := s.getClients(ctx, tnnt)
 	if err != nil {
 		return nil, err
 	}
 
-	tenantWithDetails, err := s.tenantDetailsGetter.GetDetails(ctx, resources[0].Tenant())
+	tenantWithDetails, err := s.tenantDetailsGetter.GetDetails(ctx, tnnt)
 	if err != nil {
 		return nil, err
 	}

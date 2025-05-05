@@ -40,7 +40,7 @@ type ResourceRepository interface {
 }
 
 type Syncer interface {
-	SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error)
+	SyncBatch(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SyncStatus, error)
 	TouchUnModified(ctx context.Context, project tenant.ProjectName, resources []*resource.Resource) error
 	GetSyncInterval(res *resource.Resource) (int64, error)
 	GetETSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error)
@@ -517,7 +517,7 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 		return []string{}, nil
 	}
 
-	syncStatus, err := rs.syncer.SyncBatch(ctx, toUpdateResource)
+	syncStatus, err := rs.syncer.SyncBatch(ctx, toUpdateResource[0].Tenant(), toUpdateResource)
 	var successTables []string
 	for _, i := range syncStatus {
 		if i.Success {

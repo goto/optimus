@@ -66,6 +66,19 @@ func (r resourceSpecReadWriter) ReadByName(rootDirPath, name string) (*model.Res
 	return spec, nil
 }
 
+func (r resourceSpecReadWriter) ReadByDirPath(dirPath string) (*model.ResourceSpec, error) {
+	if dirPath == "" {
+		return nil, errors.New("dir path is empty")
+	}
+	filePath := filepath.Join(dirPath, r.referenceSpecFileName)
+	spec, err := internal.ReadSpec[*model.ResourceSpec](r.specFS, filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec under [%s]: %w", filePath, err)
+	}
+	spec.Path = dirPath
+	return spec, nil
+}
+
 func (r resourceSpecReadWriter) Write(dirPath string, spec *model.ResourceSpec) error {
 	if dirPath == "" {
 		return errors.New("dir path is empty")

@@ -12,6 +12,7 @@ type ServerConfig struct {
 	Publisher              *Publisher           `mapstructure:"publisher"`
 	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
 	ExternalTables         ExternalTablesConfig `mapstructure:"external_tables"`
+	Features               FeaturesConfig       `mapstructure:"features"`
 }
 
 type Serve struct {
@@ -87,4 +88,8 @@ type PublisherKafkaConfig struct {
 	Topic               string   `mapstructure:"topic"`
 	BatchIntervalSecond int      `mapstructure:"batch_interval_second"`
 	BrokerURLs          []string `mapstructure:"broker_urls"`
+}
+
+type FeaturesConfig struct {
+	EnableV3Sensor bool `mapstructure:"enable_v3_sensor"`
 }

@@ -158,6 +158,8 @@ func (h JobRunHandler) JobRun(ctx context.Context, req *pb.JobRunRequest) (*pb.J
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
+	h.l.Debug("JobRuns[%d] for %s", len(jobRuns), req.GetJobName())
+	h.l.Debug("JobRuns %v", jobRuns)
 	var runs []*pb.JobRun
 	for _, run := range jobRuns {
 		ts := timestamppb.New(run.ScheduledAt)

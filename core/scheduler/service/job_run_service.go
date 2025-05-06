@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
@@ -118,6 +119,7 @@ type JobRunService struct {
 	priorityResolver PriorityResolver
 	compiler         JobInputCompiler
 	projectGetter    ProjectGetter
+	features         config.FeaturesConfig
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
@@ -242,8 +244,12 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	result2, c2 := filterRunsV2(expectedRuns, actualRuns, criteria, w)
 	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V2").Set(float64(c2))
 
-	result3, c3 := s.FilterRunsV3(ctx, jobWithDetails.Job.Tenant, criteria)
-	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
+	var result3 scheduler.JobRunStatusList
+	c3 := -1
+	if s.features.EnableV3Sensor {
+		result3, c3 = s.FilterRunsV3(ctx, jobWithDetails.Job.Tenant, criteria)
+		jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
+	}
 
 	m1 := max1(c1, c2, c3)
 	if m1 == c3 {
@@ -257,20 +263,23 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 
 func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requestCriteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, string, error) {
 	response := scheduler.JobRunStatusList{}
-	c1 := 0
+	c1 := -1
 	msg := "getting last run only"
 	name := scheduler.JobName(requestCriteria.Name)
-	run, err := s.repo.GetLatestRun(ctx, tnnt.ProjectName(), name, nil)
-	if err == nil {
-		r1 := &scheduler.JobRunStatus{
-			ScheduledAt: run.ScheduledAt,
-			State:       run.State,
+
+	if s.features.EnableV3Sensor {
+		run, err := s.repo.GetLatestRun(ctx, tnnt.ProjectName(), name, nil)
+		if err == nil {
+			r1 := &scheduler.JobRunStatus{
+				ScheduledAt: run.ScheduledAt,
+				State:       run.State,
+			}
+			response = []*scheduler.JobRunStatus{r1}
+			c1 = response.GetSuccessRuns()
+			jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V3").Set(float64(c1))
+		} else {
+			s.l.Error("Error getting run from db")
 		}
-		response = []*scheduler.JobRunStatus{r1}
-		c1 = response.GetSuccessRuns()
-		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V3").Set(float64(c1))
-	} else {
-		s.l.Error("Error getting run from db")
 	}
 
 	s.l.Warn(msg)
@@ -285,7 +294,11 @@ func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requ
 		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V1").Set(float64(c2))
 	} else {
 		s.l.Error("Error getting job runs from airflow")
+		if c1 == -1 {
+			return nil, msg, err2
+		}
 	}
+
 	return response, msg, nil
 }
 
@@ -880,7 +893,7 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
 	operatorRunRepo OperatorRunRepository, scheduler Scheduler, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
-	projectGetter ProjectGetter,
+	projectGetter ProjectGetter, features config.FeaturesConfig,
 ) *JobRunService {
 	return &JobRunService{
 		l:                logger,
@@ -893,6 +906,7 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 		priorityResolver: resolver,
 		compiler:         compiler,
 		projectGetter:    projectGetter,
+		features:         features,
 	}
 }
 

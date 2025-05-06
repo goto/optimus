@@ -251,6 +251,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
 	}
 
+	s.l.Debug("[%s] The count for each v1=%d, v2=%d, v3=%d", jobName, c1, c2, c3)
 	m1 := max1(c1, c2, c3)
 	if m1 == c3 {
 		return result3, msg, nil

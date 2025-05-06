@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/goto/salt/log"
-	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -177,12 +177,13 @@ func (p *planCommand) getJobSpec(ctx context.Context, fileName, ref string) (mod
 	var spec model.JobSpec
 	raw, err := p.repository.GetFileContent(ctx, p.gitProjectID, ref, fileName)
 	if err != nil {
-		return spec, fmt.Errorf("failed to get file with ref: %s and directory %s: %w", p.sourceRef, fileName, err)
+		return spec, fmt.Errorf("failed to get file with ref: %s and directory %s: %w", ref, fileName, err)
 	}
-	// note: yaml.Decoder returns an error if the file is empty, different from using yaml.Unmarshal
+	// note: in this case, we want to also read empty file as empty spec and not return an error
+	// yaml.Decoder returns io.EOF if the file is empty
 	buf := bytes.NewBuffer(raw)
-	if err := yaml.NewDecoder(buf).Decode(&spec); err != nil {
-		return spec, fmt.Errorf("failed to unmarshal job specification with ref: %s and directory %s: %w", p.sourceRef, fileName, err)
+	if err := yaml.NewDecoder(buf).Decode(&spec); err != nil && !errors.Is(err, io.EOF) {
+		return spec, fmt.Errorf("failed to unmarshal job specification with ref: %s and directory %s: %w", ref, fileName, err)
 	}
 	return spec, nil
 }

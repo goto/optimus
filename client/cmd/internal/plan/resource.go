@@ -9,6 +9,7 @@ type ResourcePlan struct {
 	Name         string  `json:"name"`
 	Datastore    string  `json:"datastore"`
 	OldNamespace *string `json:"old_namespace"` // OldNamespace will be used on migrate operation
+	Path         string  `json:"path"`
 }
 
 func (p ResourcePlan) GetName() string { return ConstructResourceName(p.Datastore, p.Name) }
@@ -16,6 +17,10 @@ func (p ResourcePlan) GetName() string { return ConstructResourceName(p.Datastor
 func (p *ResourcePlan) SetName(name string) { p.Name = name }
 
 func (p *ResourcePlan) SetOldNamespace(oldNamespace string) { p.OldNamespace = &oldNamespace }
+
+func (p ResourcePlan) GetPath() string { return p.Path }
+
+func (p *ResourcePlan) SetPath(path string) { p.Path = path }
 
 func (ResourcePlan) FileSuffix() string { return "/resource.yaml" }
 

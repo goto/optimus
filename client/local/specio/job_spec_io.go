@@ -96,6 +96,49 @@ func (j jobSpecReadWriter) ReadByName(rootDirPath, name string) (*model.JobSpec,
 	return spec, nil
 }
 
+func (j jobSpecReadWriter) ReadByDirPath(jobDirPath string) (*model.JobSpec, error) {
+	if jobDirPath == "" {
+		return nil, errors.New("dir path is empty")
+	}
+	spec, err := j.readJobSpec(jobDirPath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec under [%s]: %w", jobDirPath, err)
+	}
+
+	if j.withParentReading {
+		if err := j.mergeWithParentSpec(jobDirPath, spec); err != nil {
+			return nil, fmt.Errorf("error merging parent spec under [%s]: %w", jobDirPath, err)
+		}
+	}
+
+	return spec, nil
+}
+
+func (j jobSpecReadWriter) mergeWithParentSpec(dirPath string, spec *model.JobSpec) error {
+	parentDirPath := dirPath
+	for {
+		if parentDirPath == "." || parentDirPath == "/" {
+			break
+		}
+
+		parentFilePath := filepath.Join(parentDirPath, j.referenceParentFileName)
+		if _, err := j.specFS.Stat(parentFilePath); err == nil {
+			parentSpec, err := internal.ReadSpec[*model.JobSpec](j.specFS, parentFilePath)
+			if err != nil {
+				return fmt.Errorf("error reading parent spec under [%s]: %w", parentFilePath, err)
+			}
+			spec.MergeFrom(parentSpec)
+			break
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("error checking parent spec under [%s]: %w", parentFilePath, err)
+		}
+
+		parentDirPath = filepath.Dir(parentDirPath)
+	}
+
+	return nil
+}
+
 func (j jobSpecReadWriter) Write(dirPath string, spec *model.JobSpec) error {
 	if dirPath == "" {
 		return errors.New("dir path is empty")

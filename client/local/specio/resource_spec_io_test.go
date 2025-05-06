@@ -244,6 +244,79 @@ func (r *ResourceSpecReadWriterTestSuite) TestReadByName() {
 	})
 }
 
+func (r *ResourceSpecReadWriterTestSuite) TestReadByDirPath() {
+	r.Run("should return nil and error if no path is provided", func() {
+		specFS := afero.NewMemMapFs()
+		specReadWriter := specio.NewTestJobSpecReadWriter(specFS)
+
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath("")
+
+		r.Assert().EqualError(actualError, "dir path is empty")
+		r.Assert().Nil(actualJobSpec)
+	})
+
+	r.Run("should return nil and error if there's no specified resource spec under the path", func() {
+		specFS := afero.NewMemMapFs()
+		specReadWriter := specio.NewTestResourceSpecReadWriter(specFS)
+
+		dirPath := "namespace/dir"
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath(dirPath)
+
+		r.Assert().Error(actualError)
+		r.Assert().Nil(actualJobSpec)
+	})
+
+	r.Run("should return nil and error if reading a malformed spec", func() {
+		rawSpecContent := `
+version: 1
+version: 1
+`
+		specFS := afero.NewMemMapFs()
+		fileSpec, _ := specFS.Create("namespace/resource/user/resource.yaml")
+		fileSpec.WriteString(rawSpecContent)
+		fileSpec.Close()
+		specReadWriter := specio.NewTestResourceSpecReadWriter(specFS)
+
+		dirPath := "namespace/resource/user"
+
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath(dirPath)
+
+		r.Assert().ErrorContains(actualError, "yaml: unmarshal errors")
+		r.Assert().Nil(actualJobSpec)
+	})
+
+	r.Run("should return spec if valid spec is found inside the provided dir", func() {
+		rawSpecContent := `
+  version: 1
+  name: project.dataset.user
+  type: table
+  labels:
+    orchestrator: optimus
+  spec:
+    schema:
+    - name: id
+      type: string
+      mode: nullable
+    - name: name
+      type: string
+      mode: nullable
+`
+		specFS := afero.NewMemMapFs()
+		fileSpec, _ := specFS.Create("namespace/resource/user/resource.yaml")
+		fileSpec.WriteString(rawSpecContent)
+		fileSpec.Close()
+		specReadWriter := specio.NewTestResourceSpecReadWriter(specFS)
+
+		dirPath := "namespace/resource/user"
+		name := "project.dataset.user"
+
+		actualJobSpec, actualError := specReadWriter.ReadByDirPath(dirPath)
+
+		r.Assert().NoError(actualError)
+		r.Assert().Equal(name, actualJobSpec.Name)
+	})
+}
+
 func (r *ResourceSpecReadWriterTestSuite) TestWrite() {
 	r.Run("should return error if dir path is empty", func() {
 		specFS := afero.NewMemMapFs()

@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,7 +14,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/plan"
@@ -139,7 +140,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 			return plans, err
 		}
 
-		plans.Resource.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.ResourcePlan{Datastore: datastore})
+		plans.Resource.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.ResourcePlan{Datastore: datastore, Path: directory})
 	}
 
 	return plans.GetResult(), nil
@@ -177,10 +178,12 @@ func (p *planCommand) getResourceSpec(ctx context.Context, fileName, ref string)
 	var spec model.ResourceSpec
 	raw, err := p.repository.GetFileContent(ctx, p.gitProjectID, ref, fileName)
 	if err != nil {
-		return spec, errors.Join(err, fmt.Errorf("failed to get file with ref: %s and directory %s", p.sourceRef, fileName))
+		return spec, fmt.Errorf("failed to get file with ref: %s and directory %s: %w", p.sourceRef, fileName, err)
 	}
-	if err = yaml.Unmarshal(raw, &spec); err != nil {
-		return spec, errors.Join(err, fmt.Errorf("failed to unmarshal resource specification with ref: %s and directory %s", p.sourceRef, fileName))
+	// note: yaml.Decoder returns an error if the file is empty, different from using yaml.Unmarshal
+	buf := bytes.NewBuffer(raw)
+	if err := yaml.NewDecoder(buf).Decode(&spec); err != nil {
+		return spec, fmt.Errorf("failed to unmarshal resource specification with ref: %s and directory %s: %w", p.sourceRef, fileName, err)
 	}
 	return spec, nil
 }

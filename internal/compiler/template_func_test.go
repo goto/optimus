@@ -62,34 +62,46 @@ func TestTemplateFunctions(t *testing.T) {
 	})
 	t.Run("DateFrom", func(t *testing.T) {
 		t.Run("reduces days by 2", func(t *testing.T) {
-			from, err := compiler.DateFrom(d1, "-2", "")
+			from, err := compiler.DateFrom("-2", "", d1)
 			assert.NoError(t, err)
 			assert.Equal(t, "2023-01-13", from.Format(compiler.ISODateFormat))
 		})
 		t.Run("reduces month by 1", func(t *testing.T) {
-			from, err := compiler.DateFrom(d1, "", "-1")
+			from, err := compiler.DateFrom("", "-1", d1)
 			assert.NoError(t, err)
 			assert.Equal(t, "2022-12-15", from.Format(compiler.ISODateFormat))
 		})
 		t.Run("sets month as 5", func(t *testing.T) {
-			from, err := compiler.DateFrom(d1, "", "5")
+			from, err := compiler.DateFrom("", "5", d1)
 			assert.NoError(t, err)
 			assert.Equal(t, "2023-05-15", from.Format(compiler.ISODateFormat))
 		})
 		t.Run("sets day as 20", func(t *testing.T) {
-			from, err := compiler.DateFrom(d1, "20", "")
+			from, err := compiler.DateFrom("20", "", d1)
 			assert.NoError(t, err)
 			assert.Equal(t, "2023-01-20", from.Format(compiler.ISODateFormat))
 		})
 		t.Run("sets to first of month", func(t *testing.T) {
-			from, err := compiler.DateFrom(d1, "1", "")
+			from, err := compiler.DateFrom("1", "", d1)
 			assert.NoError(t, err)
 			assert.Equal(t, "2023-01-01", from.Format(compiler.ISODateFormat))
 		})
 		t.Run("allows to set and change", func(t *testing.T) {
-			from, err := compiler.DateFrom(d1, "1", "+3")
+			from, err := compiler.DateFrom("1", "+3", d1)
 			assert.NoError(t, err)
 			assert.Equal(t, "2023-04-01", from.Format(compiler.ISODateFormat))
+		})
+		t.Run("returns error on invalid change", func(t *testing.T) {
+			_, err := compiler.DateFrom("+one", "", d1)
+			assert.Error(t, err)
+		})
+	})
+	t.Run("DateFromStr", func(t *testing.T) {
+		t.Run("converts date from str", func(t *testing.T) {
+			dStr := "2021-02-10T10:00:00+00:00"
+			str, err := compiler.DateFromStr("+1", "+2", dStr)
+			assert.NoError(t, err)
+			assert.Equal(t, "2021-04-11", str)
 		})
 	})
 }

@@ -19,6 +19,7 @@ func OptimusFuncMap() template.FuncMap {
 		"list":        List,
 		"join":        Join,
 		"dateFrom":    DateFrom,
+		"dateFromStr": DateFromStr,
 	}
 }
 
@@ -97,7 +98,21 @@ func Join(sep string, v []string) string {
 	return strings.Join(v, sep)
 }
 
-func DateFrom(date time.Time, day string, month string) (time.Time, error) {
+func DateFromStr(day, month, timeStr string) (string, error) {
+	t, err := time.Parse(ISOTimeFormat, timeStr)
+	if err != nil {
+		return "", err
+	}
+
+	from, err := DateFrom(day, month, t)
+	if err != nil {
+		return "", err
+	}
+
+	return from.Format(ISODateFormat), nil
+}
+
+func DateFrom(day, month string, date time.Time) (time.Time, error) {
 	d1 := date
 	dayNum, err := getValueOnOp(day, d1.Day())
 	if err != nil {

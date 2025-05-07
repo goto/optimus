@@ -270,7 +270,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Run("lists the resources successfully", func(t *testing.T) {
 			spec := map[string]any{"a": "b"}
 			dbRes, err := resource.NewResource("proj.set.table", "table", resource.Bigquery, tnnt,
-				&resource.Metadata{}, spec)
+				&resource.Metadata{}, spec, nil)
 			assert.Nil(t, err)
 
 			service := new(resourceService)
@@ -547,7 +547,7 @@ func TestResourceHandler(t *testing.T) {
 			invalidKey := "a\xc5z"
 			specWithInvalidUTF := map[string]any{invalidKey: "value"}
 			dbRes, err := resource.NewResource("proj.set.table", "table", resource.Bigquery, tnnt,
-				&resource.Metadata{}, specWithInvalidUTF)
+				&resource.Metadata{}, specWithInvalidUTF, nil)
 			assert.Nil(t, err)
 			service := new(resourceService)
 			name := "proj.set.table"
@@ -571,7 +571,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Run("returns the resource successfully", func(t *testing.T) {
 			spec := map[string]any{"a": "b"}
 			dbRes, err := resource.NewResource("proj.set.table", "table", resource.Bigquery, tnnt,
-				&resource.Metadata{}, spec)
+				&resource.Metadata{}, spec, nil)
 			assert.Nil(t, err)
 
 			service := new(resourceService)
@@ -997,7 +997,7 @@ func TestResourceHandler(t *testing.T) {
 	t.Run("DeleteResource", func(t *testing.T) {
 		resourceName := "project.dataset.test_table"
 		spec := map[string]any{"a": "b"}
-		existing, _ := resource.NewResource(resourceName, "table", resource.Bigquery, tnnt, &resource.Metadata{}, spec)
+		existing, _ := resource.NewResource(resourceName, "table", resource.Bigquery, tnnt, &resource.Metadata{}, spec, nil)
 
 		t.Run("success", func(t *testing.T) {
 			var (

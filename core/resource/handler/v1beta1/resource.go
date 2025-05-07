@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
@@ -515,8 +516,16 @@ func fromResourceProto(rs *pb.ResourceSpecification, tnnt tenant.Tenant, store r
 		Description: description,
 		Labels:      rs.Labels,
 	}
-
-	return resource.NewResource(rs.Name, rs.GetType(), store, tnnt, &metadata, spec)
+	var deprecation *resource.Deprecated
+	deprecationPb := rs.GetDeprecation()
+	if deprecationPb != nil {
+		deprecation = &resource.Deprecated{
+			Reason:           deprecationPb.Reason,
+			Date:             deprecationPb.Date.AsTime(),
+			ReplacementTable: deprecationPb.ReplacementTable,
+		}
+	}
+	return resource.NewResource(rs.Name, rs.GetType(), store, tnnt, &metadata, spec, deprecation)
 }
 
 func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) {
@@ -529,14 +538,24 @@ func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) 
 	if err != nil {
 		return nil, errors.InvalidArgument(resource.EntityResource, "unable to convert spec to proto struct")
 	}
+	deprecation := res.GetDeprecationInfo()
+	var deprecationPb *pb.Deprecation
+	if deprecation != nil {
+		deprecationPb = &pb.Deprecation{
+			Reason:           deprecation.Reason,
+			Date:             timestamppb.New(deprecation.Date),
+			ReplacementTable: deprecation.ReplacementTable,
+		}
+	}
 
 	return &pb.ResourceSpecification{
-		Version: meta.Version,
-		Name:    res.FullName(),
-		Type:    res.Kind(),
-		Spec:    pbStruct,
-		Assets:  nil,
-		Labels:  meta.Labels,
+		Version:     meta.Version,
+		Name:        res.FullName(),
+		Type:        res.Kind(),
+		Spec:        pbStruct,
+		Assets:      nil,
+		Labels:      meta.Labels,
+		Deprecation: deprecationPb,
 	}, nil
 }
 

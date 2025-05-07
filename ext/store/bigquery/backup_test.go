@@ -25,7 +25,7 @@ func TestBigqueryBackup(t *testing.T) {
 		"description": "test resource",
 	}
 	fullName := "t-optimus.playground.product"
-	source, resErr := resource.NewResource(fullName, kindTable, store, tnnt, meta, spec)
+	source, resErr := resource.NewResource(fullName, kindTable, store, tnnt, meta, spec, nil)
 	assert.NoError(t, resErr)
 
 	t.Run("BackupResources", func(t *testing.T) {
@@ -33,7 +33,7 @@ func TestBigqueryBackup(t *testing.T) {
 			client := new(mockClient)
 
 			viewName := "t-optimus.playground.product-view"
-			view, err := resource.NewResource(viewName, bigquery.KindView, store, tnnt, meta, spec)
+			view, err := resource.NewResource(viewName, bigquery.KindView, store, tnnt, meta, spec, nil)
 			assert.NoError(t, err)
 
 			backup, err := resource.NewBackup(store, tnnt, []string{"p.d.t"}, "", createdAt, nil)

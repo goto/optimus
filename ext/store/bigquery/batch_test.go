@@ -27,20 +27,20 @@ func TestBatches(t *testing.T) {
 	ds1Name := "t-optimus.playground"
 	ds2Name := "t-optimus.mart"
 
-	ds1, resErr := resource.NewResource(ds1Name, kindDS, store, tnnt, meta1, spec)
+	ds1, resErr := resource.NewResource(ds1Name, kindDS, store, tnnt, meta1, spec, nil)
 	assert.Nil(t, resErr)
-	tab1, resErr := resource.NewResource(ds1Name+".table1", bigquery.KindTable, store, tnnt, meta1, spec)
+	tab1, resErr := resource.NewResource(ds1Name+".table1", bigquery.KindTable, store, tnnt, meta1, spec, nil)
 	assert.Nil(t, resErr)
-	view1, resErr := resource.NewResource(ds1Name+".view1", bigquery.KindView, store, tnnt, meta1, spec)
+	view1, resErr := resource.NewResource(ds1Name+".view1", bigquery.KindView, store, tnnt, meta1, spec, nil)
 	assert.Nil(t, resErr)
 
-	extTab1, resErr := resource.NewResource(ds2Name+".extTable1", bigquery.KindExternalTable, store, tnnt, meta1, spec)
+	extTab1, resErr := resource.NewResource(ds2Name+".extTable1", bigquery.KindExternalTable, store, tnnt, meta1, spec, nil)
 	assert.Nil(t, resErr)
-	view2, resErr := resource.NewResource(ds2Name+".view2", bigquery.KindView, store, tnnt, meta1, spec)
+	view2, resErr := resource.NewResource(ds2Name+".view2", bigquery.KindView, store, tnnt, meta1, spec, nil)
 	assert.Nil(t, resErr)
 
 	t.Run("BatchesFrom", func(t *testing.T) {
-		invalidRes, err2 := resource.NewResource(ds2Name+".invalid1", "stream", store, tnnt, meta1, spec)
+		invalidRes, err2 := resource.NewResource(ds2Name+".invalid1", "stream", store, tnnt, meta1, spec, nil)
 		assert.Nil(t, err2)
 
 		batches, err := bigquery.BatchesFrom([]*resource.Resource{ds1, tab1, view1, extTab1, view2, invalidRes}, nil)
@@ -89,7 +89,7 @@ func TestBatches(t *testing.T) {
 		createView2 := resource.FromExisting(view2, resource.ReplaceStatus(resource.StatusToCreate))
 		updateView2 := resource.FromExisting(view2, resource.ReplaceStatus(resource.StatusToUpdate))
 
-		tab2, resErr := resource.NewResource(ds1Name+".table2", bigquery.KindTable, store, tnnt, meta1, spec)
+		tab2, resErr := resource.NewResource(ds1Name+".table2", bigquery.KindTable, store, tnnt, meta1, spec, nil)
 		assert.Nil(t, resErr)
 		successTab2 := resource.FromExisting(tab2, resource.ReplaceStatus(resource.StatusSuccess))
 

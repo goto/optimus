@@ -86,6 +86,12 @@ func (n Name) String() string {
 	return string(n)
 }
 
+type Deprecated struct {
+	Reason           string
+	Date             time.Time
+	ReplacementTable string
+}
+
 type Resource struct {
 	name Name
 
@@ -99,6 +105,12 @@ type Resource struct {
 	metadata *Metadata
 
 	status Status
+
+	deprecation *Deprecated
+}
+
+func (r *Resource) IsDeprecated() bool {
+	return r.deprecation != nil
 }
 
 func (r *Resource) GetUpdateImpact(incoming *Resource) UpdateImpact {
@@ -108,7 +120,7 @@ func (r *Resource) GetUpdateImpact(incoming *Resource) UpdateImpact {
 	return UnspecifiedImpactChange
 }
 
-func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *Metadata, spec map[string]any) (*Resource, error) {
+func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *Metadata, spec map[string]any, deprecation *Deprecated) (*Resource, error) {
 	name, err := NameFrom(fullName)
 	if err != nil {
 		return nil, err
@@ -124,13 +136,14 @@ func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *M
 	}
 
 	return &Resource{
-		name:     name,
-		kind:     kind,
-		store:    store,
-		tenant:   tnnt,
-		spec:     spec,
-		metadata: meta,
-		status:   StatusUnknown,
+		name:        name,
+		kind:        kind,
+		store:       store,
+		tenant:      tnnt,
+		spec:        spec,
+		metadata:    meta,
+		status:      StatusUnknown,
+		deprecation: deprecation,
 	}, nil
 }
 
@@ -149,6 +162,10 @@ func (r *Resource) ConsoleURN() string {
 
 func (r *Resource) URN() URN {
 	return r.urn
+}
+
+func (r *Resource) GetDeprecationInfo() *Deprecated {
+	return r.deprecation
 }
 
 func (r *Resource) UpdateURN(urn URN) error {
@@ -234,14 +251,15 @@ func ReplaceStatus(status Status) FromExistingOpt {
 
 func FromExisting(existing *Resource, opts ...FromExistingOpt) *Resource {
 	output := &Resource{
-		name:     existing.name,
-		kind:     existing.kind,
-		store:    existing.store,
-		tenant:   existing.tenant,
-		spec:     existing.spec,
-		metadata: existing.metadata,
-		urn:      existing.urn,
-		status:   existing.status,
+		name:        existing.name,
+		kind:        existing.kind,
+		store:       existing.store,
+		tenant:      existing.tenant,
+		spec:        existing.spec,
+		metadata:    existing.metadata,
+		urn:         existing.urn,
+		status:      existing.status,
+		deprecation: existing.deprecation,
 	}
 	for _, opt := range opts {
 		opt(output)

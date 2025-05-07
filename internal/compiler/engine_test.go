@@ -130,7 +130,8 @@ func TestEngine(t *testing.T) {
 					map[string]string{
 						"query": `event_timestamp > "2021-02-10T10:00:00+00:00" AND event_timestamp <= "2021-02-11T10:00:00+00:00"`,
 					},
-				}, {
+				},
+				{
 					map[string]string{
 						"query": `
 				event_timestamp > "{{.DSTART | Date }}" AND event_timestamp <= "{{.DEND | Date }}"

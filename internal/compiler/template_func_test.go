@@ -60,4 +60,36 @@ func TestTemplateFunctions(t *testing.T) {
 			assert.Equal(t, "project_dataset_table", joined)
 		})
 	})
+	t.Run("DateFrom", func(t *testing.T) {
+		t.Run("reduces days by 2", func(t *testing.T) {
+			from, err := compiler.DateFrom(d1, "-2", "")
+			assert.NoError(t, err)
+			assert.Equal(t, "2023-01-13", from.Format(compiler.ISODateFormat))
+		})
+		t.Run("reduces month by 1", func(t *testing.T) {
+			from, err := compiler.DateFrom(d1, "", "-1")
+			assert.NoError(t, err)
+			assert.Equal(t, "2022-12-15", from.Format(compiler.ISODateFormat))
+		})
+		t.Run("sets month as 5", func(t *testing.T) {
+			from, err := compiler.DateFrom(d1, "", "5")
+			assert.NoError(t, err)
+			assert.Equal(t, "2023-05-15", from.Format(compiler.ISODateFormat))
+		})
+		t.Run("sets day as 20", func(t *testing.T) {
+			from, err := compiler.DateFrom(d1, "20", "")
+			assert.NoError(t, err)
+			assert.Equal(t, "2023-01-20", from.Format(compiler.ISODateFormat))
+		})
+		t.Run("sets to first of month", func(t *testing.T) {
+			from, err := compiler.DateFrom(d1, "1", "")
+			assert.NoError(t, err)
+			assert.Equal(t, "2023-01-01", from.Format(compiler.ISODateFormat))
+		})
+		t.Run("allows to set and change", func(t *testing.T) {
+			from, err := compiler.DateFrom(d1, "1", "+3")
+			assert.NoError(t, err)
+			assert.Equal(t, "2023-04-01", from.Format(compiler.ISODateFormat))
+		})
+	})
 }

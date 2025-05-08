@@ -244,11 +244,11 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	result2, c2 := filterRunsV2(expectedRuns, actualRuns, criteria, w)
 	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V2").Set(float64(c2))
 
-	var result3 scheduler.JobRunStatusList
-	c3 := -1
-	if s.features.EnableV3Sensor {
-		result3, c3 = s.FilterRunsV3(ctx, jobWithDetails.Job.Tenant, criteria)
-		jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
+	result3, c3 := s.FilterRunsV3(ctx, jobWithDetails.Job.Tenant, criteria)
+	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
+
+	if !s.features.EnableV3Sensor {
+		c3 = -1
 	}
 
 	s.l.Debug("[%s] The count for each v1=%d, v2=%d, v3=%d", jobName, c1, c2, c3)
@@ -268,30 +268,24 @@ func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requ
 	msg := "getting last run only"
 	name := scheduler.JobName(requestCriteria.Name)
 
-	if s.features.EnableV3Sensor {
-		run, err := s.repo.GetLatestRun(ctx, tnnt.ProjectName(), name, nil)
-		if err == nil {
-			r1 := &scheduler.JobRunStatus{
-				ScheduledAt: run.ScheduledAt,
-				State:       run.State,
-			}
-			response = []*scheduler.JobRunStatus{r1}
-			c1 = response.GetSuccessRuns()
-			jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V3").Set(float64(c1))
-		} else {
-			s.l.Error("Error getting run from db")
+	run, err := s.repo.GetLatestRun(ctx, tnnt.ProjectName(), name, nil)
+	if err == nil {
+		r1 := &scheduler.JobRunStatus{
+			ScheduledAt: run.ScheduledAt,
+			State:       run.State,
 		}
+		response = []*scheduler.JobRunStatus{r1}
+		c1 = response.GetSuccessRuns()
+		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V3").Set(float64(c1))
 	}
 
 	s.l.Warn(msg)
 	c2 := 0
+	var airflowResp scheduler.JobRunStatusList
 	runs, err2 := s.scheduler.GetJobRuns(ctx, tnnt, requestCriteria, jobCron)
 	if err2 == nil {
-		lst := scheduler.JobRunStatusList(runs)
-		c2 = lst.GetSuccessRuns()
-		if c2 > c1 {
-			response = lst
-		}
+		airflowResp = runs
+		c2 = airflowResp.GetSuccessRuns()
 		jobRunStatus.WithLabelValues(tnnt.ProjectName().String(), name.String(), "V1").Set(float64(c2))
 	} else {
 		s.l.Error("Error getting job runs from airflow")
@@ -300,7 +294,18 @@ func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requ
 		}
 	}
 
-	return response, msg, nil
+	if !s.features.EnableV3Sensor {
+		if err2 != nil {
+			return nil, msg, err2
+		}
+		c1 = -1
+	}
+
+	if c1 > c2 {
+		return response, msg, nil
+	}
+
+	return airflowResp, msg, nil
 }
 
 func filterRunsV1(expectedRuns, actualRuns scheduler.JobRunStatusList, criteria scheduler.JobRunsCriteria) (scheduler.JobRunStatusList, int) {

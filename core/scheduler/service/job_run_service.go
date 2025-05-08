@@ -98,6 +98,8 @@ type Scheduler interface {
 	DeleteJobs(ctx context.Context, t tenant.Tenant, jobsToDelete []string) error
 	UpdateJobState(ctx context.Context, projectName tenant.ProjectName, jobName []job.Name, state string) error
 	GetJobState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error)
+	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
+	AddRole(ctx context.Context, t tenant.Tenant, roleName string, ifNotExist bool) error
 }
 
 type EventHandler interface {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -76,7 +77,11 @@ func (r *registerCommand) RunE(_ *cobra.Command, _ []string) error {
 		return RegisterNamespace(r.logger, c, r.clientConfig.Project.Name, namespace)
 	}
 	r.logger.Info("Registering all available namespaces from client config to [%s]", r.clientConfig.Host)
-	return RegisterSelectedNamespaces(r.logger, c, r.clientConfig.Project.Name, r.clientConfig.Namespaces...)
+	err = RegisterSelectedNamespaces(r.logger, c, r.clientConfig.Project.Name, r.clientConfig.Namespaces...)
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 // RegisterSelectedNamespaces registers all selected namespaces
@@ -97,6 +102,36 @@ func RegisterSelectedNamespaces(l log.Logger, conn *grpc.ClientConn, projectName
 	}
 	if len(errMsg) > 0 {
 		return errors.New(errMsg)
+	}
+	return nil
+}
+
+func RegisterSchedulerRole(l log.Logger, conn *grpc.ClientConn, projectName string, namespace *config.Namespace) error {
+	schedulerServiceClient := pb.NewJobRunServiceClient(conn)
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), registerTimeout)
+	defer cancelFunc()
+
+	_, err := schedulerServiceClient.GetSchedulerRole(ctx, &pb.GetSchedulerRoleRequest{
+		ProjectName:   projectName,
+		NamespaceName: namespace.Name,
+		RoleName:      namespace.Name,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "unable to get role") {
+			l.Info(fmt.Sprintf("Namespace [%s]: scheduler role not found, creating...", namespace.Name))
+			_, err = schedulerServiceClient.CreateSchedulerRole(ctx, &pb.CreateSchedulerRoleRequest{
+				ProjectName:   projectName,
+				NamespaceName: namespace.Name,
+				RoleName:      namespace.Name,
+			})
+			if err != nil {
+				return fmt.Errorf("namespace [%s]: failed to register scheduler role, err: %w", namespace.Name, err)
+			}
+			l.Info(fmt.Sprintf("Namespace [%s]: scheduler role registration finished successfully.", namespace.Name))
+			return nil
+		}
+		return fmt.Errorf("namespace [%s]: failed to get scheduler role, err: %w", namespace.Name, err)
 	}
 	return nil
 }
@@ -124,5 +159,5 @@ func RegisterNamespace(l log.Logger, conn *grpc.ClientConn, projectName string, 
 		return fmt.Errorf("failed to register or update namespace [%s]: %w", namespace.Name, err)
 	}
 	l.Info("Namespace [%s] registration finished successfully", namespace.Name)
-	return nil
+	return RegisterSchedulerRole(l, conn, projectName, namespace)
 }

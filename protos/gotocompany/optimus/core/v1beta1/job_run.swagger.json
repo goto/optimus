@@ -312,6 +312,84 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/namespace/{namespaceName}/role": {
+      "get": {
+        "summary": "CreateSchedulerRole creates a new role in the scheduler",
+        "operationId": "JobRunService_GetSchedulerRole",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetSchedulerRoleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "roleName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      },
+      "post": {
+        "summary": "CreateSchedulerRole creates a new role in the scheduler",
+        "operationId": "JobRunService_CreateSchedulerRole",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1CreateSchedulerRoleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "namespaceName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/upload": {
       "put": {
         "summary": "UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler",
@@ -396,6 +474,9 @@
         }
       }
     },
+    "v1beta1CreateSchedulerRoleResponse": {
+      "type": "object"
+    },
     "v1beta1GetIntervalResponse": {
       "type": "object",
       "properties": {
@@ -416,6 +497,17 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/v1beta1JobRunWithDetail"
+          }
+        }
+      }
+    },
+    "v1beta1GetSchedulerRoleResponse": {
+      "type": "object",
+      "properties": {
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       }

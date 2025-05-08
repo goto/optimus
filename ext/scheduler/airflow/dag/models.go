@@ -32,6 +32,7 @@ type TemplateContext struct {
 	Upstreams     Upstreams
 
 	DisableJobScheduling bool
+	EnableRBAC           bool
 }
 
 type Task struct {

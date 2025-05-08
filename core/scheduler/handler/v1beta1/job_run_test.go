@@ -824,6 +824,16 @@ func (m *mockJobRunService) UploadToScheduler(ctx context.Context, projectName t
 	return args.Error(0)
 }
 
+func (m *mockJobRunService) CreateSchedulerRole(ctx context.Context, t tenant.Tenant, roleName string) error {
+	args := m.Called(ctx, t, roleName)
+	return args.Error(0)
+}
+
+func (m *mockJobRunService) GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error) {
+	args := m.Called(ctx, t, roleName)
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *mockJobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {
 	args := m.Called(ctx, projectName, jobName, filters)
 	return args.Get(0).([]*scheduler.JobRun), args.Error(1)

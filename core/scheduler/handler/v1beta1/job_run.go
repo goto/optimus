@@ -2,6 +2,8 @@ package v1beta1
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -22,6 +24,8 @@ type JobRunService interface {
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
+	CreateSchedulerRole(ctx context.Context, t tenant.Tenant, roleName string) error
+	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
 }
 
 type Notifier interface {
@@ -36,6 +40,47 @@ type JobRunHandler struct {
 	notifier Notifier
 
 	pb.UnimplementedJobRunServiceServer
+}
+
+func (h JobRunHandler) GetSchedulerRole(ctx context.Context, req *pb.GetSchedulerRoleRequest) (*pb.GetSchedulerRoleResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		h.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "unable to get tenant")
+	}
+	roleName := req.GetRoleName()
+	if roleName == "" {
+		return nil, errors.GRPCErr(errors.InvalidArgument("scheduler", "roleName name is empty"), "")
+	}
+
+	permissions, err := h.service.GetRolePermissions(ctx, tnnt, roleName)
+	if err != nil {
+		return &pb.GetSchedulerRoleResponse{}, errors.GRPCErr(err, "unable to get role")
+	}
+	return &pb.GetSchedulerRoleResponse{
+		Permissions: permissions,
+	}, nil
+}
+
+func (h JobRunHandler) CreateSchedulerRole(ctx context.Context, req *pb.CreateSchedulerRoleRequest) (*pb.CreateSchedulerRoleResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		h.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "unable to get tenant")
+	}
+	roleName := req.GetRoleName()
+	if roleName == "" {
+		return nil, errors.GRPCErr(errors.InvalidArgument("scheduler", "roleName name is empty"), "")
+	}
+
+	err = h.service.CreateSchedulerRole(ctx, tnnt, roleName)
+	if err != nil {
+		if strings.Contains(err.Error(), "409") {
+			err = errors.FailedPrecondition("Scheduler", fmt.Sprintf("unable to create role:[%s], err:[%s]", req.GetRoleName(), err.Error()))
+		}
+		return &pb.CreateSchedulerRoleResponse{}, errors.GRPCErr(err, "unable to register role")
+	}
+	return &pb.CreateSchedulerRoleResponse{}, nil
 }
 
 func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputRequest) (*pb.JobRunInputResponse, error) {

@@ -24,6 +24,9 @@ type JobRunService interface {
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
+}
+
+type SchedulerService interface {
 	CreateSchedulerRole(ctx context.Context, t tenant.Tenant, roleName string) error
 	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
 }
@@ -35,9 +38,10 @@ type Notifier interface {
 }
 
 type JobRunHandler struct {
-	l        log.Logger
-	service  JobRunService
-	notifier Notifier
+	l                log.Logger
+	service          JobRunService
+	schedulerService SchedulerService
+	notifier         Notifier
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -53,7 +57,7 @@ func (h JobRunHandler) GetSchedulerRole(ctx context.Context, req *pb.GetSchedule
 		return nil, errors.GRPCErr(errors.InvalidArgument("scheduler", "roleName name is empty"), "")
 	}
 
-	permissions, err := h.service.GetRolePermissions(ctx, tnnt, roleName)
+	permissions, err := h.schedulerService.GetRolePermissions(ctx, tnnt, roleName)
 	if err != nil {
 		return &pb.GetSchedulerRoleResponse{}, errors.GRPCErr(err, "unable to get role")
 	}
@@ -73,7 +77,7 @@ func (h JobRunHandler) CreateSchedulerRole(ctx context.Context, req *pb.CreateSc
 		return nil, errors.GRPCErr(errors.InvalidArgument("scheduler", "roleName name is empty"), "")
 	}
 
-	err = h.service.CreateSchedulerRole(ctx, tnnt, roleName)
+	err = h.schedulerService.CreateSchedulerRole(ctx, tnnt, roleName)
 	if err != nil {
 		if strings.Contains(err.Error(), "409") {
 			err = errors.FailedPrecondition("Scheduler", fmt.Sprintf("unable to create role:[%s], err:[%s]", req.GetRoleName(), err.Error()))
@@ -325,10 +329,11 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier) *JobRunHandler {
+func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier, schedulerService SchedulerService) *JobRunHandler {
 	return &JobRunHandler{
-		l:        l,
-		service:  service,
-		notifier: notifier,
+		l:                l,
+		service:          service,
+		notifier:         notifier,
+		schedulerService: schedulerService,
 	}
 }

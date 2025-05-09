@@ -78,14 +78,6 @@ func (s *JobRunService) UpdateJobScheduleState(ctx context.Context, projectName 
 	return s.scheduler.UpdateJobState(ctx, projectName, jobName, state.String())
 }
 
-func (s *JobRunService) CreateSchedulerRole(ctx context.Context, t tenant.Tenant, roleName string) error {
-	return s.scheduler.AddRole(ctx, t, roleName, true)
-}
-
-func (s *JobRunService) GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error) {
-	return s.scheduler.GetRolePermissions(ctx, t, roleName)
-}
-
 func (s *JobRunService) GetJobSchedulerState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error) {
 	return s.scheduler.GetJobState(ctx, projectName)
 }

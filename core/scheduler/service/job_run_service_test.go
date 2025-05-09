@@ -1972,6 +1972,16 @@ type mockScheduler struct {
 	mock.Mock
 }
 
+func (ms *mockScheduler) AddRole(ctx context.Context, t tenant.Tenant, roleName string, ifNotExist bool) error {
+	args := ms.Called(ctx, t, roleName, ifNotExist)
+	return args.Error(0)
+}
+
+func (ms *mockScheduler) GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error) {
+	args := ms.Called(ctx, t, roleName)
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (ms *mockScheduler) GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
 	args := ms.Called(ctx, t, criteria, jobCron)
 	if args.Get(0) == nil {

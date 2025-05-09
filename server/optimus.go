@@ -361,6 +361,8 @@ func (s *OptimusServer) setupHandlers() error {
 		s.conf.Features,
 	)
 
+	newSchedulerService := schedulerService.NewSchedulerService(newScheduler)
+
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
@@ -432,7 +434,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Resource Handler
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService))
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

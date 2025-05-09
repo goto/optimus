@@ -35,12 +35,14 @@ var SharedLib []byte
 const (
 	EntityAirflow = "Airflow"
 
-	dagStatusBatchURL = "api/v1/dags/~/dagRuns/list"
-	dagURL            = "api/v1/dags"
-	dagRunClearURL    = "api/v1/dags/%s/clearTaskInstances"
-	dagRunCreateURL   = "api/v1/dags/%s/dagRuns"
-	dagRunModifyURL   = "api/v1/dags/%s/dagRuns/%s"
-	airflowDateFormat = "2006-01-02T15:04:05+00:00"
+	rolesURL           = "auth/fab/v1/roles"
+	rolesPermissionURL = "auth/fab/v1/roles/%s"
+	dagStatusBatchURL  = "api/v1/dags/~/dagRuns/list"
+	dagURL             = "api/v1/dags"
+	dagRunClearURL     = "api/v1/dags/%s/clearTaskInstances"
+	dagRunCreateURL    = "api/v1/dags/%s/dagRuns"
+	dagRunModifyURL    = "api/v1/dags/%s/dagRuns/%s"
+	airflowDateFormat  = "2006-01-02T15:04:05+00:00"
 
 	schedulerHostKey = "SCHEDULER_HOST"
 
@@ -97,6 +99,28 @@ type Schedule struct {
 }
 
 type Tag struct {
+	Name string `json:"name"`
+}
+
+type PermissionSet struct {
+	Name    string   `json:"name"`
+	Actions []Action `json:"actions"`
+}
+
+type Action struct {
+	Action   ActionDetail   `json:"action"`
+	Resource ResourceDetail `json:"resource"`
+}
+
+func (a Action) String() string {
+	return fmt.Sprintf("%s on %s", a.Action.Name, a.Resource.Name)
+}
+
+type ActionDetail struct {
+	Name string `json:"name"`
+}
+
+type ResourceDetail struct {
 	Name string `json:"name"`
 }
 
@@ -541,6 +565,62 @@ func (s *Scheduler) getSchedulerAuth(ctx context.Context, projectName tenant.Pro
 
 func (s *Scheduler) Clear(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, executionTime time.Time) error {
 	return s.ClearBatch(ctx, t, jobName, executionTime, executionTime)
+}
+
+func (s *Scheduler) GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error) {
+	schAuth, err := s.getSchedulerAuth(ctx, t.ProjectName())
+	if err != nil {
+		return nil, err
+	}
+	req := airflowRequest{
+		path:   fmt.Sprintf(rolesPermissionURL, roleName),
+		method: http.MethodGet,
+	}
+
+	resp, err := s.client.Invoke(ctx, req, schAuth)
+	if err != nil {
+		return nil, err
+	}
+
+	var permissionSets PermissionSet
+	err = json.Unmarshal(resp, &permissionSets)
+	if err != nil {
+		return nil, err
+	}
+
+	var permissions []string
+	if strings.EqualFold(permissionSets.Name, t.NamespaceName().String()) {
+		for _, a := range permissionSets.Actions {
+			permissions = append(permissions, a.String())
+		}
+	}
+	return permissions, nil
+}
+
+func (s *Scheduler) AddRole(ctx context.Context, tnnt tenant.Tenant, roleName string, ifNotExist bool) error {
+	schAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
+	if err != nil {
+		return errors.Wrap(EntityAirflow, "secret not registered", err)
+	}
+	data := []byte(fmt.Sprintf(`{"name": %q,"actions": []}`, roleName))
+	req := airflowRequest{
+		path:   rolesURL,
+		method: http.MethodPost,
+		body:   data,
+	}
+
+	resp, err := s.client.Invoke(ctx, req, schAuth)
+	if err != nil {
+		if ifNotExist && strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return err
+	}
+
+	if string(resp) != "{}\n" {
+		return errors.InternalError(EntityAirflow, fmt.Sprintf("got Airflow Response: %s", string(resp)), nil)
+	}
+	return nil
 }
 
 func (s *Scheduler) ClearBatch(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, startExecutionTime, endExecutionTime time.Time) error {

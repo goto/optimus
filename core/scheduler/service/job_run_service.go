@@ -35,6 +35,7 @@ func (m metricType) String() string {
 
 const (
 	scheduleDelay metricType = "schedule_delay"
+	SensorV1      string     = "USE_DEPRECATED_SENSOR_V1"
 )
 
 var jobRunEventsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -242,6 +243,11 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 
 	result, c1 := filterRunsV1(expectedRuns, actualRuns, criteria)
 	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V1").Set(float64(c1))
+
+	conf := jobWithDetails.Job.Task.Config
+	if _, ok := conf[SensorV1]; ok {
+		return result, msg, nil
+	}
 
 	result2, c2 := filterRunsV2(expectedRuns, actualRuns, criteria, w)
 	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V2").Set(float64(c2))

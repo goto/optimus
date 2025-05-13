@@ -41,6 +41,11 @@ func TestJobRunService(t *testing.T) {
 	}
 	vars := map[string]string{}
 
+	task := scheduler.Task{
+		Name:   "mc2mc",
+		Config: map[string]string{"NAME": "T1"},
+	}
+
 	project, err := tenant.NewProject(projName.String(), conf, vars)
 	assert.NotNil(t, project)
 	assert.NoError(t, err)
@@ -1042,6 +1047,7 @@ func TestJobRunService(t *testing.T) {
 			job := scheduler.Job{
 				Name:   jobName,
 				Tenant: tnnt,
+				Task:   &task,
 			}
 			jobWithDetails := scheduler.JobWithDetails{
 				Job: &job,
@@ -1089,6 +1095,7 @@ func TestJobRunService(t *testing.T) {
 			job := scheduler.Job{
 				Name:   jobName,
 				Tenant: tnnt,
+				Task:   &task,
 			}
 			jobWithDetails := scheduler.JobWithDetails{
 				Job: &job,
@@ -1236,6 +1243,7 @@ func TestJobRunService(t *testing.T) {
 			job := scheduler.Job{
 				Name:   jobName,
 				Tenant: tnnt,
+				Task:   &task,
 			}
 			jobWithDetails := scheduler.JobWithDetails{
 				Job: &job,
@@ -1620,6 +1628,38 @@ func TestJobRunService(t *testing.T) {
 				assert.Equal(t, next3, returnedRuns[3].ScheduledAt)
 				assert.Equal(t, scheduler.StatePending, returnedRuns[4].State)
 				assert.Equal(t, next4, returnedRuns[4].ScheduledAt)
+			})
+			t.Run("checks runs for hourly runs", func(t *testing.T) {
+				d1 := time.Date(2025, 4, 7, 0, 0, 0, 0, time.UTC)
+				criteria := scheduler.JobRunsCriteria{
+					Name:      "sample_select",
+					StartDate: d1,
+					EndDate:   d1.AddDate(0, 0, 1),
+				}
+
+				runs := []*scheduler.JobRun{}
+				for i := 0; i < 48; i++ {
+					diff := i / 2
+					w1 := d1.Add(time.Duration(diff) * time.Hour)
+					w2 := w1.Add(time.Hour * 1)
+					r1 := &scheduler.JobRun{
+						State:       scheduler.StateSuccess,
+						ScheduledAt: d1.Add(time.Minute * 30 * time.Duration(i)),
+						WindowStart: &w1,
+						WindowEnd:   &w2,
+					}
+					runs = append(runs, r1)
+				}
+
+				jobRunRepo := new(mockJobRunRepository)
+				jobRunRepo.On("GetRunsByInterval", ctx, projName, jobName, mock.Anything).Return(runs, nil)
+				defer jobRunRepo.AssertExpectations(t)
+
+				runService := service.NewJobRunService(logger,
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, feats)
+				returnedRuns, count := runService.FilterRunsV3(ctx, tnnt, criteria)
+				assert.Equal(t, 24, count)
+				assert.Equal(t, 24, len(returnedRuns))
 			})
 		})
 	})

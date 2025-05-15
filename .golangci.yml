@@ -1,8 +1,8 @@
+version: "2"
 run:
-  timeout: 5m
-  go: "1.20"
+  go: "1.23"
 linters:
-  disable-all: true
+  default: none
   enable:
     - asasalint
     - asciicheck
@@ -17,20 +17,15 @@ linters:
     - errname
     - errorlint
     - forbidigo
-    - gci
     - ginkgolinter
     - gocheckcompilerdirectives
     - gochecknoinits
     - gochecksumtype
     - gocritic
-    - gofmt
-    - gofumpt
     - goheader
-    - goimports
     - gomodguard
     - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - grouper
     - importas
@@ -39,7 +34,6 @@ linters:
     - makezero
     - mirror
     - misspell
-    # - mnd
     - nakedret
     - nilerr
     - nilnil
@@ -51,8 +45,6 @@ linters:
     - sloglint
     - sqlclosecheck
     - staticcheck
-    - stylecheck
-    - tenv
     - testableexamples
     - testpackage
     - thelper
@@ -63,97 +55,103 @@ linters:
     - usestdlibvars
     - whitespace
     - zerologlint
-linters-settings:
-  gofumpt:
-    extra-rules: true
-  revive:
-    severity: error
+  settings:
+    goconst:
+      numbers: true
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+        - singleCaseSwitch
+      enabled-tags:
+        - diagnostic
+    gosec:
+      excludes:
+        - G101
+        - G115
+    revive:
+      severity: error
+      rules:
+        - name: atomic
+        - name: context-as-argument
+        - name: defer
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: early-return
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: modifies-parameter
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: unexported-naming
+        - name: var-naming
+        - name: unused-receiver
+        - name: unused-parameter
+        - name: useless-break
+        - name: unnecessary-stmt
+        - name: unreachable-code
+    staticcheck:
+      checks:
+        - all
+        - -S1002
+        - -SA1019
+    unparam:
+      check-exported: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: atomic
-      - name: context-as-argument
-      - name: defer
-      - name: dot-imports
-      - name: empty-block
-      - name: error-naming
-      - name: error-return
-      - name: early-return
-      - name: if-return
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: modifies-parameter
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: redefines-builtin-id
-      - name: superfluous-else
-      - name: unexported-naming
-      - name: var-naming
-      - name: unused-receiver
-      - name: unused-parameter
-      - name: useless-break
-      - name: unnecessary-stmt
-      - name: unreachable-code
-  goconst:
-    ignore-tests: true
-    numbers: true
-  # mnd:
-  #   ignored-numbers: # Why we have a big range of file permissions
-  #     - '0o600'
-  #     - '0o644'
-  #     - '0o655'
-  #     - '0o666'
-  #     - '0o770'
-  #     - '0o755'
-  #     - '0o765'
-  #     - '0o777'
-  #   ignored-functions:
-  #     - 'survey.MinLength'
-  #     - 'survey.MaxLength'
-  #     - 'args.Error'
-  gosec:
-    excludes:
-      - G101
-      - G115
-  gosimple:
-    checks:
-      - "all"
-      - "-S1002"
-  staticcheck:
-    checks:
-      - "all"
-      - "-SA1019"
-  goimports:
-    local-prefixes: github.com/goto/optimus
-  gci:
-    sections:
-      - standard # Captures all standard packages if they do not match another section.
-      - default # Contains all imports that could not be matched to another section type.
-      - prefix(github.com/goto/optimus) # Groups all imports with the specified Prefix.
-  gocritic:
-    disabled-checks:
-      - ifElseChain
-      - singleCaseSwitch
-    enabled-tags:
-      - diagnostic
-  unparam:
-    # Inspect exported functions.
-    # XXX: if you enable this setting, unparam will report a lot of false-positives in text editors:
-    check-exported: true
-issues:
-  exclude-dirs:
-    - api/proto
-    - api/third_party
-  exclude-rules:
-    # Exclude some linters from running on tests files.
-    - path: _test\.go
-      linters:
-        - gocritic
-        - contextcheck
-    - path: tests
-      linters:
-        - gocritic
-        # - mnd
-        - unparam
-        - testpackage
+      - linters:
+          - contextcheck
+          - gocritic
+        path: _test\.go
+      - linters:
+          - gocritic
+          - testpackage
+          - unparam
+        path: tests
+      - linters:
+          - goconst
+        path: (.+)_test\.go
+    paths:
+      - api/proto
+      - api/third_party
+      - third_party$
+      - builtin$
+      - examples$
 severity:
-  default-severity: error
+  default: error
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/goto/optimus)
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/goto/optimus
+  exclusions:
+    generated: lax
+    paths:
+      - api/proto
+      - api/third_party
+      - third_party$
+      - builtin$
+      - examples$

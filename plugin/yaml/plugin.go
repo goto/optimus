@@ -108,13 +108,13 @@ func NewPluginSpec(pluginPath string) (*PluginSpec, error) {
 		return &plugin, err
 	}
 	// default values
-	if plugin.Info.Entrypoint.Shell == "" {
-		plugin.Info.Entrypoint.Shell = "/bin/sh"
+	if plugin.Entrypoint.Shell == "" {
+		plugin.Entrypoint.Shell = "/bin/sh"
 	}
 
 	// standardize script value
-	script := plugin.Info.Entrypoint.Script
-	plugin.Info.Entrypoint.Script = strings.ReplaceAll(script, "\n", "; ")
+	script := plugin.Entrypoint.Script
+	plugin.Entrypoint.Script = strings.ReplaceAll(script, "\n", "; ")
 	return &plugin, nil
 }
 

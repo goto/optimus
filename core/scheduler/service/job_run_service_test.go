@@ -2092,7 +2092,7 @@ type mockConstructorEventHandler interface {
 
 func newEventHandler(t mockConstructorEventHandler) *mockEventHandler {
 	mock := &mockEventHandler{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

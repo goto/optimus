@@ -116,11 +116,7 @@ func (j jobSpecReadWriter) ReadByDirPath(jobDirPath string) (*model.JobSpec, err
 
 func (j jobSpecReadWriter) mergeWithParentSpec(dirPath string, spec *model.JobSpec) error {
 	parentDirPath := dirPath
-	for {
-		if parentDirPath == "." || parentDirPath == "/" {
-			break
-		}
-
+	for parentDirPath != "." && parentDirPath != "/" {
 		parentFilePath := filepath.Join(parentDirPath, j.referenceParentFileName)
 		if _, err := j.specFS.Stat(parentFilePath); err == nil {
 			parentSpec, err := internal.ReadSpec[*model.JobSpec](j.specFS, parentFilePath)

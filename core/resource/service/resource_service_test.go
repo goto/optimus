@@ -1850,7 +1850,7 @@ type mockConstructorTestingTNewResourceRepository interface {
 
 func newResourceRepository(t mockConstructorTestingTNewResourceRepository) *mockResourceRepository {
 	mock := &mockResourceRepository{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -1872,7 +1872,7 @@ type mockConstructorEventHandler interface {
 
 func newEventHandler(t mockConstructorEventHandler) *mockEventHandler {
 	mock := &mockEventHandler{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -2046,7 +2046,7 @@ func NewResourceManager(t interface {
 },
 ) *ResourceManager {
 	mock := &ResourceManager{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

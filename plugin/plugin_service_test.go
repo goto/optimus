@@ -588,7 +588,7 @@ func NewUpstreamIdentifierFactory(t interface {
 },
 ) *UpstreamIdentifierFactory {
 	mock := &UpstreamIdentifierFactory{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -698,7 +698,7 @@ func NewEvaluatorFactory(t interface {
 },
 ) *EvaluatorFactory {
 	mock := &EvaluatorFactory{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -771,7 +771,7 @@ func NewUpstreamIdentifier(t interface {
 },
 ) *UpstreamIdentifier {
 	mock := &UpstreamIdentifier{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

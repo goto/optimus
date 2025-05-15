@@ -111,12 +111,12 @@ func (c *cancelCommand) cancelReplay(replayID string) (*pb.CancelReplayResponse,
 
 func (*cancelCommand) stringifyReplayCancelResponse(replayID string, resp *pb.CancelReplayResponse) string {
 	buff := &bytes.Buffer{}
-	buff.WriteString(fmt.Sprintf("Job Name      : %s\n", resp.GetJobName()))
-	buff.WriteString(fmt.Sprintf("Total Runs    : %d\n\n", len(resp.GetReplayRuns())))
+	fmt.Fprintf(buff, "Job Name      : %s\n", resp.GetJobName())
+	fmt.Fprintf(buff, "Total Runs    : %d\n\n", len(resp.GetReplayRuns()))
 	if len(resp.GetReplayRuns()) > 0 {
 		header := []string{"scheduled at", "latest status"}
 		stringifyReplayRuns(buff, header, resp.GetReplayRuns())
 	}
-	buff.WriteString(fmt.Sprintf("\nReplay with ID %s has been cancelled.", replayID))
+	fmt.Fprintf(buff, "\nReplay with ID %s has been cancelled.", replayID)
 	return buff.String()
 }

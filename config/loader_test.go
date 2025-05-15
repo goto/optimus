@@ -84,12 +84,12 @@ func (s *ConfigTestSuite) SetupTest() {
 	p, err := os.Getwd()
 	s.Require().NoError(err)
 	s.currPath = p
-	s.a.Fs.MkdirAll(s.currPath, fs.ModeTemporary)
+	s.a.MkdirAll(s.currPath, fs.ModeTemporary)
 
 	p, err = os.Executable()
 	s.Require().NoError(err)
 	s.execPath = filepath.Dir(p)
-	s.a.Fs.MkdirAll(s.execPath, fs.ModeTemporary)
+	s.a.MkdirAll(s.execPath, fs.ModeTemporary)
 
 	config.FS = s.a.Fs
 
@@ -98,8 +98,8 @@ func (s *ConfigTestSuite) SetupTest() {
 }
 
 func (s *ConfigTestSuite) TearDownTest() {
-	s.a.Fs.RemoveAll(s.currPath)
-	s.a.Fs.RemoveAll(s.execPath)
+	s.a.RemoveAll(s.currPath)
+	s.a.RemoveAll(s.execPath)
 }
 
 func TestConfig(t *testing.T) {
@@ -140,7 +140,7 @@ func (s *ConfigTestSuite) TestLoadClientConfig() {
     path: ./jobs-c
     `)
 			s.a.WriteFile(samplePath, []byte(b.String()), fs.ModeTemporary)
-			defer s.a.Fs.RemoveAll(samplePath)
+			defer s.a.RemoveAll(samplePath)
 
 			conf, err := config.LoadClientConfig(samplePath)
 

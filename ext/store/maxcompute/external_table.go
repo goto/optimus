@@ -59,7 +59,7 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	}
 
 	e.mcSQLExecutor.SetCurrentSchemaName(et.Database)
-	if !(tSchema.StorageHandler == CSVHandler || tSchema.StorageHandler == TSVHandler) {
+	if tSchema.StorageHandler != CSVHandler && tSchema.StorageHandler != TSVHandler {
 		return e.createOtherTypeExternalTable(et, tSchema)
 	}
 

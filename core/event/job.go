@@ -74,9 +74,9 @@ func NewJobDeleteEvent(tnnt tenant.Tenant, jobName job.Name) (*JobDeleted, error
 }
 
 func (j *JobDeleted) Bytes() ([]byte, error) {
-	occurredAt := timestamppb.New(j.Event.OccurredAt)
+	occurredAt := timestamppb.New(j.OccurredAt)
 	optEvent := &pbInt.OptimusChangeEvent{
-		EventId:       j.Event.ID.String(),
+		EventId:       j.ID.String(),
 		OccurredAt:    occurredAt,
 		ProjectName:   j.JobTenant.ProjectName().String(),
 		NamespaceName: j.JobTenant.NamespaceName().String(),
@@ -113,7 +113,7 @@ func NewJobStateChangeEvent(tnnt tenant.Tenant, jobName job.Name, state job.Stat
 }
 
 func (j *JobStateChange) Bytes() ([]byte, error) {
-	occurredAt := timestamppb.New(j.Event.OccurredAt)
+	occurredAt := timestamppb.New(j.OccurredAt)
 	var jobStateEnum pbIntCore.JobState
 	switch j.State {
 	case job.ENABLED:
@@ -122,7 +122,7 @@ func (j *JobStateChange) Bytes() ([]byte, error) {
 		jobStateEnum = pbIntCore.JobState_JOB_STATE_DISABLED
 	}
 	optEvent := &pbInt.OptimusChangeEvent{
-		EventId:       j.Event.ID.String(),
+		EventId:       j.ID.String(),
 		OccurredAt:    occurredAt,
 		ProjectName:   j.JobTenant.ProjectName().String(),
 		NamespaceName: j.JobTenant.NamespaceName().String(),

@@ -1,6 +1,6 @@
 module github.com/goto/optimus
 
-go 1.20
+go 1.23
 
 replace github.com/goto/optimus/sdk => ./sdk
 

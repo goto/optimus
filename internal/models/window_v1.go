@@ -14,7 +14,7 @@ const (
 	HoursInMonth = HoursInDay * 30
 )
 
-var monthExp = regexp.MustCompile("(\\+|-)?([0-9]+)(M)") //nolint:gosimple
+var monthExp = regexp.MustCompile("(\\+|-)?([0-9]+)(M)") // nolint
 
 type windowV1 struct {
 	truncateTo string
@@ -115,13 +115,14 @@ func (*JobSpecTaskWindow) getWindowDate(today time.Time, windowSize, windowOffse
 	floatingEnd := today
 
 	// apply truncation to end
-	if windowTruncateTo == "h" {
+	switch windowTruncateTo {
+	case "h":
 		// remove time upto hours
 		floatingEnd = floatingEnd.Truncate(time.Hour)
-	} else if windowTruncateTo == "d" {
+	case "d":
 		// remove time upto day
 		floatingEnd = floatingEnd.Truncate(time.Hour * HoursInDay)
-	} else if windowTruncateTo == "w" {
+	case "w":
 		// shift current window to nearest Sunday
 		nearestSunday := time.Duration(time.Saturday-floatingEnd.Weekday()+1) * time.Hour * HoursInDay
 		floatingEnd = floatingEnd.Add(nearestSunday)

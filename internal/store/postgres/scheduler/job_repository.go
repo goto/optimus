@@ -305,7 +305,7 @@ func (j *Job) toJobWithDetails() (*scheduler.JobWithDetails, error) {
 		},
 		RuntimeConfig: runtimeConfig,
 	}
-	if !(storageSchedule.EndDate == nil || storageSchedule.EndDate.IsZero()) {
+	if storageSchedule.EndDate != nil && !storageSchedule.EndDate.IsZero() {
 		schedulerJobWithDetails.Schedule.EndDate = storageSchedule.EndDate
 	}
 

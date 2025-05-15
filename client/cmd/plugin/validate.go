@@ -44,7 +44,7 @@ func (v *validateCommand) validateFile(pluginPath string) error {
 		return err
 	}
 
-	return pluginSpec.Info.Validate()
+	return pluginSpec.Validate()
 }
 
 func (v *validateCommand) validateDir(pluginPath string) error {

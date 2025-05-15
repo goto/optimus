@@ -133,7 +133,7 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 }
 
 func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {
-	if !(event.Type.IsOfType(scheduler.EventCategoryJobFailure) || event.Type.IsOfType(scheduler.EventCategorySLAMiss)) {
+	if !event.Type.IsOfType(scheduler.EventCategoryJobFailure) && !event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
 		return nil
 	}
 

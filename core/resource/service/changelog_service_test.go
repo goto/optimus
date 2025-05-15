@@ -122,7 +122,7 @@ func newChangelogRepository(t interface {
 },
 ) *ChangelogRepository {
 	mock := &ChangelogRepository{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

@@ -6020,7 +6020,7 @@ func NewPluginService(t interface {
 },
 ) *PluginService {
 	mock := &PluginService{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -6134,7 +6134,7 @@ type mockConstructorEventHandler interface {
 
 func newEventHandler(t mockConstructorEventHandler) *mockEventHandler {
 	mock := &mockEventHandler{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -6222,7 +6222,7 @@ func NewJobRunInputCompiler(t interface {
 },
 ) *JobRunInputCompiler {
 	mock := &JobRunInputCompiler{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -6300,7 +6300,7 @@ func NewResourceExistenceChecker(t interface {
 },
 ) *ResourceExistenceChecker {
 	mock := &ResourceExistenceChecker{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

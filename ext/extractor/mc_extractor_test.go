@@ -88,7 +88,7 @@ func NewViewGetter(t interface {
 },
 ) *ViewGetter {
 	mock := &ViewGetter{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

@@ -58,7 +58,7 @@ lint:
 
 install: ## install required dependencies
 	@echo "> installing dependencies"
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
 	go install github.com/bufbuild/buf/cmd/buf@v1.5.0
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0

@@ -80,7 +80,7 @@ func getUnifiedDiff(oldVal, newVal any) string {
 }
 
 func compareString(prefix AttributePath, text1, text2 string) []Diff {
-	if !(text1 != text2) {
+	if text1 == text2 {
 		return nil
 	}
 	if len(text1) > strLenThreshold || len(text2) > strLenThreshold {

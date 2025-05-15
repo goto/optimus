@@ -103,12 +103,12 @@ func GetMyersDiff(src, dst []string, maxNeighbouringLines int) string {
 func shortestEditScript(src, dst []string) []operation {
 	n := len(src)
 	m := len(dst)
-	max := n + m // nolint: predeclared
+	max1 := n + m
 	var trace []map[int]int
 	var x, y int
 
 loop:
-	for d := 0; d <= max; d++ {
+	for d := 0; d <= max1; d++ {
 		v := make(map[int]int, d+2) //nolint: mnd
 		trace = append(trace, v)
 		if d == 0 {

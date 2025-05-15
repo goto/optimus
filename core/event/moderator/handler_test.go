@@ -109,7 +109,7 @@ type mockConstructorTestingTNewEvent interface {
 // NewEvent creates a new instance of Event. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 func NewEvent(t mockConstructorTestingTNewEvent) *Event {
 	mock := &Event{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

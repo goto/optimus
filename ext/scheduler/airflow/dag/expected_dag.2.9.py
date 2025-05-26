@@ -63,7 +63,6 @@ dag = DAG(
     dagrun_timeout=timedelta(seconds=DAGRUN_TIMEOUT_IN_SECS),
     tags=[
         "billing",
-        "optimus",
     ],
     sla_miss_callback=optimus_sla_miss_notify,
     on_success_callback=job_success_event,

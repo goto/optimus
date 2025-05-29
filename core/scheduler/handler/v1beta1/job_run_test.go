@@ -664,7 +664,7 @@ func TestJobRunHandler(t *testing.T) {
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
-			assert.EqualError(t, err, "errors in RegisterJobEvent:\n some error")
+			assert.EqualError(t, err, "rpc error: code = Internal desc = errors in RegisterJobEvent:\n some error: error in RegisterJobEvent handler")
 			assert.Equal(t, &pb.RegisterJobEventResponse{}, resp)
 		})
 	})

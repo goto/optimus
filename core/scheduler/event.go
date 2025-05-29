@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -110,6 +111,14 @@ type Event struct {
 	JobScheduledAt time.Time
 	Values         map[string]any
 	SLAObjectList  []*SLAObject
+}
+
+func (e Event) String() string {
+	data, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Sprintf("error marshalling Event: %s, job: %s, operator: %s, err: %s", e.Type, e.JobName, e.OperatorName, err.Error())
+	}
+	return string(data)
 }
 
 func (e EventCategory) String() string {

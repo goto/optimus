@@ -24,14 +24,7 @@ func LoadPluginToStore(l log.Logger) (*Store, error) {
 
 // discoverPluginsGivenFilePattern look for plugin with the specific pattern in following folders
 // order to search is top to down
-// ./
-// <exec>/
-// <exec>/.optimus/plugins
-// $HOME/.optimus/plugins
-// /usr/bin
-// /usr/local/bin
-//
-// for duplicate plugins(even with different versions for now), only the first found will be used
+// ./.plugins
 // sample plugin name:
 // - optimus-myplugin_linux_amd64 | with suffix: optimus- and prefix: _linux_amd64
 // - optimus-plugin-myplugin.yaml | with suffix: optimus-plugin and prefix: .yaml

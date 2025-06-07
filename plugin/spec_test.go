@@ -97,22 +97,22 @@ func TestPluginSpec(t *testing.T) {
 	})
 	t.Run("Load", func(t *testing.T) {
 		t.Run("returns error when no path is wrong", func(t *testing.T) {
-			_, err := plugin.Load("./yaml/tests/sample_non_existing.yaml")
+			_, err := plugin.Load("./tests/sample_non_existing.yaml")
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "spec not found")
 		})
 		t.Run("returns error when no plugin exists", func(t *testing.T) {
-			_, err := plugin.Load("./yaml/tests/sample_plugin_invalid.yaml")
+			_, err := plugin.Load("./tests/sample_plugin_invalid.yaml")
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "yaml: unmarshal errors")
 		})
 		t.Run("returns error when validation fails", func(t *testing.T) {
-			_, err := plugin.Load("./yaml/tests/sample_plugin_schema_invalid.yaml")
+			_, err := plugin.Load("./tests/sample_plugin_schema_invalid.yaml")
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "plugin versions are required")
 		})
 		t.Run("returns plugin after loading", func(t *testing.T) {
-			p1, err := plugin.Load("./yaml/tests/sample_plugin.yaml")
+			p1, err := plugin.Load("./tests/sample_plugin.yaml")
 			assert.NoError(t, err)
 
 			assert.Equal(t, p1.Name, "bq2bqtest")

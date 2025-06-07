@@ -77,7 +77,7 @@ func TestInfo(t *testing.T) {
 	logger := log.NewNoop()
 	ctx := context.Background()
 	taskName := "bq2bqtest"
-	p1, err := plugin.Load("./yaml/tests/sample_plugin_with_parser.yaml")
+	p1, err := plugin.Load("./tests/sample_plugin_with_parser.yaml")
 	assert.NoError(t, err)
 	t.Run("returns error when no plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
@@ -127,9 +127,9 @@ func TestIdentifyUpstreams(t *testing.T) {
 	assets := map[string]string{
 		"query.sql": "select 1;",
 	}
-	p1, err := plugin.Load("./yaml/tests/sample_plugin_with_parser.yaml")
+	p1, err := plugin.Load("./tests/sample_plugin_with_parser.yaml")
 	assert.NoError(t, err)
-	p2, err := plugin.Load("./yaml/tests/sample_plugin_with_parser_and_yamlpath_selector.yaml")
+	p2, err := plugin.Load("./tests/sample_plugin_with_parser_and_yamlpath_selector.yaml")
 	assert.NoError(t, err)
 
 	urn1, err := resource.ParseURN("bigquery://proj:datas.table1")
@@ -162,7 +162,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluator := new(Evaluator)
 		defer evaluator.AssertExpectations(t)
 
-		p3, err := plugin.Load("./yaml/tests/sample_plugin.yaml")
+		p3, err := plugin.Load("./tests/sample_plugin.yaml")
 		assert.NoError(t, err)
 
 		pluginGetter.On("GetByName", mock.Anything).Return(p3, nil)
@@ -307,7 +307,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		configTask["DATASET"] = "datas"
 		configTask["TABLE"] = "table2"
 
-		p1, err := plugin.Load("./yaml/tests/sample_plugin_with_parser_and_destination_template.yaml")
+		p1, err := plugin.Load("./tests/sample_plugin_with_parser_and_destination_template.yaml")
 		assert.NoError(t, err)
 		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
@@ -334,7 +334,7 @@ func TestConstructDestinationURN(t *testing.T) {
 		"DATASET":            "dataset1",
 		"TABLE":              "table1",
 	}
-	p1, err := plugin.Load("./yaml/tests/sample_plugin_with_destination_template.yaml")
+	p1, err := plugin.Load("./tests/sample_plugin_with_destination_template.yaml")
 	assert.NoError(t, err)
 	t.Run("returns error if unable to find the plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
@@ -359,7 +359,7 @@ func TestConstructDestinationURN(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		p1, err := plugin.Load("./yaml/tests/sample_plugin_with_parser.yaml")
+		p1, err := plugin.Load("./tests/sample_plugin_with_parser.yaml")
 		assert.NoError(t, err)
 		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
@@ -376,7 +376,7 @@ func TestConstructDestinationURN(t *testing.T) {
 		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
-		p1, err := plugin.Load("./yaml/tests/sample_plugin_with_unproper_destination_template.yaml")
+		p1, err := plugin.Load("./tests/sample_plugin_with_unproper_destination_template.yaml")
 		assert.NoError(t, err)
 		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)

@@ -16,7 +16,7 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/config"
-	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/plugin"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -31,7 +31,7 @@ type versionCommand struct {
 	isWithServer bool
 	host         string
 
-	pluginRepo *models.PluginRepository
+	pluginRepo *plugin.Store
 }
 
 // NewVersionCommand initializes command to get version
@@ -80,7 +80,8 @@ func (v *versionCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	var err error
-	v.pluginRepo, err = internal.InitPlugins(config.LogLevel(v.logger.Level()))
+
+	v.pluginRepo, err = plugin.LoadPluginToStore(v.logger)
 	return err
 }
 
@@ -107,22 +108,9 @@ func (v *versionCommand) RunE(_ *cobra.Command, _ []string) error {
 }
 
 func (v *versionCommand) printAllPluginInfos() {
-	plugins := v.pluginRepo.GetAll()
-	v.logger.Info("\nDiscovered plugins: %d", len(plugins))
-	for taskIdx, tasks := range plugins {
-		schema := tasks.Info()
-		v.logger.Info("\n%d. %s", taskIdx+1, schema.Name)
-		v.logger.Info("Description: %s", schema.Description)
-		v.logger.Info("Image: %s", schema.Image)
-		v.logger.Info("Type: %s", schema.PluginType)
-		v.logger.Info("Plugin version: %s", schema.PluginVersion)
-		v.logger.Info("Plugin mods: %v", schema.PluginMods)
-		if schema.HookType != "" {
-			v.logger.Info("Hook type: %s", schema.HookType)
-		}
-		if len(schema.DependsOn) != 0 {
-			v.logger.Info("Depends on: %v", schema.DependsOn)
-		}
+	v.logger.Info("\nDiscovered plugins:")
+	for p := range v.pluginRepo.All {
+		v.logger.Info(p.String())
 	}
 }
 

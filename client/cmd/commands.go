@@ -12,7 +12,6 @@ import (
 	"github.com/goto/optimus/client/cmd/job"
 	"github.com/goto/optimus/client/cmd/namespace"
 	"github.com/goto/optimus/client/cmd/playground"
-	"github.com/goto/optimus/client/cmd/plugin"
 	"github.com/goto/optimus/client/cmd/project"
 	"github.com/goto/optimus/client/cmd/replay"
 	"github.com/goto/optimus/client/cmd/resource"
@@ -70,9 +69,6 @@ func New() *cli.Command {
 		scheduler.NewSchedulerCommand(),
 		replay.NewReplayCommand(),
 		apply.NewApplyCommand(),
-
-		// Will decide later, to add it server side or not
-		plugin.NewPluginCommand(),
 	)
 
 	extension.UpdateWithExtension(cmd)

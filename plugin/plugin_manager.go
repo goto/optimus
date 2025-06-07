@@ -10,17 +10,14 @@ import (
 	"strings"
 
 	"github.com/goto/salt/log"
-	getter "github.com/hashicorp/go-getter"
+	"github.com/hashicorp/go-getter"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/plugin/yaml"
 )
 
-var (
-	// for plugin installation, discovery & sync on both client and server
-	PluginsDir         = ".plugins"
-	PluginsArchiveName = "yaml-plugins.zip"
-)
+// for plugin installation, discovery & sync on both client and server
+var PluginsArchiveName = "yaml-plugins.zip"
 
 type IPluginManager interface {
 	Install(dst string, sources ...string) error

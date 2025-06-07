@@ -1,24 +1,21 @@
+version: 2
 name: bq2bqtest
 description: Testing
-plugintype: task
-pluginversion: latest
+
 asset_parsers:
   bq:
   - filepath: "./config.yaml"
     selector: "$.query"
-image: docker.io/goto/optimus-task-bq2bq-executor:latest
-entrypoint:
-  shell: "/bin/bash"
-  script: |-
-    sleep 100
-    sleep 150
 
-questions:
-  - name: PROJECT
-    prompt: Project ID
-    regexp: ^[a-zA-Z0-9_\-]+$
-    minlength: 3
+plugin_versions:
+  default:
+    image: docker.io/goto/optimus-task-bq2bq-executor
+    tag: latest
+    entrypoint:
+      shell: "/bin/bash"
+      script: |-
+        sleep 100
+        sleep 150
 
-defaultconfig:
-- name: TEST
-  value: "{{.test}}"
+default_config:
+  TEST: "{{.test}}"

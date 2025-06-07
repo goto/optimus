@@ -11,13 +11,13 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
-	"github.com/goto/optimus/sdk/plugin"
+	"github.com/goto/optimus/plugin"
 )
 
 const RBACFeatureFlag = "ENABLE_RBAC"
 
 type PluginRepo interface {
-	GetByName(name string) (*plugin.Plugin, error)
+	GetByName(name string) (*plugin.Spec, error)
 }
 
 type Compiler struct {

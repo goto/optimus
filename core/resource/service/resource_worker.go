@@ -104,7 +104,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 		}
 
 		// get replay requests from DB
-		failedResources, err := w.repo.GetExternalCreatFailures(ctx)
+		failedResources, err := w.repo.GetExternalCreateFailures(ctx, KindExternalTableGoogle)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to scan for resources with status create failure due to auth, err:%s", err.Error()))
 			continue
@@ -114,7 +114,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 		}
 		mapTenantResources := groupByTenant(failedResources)
 		for tnnt, resources := range mapTenantResources {
-			lastModifiedList, err := w.syncer.GetETSourceLastModified(ctx, tnnt, resources)
+			lastModifiedList, err := w.syncer.GetGoogleSourceLastModified(ctx, tnnt, resources)
 			if err != nil {
 				w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to get last modified time for resource, err:%s", err.Error()))
 				continue

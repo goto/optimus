@@ -26,10 +26,16 @@ const (
 
 type UpdateImpact string
 
+type SourceVersioningInfo struct {
+	ModifiedTime time.Time
+	Revision     int
+}
+
 type Metadata struct {
-	Version     int32
-	Description string
-	Labels      labels.Labels
+	Version      int32
+	Description  string
+	Labels       labels.Labels
+	EtSourceType string
 }
 
 type ChangeType string
@@ -189,6 +195,10 @@ func (r *Resource) UpdateTenant(tnnt tenant.Tenant) {
 
 func (r *Resource) Metadata() *Metadata {
 	return r.metadata
+}
+
+func (r *Resource) SetMetadata(m *Metadata) {
+	r.metadata = m
 }
 
 func (r *Resource) Kind() string {

@@ -11,9 +11,9 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-func FromRecords[T any](data [][]T, columnCount int, formatFn func(rowIndex, colIndex int, data any) (string, error)) (string, bool, error) {
+func FromRecords[T any](data [][]T, columnCount int, formatFn func(rowIndex, colIndex int, data any) (string, error)) (string, error) {
 	if len(data) == 0 {
-		return "", false, nil
+		return "", nil
 	}
 
 	lenRecords := columnCount
@@ -26,7 +26,7 @@ func FromRecords[T any](data [][]T, columnCount int, formatFn func(rowIndex, col
 			s, err := formatFn(rowIndex, columnIndex, r1)
 			err = errors.WrapIfErr("CSVFormatter", fmt.Sprintf(" at row : %d", rowIndex), err)
 			if err != nil {
-				return "", false, err
+				return "", err
 			}
 			currRow = append(currRow, s)
 			if i == lenRecords {
@@ -39,10 +39,9 @@ func FromRecords[T any](data [][]T, columnCount int, formatFn func(rowIndex, col
 		}
 		allRecords = append(allRecords, currRow)
 	}
-
-	fileNeedQuoteSerde := FileNeedQuoteSerde(allRecords)
+	
 	csvData, err := FromData(allRecords)
-	return csvData, fileNeedQuoteSerde, err
+	return csvData, err
 }
 
 func fieldNeedsQuotes(field string) bool {

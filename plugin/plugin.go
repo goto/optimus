@@ -13,6 +13,12 @@ import (
 	"github.com/goto/optimus/plugin/yaml"
 )
 
+const (
+	Prefix     = "optimus-plugin-"
+	Suffix     = ".yaml"
+	PluginsDir = ".plugins"
+)
+
 func Initialize(l log.Logger) (*models.PluginRepository, error) {
 	pluginRepository := models.NewPluginRepository()
 	// fetch yaml plugins first, it holds detailed information about the plugin
@@ -21,6 +27,12 @@ func Initialize(l log.Logger) (*models.PluginRepository, error) {
 	err := yaml.Init(pluginRepository, discoveredYamlPlugins, l)
 
 	return pluginRepository, err
+}
+
+func LoadPluginToStore(l log.Logger) (*Store, error) {
+	discoveredYamlPlugins := discoverPluginsGivenFilePattern(l, Prefix, Suffix)
+	l.Debug(fmt.Sprintf("discovering yaml   plugins(%d)...", len(discoveredYamlPlugins)))
+	return InitStore(discoveredYamlPlugins, l)
 }
 
 // discoverPluginsGivenFilePattern look for plugin with the specific pattern in following folders

@@ -23,13 +23,15 @@ import (
 )
 
 const (
-	GsheetCredsKey    = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey       = "OSS_CREDS"
-	putTimeOut        = time.Second * 10
-	ExtLocation       = "EXT_LOCATION"
-	MaxSyncInterval   = 24
-	headersCountSerde = "odps.text.option.header.lines.count"
-	UseQuoteSerde     = "odps.text.option.use.quote"
+	GsheetCredsKey          = "GOOGLE_SHEETS_ACCOUNT"
+	OSSCredsKey             = "OSS_CREDS"
+	putTimeOut              = time.Second * 10
+	ExtLocation             = "EXT_LOCATION"
+	AssumeRoleProjectConfig = "EXTERNAL_TABLE_ASSUME_RAM_USER"
+	MaxSyncInterval         = 24
+	headersCountSerde       = "odps.text.option.header.lines.count"
+	UseQuoteSerde           = "odps.text.option.use.quote"
+	AssumeRoleSerde         = "odps.properties.rolearn"
 )
 
 var validInfinityValues = map[string]struct{}{

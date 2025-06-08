@@ -49,6 +49,11 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 		return err
 	}
 
+	err = e.enrichRoleToAssume(context.Background(), et, res)
+	if err != nil {
+		return errors.AddErrContext(err, EntityExternalTable, "failed to enrich Role to assume"+et.FullName())
+	}
+
 	location, err := e.getLocation(context.Background(), et, res)
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to get source location for "+et.FullName())
@@ -141,6 +146,21 @@ func NewExternalTableHandle(
 		tenantDetailsGetter: getter,
 		maskingPolicyHandle: maskingPolicyHandle,
 	}
+}
+
+func (e ExternalTableHandle) enrichRoleToAssume(ctx context.Context, et *ExternalTable, res *resource.Resource) error {
+	if _, ok := et.Source.SerdeProperties[AssumeRoleSerde]; ok {
+		return nil
+	}
+	tenantWithDetails, err := e.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
+	if err != nil {
+		return err
+	}
+	roleToAssume := tenantWithDetails.GetConfigs()[AssumeRoleProjectConfig]
+	if roleToAssume != "" {
+		et.Source.SerdeProperties[AssumeRoleSerde] = roleToAssume
+	}
+	return nil
 }
 
 func (e ExternalTableHandle) getLocation(ctx context.Context, et *ExternalTable, res *resource.Resource) (string, error) {

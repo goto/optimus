@@ -13,17 +13,17 @@ import (
 )
 
 var (
-	sheetTokenRegex = regexp.MustCompile(`larksuite.com/sheets/([^/]*)`)
+	sheetTokenRegex = regexp.MustCompile(`larksuite\.com/sheets/([^/]*)`)
 )
 
-func (lc *Client) enrichTenantAccessToken(authSecret string) error {
+func (lc *Client) enrichTenantAccessToken(ctx context.Context, authSecret string) error {
 	lr := larkRequest{
 		Host:   Host,
 		Path:   GetAccessTokenURL,
 		Method: http.MethodPost,
 		Body:   []byte(authSecret),
 	}
-	resBody, err := lc.Invoke(context.TODO(), lr)
+	resBody, err := lc.Invoke(ctx, lr)
 	if err != nil {
 		return err
 	}
@@ -36,10 +36,10 @@ func (lc *Client) enrichTenantAccessToken(authSecret string) error {
 	return nil
 }
 
-func NewLarkClient(authSecret string) (*Client, error) {
+func NewLarkClient(ctx context.Context, authSecret string) (*Client, error) {
 	lc := Client{client: &http.Client{}}
 
-	err := lc.enrichTenantAccessToken(authSecret)
+	err := lc.enrichTenantAccessToken(ctx, authSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +148,9 @@ func (lc *Client) GetSheetContent(ctx context.Context, sheetToken, sheetRange st
 		Path:   fmt.Sprintf(GetLSheetContent, sheetToken, sheetRange),
 		Query:  query,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	spreadSheetResponse := GetSpreadSheetResponse{}
 

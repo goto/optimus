@@ -19,7 +19,7 @@ func (s *SyncerService) getLarkClient(ctx context.Context, tnnt tenant.Tenant) (
 	if err != nil {
 		return nil, err
 	}
-	client, err := lark.NewLarkClient(secret.Value())
+	client, err := lark.NewLarkClient(ctx, secret.Value())
 	if err != nil {
 		return nil, fmt.Errorf("not able to create Lark Client err: %w", err)
 	}

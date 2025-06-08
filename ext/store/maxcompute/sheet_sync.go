@@ -21,7 +21,6 @@ import (
 )
 
 const (
-<<<<<<< HEAD
 	GsheetCredsKey     = "GOOGLE_SHEETS_ACCOUNT"
 	LarkCredentialsKey = "LARK_SHEETS_ACCOUNT"
 	OSSCredsKey        = "OSS_CREDS"

@@ -46,6 +46,17 @@ func TestExternalTableHandle(t *testing.T) {
 	}
 	var emptyJars []string
 
+	project, err := tenant.NewProject(projectName, map[string]string{
+		tenant.ProjectStoragePathKey: "",
+		tenant.ProjectSchedulerHost:  "",
+	}, map[string]string{})
+	assert.Nil(t, err)
+	namespace, err := tenant.NewNamespace(tnnt.NamespaceName().String(), project.Name(), map[string]string{}, map[string]string{})
+	assert.Nil(t, err)
+	secrets := tenant.PlainTextSecrets{}
+	tenantWithDetails, err := tenant.NewTenantDetails(project, namespace, secrets)
+	assert.Nil(t, err)
+
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
 			table := new(mockExternalTable)
@@ -85,7 +96,11 @@ func TestExternalTableHandle(t *testing.T) {
 			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
 
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil, nil)
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", mock.Anything, tnnt).Return(tenantWithDetails, nil)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, tenantDetailsGetter, nil)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -104,7 +119,12 @@ func TestExternalTableHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("SetCurrentSchemaName", mock.Anything)
 			defer odpsIns.AssertExpectations(t)
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil, nil)
+
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", mock.Anything, tnnt).Return(tenantWithDetails, nil)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, tenantDetailsGetter, nil)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -126,7 +146,11 @@ func TestExternalTableHandle(t *testing.T) {
 			maskingPolicyHandle := new(mockTableMaskingPolicyHandle)
 			maskingPolicyHandle.On("Process", tableName, mock.Anything).Return(nil)
 
-			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, nil, maskingPolicyHandle)
+			tenantDetailsGetter := new(mockTenantDetailsGetter)
+			tenantDetailsGetter.On("GetDetails", mock.Anything, tnnt).Return(tenantWithDetails, nil)
+			defer tenantDetailsGetter.AssertExpectations(t)
+
+			tableHandle := maxcompute.NewExternalTableHandle(odpsIns, schema, table, tenantDetailsGetter, maskingPolicyHandle)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindExternalTable, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)

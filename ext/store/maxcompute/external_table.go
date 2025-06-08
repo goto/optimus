@@ -58,6 +58,11 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build external table schema to create for "+et.FullName())
 	}
 
+	err = e.enrichRoleToAssume(context.Background(), et, res)
+	if err != nil {
+		return errors.AddErrContext(err, EntityExternalTable, "failed to enrich Role to assume"+et.FullName())
+	}
+
 	e.mcSQLExecutor.SetCurrentSchemaName(et.Database)
 	if tSchema.StorageHandler != CSVHandler && tSchema.StorageHandler != TSVHandler {
 		return e.createOtherTypeExternalTable(et, tSchema)
@@ -141,6 +146,21 @@ func NewExternalTableHandle(
 		tenantDetailsGetter: getter,
 		maskingPolicyHandle: maskingPolicyHandle,
 	}
+}
+
+func (e ExternalTableHandle) enrichRoleToAssume(ctx context.Context, et *ExternalTable, res *resource.Resource) error {
+	if _, ok := et.Source.SerdeProperties[AssumeRoleSerde]; ok {
+		return nil
+	}
+	tenantWithDetails, err := e.tenantDetailsGetter.GetDetails(ctx, res.Tenant())
+	if err != nil {
+		return err
+	}
+	roleToAssume, _ := tenantWithDetails.GetConfig(AssumeRoleProjectConfig)
+	if roleToAssume != "" {
+		et.Source.SerdeProperties[AssumeRoleSerde] = roleToAssume
+	}
+	return nil
 }
 
 func (e ExternalTableHandle) getLocation(ctx context.Context, et *ExternalTable, res *resource.Resource) (string, error) {

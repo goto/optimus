@@ -21,6 +21,7 @@ import (
 )
 
 const (
+<<<<<<< HEAD
 	GsheetCredsKey     = "GOOGLE_SHEETS_ACCOUNT"
 	LarkCredentialsKey = "LARK_SHEETS_ACCOUNT"
 	OSSCredsKey        = "OSS_CREDS"
@@ -29,6 +30,8 @@ const (
 	MaxSyncInterval    = 24
 	headersCountSerde  = "odps.text.option.header.lines.count"
 	UseQuoteSerde      = "odps.text.option.use.quote"
+	AssumeRoleSerde         = "odps.properties.rolearn"
+	AssumeRoleProjectConfig = "EXTERNAL_TABLE_ASSUME_RAM_USER"
 )
 
 var validInfinityValues = map[string]struct{}{

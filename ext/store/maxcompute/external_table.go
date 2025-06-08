@@ -156,10 +156,7 @@ func (e ExternalTableHandle) enrichRoleToAssume(ctx context.Context, et *Externa
 	if err != nil {
 		return err
 	}
-	roleToAssume, err := tenantWithDetails.GetConfig(AssumeRoleProjectConfig)
-	if err != nil {
-		return nil
-	}
+	roleToAssume, _ := tenantWithDetails.GetConfig(AssumeRoleProjectConfig)
 	if roleToAssume != "" {
 		et.Source.SerdeProperties[AssumeRoleSerde] = roleToAssume
 	}

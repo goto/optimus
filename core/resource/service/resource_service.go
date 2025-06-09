@@ -410,6 +410,7 @@ func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string
 	}
 	return output
 }
+
 func revisionListToMap(input []resource.SourceModifiedRevisionStatus) map[string]resource.SourceModifiedRevisionStatus {
 	output := make(map[string]resource.SourceModifiedRevisionStatus)
 	for _, status := range input {

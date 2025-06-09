@@ -109,7 +109,6 @@ func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resou
 		r := r
 		f1 := func() pool.JobResult[*resource.Resource] {
 			err = processResource(ctx, s.SyncRepo, externalTableClients, r, commonLocation)
-
 			if err != nil {
 				return pool.JobResult[*resource.Resource]{Output: r, Err: err}
 			}

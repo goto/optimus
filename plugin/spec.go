@@ -113,17 +113,17 @@ func (s *Spec) GetEntrypoint(config map[string]string) (Entrypoint, error) {
 		return Entrypoint{}, errors.New("default version not found")
 	}
 
+	ver := Entrypoint{}
 	verKey, ok := config[PluginVersionKey]
-	if !ok {
-		return def.Entrypoint, nil
-	}
-	ver, ok := s.PluginVersion[verKey]
-	if !ok {
-		return def.Entrypoint, nil
+	if ok {
+		v1, okVer := s.PluginVersion[verKey]
+		if okVer {
+			ver = v1.Entrypoint
+		}
 	}
 
-	shell := utils.GetFirstNonEmpty(ver.Entrypoint.Shell, def.Entrypoint.Shell, "/bin/sh")
-	script := utils.GetFirstNonEmpty(def.Entrypoint.Script, def.Entrypoint.Script)
+	shell := utils.GetFirstNonEmpty(ver.Shell, def.Entrypoint.Shell, "/bin/sh")
+	script := utils.GetFirstNonEmpty(ver.Script, def.Entrypoint.Script)
 
 	return Entrypoint{
 		Shell:  shell,

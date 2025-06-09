@@ -95,6 +95,24 @@ func TestPluginSpec(t *testing.T) {
 		assert.Equal(t, "/bin/zsh", ep.Shell)
 		assert.Equal(t, "python3 /opt/bumblebee/main.py", ep.Script)
 	})
+	t.Run("GetEntrypoint return default shell when missing", func(t *testing.T) {
+		spec := plugin.Spec{
+			SpecVersion: 1,
+			Name:        "BQ",
+			Description: "BQ plugin",
+			PluginVersion: map[string]plugin.VersionDetails{
+				plugin.DefaultVersion: {
+					Entrypoint: plugin.Entrypoint{
+						Script: "python3 /opt/bumblebee/main.py",
+					},
+				},
+			},
+		}
+
+		ep, err := spec.GetEntrypoint(map[string]string{})
+		assert.NoError(t, err)
+		assert.Equal(t, "/bin/sh", ep.Shell)
+	})
 	t.Run("Load", func(t *testing.T) {
 		t.Run("returns error when no path is wrong", func(t *testing.T) {
 			_, err := plugin.Load("./tests/sample_non_existing.yaml")

@@ -457,8 +457,7 @@ func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resou
 }
 
 func (r Repository) GetExternalCreateFailures(ctx context.Context, resourceType string) ([]*resource.Resource, error) {
-	//todo:  change it to remarks .error not empty
-	query := `select ` + resColumnsPrefix + ` from resource rs join sync_status ss on rs.full_name = ss.identifier  where rs.status = $1 and rs.store = $2 and kind = $3 and ( ss.remarks ->> 'error' LIKE '%googleapi: Error%' or ss.remarks ->> 'error' LIKE '%CSVFormatter%' );`
+	query := `select ` + resColumnsPrefix + ` from resource rs join sync_status ss on rs.full_name = ss.identifier  where rs.status = $1 and rs.store = $2 and kind = $3 and ss.remarks ->> 'error' is not null;`
 
 	rows, err := r.db.Query(ctx, query, resource.StatusCreateFailure, resource.MaxCompute, resourceType)
 	if err != nil {

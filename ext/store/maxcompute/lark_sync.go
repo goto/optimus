@@ -53,7 +53,7 @@ func (s *SyncerService) GetLarkRevisionIDs(ctx context.Context, tnnt tenant.Tena
 		}
 
 		jobs = append(jobs, func() pool.JobResult[resource.SourceModifiedRevisionStatus] {
-			revisionID, err := lc.GetRevisionID(et.Source.SourceURIs[0])
+			revisionID, err := lc.GetRevisionID(ctx, et.Source.SourceURIs[0])
 			if err != nil {
 				return pool.JobResult[resource.SourceModifiedRevisionStatus]{
 					Output: resource.SourceModifiedRevisionStatus{
@@ -78,7 +78,7 @@ func (s *SyncerService) GetLarkRevisionIDs(ctx context.Context, tnnt tenant.Tena
 	return response, nil
 }
 
-func getLSheetContent(et *ExternalTable, sheets *lark.Client) (int, string, error) {
+func getLSheetContent(ctx context.Context, et *ExternalTable, sheets *lark.Client) (int, string, error) {
 	headers, err := et.Source.GetHeaderCount()
 	if err != nil {
 		return 0, "", err
@@ -88,7 +88,7 @@ func getLSheetContent(et *ExternalTable, sheets *lark.Client) (int, string, erro
 
 	uri := et.Source.SourceURIs[0]
 	columnCount := len(et.Schema)
-	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, et.Source.GetFormattedData, columnCount, func(rowIndex, colIndex int, data any) (string, error) {
+	return sheets.GetAsCSV(ctx, uri, et.Source.Range, et.Source.GetFormattedDate, et.Source.GetFormattedData, columnCount, func(rowIndex, colIndex int, data any) (string, error) {
 		if rowIndex < headers {
 			s, _ := ParseString(data) // ignore header parsing error, as headers will be ignored in data
 			return s, nil
@@ -117,7 +117,7 @@ func processLarkSheet(ctx context.Context, lark *lark.Client, ossClient *oss.Cli
 		return 0, errors.InvalidArgument(EntityExternalTable, "source URI is empty for Lark Sheet")
 	}
 
-	revisionNumber, content, err := getLSheetContent(et, lark)
+	revisionNumber, content, err := getLSheetContent(ctx, et, lark)
 	if err != nil {
 		return revisionNumber, err
 	}

@@ -80,29 +80,29 @@ func (lc *Client) GetSheetMetadata(ctx context.Context, sheetToken string) (*She
 }
 
 func parseSheetRange(metadata *SheetMetadata, sheetRange string) (string, error) {
-	var sheetId string
+	var sheetID string
 	sheetName, rangeQuery := FromRange(sheetRange)
 	for _, sheet := range metadata.Data.Sheets {
 		if sheet.Title == sheetName {
-			sheetId = sheet.SheetID
+			sheetID = sheet.SheetID
 			break
 		}
 	}
-	if sheetId == "" {
+	if sheetID == "" {
 		return "", fmt.Errorf("sheet title: %s not found in Lark Spreadsheet", sheetRange)
 	}
 	if rangeQuery != "" {
-		return sheetId + "!" + rangeQuery, nil
+		return sheetID + "!" + rangeQuery, nil
 	}
-	return sheetId, nil
+	return sheetID, nil
 }
 
-func (lc *Client) GetRevisionID(url string) (int, error) {
+func (lc *Client) GetRevisionID(ctx context.Context, url string) (int, error) {
 	sheetToken, err := FromURL(url)
 	if err != nil {
 		return 0, err
 	}
-	sheetMetadata, err := lc.GetSheetMetadata(context.Background(), sheetToken)
+	sheetMetadata, err := lc.GetSheetMetadata(ctx, sheetToken)
 	if err != nil {
 		return 0, err
 	}
@@ -110,12 +110,12 @@ func (lc *Client) GetRevisionID(url string) (int, error) {
 	return revisionNumber, nil
 }
 
-func (lc *Client) GetAsCSV(url, sheetRange string, getFormattedDateTime, getFormattedData bool, columnCount int, formatFn func(int, int, any) (string, error)) (int, string, error) {
+func (lc *Client) GetAsCSV(ctx context.Context, url, sheetRange string, getFormattedDateTime, getFormattedData bool, columnCount int, formatFn func(int, int, any) (string, error)) (int, string, error) {
 	sheetToken, err := FromURL(url)
 	if err != nil {
 		return 0, "", err
 	}
-	sheetMetadata, err := lc.GetSheetMetadata(context.Background(), sheetToken)
+	sheetMetadata, err := lc.GetSheetMetadata(ctx, sheetToken)
 	if err != nil {
 		return 0, "", err
 	}
@@ -125,7 +125,7 @@ func (lc *Client) GetAsCSV(url, sheetRange string, getFormattedDateTime, getForm
 		return revisionNumber, "", err
 	}
 
-	content, err := lc.GetSheetContent(context.Background(), sheetToken, parsedRange, getFormattedDateTime, getFormattedData)
+	content, err := lc.GetSheetContent(ctx, sheetToken, parsedRange, getFormattedDateTime, getFormattedData)
 	if err != nil {
 		return revisionNumber, "", err
 	}

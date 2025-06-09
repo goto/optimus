@@ -278,7 +278,6 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			},
 		},
 	}
-	s.expectedServerConfig.Plugin = config.PluginConfig{}
 
 	s.expectedServerConfig.Replay.ReplayTimeoutInMinutes = 180
 	s.expectedServerConfig.Replay.ExecutionIntervalInSeconds = 120

@@ -85,7 +85,7 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 }
 
 func (e ExternalTableHandle) createOtherTypeExternalTable(et *ExternalTable, tSchema tableschema.TableSchema) error {
-	sql, err := ToOtherExternalSQLString(et.Project, et.Database, et.Source.SerdeProperties, tSchema, et.Source.SourceType)
+	sql, err := ToOtherExternalSQLString(et.Project, et.Database, et.Source.SerdeProperties, tSchema, et.Source.ContentType)
 	if err != nil {
 		return err
 	}

@@ -12,9 +12,7 @@ import (
 	"github.com/goto/optimus/ext/sheets/csv"
 )
 
-var (
-	sheetTokenRegex = regexp.MustCompile(`larksuite\.com/sheets/([^/]*)`)
-)
+var sheetTokenRegex = regexp.MustCompile(`larksuite\.com/sheets/([^/]*)`)
 
 func (lc *Client) enrichTenantAccessToken(ctx context.Context, authSecret string) error {
 	lr := larkRequest{

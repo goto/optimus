@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-
 	"google.golang.org/api/drive/v3"
 
 	"github.com/goto/optimus/core/resource"

@@ -20,8 +20,6 @@ const (
 	GetLSheetMeta     = "/open-apis/sheets/v2/spreadsheets/%s/metainfo"
 )
 
-var delays = []int{10, 30, 90}
-
 type Client struct {
 	client            *http.Client
 	TenantAccessToken string
@@ -33,7 +31,7 @@ type SheetMetadata struct {
 	Msg  string `json:"msg"`
 }
 
-func (s SheetMetadata) GetRevisionId() int {
+func (s SheetMetadata) GetRevisionID() int {
 	return s.Data.Properties.Revision
 }
 

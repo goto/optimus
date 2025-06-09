@@ -39,7 +39,7 @@ func FromRecords[T any](data [][]T, columnCount int, formatFn func(rowIndex, col
 		}
 		allRecords = append(allRecords, currRow)
 	}
-	
+
 	csvData, err := FromData(allRecords)
 	return csvData, err
 }

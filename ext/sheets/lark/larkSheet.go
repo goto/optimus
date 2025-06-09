@@ -106,7 +106,7 @@ func (lc *Client) GetRevisionID(ctx context.Context, url string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	revisionNumber := sheetMetadata.GetRevisionId()
+	revisionNumber := sheetMetadata.GetRevisionID()
 	return revisionNumber, nil
 }
 
@@ -119,7 +119,7 @@ func (lc *Client) GetAsCSV(ctx context.Context, url, sheetRange string, getForma
 	if err != nil {
 		return 0, "", err
 	}
-	revisionNumber := sheetMetadata.GetRevisionId()
+	revisionNumber := sheetMetadata.GetRevisionID()
 	parsedRange, err := parseSheetRange(sheetMetadata, sheetRange)
 	if err != nil {
 		return revisionNumber, "", err

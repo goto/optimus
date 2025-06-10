@@ -124,11 +124,6 @@ func TestPluginSpec(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "yaml: unmarshal errors")
 		})
-		t.Run("returns error when validation fails", func(t *testing.T) {
-			_, err := plugin.Load("./tests/sample_plugin_schema_invalid.yaml")
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "plugin versions are required")
-		})
 		t.Run("returns plugin after loading", func(t *testing.T) {
 			p1, err := plugin.Load("./tests/sample_plugin.yaml")
 			assert.NoError(t, err)

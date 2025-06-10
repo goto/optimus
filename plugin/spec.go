@@ -150,11 +150,6 @@ func Load(pluginPath string) (*Spec, error) {
 		return &plugin, err
 	}
 
-	err = plugin.Validate()
-	if err != nil {
-		return &plugin, err
-	}
-
 	for _, ver := range plugin.PluginVersion {
 		ver.Entrypoint.Shell = strings.ReplaceAll(ver.Entrypoint.Script, "\n", "; ")
 	}

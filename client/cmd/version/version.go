@@ -109,8 +109,17 @@ func (v *versionCommand) RunE(_ *cobra.Command, _ []string) error {
 
 func (v *versionCommand) printAllPluginInfos() {
 	v.logger.Info("\nDiscovered plugins:")
-	for p := range v.pluginRepo.All {
-		v.logger.Info(p.String())
+	i := 0
+	for task := range v.pluginRepo.All {
+		i++
+		v.logger.Info("%d. %s\n", i, task.Name)
+		v.logger.Info("Description: %s\n", task.Description)
+		v.logger.Info("Version: %d\n", task.SpecVersion)
+		for ver, details := range task.PluginVersion {
+			v.logger.Info("Version: %s", ver)
+			v.logger.Info("  Image: %s:%s", details.Image, details.Tag)
+			v.logger.Info("  Entrypoint: {Shell: %s, Script: %s}", details.Entrypoint.Shell, details.Entrypoint.Script)
+		}
 	}
 }
 

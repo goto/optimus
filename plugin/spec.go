@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -155,31 +154,4 @@ func Load(pluginPath string) (*Spec, error) {
 	}
 
 	return &plugin, nil
-}
-
-func (v VersionDetails) String() string {
-	sb := strings.Builder{}
-	sb.WriteString(v.Image + ":" + v.Tag + "\n")
-	if v.Entrypoint.Shell != "" {
-		sb.WriteString(v.Entrypoint.Shell + "\n")
-	}
-	if v.Entrypoint.Script != "" {
-		sb.WriteString(v.Entrypoint.Script + "\n")
-	}
-	return sb.String()
-}
-
-func (s *Spec) String() string {
-	sb := new(strings.Builder)
-	sb.WriteString(s.Name)
-	sb.WriteRune('\n')
-	sb.WriteString("Version: ")
-	sb.WriteString(strconv.Itoa(s.SpecVersion) + "\n")
-	sb.WriteString("Description: " + s.Description + "\n")
-	sb.WriteString("PluginVersions:\n")
-	for k, v := range s.PluginVersion {
-		sb.WriteString(k + ": \n")
-		sb.WriteString(v.String() + "\n")
-	}
-	return sb.String()
 }

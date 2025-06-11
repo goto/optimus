@@ -105,8 +105,8 @@ func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string
 func (s *SyncerService) getGoogleExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*ExternalTable, []*ExternalTable, error) {
 	var toUpdateExternalTables, unModifiedSinceUpdate []*ExternalTable
 
-	for _, et := range ets {
-		s.logger.Info(fmt.Sprintf("[ON DB] [Google] resource: %s, lastUpdateTime in DB: %s ", et.FullName(), lastUpdateMap[et.FullName()].ModifiedTime))
+	for resName, versionInfo := range lastUpdateMap {
+		s.logger.Info(fmt.Sprintf("[ON DB] [Google] resource: %s, lastUpdateTime in DB: %s ", resName, versionInfo.ModifiedTime))
 	}
 	lastSourceModifiedList, err := s.getGoogleSourceLastModified(ctx, tnnt, ets)
 	s.logger.Info("[On Drive] [Google] Fetched last resource update time list ")

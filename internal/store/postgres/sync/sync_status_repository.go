@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	syncColumnsToStore = `project_name, entity_type, identifier, last_modified, last_sync_attempt, remarks`
+	syncColumnsToStore = `project_name, entity_type, identifier, last_modified, last_sync_attempt, last_synced_revision, remarks`
 	syncColumns        = `id, ` + syncColumnsToStore
 
 	entitySyncStatus = "SYNC_STATUS"
@@ -31,8 +31,8 @@ func NewStatusSyncRepository(pool *pgxpool.Pool) *StatusRepository {
 	return &StatusRepository{db: pool}
 }
 
-func (s StatusRepository) create(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error {
-	insertQuery := `INSERT INTO sync_status (` + syncColumnsToStore + `)VALUES ($1, $2, $3, $4 , $5 , $6)`
+func (s StatusRepository) create(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, revision *int, success bool) error {
+	insertQuery := `INSERT INTO sync_status (` + syncColumnsToStore + `)VALUES ($1, $2, $3, $4 , $5 , $6 , $7)`
 	var lastUpdateTime *time.Time
 	lastSyncAttempt := time.Now()
 	if success {
@@ -42,7 +42,7 @@ func (s StatusRepository) create(ctx context.Context, projectName tenant.Project
 	if err != nil {
 		return errors.Wrap(entitySyncStatus, "unable to serialise remarks", err)
 	}
-	_, err = s.db.Exec(ctx, insertQuery, projectName, entityType, identifier, lastUpdateTime, lastSyncAttempt, remarksByte)
+	_, err = s.db.Exec(ctx, insertQuery, projectName, entityType, identifier, lastUpdateTime, lastSyncAttempt, revision, remarksByte)
 	if err != nil {
 		return errors.Wrap(entitySyncStatus, "unable to insert status entry", err)
 	}
@@ -74,7 +74,7 @@ func (s StatusRepository) Upsert(ctx context.Context, projectName tenant.Project
 		return errors.Wrap(entitySyncStatus, "unable to update status entry", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return s.create(ctx, projectName, entityType, identifier, remarks, success)
+		return s.create(ctx, projectName, entityType, identifier, remarks, nil, success)
 	}
 	return nil
 }
@@ -94,7 +94,7 @@ func (s StatusRepository) UpsertRevision(ctx context.Context, projectName tenant
 		return errors.Wrap(entitySyncStatus, "unable to update status entry", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return s.create(ctx, projectName, entityType, identifier, remarks, success)
+		return s.create(ctx, projectName, entityType, identifier, remarks, &revision, success)
 	}
 	return nil
 }

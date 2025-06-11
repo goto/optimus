@@ -65,7 +65,7 @@ func ParseDateTime(data any, sourceTimeFormats []string, outPutType string) (str
 	var parsedTime time.Time
 	switch data := data.(type) {
 	case float64:
-		precision := time.Second // since google sheets does not store precision higher than 1 second
+		precision := time.Millisecond // since google sheets does not store precision higher than 1 milisecond
 		parsedTime = utils.ConvertLotus123SerialToTime(data, precision)
 	case string:
 		if data == "" || len(sourceTimeFormats) == 0 {

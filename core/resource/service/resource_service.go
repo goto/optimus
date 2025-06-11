@@ -448,11 +448,14 @@ func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, resou
 		}
 		var resourcesToCheck []*resource.Resource
 		for _, r := range res {
-			if r.GetUpdateAt().After(dbStatusMap[r.FullName()].ModifiedTime) {
-				toUpdateResources = append(toUpdateResources, r)
-			} else {
-				resourcesToCheck = append(resourcesToCheck, r)
+			if _, ok := dbStatusMap[r.FullName()]; ok {
+				if r.GetUpdateAt().After(dbStatusMap[r.FullName()].ModifiedTime) {
+					toUpdateResources = append(toUpdateResources, r)
+					continue
+				}
 			}
+			resourcesToCheck = append(resourcesToCheck, r)
+
 		}
 		toUpdate, unModified, err := rs.syncer.GetExternalTablesDueForSync(ctx, tnnt, resourcesToCheck, dbStatusMap)
 		if err != nil {

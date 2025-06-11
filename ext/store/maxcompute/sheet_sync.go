@@ -75,7 +75,7 @@ func getAllSourceTypes(et []*ExternalTable) ExternalTableSources {
 	return sourceTypes
 }
 
-func groupBySourceType(ets []*ExternalTable) (map[ExternalTableSourceType][]*ExternalTable, error) {
+func groupBySourceType(ets []*ExternalTable) map[ExternalTableSourceType][]*ExternalTable {
 	grouped := make(map[ExternalTableSourceType][]*ExternalTable)
 	for _, et := range ets {
 		if grouped[et.GetSourceType()] == nil {
@@ -83,7 +83,7 @@ func groupBySourceType(ets []*ExternalTable) (map[ExternalTableSourceType][]*Ext
 		}
 		grouped[et.GetSourceType()] = append(grouped[et.GetSourceType()], et)
 	}
-	return grouped, nil
+	return grouped
 }
 
 func revisionListToMap(input []resource.SourceModifiedRevisionStatus) map[string]resource.SourceModifiedRevisionStatus {

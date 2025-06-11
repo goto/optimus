@@ -197,10 +197,6 @@ func (r *Resource) Metadata() *Metadata {
 	return r.metadata
 }
 
-func (r *Resource) SetMetadata(m *Metadata) {
-	r.metadata = m
-}
-
 func (r *Resource) Kind() string {
 	return r.kind
 }

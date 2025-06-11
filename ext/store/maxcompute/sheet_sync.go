@@ -66,17 +66,173 @@ func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.
 	return s.SyncRepo.Touch(ctx, projectName, KindExternalTable, resources)
 }
 
-func getAllSourceTypes(resources []*resource.Resource) (ExternalTableSources, error) {
+func getAllSourceTypes(et []*ExternalTable) (ExternalTableSources, error) {
 	sourceTypes := make(ExternalTableSources, 0)
-	for _, spec := range resources {
-		sourceTypeString := spec.Metadata().EtSourceType
-		source, err := NewExternalTableSource(sourceTypeString)
-		if err != nil {
-			return nil, err
-		}
-		sourceTypes.Append(source)
+	for _, spec := range et {
+		sourceTypeString := spec.GetSourceType()
+		sourceTypes.Append(sourceTypeString)
 	}
 	return sourceTypes, nil
+}
+
+func groupExternalTableBySource(et []*ExternalTable) (ExternalTableSources, error) {
+	sourceTypes := make(ExternalTableSources, 0)
+	for _, spec := range et {
+		sourceTypeString := spec.GetSourceType()
+		sourceTypes.Append(sourceTypeString)
+	}
+	return sourceTypes, nil
+}
+
+func groupBySourceType(ets []*ExternalTable) (map[ExternalTableSourceType][]*ExternalTable, error) {
+	grouped := make(map[ExternalTableSourceType][]*ExternalTable)
+	for _, et := range ets {
+		if grouped[et.GetSourceType()] == nil {
+			grouped[et.GetSourceType()] = make([]*ExternalTable, 0)
+		}
+		grouped[et.GetSourceType()] = append(grouped[et.GetSourceType()], et)
+	}
+	return grouped, nil
+}
+
+func revisionListToMap(input []resource.SourceModifiedRevisionStatus) map[string]resource.SourceModifiedRevisionStatus {
+	output := make(map[string]resource.SourceModifiedRevisionStatus)
+	for _, status := range input {
+		output[status.FullName] = status
+	}
+	return output
+}
+
+func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string]resource.SourceModifiedTimeStatus {
+	output := make(map[string]resource.SourceModifiedTimeStatus)
+	for _, status := range input {
+		output[status.FullName] = status
+	}
+	return output
+}
+
+func (s *SyncerService) getGoogleExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*ExternalTable, []*ExternalTable, error) {
+	var toUpdateExternalTables, unModifiedSinceUpdate []*ExternalTable
+
+	for _, et := range ets {
+		s.logger.Info(fmt.Sprintf("[ON DB] [Google] resource: %s, lastUpdateTime in DB: %s ", et.FullName(), lastUpdateMap[et.FullName()].ModifiedTime))
+	}
+	lastSourceModifiedList, err := s.getGoogleSourceLastModified(ctx, tnnt, ets)
+	s.logger.Info("[On Drive] [Google] Fetched last resource update time list ")
+	for _, modifiedTimeStatus := range lastSourceModifiedList {
+		if modifiedTimeStatus.Err == nil {
+			s.logger.Info(fmt.Sprintf("[On Drive] [Google] resource: %s, lastUpdateTime: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.LastModifiedTime))
+		} else {
+			s.logger.Error(fmt.Sprintf("[On Drive] [Google] resource: %s, error: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.Err.Error()))
+		}
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	lastSourceModifiedMap := lastModifiedListToMap(lastSourceModifiedList)
+	for _, et := range ets {
+		lastSyncedAt, ok := lastUpdateMap[et.FullName()]
+		if !ok {
+			toUpdateExternalTables = append(toUpdateExternalTables, et)
+			continue
+		}
+		if lastSourceModifiedMap[et.FullName()].Err != nil {
+			s.logger.Error(fmt.Sprintf("unable to get last modified time, err:%s", lastSourceModifiedMap[et.FullName()].Err.Error()))
+			toUpdateExternalTables = append(toUpdateExternalTables, et)
+			continue
+		}
+		if lastSourceModifiedMap[et.FullName()].LastModifiedTime.After(lastSyncedAt.ModifiedTime) {
+			toUpdateExternalTables = append(toUpdateExternalTables, et)
+		} else {
+			unModifiedSinceUpdate = append(unModifiedSinceUpdate, et)
+		}
+	}
+	return toUpdateExternalTables, unModifiedSinceUpdate, nil
+}
+
+func (s *SyncerService) getLarkExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*ExternalTable, []*ExternalTable, error) {
+	var toUpdateExternalTables, unModifiedSinceUpdate []*ExternalTable
+
+	s.logger.Info("[ON DB] [Lark] Fetched last Resource Sync time list ")
+	for resName, versionInfo := range lastUpdateMap {
+		s.logger.Info(fmt.Sprintf("[ON DB] [Lark] resource: %s, lastUpdateTime in DB: %s, Last Synced Revision: %d", resName, versionInfo.ModifiedTime.String(), versionInfo.Revision))
+	}
+	latestRevisionList, err := s.getLarkRevisionIDs(ctx, tnnt, ets)
+	s.logger.Info("[On Lark] Fetched last resource update time list ")
+	for _, latestRevision := range latestRevisionList {
+		if latestRevision.Err == nil {
+			s.logger.Info(fmt.Sprintf("[On Lark] resource: %s, latest Revision: %d ", latestRevision.FullName, latestRevision.Revision))
+		} else {
+			s.logger.Error(fmt.Sprintf("[On Lark] resource: %s, error: %s ", latestRevision.FullName, latestRevision.Err.Error()))
+		}
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	sourceRevisionMap := revisionListToMap(latestRevisionList)
+	for _, r := range ets {
+		lastSyncedAt, ok := lastUpdateMap[r.FullName()]
+		if !ok {
+			toUpdateExternalTables = append(toUpdateExternalTables, r)
+			continue
+		}
+		if sourceRevisionMap[r.FullName()].Err != nil {
+			s.logger.Error(fmt.Sprintf("[On Lark] unable to get current revision, err:%s", sourceRevisionMap[r.FullName()].Err.Error()))
+			toUpdateExternalTables = append(toUpdateExternalTables, r)
+			continue
+		}
+		if sourceRevisionMap[r.FullName()].Revision > lastSyncedAt.Revision {
+			toUpdateExternalTables = append(toUpdateExternalTables, r)
+		} else {
+			unModifiedSinceUpdate = append(unModifiedSinceUpdate, r)
+		}
+	}
+	return toUpdateExternalTables, unModifiedSinceUpdate, nil
+}
+
+func getResourceMap(resources []*resource.Resource) map[string]*resource.Resource {
+	output := make(map[string]*resource.Resource)
+	for _, r := range resources {
+		output[r.FullName()] = r
+	}
+	return output
+}
+
+func (s *SyncerService) GetExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*resource.Resource, []*resource.Resource, error) {
+	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
+	resourcesMap := getResourceMap(resources)
+	ets, err := ConvertSpecsTo[ExternalTable](resources)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	externalTablesBySourceTypes, err := groupBySourceType(ets)
+	if err != nil {
+		return nil, nil, err
+	}
+	for sourceType, externalTables := range externalTablesBySourceTypes {
+		var toUpdateET, unModifiedET []*ExternalTable
+		switch sourceType {
+		case GoogleDrive, GoogleSheet:
+			toUpdateET, unModifiedET, err = s.getGoogleExternalTablesDueForSync(ctx, tnnt, externalTables, lastUpdateMap)
+			if err != nil {
+				return nil, nil, err
+			}
+
+		case LarkSheet:
+			toUpdateET, unModifiedET, err = s.getLarkExternalTablesDueForSync(ctx, tnnt, externalTables, lastUpdateMap)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		for _, et := range toUpdateET {
+			toUpdateResources = append(toUpdateResources, resourcesMap[et.FullName()])
+		}
+		for _, et := range unModifiedET {
+			unModifiedSinceUpdate = append(unModifiedSinceUpdate, resourcesMap[et.FullName()])
+		}
+	}
+	return toUpdateResources, unModifiedSinceUpdate, nil
 }
 
 func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SyncStatus, error) {
@@ -95,7 +251,12 @@ func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resou
 			return nil, err
 		}
 	}
-	sourceTypes, err := getAllSourceTypes(resources)
+
+	externalTables, err := ConvertSpecsTo[ExternalTable](resources)
+	if err != nil {
+		return nil, err
+	}
+	sourceTypes, err := getAllSourceTypes(externalTables)
 	if err != nil {
 		return nil, err
 	}
@@ -130,9 +291,9 @@ func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resou
 			success = false
 		}
 		syncStatus = append(syncStatus, resource.SyncStatus{
-			Resource: result.Output,
-			Success:  success,
-			ErrorMsg: errMsg,
+			Identifier: result.Output.FullName(),
+			Success:    success,
+			ErrorMsg:   errMsg,
 		})
 	}
 	return syncStatus, mu.ToErr()

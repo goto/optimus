@@ -32,7 +32,7 @@ type ResourceStatusRepo interface {
 }
 
 type StatusRepo interface {
-	GetLastUpdate(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) (map[string]resource.SourceVersioningInfo, error)
+	GetLastUpdate(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) (map[string]*resource.SourceVersioningInfo, error)
 }
 
 type ResourceMgr struct {

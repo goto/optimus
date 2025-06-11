@@ -15,7 +15,6 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils/filter"
@@ -44,8 +43,8 @@ type Syncer interface {
 	SyncBatch(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SyncStatus, error)
 	TouchUnModified(ctx context.Context, project tenant.ProjectName, resources []*resource.Resource) error
 	GetSyncInterval(res *resource.Resource) (int64, error)
+	GetExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*resource.Resource, []*resource.Resource, error)
 	GetGoogleSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error)
-	GetLarkRevisionIDs(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedRevisionStatus, error)
 }
 
 type ResourceManager interface {
@@ -403,149 +402,6 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return rs.repo.ReadAll(ctx, tnnt, store, true)
 }
 
-func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string]resource.SourceModifiedTimeStatus {
-	output := make(map[string]resource.SourceModifiedTimeStatus)
-	for _, status := range input {
-		output[status.FullName] = status
-	}
-	return output
-}
-
-func revisionListToMap(input []resource.SourceModifiedRevisionStatus) map[string]resource.SourceModifiedRevisionStatus {
-	output := make(map[string]resource.SourceModifiedRevisionStatus)
-	for _, status := range input {
-		output[status.FullName] = status
-	}
-	return output
-}
-
-func (rs ResourceService) getGoogleExternalTablesDueForSync(ctx context.Context, resources []*resource.Resource, tnnt tenant.Tenant) ([]*resource.Resource, []*resource.Resource, error) {
-	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
-	lastUpdateMap, err := rs.statusRepo.GetLastUpdate(ctx, tnnt.ProjectName(), KindExternalTableGoogle, resources)
-	if err != nil {
-		return nil, nil, err
-	}
-	rs.logger.Info("[ON DB] [Google] Fetched last Resource Sync time list ")
-	for resName, versionInfo := range lastUpdateMap {
-		rs.logger.Info(fmt.Sprintf("[ON DB] [Google] resource: %s, lastUpdateTime in DB: %s ", resName, versionInfo.ModifiedTime.String()))
-	}
-	lastModifiedList, err := rs.syncer.GetGoogleSourceLastModified(ctx, tnnt, resources)
-	rs.logger.Info("[On Drive] [Google] Fetched last resource update time list ")
-	for _, modifiedTimeStatus := range lastModifiedList {
-		if modifiedTimeStatus.Err == nil {
-			rs.logger.Info(fmt.Sprintf("[On Drive] [Google] resource: %s, lastUpdateTime: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.LastModifiedTime))
-		} else {
-			rs.logger.Error(fmt.Sprintf("[On Drive] [Google] resource: %s, error: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.Err.Error()))
-		}
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	lastModifiedMap := lastModifiedListToMap(lastModifiedList)
-	for _, r := range resources {
-		lastSyncedAt, ok := lastUpdateMap[r.FullName()]
-		if !ok {
-			toUpdateResources = append(toUpdateResources, r)
-			continue
-		}
-		if r.GetUpdateAt().After(lastSyncedAt.ModifiedTime) {
-			toUpdateResources = append(toUpdateResources, r)
-			continue
-		}
-		if lastModifiedMap[r.FullName()].Err != nil {
-			rs.logger.Error(fmt.Sprintf("unable to get last modified time, err:%s", lastModifiedMap[r.FullName()].Err.Error()))
-			toUpdateResources = append(toUpdateResources, r)
-			continue
-		}
-		if lastModifiedMap[r.FullName()].LastModifiedTime.After(lastSyncedAt.ModifiedTime) {
-			toUpdateResources = append(toUpdateResources, r)
-		} else {
-			unModifiedSinceUpdate = append(unModifiedSinceUpdate, r)
-		}
-	}
-	return toUpdateResources, unModifiedSinceUpdate, nil
-}
-
-func (rs ResourceService) getLarkExternalTablesDueForSync(ctx context.Context, resources []*resource.Resource, tnnt tenant.Tenant) ([]*resource.Resource, []*resource.Resource, error) {
-	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
-	lastUpdateMap, err := rs.statusRepo.GetLastUpdate(ctx, tnnt.ProjectName(), KindExternalTableLark, resources)
-	if err != nil {
-		return nil, nil, err
-	}
-	rs.logger.Info("[ON DB] [Lark] Fetched last Resource Sync time list ")
-	for resName, versionInfo := range lastUpdateMap {
-		rs.logger.Info(fmt.Sprintf("[ON DB] [Lark] resource: %s, lastUpdateTime in DB: %s, Last Synced Revision: %d", resName, versionInfo.ModifiedTime.String(), versionInfo.Revision))
-	}
-	latestRevisionList, err := rs.syncer.GetLarkRevisionIDs(ctx, tnnt, resources)
-	rs.logger.Info("[On Lark] Fetched last resource update time list ")
-	for _, latestRevision := range latestRevisionList {
-		if latestRevision.Err == nil {
-			rs.logger.Info(fmt.Sprintf("[On Lark] resource: %s, latest Revision: %d ", latestRevision.FullName, latestRevision.Revision))
-		} else {
-			rs.logger.Error(fmt.Sprintf("[On Lark] resource: %s, error: %s ", latestRevision.FullName, latestRevision.Err.Error()))
-		}
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	sourceRevisionMap := revisionListToMap(latestRevisionList)
-	for _, r := range resources {
-		lastSyncedAt, ok := lastUpdateMap[r.FullName()]
-		if !ok {
-			toUpdateResources = append(toUpdateResources, r)
-			continue
-		}
-		if r.GetUpdateAt().After(lastSyncedAt.ModifiedTime) {
-			toUpdateResources = append(toUpdateResources, r)
-			continue
-		}
-		if sourceRevisionMap[r.FullName()].Err != nil {
-			rs.logger.Error(fmt.Sprintf("[On Lark] unable to get current revision, err:%s", sourceRevisionMap[r.FullName()].Err.Error()))
-			toUpdateResources = append(toUpdateResources, r)
-			continue
-		}
-		if sourceRevisionMap[r.FullName()].Revision > lastSyncedAt.Revision {
-			toUpdateResources = append(toUpdateResources, r)
-		} else {
-			unModifiedSinceUpdate = append(unModifiedSinceUpdate, r)
-		}
-	}
-	return toUpdateResources, unModifiedSinceUpdate, nil
-}
-
-func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, resources []*resource.Resource) ([]*resource.Resource, []*resource.Resource, error) {
-	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
-	mapTenantResources := groupByTenant(resources)
-	for tnnt, res := range mapTenantResources {
-		resourcesBySourceTypes, err := groupBySourceType(res)
-		if err != nil {
-			return nil, nil, err
-		}
-		for source, resourcesList := range resourcesBySourceTypes {
-			sourceType := *source
-			switch sourceType {
-			case maxcompute.GoogleDrive, maxcompute.GoogleSheet:
-				toUpdate, unModified, err := rs.getGoogleExternalTablesDueForSync(ctx, resourcesList, tnnt)
-				if err != nil {
-					return nil, nil, err
-				}
-				toUpdateResources = append(toUpdateResources, toUpdate...)
-				unModifiedSinceUpdate = append(unModifiedSinceUpdate, unModified...)
-			case maxcompute.LarkSheet:
-				toUpdate, unModified, err := rs.getLarkExternalTablesDueForSync(ctx, resourcesList, tnnt)
-				if err != nil {
-					return nil, nil, err
-				}
-				toUpdateResources = append(toUpdateResources, toUpdate...)
-				unModifiedSinceUpdate = append(unModifiedSinceUpdate, unModified...)
-			default:
-				return nil, nil, nil
-			}
-		}
-	}
-	return toUpdateResources, unModifiedSinceUpdate, nil
-}
-
 func groupByTenant(resources []*resource.Resource) map[tenant.Tenant][]*resource.Resource {
 	grouped := make(map[tenant.Tenant][]*resource.Resource)
 	for _, res := range resources {
@@ -553,18 +409,6 @@ func groupByTenant(resources []*resource.Resource) map[tenant.Tenant][]*resource
 		grouped[tnnt] = append(grouped[tnnt], res)
 	}
 	return grouped
-}
-
-func groupBySourceType(resources []*resource.Resource) (map[*maxcompute.ExternalTableSourceType][]*resource.Resource, error) {
-	grouped := make(map[*maxcompute.ExternalTableSourceType][]*resource.Resource)
-	for _, res := range resources {
-		sourceType, err := maxcompute.NewExternalTableSource(res.Metadata().EtSourceType)
-		if err != nil {
-			return nil, err
-		}
-		grouped[&sourceType] = append(grouped[&sourceType], res)
-	}
-	return grouped, nil
 }
 
 func (rs ResourceService) getExternalTablesWithFilters(ctx context.Context, projectName tenant.ProjectName, store resource.Store, filters ...filter.FilterOpt) ([]*resource.Resource, error) {
@@ -594,6 +438,32 @@ func (rs ResourceService) updateLastCheckedUnSyncedETs(ctx context.Context, proj
 	}
 }
 
+func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, resources []*resource.Resource) ([]*resource.Resource, []*resource.Resource, error) {
+	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
+	mapTenantResources := groupByTenant(resources)
+	for tnnt, res := range mapTenantResources {
+		dbStatusMap, err := rs.statusRepo.GetLastUpdate(ctx, tnnt.ProjectName(), resources)
+		if err != nil {
+			return nil, nil, err
+		}
+		var resourcesToCheck []*resource.Resource
+		for _, r := range res {
+			if r.GetUpdateAt().After(dbStatusMap[r.FullName()].ModifiedTime) {
+				toUpdateResources = append(toUpdateResources, r)
+			} else {
+				resourcesToCheck = append(resourcesToCheck, r)
+			}
+		}
+		toUpdate, unModified, err := rs.syncer.GetExternalTablesDueForSync(ctx, tnnt, res, dbStatusMap)
+		if err != nil {
+			return nil, nil, err
+		}
+		toUpdateResources = append(toUpdateResources, toUpdate...)
+		unModifiedSinceUpdate = append(unModifiedSinceUpdate, unModified...)
+	}
+	return toUpdateResources, unModifiedSinceUpdate, nil
+}
+
 func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, skipIntervalCheck bool, filters ...filter.FilterOpt) ([]string, error) {
 	resources, err := rs.getExternalTablesWithFilters(ctx, projectName, store, filters...)
 	if err != nil {
@@ -619,7 +489,7 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 	var successTables []string
 	for _, i := range syncStatus {
 		if i.Success {
-			successTables = append(successTables, i.Resource.FullName())
+			successTables = append(successTables, i.Identifier)
 		}
 	}
 	return successTables, err

@@ -88,6 +88,14 @@ func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient
 }
 
 func (s *SyncerService) GetGoogleSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error) {
+	ets, err := ConvertSpecsTo[ExternalTable](resources)
+	if err != nil {
+		return nil, err
+	}
+	return s.getGoogleSourceLastModified(ctx, tnnt, ets)
+}
+
+func (s *SyncerService) getGoogleSourceLastModified(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable) ([]resource.SourceModifiedTimeStatus, error) {
 	var response []resource.SourceModifiedTimeStatus
 
 	driveClient, err := s.getDriveClient(ctx, tnnt)
@@ -96,19 +104,11 @@ func (s *SyncerService) GetGoogleSourceLastModified(ctx context.Context, tnnt te
 	}
 
 	var jobs []func() pool.JobResult[resource.SourceModifiedTimeStatus]
-	for _, res := range resources {
-		r := res
-		et, err := ConvertSpecTo[ExternalTable](r)
-		if err != nil {
-			response = append(response, resource.SourceModifiedTimeStatus{
-				FullName: r.FullName(),
-				Err:      err,
-			})
-			continue
-		}
+	for _, et := range ets {
+		et := et
 		if et.Source.SourceType != GoogleSheet && et.Source.SourceType != GoogleDrive {
 			response = append(response, resource.SourceModifiedTimeStatus{
-				FullName: r.FullName(),
+				FullName: et.FullName(),
 				Err:      errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive"),
 			})
 			continue
@@ -119,7 +119,7 @@ func (s *SyncerService) GetGoogleSourceLastModified(ctx context.Context, tnnt te
 			if err != nil {
 				return pool.JobResult[resource.SourceModifiedTimeStatus]{
 					Output: resource.SourceModifiedTimeStatus{
-						FullName: r.FullName(),
+						FullName: et.FullName(),
 						Err:      errors.InvalidArgument(EntityExternalTable, err.Error()),
 					},
 					Err: errors.InvalidArgument(EntityExternalTable, err.Error()),
@@ -127,7 +127,7 @@ func (s *SyncerService) GetGoogleSourceLastModified(ctx context.Context, tnnt te
 			}
 			return pool.JobResult[resource.SourceModifiedTimeStatus]{
 				Output: resource.SourceModifiedTimeStatus{
-					FullName:         r.FullName(),
+					FullName:         et.FullName(),
 					LastModifiedTime: *lastModified,
 				},
 			}

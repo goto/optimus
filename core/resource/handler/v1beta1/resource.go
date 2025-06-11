@@ -14,7 +14,6 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
@@ -553,24 +552,7 @@ func fromResourceProto(rs *pb.ResourceSpecification, tnnt tenant.Tenant, store r
 		Description: description,
 		Labels:      rs.Labels,
 	}
-
-	res, err := resource.NewResource(rs.Name, rs.GetType(), store, tnnt, &metadata, spec)
-	if err != nil {
-		return nil, err
-	}
-	if rs.GetType() == resource.KindExternalTable {
-		if store == resource.MaxCompute {
-			etSpec, err := maxcompute.ConvertSpecTo[maxcompute.ExternalTable](res)
-			if err != nil {
-				return nil, errors.InvalidArgument(resource.EntityResource, fmt.Sprintf("Invalid Spec for MaxCompute External Table:%s, err:%s", rs.Name, err))
-			}
-			sourceType := etSpec.GetSourceType()
-			metadata.EtSourceType = sourceType.String()
-			res.SetMetadata(&metadata)
-		}
-	}
-
-	return res, err
+	return resource.NewResource(rs.Name, rs.GetType(), store, tnnt, &metadata, spec)
 }
 
 func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) {

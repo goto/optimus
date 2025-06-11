@@ -107,11 +107,11 @@ func getIdentifiersFromResources(resources []*resource.Resource) []string {
 	return identifiers
 }
 
-func (s StatusRepository) GetLastUpdate(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) (map[string]resource.SourceVersioningInfo, error) {
-	lastUpdateMap := make(map[string]resource.SourceVersioningInfo)
+func (s StatusRepository) GetLastUpdate(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) (map[string]*resource.SourceVersioningInfo, error) {
+	lastUpdateMap := make(map[string]*resource.SourceVersioningInfo)
 	identifiers := getIdentifiersFromResources(resources)
-	getQuery := "select identifier, last_modified, last_synced_revision from  sync_status where  project_name=$1 and entity_type=$2 and identifier in ('" + strings.Join(identifiers, "', '") + "') order by last_modified asc"
-	rows, err := s.db.Query(ctx, getQuery, projectName, entityType)
+	getQuery := "select identifier, last_modified, last_synced_revision, entity_type from  sync_status where  project_name=$1  and identifier in ('" + strings.Join(identifiers, "', '") + "') order by last_modified asc"
+	rows, err := s.db.Query(ctx, getQuery, projectName)
 	if err != nil {
 		return nil, errors.Wrap(entitySyncStatus, "error while getting last sync update status", err)
 	}
@@ -120,14 +120,15 @@ func (s StatusRepository) GetLastUpdate(ctx context.Context, projectName tenant.
 		var identifier string
 		var lastUpdate sql.NullTime
 		var revision sql.NullInt16
-		err := rows.Scan(&identifier, &lastUpdate, &revision)
+		var entityType string
+		err := rows.Scan(&identifier, &lastUpdate, &revision, &entityType)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return lastUpdateMap, nil
 			}
 			return nil, errors.Wrap(entitySyncStatus, "error while getting last sync update status", err)
 		}
-		lastUpdateMap[identifier] = resource.SourceVersioningInfo{ModifiedTime: lastUpdate.Time, Revision: int(revision.Int16)}
+		lastUpdateMap[identifier] = &resource.SourceVersioningInfo{ModifiedTime: lastUpdate.Time, Revision: int(revision.Int16), EntityType: entityType}
 	}
 	return lastUpdateMap, nil
 }

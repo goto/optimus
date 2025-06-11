@@ -26,7 +26,7 @@ func (s *SyncerService) getLarkClient(ctx context.Context, tnnt tenant.Tenant) (
 	return client, nil
 }
 
-func (s *SyncerService) GetLarkRevisionIDs(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedRevisionStatus, error) {
+func (s *SyncerService) getLarkRevisionIDs(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable) ([]resource.SourceModifiedRevisionStatus, error) {
 	var response []resource.SourceModifiedRevisionStatus
 	lc, err := s.getLarkClient(ctx, tnnt)
 	if err != nil {
@@ -34,19 +34,11 @@ func (s *SyncerService) GetLarkRevisionIDs(ctx context.Context, tnnt tenant.Tena
 	}
 
 	var jobs []func() pool.JobResult[resource.SourceModifiedRevisionStatus]
-	for _, res := range resources {
-		r := res
-		et, err := ConvertSpecTo[ExternalTable](r)
-		if err != nil {
-			response = append(response, resource.SourceModifiedRevisionStatus{
-				FullName: r.FullName(),
-				Err:      err,
-			})
-			continue
-		}
+	for _, et := range ets {
+		et := et
 		if et.Source.SourceType != LarkSheet {
 			response = append(response, resource.SourceModifiedRevisionStatus{
-				FullName: r.FullName(),
+				FullName: et.FullName(),
 				Err:      errors.InvalidArgument(EntityExternalTable, "source is not LarkSheet"),
 			})
 			continue
@@ -57,7 +49,7 @@ func (s *SyncerService) GetLarkRevisionIDs(ctx context.Context, tnnt tenant.Tena
 			if err != nil {
 				return pool.JobResult[resource.SourceModifiedRevisionStatus]{
 					Output: resource.SourceModifiedRevisionStatus{
-						FullName: r.FullName(),
+						FullName: et.FullName(),
 						Err:      errors.InvalidArgument(EntityExternalTable, err.Error()),
 					},
 					Err: errors.InvalidArgument(EntityExternalTable, err.Error()),
@@ -65,7 +57,7 @@ func (s *SyncerService) GetLarkRevisionIDs(ctx context.Context, tnnt tenant.Tena
 			}
 			return pool.JobResult[resource.SourceModifiedRevisionStatus]{
 				Output: resource.SourceModifiedRevisionStatus{
-					FullName: r.FullName(),
+					FullName: et.FullName(),
 					Revision: revisionID,
 				},
 			}

@@ -16,12 +16,13 @@ import (
 const (
 	resourceSchema = "maxcompute_schema"
 
-	KindTable         string = "table"
-	KindView          string = "view"
-	KindSchema        string = "schema"
-	KindExternalTable string = "external_table"
-
-	allowedColumnMaskPolicyPattern = `^[a-zA-Z0-9_-]+$`
+	KindTable                      string = "table"
+	KindView                       string = "view"
+	KindSchema                     string = "schema"
+	KindExternalTable              string = "external_table"
+	KindExternalTableGoogle        string = "external_table_google"
+	KindExternalTableLark          string = "external_table_lark"
+	allowedColumnMaskPolicyPattern        = `^[a-zA-Z0-9_-]+$`
 )
 
 type Schema []*Field
@@ -332,4 +333,17 @@ func ConvertSpecTo[T any](res *resource.Resource) (*T, error) {
 		return nil, errors.InvalidArgument(resource.EntityResource, msg)
 	}
 	return &spec, nil
+}
+
+func ConvertSpecsTo[T any](res []*resource.Resource) ([]*T, error) {
+	convertedSpecs := make([]*T, len(res))
+	for i, r := range res {
+		var spec T
+		if err := mapstructure.Decode(r.Spec(), &spec); err != nil {
+			msg := fmt.Sprintf("%s: not able to decode spec for %s", err, r.FullName())
+			return nil, errors.InvalidArgument(resource.EntityResource, msg)
+		}
+		convertedSpecs[i] = &spec
+	}
+	return convertedSpecs, nil
 }

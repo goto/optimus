@@ -24,6 +24,10 @@ type ExternalTable struct {
 	Hints map[string]string `mapstructure:"hints,omitempty"`
 }
 
+func (e *ExternalTable) GetSourceType() ExternalTableSourceType {
+	return e.Source.SourceType
+}
+
 func (e *ExternalTable) FullName() string {
 	return fmt.Sprintf("%s.%s.%s", e.Project, e.Database, e.Name)
 }
@@ -45,10 +49,50 @@ func (e *ExternalTable) Validate() error {
 	return nil
 }
 
+type ExternalTableSourceType string
+
+func (e ExternalTableSourceType) String() string {
+	return string(e)
+}
+
+func NewExternalTableSource(s string) (ExternalTableSourceType, error) {
+	switch strings.ToUpper(s) {
+	case GoogleSheet.String():
+		return GoogleSheet, nil
+	case LarkSheet.String():
+		return LarkSheet, nil
+	case GoogleDrive.String():
+		return GoogleDrive, nil
+	case OSS.String():
+		return OSS, nil
+	default:
+		return "", errors.InvalidArgument(EntityExternalTable, "unsupported external table source :"+s)
+	}
+}
+
+type ExternalTableSources []ExternalTableSourceType
+
+func (es *ExternalTableSources) Has(sources ...ExternalTableSourceType) bool {
+	for _, s := range *es {
+		for _, source := range sources {
+			if s == source {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (es *ExternalTableSources) Append(source ExternalTableSourceType) {
+	if !es.Has(source) {
+		*es = append(*es, source)
+	}
+}
+
 type ExternalSource struct {
-	SourceType  string   `mapstructure:"type,omitempty"`
-	ContentType string   `mapstructure:"content_type,omitempty"`
-	SourceURIs  []string `mapstructure:"uris,omitempty"`
+	SourceType  ExternalTableSourceType `mapstructure:"type,omitempty"`
+	ContentType string                  `mapstructure:"content_type,omitempty"`
+	SourceURIs  []string                `mapstructure:"uris,omitempty"`
 
 	// Additional configs for CSV, GoogleSheets, LarkSheets formats.
 	SerdeProperties map[string]string `mapstructure:"serde_properties"`
@@ -76,7 +120,7 @@ func (e ExternalSource) GetHeaderCount() (int, error) {
 }
 
 func (e ExternalSource) Validate() error {
-	switch strings.ToUpper(e.SourceType) {
+	switch e.SourceType {
 	case GoogleSheet, GoogleDrive:
 		if len(e.SourceURIs) == 0 {
 			return errors.InvalidArgument(EntityExternalTable, "source uri list is empty")
@@ -92,6 +136,12 @@ func (e ExternalSource) Validate() error {
 			return errors.InvalidArgument(EntityExternalTable, "source uri list is not empty, "+
 				"Found `Source.Type` `OSS`. For `Source.Type` `OSS`, server only reads from `Source.Location` or default locations configured in Project Config, `ext_location`")
 		}
+		return nil
+	case LarkSheet:
+		if len(e.SourceURIs) == 0 {
+			return errors.InvalidArgument(EntityExternalTable, "source uri list is empty")
+		}
+		// todo: check if more validations are possible
 		return nil
 	case "":
 		return errors.InvalidArgument(EntityExternalTable, "source type is empty")

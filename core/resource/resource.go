@@ -26,6 +26,12 @@ const (
 
 type UpdateImpact string
 
+type SourceVersioningInfo struct {
+	EntityType   string
+	ModifiedTime time.Time
+	Revision     int
+}
+
 type Metadata struct {
 	Version     int32
 	Description string
@@ -59,9 +65,9 @@ type ETAlertAttrs struct {
 }
 
 type SyncStatus struct {
-	Resource *Resource
-	Success  bool
-	ErrorMsg string
+	Identifier string
+	Success    bool
+	ErrorMsg   string
 }
 
 func (m *Metadata) Validate() error {

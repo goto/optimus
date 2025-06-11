@@ -164,8 +164,8 @@ func (e ExternalTableHandle) enrichRoleToAssume(ctx context.Context, et *Externa
 }
 
 func (e ExternalTableHandle) getLocation(ctx context.Context, et *ExternalTable, res *resource.Resource) (string, error) {
-	switch strings.ToUpper(et.Source.SourceType) {
-	case GoogleSheet, GoogleDrive:
+	switch et.Source.SourceType {
+	case GoogleSheet, GoogleDrive, LarkSheet:
 		loc := et.Source.Location
 		if loc == "" {
 			tenantWithDetails, err := e.tenantDetailsGetter.GetDetails(ctx, res.Tenant())

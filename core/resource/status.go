@@ -15,6 +15,12 @@ type SourceModifiedTimeStatus struct {
 	Err              error
 }
 
+type SourceModifiedRevisionStatus struct {
+	FullName string
+	Revision int
+	Err      error
+}
+
 const (
 	StatusUnknown           Status = "unknown"
 	StatusValidationFailure Status = "validation_failure"

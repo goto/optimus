@@ -43,7 +43,7 @@ func (*VFactory) NewFromRegex(re, message string) survey.Validator {
 			return fmt.Errorf("error to cast [%+v] to string type", v)
 		}
 		matched := regex.MatchString(val)
-		if matched == false {
+		if !matched {
 			return errors.New(message)
 		}
 		return nil

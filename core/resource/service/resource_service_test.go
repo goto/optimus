@@ -1857,6 +1857,14 @@ func newResourceRepository(t mockConstructorTestingTNewResourceRepository) *mock
 	return mock
 }
 
+func (m *mockResourceRepository) GetExternalCreateFailures(ctx context.Context, resourceType string) ([]*resource.Resource, error) {
+	args := m.Called(ctx, resourceType)
+	if args.Get(0) != nil {
+		return args.Get(0).([]*resource.Resource), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 type mockEventHandler struct {
 	mock.Mock
 }

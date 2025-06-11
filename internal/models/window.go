@@ -43,7 +43,7 @@ func GetEndRunDate(runTime time.Time, window Window) (time.Time, error) {
 }
 
 func monthsAndNonMonthExpression(durationExpression string) (int, string, error) {
-	if strings.Contains(durationExpression, "M") == false {
+	if !strings.Contains(durationExpression, "M") {
 		return 0, durationExpression, nil
 	}
 	maxSubString := 2

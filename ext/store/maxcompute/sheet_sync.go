@@ -66,22 +66,13 @@ func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.
 	return s.SyncRepo.Touch(ctx, projectName, KindExternalTable, resources)
 }
 
-func getAllSourceTypes(et []*ExternalTable) (ExternalTableSources, error) {
+func getAllSourceTypes(et []*ExternalTable) ExternalTableSources {
 	sourceTypes := make(ExternalTableSources, 0)
 	for _, spec := range et {
 		sourceTypeString := spec.GetSourceType()
 		sourceTypes.Append(sourceTypeString)
 	}
-	return sourceTypes, nil
-}
-
-func groupExternalTableBySource(et []*ExternalTable) (ExternalTableSources, error) {
-	sourceTypes := make(ExternalTableSources, 0)
-	for _, spec := range et {
-		sourceTypeString := spec.GetSourceType()
-		sourceTypes.Append(sourceTypeString)
-	}
-	return sourceTypes, nil
+	return sourceTypes
 }
 
 func groupBySourceType(ets []*ExternalTable) (map[ExternalTableSourceType][]*ExternalTable, error) {
@@ -256,10 +247,7 @@ func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resou
 	if err != nil {
 		return nil, err
 	}
-	sourceTypes, err := getAllSourceTypes(externalTables)
-	if err != nil {
-		return nil, err
-	}
+	sourceTypes := getAllSourceTypes(externalTables)
 	externalTableClients, err := s.getExtTableClients(ctx, tnnt, sourceTypes)
 	if err != nil {
 		return nil, err

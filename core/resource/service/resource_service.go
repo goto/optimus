@@ -454,7 +454,7 @@ func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, resou
 				resourcesToCheck = append(resourcesToCheck, r)
 			}
 		}
-		toUpdate, unModified, err := rs.syncer.GetExternalTablesDueForSync(ctx, tnnt, res, dbStatusMap)
+		toUpdate, unModified, err := rs.syncer.GetExternalTablesDueForSync(ctx, tnnt, resourcesToCheck, dbStatusMap)
 		if err != nil {
 			return nil, nil, err
 		}

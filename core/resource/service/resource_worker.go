@@ -94,6 +94,7 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 		w.UpdateResources(ctx, toSyncResources)
 	}
 }
+
 func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string]resource.SourceModifiedTimeStatus {
 	output := make(map[string]resource.SourceModifiedTimeStatus)
 	for _, status := range input {

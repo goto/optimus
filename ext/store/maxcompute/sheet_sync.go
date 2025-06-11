@@ -197,10 +197,7 @@ func (s *SyncerService) GetExternalTablesDueForSync(ctx context.Context, tnnt te
 		return nil, nil, err
 	}
 
-	externalTablesBySourceTypes, err := groupBySourceType(ets)
-	if err != nil {
-		return nil, nil, err
-	}
+	externalTablesBySourceTypes := groupBySourceType(ets)
 	for sourceType, externalTables := range externalTablesBySourceTypes {
 		var toUpdateET, unModifiedET []*ExternalTable
 		switch sourceType {

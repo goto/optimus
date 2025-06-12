@@ -1578,6 +1578,9 @@
           "items": {
             "$ref": "#/definitions/v1beta1JobConfigItem"
           }
+        },
+        "version": {
+          "type": "string"
         }
       }
     },
@@ -1611,6 +1614,23 @@
         },
         "memory": {
           "type": "string"
+        }
+      }
+    },
+    "v1beta1JobSpecTask": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "config": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobConfigItem"
+          }
         }
       }
     },
@@ -1653,6 +1673,9 @@
           "items": {
             "$ref": "#/definitions/v1beta1JobConfigItem"
           }
+        },
+        "task": {
+          "$ref": "#/definitions/v1beta1JobSpecTask"
         },
         "windowSize": {
           "type": "string"

@@ -49,9 +49,8 @@ func (s StatusRepository) create(ctx context.Context, projectName tenant.Project
 	return nil
 }
 
-func (s StatusRepository) Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) error {
-	identifiers := getIdentifiersFromResources(resources)
-	updateQuery := `update sync_status set last_sync_attempt = NOW() where  project_name=$1 and entity_type=$2 and identifier  in ('` + strings.Join(identifiers, "', '") + `')`
+func (s StatusRepository) Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error {
+	updateQuery := `update sync_status set last_sync_attempt = NOW() where project_name=$1 and entity_type=$2 and identifier  in ('` + strings.Join(identifiers, "', '") + `')`
 	_, err := s.db.Exec(ctx, updateQuery, projectName, entityType)
 	if err != nil {
 		return errors.Wrap(entitySyncStatus, "unable to update status entry", err)

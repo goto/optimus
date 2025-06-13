@@ -1,0 +1,6 @@
+version: 2
+name: bq2bqtest
+description: Testing invalid schema
+
+default_config:
+  TEST: "{{.test}}"

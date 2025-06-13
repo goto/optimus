@@ -1,17 +1,10 @@
 package survey
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"reflect"
-	"strconv"
-
 	"github.com/AlecAivazis/survey/v2"
 
 	"github.com/goto/optimus/client/local"
 	"github.com/goto/optimus/client/local/model"
-	"github.com/goto/optimus/sdk/plugin"
 )
 
 // JobSurvey defines survey for job specification in general
@@ -40,101 +33,4 @@ func (*JobSurvey) AskToSelectJobName(jobSpecReader local.SpecReader[*model.JobSp
 		return "", err
 	}
 	return selectedJobName, nil
-}
-
-func (j *JobSurvey) askCliModSurveyQuestion(ctx context.Context, cliMod plugin.CommandLineMod, question plugin.Question) (plugin.Answers, error) { //nolint: gocritic
-	surveyPrompt := j.getSurveyPromptFromPluginQuestion(question)
-
-	var responseStr string
-	if err := survey.AskOne(
-		surveyPrompt,
-		&responseStr,
-		survey.WithValidator(j.getValidatePluginQuestion(ctx, cliMod, question)),
-	); err != nil {
-		return nil, fmt.Errorf("AskSurveyQuestion: %w", err)
-	}
-
-	answers := plugin.Answers{
-		plugin.Answer{
-			Question: question,
-			Value:    responseStr,
-		},
-	}
-
-	// check if sub questions are attached on this question
-	for _, subQues := range question.SubQuestions {
-		if responseStr == subQues.IfValue {
-			for _, subQuestion := range subQues.Questions { //nolint: gocritic
-				subQuestionAnswers, err := j.askCliModSurveyQuestion(ctx, cliMod, subQuestion)
-				if err != nil {
-					return nil, err
-				}
-				answers = append(answers, subQuestionAnswers...)
-			}
-		}
-	}
-
-	return answers, nil
-}
-
-func (*JobSurvey) getSurveyPromptFromPluginQuestion(question plugin.Question) survey.Prompt { //nolint: gocritic
-	var surveyPrompt survey.Prompt
-	if len(question.Multiselect) > 0 {
-		sel := &survey.Select{
-			Message: question.Prompt,
-			Help:    question.Help,
-			Options: question.Multiselect,
-		}
-		if len(question.Default) > 0 {
-			sel.Default = question.Default
-		}
-		surveyPrompt = sel
-	} else {
-		sel := &survey.Input{
-			Message: question.Prompt,
-			Help:    question.Help,
-		}
-		if len(question.Default) > 0 {
-			sel.Default = question.Default
-		}
-		surveyPrompt = sel
-	}
-	return surveyPrompt
-}
-
-func (j *JobSurvey) getValidatePluginQuestion(ctx context.Context, cliMod plugin.CommandLineMod, question plugin.Question) survey.Validator { //nolint: gocritic
-	return func(val interface{}) error {
-		str, err := j.convertUserInputPluginToString(val)
-		if err != nil {
-			return err
-		}
-		resp, err := cliMod.ValidateQuestion(ctx, plugin.ValidateQuestionRequest{ //nolint: gocritic
-			Answer: plugin.Answer{
-				Question: question,
-				Value:    str,
-			},
-		})
-		if err != nil {
-			return err
-		}
-		if !resp.Success {
-			return errors.New(resp.Error)
-		}
-		return nil
-	}
-}
-
-func (*JobSurvey) convertUserInputPluginToString(val interface{}) (string, error) {
-	var responseStr string
-	switch reflect.TypeOf(val).Name() {
-	case "int":
-		responseStr = strconv.Itoa(val.(int))
-	case "string":
-		responseStr = val.(string)
-	case "OptionAnswer":
-		responseStr = val.(survey.OptionAnswer).Value
-	default:
-		return "", fmt.Errorf("unknown type found while parsing input: %v", val)
-	}
-	return responseStr, nil
 }

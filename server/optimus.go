@@ -39,7 +39,6 @@ import (
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/store/postgres"
 	jRepo "github.com/goto/optimus/internal/store/postgres/job"
 	"github.com/goto/optimus/internal/store/postgres/resource"
@@ -70,8 +69,8 @@ type OptimusServer struct {
 	grpcServer *grpc.Server
 	httpServer *http.Server
 
-	pluginRepo *models.PluginRepository
-	cleanupFn  []func()
+	pluginStore *plugin.Store
+	cleanupFn   []func()
 
 	eventHandler moderator.Handler
 }
@@ -154,9 +153,8 @@ func (s *OptimusServer) setupPublisher() error {
 }
 
 func (s *OptimusServer) setupPlugins() error {
-	// discover and load plugins.
-	var err error
-	s.pluginRepo, err = plugin.Initialize(s.logger)
+	store, err := plugin.LoadPluginToStore(s.logger)
+	s.pluginStore = store
 	return err
 }
 
@@ -336,7 +334,7 @@ func (s *OptimusServer) setupHandlers() error {
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
 	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler)
-	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
+	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginStore, tProjectService, tSecretService)
 	if err != nil {
 		return err
 	}
@@ -366,7 +364,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
-	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
+	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginStore, upstreamIdentifierFactory, evaluatorFactory)
 	syncStatusRepository := sync.NewStatusSyncRepository(s.dbPool)
 
 	syncer := mcStore.NewSyncer(s.logger, tenantService, tenantService, syncStatusRepository,

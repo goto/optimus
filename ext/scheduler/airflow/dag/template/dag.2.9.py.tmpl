@@ -184,7 +184,7 @@ init_container = k8s.V1Container(
 )
 
 # hooks loop start
-{{- range $_, $t := .Hooks.List }}
+{{- range $_, $t := .Hooks }}
 {{- $hookName := $t.Name | ReplaceDash }}
 init_container_{{$hookName}} = k8s.V1Container(
     name="init-container",
@@ -278,27 +278,11 @@ wait_{{ $t.JobName | DisplayName }} >> {{$transformationName}}
 wait_{{ $t.Name }} >> {{$transformationName}}
 {{- end}}
 
-# setup hooks and dependencies
-# [Dependency/HttpDep/ExternalDep/PreHook] -> Task -> [Post Hook -> Fail Hook]
-
-# setup hook dependencies
-{{- range $_, $h := .Hooks.Pre }}
-hook_{{$h.Name | ReplaceDash}} >> {{$transformationName}}
-{{- end }}
+# [Dependency/HttpDep/ExternalDep] -> Task -> [Hook]
 
 {{$transformationName}}
-{{- if .Hooks.Post }} >> [
-    {{- range $_, $h := .Hooks.Post -}}
+{{- if .Hooks }} >> [
+    {{- range $_, $h := .Hooks -}}
         hook_{{$h.Name | ReplaceDash}},
     {{- end -}} ]
 {{- end -}}
-{{- if .Hooks.Fail }} >> [
-    {{- range $_, $h := .Hooks.Fail -}}
-       hook_{{$h.Name | ReplaceDash}},
-    {{- end -}} ]
-{{- end }}
-
-# set inter-dependencies between hooks and hooks
-{{- range $before, $after := .Hooks.Dependencies }}
-hook_{{$before | ReplaceDash}} >> hook_{{$after | ReplaceDash}}
-{{- end }}

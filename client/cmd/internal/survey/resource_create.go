@@ -9,7 +9,10 @@ import (
 
 	"github.com/goto/optimus/client/local"
 	"github.com/goto/optimus/client/local/model"
+	"github.com/goto/optimus/internal/utils"
 )
+
+var validateNoSlash = utils.ValidatorFactory.NewFromRegex(`^[^/]+$`, "`/` is disallowed")
 
 // ResourceSpecCreateSurvey defines surveys for resource spec creation
 type ResourceSpecCreateSurvey struct {

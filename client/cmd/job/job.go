@@ -15,8 +15,6 @@ func NewJobCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		NewCreateCommand(),
-		NewAddHookCommand(),
 		NewRefreshCommand(),
 		NewRunListCommand(),
 		NewValidateCommand(),

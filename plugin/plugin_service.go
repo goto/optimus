@@ -13,7 +13,6 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
-	"github.com/goto/optimus/sdk/plugin"
 )
 
 const (
@@ -27,7 +26,7 @@ type (
 )
 
 type PluginGetter interface {
-	GetByName(name string) (*plugin.Plugin, error)
+	GetByName(name string) (*Spec, error)
 }
 
 type EvaluatorFactory interface {
@@ -72,18 +71,14 @@ func NewPluginService(logger log.Logger, pluginGetter PluginGetter, upstreamIden
 	}, me.ToErr()
 }
 
-func (s PluginService) Info(_ context.Context, taskName string) (*plugin.Info, error) {
+func (s PluginService) Info(_ context.Context, taskName string) (*Spec, error) {
 	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		s.l.Error("error getting plugin [%s]: %s", taskName, err)
 		return nil, err
 	}
-	if taskPlugin.YamlMod == nil {
-		s.l.Error("task plugin yaml mod is not found")
-		return nil, fmt.Errorf("yaml mod not exist")
-	}
 
-	return taskPlugin.Info(), nil
+	return taskPlugin, nil
 }
 
 func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]resource.URN, error) {
@@ -92,10 +87,10 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 		return nil, err
 	}
 
-	assetParsers := taskPlugin.Info().AssetParsers
+	assetParsers := taskPlugin.AssetParsers
 	if assetParsers == nil {
 		// if plugin doesn't contain parser, then it doesn't support auto upstream generation
-		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", taskPlugin.Info().Name)
+		s.l.Debug("plugin %s doesn't contain parser, auto upstream generation is not supported.", taskPlugin.Name)
 		return []resource.URN{}, nil
 	}
 
@@ -113,7 +108,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 		}
 
 		switch parserType {
-		case plugin.MaxcomputeParser:
+		case MaxcomputeParser:
 			svcAcc, ok := compiledConfig[mcSvcAccKey]
 			if !ok {
 				s.l.Warn("secret " + mcSvcAccKey + " not found, trying to use " + mcSvcAccKey2)
@@ -127,7 +122,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 				return nil, err
 			}
 			upstreamIdentifiers = append(upstreamIdentifiers, upstreamIdentifier)
-		case plugin.BQParser:
+		case BQParser:
 			svcAcc, ok := compiledConfig[bqSvcAccKey]
 			if !ok {
 				return nil, fmt.Errorf("secret " + bqSvcAccKey + " required to generate upstream is not found")
@@ -181,15 +176,15 @@ func (s PluginService) ConstructDestinationURN(_ context.Context, taskName strin
 	}
 
 	// for now only support single template
-	destinationURNTemplate := taskPlugin.Info().DestinationURNTemplate
+	destinationURNTemplate := taskPlugin.DestinationURNTemplate
 	if destinationURNTemplate == "" {
 		// if plugin doesn't contain destination template, then it doesn't support auto destination generation
-		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", taskPlugin.Info().Name)
+		s.l.Debug("plugin %s doesn't contain destination template, auto destination generation is not supported.", taskPlugin.Name)
 		return resource.ZeroURN(), nil
 	}
 
 	convertedURNTemplate := convertToGoTemplate(destinationURNTemplate)
-	tmpl, err := template.New("destination_urn_" + taskPlugin.Info().Name).Parse(convertedURNTemplate)
+	tmpl, err := template.New("destination_urn_" + taskPlugin.Name).Parse(convertedURNTemplate)
 	if err != nil {
 		return resource.ZeroURN(), err
 	}
@@ -220,7 +215,7 @@ func generateResourceURNFromTemplate(tmpl *template.Template, config map[string]
 	return s.String(), nil
 }
 
-func (s PluginService) getEvaluator(evaluator plugin.Evaluator) (evaluator.Evaluator, error) {
+func (s PluginService) getEvaluator(evaluator Evaluator) (evaluator.Evaluator, error) {
 	if evaluator.Selector == "" && evaluator.FilePath != "" {
 		return s.evaluatorFactory.GetFileEvaluator(evaluator.FilePath)
 	} else if evaluator.Selector != "" && evaluator.FilePath != "" {

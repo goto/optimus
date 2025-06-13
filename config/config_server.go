@@ -7,7 +7,6 @@ type ServerConfig struct {
 	Telemetry              TelemetryConfig      `mapstructure:"telemetry"`
 	Alerting               AlertingConfig       `mapstructure:"alerting"`
 	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
-	Plugin                 PluginConfig         `mapstructure:"plugin"`
 	Replay                 ReplayConfig         `mapstructure:"replay"`
 	Publisher              *Publisher           `mapstructure:"publisher"`
 	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
@@ -66,10 +65,6 @@ type ResourceManager struct {
 type ResourceManagerConfigOptimus struct {
 	Host    string            `mapstructure:"host"`
 	Headers map[string]string `mapstructure:"headers"`
-}
-
-type PluginConfig struct {
-	Artifacts []string `mapstructure:"artifacts"`
 }
 
 type ReplayConfig struct {

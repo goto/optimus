@@ -22,8 +22,8 @@ import (
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
+	"github.com/goto/optimus/plugin"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/optimus/sdk/plugin"
 )
 
 func TestNewJobHandler(t *testing.T) {
@@ -2217,10 +2217,15 @@ func TestNewJobHandler(t *testing.T) {
 				JobName:       jobA.Spec().Name().String(),
 			}
 
-			taskInfo := &plugin.Info{
+			taskInfo := &plugin.Spec{
 				Name:        "bq2bq",
 				Description: "task info desc",
-				Image:       "goto/bq2bq:latest",
+				PluginVersion: map[string]plugin.VersionDetails{
+					"default": {
+						Image: "example.com/plugis/exec",
+						Tag:   "1.0.0.",
+					},
+				},
 			}
 			jobService.On("Get", ctx, sampleTenant, jobA.Spec().Name()).Return(jobA, nil)
 			jobService.On("GetTaskInfo", ctx, jobA.Spec().Task()).Return(taskInfo, nil)
@@ -2430,26 +2435,14 @@ func (_m *JobService) GetChangelog(ctx context.Context, projectName tenant.Proje
 }
 
 // GetTaskInfo provides a mock function with given fields: ctx, task
-func (_m *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error) {
+func (_m *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Spec, error) {
 	ret := _m.Called(ctx, task)
 
-	var r0 *plugin.Info
-	if rf, ok := ret.Get(0).(func(context.Context, job.Task) *plugin.Info); ok {
-		r0 = rf(ctx, task)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*plugin.Info)
-		}
+	if ret.Get(0) == nil {
+		return nil, ret.Error(1)
 	}
 
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, job.Task) error); ok {
-		r1 = rf(ctx, task)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return ret.Get(0).(*plugin.Spec), ret.Error(1)
 }
 
 // GetUpstreamsToInspect provides a mock function with given fields: ctx, subjectJob, localJob

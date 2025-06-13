@@ -8,31 +8,23 @@ import (
 	"strings"
 
 	"github.com/goto/salt/log"
-
-	"github.com/goto/optimus/internal/models"
-	"github.com/goto/optimus/plugin/yaml"
 )
 
-func Initialize(l log.Logger) (*models.PluginRepository, error) {
-	pluginRepository := models.NewPluginRepository()
-	// fetch yaml plugins first, it holds detailed information about the plugin
-	discoveredYamlPlugins := discoverPluginsGivenFilePattern(l, yaml.Prefix, yaml.Suffix)
-	l.Debug(fmt.Sprintf("discovering yaml   plugins(%d)...", len(discoveredYamlPlugins)))
-	err := yaml.Init(pluginRepository, discoveredYamlPlugins, l)
+const (
+	Prefix     = "optimus-plugin-"
+	Suffix     = ".yaml"
+	PluginsDir = ".plugins"
+)
 
-	return pluginRepository, err
+func LoadPluginToStore(l log.Logger) (*Store, error) {
+	discoveredYamlPlugins := discoverPluginsGivenFilePattern(l, Prefix, Suffix)
+	l.Debug(fmt.Sprintf("discovering yaml   plugins(%d)...", len(discoveredYamlPlugins)))
+	return InitStore(discoveredYamlPlugins, l)
 }
 
 // discoverPluginsGivenFilePattern look for plugin with the specific pattern in following folders
 // order to search is top to down
-// ./
-// <exec>/
-// <exec>/.optimus/plugins
-// $HOME/.optimus/plugins
-// /usr/bin
-// /usr/local/bin
-//
-// for duplicate plugins(even with different versions for now), only the first found will be used
+// ./.plugins
 // sample plugin name:
 // - optimus-myplugin_linux_amd64 | with suffix: optimus- and prefix: _linux_amd64
 // - optimus-plugin-myplugin.yaml | with suffix: optimus-plugin and prefix: .yaml
@@ -44,19 +36,6 @@ func discoverPluginsGivenFilePattern(l log.Logger, prefix, suffix string) []stri
 	} else {
 		l.Debug(fmt.Sprintf("Error discovering working dir: %s", err))
 	}
-
-	// look in the same directory as the executable
-	if exePath, err := os.Executable(); err != nil {
-		l.Debug(fmt.Sprintf("Error discovering exe directory: %s", err))
-	} else {
-		dirs = append(dirs, filepath.Dir(exePath))
-	}
-
-	// add user home directory
-	if currentHomeDir, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs, filepath.Join(currentHomeDir, ".optimus", "plugins"))
-	}
-	dirs = append(dirs, []string{"/usr/bin", "/usr/local/bin"}...)
 
 	for _, dirPath := range dirs {
 		fileInfos, err := os.ReadDir(dirPath)

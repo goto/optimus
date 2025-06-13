@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/goto/optimus/config"
-	"github.com/goto/optimus/plugin"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -171,11 +170,6 @@ func prepareHTTPProxy(httpAddr, grpcAddr string) (*http.Server, func(), error) {
 	baseMux := http.NewServeMux()
 	baseMux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(w, "pong")
-	})
-	baseMux.HandleFunc("/plugins", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Header().Set("Content-Type", "application/zip")
-		http.ServeFile(w, r, plugin.PluginsArchiveName)
 	})
 	baseMux.Handle("/api/", otelhttp.NewHandler(http.StripPrefix("/api", gwmux), "api"))
 

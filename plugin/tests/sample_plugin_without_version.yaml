@@ -1,0 +1,15 @@
+version: 2
+name: bq2bqtest
+description: Testing
+
+plugin_versions:
+  default:
+    tag: ""
+    image: ""
+    entrypoint:
+      shell: "/bin/bash"
+      script: "sleep 100"
+
+default_config:
+  name: TEST
+  value: "{{.test}}"

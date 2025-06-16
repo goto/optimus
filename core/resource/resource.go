@@ -28,7 +28,7 @@ type UpdateImpact string
 
 type SourceVersioningInfo struct {
 	EntityType   string
-	ModifiedTime time.Time
+	LastSyncTime time.Time
 	Revision     int
 }
 

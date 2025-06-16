@@ -127,7 +127,7 @@ func (s StatusRepository) GetLastUpdate(ctx context.Context, projectName tenant.
 			}
 			return nil, errors.Wrap(entitySyncStatus, "error while getting last sync update status", err)
 		}
-		lastUpdateMap[identifier] = &resource.SourceVersioningInfo{ModifiedTime: lastUpdate.Time, Revision: int(revision.Int16), EntityType: entityType}
+		lastUpdateMap[identifier] = &resource.SourceVersioningInfo{LastSyncTime: lastUpdate.Time, Revision: int(revision.Int16), EntityType: entityType}
 	}
 	return lastUpdateMap, nil
 }

@@ -49,6 +49,7 @@ type ExternalTablesConfig struct {
 	SourceSyncInterval        int64 `mapstructure:"source_sync_interval_minutes"`
 	MaxFileSizeSupported      int   `mapstructure:"max_drive_file_size_mb"`
 	DriveFileCleanupSizeLimit int   `mapstructure:"drive_file_cleanup_size_limit_mb"`
+	MaxSyncDelayTolerance     int64 `mapstructure:"max_sync_delay_tolerance_hours"`
 }
 
 type EventManagerConfig struct {

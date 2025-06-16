@@ -20,6 +20,7 @@ type ViewSchema interface {
 
 type ViewTable interface {
 	CreateView(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool) error
+	CreateViewWithHints(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool, hints map[string]string) error
 	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
 }
 
@@ -40,7 +41,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 	}
 
 	viewSchema := buildViewSchema(view)
-	if err := v.viewTable.CreateView(viewSchema, false, false, false); err != nil {
+	if err := v.viewTable.CreateViewWithHints(viewSchema, false, false, false, view.Hints); err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityView, "view already exists on maxcompute: "+view.FullName())
 		}
@@ -62,7 +63,7 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 	}
 
 	viewSchema := buildViewSchema(view)
-	if err := v.viewTable.CreateView(viewSchema, true, false, false); err != nil {
+	if err := v.viewTable.CreateViewWithHints(viewSchema, true, false, false, view.Hints); err != nil {
 		return errors.InternalError(EntityView, "failed to update view "+res.FullName(), err)
 	}
 

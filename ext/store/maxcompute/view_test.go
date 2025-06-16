@@ -31,6 +31,8 @@ func TestViewHandle(t *testing.T) {
 		odps.NewTable(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, schemaName, tableName),
 	}
 
+	nilHints := map[string]string(nil)
+
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
@@ -73,7 +75,7 @@ func TestViewHandle(t *testing.T) {
 		})
 		t.Run("returns error when view table is already exist", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("CreateView", mock.Anything, false, false, false).Return(fmt.Errorf("Table or view already exists"))
+			table.On("CreateViewWithHints", mock.Anything, false, false, false, nilHints).Return(fmt.Errorf("Table or view already exists"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
@@ -99,7 +101,7 @@ func TestViewHandle(t *testing.T) {
 		})
 		t.Run("returns error when view creation returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("CreateView", mock.Anything, false, false, false).Return(fmt.Errorf("error while creating view"))
+			table.On("CreateViewWithHints", mock.Anything, false, false, false, nilHints).Return(fmt.Errorf("error while creating view"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
@@ -125,7 +127,7 @@ func TestViewHandle(t *testing.T) {
 		})
 		t.Run("returns success when create view table", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
-			table.On("CreateView", mock.Anything, false, false, false).Return(nil)
+			table.On("CreateViewWithHints", mock.Anything, false, false, false, nilHints).Return(nil)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
@@ -183,7 +185,7 @@ func TestViewHandle(t *testing.T) {
 		t.Run("returns error when view update returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
-			table.On("CreateView", mock.Anything, true, false, false).Return(fmt.Errorf("error while update view"))
+			table.On("CreateViewWithHints", mock.Anything, true, false, false, nilHints).Return(fmt.Errorf("error while update view"))
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
@@ -206,7 +208,7 @@ func TestViewHandle(t *testing.T) {
 		t.Run("returns success when view update", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
-			table.On("CreateView", mock.Anything, true, false, false).Return(nil)
+			table.On("CreateViewWithHints", mock.Anything, true, false, false, nilHints).Return(nil)
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)

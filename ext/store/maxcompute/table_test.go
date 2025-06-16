@@ -40,6 +40,11 @@ func (m *mockMaxComputeTable) CreateView(schema tableschema.TableSchema, orRepla
 	return args.Error(0)
 }
 
+func (m *mockMaxComputeTable) CreateViewWithHints(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool, hints map[string]string) error {
+	args := m.Called(schema, orReplace, createIfNotExists, buildDeferred, hints)
+	return args.Error(0)
+}
+
 type mockMaxComputeSchema struct {
 	mock.Mock
 }

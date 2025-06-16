@@ -411,16 +411,21 @@ func (t TaskName) String() string {
 }
 
 type Task struct {
-	name   TaskName
-	config Config
+	name    TaskName
+	version string
+	config  Config
 }
 
-func NewTask(name TaskName, config Config) Task {
-	return Task{name: name, config: config}
+func NewTask(name TaskName, config Config, version string) Task {
+	return Task{name: name, config: config, version: version}
 }
 
 func (t Task) Name() TaskName {
 	return t.name
+}
+
+func (t Task) Version() string {
+	return t.version
 }
 
 func (t Task) Config() Config {
@@ -506,15 +511,16 @@ func (m *MetadataBuilder) WithScheduler(scheduler map[string]string) *MetadataBu
 }
 
 type Hook struct {
-	name   string
-	config Config
+	name    string
+	version string
+	config  Config
 }
 
-func NewHook(name string, config Config) (*Hook, error) {
+func NewHook(name string, config Config, version string) (*Hook, error) {
 	if name == "" {
 		return nil, errors.InvalidArgument(EntityJob, "hook name is empty")
 	}
-	return &Hook{name: name, config: config}, nil
+	return &Hook{name: name, config: config, version: version}, nil
 }
 
 func (h Hook) Name() string {
@@ -523,6 +529,10 @@ func (h Hook) Name() string {
 
 func (h Hook) Config() Config {
 	return h.config
+}
+
+func (h Hook) Version() string {
+	return h.version
 }
 
 type Asset map[string]string

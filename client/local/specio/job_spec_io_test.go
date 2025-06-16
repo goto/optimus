@@ -347,6 +347,7 @@ behavior:
   depends_on_past: false
 task:
   name: ""
+  version: ""
 hooks: []
 dependencies: []
 `

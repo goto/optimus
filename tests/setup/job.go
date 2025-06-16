@@ -285,9 +285,9 @@ func (d *DummyJobBuilder) Build(tnnt tenant.Tenant) *job.Job {
 	if err != nil {
 		panic(err)
 	}
-	task := job.NewTask(d.taskName, d.taskConfig)
+	task := job.NewTask(d.taskName, d.taskConfig, "")
 
-	hook, err := job.NewHook(d.hookName, d.hookConfig)
+	hook, err := job.NewHook(d.hookName, d.hookConfig, "")
 	if err != nil {
 		panic(err)
 	}

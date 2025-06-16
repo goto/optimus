@@ -66,9 +66,10 @@ type JobSpecBehaviorWebhook struct {
 }
 
 type JobSpecTask struct {
-	Name   string            `yaml:"name"`
-	Config map[string]string `yaml:"config,omitempty"`
-	Window JobSpecTaskWindow `yaml:"window,omitempty"`
+	Name    string            `yaml:"name"`
+	Version string            `yaml:"version"`
+	Config  map[string]string `yaml:"config,omitempty"`
+	Window  JobSpecTaskWindow `yaml:"window,omitempty"`
 }
 
 type JobSpecTaskWindow struct {
@@ -82,8 +83,9 @@ type JobSpecTaskWindow struct {
 }
 
 type JobSpecHook struct {
-	Name   string            `yaml:"name"`
-	Config map[string]string `yaml:"config,omitempty"`
+	Name    string            `yaml:"name"`
+	Version string            `yaml:"version"`
+	Config  map[string]string `yaml:"config,omitempty"`
 }
 
 type JobSpecDependency struct {
@@ -129,15 +131,18 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 		Interval:      j.Schedule.Interval,
 		DependsOnPast: j.Behavior.DependsOnPast,
 		CatchUp:       j.Behavior.Catchup,
-		TaskName:      j.Task.Name,
-		Config:        j.getProtoJobConfigItems(),
-		Dependencies:  j.getProtoJobDependencies(),
-		Assets:        j.Asset,
-		Hooks:         j.getProtoJobSpecHooks(),
-		Description:   j.Description,
-		Labels:        j.Labels,
-		Behavior:      j.getProtoJobSpecBehavior(),
-		Metadata:      j.getProtoJobMetadata(),
+		Task: &pb.JobSpecTask{
+			Name:    j.Task.Name,
+			Version: j.Task.Version,
+			Config:  j.getProtoJobConfigItems(),
+		},
+		Dependencies: j.getProtoJobDependencies(),
+		Assets:       j.Asset,
+		Hooks:        j.getProtoJobSpecHooks(),
+		Description:  j.Description,
+		Labels:       j.Labels,
+		Behavior:     j.getProtoJobSpecBehavior(),
+		Metadata:     j.getProtoJobMetadata(),
 	}
 
 	if js.Version < NewWindowVersion {
@@ -255,8 +260,9 @@ func (j *JobSpec) getProtoJobSpecHooks() []*pb.JobSpecHook {
 			})
 		}
 		protoJobSpecHooks[i] = &pb.JobSpecHook{
-			Name:   hook.Name,
-			Config: protoJobConfigItems,
+			Name:    hook.Name,
+			Version: hook.Version,
+			Config:  protoJobConfigItems,
 		}
 	}
 	return protoJobSpecHooks

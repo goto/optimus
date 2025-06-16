@@ -199,7 +199,7 @@ init_container_predator = k8s.V1Container(
 hook_predator = SuperKubernetesPodOperator(
     image_pull_policy=IMAGE_PULL_POLICY,
     namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
-    image="example.io/namespace/predator-image:latest",
+    image="example.io/namespace/predator-image:3.5-alpine",
     cmds=["/bin/sh", "-c"],
     arguments=[get_entrypoint_cmd(r"""predator ${SUB_COMMAND} -s ${PREDATOR_URL} -u "${BQ_PROJECT}.${BQ_DATASET}.${BQ_TABLE}" """)],
     name="hook_predator",

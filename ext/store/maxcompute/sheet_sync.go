@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/goto/salt/log"
@@ -45,12 +46,13 @@ type SyncerService struct {
 	secretProvider            SecretProvider
 	tenantDetailsGetter       TenantDetailsGetter
 	SyncRepo                  SyncRepo
+	MaxSyncDelayTolerance     time.Duration
 	maxFileSizeSupported      int
 	driveFileCleanupSizeLimit int
 }
 
 func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter,
-	syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int,
+	syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int, maxSyncDelayTolerance time.Duration,
 ) *SyncerService {
 	return &SyncerService{
 		logger:                    log,
@@ -59,6 +61,7 @@ func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGette
 		SyncRepo:                  syncRepo,
 		maxFileSizeSupported:      maxFileSizeSupported,
 		driveFileCleanupSizeLimit: driveFileCleanupSizeLimit,
+		MaxSyncDelayTolerance:     maxSyncDelayTolerance,
 	}
 }
 
@@ -215,6 +218,13 @@ func getETNameToResourceMap(resources []*resource.Resource) (map[string]*resourc
 	return output, nil
 }
 
+func maxDuration(d1, d2 time.Duration) time.Duration {
+	if d1 > d2 {
+		return d1
+	}
+	return d2
+}
+
 func (s *SyncerService) GetExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*resource.Resource, []*resource.Resource, error) {
 	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
 	etNameResourcesMap, err := getETNameToResourceMap(resources)
@@ -231,12 +241,32 @@ func (s *SyncerService) GetExternalTablesDueForSync(ctx context.Context, tnnt te
 	for sourceType, externalTables := range externalTablesBySourceTypes {
 		var toUpdateET, unModifiedET []*ExternalTable
 		switch sourceType {
-		case GoogleDrive, GoogleSheet:
+		case GoogleSheet:
+			var externalTablesToCheck []*ExternalTable
+			for _, externalTable := range externalTables {
+				configuredSyncDelayTolerance := externalTable.GetSyncDelayTolerance()
+				syncDelayTolerance := maxDuration(s.MaxSyncDelayTolerance, configuredSyncDelayTolerance)
+				if syncDelayTolerance == 0 {
+					externalTablesToCheck = append(externalTablesToCheck, externalTable)
+					continue
+				}
+				resourceName := etNameResourcesMap[externalTable.FullName()].FullName()
+
+				if lastUpdateMap[resourceName].ModifiedTime.Add(syncDelayTolerance).Before(time.Now()) {
+					toUpdateResources = append(toUpdateResources, etNameResourcesMap[externalTable.FullName()])
+					continue
+				}
+				externalTablesToCheck = append(externalTablesToCheck, externalTable)
+			}
+			toUpdateET, unModifiedET, err = s.getGoogleExternalTablesDueForSync(ctx, tnnt, externalTablesToCheck, lastUpdateMap)
+			if err != nil {
+				return nil, nil, err
+			}
+		case GoogleDrive:
 			toUpdateET, unModifiedET, err = s.getGoogleExternalTablesDueForSync(ctx, tnnt, externalTables, lastUpdateMap)
 			if err != nil {
 				return nil, nil, err
 			}
-
 		case LarkSheet:
 			toUpdateET, unModifiedET, err = s.getLarkExternalTablesDueForSync(ctx, tnnt, externalTables, lastUpdateMap)
 			if err != nil {

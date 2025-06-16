@@ -19,6 +19,8 @@ type View struct {
 	Columns     []string `mapstructure:"columns,omitempty"`
 	ViewQuery   string   `mapstructure:"view_query,omitempty"`
 	Lifecycle   int      `mapstructure:"lifecycle,omitempty"`
+
+	Hints map[string]string `mapstructure:"hints,omitempty"`
 }
 
 func (v *View) FullName() string {

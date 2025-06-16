@@ -10,7 +10,7 @@ require (
 	github.com/MakeNowJust/heredoc v1.0.0
 	github.com/PagerDuty/go-pagerduty v1.5.1
 	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.1.3
-	github.com/aliyun/aliyun-odps-go-sdk v0.4.0
+	github.com/aliyun/aliyun-odps-go-sdk v0.4.12
 	github.com/briandowns/spinner v1.18.0
 	github.com/charmbracelet/bubbles v0.13.0
 	github.com/charmbracelet/bubbletea v0.22.1

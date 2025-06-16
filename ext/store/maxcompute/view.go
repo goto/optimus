@@ -19,7 +19,6 @@ type ViewSchema interface {
 }
 
 type ViewTable interface {
-	CreateView(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool) error
 	CreateViewWithHints(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool, hints map[string]string) error
 	BatchLoadTables(tableNames []string) ([]*odps.Table, error)
 }

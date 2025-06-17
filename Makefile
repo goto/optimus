@@ -4,7 +4,7 @@ MAKEFLAGS += --no-builtin-rules
 NAME = "github.com/goto/optimus"
 LAST_COMMIT := $(shell git rev-parse --short HEAD)
 LAST_TAG := "$(shell git rev-list --tags --max-count=1)"
-OPMS_VERSION := "$(shell git describe --tags ${LAST_TAG})"
+OPMS_VERSION := "$(shell git describe --tags ${LAST_TAG})-next"
 PROTON_COMMIT := "8c206c437706d5e6d03d9b7ea75ecb0f2368bbc5"
 
 
@@ -21,7 +21,7 @@ build: # build optimus binary
 build-linux: # build optimus binary for linux
 	@echo " > notice: skipped proto generation, use 'generate-proto' make command"
 	@echo " > building optimus version ${OPMS_VERSION}"
-	@GOOS=linux GOARCH=amd64 go build -ldflags "-X ${NAME}/config.BuildVersion=${OPMS_VERSION} -X ${NAME}/config.BuildCommit=${LAST_COMMIT}" -o optimus .
+	@GOOS=linux GOARCH=arm64 go build -ldflags "-X ${NAME}/config.BuildVersion=${OPMS_VERSION} -X ${NAME}/config.BuildCommit=${LAST_COMMIT}" -o optimus .
 	@echo " - build complete"
 
 test-ci: unit-test-ci vet ## run tests

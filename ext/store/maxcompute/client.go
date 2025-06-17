@@ -92,8 +92,6 @@ func (c *MaxComputeClient) GetDDLView(_ context.Context, table string) (string, 
 }
 
 func (c *MaxComputeClient) SchemaHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
-	c.SetDefaultProjectName(projectSchema.Project)
-	c.SetCurrentSchemaName(projectSchema.Schema)
 	s := c.Schemas()
 	interactor := s.Get(projectSchema.Schema)
 	return NewSchemaHandle(s, interactor)

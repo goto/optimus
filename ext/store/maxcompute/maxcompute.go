@@ -244,6 +244,10 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		return false, err
 	}
 
+	if !client.SchemaHandleFrom(projectSchema).Exists(name.String()) {
+		return false, nil
+	}
+
 	kindToHandleFn := map[string]func(projectSchema ProjectSchema) TableResourceHandle{
 		KindTable: func(projectSchema ProjectSchema) TableResourceHandle {
 			maskingPolicyClient, err := m.initializeClient(spanCtx, tnnt, accountMaskPolicyKey)
@@ -266,8 +270,8 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		},
 	}
 
-	for _, resourceHandleFn := range kindToHandleFn {
-		resourceName, err := resourceNameFor(name)
+	for kind, resourceHandleFn := range kindToHandleFn {
+		resourceName, err := resourceNameFor(name, kind)
 		if err != nil {
 			return true, err
 		}

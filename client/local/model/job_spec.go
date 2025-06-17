@@ -67,7 +67,7 @@ type JobSpecBehaviorWebhook struct {
 
 type JobSpecTask struct {
 	Name    string            `yaml:"name"`
-	Version string            `yaml:"version"`
+	Version string            `yaml:"version,omitempty"`
 	Config  map[string]string `yaml:"config,omitempty"`
 	Window  JobSpecTaskWindow `yaml:"window,omitempty"`
 }
@@ -84,7 +84,7 @@ type JobSpecTaskWindow struct {
 
 type JobSpecHook struct {
 	Name    string            `yaml:"name"`
-	Version string            `yaml:"version"`
+	Version string            `yaml:"version,omitempty"`
 	Config  map[string]string `yaml:"config,omitempty"`
 }
 

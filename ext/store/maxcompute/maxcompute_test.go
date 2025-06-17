@@ -175,6 +175,31 @@ func TestMaxComputeStore(t *testing.T) {
 			err = mcStore.Create(ctx, res)
 			assert.Nil(t, err)
 		})
+		t.Run("return success when calls appropriate handler for schema", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Create", res).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("SchemaHandleFrom", mock.Anything).Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+			err = mcStore.Create(ctx, res)
+			assert.Nil(t, err)
+		})
 	})
 	t.Run("Update", func(t *testing.T) {
 		t.Run("returns error when secret is not provided", func(t *testing.T) {
@@ -312,6 +337,31 @@ func TestMaxComputeStore(t *testing.T) {
 			err = mcStore.Update(ctx, res)
 			assert.Nil(t, err)
 		})
+		t.Run("return success when calls appropriate handler for schema", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Update", res).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("SchemaHandleFrom", mock.Anything).Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+			err = mcStore.Update(ctx, res)
+			assert.Nil(t, err)
+		})
 	})
 	t.Run("Validate", func(t *testing.T) {
 		invalidSpec := map[string]any{
@@ -374,6 +424,25 @@ func TestMaxComputeStore(t *testing.T) {
 				err = mcStore.Validate(res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "view query is empty for "+fullName)
+			})
+		})
+		t.Run("for schema", func(t *testing.T) {
+			schemaSpec := map[string]any{
+				"description": "schema description / comment",
+			}
+			t.Run("returns error when cannot decode schema", func(t *testing.T) {
+				res, err := resource.NewResource("", maxcompute.KindSchema, store, tnnt, &metadata, invalidSpec)
+				assert.Error(t, err)
+				assert.Nil(t, res)
+			})
+			t.Run("returns nil error when validation passes", func(t *testing.T) {
+				res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, schemaSpec)
+				assert.Nil(t, err)
+				assert.Equal(t, fullName, res.FullName())
+
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+				err = mcStore.Validate(res)
+				assert.NoError(t, err)
 			})
 		})
 	})
@@ -646,6 +715,11 @@ func (m *mockClient) ExternalTableHandleFrom(schema maxcompute.ProjectSchema, te
 func (m *mockClient) TableMaskingPolicyHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableMaskingPolicyHandle {
 	args := m.Called(schema)
 	return args.Get(0).(maxcompute.TableMaskingPolicyHandle)
+}
+
+func (m *mockClient) SchemaHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableResourceHandle {
+	args := m.Called(schema)
+	return args.Get(0).(maxcompute.TableResourceHandle)
 }
 
 type mockClientProvider struct {

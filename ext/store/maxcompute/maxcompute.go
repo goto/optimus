@@ -38,6 +38,7 @@ type Client interface {
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
 	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema) TableMaskingPolicyHandle
+	SchemaHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -112,6 +113,9 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		return handle.Create(res)
+	case KindSchema:
+		handle := odpsClient.SchemaHandleFrom(projectSchema)
+		return handle.Create(res)
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
@@ -163,7 +167,9 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		return handle.Update(res)
-
+	case KindSchema:
+		handle := odpsClient.SchemaHandleFrom(projectSchema)
+		return handle.Update(res)
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
@@ -195,7 +201,12 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 			return err
 		}
 		return extTable.Validate()
-
+	case KindSchema:
+		schema, err := ConvertSpecToSchemaDetails(r)
+		if err != nil {
+			return err
+		}
+		return schema.Validate()
 	default:
 		return errors.InvalidArgument(resource.EntityResource, "unknown kind")
 	}

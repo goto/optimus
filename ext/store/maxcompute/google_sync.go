@@ -105,21 +105,21 @@ func (s *SyncerService) getGoogleSourceLastModified(ctx context.Context, tnnt te
 
 	var jobs []func() pool.JobResult[resource.SourceModifiedTimeStatus]
 	for _, et := range ets {
-		et := et
-		if et.Source.SourceType != GoogleSheet && et.Source.SourceType != GoogleDrive {
+		et2 := et
+		if et2.Source.SourceType != GoogleSheet && et2.Source.SourceType != GoogleDrive {
 			response = append(response, resource.SourceModifiedTimeStatus{
-				FullName: et.FullName(),
+				FullName: et2.FullName(),
 				Err:      errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive"),
 			})
 			continue
 		}
 
 		jobs = append(jobs, func() pool.JobResult[resource.SourceModifiedTimeStatus] {
-			lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
+			lastModified, err := driveClient.GetLastModified(et2.Source.SourceURIs[0])
 			if err != nil {
 				return pool.JobResult[resource.SourceModifiedTimeStatus]{
 					Output: resource.SourceModifiedTimeStatus{
-						FullName: et.FullName(),
+						FullName: et2.FullName(),
 						Err:      errors.InvalidArgument(EntityExternalTable, err.Error()),
 					},
 					Err: errors.InvalidArgument(EntityExternalTable, err.Error()),
@@ -127,7 +127,7 @@ func (s *SyncerService) getGoogleSourceLastModified(ctx context.Context, tnnt te
 			}
 			return pool.JobResult[resource.SourceModifiedTimeStatus]{
 				Output: resource.SourceModifiedTimeStatus{
-					FullName:         et.FullName(),
+					FullName:         et2.FullName(),
 					LastModifiedTime: *lastModified,
 				},
 			}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/goto/optimus/internal/errors"
 )
@@ -22,6 +23,13 @@ type ExternalTable struct {
 	Source      *ExternalSource `mapstructure:"source,omitempty"`
 
 	Hints map[string]string `mapstructure:"hints,omitempty"`
+}
+
+func (e *ExternalTable) GetSyncDelayTolerance() time.Duration {
+	if e.Source != nil {
+		return time.Duration(e.Source.SyncInterval) * time.Hour
+	}
+	return 0
 }
 
 func (e *ExternalTable) GetSourceType() ExternalTableSourceType {

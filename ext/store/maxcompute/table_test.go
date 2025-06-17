@@ -35,8 +35,8 @@ func (m *mockMaxComputeTable) BatchLoadTables(tableNames []string) ([]*odps.Tabl
 	return args.Get(0).([]*odps.Table), args.Error(1)
 }
 
-func (m *mockMaxComputeTable) CreateView(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool) error {
-	args := m.Called(schema, orReplace, createIfNotExists, buildDeferred)
+func (m *mockMaxComputeTable) CreateViewWithHints(schema tableschema.TableSchema, orReplace, createIfNotExists, buildDeferred bool, hints map[string]string) error {
+	args := m.Called(schema, orReplace, createIfNotExists, buildDeferred, hints)
 	return args.Error(0)
 }
 

@@ -192,7 +192,7 @@ func getCompleteComponentName(res *resource.Resource) (ProjectSchema, resource.N
 		return ProjectSchema{}, "", err
 	}
 
-	resourceName, err := resourceNameFor(res.Name())
+	resourceName, err := resourceNameFor(res.Name(), res.Kind())
 	if err != nil {
 		return ProjectSchema{}, "", err
 	}
@@ -200,8 +200,20 @@ func getCompleteComponentName(res *resource.Resource) (ProjectSchema, resource.N
 	return projectSchema, resource.Name(resourceName), nil
 }
 
-func resourceNameFor(name resource.Name) (string, error) {
+func resourceNameFor(name resource.Name, kind string) (string, error) {
 	parts := strings.Split(name.String(), ".")
+
+	if kind == KindSchema {
+		if len(parts) < ProjectSchemaSections {
+			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
+		}
+
+		if parts[1] == "" {
+			return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
+		}
+		return parts[1], nil
+	}
+
 	if len(parts) < TableNameSections {
 		return "", errors.InvalidArgument(resource.EntityResource, "invalid resource name: "+name.String())
 	}

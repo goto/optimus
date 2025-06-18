@@ -91,6 +91,14 @@ func (c *MaxComputeClient) GetDDLView(_ context.Context, table string) (string, 
 	return "", nil
 }
 
+func (c *MaxComputeClient) SchemaHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
+	c.SetDefaultProjectName(projectSchema.Project)
+	c.SetCurrentSchemaName(projectSchema.Schema)
+	s := c.Schemas()
+	interactor := s.Get(projectSchema.Schema)
+	return NewSchemaHandle(s, interactor)
+}
+
 func collectMaxComputeCredential(jsonData []byte) (*maxComputeCredentials, error) {
 	var creds maxComputeCredentials
 	if err := json.Unmarshal(jsonData, &creds); err != nil {

@@ -63,7 +63,11 @@ func TestSchemaHandle(t *testing.T) {
 			}()
 			schemaHandle := maxcompute.NewSchemaHandle(schema, interactor)
 
-			spec := map[string]any{"description": "test create"}
+			spec := map[string]any{
+				"project":     projectName,
+				"database":    schemaName,
+				"description": "test create",
+			}
 			res, err := resource.NewResource(fullName, maxcompute.KindSchema, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
@@ -83,7 +87,11 @@ func TestSchemaHandle(t *testing.T) {
 			}()
 			schemaHandle := maxcompute.NewSchemaHandle(schema, interactor)
 
-			spec := map[string]any{"description": "test create"}
+			spec := map[string]any{
+				"project":     projectName,
+				"database":    schemaName,
+				"description": "test create",
+			}
 			res, err := resource.NewResource(fullName, maxcompute.KindSchema, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
@@ -122,7 +130,11 @@ func TestSchemaHandle(t *testing.T) {
 			}()
 			schemaHandle := maxcompute.NewSchemaHandle(schema, interactor)
 
-			spec := map[string]any{"description": "test create"}
+			spec := map[string]any{
+				"project":     projectName,
+				"database":    schemaName,
+				"description": "test update",
+			}
 			res, err := resource.NewResource(fullName, maxcompute.KindSchema, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 
@@ -142,7 +154,11 @@ func TestSchemaHandle(t *testing.T) {
 			}()
 			schemaHandle := maxcompute.NewSchemaHandle(schema, interactor)
 
-			spec := map[string]any{"description": "test create"}
+			spec := map[string]any{
+				"project":     projectName,
+				"database":    schemaName,
+				"description": "test update",
+			}
 			res, err := resource.NewResource(fullName, maxcompute.KindSchema, mcStore, tnnt, &metadata, spec)
 			assert.Nil(t, err)
 

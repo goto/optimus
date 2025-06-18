@@ -6,29 +6,26 @@ import (
 )
 
 type SchemaDetails struct {
-	Name resource.Name `mapstructure:"name,omitempty"`
-
-	Description string `mapstructure:"description,omitempty"`
+	Name        resource.Name `mapstructure:"name,omitempty"`
+	Project     string        `mapstructure:"project,omitempty"`
+	Database    string        `mapstructure:"database,omitempty"`
+	Description string        `mapstructure:"description,omitempty"`
 }
 
 func (v *SchemaDetails) Validate() error {
 	if v.Name == "" {
-		return errors.InvalidArgument(EntityView, "schema name is empty for "+v.Name.String())
+		return errors.InvalidArgument(EntityView, "resource name is empty")
 	}
 
-	if _, _, err := v.ProjectSchema(); err != nil {
-		return errors.AddErrContext(err, EntitySchema, "invalid schema name "+v.Name.String())
+	if v.Project == "" {
+		return errors.InvalidArgument(EntitySchema, "project name is empty for "+v.Name.String())
+	}
+
+	if v.Database == "" {
+		return errors.InvalidArgument(EntitySchema, "database name is empty for "+v.Name.String())
 	}
 
 	return nil
-}
-
-func (v *SchemaDetails) ProjectSchema() (string, string, error) {
-	urn, err := ProjectSchemaFor(v.Name)
-	if err != nil {
-		return "", "", errors.AddErrContext(err, EntitySchema, "invalid schema name "+v.Name.String())
-	}
-	return urn.Project, urn.Schema, nil
 }
 
 func ConvertSpecToSchemaDetails(res *resource.Resource) (*SchemaDetails, error) {

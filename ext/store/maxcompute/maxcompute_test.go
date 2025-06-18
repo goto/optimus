@@ -429,11 +429,37 @@ func TestMaxComputeStore(t *testing.T) {
 		t.Run("for schema", func(t *testing.T) {
 			schemaSpec := map[string]any{
 				"description": "schema description / comment",
+				"project":     projectName,
+				"database":    schemaName,
 			}
-			t.Run("returns error when cannot decode schema", func(t *testing.T) {
-				res, err := resource.NewResource("", maxcompute.KindSchema, store, tnnt, &metadata, invalidSpec)
+			t.Run("returns error when project name is empty", func(t *testing.T) {
+				invalidSchemaSpec := map[string]any{
+					"description": "schema description / comment",
+				}
+
+				res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, invalidSchemaSpec)
+				assert.NoError(t, err)
+				assert.NotNil(t, res)
+
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+				err = mcStore.Validate(res)
 				assert.Error(t, err)
-				assert.Nil(t, res)
+				assert.ErrorContains(t, err, "project name is empty for "+fullName)
+			})
+			t.Run("returns error when database / schema name is empty", func(t *testing.T) {
+				invalidSchemaSpec := map[string]any{
+					"description": "schema description / comment",
+					"project":     projectName,
+				}
+
+				res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, invalidSchemaSpec)
+				assert.NoError(t, err)
+				assert.NotNil(t, res)
+
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+				err = mcStore.Validate(res)
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, "database name is empty for "+fullName)
 			})
 			t.Run("returns nil error when validation passes", func(t *testing.T) {
 				res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, schemaSpec)

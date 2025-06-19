@@ -153,7 +153,7 @@ func (s *OptimusServer) setupPublisher() error {
 }
 
 func (s *OptimusServer) setupPlugins() error {
-	store, err := plugin.LoadPluginToStore(s.logger)
+	store, err := plugin.LoadPluginToStore(s.logger, s.conf.Plugins.Location)
 	s.pluginStore = store
 	return err
 }

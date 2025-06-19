@@ -28,7 +28,7 @@ func LoadPluginToStore(l log.Logger, location string) (*Store, error) {
 // sample plugin name:
 // - optimus-myplugin_linux_amd64 | with suffix: optimus- and prefix: _linux_amd64
 // - optimus-plugin-myplugin.yaml | with suffix: optimus-plugin and prefix: .yaml
-func discoverPluginsGivenFilePattern(l log.Logger, prefix, suffix string, location string) []string {
+func discoverPluginsGivenFilePattern(l log.Logger, prefix, suffix, location string) []string {
 	var discoveredPlugins, dirs []string
 	if location != "" {
 		dirs = append(dirs, location)

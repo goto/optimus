@@ -16,8 +16,8 @@ const (
 	PluginsDir = ".plugins"
 )
 
-func LoadPluginToStore(l log.Logger) (*Store, error) {
-	discoveredYamlPlugins := discoverPluginsGivenFilePattern(l, Prefix, Suffix)
+func LoadPluginToStore(l log.Logger, location string) (*Store, error) {
+	discoveredYamlPlugins := discoverPluginsGivenFilePattern(l, Prefix, Suffix, location)
 	l.Debug(fmt.Sprintf("discovering yaml   plugins(%d)...", len(discoveredYamlPlugins)))
 	return InitStore(discoveredYamlPlugins, l)
 }
@@ -28,8 +28,11 @@ func LoadPluginToStore(l log.Logger) (*Store, error) {
 // sample plugin name:
 // - optimus-myplugin_linux_amd64 | with suffix: optimus- and prefix: _linux_amd64
 // - optimus-plugin-myplugin.yaml | with suffix: optimus-plugin and prefix: .yaml
-func discoverPluginsGivenFilePattern(l log.Logger, prefix, suffix string) []string {
+func discoverPluginsGivenFilePattern(l log.Logger, prefix, suffix string, location string) []string {
 	var discoveredPlugins, dirs []string
+	if location != "" {
+		dirs = append(dirs, location)
+	}
 
 	if p, err := os.Getwd(); err == nil {
 		dirs = append(dirs, path.Join(p, PluginsDir), p)

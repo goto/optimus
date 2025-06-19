@@ -81,7 +81,7 @@ func (v *versionCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 
 	var err error
 
-	v.pluginRepo, err = plugin.LoadPluginToStore(v.logger)
+	v.pluginRepo, err = plugin.LoadPluginToStore(v.logger, "")
 	return err
 }
 

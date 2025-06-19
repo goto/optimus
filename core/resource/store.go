@@ -3,8 +3,9 @@ package resource
 import "github.com/goto/optimus/internal/errors"
 
 const (
-	Bigquery   Store = "bigquery"
-	MaxCompute Store = "maxcompute"
+	Bigquery          Store = "bigquery"
+	MaxCompute        Store = "maxcompute"
+	KindExternalTable       = "external_table"
 )
 
 // Store represents the type of datasource, resource corresponds to

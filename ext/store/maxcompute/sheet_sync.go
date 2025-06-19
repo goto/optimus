@@ -3,14 +3,11 @@ package maxcompute
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/goto/salt/log"
-	"google.golang.org/api/drive/v3"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
@@ -18,18 +15,21 @@ import (
 	"github.com/goto/optimus/ext/sheets/csv"
 	"github.com/goto/optimus/ext/sheets/gdrive"
 	"github.com/goto/optimus/ext/sheets/gsheet"
+	"github.com/goto/optimus/ext/sheets/lark"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/pool"
 )
 
 const (
-	GsheetCredsKey    = "GOOGLE_SHEETS_ACCOUNT"
-	OSSCredsKey       = "OSS_CREDS"
-	putTimeOut        = time.Second * 10
-	ExtLocation       = "EXT_LOCATION"
-	MaxSyncInterval   = 24
-	headersCountSerde = "odps.text.option.header.lines.count"
-	UseQuoteSerde     = "odps.text.option.use.quote"
+	GsheetCredsKey          = "GOOGLE_SHEETS_ACCOUNT"
+	LarkCredentialsKey      = "LARK_SHEETS_ACCOUNT"
+	OSSCredsKey             = "OSS_CREDS"
+	ExtLocation             = "EXT_LOCATION"
+	MaxSyncInterval         = 24
+	headersCountSerde       = "odps.text.option.header.lines.count"
+	UseQuoteSerde           = "odps.text.option.use.quote"
+	AssumeRoleSerde         = "odps.properties.rolearn"
+	AssumeRoleProjectConfig = "EXTERNAL_TABLE_ASSUME_RAM_USER"
 )
 
 var validInfinityValues = map[string]struct{}{
@@ -46,12 +46,13 @@ type SyncerService struct {
 	secretProvider            SecretProvider
 	tenantDetailsGetter       TenantDetailsGetter
 	SyncRepo                  SyncRepo
+	MaxSyncDelayTolerance     time.Duration
 	maxFileSizeSupported      int
 	driveFileCleanupSizeLimit int
 }
 
 func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGetter TenantDetailsGetter,
-	syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int,
+	syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int, maxSyncDelayTolerance time.Duration,
 ) *SyncerService {
 	return &SyncerService{
 		logger:                    log,
@@ -60,20 +61,243 @@ func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGette
 		SyncRepo:                  syncRepo,
 		maxFileSizeSupported:      maxFileSizeSupported,
 		driveFileCleanupSizeLimit: driveFileCleanupSizeLimit,
+		MaxSyncDelayTolerance:     maxSyncDelayTolerance,
 	}
 }
 
 func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) error {
-	return s.SyncRepo.Touch(ctx, projectName, KindExternalTable, resources)
+	ets, err := ConvertSpecsTo[ExternalTable](resources)
+	if err != nil {
+		return err
+	}
+	etSourceMap := groupBySourceType(ets)
+	me := errors.NewMultiError("error while update last sync attempt time")
+	for sourceType, externalTables := range etSourceMap {
+		switch sourceType {
+		case GoogleSheet, GoogleDrive:
+			tableIdentifiers := make([]string, len(externalTables))
+			for i, table := range externalTables {
+				tableIdentifiers[i] = table.FullName()
+			}
+			me.Append(s.SyncRepo.Touch(ctx, projectName, KindExternalTableGoogle, tableIdentifiers))
+		case LarkSheet:
+			tableIdentifiers := make([]string, len(externalTables))
+			for i, table := range externalTables {
+				tableIdentifiers[i] = table.FullName()
+			}
+			me.Append(s.SyncRepo.Touch(ctx, projectName, KindExternalTableLark, tableIdentifiers))
+		}
+	}
+	return me.ToErr()
+}
+
+func getAllSourceTypes(et []*ExternalTable) ExternalTableSources {
+	sourceTypes := make(ExternalTableSources, 0)
+	for _, spec := range et {
+		sourceTypeString := spec.GetSourceType()
+		sourceTypes.Append(sourceTypeString)
+	}
+	return sourceTypes
+}
+
+func groupBySourceType(ets []*ExternalTable) map[ExternalTableSourceType][]*ExternalTable {
+	grouped := make(map[ExternalTableSourceType][]*ExternalTable)
+	for _, et := range ets {
+		if grouped[et.GetSourceType()] == nil {
+			grouped[et.GetSourceType()] = make([]*ExternalTable, 0)
+		}
+		grouped[et.GetSourceType()] = append(grouped[et.GetSourceType()], et)
+	}
+	return grouped
+}
+
+func revisionListToMap(input []resource.SourceModifiedRevisionStatus) map[string]resource.SourceModifiedRevisionStatus {
+	output := make(map[string]resource.SourceModifiedRevisionStatus)
+	for _, status := range input {
+		output[status.FullName] = status
+	}
+	return output
+}
+
+func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string]resource.SourceModifiedTimeStatus {
+	output := make(map[string]resource.SourceModifiedTimeStatus)
+	for _, status := range input {
+		output[status.FullName] = status
+	}
+	return output
+}
+
+func (s *SyncerService) getGoogleExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*ExternalTable, []*ExternalTable, error) {
+	var toUpdateExternalTables, unModifiedSinceUpdate []*ExternalTable
+
+	for resName, versionInfo := range lastUpdateMap {
+		s.logger.Info(fmt.Sprintf("[ON DB] [Google] resource: %s, lastUpdateTime in DB: %s ", resName, versionInfo.LastSyncTime))
+	}
+	lastSourceModifiedList, err := s.getGoogleSourceLastModified(ctx, tnnt, ets)
+	s.logger.Info("[On Drive] [Google] Fetched last resource update time list ")
+	for _, modifiedTimeStatus := range lastSourceModifiedList {
+		if modifiedTimeStatus.Err == nil {
+			s.logger.Info(fmt.Sprintf("[On Drive] [Google] resource: %s, lastUpdateTime: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.LastModifiedTime))
+		} else {
+			s.logger.Error(fmt.Sprintf("[On Drive] [Google] resource: %s, error: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.Err.Error()))
+		}
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	lastSourceModifiedMap := lastModifiedListToMap(lastSourceModifiedList)
+	for _, et := range ets {
+		lastSyncedAt, ok := lastUpdateMap[et.FullName()]
+		if !ok {
+			toUpdateExternalTables = append(toUpdateExternalTables, et)
+			continue
+		}
+		if lastSourceModifiedMap[et.FullName()].Err != nil {
+			s.logger.Error(fmt.Sprintf("unable to get last modified time, err:%s", lastSourceModifiedMap[et.FullName()].Err.Error()))
+			toUpdateExternalTables = append(toUpdateExternalTables, et)
+			continue
+		}
+		if lastSourceModifiedMap[et.FullName()].LastModifiedTime.After(lastSyncedAt.LastSyncTime) {
+			toUpdateExternalTables = append(toUpdateExternalTables, et)
+		} else {
+			unModifiedSinceUpdate = append(unModifiedSinceUpdate, et)
+		}
+	}
+	return toUpdateExternalTables, unModifiedSinceUpdate, nil
+}
+
+func (s *SyncerService) getLarkExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*ExternalTable, []*ExternalTable, error) {
+	var toUpdateExternalTables, unModifiedSinceUpdate []*ExternalTable
+
+	s.logger.Info("[ON DB] [Lark] Fetched last Resource Sync time list ")
+	for resName, versionInfo := range lastUpdateMap {
+		s.logger.Info(fmt.Sprintf("[ON DB] [Lark] resource: %s, lastUpdateTime in DB: %s, Last Synced Revision: %d", resName, versionInfo.LastSyncTime.String(), versionInfo.Revision))
+	}
+	latestRevisionList, err := s.getLarkRevisionIDs(ctx, tnnt, ets)
+	s.logger.Info("[On Lark] Fetched last resource update time list ")
+	for _, latestRevision := range latestRevisionList {
+		if latestRevision.Err == nil {
+			s.logger.Info(fmt.Sprintf("[On Lark] resource: %s, latest Revision: %d ", latestRevision.FullName, latestRevision.Revision))
+		} else {
+			s.logger.Error(fmt.Sprintf("[On Lark] resource: %s, error: %s ", latestRevision.FullName, latestRevision.Err.Error()))
+		}
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	sourceRevisionMap := revisionListToMap(latestRevisionList)
+	for _, r := range ets {
+		lastSyncedAt, ok := lastUpdateMap[r.FullName()]
+		if !ok {
+			toUpdateExternalTables = append(toUpdateExternalTables, r)
+			continue
+		}
+		if sourceRevisionMap[r.FullName()].Err != nil {
+			s.logger.Error(fmt.Sprintf("[On Lark] unable to get current revision, err:%s", sourceRevisionMap[r.FullName()].Err.Error()))
+			toUpdateExternalTables = append(toUpdateExternalTables, r)
+			continue
+		}
+		if sourceRevisionMap[r.FullName()].Revision > lastSyncedAt.Revision {
+			toUpdateExternalTables = append(toUpdateExternalTables, r)
+		} else {
+			unModifiedSinceUpdate = append(unModifiedSinceUpdate, r)
+		}
+	}
+	return toUpdateExternalTables, unModifiedSinceUpdate, nil
+}
+
+func getETNameToResourceMap(resources []*resource.Resource) (map[string]*resource.Resource, error) {
+	output := make(map[string]*resource.Resource)
+	for _, r := range resources {
+		et, err := ConvertSpecTo[ExternalTable](r)
+		if err != nil {
+			return nil, err
+		}
+		output[et.FullName()] = r
+	}
+	return output, nil
+}
+
+// minDuration returns the smaller of two durations.
+// If one is 0, it returns the non-zero one.
+// If both are 0, it returns 0.
+func minDuration(a, b time.Duration) time.Duration {
+	switch {
+	case a == 0 && b == 0:
+		return 0
+	case a == 0:
+		return b
+	case b == 0:
+		return a
+	default:
+		if a < b {
+			return a
+		}
+		return b
+	}
+}
+
+func (s *SyncerService) GetExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*resource.Resource, []*resource.Resource, error) {
+	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
+	etNameResourcesMap, err := getETNameToResourceMap(resources)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ets, err := ConvertSpecsTo[ExternalTable](resources)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	externalTablesBySourceTypes := groupBySourceType(ets)
+	for sourceType, externalTables := range externalTablesBySourceTypes {
+		var toUpdateET, unModifiedET []*ExternalTable
+		switch sourceType {
+		case GoogleSheet:
+			var externalTablesToCheck []*ExternalTable
+			for _, externalTable := range externalTables {
+				syncDelayToleranceDefinedInSpec := externalTable.GetSyncDelayTolerance()
+				syncDelayTolerance := minDuration(s.MaxSyncDelayTolerance, syncDelayToleranceDefinedInSpec)
+				if syncDelayTolerance == 0 {
+					externalTablesToCheck = append(externalTablesToCheck, externalTable)
+					continue
+				}
+				resourceName := etNameResourcesMap[externalTable.FullName()].FullName()
+
+				if lastUpdateMap[resourceName].LastSyncTime.Add(syncDelayTolerance).Before(time.Now()) {
+					toUpdateResources = append(toUpdateResources, etNameResourcesMap[externalTable.FullName()])
+					continue
+				}
+				externalTablesToCheck = append(externalTablesToCheck, externalTable)
+			}
+			toUpdateET, unModifiedET, err = s.getGoogleExternalTablesDueForSync(ctx, tnnt, externalTablesToCheck, lastUpdateMap)
+			if err != nil {
+				return nil, nil, err
+			}
+		case GoogleDrive:
+			toUpdateET, unModifiedET, err = s.getGoogleExternalTablesDueForSync(ctx, tnnt, externalTables, lastUpdateMap)
+			if err != nil {
+				return nil, nil, err
+			}
+		case LarkSheet:
+			toUpdateET, unModifiedET, err = s.getLarkExternalTablesDueForSync(ctx, tnnt, externalTables, lastUpdateMap)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		for _, et := range toUpdateET {
+			toUpdateResources = append(toUpdateResources, etNameResourcesMap[et.FullName()])
+		}
+		for _, et := range unModifiedET {
+			unModifiedSinceUpdate = append(unModifiedSinceUpdate, etNameResourcesMap[et.FullName()])
+		}
+	}
+	return toUpdateResources, unModifiedSinceUpdate, nil
 }
 
 func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SyncStatus, error) {
 	if len(resources) == 0 {
 		return []resource.SyncStatus{}, nil
-	}
-	sheets, ossClient, drive, err := s.getClients(ctx, tnnt)
-	if err != nil {
-		return nil, err
 	}
 
 	tenantWithDetails, err := s.tenantDetailsGetter.GetDetails(ctx, tnnt)
@@ -88,26 +312,21 @@ func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resou
 		}
 	}
 
+	externalTables, err := ConvertSpecsTo[ExternalTable](resources)
+	if err != nil {
+		return nil, err
+	}
+	sourceTypes := getAllSourceTypes(externalTables)
+	externalTableClients, err := s.getExtTableClients(ctx, tnnt, sourceTypes)
+	if err != nil {
+		return nil, err
+	}
+
 	var jobs []func() pool.JobResult[*resource.Resource]
 	for _, r := range resources {
 		r := r
 		f1 := func() pool.JobResult[*resource.Resource] {
-			et, err := ConvertSpecTo[ExternalTable](r)
-			if err != nil {
-				return pool.JobResult[*resource.Resource]{Output: r, Err: err}
-			}
-			quoteSerdeMissing, err := processResource(ctx, sheets, ossClient, drive, et, commonLocation)
-			syncStatusRemarks := map[string]string{}
-			if quoteSerdeMissing {
-				syncStatusRemarks["quoteSerdeMissing"] = "True"
-			}
-			if err != nil {
-				syncStatusRemarks["error"] = err.Error()
-				syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
-				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, false)
-			} else {
-				s.SyncRepo.Upsert(ctx, r.Tenant().ProjectName(), KindExternalTable, r.FullName(), syncStatusRemarks, true)
-			}
+			err = processResource(ctx, s.SyncRepo, externalTableClients, r, commonLocation)
 			if err != nil {
 				return pool.JobResult[*resource.Resource]{Output: r, Err: err}
 			}
@@ -129,65 +348,12 @@ func (s *SyncerService) SyncBatch(ctx context.Context, tnnt tenant.Tenant, resou
 			success = false
 		}
 		syncStatus = append(syncStatus, resource.SyncStatus{
-			Resource: result.Output,
-			Success:  success,
-			ErrorMsg: errMsg,
+			Identifier: result.Output.FullName(),
+			Success:    success,
+			ErrorMsg:   errMsg,
 		})
 	}
 	return syncStatus, mu.ToErr()
-}
-
-func (s *SyncerService) GetETSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error) {
-	var response []resource.SourceModifiedTimeStatus
-	driveClient, clientErr := s.getDriveClient(ctx, tnnt)
-	if clientErr != nil {
-		return nil, errors.InternalError(EntityExternalTable, "unable to get google drive Client", clientErr)
-	}
-	var jobs []func() pool.JobResult[resource.SourceModifiedTimeStatus]
-	for _, res := range resources {
-		r := res
-		et, err := ConvertSpecTo[ExternalTable](r)
-		if err != nil {
-			response = append(response, resource.SourceModifiedTimeStatus{
-				FullName: r.FullName(),
-				Err:      err,
-			})
-			continue
-		}
-		switch strings.ToUpper(et.Source.SourceType) {
-		case GoogleSheet, GoogleDrive:
-			jobs = append(jobs, func() pool.JobResult[resource.SourceModifiedTimeStatus] {
-				lastModified, err := driveClient.GetLastModified(et.Source.SourceURIs[0])
-				if err != nil {
-					return pool.JobResult[resource.SourceModifiedTimeStatus]{
-						Output: resource.SourceModifiedTimeStatus{
-							FullName: r.FullName(),
-							Err:      errors.InvalidArgument(EntityExternalTable, err.Error()),
-						},
-						Err: errors.InvalidArgument(EntityExternalTable, err.Error()),
-					}
-				}
-				return pool.JobResult[resource.SourceModifiedTimeStatus]{
-					Output: resource.SourceModifiedTimeStatus{
-						FullName:         r.FullName(),
-						LastModifiedTime: *lastModified,
-					},
-				}
-			})
-
-		default:
-			response = append(response, resource.SourceModifiedTimeStatus{
-				FullName: r.FullName(),
-				Err:      errors.InvalidArgument(EntityExternalTable, "source is not GoogleSheet or GoogleDrive"),
-			})
-		}
-	}
-	resultsChan := pool.RunWithWorkers(10, jobs)
-	for result := range resultsChan {
-		response = append(response, result.Output)
-	}
-
-	return response, nil
 }
 
 func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
@@ -204,42 +370,16 @@ func (*SyncerService) GetSyncInterval(res *resource.Resource) (int64, error) {
 	return et.Source.SyncInterval, nil
 }
 
-func getGSheetContent(et *ExternalTable, sheets *gsheet.GSheets) (string, bool, error) {
-	headers, err := et.Source.GetHeaderCount()
+func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {
+	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {
-		return "", false, err
+		return err
 	}
 
-	et.Source.GetFormattedDate = et.Source.GetFormattedDate || !et.Schema.ContainsDateTimeColumns()
+	sources := []ExternalTableSourceType{et.GetSourceType()}
 
-	uri := et.Source.SourceURIs[0]
-	columnCount := len(et.Schema)
-	return sheets.GetAsCSV(uri, et.Source.Range, et.Source.GetFormattedDate, et.Source.GetFormattedData, columnCount, func(rowIndex, colIndex int, data any) (string, error) {
-		if rowIndex < headers {
-			s, _ := ParseString(data) // ignore header parsing error, as headers will be ignored in data
-			return s, nil
-		}
-		value, err := formatSheetData(colIndex, data, et.Schema)
-		if err != nil {
-			if d, ok := data.(string); ok {
-				if strings.HasPrefix(d, "#REF!") || strings.HasPrefix(d, "#N/A") {
-					err = nil
-					value = ""
-				} else {
-					if _, ok := validInfinityValues[d]; ok { // check infinity
-						err = nil
-						value = d
-					}
-				}
-			}
-		}
-		err = errors.WrapIfErr(EntityFormatter, fmt.Sprintf("for column Index:%d", colIndex), err)
-		return value, err
-	})
-}
-
-func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error {
-	sheets, ossClient, drive, err := s.getClients(ctx, res.Tenant())
+	// also get lark client if resource type is lark
+	externalTableClients, err := s.getExtTableClients(ctx, res.Tenant(), sources)
 	if err != nil {
 		return err
 	}
@@ -253,95 +393,61 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 			return err
 		}
 	}
-	et, err := ConvertSpecTo[ExternalTable](res)
-	if err != nil {
-		return err
-	}
-	_, err = processResource(ctx, sheets, ossClient, drive, et, commonLocation)
-	syncStatusRemarks := map[string]string{}
-
-	if err != nil {
-		syncStatusRemarks["error"] = err.Error()
-		syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
-		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, et.FullName(), syncStatusRemarks, false)
-	} else {
-		s.SyncRepo.Upsert(ctx, res.Tenant().ProjectName(), KindExternalTable, et.FullName(), syncStatusRemarks, true)
-	}
-	return err
+	return processResource(ctx, s.SyncRepo, externalTableClients, res, commonLocation)
 }
 
-func (s *SyncerService) getDriveClient(ctx context.Context, tnnt tenant.Tenant) (*gdrive.GDrive, error) {
-	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
-	if err != nil {
-		return nil, err
-	}
-
-	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported, s.driveFileCleanupSizeLimit)
-	if err != nil {
-		return nil, fmt.Errorf("not able to create drive service err: %w", err)
-	}
-
-	return driveSrv, nil
+type ExtTableClients struct {
+	GSheet *gsheet.GSheets
+	OSS    *oss.Client
+	GDrive *gdrive.GDrive
+	Lark   *lark.Client
 }
 
-func (s *SyncerService) getClients(ctx context.Context, tnnt tenant.Tenant) (*gsheet.GSheets, *oss.Client, *gdrive.GDrive, error) {
-	secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+func (s *SyncerService) getExtTableClients(ctx context.Context, tnnt tenant.Tenant, sourceTypes ExternalTableSources) (ExtTableClients, error) {
+	var clients ExtTableClients
+	if sourceTypes.Has(GoogleSheet) {
+		secret, err := s.secretProvider.GetSecret(ctx, tnnt, GsheetCredsKey)
+		if err != nil {
+			return clients, err
+		}
+		sheetClient, err := gsheet.NewGSheets(ctx, secret.Value())
+		if err != nil {
+			return clients, err
+		}
+		clients.GSheet = sheetClient
 
-	sheetClient, err := gsheet.NewGSheets(ctx, secret.Value())
-	if err != nil {
-		return nil, nil, nil, err
+		driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported, s.driveFileCleanupSizeLimit)
+		if err != nil {
+			return clients, fmt.Errorf("not able to create drive service err: %w", err)
+		}
+		clients.GDrive = driveSrv
+	}
+	if sourceTypes.Has(GoogleDrive) && clients.GDrive == nil {
+		driveSrv, err := s.getDriveClient(ctx, tnnt)
+		if err != nil {
+			return clients, err
+		}
+		clients.GDrive = driveSrv
+	}
+	if sourceTypes.Has(LarkSheet) {
+		larkClient, err := s.getLarkClient(ctx, tnnt)
+		if err != nil {
+			return clients, err
+		}
+		clients.Lark = larkClient
 	}
 
 	creds, err := s.secretProvider.GetSecret(ctx, tnnt, OSSCredsKey)
 	if err != nil {
-		return nil, nil, nil, err
+		return clients, err
 	}
-
 	ossClient, err := bucket.NewOssClient(creds.Value())
 	if err != nil {
-		return nil, nil, nil, err
+		return clients, err
 	}
+	clients.OSS = ossClient
 
-	driveSrv, err := gdrive.NewGDrives(ctx, secret.Value(), s.maxFileSizeSupported, s.driveFileCleanupSizeLimit)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("not able to create drive service err: %w", err)
-	}
-
-	return sheetClient, ossClient, driveSrv, nil
-}
-
-func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, et *ExternalTable, commonLocation string) (bool, error) {
-	if len(et.Source.SourceURIs) == 0 {
-		return false, errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Sheet")
-	}
-
-	content, fileNeedQuoteSerde, err := getGSheetContent(et, sheetSrv)
-	if err != nil {
-		return fileNeedQuoteSerde, err
-	}
-	var quoteSerdeMissing bool
-	if fileNeedQuoteSerde {
-		if val, ok := et.Source.SerdeProperties[UseQuoteSerde]; ok {
-			boolVal, _ := strconv.ParseBool(val)
-			quoteSerdeMissing = !boolVal
-		} else {
-			quoteSerdeMissing = true
-		}
-	}
-
-	bucketName, objectPath, err := getBucketNameAndPath(commonLocation, et.Source.Location, et.FullName())
-	if err != nil {
-		return quoteSerdeMissing, err
-	}
-	objectKey := objectPath + "file.csv"
-	err = deleteFolderFromBucket(ctx, ossClient, bucketName, objectPath)
-	if err != nil {
-		return fileNeedQuoteSerde, err
-	}
-	return quoteSerdeMissing, writeToBucket(ctx, ossClient, bucketName, objectKey, content)
+	return clients, nil
 }
 
 func cleanCsvContent(data string, et *ExternalTable) (string, error) {
@@ -355,7 +461,7 @@ func cleanCsvContent(data string, et *ExternalTable) (string, error) {
 	}
 	columnCount := len(et.Schema)
 	var output string
-	output, _, err = csv.FromRecords[string](records, columnCount, func(rowIndex, colIndex int, data any) (string, error) {
+	output, err = csv.FromRecords[string](records, columnCount, func(rowIndex, colIndex int, data any) (string, error) {
 		if rowIndex < headers {
 			s, _ := ParseString(data) // ignore header parsing error, as headers will be ignored in data
 			return s, nil
@@ -381,92 +487,36 @@ func cleanCsvContent(data string, et *ExternalTable) (string, error) {
 	return output, err
 }
 
-func SyncDriveFileToOSS(ctx context.Context, driveClient *gdrive.GDrive, driveFile *drive.File, ossClient *oss.Client, bucketName, objectName string, et *ExternalTable) error {
-	if !strings.EqualFold(driveFile.FileExtension, et.Source.ContentType) {
-		return nil
-	}
-	if !driveClient.IsWithinDownloadLimit(driveFile) {
-		return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("file size:[%d] mb, greated than configured limit", driveFile.Size/1000000))
-	}
-	content, err := driveClient.DownloadFile(driveFile.Id)
+func processResource(ctx context.Context, syncRepo SyncRepo, externalTableClients ExtTableClients, resource *resource.Resource, commonLocation string) error {
+	et, err := ConvertSpecTo[ExternalTable](resource)
 	if err != nil {
 		return err
 	}
-	var contentToSync string
-	if et.Source.CleanGDriveCSV && strings.EqualFold(et.Source.ContentType, CSV) {
-		if !driveClient.IsWithinParseLimit(driveFile) {
-			return errors.InvalidArgument(EntityExternalTable, fmt.Sprintf("external table source option 'clean_gdrive_csv' is enabled, but the file size (%d MB) exceeds the server's configured driveFileCleanupSizeLimit", driveFile.Size/1000000))
-		}
-		contentToSync, err = cleanCsvContent(string(content), et)
+	switch et.Source.SourceType {
+	case GoogleSheet, GoogleDrive:
+		err := processGoogleTypeSources(ctx, externalTableClients, externalTableClients.OSS, et, commonLocation)
+		syncStatusRemarks := map[string]string{}
 		if err != nil {
-			return err
+			syncStatusRemarks["error"] = err.Error()
+			syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
+			syncRepo.Upsert(ctx, resource.Tenant().ProjectName(), KindExternalTableGoogle, resource.FullName(), syncStatusRemarks, false)
+		} else {
+			syncRepo.Upsert(ctx, resource.Tenant().ProjectName(), KindExternalTableGoogle, resource.FullName(), syncStatusRemarks, true)
 		}
-	} else {
-		contentToSync = string(content)
-	}
-	return writeToBucket(ctx, ossClient, bucketName, objectName, contentToSync)
-}
-
-func SyncDriveFolderToOSS(ctx context.Context, driveClient *gdrive.GDrive, ossClient *oss.Client, folderID, bucketName, destination string, et *ExternalTable) error {
-	driveFiles, err := driveClient.FolderListShow(folderID)
-	if err != nil {
 		return err
-	}
-	for _, driveFile := range driveFiles.Files {
-		objectName := filepath.Join(destination, driveFile.Name)
-		if strings.EqualFold(driveFile.MimeType, gdrive.TypeFolder) {
-			err = SyncDriveFolderToOSS(ctx, driveClient, ossClient, driveFile.Id, bucketName, objectName, et)
-			if err != nil {
-				return err
-			}
-		}
-		err = SyncDriveFileToOSS(ctx, driveClient, driveFile, ossClient, bucketName, objectName, et)
+	case LarkSheet:
+		revisionNumber, err := processLarkSheet(ctx, externalTableClients.Lark, externalTableClients.OSS, et, commonLocation)
+		syncStatusRemarks := map[string]string{}
 		if err != nil {
-			return err
+			syncStatusRemarks["error"] = err.Error()
+			syncStatusRemarks["sheet_url"] = et.Source.SourceURIs[0]
+			syncRepo.UpsertRevision(ctx, resource.Tenant().ProjectName(), KindExternalTableLark, resource.FullName(), syncStatusRemarks, revisionNumber, false)
+		} else {
+			syncRepo.UpsertRevision(ctx, resource.Tenant().ProjectName(), KindExternalTableLark, resource.FullName(), syncStatusRemarks, revisionNumber, true)
 		}
-	}
-	return nil
-}
-
-func syncFromDrive(ctx context.Context, driveSrv *gdrive.GDrive, ossClient *oss.Client, et *ExternalTable, bucketName, objectPath string) error {
-	fileType, driveFile, err := driveSrv.ListDriveEntity(et.Source.SourceURIs[0])
-	if err != nil {
 		return err
-	}
-	if fileType == "folder" {
-		return SyncDriveFolderToOSS(ctx, driveSrv, ossClient, driveFile.Id, bucketName, objectPath, et)
-	}
-	objectName := filepath.Join(objectPath, driveFile.Name)
-	return SyncDriveFileToOSS(ctx, driveSrv, driveFile, ossClient, bucketName, objectName, et)
-}
-
-func processGoogleDrive(ctx context.Context, driveSrv *gdrive.GDrive, ossClient *oss.Client, et *ExternalTable, commonLocation string) error {
-	if len(et.Source.SourceURIs) == 0 {
-		return errors.InvalidArgument(EntityExternalTable, "source URI is empty for Google Drive")
-	}
-
-	bucketName, objectPath, err := getBucketNameAndPath(commonLocation, et.Source.Location, et.FullName())
-	if err != nil {
-		return err
-	}
-
-	err = deleteFolderFromBucket(ctx, ossClient, bucketName, objectPath)
-	if err != nil {
-		return err
-	}
-
-	return syncFromDrive(ctx, driveSrv, ossClient, et, bucketName, objectPath)
-}
-
-func processResource(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient *oss.Client, drive *gdrive.GDrive, et *ExternalTable, commonLocation string) (bool, error) {
-	switch strings.ToUpper(et.Source.SourceType) {
-	case GoogleSheet:
-		return processGoogleSheet(ctx, sheetSrv, ossClient, et, commonLocation)
-	case GoogleDrive:
-		err := processGoogleDrive(ctx, drive, ossClient, et, commonLocation)
-		return false, err
 	default:
-		return false, nil
+		return nil
 	}
 }
 

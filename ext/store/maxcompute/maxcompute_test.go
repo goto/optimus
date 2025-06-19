@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -21,6 +22,7 @@ func TestMaxComputeStore(t *testing.T) {
 	log := log.NewNoop()
 	projectName, schemaName, tableName := "proj", "schema", "test_table"
 	fullName := projectName + "." + schemaName + "." + tableName
+	maxSyncDelayTolerance := 0 * time.Hour
 	tnnt, _ := tenant.NewTenant(projectName, "ns")
 	pts, _ := tenant.NewPlainTextSecret("secret_name", "secret_value")
 	maskingPolicySecret, _ := tenant.NewPlainTextSecret("masking_policy_secret_name", "masking_policy_secret_value")
@@ -45,7 +47,7 @@ func TestMaxComputeStore(t *testing.T) {
 			defer secretProvider.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -63,7 +65,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(nil, errors.New("error in client"))
 			defer clientProvider.AssertExpectations(t)
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -84,7 +86,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
 			defer clientProvider.AssertExpectations(t)
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(projectName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -106,7 +108,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(fullName, "unknown", store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -144,7 +146,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", maskingPolicySecret.Value()).Return(maskingPolicyClient, nil)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 			err = mcStore.Create(ctx, res)
 			assert.Nil(t, err)
 		})
@@ -169,7 +171,32 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+			err = mcStore.Create(ctx, res)
+			assert.Nil(t, err)
+		})
+		t.Run("return success when calls appropriate handler for schema", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Create", res).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("SchemaHandleFrom", mock.Anything).Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 			err = mcStore.Create(ctx, res)
 			assert.Nil(t, err)
 		})
@@ -182,7 +209,7 @@ func TestMaxComputeStore(t *testing.T) {
 			defer secretProvider.AssertExpectations(t)
 
 			clientProvider := new(mockClientProvider)
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -200,7 +227,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(nil, errors.New("error in client"))
 			defer clientProvider.AssertExpectations(t)
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -221,7 +248,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider := new(mockClientProvider)
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
 			defer clientProvider.AssertExpectations(t)
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(projectName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -243,7 +270,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			res, err := resource.NewResource(fullName, "unknown", store, tnnt, &metadata, spec)
 			assert.Nil(t, err)
@@ -281,7 +308,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", maskingPolicySecret.Value()).Return(maskingPolicyClient, nil)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 			err = mcStore.Update(ctx, res)
 			assert.Nil(t, err)
 		})
@@ -306,7 +333,32 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+			err = mcStore.Update(ctx, res)
+			assert.Nil(t, err)
+		})
+		t.Run("return success when calls appropriate handler for schema", func(t *testing.T) {
+			secretProvider := new(mockSecretProvider)
+			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").
+				Return(pts, nil)
+			defer secretProvider.AssertExpectations(t)
+
+			res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			tableHandle := new(mockTableResourceHandle)
+			tableHandle.On("Update", res).Return(nil)
+			defer tableHandle.AssertExpectations(t)
+
+			client := new(mockClient)
+			client.On("SchemaHandleFrom", mock.Anything).Return(tableHandle)
+			defer client.AssertExpectations(t)
+
+			clientProvider := new(mockClientProvider)
+			clientProvider.On("Get", pts.Value()).Return(client, nil)
+			defer clientProvider.AssertExpectations(t)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 			err = mcStore.Update(ctx, res)
 			assert.Nil(t, err)
 		})
@@ -325,7 +377,7 @@ func TestMaxComputeStore(t *testing.T) {
 			res, err := resource.NewResource(fullName, "unknown", store, tnnt, &metadata, invalidSpec)
 			assert.Nil(t, err)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 			err = mcStore.Validate(res)
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "unknown kind")
@@ -336,7 +388,7 @@ func TestMaxComputeStore(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Equal(t, fullName, res.FullName())
 
-				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize)
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 				err = mcStore.Validate(res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
@@ -346,7 +398,7 @@ func TestMaxComputeStore(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Equal(t, fullName, res.FullName())
 
-				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize)
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 				err = mcStore.Validate(res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "empty schema for table "+fullName)
@@ -358,7 +410,7 @@ func TestMaxComputeStore(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Equal(t, fullName, res.FullName())
 
-				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize)
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 				err = mcStore.Validate(res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "not able to decode spec for "+fullName)
@@ -368,10 +420,55 @@ func TestMaxComputeStore(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Equal(t, fullName, res.FullName())
 
-				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize)
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 				err = mcStore.Validate(res)
 				assert.NotNil(t, err)
 				assert.ErrorContains(t, err, "view query is empty for "+fullName)
+			})
+		})
+		t.Run("for schema", func(t *testing.T) {
+			schemaSpec := map[string]any{
+				"description": "schema description / comment",
+				"project":     projectName,
+				"database":    schemaName,
+			}
+			t.Run("returns error when project name is empty", func(t *testing.T) {
+				invalidSchemaSpec := map[string]any{
+					"description": "schema description / comment",
+				}
+
+				res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, invalidSchemaSpec)
+				assert.NoError(t, err)
+				assert.NotNil(t, res)
+
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+				err = mcStore.Validate(res)
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, "project name is empty for "+fullName)
+			})
+			t.Run("returns error when database / schema name is empty", func(t *testing.T) {
+				invalidSchemaSpec := map[string]any{
+					"description": "schema description / comment",
+					"project":     projectName,
+				}
+
+				res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, invalidSchemaSpec)
+				assert.NoError(t, err)
+				assert.NotNil(t, res)
+
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+				err = mcStore.Validate(res)
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, "database name is empty for "+fullName)
+			})
+			t.Run("returns nil error when validation passes", func(t *testing.T) {
+				res, err := resource.NewResource(fullName, maxcompute.KindSchema, store, tnnt, &metadata, schemaSpec)
+				assert.Nil(t, err)
+				assert.Equal(t, fullName, res.FullName())
+
+				mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
+				err = mcStore.Validate(res)
+				assert.NoError(t, err)
 			})
 		})
 	})
@@ -389,7 +486,7 @@ func TestMaxComputeStore(t *testing.T) {
 			res, err := resource.NewResource(projectName+"."+schemaName+"."+tableName, maxcompute.KindTable, store, tnnt, &metadata, spec)
 			assert.NoError(t, err)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, nil, nil, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 			actualURN, err := mcStore.GetURN(res)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedURN, actualURN)
@@ -403,7 +500,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider := new(mockClientProvider)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			urn, err := resource.NewURN("random_store", "project.table")
 			assert.NoError(t, err)
@@ -421,7 +518,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider := new(mockClientProvider)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
@@ -439,7 +536,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", pts.Value()).Return(nil, errors.New("error in client"))
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
@@ -461,7 +558,7 @@ func TestMaxComputeStore(t *testing.T) {
 			clientProvider.On("Get", pts.Value()).Return(client, nil)
 			defer clientProvider.AssertExpectations(t)
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			urn, err := resource.NewURN("maxcompute", projectName)
 			assert.NoError(t, err)
@@ -470,7 +567,7 @@ func TestMaxComputeStore(t *testing.T) {
 			assert.False(t, actualExist)
 			assert.ErrorContains(t, actualError, "invalid schema name: "+projectName)
 		})
-		t.Run("returns true and error when resource name is invalid", func(t *testing.T) {
+		t.Run("returns false and nil error when schema is not exists", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
 			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
 			defer secretProvider.AssertExpectations(t)
@@ -483,40 +580,23 @@ func TestMaxComputeStore(t *testing.T) {
 			defer clientProvider.AssertExpectations(t)
 
 			tableHandle := new(mockTableResourceHandle)
-			defer tableHandle.AssertExpectations(t)
+			schemaHandle := new(mockTableResourceHandle)
+			defer func() {
+				tableHandle.AssertExpectations(t)
+				schemaHandle.AssertExpectations(t)
+			}()
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			client.On("SchemaHandleFrom", mock.Anything).Return(schemaHandle)
+			schemaHandle.On("Exists", mock.Anything).Return(false)
+
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			urn, err := resource.NewURN("maxcompute", "project.table")
 			assert.NoError(t, err)
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
-			assert.True(t, actualExist)
-			assert.ErrorContains(t, actualError, "invalid resource name: project.table")
-		})
-		t.Run("returns true and error when resource name is empty", func(t *testing.T) {
-			secretProvider := new(mockSecretProvider)
-			secretProvider.On("GetSecret", mock.Anything, tnnt, "DATASTORE_MAXCOMPUTE").Return(pts, nil)
-			defer secretProvider.AssertExpectations(t)
-
-			client := new(mockClient)
-			defer client.AssertExpectations(t)
-
-			clientProvider := new(mockClientProvider)
-			clientProvider.On("Get", pts.Value()).Return(client, nil)
-			defer clientProvider.AssertExpectations(t)
-
-			tableHandle := new(mockTableResourceHandle)
-			defer tableHandle.AssertExpectations(t)
-
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
-
-			urn, err := resource.NewURN("maxcompute", "project.schema.")
-			assert.NoError(t, err)
-
-			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
-			assert.True(t, actualExist)
-			assert.ErrorContains(t, actualError, "invalid resource name: project.schema.")
+			assert.False(t, actualExist)
+			assert.NoError(t, actualError)
 		})
 		t.Run("returns true and nil when schema table resource does exist", func(t *testing.T) {
 			secretProvider := new(mockSecretProvider)
@@ -536,16 +616,21 @@ func TestMaxComputeStore(t *testing.T) {
 			mpHandle := new(mockTableMaskingPolicyHandle)
 			tableHandle := new(mockTableResourceHandle)
 			viewHandle := new(mockTableResourceHandle)
+			schemaHandle := new(mockTableResourceHandle)
 			defer func() {
 				tableHandle.AssertExpectations(t)
 				viewHandle.AssertExpectations(t)
 				mpHandle.AssertExpectations(t)
+				schemaHandle.AssertExpectations(t)
 			}()
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
+
+			client.On("SchemaHandleFrom", mock.Anything).Return(schemaHandle)
+			schemaHandle.On("Exists", mock.Anything).Return(true)
 
 			client.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(mpHandle).Maybe()
 			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything, mpHandle).Return(viewHandle).Maybe()
@@ -577,16 +662,21 @@ func TestMaxComputeStore(t *testing.T) {
 			mpHandle := new(mockTableMaskingPolicyHandle)
 			tableHandle := new(mockTableResourceHandle)
 			viewHandle := new(mockTableResourceHandle)
+			schemaHandle := new(mockTableResourceHandle)
 			defer func() {
 				tableHandle.AssertExpectations(t)
 				viewHandle.AssertExpectations(t)
-				defer mpHandle.AssertExpectations(t)
+				mpHandle.AssertExpectations(t)
+				schemaHandle.AssertExpectations(t)
 			}()
 
-			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize)
+			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
 
 			urn, err := resource.NewURN("maxcompute", "project.schema.table")
 			assert.NoError(t, err)
+
+			client.On("SchemaHandleFrom", mock.Anything).Return(schemaHandle)
+			schemaHandle.On("Exists", mock.Anything).Return(true)
 
 			client.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(mpHandle).Maybe()
 			client.On("TableHandleFrom", mock.Anything, mpHandle).Return(tableHandle).Maybe()
@@ -644,6 +734,11 @@ func (m *mockClient) ExternalTableHandleFrom(schema maxcompute.ProjectSchema, te
 func (m *mockClient) TableMaskingPolicyHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableMaskingPolicyHandle {
 	args := m.Called(schema)
 	return args.Get(0).(maxcompute.TableMaskingPolicyHandle)
+}
+
+func (m *mockClient) SchemaHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableResourceHandle {
+	args := m.Called(schema)
+	return args.Get(0).(maxcompute.TableResourceHandle)
 }
 
 type mockClientProvider struct {

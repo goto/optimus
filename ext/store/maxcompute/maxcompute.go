@@ -3,6 +3,7 @@ package maxcompute
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/goto/salt/log"
 	"go.opentelemetry.io/otel"
@@ -37,6 +38,7 @@ type Client interface {
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
 	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema) TableMaskingPolicyHandle
+	SchemaHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -53,7 +55,8 @@ type TenantDetailsGetter interface {
 
 type SyncRepo interface {
 	Upsert(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, success bool) error
-	Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) error
+	Touch(ctx context.Context, projectName tenant.ProjectName, entityType string, identifiers []string) error
+	UpsertRevision(ctx context.Context, projectName tenant.ProjectName, entityType, identifier string, remarks map[string]string, revision int, success bool) error
 }
 
 type MaxCompute struct {
@@ -64,6 +67,7 @@ type MaxCompute struct {
 	SyncRepo                  SyncRepo
 	maxFileSizeSupported      int
 	driveFileCleanupSizeLimit int
+	maxSyncDelayTolerance     time.Duration
 }
 
 func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
@@ -95,7 +99,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		return handle.Create(res)
 
 	case KindExternalTable:
-		syncer := NewSyncer(m.logger, m.secretProvider, m.tenantGetter, m.SyncRepo, m.maxFileSizeSupported, m.driveFileCleanupSizeLimit)
+		syncer := NewSyncer(m.logger, m.secretProvider, m.tenantGetter, m.SyncRepo, m.maxFileSizeSupported, m.driveFileCleanupSizeLimit, m.maxSyncDelayTolerance)
 		err = syncer.Sync(ctx, res)
 		if err != nil {
 			return errors.Wrap(EntityExternalTable, "unable to sync", err)
@@ -108,6 +112,9 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
+		return handle.Create(res)
+	case KindSchema:
+		handle := odpsClient.SchemaHandleFrom(projectSchema)
 		return handle.Create(res)
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
@@ -160,7 +167,9 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		return handle.Update(res)
-
+	case KindSchema:
+		handle := odpsClient.SchemaHandleFrom(projectSchema)
+		return handle.Update(res)
 	default:
 		return errors.InvalidArgument(store, "invalid kind for maxcompute resource "+res.Kind())
 	}
@@ -192,7 +201,12 @@ func (MaxCompute) Validate(r *resource.Resource) error {
 			return err
 		}
 		return extTable.Validate()
-
+	case KindSchema:
+		schema, err := ConvertSpecToSchemaDetails(r)
+		if err != nil {
+			return err
+		}
+		return schema.Validate()
 	default:
 		return errors.InvalidArgument(resource.EntityResource, "unknown kind")
 	}
@@ -230,6 +244,10 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		return false, err
 	}
 
+	if !client.SchemaHandleFrom(projectSchema).Exists(name.String()) {
+		return false, nil
+	}
+
 	kindToHandleFn := map[string]func(projectSchema ProjectSchema) TableResourceHandle{
 		KindTable: func(projectSchema ProjectSchema) TableResourceHandle {
 			maskingPolicyClient, err := m.initializeClient(spanCtx, tnnt, accountMaskPolicyKey)
@@ -252,8 +270,8 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		},
 	}
 
-	for _, resourceHandleFn := range kindToHandleFn {
-		resourceName, err := resourceNameFor(name)
+	for kind, resourceHandleFn := range kindToHandleFn {
+		resourceName, err := resourceNameFor(name, kind)
 		if err != nil {
 			return true, err
 		}
@@ -272,7 +290,7 @@ func startChildSpan(ctx context.Context, name string) (context.Context, trace.Sp
 	return tracer.Start(ctx, name)
 }
 
-func NewMaxComputeDataStore(logger log.Logger, secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter, syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int) *MaxCompute {
+func NewMaxComputeDataStore(logger log.Logger, secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter, syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int, maxSyncDelayTolerance time.Duration) *MaxCompute {
 	return &MaxCompute{
 		logger:                    logger,
 		secretProvider:            secretProvider,
@@ -281,5 +299,6 @@ func NewMaxComputeDataStore(logger log.Logger, secretProvider SecretProvider, cl
 		SyncRepo:                  syncRepo,
 		maxFileSizeSupported:      maxFileSizeSupported,
 		driveFileCleanupSizeLimit: driveFileCleanupSizeLimit,
+		maxSyncDelayTolerance:     maxSyncDelayTolerance,
 	}
 }

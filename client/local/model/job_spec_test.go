@@ -28,6 +28,8 @@ func (s *JobSpecTestSuite) TestToProto() {
 
 		expectedProto := s.getCompleteJobSpecProto()
 		expectedProto.Behavior = nil
+		expectedProto.TaskName = ""
+		expectedProto.Config = nil
 
 		actualProto := jobSpec.ToProto()
 
@@ -40,6 +42,8 @@ func (s *JobSpecTestSuite) TestToProto() {
 
 		expectedProto := s.getCompleteJobSpecProto()
 		expectedProto.Metadata = nil
+		expectedProto.TaskName = ""
+		expectedProto.Config = nil
 
 		actualProto := jobSpec.ToProto()
 
@@ -52,6 +56,8 @@ func (s *JobSpecTestSuite) TestToProto() {
 
 		expectedProto := s.getCompleteJobSpecProto()
 		expectedProto.Metadata.Resource.Request = nil
+		expectedProto.TaskName = ""
+		expectedProto.Config = nil
 
 		actualProto := jobSpec.ToProto()
 
@@ -62,6 +68,8 @@ func (s *JobSpecTestSuite) TestToProto() {
 		jobSpec := s.getCompleteJobSpec()
 
 		expectedProto := s.getCompleteJobSpecProto()
+		expectedProto.TaskName = ""
+		expectedProto.Config = nil
 
 		actualProto := jobSpec.ToProto()
 
@@ -207,6 +215,15 @@ func (*JobSpecTestSuite) getCompleteJobSpecProto() *pb.JobSpecification {
 			{
 				Name:  "taskkey",
 				Value: "taskvalue",
+			},
+		},
+		Task: &pb.JobSpecTask{
+			Name: "job_task_1",
+			Config: []*pb.JobConfigItem{
+				{
+					Name:  "taskkey",
+					Value: "taskvalue",
+				},
 			},
 		},
 		WindowSize:       "24h",

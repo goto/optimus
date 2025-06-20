@@ -67,7 +67,7 @@ func TestJobService(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	taskName, _ := job.TaskNameFrom("bq2bq")
-	jobTask := job.NewTask(taskName, jobTaskConfig)
+	jobTask := job.NewTask(taskName, jobTaskConfig, "")
 	jobAsset := job.Asset(map[string]string{
 		"query.sql": "select * from `project.dataset.sample`",
 	})
@@ -362,7 +362,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 
-			nonBq2bqTask := job.NewTask("another", nil)
+			nonBq2bqTask := job.NewTask("another", nil, "")
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, nonBq2bqTask).Build()
 			specs := []*job.Spec{specA}
 
@@ -986,7 +986,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 
-			nonBq2bqTask := job.NewTask("another", nil)
+			nonBq2bqTask := job.NewTask("another", nil, "")
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, nonBq2bqTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
 
@@ -1517,7 +1517,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 
-			nonBq2bqTask := job.NewTask("another", nil)
+			nonBq2bqTask := job.NewTask("another", nil, "")
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, nonBq2bqTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
 

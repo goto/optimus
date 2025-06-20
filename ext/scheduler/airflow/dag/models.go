@@ -47,12 +47,12 @@ func PrepareTask(job *scheduler.Job, pluginRepo PluginRepo) (Task, error) {
 		return Task{}, errors.NotFound(EntitySchedulerAirflow, "plugin not found for "+job.Task.Name)
 	}
 
-	img, err := spec.GetImage(job.Task.Config)
+	img, err := spec.GetImage(job.Task.Version)
 	if err != nil {
 		return Task{}, errors.NotFound("schedulerAirflow", "error in getting image "+job.Task.Name)
 	}
 
-	ep, err := spec.GetEntrypoint(job.Task.Config)
+	ep, err := spec.GetEntrypoint(job.Task.Version)
 	if err != nil {
 		return Task{}, errors.NotFound("schedulerAirflow", "error in getting entrypoint "+job.Task.Name)
 	}
@@ -82,12 +82,12 @@ func PrepareHooksForJob(job *scheduler.Job, pluginRepo PluginRepo) (Hooks, error
 			return Hooks{}, errors.NotFound("schedulerAirflow", "hook not found for name "+h.Name)
 		}
 
-		img, err := spec.GetImage(h.Config)
+		img, err := spec.GetImage(h.Version)
 		if err != nil {
 			return Hooks{}, errors.NotFound("schedulerAirflow", "error in getting image "+h.Name)
 		}
 
-		ep, err := spec.GetEntrypoint(h.Config)
+		ep, err := spec.GetEntrypoint(h.Version)
 		if err != nil {
 			return Hooks{}, errors.NotFound("schedulerAirflow", "error in getting entrypoint "+h.Name)
 		}

@@ -111,7 +111,7 @@ func TestInfo(t *testing.T) {
 		result, err := pluginService.Info(ctx, taskName)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
-		img, err := result.GetImage(map[string]string{})
+		img, err := result.GetImage("")
 		assert.NoError(t, err)
 		assert.Equal(t, "docker.io/goto/optimus-task-bq2bq-executor:latest", img)
 	})

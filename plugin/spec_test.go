@@ -26,7 +26,7 @@ func TestPluginSpec(t *testing.T) {
 			},
 		}
 
-		image, err := spec.GetImage(map[string]string{})
+		image, err := spec.GetImage("")
 		assert.NoError(t, err)
 		assert.Equal(t, "example.io/namespace/bq2bq-executor:latest", image)
 	})
@@ -46,7 +46,7 @@ func TestPluginSpec(t *testing.T) {
 			},
 		}
 
-		image, err := spec.GetImage(map[string]string{"VERSION": "3.5"})
+		image, err := spec.GetImage("3.5")
 		assert.NoError(t, err)
 		assert.Equal(t, "example.io/namespace/bq2bq-executor:3.5.0", image)
 	})
@@ -65,7 +65,7 @@ func TestPluginSpec(t *testing.T) {
 			},
 		}
 
-		ep, err := spec.GetEntrypoint(map[string]string{})
+		ep, err := spec.GetEntrypoint("")
 		assert.NoError(t, err)
 		assert.Equal(t, "/bin/bash", ep.Shell)
 		assert.Equal(t, "python3 /opt/bumblebee/main.py", ep.Script)
@@ -90,7 +90,7 @@ func TestPluginSpec(t *testing.T) {
 			},
 		}
 
-		ep, err := spec.GetEntrypoint(map[string]string{"VERSION": "3.5"})
+		ep, err := spec.GetEntrypoint("3.5")
 		assert.NoError(t, err)
 		assert.Equal(t, "/bin/zsh", ep.Shell)
 		assert.Equal(t, "python3 /opt/bumblebee/main.py", ep.Script)
@@ -109,7 +109,7 @@ func TestPluginSpec(t *testing.T) {
 			},
 		}
 
-		ep, err := spec.GetEntrypoint(map[string]string{})
+		ep, err := spec.GetEntrypoint("")
 		assert.NoError(t, err)
 		assert.Equal(t, "/bin/sh", ep.Shell)
 	})

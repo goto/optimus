@@ -90,13 +90,15 @@ func (j *Job) URN() string {
 }
 
 type Task struct {
-	Name   string
-	Config map[string]string
+	Name    string
+	Version string
+	Config  map[string]string
 }
 
 type Hook struct {
-	Name   string
-	Config map[string]string
+	Name    string
+	Version string
+	Config  map[string]string
 }
 
 // JobWithDetails contains the details for a job

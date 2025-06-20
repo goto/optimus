@@ -20,8 +20,7 @@ const (
 	BQParser         ParserType = "bq"
 	MaxcomputeParser ParserType = "maxcompute"
 
-	PluginVersionKey = "VERSION"
-	DefaultVersion   = "default"
+	DefaultVersion = "default"
 )
 
 type Evaluator struct {
@@ -85,19 +84,18 @@ func (s *Spec) Validate() error {
 	return nil
 }
 
-func (s *Spec) GetImage(config map[string]string) (string, error) {
+func (s *Spec) GetImage(version string) (string, error) {
 	def, ok := s.PluginVersion[DefaultVersion]
 	if !ok {
 		return "", errors.New("default version not found")
 	}
 
-	verKey, ok := config[PluginVersionKey]
-	if !ok {
-		return fmt.Sprintf("%s:%s", def.Image, def.Tag), nil
-	}
-	ver, ok := s.PluginVersion[verKey]
-	if !ok {
-		return fmt.Sprintf("%s:%s", def.Image, def.Tag), nil
+	ver := VersionDetails{}
+	if version != "" {
+		details, ok := s.PluginVersion[version]
+		if ok {
+			ver = details
+		}
 	}
 
 	img := utils.GetFirstNonEmpty(ver.Image, def.Image)
@@ -106,19 +104,16 @@ func (s *Spec) GetImage(config map[string]string) (string, error) {
 	return fmt.Sprintf("%s:%s", img, tag), nil
 }
 
-func (s *Spec) GetEntrypoint(config map[string]string) (Entrypoint, error) {
+func (s *Spec) GetEntrypoint(version string) (Entrypoint, error) {
 	def, ok := s.PluginVersion[DefaultVersion]
 	if !ok {
 		return Entrypoint{}, errors.New("default version not found")
 	}
 
 	ver := Entrypoint{}
-	verKey, ok := config[PluginVersionKey]
-	if ok {
-		v1, okVer := s.PluginVersion[verKey]
-		if okVer {
-			ver = v1.Entrypoint
-		}
+	v1, okVer := s.PluginVersion[version]
+	if okVer {
+		ver = v1.Entrypoint
 	}
 
 	shell := utils.GetFirstNonEmpty(ver.Shell, def.Entrypoint.Shell, "/bin/sh")

@@ -30,15 +30,20 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		CatchUp:        jobEntity.Spec().Schedule().CatchUp(),
 		TaskName:       spec.Task().Name().String(),
 		Config:         fromConfig(spec.Task().Config()),
-		Dependencies:   fromSpecUpstreams(spec.UpstreamSpec()),
-		Assets:         fromAsset(spec.Asset()),
-		Hooks:          fromHooks(spec.Hooks()),
-		Description:    spec.Description(),
-		Labels:         spec.Labels(),
-		Behavior:       fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
-		Metadata:       fromMetadata(spec.Metadata()),
-		Destination:    jobEntity.Destination().String(),
-		Sources:        fromResourceURNs(jobEntity.Sources()),
+		Task: &pb.JobSpecTask{
+			Name:    spec.Task().Name().String(),
+			Version: spec.Task().Version(),
+			Config:  fromConfig(spec.Task().Config()),
+		},
+		Dependencies: fromSpecUpstreams(spec.UpstreamSpec()),
+		Assets:       fromAsset(spec.Asset()),
+		Hooks:        fromHooks(spec.Hooks()),
+		Description:  spec.Description(),
+		Labels:       spec.Labels(),
+		Behavior:     fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
+		Metadata:     fromMetadata(spec.Metadata()),
+		Destination:  jobEntity.Destination().String(),
+		Sources:      fromResourceURNs(jobEntity.Sources()),
 	}
 
 	if spec.Version() == window.NewWindowVersion {
@@ -140,17 +145,17 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	}
 
 	var taskConfig job.Config
-	if js.Config != nil {
-		taskConfig, err = toConfig(js.Config)
+	if js.Task.Config != nil {
+		taskConfig, err = toConfig(js.Task.Config)
 		if err != nil {
 			return nil, err
 		}
 	}
-	taskName, err := job.TaskNameFrom(js.TaskName)
+	taskName, err := job.TaskNameFrom(js.Task.Name)
 	if err != nil {
 		return nil, err
 	}
-	task := job.NewTask(taskName, taskConfig)
+	task := job.NewTask(taskName, taskConfig, js.Task.Version)
 
 	jobSpecBuilder := job.NewSpecBuilder(version, name, owner, schedule, window, task).WithDescription(js.Description)
 
@@ -275,7 +280,7 @@ func toHooks(hooksProto []*pb.JobSpecHook) ([]*job.Hook, error) {
 		if err != nil {
 			return nil, err
 		}
-		hookSpec, err := job.NewHook(hookProto.Name, hookConfig)
+		hookSpec, err := job.NewHook(hookProto.Name, hookConfig, hookProto.Version)
 		if err != nil {
 			return nil, err
 		}
@@ -288,8 +293,9 @@ func fromHooks(hooks []*job.Hook) []*pb.JobSpecHook {
 	var hooksProto []*pb.JobSpecHook
 	for _, hook := range hooks {
 		hooksProto = append(hooksProto, &pb.JobSpecHook{
-			Name:   hook.Name(),
-			Config: fromConfig(hook.Config()),
+			Name:    hook.Name(),
+			Version: hook.Version(),
+			Config:  fromConfig(hook.Config()),
 		})
 	}
 	return hooksProto

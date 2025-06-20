@@ -112,9 +112,9 @@ func (v *versionCommand) printAllPluginInfos() {
 	i := 0
 	for task := range v.pluginRepo.All {
 		i++
-		v.logger.Info("%d. %s\n", i, task.Name)
-		v.logger.Info("Description: %s\n", task.Description)
-		v.logger.Info("Version: %d\n", task.SpecVersion)
+		v.logger.Info("\n%d. %s", i, task.Name)
+		v.logger.Info("Description: %s", task.Description)
+		v.logger.Info("Version: %d", task.SpecVersion)
 		for ver, details := range task.PluginVersion {
 			v.logger.Info("Version: %s", ver)
 			v.logger.Info("  Image: %s:%s", details.Image, details.Tag)

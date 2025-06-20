@@ -5,7 +5,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 )
 
 type DummyJobBuilder struct {
@@ -52,11 +51,10 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 	}
 
 	version := 1
-	w, err := models.NewWindow(version, "d", "24h", "24h")
+	windowConfig, err := window.NewConfig("1d", "1d", "", "")
 	if err != nil {
 		panic(err)
 	}
-	windowConfig := window.NewCustomConfig(w)
 
 	taskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_task_value"})
 	if err != nil {

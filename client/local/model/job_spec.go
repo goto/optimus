@@ -72,9 +72,7 @@ type JobSpecTask struct {
 }
 
 type JobSpecTaskWindow struct {
-	Size string `yaml:"size,omitempty"`
-	// deprecated, replaced by ShiftBy
-	Offset     string `yaml:"offset,omitempty"`
+	Size       string `yaml:"size,omitempty"`
 	TruncateTo string `yaml:"truncate_to,omitempty"`
 	Preset     string `yaml:"preset,omitempty"`
 	ShiftBy    string `yaml:"shift_by,omitempty"`
@@ -138,21 +136,13 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 		Labels:        j.Labels,
 		Behavior:      j.getProtoJobSpecBehavior(),
 		Metadata:      j.getProtoJobMetadata(),
-	}
-
-	if js.Version < NewWindowVersion {
-		js.WindowSize = j.Task.Window.Size
-		js.WindowOffset = j.Task.Window.Offset
-		js.WindowTruncateTo = j.Task.Window.TruncateTo
-		js.WindowPreset = j.Task.Window.Preset
-	} else {
-		js.Window = &pb.JobSpecification_Window{
+		Window: &pb.JobSpecification_Window{
 			Preset:     j.Task.Window.Preset,
 			Size:       j.Task.Window.Size,
 			ShiftBy:    j.Task.Window.ShiftBy,
 			Location:   j.Task.Window.Location,
 			TruncateTo: j.Task.Window.TruncateTo,
-		}
+		},
 	}
 
 	return js
@@ -386,9 +376,11 @@ func (j *JobSpec) MergeFrom(anotherJobSpec *JobSpec) {
 	}
 
 	j.Task.Name = getValue(j.Task.Name, anotherJobSpec.Task.Name)
-	j.Task.Window.TruncateTo = getValue(j.Task.Window.TruncateTo, anotherJobSpec.Task.Window.TruncateTo)
-	j.Task.Window.Offset = getValue(j.Task.Window.Offset, anotherJobSpec.Task.Window.Offset)
 	j.Task.Window.Size = getValue(j.Task.Window.Size, anotherJobSpec.Task.Window.Size)
+	j.Task.Window.TruncateTo = getValue(j.Task.Window.TruncateTo, anotherJobSpec.Task.Window.TruncateTo)
+	j.Task.Window.Preset = getValue(j.Task.Window.Preset, anotherJobSpec.Task.Window.Preset)
+	j.Task.Window.ShiftBy = getValue(j.Task.Window.ShiftBy, anotherJobSpec.Task.Window.ShiftBy)
+	j.Task.Window.Location = getValue(j.Task.Window.Location, anotherJobSpec.Task.Window.Location)
 	if anotherJobSpec.Task.Config != nil {
 		if j.Task.Config == nil {
 			j.Task.Config = map[string]string{}
@@ -474,23 +466,15 @@ func getValue[V int | string | bool | time.Duration](reference, other V) V {
 
 func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 	var w JobSpecTaskWindow
-	if protoSpec.Version < NewWindowVersion {
-		w = JobSpecTaskWindow{
-			Size:       protoSpec.WindowSize,
-			Offset:     protoSpec.WindowOffset,
-			TruncateTo: protoSpec.WindowTruncateTo,
-			Preset:     protoSpec.WindowPreset,
-		}
-	} else {
-		wc := protoSpec.Window
-		w = JobSpecTaskWindow{
-			Size:       wc.Size,
-			ShiftBy:    wc.ShiftBy,
-			TruncateTo: wc.TruncateTo,
-			Location:   wc.Location,
-			Preset:     wc.Preset,
-		}
+	wc := protoSpec.Window
+	w = JobSpecTaskWindow{
+		Size:       wc.Size,
+		ShiftBy:    wc.ShiftBy,
+		TruncateTo: wc.TruncateTo,
+		Location:   wc.Location,
+		Preset:     wc.Preset,
 	}
+
 	return &JobSpec{
 		Version:     int(protoSpec.Version),
 		Name:        protoSpec.Name,

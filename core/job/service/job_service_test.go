@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +20,6 @@ import (
 	"github.com/goto/optimus/internal/compiler"
 	optErrors "github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/optimus/plugin"
@@ -59,8 +57,8 @@ func TestJobService(t *testing.T) {
 	assert.NoError(t, err)
 	jobSchedule, err := job.NewScheduleBuilder(startDate).Build()
 	assert.NoError(t, err)
-	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
-	jobWindow := window.NewCustomConfig(w)
+	jobWindow, err := window.NewConfig("1d", "1d", "", "")
+	assert.NoError(t, err)
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{
 		"sample_task_key":    "sample_value",
 		"BQ_SERVICE_ACCOUNT": "service_account",
@@ -2151,8 +2149,8 @@ func TestJobService(t *testing.T) {
 
 			incomingSpecs := []*job.Spec{specA}
 
-			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
-			existingJobWindow := window.NewCustomConfig(w2)
+			existingJobWindow, err := window.NewConfig("1d", "", "", "")
+			assert.NoError(t, err)
 			existingSpecA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName, false)
 			existingSpecs := []*job.Job{existingJobA}
@@ -2187,7 +2185,7 @@ func TestJobService(t *testing.T) {
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertManager)
 
-			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
+			err = jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
 			assert.NoError(t, err)
 		})
 		t.Run("deletes the removed jobs", func(t *testing.T) {
@@ -2350,8 +2348,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			incomingSpecs := []*job.Spec{specA, specB}
 
-			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
-			existingJobWindow := window.NewCustomConfig(w2)
+			existingJobWindow, err := window.NewConfig("1d", "", "", "")
+			assert.NoError(t, err)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, resource.ZeroURN(), nil, false)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -2407,7 +2405,7 @@ func TestJobService(t *testing.T) {
 			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, mock.Anything, emptyStringArr).Return(nil).Once()
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertManager)
-			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
+			err = jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
 			assert.NoError(t, err)
 		})
 		t.Run("should not return error if modified the job and the downstream in one time", func(t *testing.T) {
@@ -2450,8 +2448,8 @@ func TestJobService(t *testing.T) {
 
 			incomingSpecs := []*job.Spec{specA, specB}
 
-			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
-			existingJobWindow := window.NewCustomConfig(w2)
+			existingJobWindow, err := window.NewConfig("1d", "", "", "")
+			assert.NoError(t, err)
 			existingSpecA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName, false)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -2495,7 +2493,7 @@ func TestJobService(t *testing.T) {
 			}), jobNamesToRemove).Return(nil)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertManager)
-			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
+			err = jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
 			assert.NoError(t, err)
 		})
 		t.Run("skips invalid job when classifying specs as added, modified, or deleted", func(t *testing.T) {
@@ -2533,8 +2531,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			incomingSpecs := []*job.Spec{specA, specB}
 
-			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
-			existingJobWindow := window.NewCustomConfig(w2)
+			existingJobWindow, err := window.NewConfig("1d", "", "", "")
+			assert.NoError(t, err)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, resource.ZeroURN(), nil, false)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -2585,7 +2583,7 @@ func TestJobService(t *testing.T) {
 			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, emptyStringArr, jobNamesToRemove).Return(nil)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertManager)
-			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, []job.Name{"job-D"}, logWriter)
+			err = jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, []job.Name{"job-D"}, logWriter)
 			assert.NoError(t, err)
 		})
 		t.Run("skips adding new invalid jobs, such jobs should be marked as dirty, and left like that, also dont process other jobs to be deleted and early return", func(t *testing.T) {
@@ -2665,8 +2663,8 @@ func TestJobService(t *testing.T) {
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			incomingSpecs := []*job.Spec{specB}
 
-			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
-			existingJobWindow := window.NewCustomConfig(w2)
+			existingJobWindow, err := window.NewConfig("1d", "", "", "")
+			assert.NoError(t, err)
 			existingSpecB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobB := job.NewJob(sampleTenant, existingSpecB, resource.ZeroURN(), nil, false)
 			existingSpecC, _ := job.NewSpecBuilder(jobVersion, "job-C", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -2681,7 +2679,7 @@ func TestJobService(t *testing.T) {
 			alertManager := new(AlertManager)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, eventHandler, log, jobDeploymentService, compiler.NewEngine(), nil, nil, alertManager)
-			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
+			err = jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 		})
 		t.Run("skips to delete jobs if the downstream is not deleted", func(t *testing.T) {
@@ -2872,8 +2870,8 @@ func TestJobService(t *testing.T) {
 
 			incomingSpecs := []*job.Spec{specA}
 
-			w2, _ := models.NewWindow(jobVersion, "d", "0h", "24h")
-			existingJobWindow := window.NewCustomConfig(w2)
+			existingJobWindow, err := window.NewConfig("1d", "", "", "")
+			assert.NoError(t, err)
 			existingSpecA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, existingJobWindow, jobTask).WithAsset(jobAsset).Build()
 			existingJobA := job.NewJob(sampleTenant, existingSpecA, jobADestination, jobAUpstreamName, false)
 			existingSpecs := []*job.Job{existingJobA}
@@ -2890,7 +2888,7 @@ func TestJobService(t *testing.T) {
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
 			jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, jobDeploymentService, compiler.NewEngine(), nil, nil, nil)
-			err := jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
+			err = jobService.ReplaceAll(ctx, sampleTenant, incomingSpecs, jobNamesWithInvalidSpec, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 		})
 		t.Run("should not break process if one of job failed to be deleted", func(t *testing.T) {
@@ -6156,8 +6154,8 @@ type JobRunInputCompiler struct {
 }
 
 // Compile provides a mock function with given fields: ctx, job, config, executedAt
-func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
-	ret := _m.Called(ctx, job, config, executedAt)
+func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
+	ret := _m.Called(ctx, job, config)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Compile")
@@ -6165,19 +6163,19 @@ func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWi
 
 	var r0 *scheduler.ExecutorInput
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) (*scheduler.ExecutorInput, error)); ok {
-		return rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig) (*scheduler.ExecutorInput, error)); ok {
+		return rf(ctx, job, config)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) *scheduler.ExecutorInput); ok {
-		r0 = rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig) *scheduler.ExecutorInput); ok {
+		r0 = rf(ctx, job, config)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*scheduler.ExecutorInput)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) error); ok {
-		r1 = rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(1).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig) error); ok {
+		r1 = rf(ctx, job, config)
 	} else {
 		r1 = ret.Error(1)
 	}

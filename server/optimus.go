@@ -39,7 +39,6 @@ import (
 	"github.com/goto/optimus/ext/transport/kafka"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/store/postgres"
 	jRepo "github.com/goto/optimus/internal/store/postgres/job"
 	"github.com/goto/optimus/internal/store/postgres/resource"
@@ -70,8 +69,8 @@ type OptimusServer struct {
 	grpcServer *grpc.Server
 	httpServer *http.Server
 
-	pluginRepo *models.PluginRepository
-	cleanupFn  []func()
+	pluginStore *plugin.Store
+	cleanupFn   []func()
 
 	eventHandler moderator.Handler
 }
@@ -154,9 +153,8 @@ func (s *OptimusServer) setupPublisher() error {
 }
 
 func (s *OptimusServer) setupPlugins() error {
-	// discover and load plugins.
-	var err error
-	s.pluginRepo, err = plugin.Initialize(s.logger)
+	store, err := plugin.LoadPluginToStore(s.logger, s.conf.Plugins.Location)
+	s.pluginStore = store
 	return err
 }
 
@@ -336,7 +334,7 @@ func (s *OptimusServer) setupHandlers() error {
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
 	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler)
-	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginRepo, tProjectService, tSecretService)
+	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginStore, tProjectService, tSecretService)
 	if err != nil {
 		return err
 	}
@@ -358,15 +356,20 @@ func (s *OptimusServer) setupHandlers() error {
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
+		s.conf.Features,
 	)
+
+	newSchedulerService := schedulerService.NewSchedulerService(newScheduler)
 
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)
-	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginRepo, upstreamIdentifierFactory, evaluatorFactory)
+	pluginService, _ := plugin.NewPluginService(s.logger, s.pluginStore, upstreamIdentifierFactory, evaluatorFactory)
 	syncStatusRepository := sync.NewStatusSyncRepository(s.dbPool)
 
-	syncer := mcStore.NewSyncer(s.logger, tenantService, tenantService, syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported)
+	maxSyncDelayTolerance := time.Duration(s.conf.ExternalTables.MaxSyncDelayTolerance) * time.Hour
+	syncer := mcStore.NewSyncer(s.logger, tenantService, tenantService, syncStatusRepository,
+		s.conf.ExternalTables.MaxFileSizeSupported, s.conf.ExternalTables.DriveFileCleanupSizeLimit, maxSyncDelayTolerance)
 
 	// Resource Bounded Context - requirements
 	resourceRepository := resource.NewRepository(s.dbPool)
@@ -407,7 +410,8 @@ func (s *OptimusServer) setupHandlers() error {
 	resourceManager.RegisterDatastore(rModel.Bigquery, bigqueryStore)
 
 	mcClientProvider := mcStore.NewClientProvider()
-	maxComputeStore := mcStore.NewMaxComputeDataStore(s.logger, tenantService, mcClientProvider, tenantService, syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported)
+	maxComputeStore := mcStore.NewMaxComputeDataStore(s.logger, tenantService, mcClientProvider, tenantService,
+		syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported, s.conf.ExternalTables.DriveFileCleanupSizeLimit, maxSyncDelayTolerance)
 	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	resourceWorkerCtx, closeResourceWorker := context.WithCancel(context.Background())
@@ -429,7 +433,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Resource Handler
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService))
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

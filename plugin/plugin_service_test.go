@@ -14,8 +14,6 @@ import (
 	"github.com/goto/optimus/plugin"
 	upstreamidentifier "github.com/goto/optimus/plugin/upstream_identifier"
 	"github.com/goto/optimus/plugin/upstream_identifier/evaluator"
-	"github.com/goto/optimus/plugin/yaml"
-	p "github.com/goto/optimus/sdk/plugin"
 )
 
 func TestNewPluginService(t *testing.T) {
@@ -79,11 +77,8 @@ func TestInfo(t *testing.T) {
 	logger := log.NewNoop()
 	ctx := context.Background()
 	taskName := "bq2bqtest"
-	pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser.yaml")
+	p1, err := plugin.Load("./tests/sample_plugin_with_parser.yaml")
 	assert.NoError(t, err)
-	pluginTest := &p.Plugin{
-		YamlMod: pluginYamlTest,
-	}
 	t.Run("returns error when no plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
@@ -101,24 +96,6 @@ func TestInfo(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Equal(t, "some error", err.Error())
 	})
-	t.Run("returns error when yaml mod not supported", func(t *testing.T) {
-		pluginGetter := new(PluginGetter)
-		defer pluginGetter.AssertExpectations(t)
-		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
-		evaluatorFactory := new(EvaluatorFactory)
-		defer evaluatorFactory.AssertExpectations(t)
-
-		pluginWithoutYaml := &p.Plugin{}
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginWithoutYaml, nil)
-		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
-		assert.NoError(t, err)
-		assert.NotNil(t, pluginService)
-
-		result, err := pluginService.Info(ctx, taskName)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, "yaml mod not exist", err.Error())
-	})
 	t.Run("returns plugin info", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
@@ -126,7 +103,7 @@ func TestInfo(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -134,7 +111,9 @@ func TestInfo(t *testing.T) {
 		result, err := pluginService.Info(ctx, taskName)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, "docker.io/goto/optimus-task-bq2bq-executor:latest", result.Image)
+		img, err := result.GetImage(map[string]string{})
+		assert.NoError(t, err)
+		assert.Equal(t, "docker.io/goto/optimus-task-bq2bq-executor:latest", img)
 	})
 }
 
@@ -148,23 +127,17 @@ func TestIdentifyUpstreams(t *testing.T) {
 	assets := map[string]string{
 		"query.sql": "select 1;",
 	}
-	pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser.yaml")
+	p1, err := plugin.Load("./tests/sample_plugin_with_parser.yaml")
 	assert.NoError(t, err)
-	pluginTest := &p.Plugin{
-		YamlMod: pluginYamlTest,
-	}
-	pluginYamlTestWithSelector, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_yamlpath_selector.yaml")
+	p2, err := plugin.Load("./tests/sample_plugin_with_parser_and_yamlpath_selector.yaml")
 	assert.NoError(t, err)
-	pluginTestWithSelector := &p.Plugin{
-		YamlMod: pluginYamlTestWithSelector,
-	}
 
 	urn1, err := resource.ParseURN("bigquery://proj:datas.table1")
 	assert.NoError(t, err)
 	urn2, err := resource.ParseURN("bigquery://proj:datas.table2")
 	assert.NoError(t, err)
 
-	t.Run("return error when plugin is not exist on pluginGetter", func(t *testing.T) {
+	t.Run("return error when plugin is not exist on pluginStore", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
 		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
@@ -189,13 +162,10 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluator := new(Evaluator)
 		defer evaluator.AssertExpectations(t)
 
-		pluginYamlWithoutParserTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin.yaml")
+		p3, err := plugin.Load("./tests/sample_plugin.yaml")
 		assert.NoError(t, err)
-		pluginWithoutParserTest := &p.Plugin{
-			YamlMod: pluginYamlWithoutParserTest,
-		}
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginWithoutParserTest, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p3, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -212,7 +182,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(nil, errors.New("some error"))
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
@@ -229,7 +199,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithSelector, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p2, nil)
 		evaluatorFactory.On("GetYamlPathEvaluator", mock.Anything, "$.query").Return(nil, errors.New("some error"))
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
@@ -246,8 +216,8 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginTestWithWrongFilePath := *pluginTestWithSelector // copy by value
-		pluginTestWithWrongFilePath.Info().AssetParsers[p.BQParser][0].FilePath = "wrong_extension.yyx"
+		pluginTestWithWrongFilePath := *p2 // copy by value
+		pluginTestWithWrongFilePath.AssetParsers[plugin.BQParser][0].FilePath = "wrong_extension.yyx"
 		pluginGetter.On("GetByName", mock.Anything).Return(&pluginTestWithWrongFilePath, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
@@ -267,7 +237,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluator := new(Evaluator)
 		defer evaluator.AssertExpectations(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
@@ -287,7 +257,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		evaluator := new(Evaluator)
 		defer evaluator.AssertExpectations(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(nil, errors.New("some error"))
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
@@ -308,7 +278,7 @@ func TestIdentifyUpstreams(t *testing.T) {
 		defer evaluator.AssertExpectations(t)
 		upstreamIdentifier := NewUpstreamIdentifier(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
 		upstreamIdentifier.On("IdentifyResources", ctx, assets, config).Return([]resource.URN{urn1}, nil)
@@ -337,12 +307,9 @@ func TestIdentifyUpstreams(t *testing.T) {
 		configTask["DATASET"] = "datas"
 		configTask["TABLE"] = "table2"
 
-		pluginYamlTestWithDestinationTemplate, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser_and_destination_template.yaml")
+		p1, err := plugin.Load("./tests/sample_plugin_with_parser_and_destination_template.yaml")
 		assert.NoError(t, err)
-		pluginTestWithDestinationTemplate := &p.Plugin{
-			YamlMod: pluginYamlTestWithDestinationTemplate,
-		}
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithDestinationTemplate, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		evaluatorFactory.On("GetFileEvaluator", mock.Anything).Return(evaluator, nil)
 		upstreamIdentifierFactory.On("GetBQUpstreamIdentifier", ctx, mock.Anything, evaluator).Return(upstreamIdentifier, nil)
 		upstreamIdentifier.On("IdentifyResources", ctx, assets, configTask).Return([]resource.URN{urn1, urn2}, nil)
@@ -367,11 +334,8 @@ func TestConstructDestinationURN(t *testing.T) {
 		"DATASET":            "dataset1",
 		"TABLE":              "table1",
 	}
-	pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_destination_template.yaml")
+	p1, err := plugin.Load("./tests/sample_plugin_with_destination_template.yaml")
 	assert.NoError(t, err)
-	pluginTest := &p.Plugin{
-		YamlMod: pluginYamlTest,
-	}
 	t.Run("returns error if unable to find the plugin", func(t *testing.T) {
 		pluginGetter := new(PluginGetter)
 		defer pluginGetter.AssertExpectations(t)
@@ -395,12 +359,9 @@ func TestConstructDestinationURN(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_parser.yaml")
+		p1, err := plugin.Load("./tests/sample_plugin_with_parser.yaml")
 		assert.NoError(t, err)
-		pluginTestWithoutDestinationTemplate := &p.Plugin{
-			YamlMod: pluginYamlTest,
-		}
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestWithoutDestinationTemplate, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -415,12 +376,9 @@ func TestConstructDestinationURN(t *testing.T) {
 		upstreamIdentifierFactory := NewUpstreamIdentifierFactory(t)
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
-		pluginYamlTest, err := yaml.NewPluginSpec("./yaml/tests/sample_plugin_with_unproper_destination_template.yaml")
+		p1, err := plugin.Load("./tests/sample_plugin_with_unproper_destination_template.yaml")
 		assert.NoError(t, err)
-		pluginTestUnproperTemplate := &p.Plugin{
-			YamlMod: pluginYamlTest,
-		}
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTestUnproperTemplate, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -436,7 +394,7 @@ func TestConstructDestinationURN(t *testing.T) {
 		evaluatorFactory := new(EvaluatorFactory)
 		defer evaluatorFactory.AssertExpectations(t)
 
-		pluginGetter.On("GetByName", mock.Anything).Return(pluginTest, nil)
+		pluginGetter.On("GetByName", mock.Anything).Return(p1, nil)
 		pluginService, err := plugin.NewPluginService(logger, pluginGetter, upstreamIdentifierFactory, evaluatorFactory)
 		assert.NoError(t, err)
 		assert.NotNil(t, pluginService)
@@ -456,49 +414,13 @@ type PluginGetter struct {
 }
 
 // GetByName provides a mock function with given fields: name
-func (_m *PluginGetter) GetByName(name string) (*p.Plugin, error) {
+func (_m *PluginGetter) GetByName(name string) (*plugin.Spec, error) {
 	ret := _m.Called(name)
 
-	var r0 *p.Plugin
-	var r1 error
-	if rf, ok := ret.Get(0).(func(string) (*p.Plugin, error)); ok {
-		return rf(name)
+	if ret.Get(0) == nil {
+		return nil, ret.Error(1)
 	}
-	if rf, ok := ret.Get(0).(func(string) *p.Plugin); ok {
-		r0 = rf(name)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*p.Plugin)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(name)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-type YamlMod struct {
-	mock.Mock
-}
-
-// PluginInfo provides a mock function with given fields:
-func (_m *YamlMod) PluginInfo() *p.Info {
-	ret := _m.Called()
-
-	var r0 *p.Info
-	if rf, ok := ret.Get(0).(func() *p.Info); ok {
-		r0 = rf()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*p.Info)
-		}
-	}
-
-	return r0
+	return ret.Get(0).(*plugin.Spec), ret.Error(1)
 }
 
 // UpstreamIdentifierFactory is an autogenerated mock type for the UpstreamIdentifierFactory type
@@ -588,7 +510,7 @@ func NewUpstreamIdentifierFactory(t interface {
 },
 ) *UpstreamIdentifierFactory {
 	mock := &UpstreamIdentifierFactory{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -698,7 +620,7 @@ func NewEvaluatorFactory(t interface {
 },
 ) *EvaluatorFactory {
 	mock := &EvaluatorFactory{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -771,7 +693,7 @@ func NewUpstreamIdentifier(t interface {
 },
 ) *UpstreamIdentifier {
 	mock := &UpstreamIdentifier{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

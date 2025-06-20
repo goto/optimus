@@ -8,10 +8,12 @@ type Kind interface {
 type Setter interface {
 	SetName(string)
 	SetOldNamespace(oldNamespace string)
+	SetPath(string)
 }
 
 type Getter interface {
 	GetName() string
+	GetPath() string
 }
 
 type KindList[kind Kind] []kind

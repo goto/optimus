@@ -6,7 +6,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/sdk/plugin"
+	"github.com/goto/optimus/plugin"
 )
 
 const (
@@ -32,6 +32,7 @@ type TemplateContext struct {
 	Upstreams     Upstreams
 
 	DisableJobScheduling bool
+	EnableRBAC           bool
 }
 
 type Task struct {
@@ -41,17 +42,25 @@ type Task struct {
 }
 
 func PrepareTask(job *scheduler.Job, pluginRepo PluginRepo) (Task, error) {
-	plugin, err := pluginRepo.GetByName(job.Task.Name)
+	spec, err := pluginRepo.GetByName(job.Task.Name)
 	if err != nil {
 		return Task{}, errors.NotFound(EntitySchedulerAirflow, "plugin not found for "+job.Task.Name)
 	}
 
-	info := plugin.Info()
+	img, err := spec.GetImage(job.Task.Config)
+	if err != nil {
+		return Task{}, errors.NotFound("schedulerAirflow", "error in getting image "+job.Task.Name)
+	}
+
+	ep, err := spec.GetEntrypoint(job.Task.Config)
+	if err != nil {
+		return Task{}, errors.NotFound("schedulerAirflow", "error in getting entrypoint "+job.Task.Name)
+	}
 
 	return Task{
-		Name:       info.Name,
-		Image:      info.Image,
-		Entrypoint: info.Entrypoint,
+		Name:       spec.Name,
+		Image:      img,
+		Entrypoint: ep,
 	}, nil
 }
 
@@ -59,56 +68,37 @@ type Hook struct {
 	Name       string
 	Image      string
 	Entrypoint plugin.Entrypoint
-	IsFailHook bool
+	IsFailHook bool // Set to false
 }
 
-type Hooks struct {
-	Pre          []Hook
-	Post         []Hook
-	Fail         []Hook
-	Dependencies map[string]string
-}
-
-func (h Hooks) List() []Hook { //nolint: gocritic
-	list := h.Pre
-	list = append(list, h.Post...)
-	list = append(list, h.Fail...)
-	return list
-}
+type Hooks []Hook
 
 func PrepareHooksForJob(job *scheduler.Job, pluginRepo PluginRepo) (Hooks, error) {
 	var hooks Hooks
-	hooks.Dependencies = map[string]string{}
 
 	for _, h := range job.Hooks {
-		hook, err := pluginRepo.GetByName(h.Name)
+		spec, err := pluginRepo.GetByName(h.Name)
 		if err != nil {
 			return Hooks{}, errors.NotFound("schedulerAirflow", "hook not found for name "+h.Name)
 		}
 
-		info := hook.Info()
-		hk := Hook{
-			Name:       h.Name,
-			Image:      info.Image,
-			Entrypoint: info.Entrypoint,
-		}
-		switch info.HookType {
-		case plugin.HookTypePre:
-			hooks.Pre = append(hooks.Pre, hk)
-		case plugin.HookTypePost:
-			hooks.Post = append(hooks.Post, hk)
-		case plugin.HookTypeFail:
-			hk.IsFailHook = true
-			hooks.Fail = append(hooks.Fail, hk)
+		img, err := spec.GetImage(h.Config)
+		if err != nil {
+			return Hooks{}, errors.NotFound("schedulerAirflow", "error in getting image "+h.Name)
 		}
 
-		for _, before := range info.DependsOn {
-			_, err = job.GetHook(before)
-			if err != nil {
-				continue
-			}
-			hooks.Dependencies[before] = h.Name
+		ep, err := spec.GetEntrypoint(h.Config)
+		if err != nil {
+			return Hooks{}, errors.NotFound("schedulerAirflow", "error in getting entrypoint "+h.Name)
 		}
+
+		hk := Hook{
+			Name:       spec.Name,
+			Image:      img,
+			Entrypoint: ep,
+		}
+
+		hooks = append(hooks, hk)
 	}
 
 	return hooks, nil

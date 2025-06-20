@@ -36,14 +36,15 @@ type ResourceRepository interface {
 	GetAllExternal(ctx context.Context, store resource.Store) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
-	GetExternalCreatFailures(ctx context.Context) ([]*resource.Resource, error)
+	GetExternalCreateFailures(ctx context.Context, resourceType string) ([]*resource.Resource, error)
 }
 
 type Syncer interface {
-	SyncBatch(ctx context.Context, resources []*resource.Resource) ([]resource.SyncStatus, error)
+	SyncBatch(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SyncStatus, error)
 	TouchUnModified(ctx context.Context, project tenant.ProjectName, resources []*resource.Resource) error
 	GetSyncInterval(res *resource.Resource) (int64, error)
-	GetETSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error)
+	GetExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*resource.Resource, []*resource.Resource, error)
+	GetGoogleSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error)
 }
 
 type ResourceManager interface {
@@ -401,65 +402,6 @@ func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store 
 	return rs.repo.ReadAll(ctx, tnnt, store, true)
 }
 
-func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string]resource.SourceModifiedTimeStatus {
-	output := make(map[string]resource.SourceModifiedTimeStatus)
-	for _, status := range input {
-		output[status.FullName] = status
-	}
-	return output
-}
-
-func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, resources []*resource.Resource) ([]*resource.Resource, []*resource.Resource, error) {
-	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
-	mapTenantResources := groupByTenant(resources)
-	for tnnt, res := range mapTenantResources {
-		lastUpdateMap, err := rs.statusRepo.GetLastUpdateTime(ctx, tnnt.ProjectName(), KindExternalTable, res)
-		if err != nil {
-			return nil, nil, err
-		}
-		rs.logger.Info("[ON DB] Fetched last Resource Sync time list ")
-		for resName, updateTime := range lastUpdateMap {
-			rs.logger.Info(fmt.Sprintf("[ON DB] resource: %s, lastUpdateTime in DB: %s ", resName, updateTime.String()))
-		}
-		lastModifiedList, err := rs.syncer.GetETSourceLastModified(ctx, tnnt, res)
-		rs.logger.Info("[On Drive] Fetched last resource update time list ")
-		for _, modifiedTimeStatus := range lastModifiedList {
-			if modifiedTimeStatus.Err == nil {
-				rs.logger.Info(fmt.Sprintf("[On Drive] resource: %s, lastUpdateTime: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.LastModifiedTime))
-			} else {
-				rs.logger.Error(fmt.Sprintf("[On Drive] resource: %s, error: %s ", modifiedTimeStatus.FullName, modifiedTimeStatus.Err.Error()))
-			}
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		lastModifiedMap := lastModifiedListToMap(lastModifiedList)
-		for _, r := range res {
-			lastSyncedAt, ok := lastUpdateMap[r.FullName()]
-			if !ok {
-				toUpdateResources = append(toUpdateResources, r)
-				continue
-			}
-			if r.GetUpdateAt().After(lastSyncedAt) {
-				toUpdateResources = append(toUpdateResources, r)
-				continue
-			}
-			if lastModifiedMap[r.FullName()].Err != nil {
-				rs.logger.Error(fmt.Sprintf("unable to get last modified time, err:%s", lastModifiedMap[r.FullName()].Err.Error()))
-				toUpdateResources = append(toUpdateResources, r)
-				continue
-			}
-			if lastModifiedMap[r.FullName()].LastModifiedTime.After(lastSyncedAt) {
-				toUpdateResources = append(toUpdateResources, r)
-			} else {
-				unModifiedSinceUpdate = append(unModifiedSinceUpdate, r)
-			}
-		}
-	}
-
-	return toUpdateResources, unModifiedSinceUpdate, nil
-}
-
 func groupByTenant(resources []*resource.Resource) map[tenant.Tenant][]*resource.Resource {
 	grouped := make(map[tenant.Tenant][]*resource.Resource)
 	for _, res := range resources {
@@ -496,6 +438,32 @@ func (rs ResourceService) updateLastCheckedUnSyncedETs(ctx context.Context, proj
 	}
 }
 
+func (rs ResourceService) getExternalTablesDueForSync(ctx context.Context, resources []*resource.Resource) ([]*resource.Resource, []*resource.Resource, error) {
+	var toUpdateResources, unModifiedSinceUpdate []*resource.Resource
+	mapTenantResources := groupByTenant(resources)
+	for tnnt, res := range mapTenantResources {
+		dbStatusMap, err := rs.statusRepo.GetLastUpdate(ctx, tnnt.ProjectName(), resources)
+		if err != nil {
+			return nil, nil, err
+		}
+		var resourcesToCheck []*resource.Resource
+		for _, r := range res {
+			if status, ok := dbStatusMap[r.FullName()]; !ok || r.GetUpdateAt().After(status.LastSyncTime) {
+				toUpdateResources = append(toUpdateResources, r)
+			} else {
+				resourcesToCheck = append(resourcesToCheck, r)
+			}
+		}
+		toUpdate, unModified, err := rs.syncer.GetExternalTablesDueForSync(ctx, tnnt, resourcesToCheck, dbStatusMap)
+		if err != nil {
+			return nil, nil, err
+		}
+		toUpdateResources = append(toUpdateResources, toUpdate...)
+		unModifiedSinceUpdate = append(unModifiedSinceUpdate, unModified...)
+	}
+	return toUpdateResources, unModifiedSinceUpdate, nil
+}
+
 func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, skipIntervalCheck bool, filters ...filter.FilterOpt) ([]string, error) {
 	resources, err := rs.getExternalTablesWithFilters(ctx, projectName, store, filters...)
 	if err != nil {
@@ -517,11 +485,11 @@ func (rs ResourceService) SyncExternalTables(ctx context.Context, projectName te
 		return []string{}, nil
 	}
 
-	syncStatus, err := rs.syncer.SyncBatch(ctx, toUpdateResource)
+	syncStatus, err := rs.syncer.SyncBatch(ctx, toUpdateResource[0].Tenant(), toUpdateResource)
 	var successTables []string
 	for _, i := range syncStatus {
 		if i.Success {
-			successTables = append(successTables, i.Resource.FullName())
+			successTables = append(successTables, i.Identifier)
 		}
 	}
 	return successTables, err

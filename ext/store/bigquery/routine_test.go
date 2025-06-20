@@ -165,7 +165,7 @@ func NewMockBigQueryRoutine(t interface {
 },
 ) *mockBigQueryRoutine {
 	mock := &mockBigQueryRoutine{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

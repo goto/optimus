@@ -79,7 +79,7 @@ func (c *BqClient) BulkGetDDLView(ctx context.Context, pd ProjectDataset, names 
 	}
 
 	queryContent := buildGetDDLQuery(pd.Project, pd.Dataset, names...)
-	queryStatement := c.Client.Query(queryContent)
+	queryStatement := c.Query(queryContent)
 	rowIterator, err := queryStatement.Read(ctx)
 	if err != nil {
 		return urnToDDL, err

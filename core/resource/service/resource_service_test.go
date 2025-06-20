@@ -1850,11 +1850,19 @@ type mockConstructorTestingTNewResourceRepository interface {
 
 func newResourceRepository(t mockConstructorTestingTNewResourceRepository) *mockResourceRepository {
 	mock := &mockResourceRepository{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
 	return mock
+}
+
+func (m *mockResourceRepository) GetExternalCreateFailures(ctx context.Context, resourceType string) ([]*resource.Resource, error) {
+	args := m.Called(ctx, resourceType)
+	if args.Get(0) != nil {
+		return args.Get(0).([]*resource.Resource), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 type mockEventHandler struct {
@@ -1872,7 +1880,7 @@ type mockConstructorEventHandler interface {
 
 func newEventHandler(t mockConstructorEventHandler) *mockEventHandler {
 	mock := &mockEventHandler{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -2046,7 +2054,7 @@ func NewResourceManager(t interface {
 },
 ) *ResourceManager {
 	mock := &ResourceManager{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

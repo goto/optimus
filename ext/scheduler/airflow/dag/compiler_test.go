@@ -14,8 +14,7 @@ import (
 	"github.com/goto/optimus/ext/scheduler/airflow/dag"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/sdk/plugin"
-	"github.com/goto/optimus/sdk/plugin/mock"
+	"github.com/goto/optimus/plugin"
 )
 
 //go:embed expected_dag.2.1.py
@@ -38,7 +37,7 @@ func TestDagCompiler(t *testing.T) {
 		assert.NoError(t, err)
 
 		t.Run("returns error when cannot find task", func(t *testing.T) {
-			emptyRepo := mockPluginRepo{plugins: []*plugin.Plugin{}}
+			emptyRepo := mockPluginRepo{plugins: map[string]*plugin.Spec{}}
 			com, err := dag.NewDagCompiler(nil, "http://optimus.example.com", grpcHost, emptyRepo)
 			assert.NoError(t, err)
 
@@ -163,7 +162,6 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 	hooks := []*scheduler.Hook{
 		{Name: "transporter"},
 		{Name: "predator"},
-		{Name: "failureHook"},
 	}
 
 	jobMeta := &scheduler.JobMetadata{
@@ -243,67 +241,66 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 }
 
 type mockPluginRepo struct {
-	plugins []*plugin.Plugin
+	plugins map[string]*plugin.Spec
 }
 
-func (m mockPluginRepo) GetByName(name string) (*plugin.Plugin, error) {
-	for _, plugin := range m.plugins {
-		if plugin.Info().Name == name {
-			return plugin, nil
-		}
+func (m mockPluginRepo) GetByName(name string) (*plugin.Spec, error) {
+	p, ok := m.plugins[name]
+	if !ok {
+		return nil, fmt.Errorf("error finding %s", name)
 	}
-	return nil, fmt.Errorf("error finding %s", name)
+	return p, nil
 }
 
 func setupPluginRepo() mockPluginRepo {
-	execUnit := new(mock.YamlMod)
-	execUnit.On("PluginInfo").Return(&plugin.Info{
-		Name:  "bq-bq",
-		Image: "example.io/namespace/bq2bq-executor:latest",
-		Entrypoint: plugin.Entrypoint{
-			Shell:  "/bin/bash",
-			Script: "python3 /opt/bumblebee/main.py",
+	execUnit := &plugin.Spec{
+		Name: "bq-bq",
+		PluginVersion: map[string]plugin.VersionDetails{
+			"default": {
+				Image: "example.io/namespace/bq2bq-executor",
+				Tag:   "latest",
+				Entrypoint: plugin.Entrypoint{
+					Shell:  "/bin/bash",
+					Script: "python3 /opt/bumblebee/main.py",
+				},
+			},
 		},
-	}, nil)
+	}
 
 	transporterHook := "transporter"
-	hookUnit := new(mock.YamlMod)
-	hookUnit.On("PluginInfo").Return(&plugin.Info{
-		Name:     transporterHook,
-		HookType: plugin.HookTypePre,
-		Image:    "example.io/namespace/transporter-executor:latest",
-		Entrypoint: plugin.Entrypoint{
-			Shell:  "/bin/sh",
-			Script: "java -cp /opt/transporter/transporter.jar:/opt/transporter/jolokia-jvm-agent.jar -javaagent:jolokia-jvm-agent.jar=port=7777,host=0.0.0.0 com.gojek.transporter.Main",
+	hookUnit := &plugin.Spec{
+		Name: transporterHook,
+		PluginVersion: map[string]plugin.VersionDetails{
+			"default": {
+				Image: "example.io/namespace/transporter-executor",
+				Tag:   "latest",
+				Entrypoint: plugin.Entrypoint{
+					Shell:  "/bin/sh",
+					Script: "java -cp /opt/transporter/transporter.jar:/opt/transporter/jolokia-jvm-agent.jar -javaagent:jolokia-jvm-agent.jar=port=7777,host=0.0.0.0 com.gojek.transporter.Main",
+				},
+			},
 		},
-		DependsOn: []string{"predator"},
-	}, nil)
+	}
 
 	predatorHook := "predator"
-	hookUnit2 := new(mock.YamlMod)
-	hookUnit2.On("PluginInfo").Return(&plugin.Info{
-		Name:     predatorHook,
-		HookType: plugin.HookTypePost,
-		Image:    "example.io/namespace/predator-image:latest",
-		Entrypoint: plugin.Entrypoint{
-			Shell:  "/bin/sh",
-			Script: "predator ${SUB_COMMAND} -s ${PREDATOR_URL} -u \"${BQ_PROJECT}.${BQ_DATASET}.${BQ_TABLE}\"",
+	hookUnit2 := &plugin.Spec{
+		Name: predatorHook,
+		PluginVersion: map[string]plugin.VersionDetails{
+			"default": {
+				Image: "example.io/namespace/predator-image",
+				Tag:   "latest",
+				Entrypoint: plugin.Entrypoint{
+					Shell:  "/bin/sh",
+					Script: "predator ${SUB_COMMAND} -s ${PREDATOR_URL} -u \"${BQ_PROJECT}.${BQ_DATASET}.${BQ_TABLE}\"",
+				},
+			},
 		},
-	}, nil)
+	}
 
-	hookUnit3 := new(mock.YamlMod)
-	hookUnit3.On("PluginInfo").Return(&plugin.Info{
-		Name:     "failureHook",
-		HookType: plugin.HookTypeFail,
-		Image:    "example.io/namespace/failure-hook-image:latest",
-		Entrypoint: plugin.Entrypoint{
-			Shell:  "/bin/sh",
-			Script: "sleep 5",
-		},
-	}, nil)
-
-	repo := mockPluginRepo{plugins: []*plugin.Plugin{
-		{YamlMod: execUnit}, {YamlMod: hookUnit}, {YamlMod: hookUnit2}, {YamlMod: hookUnit3},
+	repo := mockPluginRepo{plugins: map[string]*plugin.Spec{
+		execUnit.Name:   execUnit,
+		transporterHook: hookUnit,
+		predatorHook:    hookUnit2,
 	}}
 	return repo
 }

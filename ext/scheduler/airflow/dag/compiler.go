@@ -10,11 +10,14 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/sdk/plugin"
+	"github.com/goto/optimus/internal/utils"
+	"github.com/goto/optimus/plugin"
 )
 
+const RBACFeatureFlag = "ENABLE_RBAC"
+
 type PluginRepo interface {
-	GetByName(name string) (*plugin.Plugin, error)
+	GetByName(name string) (*plugin.Spec, error)
 }
 
 type Compiler struct {
@@ -45,6 +48,12 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 
 	upstreams := SetupUpstreams(jobDetails.Upstreams, c.hostname)
 
+	var enableRBAC bool
+	val, err := project.GetConfig(RBACFeatureFlag)
+	if err == nil {
+		enableRBAC = utils.ConvertToBoolean(val)
+	}
+
 	templateContext := TemplateContext{
 		JobDetails:           jobDetails,
 		Tenant:               jobDetails.Job.Tenant,
@@ -60,6 +69,7 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 		Priority:             jobDetails.Priority,
 		Upstreams:            upstreams,
 		DisableJobScheduling: project.IsJobSchedulingDisabled(),
+		EnableRBAC:           enableRBAC,
 	}
 
 	airflowVersion, err := project.GetConfig(tenant.ProjectSchedulerVersion)

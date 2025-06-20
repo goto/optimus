@@ -552,7 +552,6 @@ func fromResourceProto(rs *pb.ResourceSpecification, tnnt tenant.Tenant, store r
 		Description: description,
 		Labels:      rs.Labels,
 	}
-
 	return resource.NewResource(rs.Name, rs.GetType(), store, tnnt, &metadata, spec)
 }
 

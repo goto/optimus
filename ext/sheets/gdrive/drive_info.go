@@ -7,7 +7,10 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-const TypeFolder = "application/vnd.google-apps.folder"
+const (
+	TypeFolder      = "application/vnd.google-apps.folder"
+	TypeGoogleSheet = "application/vnd.google-apps.spreadsheet"
+)
 
 var driveIDRegex = regexp.MustCompile(`(?:drive|docs)\.google\.com\/(?:file\/d\/|drive\/folders\/|open\?id=|spreadsheets\/d\/)([a-zA-Z0-9_-]+)`)
 
@@ -20,5 +23,9 @@ func ExtractFileID(driveLink string) (string, error) {
 }
 
 func isFolder(file *drive.File) bool {
-	return file.MimeType == "application/vnd.google-apps.folder"
+	return file.MimeType == TypeFolder
+}
+
+func isGoogleSheet(file *drive.File) bool {
+	return file.MimeType == TypeGoogleSheet
 }

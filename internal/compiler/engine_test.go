@@ -130,7 +130,8 @@ func TestEngine(t *testing.T) {
 					map[string]string{
 						"query": `event_timestamp > "2021-02-10T10:00:00+00:00" AND event_timestamp <= "2021-02-11T10:00:00+00:00"`,
 					},
-				}, {
+				},
+				{
 					map[string]string{
 						"query": `
 				event_timestamp > "{{.DSTART | Date }}" AND event_timestamp <= "{{.DEND | Date }}"
@@ -138,6 +139,26 @@ func TestEngine(t *testing.T) {
 					},
 					map[string]string{
 						"query": `event_timestamp > "2021-02-10" AND event_timestamp <= "2021-02-11"`,
+					},
+				},
+				{
+					map[string]string{
+						"query": `
+				event_timestamp > "{{ .DSTART | dateFromStr "-2" "" }}"
+				`,
+					},
+					map[string]string{
+						"query": `event_timestamp > "2021-02-08"`,
+					},
+				},
+				{
+					map[string]string{
+						"query": `
+				event_timestamp > "{{ .DSTART | Date | toDate "2006-01-02" | dateFrom "-2" "+1" | date "2006-01-02" }}"
+				`,
+					},
+					map[string]string{
+						"query": `event_timestamp > "2021-03-08"`,
 					},
 				},
 			}

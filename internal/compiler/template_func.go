@@ -18,6 +18,8 @@ func OptimusFuncMap() template.FuncMap {
 		"unixEpoch":   UnixEpoch,
 		"list":        List,
 		"join":        Join,
+		"dateFrom":    DateFrom,
+		"dateFromStr": DateFromStr,
 	}
 }
 
@@ -94,4 +96,63 @@ func List(v ...string) []string {
 
 func Join(sep string, v []string) string {
 	return strings.Join(v, sep)
+}
+
+func DateFromStr(day, month, timeStr string) (string, error) {
+	t, err := time.Parse(ISOTimeFormat, timeStr)
+	if err != nil {
+		return "", err
+	}
+
+	from, err := DateFrom(day, month, t)
+	if err != nil {
+		return "", err
+	}
+
+	return from.Format(ISODateFormat), nil
+}
+
+func DateFrom(day, month string, date time.Time) (time.Time, error) {
+	d1 := date
+	dayNum, err := getValueOnOp(day, d1.Day())
+	if err != nil {
+		return date, err
+	}
+
+	monthNum, err := getValueOnOp(month, int(d1.Month()))
+	if err != nil {
+		return date, err
+	}
+
+	d2 := time.Date(d1.Year(), time.Month(monthNum), dayNum,
+		d1.Hour(), d1.Minute(), d1.Second(), d1.Nanosecond(), d1.Location())
+	return d2, nil
+}
+
+func getValueOnOp(str string, val int) (int, error) {
+	if str == "" {
+		return val, nil
+	}
+
+	numStr := str
+	if strings.HasPrefix(str, "+") || strings.HasPrefix(str, "-") {
+		numStr = str[1:]
+	}
+
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		return 0, err
+	}
+
+	if strings.HasPrefix(str, "+") {
+		num = val + num
+		return num, nil
+	}
+
+	if strings.HasPrefix(str, "-") {
+		num = val - num
+		return num, nil
+	}
+
+	return num, nil
 }

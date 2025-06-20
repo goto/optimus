@@ -12,7 +12,6 @@ container:
     - optimus
   args:
     - serve
-    - --install-plugins
     - -c
     - /etc/optimus/config.yaml  # mounted as per helm chart
   volumeMounts:

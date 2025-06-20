@@ -7,11 +7,12 @@ type ServerConfig struct {
 	Telemetry              TelemetryConfig      `mapstructure:"telemetry"`
 	Alerting               AlertingConfig       `mapstructure:"alerting"`
 	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
-	Plugin                 PluginConfig         `mapstructure:"plugin"`
 	Replay                 ReplayConfig         `mapstructure:"replay"`
 	Publisher              *Publisher           `mapstructure:"publisher"`
 	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
 	ExternalTables         ExternalTablesConfig `mapstructure:"external_tables"`
+	Features               FeaturesConfig       `mapstructure:"features"`
+	Plugins                Plugins              `mapstructure:"plugins"`
 }
 
 type Serve struct {
@@ -27,6 +28,10 @@ type DBConfig struct {
 	DSN               string `mapstructure:"dsn"`                              // data source name e.g.: postgres://user:password@host:123/database?sslmode=disable
 	MinOpenConnection int    `mapstructure:"min_open_connection" default:"5"`  // minimum open DB connections
 	MaxOpenConnection int    `mapstructure:"max_open_connection" default:"20"` // maximum allowed open DB connections
+}
+
+type Plugins struct {
+	Location string `mapstructure:"location"`
 }
 
 type TelemetryConfig struct {
@@ -46,7 +51,9 @@ type AlertingConfig struct {
 type ExternalTablesConfig struct {
 	AccessIssuesRetryInterval int64 `mapstructure:"access_issues_retry_interval_minutes"`
 	SourceSyncInterval        int64 `mapstructure:"source_sync_interval_minutes"`
-	MaxFileSizeSupported      int   `mapstructure:"max_drive_file_size"`
+	MaxFileSizeSupported      int   `mapstructure:"max_drive_file_size_mb"`
+	DriveFileCleanupSizeLimit int   `mapstructure:"drive_file_cleanup_size_limit_mb"`
+	MaxSyncDelayTolerance     int64 `mapstructure:"max_sync_delay_tolerance_hours"`
 }
 
 type EventManagerConfig struct {
@@ -66,10 +73,6 @@ type ResourceManagerConfigOptimus struct {
 	Headers map[string]string `mapstructure:"headers"`
 }
 
-type PluginConfig struct {
-	Artifacts []string `mapstructure:"artifacts"`
-}
-
 type ReplayConfig struct {
 	ReplayTimeoutInMinutes            int               `mapstructure:"replay_timeout_in_minutes" default:"180"`
 	ExecutionIntervalInSeconds        int               `mapstructure:"execution_interval_in_seconds" default:"120"`
@@ -86,4 +89,8 @@ type PublisherKafkaConfig struct {
 	Topic               string   `mapstructure:"topic"`
 	BatchIntervalSecond int      `mapstructure:"batch_interval_second"`
 	BrokerURLs          []string `mapstructure:"broker_urls"`
+}
+
+type FeaturesConfig struct {
+	EnableV3Sensor bool `mapstructure:"enable_v3_sensor"`
 }

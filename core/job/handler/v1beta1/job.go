@@ -17,8 +17,8 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
+	"github.com/goto/optimus/plugin"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/optimus/sdk/plugin"
 )
 
 type JobHandler struct {
@@ -57,7 +57,7 @@ type JobModificationService interface {
 
 type JobQueryService interface {
 	Get(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name) (jobSpec *job.Job, err error)
-	GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error)
+	GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Spec, error)
 	GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, spec *job.Spec) (*job.Job, writer.BufferedLogger)
 	GetByFilter(ctx context.Context, filters ...filter.FilterOpt) (jobSpecs []*job.Job, err error)
 	GetUpstreamsToInspect(ctx context.Context, subjectJob *job.Job, localJob bool) ([]*job.Upstream, error)
@@ -583,16 +583,22 @@ func (jh *JobHandler) GetJobTask(ctx context.Context, req *pb.GetJobTaskRequest)
 		return nil, err
 	}
 
-	taskInfo, err := jh.jobService.GetTaskInfo(ctx, jobResult.Spec().Task())
+	task := jobResult.Spec().Task()
+	taskSpec, err := jh.jobService.GetTaskInfo(ctx, task)
 	if err != nil {
 		jh.l.Error("error getting task info: %s", err)
 		return nil, err
 	}
 
+	img, err := taskSpec.GetImage(task.Config())
+	if err != nil {
+		return nil, errors.NotFound(job.EntityJob, "error in getting image "+task.Name().String())
+	}
+
 	jobTaskSpec := &pb.JobTask{
-		Name:        taskInfo.Name,
-		Description: taskInfo.Description,
-		Image:       taskInfo.Image,
+		Name:        taskSpec.Name,
+		Description: taskSpec.Description,
+		Image:       img,
 	}
 
 	jobTaskSpec.Destination = &pb.JobTask_Destination{

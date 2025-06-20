@@ -62,11 +62,12 @@ dag = DAG(
     catchup=True,
     dagrun_timeout=timedelta(seconds=DAGRUN_TIMEOUT_IN_SECS),
     tags=[
-        "optimus",
+        "billing",
     ],
     sla_miss_callback=optimus_sla_miss_notify,
     on_success_callback=job_success_event,
     on_failure_callback=job_failure_event,
+    
 )
 
 resources = k8s.V1ResourceRequirements(
@@ -217,42 +218,6 @@ hook_predator = SuperKubernetesPodOperator(
     init_containers=[init_container_predator],
     pool=POOL_HOOK
 )
-init_container_failureHook = k8s.V1Container(
-    name="init-container",
-    image=INIT_CONTAINER_IMAGE,
-    image_pull_policy=IMAGE_PULL_POLICY,
-    env=init_env_vars + [
-        k8s.V1EnvVar(name="INSTANCE_TYPE", value='hook'),
-        k8s.V1EnvVar(name="INSTANCE_NAME", value='failureHook'),
-    ],
-    security_context=k8s.V1PodSecurityContext(run_as_user=0),
-    volume_mounts=asset_volume_mounts,
-    command=["/bin/sh", INIT_CONTAINER_ENTRYPOINT],
-)
-
-hook_failureHook = SuperKubernetesPodOperator(
-    image_pull_policy=IMAGE_PULL_POLICY,
-    namespace=conf.get('kubernetes_executor', 'namespace', fallback="default"),
-    image="example.io/namespace/failure-hook-image:latest",
-    cmds=["/bin/sh", "-c"],
-    arguments=[get_entrypoint_cmd(r"""sleep 5 """)],
-    name="hook_failureHook",
-    task_id="hook_failureHook",
-    get_logs=True,
-    dag=dag,
-    in_cluster=True,
-    depends_on_past=False,
-    is_delete_operator_pod=True,
-    do_xcom_push=False,
-    env_vars=executor_env_vars,
-    trigger_rule="one_failed",
-    container_resources=resources,
-    reattach_on_restart=True,
-    volume_mounts=asset_volume_mounts,
-    volumes=[volume],
-    init_containers=[init_container_failureHook],
-    pool=POOL_HOOK
-)
 # hooks loop ends
 
 
@@ -312,13 +277,6 @@ wait_foo__dash__intra__dash__dep__dash__job >> transformation_bq__dash__bq
 wait_foo__dash__inter__dash__dep__dash__job >> transformation_bq__dash__bq
 wait_foo__dash__external__dash__optimus__dash__dep__dash__job >> transformation_bq__dash__bq
 
-# setup hooks and dependencies
-# [Dependency/HttpDep/ExternalDep/PreHook] -> Task -> [Post Hook -> Fail Hook]
+# [Dependency/HttpDep/ExternalDep] -> Task -> [Hook]
 
-# setup hook dependencies
-hook_transporter >> transformation_bq__dash__bq
-
-transformation_bq__dash__bq >> [hook_predator,] >> [hook_failureHook,]
-
-# set inter-dependencies between hooks and hooks
-hook_predator >> hook_transporter
+transformation_bq__dash__bq >> [hook_transporter,hook_predator,]

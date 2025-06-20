@@ -22,7 +22,7 @@ import (
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
-	"github.com/goto/optimus/sdk/plugin"
+	"github.com/goto/optimus/plugin"
 )
 
 func TestJobService(t *testing.T) {
@@ -3778,10 +3778,9 @@ func TestJobService(t *testing.T) {
 		t.Run("return task with information included when success", func(t *testing.T) {
 			pluginService := NewPluginService(t)
 
-			pluginInfoResp := &plugin.Info{
+			pluginInfoResp := &plugin.Spec{
 				Name:        "bq2bq",
 				Description: "plugin desc",
-				Image:       "goto/bq2bq:latest",
 			}
 			pluginService.On("Info", ctx, jobTask.Name().String()).Return(pluginInfoResp, nil)
 
@@ -5981,33 +5980,14 @@ func (_m *PluginService) IdentifyUpstreams(ctx context.Context, taskName string,
 }
 
 // Info provides a mock function with given fields: ctx, taskName
-func (_m *PluginService) Info(ctx context.Context, taskName string) (*plugin.Info, error) {
+func (_m *PluginService) Info(ctx context.Context, taskName string) (*plugin.Spec, error) {
 	ret := _m.Called(ctx, taskName)
 
-	if len(ret) == 0 {
-		panic("no return value specified for Info")
+	if ret.Get(0) == nil {
+		return nil, ret.Error(1)
 	}
 
-	var r0 *plugin.Info
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (*plugin.Info, error)); ok {
-		return rf(ctx, taskName)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) *plugin.Info); ok {
-		r0 = rf(ctx, taskName)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*plugin.Info)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, taskName)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return ret.Get(0).(*plugin.Spec), ret.Error(1)
 }
 
 // NewPluginService creates a new instance of PluginService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -6018,7 +5998,7 @@ func NewPluginService(t interface {
 },
 ) *PluginService {
 	mock := &PluginService{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -6132,7 +6112,7 @@ type mockConstructorEventHandler interface {
 
 func newEventHandler(t mockConstructorEventHandler) *mockEventHandler {
 	mock := &mockEventHandler{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -6220,7 +6200,7 @@ func NewJobRunInputCompiler(t interface {
 },
 ) *JobRunInputCompiler {
 	mock := &JobRunInputCompiler{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
@@ -6298,7 +6278,7 @@ func NewResourceExistenceChecker(t interface {
 },
 ) *ResourceExistenceChecker {
 	mock := &ResourceExistenceChecker{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

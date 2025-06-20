@@ -133,7 +133,7 @@ func NewMockBigQueryModel(t interface {
 },
 ) *mockBigQueryModel {
 	mock := &mockBigQueryModel{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

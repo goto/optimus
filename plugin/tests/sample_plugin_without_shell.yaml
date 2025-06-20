@@ -1,0 +1,13 @@
+version: 2
+name: bq2bqtest
+description: Testing
+
+plugin_versions:
+  default:
+    tag: latest
+    image: docker.io/gotocompany/optimus-task-bq2bq-executor
+    entrypoint:
+      script: "sleep 100"
+
+default_config:
+  TEST: "{{.test}}"

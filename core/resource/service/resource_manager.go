@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/goto/salt/log"
 
@@ -13,7 +12,9 @@ import (
 )
 
 const (
-	KindExternalTable string = "external_table"
+	KindExternalTable       string = "external_table"
+	KindExternalTableGoogle string = "external_table_google"
+	KindExternalTableLark   string = "external_table_lark"
 )
 
 type DataStore interface {
@@ -31,7 +32,7 @@ type ResourceStatusRepo interface {
 }
 
 type StatusRepo interface {
-	GetLastUpdateTime(ctx context.Context, projectName tenant.ProjectName, entityType string, resources []*resource.Resource) (map[string]time.Time, error)
+	GetLastUpdate(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) (map[string]*resource.SourceVersioningInfo, error)
 }
 
 type ResourceMgr struct {

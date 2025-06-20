@@ -21,9 +21,9 @@ func TestPostgresJobRunRepository(t *testing.T) {
 	currentTime := time.Now().UTC()
 	scheduledAt := currentTime.Add(-time.Hour)
 	slaDefinitionInSec := int64(3600) // seconds
-	start := currentTime.Truncate(time.Hour * 24)
-	end := start.Add(time.Hour * 24)
-	intr := interval.NewInterval(start, end)
+	startDate := time.Date(2024, 3, 21, 2, 0, 0, 0, time.UTC)
+	endDate := time.Date(2024, 3, 25, 2, 0, 0, 0, time.UTC)
+	intr := interval.NewInterval(startDate, endDate)
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("creates a job run", func(t *testing.T) {
@@ -208,6 +208,32 @@ func TestPostgresJobRunRepository(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Len(t, jobRuns, 1)
 			assert.Equal(t, scheduler.StateSuccess, jobRuns[0].State)
+		})
+	})
+
+	t.Run("GetRunsByInterval", func(t *testing.T) {
+		t.Run("gets job runs with overlap of specific interval", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+			jobRunRepo := postgres.NewJobRunRepository(db)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
+			assert.Nil(t, err)
+			jobRuns, err := jobRunRepo.GetRunsByInterval(ctx, tnnt.ProjectName(), jobAName, intr)
+			assert.Nil(t, err)
+			assert.Len(t, jobRuns, 1)
+			assert.Equal(t, intr.Start(), *jobRuns[0].WindowStart)
+			assert.Equal(t, intr.End(), *jobRuns[0].WindowEnd)
+		})
+		t.Run("returns empty list if no job runs found in the interval", func(t *testing.T) {
+			db := dbSetup()
+			jobRunRepo := postgres.NewJobRunRepository(db)
+
+			since := scheduledAt.Add(-2 * time.Hour)
+			until := scheduledAt.Add(-1 * time.Hour)
+			interval := interval.NewInterval(since, until)
+			jobRuns, err := jobRunRepo.GetRunsByInterval(ctx, tnnt.ProjectName(), jobAName, interval)
+			assert.Nil(t, err)
+			assert.Len(t, jobRuns, 0)
 		})
 	})
 }

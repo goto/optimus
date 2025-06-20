@@ -9,6 +9,12 @@ type OperationByNamespaces[kind Kind] struct {
 
 // Add will decide where to add the plan, sourceName: latest state, targetName: current state
 func (o *OperationByNamespaces[Kind]) Add(namespace, sourceName, targetName string, plan Kind) {
+	// do not append to the plan if both sourceName and targetName are empty,
+	// which means there's nothing to track on the changes
+	if len(sourceName) == 0 && len(targetName) == 0 {
+		return
+	}
+
 	plan.SetName(targetName)
 
 	if len(sourceName) > 0 && len(targetName) == 0 {

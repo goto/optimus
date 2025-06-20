@@ -8,26 +8,25 @@ const (
 )
 
 const (
-	CSV         string = "CSV"
-	TSV         string = "TSV"
-	JSON        string = "JSON"
-	TxtFile     string = "TEXTFILE"
-	RcFile      string = "RCFILE"
-	ORC         string = "ORC"
-	OrcFile     string = "ORCFILE"
-	SeqFile     string = "SEQUENCEFILE"
-	Parquet     string = "PARQUET"
-	Avro        string = "AVRO"
-	GoogleSheet string = "GOOGLE_SHEETS"
-	GoogleDrive string = "GOOGLE_DRIVE"
-	LarkSheets  string = "LARK_SHEETS"
+	CSV         string                  = "CSV"
+	TSV         string                  = "TSV"
+	JSON        string                  = "JSON"
+	TxtFile     string                  = "TEXTFILE"
+	RcFile      string                  = "RCFILE"
+	ORC         string                  = "ORC"
+	OrcFile     string                  = "ORCFILE"
+	SeqFile     string                  = "SEQUENCEFILE"
+	Parquet     string                  = "PARQUET"
+	Avro        string                  = "AVRO"
+	GoogleSheet ExternalTableSourceType = "GOOGLE_SHEETS"
+	GoogleDrive ExternalTableSourceType = "GOOGLE_DRIVE"
+	LarkSheet   ExternalTableSourceType = "LARK_SHEET"
+	OSS         ExternalTableSourceType = "OSS"
 )
 
 func handlerForFormat(format string) string {
+	// todo: review carefully this part
 	switch strings.ToUpper(format) {
-	// the built-in text extractor for CSV and TSV
-	case GoogleSheet:
-		return CSVHandler
 	case CSV:
 		return CSVHandler
 	case TSV:

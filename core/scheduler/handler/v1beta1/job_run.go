@@ -2,6 +2,8 @@ package v1beta1
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -24,6 +26,11 @@ type JobRunService interface {
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
 }
 
+type SchedulerService interface {
+	CreateSchedulerRole(ctx context.Context, t tenant.Tenant, roleName string) error
+	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
+}
+
 type Notifier interface {
 	Push(ctx context.Context, event *scheduler.Event) error
 	Webhook(ctx context.Context, event *scheduler.Event) error
@@ -31,11 +38,53 @@ type Notifier interface {
 }
 
 type JobRunHandler struct {
-	l        log.Logger
-	service  JobRunService
-	notifier Notifier
+	l                log.Logger
+	service          JobRunService
+	schedulerService SchedulerService
+	notifier         Notifier
 
 	pb.UnimplementedJobRunServiceServer
+}
+
+func (h JobRunHandler) GetSchedulerRole(ctx context.Context, req *pb.GetSchedulerRoleRequest) (*pb.GetSchedulerRoleResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		h.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "unable to get tenant")
+	}
+	roleName := req.GetRoleName()
+	if roleName == "" {
+		return nil, errors.GRPCErr(errors.InvalidArgument("scheduler", "roleName name is empty"), "")
+	}
+
+	permissions, err := h.schedulerService.GetRolePermissions(ctx, tnnt, roleName)
+	if err != nil {
+		return &pb.GetSchedulerRoleResponse{}, errors.GRPCErr(err, "unable to get role")
+	}
+	return &pb.GetSchedulerRoleResponse{
+		Permissions: permissions,
+	}, nil
+}
+
+func (h JobRunHandler) CreateSchedulerRole(ctx context.Context, req *pb.CreateSchedulerRoleRequest) (*pb.CreateSchedulerRoleResponse, error) {
+	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	if err != nil {
+		h.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
+		return nil, errors.GRPCErr(err, "unable to get tenant")
+	}
+	roleName := req.GetRoleName()
+	if roleName == "" {
+		return nil, errors.GRPCErr(errors.InvalidArgument("scheduler", "roleName name is empty"), "")
+	}
+
+	err = h.schedulerService.CreateSchedulerRole(ctx, tnnt, roleName)
+	if err != nil {
+		if strings.Contains(err.Error(), "409") {
+			err = errors.FailedPrecondition("Scheduler", fmt.Sprintf("unable to create role:[%s], err:[%s]", req.GetRoleName(), err.Error()))
+		}
+		return &pb.CreateSchedulerRoleResponse{}, errors.GRPCErr(err, "unable to register role")
+	}
+	return &pb.CreateSchedulerRoleResponse{}, nil
 }
 
 func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputRequest) (*pb.JobRunInputResponse, error) {
@@ -158,6 +207,8 @@ func (h JobRunHandler) JobRun(ctx context.Context, req *pb.JobRunRequest) (*pb.J
 		return nil, errors.GRPCErr(err, "unable to get job run for "+req.GetJobName())
 	}
 
+	h.l.Debug("JobRuns[%d] for %s", len(jobRuns), req.GetJobName())
+	h.l.Debug("JobRuns %v", jobRuns)
 	var runs []*pb.JobRun
 	for _, run := range jobRuns {
 		ts := timestamppb.New(run.ScheduledAt)
@@ -244,7 +295,11 @@ func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJob
 	err = h.notifier.Push(ctx, event)
 	me.Append(err)
 
-	return &pb.RegisterJobEventResponse{}, me.ToErr()
+	if me.ToErr() != nil {
+		h.l.Error("error handling RegisterJobEvent event: %s, err: %s", event, me.ToErr())
+	}
+
+	return &pb.RegisterJobEventResponse{}, errors.GRPCErr(me.ToErr(), "error in RegisterJobEvent handler")
 }
 
 // GetInterval gets interval on specific job given reference time.
@@ -278,10 +333,11 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier) *JobRunHandler {
+func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier, schedulerService SchedulerService) *JobRunHandler {
 	return &JobRunHandler{
-		l:        l,
-		service:  service,
-		notifier: notifier,
+		l:                l,
+		service:          service,
+		notifier:         notifier,
+		schedulerService: schedulerService,
 	}
 }

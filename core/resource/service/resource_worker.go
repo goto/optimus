@@ -30,6 +30,41 @@ func NewResourceWorker(logger log.Logger, repo ResourceRepository, syncer Syncer
 	}
 }
 
+func (w *ResourceWorker) UpdateResources(ctx context.Context, resources []*resource.Resource) {
+	mapTenantResources := groupByTenant(resources)
+
+	for t, toUpdateResources := range mapTenantResources {
+		start := time.Now()
+		var sheetsSyncedCount int
+		if len(toUpdateResources) < 1 {
+			w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] Founds no Sheets to be updated", t))
+			continue
+		}
+
+		syncStatus, err := w.resService.syncer.SyncBatch(ctx, t, toUpdateResources)
+		if err != nil {
+			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] [%s] unable to sync external sheets, err:%s", t, err.Error()))
+		}
+		for _, i := range syncStatus {
+			resourceName := i.Identifier
+			if i.Success {
+				sheetsSyncedCount++
+				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] successfully synced source for Res: %s", t, resourceName))
+			} else {
+				w.resService.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
+					URN:       i.Identifier,
+					Tenant:    t,
+					EventType: "Sync Failure",
+					Message:   i.ErrorMsg,
+				})
+				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] [%s] failed to sync resource for Res: %s, err: %s", t, resourceName, i.ErrorMsg))
+			}
+		}
+
+		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] [%s] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", t, sheetsSyncedCount, len(toUpdateResources), time.Since(start).String()))
+	}
+}
+
 func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInterval int64) {
 	for {
 		select {
@@ -40,47 +75,32 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 		}
 
 		w.logger.Info("[SyncExternalSheets] starting to sync external sheets")
-		start := time.Now()
+
 		allResources, err := w.repo.GetAllExternal(ctx, resource.MaxCompute)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to get all external resources, err:%s", err.Error()))
 		}
 
-		toUpdateResources, tablesWithUnmodifiedSource, err := w.resService.getExternalTablesDueForSync(ctx, allResources)
+		toSyncResources, tablesWithUnmodifiedSource, err := w.resService.getExternalTablesDueForSync(ctx, allResources)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] unable to get tables due for syncing, err:%s", err.Error()))
 			continue
 		}
-		mapTenantResources := groupByTenant(tablesWithUnmodifiedSource)
-		for tnnt, resources := range mapTenantResources {
+		mapTenantUnmodifiedResources := groupByTenant(tablesWithUnmodifiedSource)
+		for tnnt, resources := range mapTenantUnmodifiedResources {
 			w.resService.updateLastCheckedUnSyncedETs(ctx, tnnt.ProjectName(), resources)
 		}
-		var sheetsSyncedCount int
-		if len(toUpdateResources) < 1 {
-			w.logger.Info("[SyncExternalSheets] Founds no Sheets to be updated")
-			continue
-		}
-		syncStatus, err := w.resService.syncer.SyncBatch(ctx, toUpdateResources)
-		if err != nil {
-			w.logger.Error(fmt.Sprintf("[SyncExternalSheets] unable to sync external sheets, err:%s", err.Error()))
-		}
-		for _, i := range syncStatus {
-			if i.Success {
-				sheetsSyncedCount++
-				w.logger.Info(fmt.Sprintf("[SyncExternalSheets] successfully synced source for Res: %s", i.Resource.FullName()))
-			} else {
-				w.resService.alertHandler.SendExternalTableEvent(&resource.ETAlertAttrs{
-					URN:       i.Resource.FullName(),
-					Tenant:    i.Resource.Tenant(),
-					EventType: "Sync Failure",
-					Message:   i.ErrorMsg,
-				})
-				w.logger.Error(fmt.Sprintf("[SyncExternalSheets] failed to sync resource for Res: %s, err: %s", i.Resource.FullName(), i.ErrorMsg))
-			}
-		}
 
-		w.logger.Info(fmt.Sprintf("[SyncExternalSheets] finished syncing external sheets, sheets synced: %d/%d, Total Time: %s", sheetsSyncedCount, len(toUpdateResources), time.Since(start).String()))
+		w.UpdateResources(ctx, toSyncResources)
 	}
+}
+
+func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string]resource.SourceModifiedTimeStatus {
+	output := make(map[string]resource.SourceModifiedTimeStatus)
+	for _, status := range input {
+		output[status.FullName] = status
+	}
+	return output
 }
 
 func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssuesRetryInterval int64) {
@@ -93,7 +113,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 		}
 
 		// get replay requests from DB
-		failedResources, err := w.repo.GetExternalCreatFailures(ctx)
+		failedResources, err := w.repo.GetExternalCreateFailures(ctx, KindExternalTableGoogle)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to scan for resources with status create failure due to auth, err:%s", err.Error()))
 			continue
@@ -103,7 +123,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 		}
 		mapTenantResources := groupByTenant(failedResources)
 		for tnnt, resources := range mapTenantResources {
-			lastModifiedList, err := w.syncer.GetETSourceLastModified(ctx, tnnt, resources)
+			lastModifiedList, err := w.syncer.GetGoogleSourceLastModified(ctx, tnnt, resources)
 			if err != nil {
 				w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to get last modified time for resource, err:%s", err.Error()))
 				continue

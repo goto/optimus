@@ -1402,7 +1402,7 @@ func newResourceChangeLogService(t interface {
 },
 ) *ResourceChangeLogService {
 	mock := &ResourceChangeLogService{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

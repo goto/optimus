@@ -23,7 +23,7 @@ import (
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
-	"github.com/goto/optimus/sdk/plugin"
+	"github.com/goto/optimus/plugin"
 )
 
 const (
@@ -92,7 +92,7 @@ type Engine interface {
 }
 
 type PluginService interface {
-	Info(ctx context.Context, taskName string) (*plugin.Info, error)
+	Info(ctx context.Context, taskName string) (*plugin.Spec, error)
 	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []resource.URN, err error)
 	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN resource.URN, err error)
 }
@@ -469,7 +469,7 @@ func (j *JobService) Get(ctx context.Context, jobTenant tenant.Tenant, jobName j
 	return jobs[0], nil
 }
 
-func (j *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Info, error) {
+func (j *JobService) GetTaskInfo(ctx context.Context, task job.Task) (*plugin.Spec, error) {
 	return j.pluginService.Info(ctx, task.Name().String())
 }
 

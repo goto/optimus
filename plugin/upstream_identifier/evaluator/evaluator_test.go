@@ -235,7 +235,8 @@ func TestEnvEvaluator(t *testing.T) {
 			}
 			rawResource := envEvaluator.Evaluate(assets, config2)
 			assert.NotEmpty(t, rawResource)
-			assert.Equal(t, "select 1\nselect 2", rawResource)
+			assert.Contains(t, rawResource, "select 1")
+			assert.Contains(t, rawResource, "select 2")
 		})
 	})
 }

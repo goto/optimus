@@ -1727,6 +1727,14 @@ type mockJobRunRepository struct {
 	mock.Mock
 }
 
+func (m *mockJobRunRepository) GetRunsByInterval(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, interval interval.Interval) ([]*scheduler.JobRun, error) {
+	args := m.Called(ctx, project, jobName, interval)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.JobRun), args.Error(1)
+}
+
 func (m *mockJobRunRepository) GetByScheduledAt(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error) {
 	args := m.Called(ctx, tenant, name, scheduledAt)
 	if args.Get(0) == nil {

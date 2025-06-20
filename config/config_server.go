@@ -7,12 +7,12 @@ type ServerConfig struct {
 	Telemetry              TelemetryConfig      `mapstructure:"telemetry"`
 	Alerting               AlertingConfig       `mapstructure:"alerting"`
 	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
-	Plugin                 PluginConfig         `mapstructure:"plugin"`
 	Replay                 ReplayConfig         `mapstructure:"replay"`
 	Publisher              *Publisher           `mapstructure:"publisher"`
 	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
 	ExternalTables         ExternalTablesConfig `mapstructure:"external_tables"`
 	Features               FeaturesConfig       `mapstructure:"features"`
+	Plugins                Plugins              `mapstructure:"plugins"`
 }
 
 type Serve struct {
@@ -28,6 +28,10 @@ type DBConfig struct {
 	DSN               string `mapstructure:"dsn"`                              // data source name e.g.: postgres://user:password@host:123/database?sslmode=disable
 	MinOpenConnection int    `mapstructure:"min_open_connection" default:"5"`  // minimum open DB connections
 	MaxOpenConnection int    `mapstructure:"max_open_connection" default:"20"` // maximum allowed open DB connections
+}
+
+type Plugins struct {
+	Location string `mapstructure:"location"`
 }
 
 type TelemetryConfig struct {
@@ -67,10 +71,6 @@ type ResourceManager struct {
 type ResourceManagerConfigOptimus struct {
 	Host    string            `mapstructure:"host"`
 	Headers map[string]string `mapstructure:"headers"`
-}
-
-type PluginConfig struct {
-	Artifacts []string `mapstructure:"artifacts"`
 }
 
 type ReplayConfig struct {

@@ -10,15 +10,10 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/internal/lib/interval"
-	"github.com/goto/optimus/sdk/plugin"
 )
 
 type FilesCompiler interface {
 	Compile(fileMap map[string]string, context map[string]any) (map[string]string, error)
-}
-
-type PluginRepo interface {
-	GetByName(name string) (*plugin.Plugin, error)
 }
 
 type JobRunAssetsCompiler struct {

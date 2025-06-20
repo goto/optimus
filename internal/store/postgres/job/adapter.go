@@ -629,7 +629,8 @@ func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
 	}
 
 	var taskConf TaskConfig
-	if err := json.Unmarshal(raw, &taskConf); err != nil {
+	err := json.Unmarshal(raw, &taskConf)
+	if err != nil || taskConf.Config == nil {
 		config := map[string]string{}
 		if err2 := json.Unmarshal(raw, &config); err2 != nil {
 			return job.Task{}, err

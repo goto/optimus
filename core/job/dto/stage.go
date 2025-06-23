@@ -10,6 +10,7 @@ const (
 	StageTenantValidation      ValidateStage = "tenant validation"
 	StageUpstreamValidation    ValidateStage = "upstream validation"
 	StageWindowValidation      ValidateStage = "window validation"
+	StagePluginValidation      ValidateStage = "plugin validation"
 )
 
 type ValidateStage string

@@ -144,18 +144,10 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 		return nil, err
 	}
 
-	var taskConfig job.Config
-	if js.Task.Config != nil {
-		taskConfig, err = toConfig(js.Task.Config)
-		if err != nil {
-			return nil, err
-		}
-	}
-	taskName, err := job.TaskNameFrom(js.Task.Name)
+	task, err := toTask(js)
 	if err != nil {
 		return nil, err
 	}
-	task := job.NewTask(taskName, taskConfig, js.Task.Version)
 
 	jobSpecBuilder := job.NewSpecBuilder(version, name, owner, schedule, window, task).WithDescription(js.Description)
 
@@ -224,6 +216,39 @@ func fromRetryAndAlerts(jobRetry *job.Retry, alerts []*job.AlertSpec) *pb.JobSpe
 		Retry:  retryProto,
 		Notify: notifierProto,
 	}
+}
+
+func toTask(js *pb.JobSpecification) (job.Task, error) {
+	var err error
+	if js.Task == nil { // Old flow
+		t1, err := job.TaskNameFrom(js.TaskName)
+		if err != nil {
+			return job.Task{}, err
+		}
+		var taskConfig job.Config
+		if js.Config != nil {
+			taskConfig, err = toConfig(js.Config)
+			if err != nil {
+				return job.Task{}, err
+			}
+		}
+
+		return job.NewTask(t1, taskConfig, ""), err
+	}
+
+	var taskConfig job.Config
+	if js.Task.Config != nil {
+		taskConfig, err = toConfig(js.Task.Config)
+		if err != nil {
+			return job.Task{}, err
+		}
+	}
+	taskName, err := job.TaskNameFrom(js.Task.Name)
+	if err != nil {
+		return job.Task{}, err
+	}
+	task := job.NewTask(taskName, taskConfig, js.Task.Version)
+	return task, nil
 }
 
 func toWindow(js *pb.JobSpecification) (window.Config, error) {

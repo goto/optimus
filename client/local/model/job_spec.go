@@ -122,6 +122,7 @@ type JobSpecMetadataAirflow struct {
 }
 
 func (j *JobSpec) ToProto() *pb.JobSpecification {
+	taskConfig := j.getProtoJobConfigItems()
 	js := &pb.JobSpecification{
 		Version:       int32(j.Version),
 		Name:          j.Name,
@@ -131,10 +132,12 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 		Interval:      j.Schedule.Interval,
 		DependsOnPast: j.Behavior.DependsOnPast,
 		CatchUp:       j.Behavior.Catchup,
+		TaskName:      j.Task.Name,
+		Config:        taskConfig,
 		Task: &pb.JobSpecTask{
 			Name:    j.Task.Name,
 			Version: j.Task.Version,
-			Config:  j.getProtoJobConfigItems(),
+			Config:  taskConfig,
 		},
 		Dependencies: j.getProtoJobDependencies(),
 		Assets:       j.Asset,

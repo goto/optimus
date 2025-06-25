@@ -297,9 +297,9 @@ func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJob
 
 	if me.ToErr() != nil {
 		h.l.Error("error handling RegisterJobEvent event: %s, err: %s", event, me.ToErr())
+		return &pb.RegisterJobEventResponse{}, errors.GRPCErr(me.ToErr(), "error in RegisterJobEvent handler")
 	}
-
-	return &pb.RegisterJobEventResponse{}, errors.GRPCErr(me.ToErr(), "error in RegisterJobEvent handler")
+	return &pb.RegisterJobEventResponse{}, nil
 }
 
 // GetInterval gets interval on specific job given reference time.

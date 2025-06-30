@@ -70,7 +70,10 @@ func (gd *GDrive) DownloadFile(fileID string) ([]byte, error) {
 }
 
 func (gd *GDrive) FolderListShow(folderID string) (*drive.FileList, error) {
-	return gd.srv.Files.List().Q(fmt.Sprintf("'%s' in parents", folderID)).SupportsAllDrives(true).
+	return gd.srv.Files.List().
+		IncludeItemsFromAllDrives(true).
+		SupportsAllDrives(true).
+		Q(fmt.Sprintf("'%s' in parents", folderID)).
 		Fields("files(fileExtension, id, mimeType, modifiedTime, name, properties, size)").
 		Do()
 }

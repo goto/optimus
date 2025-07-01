@@ -30,15 +30,20 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		CatchUp:        jobEntity.Spec().Schedule().CatchUp(),
 		TaskName:       spec.Task().Name().String(),
 		Config:         fromConfig(spec.Task().Config()),
-		Dependencies:   fromSpecUpstreams(spec.UpstreamSpec()),
-		Assets:         fromAsset(spec.Asset()),
-		Hooks:          fromHooks(spec.Hooks()),
-		Description:    spec.Description(),
-		Labels:         spec.Labels(),
-		Behavior:       fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
-		Metadata:       fromMetadata(spec.Metadata()),
-		Destination:    jobEntity.Destination().String(),
-		Sources:        fromResourceURNs(jobEntity.Sources()),
+		Task: &pb.JobSpecTask{
+			Name:    spec.Task().Name().String(),
+			Version: spec.Task().Version(),
+			Config:  fromConfig(spec.Task().Config()),
+		},
+		Dependencies: fromSpecUpstreams(spec.UpstreamSpec()),
+		Assets:       fromAsset(spec.Asset()),
+		Hooks:        fromHooks(spec.Hooks()),
+		Description:  spec.Description(),
+		Labels:       spec.Labels(),
+		Behavior:     fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
+		Metadata:     fromMetadata(spec.Metadata()),
+		Destination:  jobEntity.Destination().String(),
+		Sources:      fromResourceURNs(jobEntity.Sources()),
 	}
 
 	if spec.Version() == window.NewWindowVersion {
@@ -139,18 +144,10 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 		return nil, err
 	}
 
-	var taskConfig job.Config
-	if js.Config != nil {
-		taskConfig, err = toConfig(js.Config)
-		if err != nil {
-			return nil, err
-		}
-	}
-	taskName, err := job.TaskNameFrom(js.TaskName)
+	task, err := toTask(js)
 	if err != nil {
 		return nil, err
 	}
-	task := job.NewTask(taskName, taskConfig)
 
 	jobSpecBuilder := job.NewSpecBuilder(version, name, owner, schedule, window, task).WithDescription(js.Description)
 
@@ -221,6 +218,39 @@ func fromRetryAndAlerts(jobRetry *job.Retry, alerts []*job.AlertSpec) *pb.JobSpe
 	}
 }
 
+func toTask(js *pb.JobSpecification) (job.Task, error) {
+	var err error
+	if js.Task == nil { // Old flow
+		t1, err := job.TaskNameFrom(js.TaskName)
+		if err != nil {
+			return job.Task{}, err
+		}
+		var taskConfig job.Config
+		if js.Config != nil {
+			taskConfig, err = toConfig(js.Config)
+			if err != nil {
+				return job.Task{}, err
+			}
+		}
+
+		return job.NewTask(t1, taskConfig, ""), err
+	}
+
+	var taskConfig job.Config
+	if js.Task.Config != nil {
+		taskConfig, err = toConfig(js.Task.Config)
+		if err != nil {
+			return job.Task{}, err
+		}
+	}
+	taskName, err := job.TaskNameFrom(js.Task.Name)
+	if err != nil {
+		return job.Task{}, err
+	}
+	task := job.NewTask(taskName, taskConfig, js.Task.Version)
+	return task, nil
+}
+
 func toWindow(js *pb.JobSpecification) (window.Config, error) {
 	if js.Window != nil {
 		w := js.Window
@@ -275,7 +305,7 @@ func toHooks(hooksProto []*pb.JobSpecHook) ([]*job.Hook, error) {
 		if err != nil {
 			return nil, err
 		}
-		hookSpec, err := job.NewHook(hookProto.Name, hookConfig)
+		hookSpec, err := job.NewHook(hookProto.Name, hookConfig, hookProto.Version)
 		if err != nil {
 			return nil, err
 		}
@@ -288,8 +318,9 @@ func fromHooks(hooks []*job.Hook) []*pb.JobSpecHook {
 	var hooksProto []*pb.JobSpecHook
 	for _, hook := range hooks {
 		hooksProto = append(hooksProto, &pb.JobSpecHook{
-			Name:   hook.Name(),
-			Config: fromConfig(hook.Config()),
+			Name:    hook.Name(),
+			Version: hook.Version(),
+			Config:  fromConfig(hook.Config()),
 		})
 	}
 	return hooksProto

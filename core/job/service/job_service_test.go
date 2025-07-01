@@ -66,8 +66,19 @@ func TestJobService(t *testing.T) {
 		"BQ_SERVICE_ACCOUNT": "service_account",
 	})
 	assert.NoError(t, err)
+	pluginSpec := plugin.Spec{
+		SpecVersion: 2,
+		Name:        "bq2bq",
+		Description: "",
+		PluginVersion: map[string]plugin.VersionDetails{
+			"default": {
+				Image: "example.io/bq2bq",
+				Tag:   "1.0.5",
+			},
+		},
+	}
 	taskName, _ := job.TaskNameFrom("bq2bq")
-	jobTask := job.NewTask(taskName, jobTaskConfig)
+	jobTask := job.NewTask(taskName, jobTaskConfig, "")
 	jobAsset := job.Asset(map[string]string{
 		"query.sql": "select * from `project.dataset.sample`",
 	})
@@ -362,7 +373,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 
-			nonBq2bqTask := job.NewTask("another", nil)
+			nonBq2bqTask := job.NewTask("another", nil, "")
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, nonBq2bqTask).Build()
 			specs := []*job.Spec{specA}
 
@@ -986,7 +997,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 
-			nonBq2bqTask := job.NewTask("another", nil)
+			nonBq2bqTask := job.NewTask("another", nil, "")
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, nonBq2bqTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
 
@@ -1517,7 +1528,7 @@ func TestJobService(t *testing.T) {
 
 			eventHandler := newEventHandler(t)
 
-			nonBq2bqTask := job.NewTask("another", nil)
+			nonBq2bqTask := job.NewTask("another", nil, "")
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, nonBq2bqTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
 
@@ -4576,6 +4587,7 @@ func TestJobService(t *testing.T) {
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
 					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
@@ -4636,6 +4648,11 @@ func TestJobService(t *testing.T) {
 								Success:  true,
 							},
 							{
+								Stage:    "plugin validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
 								Stage: "compile validation for run",
 								Messages: []string{
 									"compiling [bq2bq] with type [task] failed with error: unexpected compile error",
@@ -4669,6 +4686,11 @@ func TestJobService(t *testing.T) {
 							},
 							{
 								Stage:    "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "plugin validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},
@@ -4737,6 +4759,7 @@ func TestJobService(t *testing.T) {
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
 					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
@@ -4793,6 +4816,11 @@ func TestJobService(t *testing.T) {
 								Success:  true,
 							},
 							{
+								Stage:    "plugin validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
 								Stage:    "compile validation for run",
 								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
 								Success:  true,
@@ -4821,6 +4849,11 @@ func TestJobService(t *testing.T) {
 							},
 							{
 								Stage:    "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "plugin validation",
 								Messages: []string{"no issue"},
 								Success:  true,
 							},

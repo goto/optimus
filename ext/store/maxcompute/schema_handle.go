@@ -27,6 +27,10 @@ func (sh SchemaHandle) Create(res *resource.Resource) error {
 	return nil
 }
 
+func (sh SchemaHandle) Delete(res *resource.Resource) error {
+	return nil
+}
+
 func (sh SchemaHandle) Update(res *resource.Resource) error {
 	schemaDetails, err := ConvertSpecToSchemaDetails(res)
 	if err != nil {

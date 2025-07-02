@@ -80,6 +80,8 @@ func (r *Resource) MarkFailure() error {
 		return nil
 	case StatusToUpdate:
 		r.status = StatusUpdateFailure
+	case StatusToDelete:
+		r.status = StatusDeleteFailure
 		return nil
 	}
 	msg := fmt.Sprintf("status transition for [%s] from status [%s] to status failure is not allowed", r.FullName(), r.status)
@@ -90,6 +92,9 @@ func (r *Resource) MarkSuccess() error {
 	switch r.status {
 	case StatusToCreate, StatusToUpdate:
 		r.status = StatusSuccess
+		return nil
+	case StatusToDelete:
+		r.status = StatusDeleted
 		return nil
 	}
 	msg := fmt.Sprintf("status transition for [%s] from status [%s] to status success is not allowed", r.FullName(), r.status)

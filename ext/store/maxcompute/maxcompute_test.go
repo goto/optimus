@@ -707,6 +707,11 @@ func (m *mockTableResourceHandle) Update(res *resource.Resource) error {
 	return args.Error(0)
 }
 
+func (m *mockTableResourceHandle) Delete(res *resource.Resource) error {
+	args := m.Called(res)
+	return args.Error(0)
+}
+
 func (m *mockTableResourceHandle) Exists(tableName string) bool {
 	args := m.Called(tableName)
 	return args.Get(0).(bool)

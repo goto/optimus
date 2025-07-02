@@ -29,6 +29,10 @@ type ViewHandle struct {
 	viewTable       ViewTable
 }
 
+func (v ViewHandle) Delete(res *resource.Resource) error {
+	return nil
+}
+
 func (v ViewHandle) Create(res *resource.Resource) error {
 	view, err := ConvertSpecTo[View](res)
 	if err != nil {

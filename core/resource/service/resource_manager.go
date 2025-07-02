@@ -20,6 +20,7 @@ const (
 type DataStore interface {
 	Create(context.Context, *resource.Resource) error
 	Update(context.Context, *resource.Resource) error
+	Delete(context.Context, *resource.Resource) error
 	BatchUpdate(context.Context, []*resource.Resource) error
 	Validate(*resource.Resource) error
 	GetURN(res *resource.Resource) (resource.URN, error)
@@ -45,6 +46,35 @@ type ResourceMgr struct {
 
 func (m *ResourceMgr) CreateResource(ctx context.Context, res *resource.Resource) error {
 	store := res.Store()
+	datastore, ok := m.datastoreMap[store]
+	if !ok {
+		msg := fmt.Sprintf("datastore [%s] for resource [%s] is not found", store.String(), res.FullName())
+		m.logger.Error(msg)
+		return errors.InternalError(resource.EntityResource, msg, nil)
+	}
+
+	me := errors.NewMultiError("error in create resource")
+	err := datastore.Create(ctx, res)
+	if err != nil {
+		m.logger.Error("error creating resource [%s] to datastore [%s]: %s", res.FullName(), store.String(), err)
+		if errors.IsErrorType(err, errors.ErrAlreadyExists) {
+			me.Append(res.MarkExistInStore())
+		} else {
+			me.Append(err)
+			me.Append(res.MarkFailure())
+		}
+	} else {
+		me.Append(res.MarkSuccess())
+	}
+
+	me.Append(m.repo.UpdateStatus(ctx, res))
+	return me.ToErr()
+}
+
+// DeleteResource This should only work for MaxCompute Resource deleteion
+func (m *ResourceMgr) DeleteResource(ctx context.Context, res *resource.Resource) error {
+	store := res.Store()
+
 	datastore, ok := m.datastoreMap[store]
 	if !ok {
 		msg := fmt.Sprintf("datastore [%s] for resource [%s] is not found", store.String(), res.FullName())

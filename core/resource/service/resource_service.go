@@ -50,6 +50,7 @@ type Syncer interface {
 type ResourceManager interface {
 	CreateResource(ctx context.Context, res *resource.Resource) error
 	UpdateResource(ctx context.Context, res *resource.Resource) error
+	DeleteResource(ctx context.Context, res *resource.Resource) error
 	SyncResource(ctx context.Context, res *resource.Resource) error
 	BatchUpdate(ctx context.Context, store resource.Store, resources []*resource.Resource) error
 	Validate(res *resource.Resource) error
@@ -359,6 +360,10 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 		rs.logger.Info(fmt.Sprintf("attempt to delete resource %s with downstreamJobs: [%s]", existing.FullName(), jobNames))
 	}
 	_ = existing.MarkToDelete()
+
+	if existing.Store().Is(resource.MaxCompute) && existing.Kind() == KindExternalTable {
+		err = rs.mgr.DeleteResource(ctx, existing)
+	}
 
 	if err = rs.repo.Delete(ctx, existing); err != nil {
 		rs.logger.Error("error soft-delete resource [%s] to db: %s", existing.FullName(), err)

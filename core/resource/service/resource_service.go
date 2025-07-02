@@ -363,13 +363,17 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 
 	if existing.Store().Is(resource.MaxCompute) && existing.Kind() == KindExternalTable {
 		err = rs.mgr.DeleteResource(ctx, existing)
+		if err != nil {
+			rs.logger.Error("error deleting resource [%s] from manager: %s", existing.FullName(), err)
+			return nil, err
+		}
 	}
 
 	if err = rs.repo.Delete(ctx, existing); err != nil {
 		rs.logger.Error("error soft-delete resource [%s] to db: %s", existing.FullName(), err)
 		return nil, err
 	}
-
+	
 	res := &resource.DeleteResponse{Resource: existing}
 	if strings.TrimSpace(jobNames) != "" {
 		res.DownstreamJobs = strings.Split(jobNames, ", ")

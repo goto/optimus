@@ -82,16 +82,13 @@ func (m *ResourceMgr) DeleteResource(ctx context.Context, res *resource.Resource
 		return errors.InternalError(resource.EntityResource, msg, nil)
 	}
 
-	me := errors.NewMultiError("error in create resource")
-	err := datastore.Create(ctx, res)
+	me := errors.NewMultiError("error in Delete resource")
+	err := datastore.Delete(ctx, res)
 	if err != nil {
-		m.logger.Error("error creating resource [%s] to datastore [%s]: %s", res.FullName(), store.String(), err)
-		if errors.IsErrorType(err, errors.ErrAlreadyExists) {
-			me.Append(res.MarkExistInStore())
-		} else {
-			me.Append(err)
-			me.Append(res.MarkFailure())
-		}
+		m.logger.Error("error Deleting resource [%s] from datastore [%s]: %s", res.FullName(), store.String(), err)
+
+		me.Append(err)
+		me.Append(res.MarkFailure())
 	} else {
 		me.Append(res.MarkSuccess())
 	}

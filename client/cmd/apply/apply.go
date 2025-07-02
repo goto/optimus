@@ -376,7 +376,7 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 			if strings.Contains(err.Error(), errors.ErrNotFound.String()) {
 				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s, but it was not found on the server. Attempting to create the resource instead",
 					request.NamespaceName, "resource", resourceName, resourceName)
-				addResourceRequest := c.convertUpdateResourceRequestToAdd(request)
+				addResourceRequest := convertUpdateResourceRequestToAdd(request)
 				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
 				continue
 			}
@@ -416,7 +416,7 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 	}
 }
 
-func (c *applyCommand) convertUpdateResourceRequestToAdd(req *pb.UpdateResourceRequest) *pb.CreateResourceRequest {
+func convertUpdateResourceRequestToAdd(req *pb.UpdateResourceRequest) *pb.CreateResourceRequest {
 	return &pb.CreateResourceRequest{
 		ProjectName:   req.ProjectName,
 		DatastoreName: req.DatastoreName,

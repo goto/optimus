@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -148,9 +149,11 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	addedResources := c.executeResourceAdd(ctx, resourceClient, addResourceRequest)
 	migratedResources := c.executeResourceMigrate(ctx, resourceClient, migrateResourceRequest)
 	updatedResources := c.executeResourceUpdate(ctx, resourceClient, updateResourceRequest)
+
 	addedJobs := c.executeJobAdd(ctx, jobClient, addJobRequest)
 	migratedJobs := c.executeJobMigrate(ctx, jobClient, migrateJobRequest)
 	updatedJobs := c.executeJobUpdate(ctx, jobClient, updateJobRequest)
+
 	// job deletion < resource deletion
 	deletedJobs := c.executeJobBulkDelete(ctx, jobClient, &pb.BulkDeleteJobsRequest{ProjectName: plans.ProjectName, Jobs: deleteJobRequest})
 	deletedResources := c.executeResourceDelete(ctx, resourceClient, deleteResourceRequest)
@@ -370,6 +373,14 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 		_, err := client.UpdateResource(ctx, request)
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResource().GetName())
 		if err != nil {
+			if strings.Contains(err.Error(), errors.ErrNotFound.String()) {
+				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s, but it was not found on the server. Attempting to create the resource instead",
+					request.NamespaceName, "resource", resourceName, resourceName)
+				addResourceRequest := convertUpdateResourceRequestToAdd(request)
+				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
+				continue
+			}
+
 			c.errors.Append(err)
 			c.printFailed(request.NamespaceName, "update", "resource", resourceName, err.Error())
 			continue
@@ -402,6 +413,15 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 			NamespaceName: namespace.Name,
 			Specs:         jobsToBeSend,
 		},
+	}
+}
+
+func convertUpdateResourceRequestToAdd(req *pb.UpdateResourceRequest) *pb.CreateResourceRequest {
+	return &pb.CreateResourceRequest{
+		ProjectName:   req.ProjectName,
+		DatastoreName: req.DatastoreName,
+		Resource:      req.Resource,
+		NamespaceName: req.NamespaceName,
 	}
 }
 

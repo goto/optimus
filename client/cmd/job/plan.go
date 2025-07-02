@@ -141,6 +141,12 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 			return plans, err
 		}
 
+		if len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0 {
+			if sourceSpec.Version < 3 {
+				return plans, fmt.Errorf("spec[%s] should use version 3", sourceSpec.Name)
+			}
+		}
+
 		plans.Job.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.JobPlan{Path: directory})
 	}
 

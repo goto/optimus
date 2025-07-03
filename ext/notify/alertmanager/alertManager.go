@@ -124,7 +124,8 @@ func (a *AlertManager) worker(ctx context.Context) {
 			err := a.PrepareAndSendEvent(e) // nolint:contextcheck
 			if err != nil {
 				eventWorkerSendErrCounter.WithLabelValues(e.Project, e.LogTag, err.Error()).Inc()
-				a.workerErrChan <- fmt.Errorf("alert worker: %w", err)
+				eventDataBytes, _ := json.Marshal(e.Data)
+				a.workerErrChan <- fmt.Errorf("alert worker: event_info: [ %s ], err: %w", string(eventDataBytes), err)
 			} else {
 				successSentCounter.WithLabelValues(e.Project, e.LogTag).Inc()
 			}

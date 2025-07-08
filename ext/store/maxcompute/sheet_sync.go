@@ -16,6 +16,7 @@ import (
 	"github.com/goto/optimus/ext/sheets/gdrive"
 	"github.com/goto/optimus/ext/sheets/gsheet"
 	"github.com/goto/optimus/ext/sheets/lark"
+	"github.com/goto/optimus/ext/sheets/larkdrive"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/pool"
 )
@@ -169,17 +170,17 @@ func (s *SyncerService) getGoogleExternalTablesDueForSync(ctx context.Context, t
 func (s *SyncerService) getLarkExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*ExternalTable, []*ExternalTable, error) {
 	var toUpdateExternalTables, unModifiedSinceUpdate []*ExternalTable
 
-	s.logger.Info("[ON DB] [Lark] Fetched last Resource Sync time list ")
+	s.logger.Info("[ON DB] [LarkSheet] Fetched last Resource Sync time list ")
 	for resName, versionInfo := range lastUpdateMap {
-		s.logger.Info(fmt.Sprintf("[ON DB] [Lark] resource: %s, lastUpdateTime in DB: %s, Last Synced Revision: %d", resName, versionInfo.LastSyncTime.String(), versionInfo.Revision))
+		s.logger.Info(fmt.Sprintf("[ON DB] [LarkSheet] resource: %s, lastUpdateTime in DB: %s, Last Synced Revision: %d", resName, versionInfo.LastSyncTime.String(), versionInfo.Revision))
 	}
 	latestRevisionList, err := s.getLarkRevisionIDs(ctx, tnnt, ets)
-	s.logger.Info("[On Lark] Fetched last resource update time list ")
+	s.logger.Info("[On LarkSheet] Fetched last resource update time list ")
 	for _, latestRevision := range latestRevisionList {
 		if latestRevision.Err == nil {
-			s.logger.Info(fmt.Sprintf("[On Lark] resource: %s, latest Revision: %d ", latestRevision.FullName, latestRevision.Revision))
+			s.logger.Info(fmt.Sprintf("[On LarkSheet] resource: %s, latest Revision: %d ", latestRevision.FullName, latestRevision.Revision))
 		} else {
-			s.logger.Error(fmt.Sprintf("[On Lark] resource: %s, error: %s ", latestRevision.FullName, latestRevision.Err.Error()))
+			s.logger.Error(fmt.Sprintf("[On LarkSheet] resource: %s, error: %s ", latestRevision.FullName, latestRevision.Err.Error()))
 		}
 	}
 	if err != nil {
@@ -193,7 +194,7 @@ func (s *SyncerService) getLarkExternalTablesDueForSync(ctx context.Context, tnn
 			continue
 		}
 		if sourceRevisionMap[r.FullName()].Err != nil {
-			s.logger.Error(fmt.Sprintf("[On Lark] unable to get current revision, err:%s", sourceRevisionMap[r.FullName()].Err.Error()))
+			s.logger.Error(fmt.Sprintf("[On LarkSheet] unable to get current revision, err:%s", sourceRevisionMap[r.FullName()].Err.Error()))
 			toUpdateExternalTables = append(toUpdateExternalTables, r)
 			continue
 		}
@@ -279,7 +280,7 @@ func (s *SyncerService) GetExternalTablesDueForSync(ctx context.Context, tnnt te
 			if err != nil {
 				return nil, nil, err
 			}
-		case LarkSheet:
+		case LarkSheet, LarkDrive:
 			toUpdateET, unModifiedET, err = s.getLarkExternalTablesDueForSync(ctx, tnnt, externalTables, lastUpdateMap)
 			if err != nil {
 				return nil, nil, err
@@ -397,10 +398,11 @@ func (s *SyncerService) Sync(ctx context.Context, res *resource.Resource) error 
 }
 
 type ExtTableClients struct {
-	GSheet *gsheet.GSheets
-	OSS    *oss.Client
-	GDrive *gdrive.GDrive
-	Lark   *lark.Client
+	GSheet    *gsheet.GSheets
+	OSS       *oss.Client
+	GDrive    *gdrive.GDrive
+	LarkSheet *lark.Client
+	LarkDrive *larkdrive.Client
 }
 
 func (s *SyncerService) getExtTableClients(ctx context.Context, tnnt tenant.Tenant, sourceTypes ExternalTableSources) (ExtTableClients, error) {
@@ -429,12 +431,26 @@ func (s *SyncerService) getExtTableClients(ctx context.Context, tnnt tenant.Tena
 		}
 		clients.GDrive = driveSrv
 	}
-	if sourceTypes.Has(LarkSheet) {
+
+	if sourceTypes.Has(LarkDrive) {
+		larkDriveClient, err := s.getLarkDriveClient(ctx, tnnt)
+		if err != nil {
+			return clients, err
+		}
+		clients.LarkDrive = larkDriveClient
+
 		larkClient, err := s.getLarkClient(ctx, tnnt)
 		if err != nil {
 			return clients, err
 		}
-		clients.Lark = larkClient
+		clients.LarkSheet = larkClient
+	}
+	if sourceTypes.Has(LarkSheet) && clients.LarkSheet == nil {
+		larkClient, err := s.getLarkClient(ctx, tnnt)
+		if err != nil {
+			return clients, err
+		}
+		clients.LarkSheet = larkClient
 	}
 
 	creds, err := s.secretProvider.GetSecret(ctx, tnnt, OSSCredsKey)
@@ -505,7 +521,7 @@ func processResource(ctx context.Context, syncRepo SyncRepo, externalTableClient
 		}
 		return err
 	case LarkSheet:
-		revisionNumber, err := processLarkSheet(ctx, externalTableClients.Lark, externalTableClients.OSS, et, commonLocation)
+		revisionNumber, err := processLarkTypeSources(ctx, externalTableClients, et, commonLocation)
 		syncStatusRemarks := map[string]string{}
 		if err != nil {
 			syncStatusRemarks["error"] = err.Error()

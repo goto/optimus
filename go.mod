@@ -25,6 +25,7 @@ require (
 	github.com/gtank/cryptopasta v0.0.0-20170601214702-1f550f6f2f69
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/kushsharma/parallel v0.2.1
+	github.com/larksuite/oapi-sdk-go/v3 v3.4.20
 	github.com/lib/pq v1.10.4
 	github.com/mattn/go-isatty v0.0.16
 	github.com/mitchellh/mapstructure v1.4.3
@@ -101,7 +102,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect

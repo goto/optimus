@@ -373,8 +373,8 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 		_, err := client.UpdateResource(ctx, request)
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResource().GetName())
 		if err != nil {
-			if strings.Contains(err.Error(), errors.ErrNotFound.String()) {
-				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s, but it was not found on the server. Attempting to create the resource instead",
+			if strings.Contains(err.Error(), "[create_failure]") {
+				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\tThis resource is in 'create_failure' state on the server.\n\tAttempting to re-create the resource instead",
 					request.NamespaceName, "resource", resourceName, resourceName)
 				addResourceRequest := convertUpdateResourceRequestToAdd(request)
 				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})

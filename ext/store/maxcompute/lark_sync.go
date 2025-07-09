@@ -134,7 +134,7 @@ func getLSheetContent(ctx context.Context, et *ExternalTable, sheets *lark.Clien
 
 func processLarkSheet(ctx context.Context, lark *lark.Client, ossClient *oss.Client, et *ExternalTable, commonLocation string) (int, error) {
 	if len(et.Source.SourceURIs) == 0 {
-		return 0, errors.InvalidArgument(EntityExternalTable, "source URI is empty for LarkSheet Sheet")
+		return 0, errors.InvalidArgument(EntityExternalTable, "source URI is empty for Lark Sheet")
 	}
 
 	revisionNumber, content, err := getLSheetContent(ctx, et, lark)

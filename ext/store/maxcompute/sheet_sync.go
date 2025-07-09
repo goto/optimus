@@ -170,17 +170,17 @@ func (s *SyncerService) getGoogleExternalTablesDueForSync(ctx context.Context, t
 func (s *SyncerService) getLarkExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*ExternalTable, []*ExternalTable, error) {
 	var toUpdateExternalTables, unModifiedSinceUpdate []*ExternalTable
 
-	s.logger.Info("[ON DB] [LarkSheet] Fetched last Resource Sync time list ")
+	s.logger.Info("[ON DB] [Lark] Fetched last Resource Sync time list ")
 	for resName, versionInfo := range lastUpdateMap {
-		s.logger.Info(fmt.Sprintf("[ON DB] [LarkSheet] resource: %s, lastUpdateTime in DB: %s, Last Synced Revision: %d", resName, versionInfo.LastSyncTime.String(), versionInfo.Revision))
+		s.logger.Info(fmt.Sprintf("[ON DB] [Lark] resource: %s, lastUpdateTime in DB: %s, Last Synced Revision: %d", resName, versionInfo.LastSyncTime.String(), versionInfo.Revision))
 	}
 	latestRevisionList, err := s.getLarkRevisionIDs(ctx, tnnt, ets)
-	s.logger.Info("[On LarkSheet] Fetched last resource update time list ")
+	s.logger.Info("[On Lark] Fetched last resource update time list ")
 	for _, latestRevision := range latestRevisionList {
 		if latestRevision.Err == nil {
-			s.logger.Info(fmt.Sprintf("[On LarkSheet] resource: %s, latest Revision: %d ", latestRevision.FullName, latestRevision.Revision))
+			s.logger.Info(fmt.Sprintf("[On Lark] resource: %s, latest Revision: %d ", latestRevision.FullName, latestRevision.Revision))
 		} else {
-			s.logger.Error(fmt.Sprintf("[On LarkSheet] resource: %s, error: %s ", latestRevision.FullName, latestRevision.Err.Error()))
+			s.logger.Error(fmt.Sprintf("[On Lark] resource: %s, error: %s ", latestRevision.FullName, latestRevision.Err.Error()))
 		}
 	}
 	if err != nil {
@@ -194,7 +194,7 @@ func (s *SyncerService) getLarkExternalTablesDueForSync(ctx context.Context, tnn
 			continue
 		}
 		if sourceRevisionMap[r.FullName()].Err != nil {
-			s.logger.Error(fmt.Sprintf("[On LarkSheet] unable to get current revision, err:%s", sourceRevisionMap[r.FullName()].Err.Error()))
+			s.logger.Error(fmt.Sprintf("[On Lark] unable to get current revision, err:%s", sourceRevisionMap[r.FullName()].Err.Error()))
 			toUpdateExternalTables = append(toUpdateExternalTables, r)
 			continue
 		}

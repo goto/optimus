@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
+	"google.golang.org/grpc/codes"
+
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
@@ -373,9 +375,15 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 		_, err := client.UpdateResource(ctx, request)
 		resourceName := plan.ConstructResourceName(request.DatastoreName, request.GetResource().GetName())
 		if err != nil {
-			if strings.Contains(err.Error(), errors.ErrNotFound.String()) {
-				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s, but it was not found on the server. Attempting to create the resource instead",
-					request.NamespaceName, "resource", resourceName, resourceName)
+			if strings.Contains(err.Error(), codes.NotFound.String()) || strings.Contains(err.Error(), codes.InvalidArgument.String()) {
+				switch {
+				case strings.Contains(err.Error(), codes.NotFound.String()):
+					c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\t This resource is not found on the server.\n\tAttempting to create the resource instead",
+						request.NamespaceName, "resource", resourceName, resourceName)
+				case strings.Contains(err.Error(), codes.InvalidArgument.String()):
+					c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\t This resource is in 'create_failue' state on the server.\n\tAttempting to re-create the resource instead",
+						request.NamespaceName, "resource", resourceName, resourceName)
+				}
 				addResourceRequest := convertUpdateResourceRequestToAdd(request)
 				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
 				continue

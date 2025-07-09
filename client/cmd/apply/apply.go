@@ -13,8 +13,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
-	"google.golang.org/grpc/codes"
-
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
@@ -25,6 +23,7 @@ import (
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
+	"google.golang.org/grpc/codes"
 )
 
 const (

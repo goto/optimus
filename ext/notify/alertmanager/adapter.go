@@ -9,6 +9,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/internal/utils"
 )
 
 const (
@@ -35,8 +36,8 @@ func (j ReplayEventType) String() string {
 	return string(j)
 }
 
-func (a *AlertManager) getJobConsoleLink(project, job string) string {
-	return fmt.Sprintf("%s/%s/%s:%s", a.dataConsole, "optimus", project, job)
+func (a *AlertManager) getJobConsoleLink(dataConsole, project, job string) string {
+	return fmt.Sprintf("%s/%s/%s:%s", utils.GetFirstNonEmpty(dataConsole, a.dataConsole), "optimus", project, job)
 }
 
 func getSeverity(severity string) string {
@@ -67,10 +68,10 @@ func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType strin
 	}
 }
 
-func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
+func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs, config *scheduler.AlertManagerConfig) {
 	projectName := e.JobEvent.Tenant.ProjectName().String()
 	jobName := e.JobEvent.JobName.String()
-	dashURL, _ := url.Parse(a.dashboard)
+	dashURL, _ := url.Parse(utils.GetFirstNonEmpty(config.DashboardURL, a.dashboard))
 	q := dashURL.Query()
 	q.Set("var-project", projectName)
 	q.Set("var-namespace", e.JobEvent.Tenant.NamespaceName().String())
@@ -83,7 +84,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		"job_name":     jobName,
 		"owner":        e.Owner,
 		"scheduled_at": e.JobEvent.JobScheduledAt.Format(radarTimeFormat),
-		"console_link": a.getJobConsoleLink(projectName, jobName),
+		"console_link": a.getJobConsoleLink(config.ConsoleURL, projectName, jobName),
 		"dashboard":    dashURL.String(),
 	}
 
@@ -113,6 +114,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 			"identifier": e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
 		},
+		Endpoint: utils.GetFirstNonEmpty(config.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type.String(), alertPayload)
 	a.relay(alertPayload)
@@ -121,6 +123,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 	projectName := attr.Tenant.ProjectName().String()
 	jobName := attr.Name.String()
+	consoleLink := a.getJobConsoleLink(attr.AlertManagerConsoleUrl, projectName, jobName)
 	a.relay(&AlertPayload{
 		Project: projectName,
 		LogTag:  attr.URN,
@@ -130,17 +133,18 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 			"job_name":     jobName,
 			"entity_type":  "Job",
 			"change_type":  attr.ChangeType.String(),
-			"console_link": a.getJobConsoleLink(projectName, jobName),
+			"console_link": consoleLink,
 		},
 		Template: optimusChangeTemplate,
 		Labels: map[string]string{
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.ChangeType.String()),
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
 	})
 }
 
-func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
+func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs, config *scheduler.AlertManagerConfig) {
 	projectName := attr.Tenant.ProjectName().String()
 	alertPayload := AlertPayload{
 		Project: projectName,
@@ -151,13 +155,14 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 			"namespace":    attr.Tenant.NamespaceName().String(),
 			"state":        attr.State.String(),
 			"replay_id":    attr.ReplayID,
-			"console_link": a.getJobConsoleLink(projectName, attr.JobName),
+			"console_link": a.getJobConsoleLink(a.dataConsole, projectName, attr.JobName),
 		},
 		Template: replayTemplate,
 		Labels: map[string]string{
 			"identifier": attr.JobURN,
 			"event_type": strings.ToLower(ReplayLifeCycle.String()),
 		},
+		Endpoint: utils.GetFirstNonEmpty(config.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(attr.JobWithDetails, ReplayLifeCycle.String(), &alertPayload)
 	a.relay(&alertPayload)
@@ -176,13 +181,14 @@ func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 			"job_name":     resourceName,
 			"entity_type":  "Resource",
 			"change_type":  attr.EventType.String(),
-			"console_link": a.getJobConsoleLink(projectName, resourceName),
+			"console_link": a.getJobConsoleLink(a.dataConsole, projectName, resourceName),
 		},
 		Template: optimusChangeTemplate,
 		Labels: map[string]string{
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.EventType.String()),
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
 	})
 }
 
@@ -200,5 +206,6 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 			"team":     attr.Tenant.NamespaceName().String(),
 			"severity": "WARNING",
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
 	})
 }

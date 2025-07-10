@@ -114,3 +114,9 @@ const (
 	MetricNotificationWorkerSendErr = "notification_worker_send_err_total"
 	MetricNotificationSend          = "notification_worker_send_total"
 )
+
+type AlertManagerConfig struct {
+	Endpoint     string
+	DashboardURL string
+	ConsoleURL   string
+}

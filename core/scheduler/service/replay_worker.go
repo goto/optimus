@@ -40,6 +40,7 @@ type ReplayWorker struct {
 	scheduler    ReplayScheduler
 	config       config.ReplayConfig
 	alertManager AlertManager
+	tenantGetter TenantGetter
 }
 
 type ReplayScheduler interface {
@@ -52,7 +53,7 @@ type ReplayScheduler interface {
 	GetJobRunsWithDetails(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error)
 }
 
-func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig, alertManager AlertManager) *ReplayWorker {
+func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRepo JobRepository, scheduler ReplayScheduler, cfg config.ReplayConfig, alertManager AlertManager, tenantGetter TenantGetter) *ReplayWorker {
 	return &ReplayWorker{
 		logger:       logger,
 		jobRepo:      jobRepo,
@@ -60,6 +61,7 @@ func NewReplayWorker(logger log.Logger, replayRepository ReplayRepository, jobRe
 		config:       cfg,
 		scheduler:    scheduler,
 		alertManager: alertManager,
+		tenantGetter: tenantGetter,
 	}
 }
 
@@ -458,12 +460,20 @@ func (w *ReplayWorker) sendReplayEvent(ctx context.Context, attr scheduler.Repla
 		w.logger.Error("[ReplayID: %s] unable adapt job name from %s", attr.ReplayID, attr.JobName)
 		return err
 	}
+
 	jobWithDetails, err := w.jobRepo.GetJobDetails(ctx, attr.Tenant.ProjectName(), jobName)
 	if err != nil {
 		w.logger.Error("[ReplayID: %s] unable get jobWithDetails for %s", attr.ReplayID, jobName)
 		return err
 	}
+
+	tenantDetails, err := w.tenantGetter.GetDetails(ctx, attr.Tenant)
+	if err != nil {
+		w.logger.Error("[ReplayID: %s] unable to get tenant details for %s", attr.ReplayID, attr.Tenant)
+		return err
+	}
+
 	attr.JobWithDetails = jobWithDetails
-	w.alertManager.SendReplayEvent(&attr)
+	w.alertManager.SendReplayEvent(&attr, getAlertManagerProjectConfig(tenantDetails))
 	return nil
 }

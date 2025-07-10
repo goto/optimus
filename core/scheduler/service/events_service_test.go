@@ -144,7 +144,7 @@ func TestNotificationService(t *testing.T) {
 					JobEvent:      event,
 
 					JobWithDetails: &jobWithDetails,
-				})
+				}, &scheduler.AlertManagerConfig{})
 				tenantService := new(mockTenantService)
 				tenantWithDetails, _ := tenant.NewTenantDetails(project, namespace, []*tenant.PlainTextSecret{})
 				tenantService.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
@@ -351,10 +351,10 @@ type mockAlertManager struct {
 	mock.Mock
 }
 
-func (m *mockAlertManager) SendJobRunEvent(attr *scheduler.AlertAttrs) {
-	m.Called(attr)
+func (m *mockAlertManager) SendJobRunEvent(attr *scheduler.AlertAttrs, config *scheduler.AlertManagerConfig) {
+	m.Called(attr, config)
 }
 
-func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
-	m.Called(attr)
+func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs, config *scheduler.AlertManagerConfig) {
+	m.Called(attr, config)
 }

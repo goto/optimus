@@ -52,6 +52,7 @@ type AlertPayload struct {
 	Data     map[string]string `json:"data"`
 	Template string            `json:"template"`
 	Labels   map[string]string `json:"labels"`
+	Endpoint string            `json:"-"`
 }
 
 type AlertManager struct {
@@ -70,7 +71,7 @@ type AlertManager struct {
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {
-	if a.endpoint == "" {
+	if alert.Endpoint == "" {
 		// Don't alert if alert manager is not configured in server config
 		return
 	}
@@ -89,9 +90,10 @@ func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
 	defer cancel()
 	reqID := uuid.New()
+	endpoint := alertPayload.Endpoint
 
-	a.logger.Debug(fmt.Sprintf("sending request to alert manager url:%s, body:%s, reqID: %s", a.endpoint, payloadJSON, reqID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.endpoint, bytes.NewBuffer(payloadJSON))
+	a.logger.Debug(fmt.Sprintf("sending request to alert manager url:%s, body:%s, reqID: %s", endpoint, payloadJSON, reqID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return err
 	}

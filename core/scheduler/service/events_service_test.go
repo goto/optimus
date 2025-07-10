@@ -156,6 +156,50 @@ func TestNotificationService(t *testing.T) {
 				assert.Nil(t, err)
 			})
 
+			t.Run("should send event to alert manager with project level config", func(t *testing.T) {
+				jobRepo := new(JobRepository)
+				alertManager := new(mockAlertManager)
+				tenantService := new(mockTenantService)
+				defer func() {
+					jobRepo.AssertExpectations(t)
+					alertManager.AssertExpectations(t)
+					tenantService.AssertExpectations(t)
+				}()
+
+				projectWithAlertManagerConfig, _ := tenant.NewProject("proj1", map[string]string{
+					"STORAGE_PATH":               "somePath",
+					"SCHEDULER_HOST":             "localhost",
+					"ALERTMANAGER_ENDPOINT":      "http://alertmanager:9093/api/v1/alerts",
+					"ALERTMANAGER_DASHBOARD_URL": "http://alertmanager:9093",
+					"ALERTMANAGER_CONSOLE_URL":   "http://alertmanager:9093/graph",
+				}, make(map[string]string))
+				tenantWithDetails, _ := tenant.NewTenantDetails(projectWithAlertManagerConfig, namespace, []*tenant.PlainTextSecret{})
+				alertMangerConfig := &scheduler.AlertManagerConfig{
+					Endpoint:     "http://alertmanager:9093/api/v1/alerts",
+					DashboardURL: "http://alertmanager:9093",
+					ConsoleURL:   "http://alertmanager:9093/graph",
+				}
+
+				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
+				tenantService.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
+
+				alertManager.On("SendJobRunEvent", &scheduler.AlertAttrs{
+					Owner:         "jobOwnerName",
+					JobURN:        job.URN(),
+					Title:         "Optimus Job Alert",
+					SchedulerHost: "localhost",
+					Status:        scheduler.StatusFiring,
+					JobEvent:      event,
+
+					JobWithDetails: &jobWithDetails,
+				}, alertMangerConfig)
+
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager)
+
+				err := notifyService.Relay(ctx, event)
+				assert.Nil(t, err)
+			})
+
 			t.Run("should send slack notification", func(t *testing.T) {
 				jobRepo := new(JobRepository)
 				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)

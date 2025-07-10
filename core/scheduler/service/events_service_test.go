@@ -167,17 +167,13 @@ func TestNotificationService(t *testing.T) {
 				}()
 
 				projectWithAlertManagerConfig, _ := tenant.NewProject("proj1", map[string]string{
-					"STORAGE_PATH":               "somePath",
-					"SCHEDULER_HOST":             "localhost",
-					"ALERTMANAGER_ENDPOINT":      "http://alertmanager:9093/api/v1/alerts",
-					"ALERTMANAGER_DASHBOARD_URL": "http://alertmanager:9093",
-					"ALERTMANAGER_CONSOLE_URL":   "http://alertmanager:9093/graph",
+					"STORAGE_PATH":          "somePath",
+					"SCHEDULER_HOST":        "localhost",
+					"ALERTMANAGER_ENDPOINT": "http://alertmanager:9093/api/v1/alerts",
 				}, make(map[string]string))
 				tenantWithDetails, _ := tenant.NewTenantDetails(projectWithAlertManagerConfig, namespace, []*tenant.PlainTextSecret{})
 				alertMangerConfig := &scheduler.AlertManagerConfig{
-					Endpoint:     "http://alertmanager:9093/api/v1/alerts",
-					DashboardURL: "http://alertmanager:9093",
-					ConsoleURL:   "http://alertmanager:9093/graph",
+					Endpoint: "http://alertmanager:9093/api/v1/alerts",
 				}
 
 				jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)

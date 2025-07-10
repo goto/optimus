@@ -181,8 +181,7 @@ type AlertAttrs struct {
 	ChangeType ChangeType
 	Job        *Spec
 
-	AlertManagerEndpoint   string
-	AlertManagerConsoleUrl string
+	AlertManagerEndpoint string
 }
 
 type UpdateImpact string

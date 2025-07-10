@@ -32,6 +32,9 @@ func TestReplayWorker(t *testing.T) {
 		tenant.ProjectStoragePathKey:       "fs://bucket",
 		tenant.ProjectAlertManagerEndpoint: "https://alertmanager.example.com",
 	}
+	alertManagerConfig := &scheduler.AlertManagerConfig{
+		Endpoint: projectConfig[tenant.ProjectAlertManagerEndpoint],
+	}
 	projName := tenant.ProjectName("proj")
 	project, _ := tenant.NewProject(projName.String(), projectConfig, make(map[string]string))
 	namespaceName := tenant.ProjectName("ns1")
@@ -126,7 +129,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
@@ -215,7 +218,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
@@ -303,7 +306,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, summaryMsg).Return(nil).Once()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
@@ -391,7 +394,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, summaryMsg).Return(nil).Once()
 			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -478,7 +481,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
@@ -549,7 +552,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(nil, errors.New(errorMsg)).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -589,7 +592,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRuns", mock.Anything, tnnt, mock.Anything, jobCron).Return(nil, errors.New(errorMsg)).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -638,7 +641,7 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(errors.New(errorMsg)).Once()
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -689,7 +692,7 @@ func TestReplayWorker(t *testing.T) {
 			errorMsgToStore := "create runs:\n internal error"
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsgToStore).Return(nil).Once()
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
@@ -778,7 +781,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
 			worker.Execute(replayID, tnnt, jobAName)
@@ -814,7 +817,7 @@ func TestReplayWorker(t *testing.T) {
 			replayRepository.On("GetReplayByID", mock.Anything, replayWithRun.Replay.ID()).Return(replayWithRun, nil).Once()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, alertManagerConfig).Return()
 			defer alertManager.AssertExpectations(t)
 
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)

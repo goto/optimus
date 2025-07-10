@@ -220,12 +220,8 @@ func getAlertManagerProjectConfig(tenantWithDetails *tenant.WithDetails) *schedu
 		return &scheduler.AlertManagerConfig{}
 	}
 	alertManagerEndpoint, _ := tenantWithDetails.GetConfig(tenant.ProjectAlertManagerEndpoint)
-	alertManagerDashboardURL, _ := tenantWithDetails.GetConfig(tenant.ProjectAlertManagerDashboardUrl)
-	alertManagerConsoleURL, _ := tenantWithDetails.GetConfig(tenant.ProjectAlertManagerConsoleUrl)
 	return &scheduler.AlertManagerConfig{
-		Endpoint:     alertManagerEndpoint,
-		DashboardURL: alertManagerDashboardURL,
-		ConsoleURL:   alertManagerConsoleURL,
+		Endpoint: alertManagerEndpoint,
 	}
 }
 

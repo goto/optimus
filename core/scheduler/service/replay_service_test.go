@@ -63,6 +63,7 @@ func TestReplayService(t *testing.T) {
 		"STORAGE_PATH":             "file:///tmp/",
 		"SCHEDULER_HOST":           "http://localhost",
 	}
+	emptyReplayAMConfig := &scheduler.AlertManagerConfig{}
 	projectVars := map[string]string{}
 	nsVars := map[string]string{}
 	namespaceEntity, _ := tenant.NewNamespace(namespaceName.String(), projName, namespaceCfg, nsVars)
@@ -109,7 +110,7 @@ func TestReplayService(t *testing.T) {
 			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, emptyReplayAMConfig).Return()
 			defer alertManager.AssertExpectations(t)
 
 			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger, taskNameToExecutionProjectMap, alertManager)
@@ -154,7 +155,7 @@ func TestReplayService(t *testing.T) {
 			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
 
 			alertManager := new(mockAlertManager)
-			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			alertManager.On("SendReplayEvent", mock.Anything, emptyReplayAMConfig).Return()
 			defer alertManager.AssertExpectations(t)
 			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger, taskNameToExecutionProjectMap, alertManager)
 			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfigEmptyJobConfig)

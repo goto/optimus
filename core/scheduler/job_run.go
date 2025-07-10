@@ -116,7 +116,5 @@ const (
 )
 
 type AlertManagerConfig struct {
-	Endpoint     string
-	DashboardURL string
-	ConsoleURL   string
+	Endpoint string
 }

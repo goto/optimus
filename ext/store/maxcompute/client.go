@@ -6,10 +6,10 @@ import (
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
+	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/salt/log"
 )
 
 type MaxComputeClientProvider struct{}

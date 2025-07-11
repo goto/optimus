@@ -6,11 +6,11 @@ import (
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/ext/store/maxcompute"
-	"github.com/goto/salt/log"
 )
 
 func TestMaskingPolicyHandle(t *testing.T) {

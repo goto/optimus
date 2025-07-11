@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
+	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
-	"github.com/goto/salt/log"
 )
 
 type McTables interface {

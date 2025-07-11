@@ -187,7 +187,7 @@ func parseMaskingPolicyError(err error) error {
 	if strings.Contains(err.Error(), "ExceptionBase:") {
 		exceptionBaseIdx := strings.Index(err.Error(), "ExceptionBase:") + len("ExceptionBase:")
 		actualErrorMsg := strings.TrimSpace(err.Error()[exceptionBaseIdx:])
-		return fmt.Errorf("Error from MaxCompute: %s", actualErrorMsg)
+		return fmt.Errorf("error from maxCompute: %s", actualErrorMsg)
 	}
 
 	return err

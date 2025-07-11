@@ -254,7 +254,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			if err != nil {
 				maskingPolicyClient = client
 			}
-			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
 			return client.TableHandleFrom(projectSchema, maskingPolicyHandle)
 		},
@@ -264,7 +264,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			if err != nil {
 				maskingPolicyClient = client
 			}
-			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
 			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		},

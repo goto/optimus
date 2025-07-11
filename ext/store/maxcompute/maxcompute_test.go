@@ -134,7 +134,7 @@ func TestMaxComputeStore(t *testing.T) {
 
 			maskingPolicyClient := new(mockClient)
 			maskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			maskingPolicyClient.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(maskingPolicyHandle)
+			maskingPolicyClient.On("TableMaskingPolicyHandleFrom", mock.Anything, log).Return(maskingPolicyHandle)
 			defer maskingPolicyClient.AssertExpectations(t)
 
 			client := new(mockClient)
@@ -296,7 +296,7 @@ func TestMaxComputeStore(t *testing.T) {
 
 			maskingPolicyClient := new(mockClient)
 			maskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			maskingPolicyClient.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(maskingPolicyHandle)
+			maskingPolicyClient.On("TableMaskingPolicyHandleFrom", mock.Anything, log).Return(maskingPolicyHandle)
 			defer maskingPolicyClient.AssertExpectations(t)
 
 			client := new(mockClient)
@@ -632,7 +632,7 @@ func TestMaxComputeStore(t *testing.T) {
 			client.On("SchemaHandleFrom", mock.Anything).Return(schemaHandle)
 			schemaHandle.On("Exists", mock.Anything).Return(true)
 
-			client.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(mpHandle).Maybe()
+			client.On("TableMaskingPolicyHandleFrom", mock.Anything, log).Return(mpHandle).Maybe()
 			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything, mpHandle).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
 			client.On("TableHandleFrom", mock.Anything, mpHandle).Return(tableHandle).Maybe()
@@ -678,7 +678,7 @@ func TestMaxComputeStore(t *testing.T) {
 			client.On("SchemaHandleFrom", mock.Anything).Return(schemaHandle)
 			schemaHandle.On("Exists", mock.Anything).Return(true)
 
-			client.On("TableMaskingPolicyHandleFrom", mock.Anything).Return(mpHandle).Maybe()
+			client.On("TableMaskingPolicyHandleFrom", mock.Anything, log).Return(mpHandle).Maybe()
 			client.On("TableHandleFrom", mock.Anything, mpHandle).Return(tableHandle).Maybe()
 			tableHandle.On("Exists", mock.Anything).Return(false).Maybe()
 			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
@@ -731,8 +731,8 @@ func (m *mockClient) ExternalTableHandleFrom(schema maxcompute.ProjectSchema, te
 	return args.Get(0).(maxcompute.TableResourceHandle)
 }
 
-func (m *mockClient) TableMaskingPolicyHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableMaskingPolicyHandle {
-	args := m.Called(schema)
+func (m *mockClient) TableMaskingPolicyHandleFrom(schema maxcompute.ProjectSchema, logger log.Logger) maxcompute.TableMaskingPolicyHandle {
+	args := m.Called(schema, logger)
 	return args.Get(0).(maxcompute.TableMaskingPolicyHandle)
 }
 

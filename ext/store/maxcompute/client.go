@@ -9,6 +9,7 @@ import (
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/salt/log"
 )
 
 type MaxComputeClientProvider struct{}
@@ -68,12 +69,12 @@ func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableReso
 	return NewViewHandle(c, s, t)
 }
 
-func (c *MaxComputeClient) TableMaskingPolicyHandleFrom(projectSchema ProjectSchema) TableMaskingPolicyHandle {
+func (c *MaxComputeClient) TableMaskingPolicyHandleFrom(projectSchema ProjectSchema, logger log.Logger) TableMaskingPolicyHandle {
 	c.SetDefaultProjectName(projectSchema.Project)
 	c.SetCurrentSchemaName(projectSchema.Schema)
 	t := c.Tables()
 	w := McTableWrapper{t}
-	return NewMaskingPolicyHandle(c, w)
+	return NewMaskingPolicyHandle(c, w, logger)
 }
 
 func (c *MaxComputeClient) GetDDLView(_ context.Context, table string) (string, error) {

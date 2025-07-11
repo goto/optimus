@@ -149,8 +149,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string) *AlertManager {
 	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
-		logger.Info("alert-manager: host name not found in config, Optimus can not send events to Alert manager.")
-		return &AlertManager{}
+		logger.Info("alert-manager: host name not found in server config, Optimus can still send events to Alert manager using tenant config.")
 	}
 
 	this := &AlertManager{

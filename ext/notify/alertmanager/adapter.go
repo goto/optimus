@@ -123,7 +123,6 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 	projectName := attr.Tenant.ProjectName().String()
 	jobName := attr.Name.String()
-	consoleLink := a.getJobConsoleLink(projectName, jobName)
 	a.relay(&AlertPayload{
 		Project: projectName,
 		LogTag:  attr.URN,
@@ -133,7 +132,7 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 			"job_name":     jobName,
 			"entity_type":  "Job",
 			"change_type":  attr.ChangeType.String(),
-			"console_link": consoleLink,
+			"console_link": a.getJobConsoleLink(projectName, jobName),
 		},
 		Template: optimusChangeTemplate,
 		Labels: map[string]string{

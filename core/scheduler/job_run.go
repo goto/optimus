@@ -81,6 +81,8 @@ type AlertAttrs struct {
 	JobEvent      *Event
 
 	JobWithDetails *JobWithDetails
+
+	AlertManager AlertManagerConfig
 }
 
 type ReplayNotificationAttrs struct {
@@ -91,6 +93,8 @@ type ReplayNotificationAttrs struct {
 	State    ReplayState
 
 	JobWithDetails *JobWithDetails
+
+	AlertManager AlertManagerConfig
 }
 
 type WebhookAttrs struct {
@@ -115,6 +119,8 @@ const (
 	MetricNotificationSend          = "notification_worker_send_total"
 )
 
+// AlertManagerConfig holds the configuration for the AlertManager endpoint.
+// we can add more fields in the future if needed, such as dashboard url or console url
 type AlertManagerConfig struct {
 	Endpoint string
 }

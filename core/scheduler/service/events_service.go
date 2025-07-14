@@ -36,8 +36,8 @@ type Webhook interface {
 }
 
 type AlertManager interface {
-	SendJobRunEvent(attr *scheduler.AlertAttrs, config *scheduler.AlertManagerConfig)
-	SendReplayEvent(attr *scheduler.ReplayNotificationAttrs, config *scheduler.AlertManagerConfig)
+	SendJobRunEvent(attr *scheduler.AlertAttrs)
+	SendReplayEvent(attr *scheduler.ReplayNotificationAttrs)
 }
 
 type EventsService struct {
@@ -79,7 +79,8 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 		Status:         status,
 		JobEvent:       event,
 		JobWithDetails: jobDetails,
-	}, getAlertManagerProjectConfig(tenantWithDetails))
+		AlertManager:   getAlertManagerProjectConfig(tenantWithDetails),
+	})
 	return nil
 }
 
@@ -215,12 +216,12 @@ func (e *EventsService) Close() error {
 	return me.ToErr()
 }
 
-func getAlertManagerProjectConfig(tenantWithDetails *tenant.WithDetails) *scheduler.AlertManagerConfig {
+func getAlertManagerProjectConfig(tenantWithDetails *tenant.WithDetails) scheduler.AlertManagerConfig {
 	if tenantWithDetails == nil {
-		return &scheduler.AlertManagerConfig{}
+		return scheduler.AlertManagerConfig{}
 	}
 	alertManagerEndpoint, _ := tenantWithDetails.GetConfig(tenant.ProjectAlertManagerEndpoint)
-	return &scheduler.AlertManagerConfig{
+	return scheduler.AlertManagerConfig{
 		Endpoint: alertManagerEndpoint,
 	}
 }

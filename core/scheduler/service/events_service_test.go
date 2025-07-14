@@ -144,7 +144,8 @@ func TestNotificationService(t *testing.T) {
 					JobEvent:      event,
 
 					JobWithDetails: &jobWithDetails,
-				}, &scheduler.AlertManagerConfig{})
+					AlertManager:   scheduler.AlertManagerConfig{},
+				})
 				tenantService := new(mockTenantService)
 				tenantWithDetails, _ := tenant.NewTenantDetails(project, namespace, []*tenant.PlainTextSecret{})
 				tenantService.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
@@ -172,7 +173,7 @@ func TestNotificationService(t *testing.T) {
 					"ALERTMANAGER_ENDPOINT": "http://alertmanager:9093/api/v1/alerts",
 				}, make(map[string]string))
 				tenantWithDetails, _ := tenant.NewTenantDetails(projectWithAlertManagerConfig, namespace, []*tenant.PlainTextSecret{})
-				alertMangerConfig := &scheduler.AlertManagerConfig{
+				alertMangerConfig := scheduler.AlertManagerConfig{
 					Endpoint: "http://alertmanager:9093/api/v1/alerts",
 				}
 
@@ -188,7 +189,8 @@ func TestNotificationService(t *testing.T) {
 					JobEvent:      event,
 
 					JobWithDetails: &jobWithDetails,
-				}, alertMangerConfig)
+					AlertManager:   alertMangerConfig,
+				})
 
 				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager)
 
@@ -391,10 +393,10 @@ type mockAlertManager struct {
 	mock.Mock
 }
 
-func (m *mockAlertManager) SendJobRunEvent(attr *scheduler.AlertAttrs, config *scheduler.AlertManagerConfig) {
-	m.Called(attr, config)
+func (m *mockAlertManager) SendJobRunEvent(attr *scheduler.AlertAttrs) {
+	m.Called(attr)
 }
 
-func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs, config *scheduler.AlertManagerConfig) {
-	m.Called(attr, config)
+func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
+	m.Called(attr)
 }

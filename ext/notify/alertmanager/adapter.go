@@ -68,7 +68,7 @@ func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType strin
 	}
 }
 
-func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs, config *scheduler.AlertManagerConfig) {
+func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 	projectName := e.JobEvent.Tenant.ProjectName().String()
 	jobName := e.JobEvent.JobName.String()
 	dashURL, _ := url.Parse(a.dashboard)
@@ -114,7 +114,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs, config *schedule
 			"identifier": e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
 		},
-		Endpoint: utils.GetFirstNonEmpty(config.Endpoint, a.endpoint),
+		Endpoint: utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type.String(), alertPayload)
 	a.relay(alertPayload)
@@ -144,7 +144,7 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 	})
 }
 
-func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs, config *scheduler.AlertManagerConfig) {
+func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
 	projectName := attr.Tenant.ProjectName().String()
 	alertPayload := AlertPayload{
 		Project: projectName,
@@ -162,7 +162,7 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs, 
 			"identifier": attr.JobURN,
 			"event_type": strings.ToLower(ReplayLifeCycle.String()),
 		},
-		Endpoint: utils.GetFirstNonEmpty(config.Endpoint, a.endpoint),
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(attr.JobWithDetails, ReplayLifeCycle.String(), &alertPayload)
 	a.relay(&alertPayload)

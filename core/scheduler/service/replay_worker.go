@@ -474,6 +474,7 @@ func (w *ReplayWorker) sendReplayEvent(ctx context.Context, attr scheduler.Repla
 	}
 
 	attr.JobWithDetails = jobWithDetails
-	w.alertManager.SendReplayEvent(&attr, getAlertManagerProjectConfig(tenantDetails))
+	attr.AlertManager = getAlertManagerProjectConfig(tenantDetails)
+	w.alertManager.SendReplayEvent(&attr)
 	return nil
 }

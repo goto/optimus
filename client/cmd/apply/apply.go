@@ -380,6 +380,13 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
 				continue
 			}
+			if strings.Contains(err.Error(), "Not Found") {
+				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\tThis resource does not exist on the server.\n\tAttempting to Create the resource instead",
+					request.NamespaceName, "resource", resourceName, resourceName)
+				addResourceRequest := convertUpdateResourceRequestToAdd(request)
+				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
+				continue
+			}
 
 			c.errors.Append(err)
 			c.printFailed(request.NamespaceName, "update", "resource", resourceName, err.Error())

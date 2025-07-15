@@ -319,14 +319,17 @@ func (s *OptimusServer) setupHandlers() error {
 		},
 	)
 
-	alertsHandler := alertmanager.New(
-		notificationContext,
-		s.logger,
-		s.conf.Alerting.EventManager.Host,
-		s.conf.Alerting.EventManager.Endpoint,
-		s.conf.Alerting.Dashboard,
-		s.conf.Alerting.DataConsole,
-	)
+	alertsHandler := new(alertmanager.AlertManager)
+	if s.conf.Alerting.EventManager.Enabled {
+		alertsHandler = alertmanager.New(
+			notificationContext,
+			s.logger,
+			s.conf.Alerting.EventManager.Host,
+			s.conf.Alerting.EventManager.Endpoint,
+			s.conf.Alerting.Dashboard,
+			s.conf.Alerting.DataConsole,
+		)
+	}
 
 	newEngine := compiler.NewEngine()
 
@@ -340,7 +343,7 @@ func (s *OptimusServer) setupHandlers() error {
 	}
 
 	replayRepository := schedulerRepo.NewReplayRepository(s.dbPool)
-	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay, alertsHandler)
+	replayWorker := schedulerService.NewReplayWorker(s.logger, replayRepository, jobProviderRepo, newScheduler, s.conf.Replay, alertsHandler, tenantService)
 
 	replayContext, closeReplayScan := context.WithCancel(context.Background())
 	s.cleanupFn = append(s.cleanupFn, closeReplayScan)

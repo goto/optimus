@@ -55,6 +55,8 @@ type AlertAttrs struct {
 	Tenant    tenant.Tenant
 	EventTime time.Time
 	EventType ChangeType
+
+	AlertManagerEndpoint string
 }
 
 type ETAlertAttrs struct {
@@ -62,6 +64,8 @@ type ETAlertAttrs struct {
 	Tenant    tenant.Tenant
 	EventType string
 	Message   string
+
+	AlertManagerEndpoint string
 }
 
 type SyncStatus struct {

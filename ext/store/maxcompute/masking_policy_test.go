@@ -6,6 +6,7 @@ import (
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -16,6 +17,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 	accessID, accessKey, endpoint := "access_id", "access_key", "http://service.ap-southeast-5.maxcompute.aliyun.com/api"
 	projectName, schemaName, tableName := "proj", "schema", "test"
 	odpsInstance := odps.NewInstance(odps.NewOdps(account.NewAliyunAccount(accessID, accessKey), endpoint), projectName, "")
+	logger := log.NewNoop()
 
 	tbl := maxcompute.Table{
 		Name:     tableName,
@@ -36,7 +38,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 
 			mockSQLExecutor := new(mockOdpsIns)
 
-			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
+			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables, logger)
 			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
@@ -54,7 +56,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 
 			mockSQLExecutor := new(mockOdpsIns)
 
-			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
+			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables, logger)
 			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
@@ -73,7 +75,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 
 			mockSQLExecutor := new(mockOdpsIns)
 
-			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
+			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables, logger)
 			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
@@ -98,7 +100,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			mockSQLExecutor.On("ExecSQlWithHints", mock.Anything, mock.Anything).Return(odpsInstance, errors.New("cannot apply"))
 			defer mockSQLExecutor.AssertExpectations(t)
 
-			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
+			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables, logger)
 			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)
@@ -109,6 +111,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			existingMaskingInfo := []odps.ColumnMaskInfo{
 				{Name: "column2", PolicyNameList: []string{"old_mask_policy", "old_unmask_policy"}},
 			}
+			logger := log.NewNoop()
 			mockTableIns := new(mockTableInstance)
 			mockTableIns.On("Load").Return(nil)
 			mockTableIns.On("ColumnMaskInfos").Return(existingMaskingInfo, nil)
@@ -126,7 +129,7 @@ func TestMaskingPolicyHandle(t *testing.T) {
 			mockSQLExecutor.On("ExecSQlWithHints", "APPLY DATA MASKING POLICY unmask_policy BIND TO TABLE schema.test COLUMN column1;", mock.Anything).Return(odpsInstance, nil)
 			defer mockSQLExecutor.AssertExpectations(t)
 
-			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables)
+			handle := maxcompute.NewMaskingPolicyHandle(mockSQLExecutor, mockTables, logger)
 			err := handle.Process(tbl.Name, tbl.Schema)
 
 			assert.Error(t, err)

@@ -383,6 +383,7 @@ func fromAlerts(jobAlerts []*job.AlertSpec) []*pb.JobSpecification_Behavior_Noti
 			Channels: alert.Channels(),
 			Config:   alert.Config(),
 			Severity: alert.Severity(),
+			Team:     alert.Team(),
 		})
 	}
 	return notifiers

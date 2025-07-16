@@ -6,10 +6,26 @@ import (
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
 )
+
+const (
+	maskingPolicyActionStatusMetricName = "masking_policy_action_status"
+
+	maskingPolicyActionStatusSuccess = "success"
+	maskingPolicyActionStatusError   = "error"
+	maskingPolicyActionBind          = "bind"
+	maskingPolicyActionUnbind        = "unbind"
+)
+
+var maskingPolicyActionStatusCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: maskingPolicyActionStatusMetricName,
+	Help: "status of masking policy-related actions, tagged by table name, column name, masking policy name, action, and status (success/error)",
+}, []string{"table_name", "column_name", "masking_policy", "action", "status"})
 
 type McTables interface {
 	BatchLoadTables(tableNames []string) ([]McTableInstance, error)
@@ -112,7 +128,7 @@ func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackersPerColumn []maskingP
 			sqlTasks = append(sqlTasks, maskingPolicyTaskTracker{
 				ColumnName:    t.ColumnName,
 				MaskingPolicy: policy,
-				Action:        "bind",
+				Action:        maskingPolicyActionBind,
 				SQLTask:       fmt.Sprintf("APPLY DATA MASKING POLICY %s BIND TO TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName),
 			})
 		}
@@ -121,7 +137,7 @@ func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackersPerColumn []maskingP
 			sqlTasks = append(sqlTasks, maskingPolicyTaskTracker{
 				ColumnName:    t.ColumnName,
 				MaskingPolicy: policy,
-				Action:        "unbind",
+				Action:        maskingPolicyActionUnbind,
 				SQLTask:       fmt.Sprintf("APPLY DATA MASKING POLICY %s UNBIND FROM TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName),
 			})
 		}
@@ -131,21 +147,45 @@ func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackersPerColumn []maskingP
 	for _, task := range sqlTasks {
 		ins, err := h.mcSQLExecutor.ExecSQlWithHints(task.SQLTask, nil)
 		if err != nil {
+			maskingPolicyActionStatusCounter.WithLabelValues(
+				fmt.Sprintf("%s.%s", schemaName, tableName),
+				task.ColumnName,
+				task.MaskingPolicy,
+				task.Action,
+				maskingPolicyActionStatusError,
+			).Inc()
+
 			err = parseMaskingPolicyError(err)
-			h.logger.Info("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
+			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
 			me.Append(fmt.Errorf("failed to %s masking policy %s for column %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
 			continue
 		}
 
 		err = ins.WaitForSuccess()
 		if err != nil {
+			maskingPolicyActionStatusCounter.WithLabelValues(
+				fmt.Sprintf("%s.%s", schemaName, tableName),
+				task.ColumnName,
+				task.MaskingPolicy,
+				task.Action,
+				maskingPolicyActionStatusError,
+			).Inc()
+
 			err = parseMaskingPolicyError(err)
-			h.logger.Info("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
+			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
 			me.Append(fmt.Errorf("failed to %s masking policy %s to column %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
 			continue
 		}
 
-		h.logger.Info("[masking-policy: success] %s for masking policy %s to table %s.%s column %s succeeded", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
+		maskingPolicyActionStatusCounter.WithLabelValues(
+			fmt.Sprintf("%s.%s", schemaName, tableName),
+			task.ColumnName,
+			task.MaskingPolicy,
+			task.Action,
+			maskingPolicyActionStatusSuccess,
+		).Inc()
+
+		h.logger.Info("[masking-policy: success] action %s for masking policy %s to table %s.%s column %s succeeded", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName)
 	}
 
 	return me.ToErr()

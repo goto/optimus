@@ -21,6 +21,7 @@ const (
 	ErrAlreadyExists   ErrorType = "Resource Already Exists"
 	ErrInvalidArgument ErrorType = "Invalid Argument"
 	ErrFailedPrecond   ErrorType = "Failed Precondition"
+	ErrForbidden       ErrorType = "Forbidden"
 
 	ErrInvalidState ErrorType = "Invalid State"
 )
@@ -38,7 +39,10 @@ func (*DomainError) Is(tgt error) bool {
 }
 
 func AddErrContext(err error, entity, msg string) *DomainError {
-	errType := ErrInternalError
+	return AddErrContextWithType(err, ErrInternalError, entity, msg)
+}
+
+func AddErrContextWithType(err error, errType ErrorType, entity, msg string) *DomainError {
 	var de *DomainError
 	if errors.As(err, &de) {
 		errType = de.ErrorType
@@ -119,6 +123,15 @@ func NotFound(entity, msg string) *DomainError {
 func FailedPrecondition(entity, msg string) *DomainError {
 	return &DomainError{
 		ErrorType:  ErrFailedPrecond,
+		Entity:     entity,
+		Message:    msg,
+		WrappedErr: nil,
+	}
+}
+
+func NewForbidden(entity, msg string) *DomainError {
+	return &DomainError{
+		ErrorType:  ErrForbidden,
 		Entity:     entity,
 		Message:    msg,
 		WrappedErr: nil,

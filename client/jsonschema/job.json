@@ -100,17 +100,18 @@
         },
         "channels": {
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "Only Pagerduty is supported, Slack support is depricated"
           },
           "type": "array"
         },
         "severity": {
           "type": "string",
-          "enum": ["INFO", "WARNING", "CRITICAL", "info", "warning", "critical"]
+          "enum": ["INFO", "WARNING", "CRITICAL"]
         },
         "team": {
           "type": "string",
-          "description": "Team which will receive these alerts"
+          "description": "[Optional] Send Alerts to this team instead of the Namespace named team"
         }
       },
       "additionalProperties": false,
@@ -125,7 +126,7 @@
           "type": "integer"
         },
         "delay": {
-          "type": "integer",
+          "type": "string",
           "description": "Delay duration"
         },
         "exponential_backoff": {
@@ -346,7 +347,8 @@
     "WebhookEndpoint": {
       "properties": {
         "url": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^(https?:\\/\\/)[\\w.-]+(?:\\.[\\w\\.-]+)+[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=.]+$"
         },
         "headers": {
           "additionalProperties": {

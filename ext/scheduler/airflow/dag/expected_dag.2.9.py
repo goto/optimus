@@ -67,7 +67,7 @@ dag = DAG(
     sla_miss_callback=optimus_sla_miss_notify,
     on_success_callback=job_success_event,
     on_failure_callback=job_failure_event,
-    
+    access_control={  },
 )
 
 resources = k8s.V1ResourceRequirements(

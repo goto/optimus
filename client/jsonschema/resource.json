@@ -279,10 +279,12 @@
     "ExternalSource": {
       "properties": {
         "type": {
-          "type": "string"
+          "type": "string",
+          "enum": ["GOOGLE_SHEETS", "GOOGLE_DRIVE", "LARK_SHEET", "OSS"]
         },
         "content_type": {
-          "type": "string"
+          "type": "string",
+          "enum": ["CSV", "TSV", "JSON", "TEXTFILE", "RCFILE", "ORC", "ORCFILE", "SEQUENCEFILE", "PARQUET", "AVRO"]
         },
         "uris": {
           "items": {

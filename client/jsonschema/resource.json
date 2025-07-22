@@ -427,11 +427,13 @@
           "type": "boolean"
         },
         "source_time_format": {
-          "type": "string"
+          "type": "string",
+          "description": "Time format strings supporting symbolic placeholders like YYYY, MM, DD, hh, mm, and ss, which optimus automatically converts to Go's layout format (e.g., 2006, 01, 02, etc.)—making it easier to define readable and consistent formats without memorizing Go's reference time layout. Examples: 'YYYY-MM-DD hh:mm:ss' → '2006-01-02 15:04:05' ; 'DDDD, MMMM D, YYYY' → 'Monday, January 2, 2006' ; 'hh:mm AM/PM' → '03:04 PM'"
         },
         "source_time_formats": {
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "Time format strings supporting symbolic placeholders like YYYY, MM, DD, hh, mm, and ss, which optimus automatically converts to Go's layout format (e.g., 2006, 01, 02, etc.)—making it easier to define readable and consistent formats without memorizing Go's reference time layout. Examples: 'YYYY-MM-DD hh:mm:ss' → '2006-01-02 15:04:05' ; 'DDDD, MMMM D, YYYY' → 'Monday, January 2, 2006' ; 'hh:mm AM/PM' → '03:04 PM'"
           },
           "type": "array"
         },

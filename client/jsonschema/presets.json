@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goto/optimus/client/local/model/presets-map",
+  "$ref": "#/$defs/PresetsMap",
+  "$defs": {
+    "JobSpecTaskWindow": {
+      "properties": {
+        "size": {
+          "type": "string",
+          "pattern": "^-?\\d+[hdwMy]$",
+          "description": "Size of the data window"
+        },
+        "truncate_to": {
+          "type": "string",
+          "enum": [ "h", "d","w", "M", "y", "None"],
+          "description": "Define alignment of window, use when different from size unit, eg 1d and h"
+        },
+        "shift_by": {
+          "type": "string",
+          "pattern": "^-?\\d+[hdwMy]$",
+          "description": "Size of the data window"
+        },
+        "location": {
+          "type": "string",
+          "description": "IANA country location codes like Asia/Jakarta"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "size"
+      ]
+    },
+    "Preset": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "window": {
+          "$ref": "#/$defs/JobSpecTaskWindow"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "window"
+      ]
+    },
+    "PresetsMap": {
+      "properties": {
+        "presets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Preset"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "presets"
+      ]
+    }
+  }
+}

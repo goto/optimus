@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goto/optimus/config/client-config",
+  "$ref": "#/$defs/ClientConfig",
+  "$defs": {
+    "Auth": {
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "client_secret": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "client_id",
+        "client_secret"
+      ]
+    },
+    "ClientConfig": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "log": {
+          "$ref": "#/$defs/LogConfig"
+        },
+        "host": {
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/$defs/Project"
+        },
+        "namespaces": {
+          "items": {
+            "$ref": "#/$defs/Namespace"
+          },
+          "type": "array"
+        },
+        "auth": {
+          "$ref": "#/$defs/Auth"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "version",
+        "host",
+        "project",
+        "namespaces"
+      ]
+    },
+    "Datastore": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["bigquery", "maxcompute"],
+          "description": "Datawarehouse to use for resources"
+        },
+        "path": {
+          "type": "string"
+        },
+        "backup": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "path"
+      ]
+    },
+    "Job": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path"
+      ]
+    },
+    "LogConfig": {
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "FATAL"]
+        },
+        "format": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Namespace": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "config": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "job": {
+          "$ref": "#/$defs/Job"
+        },
+        "datastore": {
+          "items": {
+            "$ref": "#/$defs/Datastore"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name"
+      ]
+    },
+    "Project": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "preset_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "config"
+      ]
+    }
+  }
+}

@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goto/optimus/client/local/model/job-spec",
+  "$ref": "#/$defs/JobSpec",
+  "$defs": {
+    "JobSpec": {
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 3
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Team or individual owning this job"
+        },
+        "description": {
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/$defs/JobSpecSchedule"
+        },
+        "behavior": {
+          "$ref": "#/$defs/JobSpecBehavior"
+        },
+        "task": {
+          "$ref": "#/$defs/JobSpecTask"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/JobSpecHook"
+          },
+          "type": "array"
+        },
+        "dependencies": {
+          "items": {
+            "$ref": "#/$defs/JobSpecDependency"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JobSpecMetadata"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "owner",
+        "schedule",
+        "behavior",
+        "task"
+      ]
+    },
+    "JobSpecBehavior": {
+      "properties": {
+        "depends_on_past": {
+          "type": "boolean"
+        },
+        "catch_up": {
+          "type": "boolean",
+          "default": false
+        },
+        "retry": {
+          "$ref": "#/$defs/JobSpecBehaviorRetry"
+        },
+        "notify": {
+          "items": {
+            "$ref": "#/$defs/JobSpecBehaviorNotifier"
+          },
+          "type": "array"
+        },
+        "webhook": {
+          "items": {
+            "$ref": "#/$defs/JobSpecBehaviorWebhook"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecBehaviorNotifier": {
+      "properties": {
+        "on": {
+          "type": "string",
+          "enum": ["sla_miss", "failure", "job_success", "replay_lifecycle"],
+          "description": "Job event for which we want to be notified"
+        },
+        "config": {
+          "type": "object"
+        },
+        "channels": {
+          "items": {
+            "type": "string",
+            "description": "Only Pagerduty is supported, Slack support is depricated"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["INFO", "WARNING", "CRITICAL"]
+        },
+        "team": {
+          "type": "string",
+          "description": "[Optional] Send Alerts to this team instead of the Namespace named team"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "on"
+      ]
+    },
+    "JobSpecBehaviorRetry": {
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "delay": {
+          "type": "string",
+          "description": "Delay duration"
+        },
+        "exponential_backoff": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecBehaviorWebhook": {
+      "properties": {
+        "on": {
+          "type": "string"
+        },
+        "endpoints": {
+          "items": {
+            "$ref": "#/$defs/WebhookEndpoint"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "on",
+        "endpoints"
+      ]
+    },
+    "JobSpecDependency": {
+      "properties": {
+        "job": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "http": {
+          "$ref": "#/$defs/JobSpecDependencyHTTP"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecDependencyHTTP": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "url": {
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "url"
+      ]
+    },
+    "JobSpecHook": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of plugin to use, use empty for default"
+        },
+        "config": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name"
+      ]
+    },
+    "JobSpecMetadata": {
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/JobSpecMetadataResource"
+        },
+        "airflow": {
+          "$ref": "#/$defs/JobSpecMetadataAirflow"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecMetadataAirflow": {
+      "properties": {
+        "pool": {
+          "type": "string"
+        },
+        "queue": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecMetadataResource": {
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/JobSpecMetadataResourceConfig"
+        },
+        "limit": {
+          "$ref": "#/$defs/JobSpecMetadataResourceConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecMetadataResourceConfig": {
+      "properties": {
+        "memory": {
+          "type": "string"
+        },
+        "cpu": {
+          "type": ["string", "integer"]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecSchedule": {
+      "properties": {
+        "start_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Expected format yyyy-MM-dd"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Expected format yyyy-MM-dd"
+        },
+        "interval": {
+          "type": "string",
+          "description": "Cron expression"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "start_date",
+        "interval"
+      ]
+    },
+    "JobSpecTask": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of plugin to use, use empty for default"
+        },
+        "config": {
+          "type": "object"
+        },
+        "window": {
+          "$ref": "#/$defs/JobSpecTaskWindow"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name"
+      ]
+    },
+    "JobSpecTaskWindow": {
+      "description": "Configure the data consumption window for job",
+      "properties": {
+        "size": {
+          "type": "string",
+          "pattern": "^-?\\d+[hdwMy]$",
+          "description": "Size of the data window"
+        },
+        "truncate_to": {
+          "type": "string",
+          "enum": [ "h", "d","w", "M", "y", "None"]
+        },
+        "preset": {
+          "type": "string"
+        },
+        "shift_by": {
+          "type": "string",
+          "pattern": "^-?\\d+[hdwMy]$",
+          "description": "Size of the data window"
+        },
+        "location": {
+          "type": "string",
+          "description": "IANA country location codes like Asia/Jakarta"
+        }
+      },
+      "oneOf" : [{
+        "required" : ["size" ]
+      }, {
+        "required" : ["preset"]
+      }],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WebhookEndpoint": {
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^(https?:\\/\\/)[\\w.-]+(?:\\.[\\w\\.-]+)+[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=.]+$"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url"
+      ]
+    }
+  }
+}

@@ -78,11 +78,7 @@ dag = DAG(
     sla_miss_callback=optimus_sla_miss_notify,
     on_success_callback=job_success_event,
     on_failure_callback=job_failure_event,
-    {{ if .EnableRBAC -}}
-    access_control={
-        {{ .Tenant.NamespaceName.String | quote}}: {"can_edit"},
-    },
-    {{- end }}
+    access_control={ {{ if .EnableRBAC -}}{{ .Tenant.NamespaceName.String | quote}}: {"can_edit"},{{- end }} },
 )
 
 {{ if .RuntimeConfig.Resource -}}

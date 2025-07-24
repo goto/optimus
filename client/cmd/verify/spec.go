@@ -44,7 +44,6 @@ const (
 	jobFile             = "job.yaml"
 	resourceFile        = "resource.yaml"
 	dataStoreMaxCompute = "maxcompute"
-	entitySpecValidator = "spec-validator"
 )
 
 // NewValidateSpecCommand initialize command to list backup
@@ -138,14 +137,14 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 			return err
 		}
 
-		var me []error
+		var errs []error
 		jobFolder := namespace.Job.Path
 		if jobFolder != "" {
 			v.logger.Info("\nValidating all job specs in namespace: [%s]", v.namespace)
 			err = v.validateJobSpecsInDir(jobFolder)
 			if err != nil {
 				v.logger.Error("Failed to validate job specs in directory %s", jobFolder)
-				me = append(me, err)
+				errs = append(errs, err)
 			}
 			v.sectionBreak()
 		}
@@ -162,11 +161,11 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 			err = v.validateResourceSpecsInDir(resourcesFolder)
 			if err != nil {
 				v.logger.Error("Failed to validate resource specs in directory %s", resourcesFolder)
-				me = append(me, err)
+				errs = append(errs, err)
 			}
 		}
 
-		if errors.Join(me...) != nil {
+		if errors.Join(errs...) != nil {
 			return errors.New("validate job spec failed")
 		}
 
@@ -240,15 +239,12 @@ func (v *validateSpecCommand) validateResourceSpecsInDir(resourceDir string) err
 		v.logger.Error("Failed to get all resource specs in directory %s, Error: %s", resourceDir, err.Error())
 		return err
 	}
-	var me []error
+	var errs []error
 	for _, resourceSpecPath := range allSpecsInDir {
 		v.logger.Info("Validating resource spec: %s", resourceSpecPath)
-		err := v.validateSpec(resourceSchema, resourceSpecPath)
-		if err != nil {
-			me = append(me, err)
-		}
+		errs = append(errs, v.validateSpec(resourceSchema, resourceSpecPath))
 	}
-	return errors.Join(me...)
+	return errors.Join(errs...)
 }
 
 func (v *validateSpecCommand) validateJobSpecs(jobPath string) error {
@@ -274,16 +270,13 @@ func (v *validateSpecCommand) sectionBreak() {
 }
 
 func (v *validateSpecCommand) validateJobPlan(jobSchema *jsonschema.Schema, jobs []*plan.JobPlan) error {
-	var me []error
+	errs := []error{}
 	for _, j1 := range jobs {
 		v.logger.Info("\t├─ ⏳ Validating job: %s", j1.Path)
 		jobSpecPath := path.Join(j1.Path, jobFile)
-		err := v.validateSpec(jobSchema, jobSpecPath)
-		if err != nil {
-			me = append(me, err)
-		}
+		errs = append(errs, v.validateSpec(jobSchema, jobSpecPath))
 	}
-	return errors.Join(me...)
+	return errors.Join(errs...)
 }
 
 func (v *validateSpecCommand) validateSpec(jobSchema *jsonschema.Schema, specPath string) error {
@@ -307,20 +300,20 @@ func (v *validateSpecCommand) validateSpec(jobSchema *jsonschema.Schema, specPat
 }
 
 func (v *validateSpecCommand) validateResourcePlan(resourceSchema *jsonschema.Schema, resources []*plan.ResourcePlan) error {
-	var me []error
+	errs := []error{}
 	for _, r1 := range resources {
 		v.logger.Info("\t├─ ⏳ Validating resource: %s", r1.Path)
 		resourceSpecPath := path.Join(r1.Path, resourceFile)
 		err := v.validateSpec(resourceSchema, resourceSpecPath)
 		if err != nil {
-			me = append(me, err)
+			errs = append(errs, err)
 		}
 	}
-	return errors.Join(me...)
+	return errors.Join(errs...)
 }
 
 func (v *validateSpecCommand) validateJobOperations(jobOperations plan.OperationByNamespaces[*plan.JobPlan]) error {
-	var me []error
+	errs := []error{}
 	jobSchema, err := v.specCompiler.Compile("embed://job.json")
 	if err != nil {
 		v.logger.Error("Failed to compile job schema validation, Error: %s", err.Error())
@@ -338,10 +331,7 @@ func (v *validateSpecCommand) validateJobOperations(jobOperations plan.Operation
 				v.logger.Info("\t└─ No jobs to validate")
 				continue
 			}
-			err1 := v.validateJobPlan(jobSchema, jobs)
-			if err1 != nil {
-				me = append(me, err1)
-			}
+			errs = append(errs, v.validateJobPlan(jobSchema, jobs))
 		}
 	}
 
@@ -355,18 +345,15 @@ func (v *validateSpecCommand) validateJobOperations(jobOperations plan.Operation
 				v.logger.Info("\t└─ No jobs to validate")
 				continue
 			}
-			err2 := v.validateJobPlan(jobSchema, jobs)
-			if err2 != nil {
-				me = append(me, err2)
-			}
+			errs = append(errs, v.validateJobPlan(jobSchema, jobs))
 		}
 	}
 
-	return errors.Join(me...)
+	return errors.Join(errs...)
 }
 
 func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan.OperationByNamespaces[*plan.ResourcePlan]) error {
-	var me []error
+	errs := []error{}
 	resourceSchema, err := v.specCompiler.Compile("embed://resource.json")
 	if err != nil {
 		v.logger.Error("Failed to compile resource schema validation, Error: %s", err.Error())
@@ -382,10 +369,7 @@ func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan
 				v.logger.Info("\t└─ No resources to validate")
 				continue
 			}
-			err1 := v.validateResourcePlan(resourceSchema, resources)
-			if err1 != nil {
-				me = append(me, err1)
-			}
+			errs = append(errs, v.validateResourcePlan(resourceSchema, resources))
 		}
 	}
 
@@ -399,13 +383,10 @@ func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan
 				v.logger.Info("\t└─ No resources to validate")
 				continue
 			}
-			err2 := v.validateResourcePlan(resourceSchema, resources)
-			if err2 != nil {
-				me = append(me, err2)
-			}
+			errs = append(errs, v.validateResourcePlan(resourceSchema, resources))
 		}
 	}
-	return errors.Join(me...)
+	return errors.Join(errs...)
 }
 
 func (v *validateSpecCommand) validateSpecUsingPlan(p1 *plan.Plan) error {

@@ -204,7 +204,7 @@ func (v *validateSpecCommand) validateJobSpecsInDir(jobDir string) error {
 	}
 	for _, jobSpecPath := range allSpecsInDir {
 		v.logger.Info("Validating job spec: %s", jobSpecPath)
-		v.validateJobSpec(jobSchema, jobSpecPath)
+		v.validateSpec(jobSchema, jobSpecPath)
 	}
 	return nil
 }
@@ -222,7 +222,7 @@ func (v *validateSpecCommand) validateResourceSpecsInDir(resourceDir string) err
 	}
 	for _, resourceSpecPath := range allSpecsInDir {
 		v.logger.Info("Validating resource spec: %s", resourceSpecPath)
-		v.validateResourceSpec(resourceSchema, resourceSpecPath)
+		v.validateSpec(resourceSchema, resourceSpecPath)
 	}
 	return nil
 }
@@ -233,7 +233,7 @@ func (v *validateSpecCommand) validateJobSpecs(jobPath string) error {
 		v.logger.Error("Failed to compile job schema validation, Error: %s", err.Error())
 		return err
 	}
-	return v.validateJobSpec(jobSchema, jobPath)
+	return v.validateSpec(jobSchema, jobPath)
 }
 
 func (v *validateSpecCommand) validateResourceSpecs(resourcePath string) error {
@@ -242,7 +242,7 @@ func (v *validateSpecCommand) validateResourceSpecs(resourcePath string) error {
 		v.logger.Error("Failed to compile resource schema validation, Error: %s", err.Error())
 		return err
 	}
-	return v.validateResourceSpec(resourceSchema, resourcePath)
+	return v.validateSpec(resourceSchema, resourcePath)
 }
 
 func (v *validateSpecCommand) sectionBreak() {
@@ -254,45 +254,25 @@ func (v *validateSpecCommand) validateJobPlan(jobSchema *jsonschema.Schema, jobs
 	for _, j1 := range jobs {
 		v.logger.Info("\t├─ ⏳ Validating job: %s", j1.Path)
 		jobSpecPath := path.Join(j1.Path, jobFile)
-		errs = append(errs, v.validateJobSpec(jobSchema, jobSpecPath))
+		errs = append(errs, v.validateSpec(jobSchema, jobSpecPath))
 	}
 	return errs
 }
 
-func (v *validateSpecCommand) validateJobSpec(jobSchema *jsonschema.Schema, jobSpecPath string) error {
-	spec, err := readSpec(jobSpecPath)
+func (v *validateSpecCommand) validateSpec(jobSchema *jsonschema.Schema, specPath string) error {
+	spec, err := readSpec(specPath)
 	if err != nil {
-		v.logger.Error("\t└─ ❌ Error reading spec at : %s, Error: %v", jobSpecPath, err)
+		v.logger.Error("\t└─ ❌ Error reading spec at : %s, Error: %v", specPath, err)
 		return err
 	}
 
 	err = jobSchema.Validate(spec)
 	if err != nil {
-		v.logger.Error("\t│    Invalid job spec at : %s", jobSpecPath)
+		v.logger.Error("\t│    Invalid spec at : %s", specPath)
 		for _, errLine := range strings.Split(err.Error(), "\n")[1:] {
 			v.logger.Error("\t│      %s", errLine)
 		}
-		v.logger.Error("\t└─ ❌ Job Spec Validation Failed")
-		return err
-	}
-	v.logger.Info("\t└─ ✅ Valid spec")
-	return nil
-}
-
-func (v *validateSpecCommand) validateResourceSpec(resourceSchema *jsonschema.Schema, resourceSpecPath string) error {
-	spec, err := readSpec(resourceSpecPath)
-	if err != nil {
-		v.logger.Error("\t│  ❌ Error reading spec at : %s, Error: %v", resourceSpecPath, err)
-		return err
-	}
-
-	err = resourceSchema.Validate(spec)
-	if err != nil {
-		v.logger.Error("\t│    Invalid resource spec at : %s", resourceSpecPath)
-		for _, errLine := range strings.Split(err.Error(), "\n")[1:] {
-			v.logger.Error("\t│      %s", errLine)
-		}
-		v.logger.Error("\t└─ ❌ Resource Spec Validation Failed")
+		v.logger.Error("\t└─ ❌ Spec Validation Failed")
 		return err
 	}
 	v.logger.Info("\t└─ ✅ Valid spec")
@@ -305,7 +285,7 @@ func (v *validateSpecCommand) validateResourcePlan(resourceSchema *jsonschema.Sc
 		v.logger.Info("\t├─ ⏳ Validating resource: %s", r1.Path)
 		resourceSpecPath := path.Join(r1.Path, resourceFile)
 
-		err := v.validateResourceSpec(resourceSchema, resourceSpecPath)
+		err := v.validateSpec(resourceSchema, resourceSpecPath)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -389,7 +369,6 @@ func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan
 			errs = append(errs, v.validateResourcePlan(resourceSchema, resources)...)
 		}
 	}
-
 	return errs
 }
 

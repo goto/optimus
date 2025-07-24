@@ -2,6 +2,7 @@ package verify
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +21,6 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/plan"
 	schema "github.com/goto/optimus/client/jsonschema"
 	"github.com/goto/optimus/config"
-	"github.com/goto/optimus/internal/errors"
 )
 
 type validateSpecCommand struct {
@@ -112,21 +112,21 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 		v.plan = plan
 
 		if v.validateSpecUsingPlan(v.plan) != nil {
-			return errors.NewError(errors.ErrInvalidArgument, entitySpecValidator, "validate spec using plan failed")
+			return errors.New("validate spec using plan failed")
 		}
 
 	case v.jobPath != "":
 		v.logger.Info("\nValidating Specs (Single Spec Mode)")
 		v.logger.Info("└─ Job file: %s", v.jobPath)
 		if v.validateJobSpecs(v.jobPath) != nil {
-			return errors.NewError(errors.ErrInvalidArgument, entitySpecValidator, "validate job spec failed")
+			return errors.New("validate job spec failed")
 		}
 
 	case v.resourcePath != "":
 		v.logger.Info("\nValidating Specs (Single Spec Mode)")
 		v.logger.Info("└─ Resource file: %s", v.resourcePath)
 		if v.validateResourceSpecs(v.resourcePath) != nil {
-			return errors.NewError(errors.ErrInvalidArgument, entitySpecValidator, "validate resource spec failed")
+			return errors.New("validate resource spec failed")
 		}
 
 	case v.namespace != "":
@@ -138,14 +138,14 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 			return err
 		}
 
-		me := errors.NewMultiError("Namespace mode error")
+		var me []error
 		jobFolder := namespace.Job.Path
 		if jobFolder != "" {
 			v.logger.Info("\nValidating all job specs in namespace: [%s]", v.namespace)
 			err = v.validateJobSpecsInDir(jobFolder)
 			if err != nil {
 				v.logger.Error("Failed to validate job specs in directory %s", jobFolder)
-				me.Append(err)
+				me = append(me, err)
 			}
 			v.sectionBreak()
 		}
@@ -162,12 +162,12 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 			err = v.validateResourceSpecsInDir(resourcesFolder)
 			if err != nil {
 				v.logger.Error("Failed to validate resource specs in directory %s", resourcesFolder)
-				me.Append(err)
+				me = append(me, err)
 			}
 		}
 
-		if me.ToErr() != nil {
-			return errors.NewError(errors.ErrInvalidArgument, entitySpecValidator, "validate job spec failed")
+		if errors.Join(me...) != nil {
+			return errors.New("validate job spec failed")
 		}
 
 	default:
@@ -180,7 +180,7 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 		v.logger.Info("├─ Namespace Mode (-ns, --namespace)")
 		v.logger.Info("│  └─ Validate all specs in a namespace")
 		v.logger.Info("└─ Use -c or --config to specify client configuration file")
-		return errors.NewError(errors.ErrInvalidArgument, entitySpecValidator, "invalid invocation")
+		return errors.New("invalid invocation")
 	}
 
 	return nil
@@ -218,12 +218,15 @@ func (v *validateSpecCommand) validateJobSpecsInDir(jobDir string) error {
 		v.logger.Error("Failed to get all job specs in directory %s, Error: %s", jobDir, err.Error())
 		return err
 	}
-	me := errors.NewMultiError("validateSpecsInDir")
+	var me []error
 	for _, jobSpecPath := range allSpecsInDir {
 		v.logger.Info("Validating job spec: %s", jobSpecPath)
-		me.Append(v.validateSpec(jobSchema, jobSpecPath))
+		err := v.validateSpec(jobSchema, jobSpecPath)
+		if err != nil {
+			me = append(me, err)
+		}
 	}
-	return me.ToErr()
+	return errors.Join(me...)
 }
 
 func (v *validateSpecCommand) validateResourceSpecsInDir(resourceDir string) error {
@@ -237,12 +240,15 @@ func (v *validateSpecCommand) validateResourceSpecsInDir(resourceDir string) err
 		v.logger.Error("Failed to get all resource specs in directory %s, Error: %s", resourceDir, err.Error())
 		return err
 	}
-	me := errors.NewMultiError("validateSpecsInDir")
+	var me []error
 	for _, resourceSpecPath := range allSpecsInDir {
 		v.logger.Info("Validating resource spec: %s", resourceSpecPath)
-		me.Append(v.validateSpec(resourceSchema, resourceSpecPath))
+		err := v.validateSpec(resourceSchema, resourceSpecPath)
+		if err != nil {
+			me = append(me, err)
+		}
 	}
-	return me.ToErr()
+	return errors.Join(me...)
 }
 
 func (v *validateSpecCommand) validateJobSpecs(jobPath string) error {
@@ -268,13 +274,16 @@ func (v *validateSpecCommand) sectionBreak() {
 }
 
 func (v *validateSpecCommand) validateJobPlan(jobSchema *jsonschema.Schema, jobs []*plan.JobPlan) error {
-	me := errors.NewMultiError("validateJobPlan")
+	var me []error
 	for _, j1 := range jobs {
 		v.logger.Info("\t├─ ⏳ Validating job: %s", j1.Path)
 		jobSpecPath := path.Join(j1.Path, jobFile)
-		me.Append(v.validateSpec(jobSchema, jobSpecPath))
+		err := v.validateSpec(jobSchema, jobSpecPath)
+		if err != nil {
+			me = append(me, err)
+		}
 	}
-	return me.ToErr()
+	return errors.Join(me...)
 }
 
 func (v *validateSpecCommand) validateSpec(jobSchema *jsonschema.Schema, specPath string) error {
@@ -298,17 +307,20 @@ func (v *validateSpecCommand) validateSpec(jobSchema *jsonschema.Schema, specPat
 }
 
 func (v *validateSpecCommand) validateResourcePlan(resourceSchema *jsonschema.Schema, resources []*plan.ResourcePlan) error {
-	me := errors.NewMultiError("validateResourcePlan")
+	var me []error
 	for _, r1 := range resources {
 		v.logger.Info("\t├─ ⏳ Validating resource: %s", r1.Path)
 		resourceSpecPath := path.Join(r1.Path, resourceFile)
-		me.Append(v.validateSpec(resourceSchema, resourceSpecPath))
+		err := v.validateSpec(resourceSchema, resourceSpecPath)
+		if err != nil {
+			me = append(me, err)
+		}
 	}
-	return me.ToErr()
+	return errors.Join(me...)
 }
 
 func (v *validateSpecCommand) validateJobOperations(jobOperations plan.OperationByNamespaces[*plan.JobPlan]) error {
-	me := errors.NewMultiError("validateJobOperations")
+	var me []error
 	jobSchema, err := v.specCompiler.Compile("embed://job.json")
 	if err != nil {
 		v.logger.Error("Failed to compile job schema validation, Error: %s", err.Error())
@@ -326,7 +338,10 @@ func (v *validateSpecCommand) validateJobOperations(jobOperations plan.Operation
 				v.logger.Info("\t└─ No jobs to validate")
 				continue
 			}
-			me.Append(v.validateJobPlan(jobSchema, jobs))
+			err1 := v.validateJobPlan(jobSchema, jobs)
+			if err1 != nil {
+				me = append(me, err1)
+			}
 		}
 	}
 
@@ -340,15 +355,18 @@ func (v *validateSpecCommand) validateJobOperations(jobOperations plan.Operation
 				v.logger.Info("\t└─ No jobs to validate")
 				continue
 			}
-			me.Append(v.validateJobPlan(jobSchema, jobs))
+			err2 := v.validateJobPlan(jobSchema, jobs)
+			if err2 != nil {
+				me = append(me, err2)
+			}
 		}
 	}
 
-	return me.ToErr()
+	return errors.Join(me...)
 }
 
 func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan.OperationByNamespaces[*plan.ResourcePlan]) error {
-	me := errors.NewMultiError("validateResourceOperations")
+	var me []error
 	resourceSchema, err := v.specCompiler.Compile("embed://resource.json")
 	if err != nil {
 		v.logger.Error("Failed to compile resource schema validation, Error: %s", err.Error())
@@ -364,7 +382,10 @@ func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan
 				v.logger.Info("\t└─ No resources to validate")
 				continue
 			}
-			me.Append(v.validateResourcePlan(resourceSchema, resources))
+			err1 := v.validateResourcePlan(resourceSchema, resources)
+			if err1 != nil {
+				me = append(me, err1)
+			}
 		}
 	}
 
@@ -378,21 +399,23 @@ func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan
 				v.logger.Info("\t└─ No resources to validate")
 				continue
 			}
-			me.Append(v.validateResourcePlan(resourceSchema, resources))
+			err2 := v.validateResourcePlan(resourceSchema, resources)
+			if err2 != nil {
+				me = append(me, err2)
+			}
 		}
 	}
-	return me.ToErr()
+	return errors.Join(me...)
 }
 
 func (v *validateSpecCommand) validateSpecUsingPlan(p1 *plan.Plan) error {
-	me := errors.NewMultiError("validateSpecUsingPlan")
 	v.sectionBreak()
-	me.Append(v.validateJobOperations(p1.Job))
+	err1 := v.validateJobOperations(p1.Job)
 
 	v.sectionBreak()
-	me.Append(v.validateResourceOperations(p1.Resource))
+	err2 := v.validateResourceOperations(p1.Resource)
 
-	return me.ToErr()
+	return errors.Join(err1, err2)
 }
 
 func readSpec(filePath string) (any, error) {

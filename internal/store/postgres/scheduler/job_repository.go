@@ -113,7 +113,7 @@ type Job struct {
 	HTTPUpstreams   json.RawMessage
 
 	TaskName   string
-	TaskConfig map[string]string
+	TaskConfig json.RawMessage
 
 	Hooks json.RawMessage
 
@@ -242,9 +242,20 @@ func (j *Job) toJob() (*scheduler.Job, error) {
 		WindowConfig: w,
 		Assets:       j.Assets,
 		Task: &scheduler.Task{
-			Name:   j.TaskName,
-			Config: j.TaskConfig,
+			Name: j.TaskName,
 		},
+	}
+
+	if j.TaskConfig != nil {
+		var taskConf *scheduler.Task
+		if err := json.Unmarshal(j.TaskConfig, &taskConf); err != nil {
+			config := map[string]string{}
+			if err2 := json.Unmarshal(j.TaskConfig, &config); err2 == nil {
+				taskConf.Config = config
+			}
+		}
+		schedulerJob.Task.Config = taskConf.Config
+		schedulerJob.Task.Version = taskConf.Version
 	}
 
 	if j.Hooks != nil {

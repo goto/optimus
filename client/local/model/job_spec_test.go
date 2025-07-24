@@ -208,6 +208,15 @@ func (*JobSpecTestSuite) getCompleteJobSpecProto() *pb.JobSpecification {
 				Value: "taskvalue",
 			},
 		},
+		Task: &pb.JobSpecTask{
+			Name: "job_task_1",
+			Config: []*pb.JobConfigItem{
+				{
+					Name:  "taskkey",
+					Value: "taskvalue",
+				},
+			},
+		},
 		Window: &pb.JobSpecification_Window{
 			Size:    "1d",
 			ShiftBy: "1h",

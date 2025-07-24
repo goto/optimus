@@ -35,7 +35,7 @@ type Spec struct {
 	HTTPUpstreams   json.RawMessage
 
 	TaskName   string
-	TaskConfig map[string]string
+	TaskConfig json.RawMessage
 
 	Hooks json.RawMessage
 
@@ -115,9 +115,15 @@ type Asset struct {
 	Value string
 }
 
+type TaskConfig struct {
+	Version string
+	Config  map[string]string
+}
+
 type Hook struct {
-	Name   string
-	Config map[string]string
+	Name    string
+	Version string
+	Config  map[string]string
 }
 
 type Metadata struct {
@@ -150,6 +156,11 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 	}
 
 	webhookBytes, err := toStorageWebhooks(jobSpec.WebhookSpecs())
+	if err != nil {
+		return nil, err
+	}
+
+	taskConfigBytes, err := toStorageTaskConfig(jobSpec.Task())
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +225,7 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 		Webhook: webhookBytes,
 
 		TaskName:   jobSpec.Task().Name().String(),
-		TaskConfig: jobSpec.Task().Config(),
+		TaskConfig: taskConfigBytes,
 
 		Hooks: hooksBytes,
 
@@ -264,10 +275,24 @@ func toStorageHooks(hookSpecs []*job.Hook) ([]byte, error) {
 	return hooksJSON, nil
 }
 
+func toStorageTaskConfig(spec job.Task) ([]byte, error) {
+	t1 := TaskConfig{
+		Version: spec.Version(),
+		Config:  spec.Config(),
+	}
+
+	taskConf, err := json.Marshal(t1)
+	if err != nil {
+		return nil, err
+	}
+	return taskConf, nil
+}
+
 func toStorageHook(spec *job.Hook) Hook {
 	return Hook{
-		Name:   spec.Name(),
-		Config: spec.Config(),
+		Name:    spec.Name(),
+		Version: spec.Version(),
+		Config:  spec.Config(),
 	}
 }
 
@@ -419,18 +444,15 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 		}
 	}
 
-	var taskConfig job.Config
-	if jobSpec.TaskConfig != nil {
-		taskConfig, err = job.ConfigFrom(jobSpec.TaskConfig)
-		if err != nil {
-			return nil, err
-		}
-	}
 	taskName, err := job.TaskNameFrom(jobSpec.TaskName)
 	if err != nil {
 		return nil, err
 	}
-	task := job.NewTask(taskName, taskConfig)
+
+	task, err := fromStorageTask(taskName, jobSpec.TaskConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	jobSpecBuilder := job.NewSpecBuilder(version, jobName, owner, schedule, w, task).WithDescription(jobSpec.Description)
 
@@ -579,6 +601,26 @@ func fromStorageSchedule(raw []byte) (*job.Schedule, error) {
 	return scheduleBuilder.Build()
 }
 
+func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
+	if raw == nil {
+		task := job.NewTask(name, nil, "")
+		return task, nil
+	}
+
+	var taskConf TaskConfig
+	err := json.Unmarshal(raw, &taskConf)
+	if err != nil || taskConf.Config == nil {
+		config := map[string]string{}
+		if err2 := json.Unmarshal(raw, &config); err2 != nil {
+			return job.Task{}, err
+		}
+		taskConf.Config = config
+	}
+
+	jobTask := job.NewTask(name, taskConf.Config, taskConf.Version)
+	return jobTask, nil
+}
+
 func fromStorageHooks(raw []byte) ([]*job.Hook, error) {
 	if raw == nil {
 		return nil, nil
@@ -606,7 +648,7 @@ func fromStorageHook(hook Hook) (*job.Hook, error) {
 	if err != nil {
 		return nil, err
 	}
-	return job.NewHook(hook.Name, config)
+	return job.NewHook(hook.Name, config, hook.Version)
 }
 
 func fromStorageAlerts(raw []byte) ([]*job.AlertSpec, error) {

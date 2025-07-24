@@ -30,6 +30,8 @@ type registerCommand struct {
 	namespaceName string
 }
 
+var skipRole bool
+
 // NewRegisterCommand initializes command for registering namespace
 func NewRegisterCommand() *cobra.Command {
 	register := &registerCommand{
@@ -47,6 +49,7 @@ func NewRegisterCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&register.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
 	cmd.Flags().StringVar(&register.dirPath, "dir", register.dirPath, "Directory where the Optimus client config resides")
 	cmd.Flags().StringVar(&register.namespaceName, "name", register.namespaceName, "If set, then only that namespace will be registered")
+	cmd.Flags().BoolVarP(&skipRole, "skip", "s", false, "If set, then role will not be configured")
 	return cmd
 }
 
@@ -107,6 +110,9 @@ func RegisterSelectedNamespaces(l log.Logger, conn *grpc.ClientConn, projectName
 }
 
 func RegisterSchedulerRole(l log.Logger, conn *grpc.ClientConn, projectName string, namespace *config.Namespace) error {
+	if skipRole {
+		return nil
+	}
 	schedulerServiceClient := pb.NewJobRunServiceClient(conn)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), registerTimeout)

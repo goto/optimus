@@ -52,6 +52,7 @@ type AlertPayload struct {
 	Data     map[string]string `json:"data"`
 	Template string            `json:"template"`
 	Labels   map[string]string `json:"labels"`
+	Endpoint string            `json:"-"`
 }
 
 type AlertManager struct {
@@ -70,7 +71,7 @@ type AlertManager struct {
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {
-	if a.endpoint == "" {
+	if alert.Endpoint == "" {
 		// Don't alert if alert manager is not configured in server config
 		return
 	}
@@ -89,9 +90,10 @@ func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
 	defer cancel()
 	reqID := uuid.New()
+	endpoint := alertPayload.Endpoint
 
-	a.logger.Debug(fmt.Sprintf("sending request to alert manager url:%s, body:%s, reqID: %s", a.endpoint, payloadJSON, reqID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.endpoint, bytes.NewBuffer(payloadJSON))
+	a.logger.Debug(fmt.Sprintf("sending request to alert manager url:%s, body:%s, reqID: %s", endpoint, payloadJSON, reqID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return err
 	}
@@ -124,7 +126,8 @@ func (a *AlertManager) worker(ctx context.Context) {
 			err := a.PrepareAndSendEvent(e) // nolint:contextcheck
 			if err != nil {
 				eventWorkerSendErrCounter.WithLabelValues(e.Project, e.LogTag, err.Error()).Inc()
-				a.workerErrChan <- fmt.Errorf("alert worker: %w", err)
+				eventDataBytes, _ := json.Marshal(e.Data)
+				a.workerErrChan <- fmt.Errorf("alert worker: event_info: [ %s ], err: %w", string(eventDataBytes), err)
 			} else {
 				successSentCounter.WithLabelValues(e.Project, e.LogTag).Inc()
 			}
@@ -146,8 +149,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string) *AlertManager {
 	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
-		logger.Info("alert-manager: host name not found in config, Optimus can not send events to Alert manager.")
-		return &AlertManager{}
+		logger.Info("alert-manager: host name not found in server config, Optimus can still send events to Alert manager using tenant config.")
 	}
 
 	this := &AlertManager{

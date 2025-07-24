@@ -2,12 +2,30 @@ package maxcompute
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
+	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
 )
+
+const (
+	maskingPolicyActionStatusMetricName = "masking_policy_action_status"
+
+	maskingPolicyActionStatusSuccess = "success"
+	maskingPolicyActionStatusError   = "error"
+	maskingPolicyActionBind          = "bind"
+	maskingPolicyActionUnbind        = "unbind"
+)
+
+var maskingPolicyActionStatusCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: maskingPolicyActionStatusMetricName,
+	Help: "status of masking policy-related actions, tagged by table name, column name, masking policy name, action, and status (success/error)",
+}, []string{"table_name", "column_name", "masking_policy", "action", "status"})
 
 type McTables interface {
 	BatchLoadTables(tableNames []string) ([]McTableInstance, error)
@@ -34,12 +52,14 @@ type maskingPolicyTaskTracker struct {
 type MaskingPolicyHandle struct {
 	mcSQLExecutor McSQLExecutor
 	mcTable       McTables
+	logger        log.Logger
 }
 
-func NewMaskingPolicyHandle(mcSQLExecutor McSQLExecutor, mcTables McTables) TableMaskingPolicyHandle {
+func NewMaskingPolicyHandle(mcSQLExecutor McSQLExecutor, mcTables McTables, logger log.Logger) TableMaskingPolicyHandle {
 	return &MaskingPolicyHandle{
 		mcSQLExecutor: mcSQLExecutor,
 		mcTable:       mcTables,
+		logger:        logger,
 	}
 }
 
@@ -98,26 +118,27 @@ func (h MaskingPolicyHandle) getExistingMaskPolicies(tableName string) ([]odps.C
 	return existingMaskPolicies, nil
 }
 
-func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackers []maskingPolicyTracker, tableName string) error {
+func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackersPerColumn []maskingPolicyTracker, tableName string) error {
 	sqlTasks := []maskingPolicyTaskTracker{}
 	schemaName := h.mcSQLExecutor.CurrentSchemaName()
 
-	for _, t := range trackers {
-		for _, policy := range t.ToDelete {
-			sqlTasks = append(sqlTasks, maskingPolicyTaskTracker{
-				ColumnName:    t.ColumnName,
-				MaskingPolicy: policy,
-				Action:        "delete",
-				SQLTask:       fmt.Sprintf("APPLY DATA MASKING POLICY %s UNBIND FROM TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName),
-			})
-		}
-
+	for _, t := range trackersPerColumn {
+		// order matters: we want to attach new masking policies before removing old ones so there's no downtime
 		for _, policy := range t.ToCreate {
 			sqlTasks = append(sqlTasks, maskingPolicyTaskTracker{
 				ColumnName:    t.ColumnName,
 				MaskingPolicy: policy,
-				Action:        "create",
+				Action:        maskingPolicyActionBind,
 				SQLTask:       fmt.Sprintf("APPLY DATA MASKING POLICY %s BIND TO TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName),
+			})
+		}
+
+		for _, policy := range t.ToDelete {
+			sqlTasks = append(sqlTasks, maskingPolicyTaskTracker{
+				ColumnName:    t.ColumnName,
+				MaskingPolicy: policy,
+				Action:        maskingPolicyActionUnbind,
+				SQLTask:       fmt.Sprintf("APPLY DATA MASKING POLICY %s UNBIND FROM TABLE %s.%s COLUMN %s;", policy, schemaName, tableName, t.ColumnName),
 			})
 		}
 	}
@@ -126,14 +147,45 @@ func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackers []maskingPolicyTrac
 	for _, task := range sqlTasks {
 		ins, err := h.mcSQLExecutor.ExecSQlWithHints(task.SQLTask, nil)
 		if err != nil {
-			me.Append(fmt.Errorf("failed to apply %s masking policy %s for %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
+			maskingPolicyActionStatusCounter.WithLabelValues(
+				fmt.Sprintf("%s.%s", schemaName, tableName),
+				task.ColumnName,
+				task.MaskingPolicy,
+				task.Action,
+				maskingPolicyActionStatusError,
+			).Inc()
+
+			err = parseMaskingPolicyError(err)
+			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
+			me.Append(fmt.Errorf("failed to %s masking policy %s for column %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
 			continue
 		}
 
 		err = ins.WaitForSuccess()
 		if err != nil {
-			me.Append(fmt.Errorf("failed to apply %s masking policy %s for %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
+			maskingPolicyActionStatusCounter.WithLabelValues(
+				fmt.Sprintf("%s.%s", schemaName, tableName),
+				task.ColumnName,
+				task.MaskingPolicy,
+				task.Action,
+				maskingPolicyActionStatusError,
+			).Inc()
+
+			err = parseMaskingPolicyError(err)
+			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
+			me.Append(fmt.Errorf("failed to %s masking policy %s to column %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
+			continue
 		}
+
+		maskingPolicyActionStatusCounter.WithLabelValues(
+			fmt.Sprintf("%s.%s", schemaName, tableName),
+			task.ColumnName,
+			task.MaskingPolicy,
+			task.Action,
+			maskingPolicyActionStatusSuccess,
+		).Inc()
+
+		h.logger.Info("[masking-policy: success] action %s for masking policy %s to table %s.%s column %s succeeded", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName)
 	}
 
 	return me.ToErr()
@@ -165,4 +217,18 @@ func compareMaskPolicies(newColumnMasks, existingColumnMasks []odps.ColumnMaskIn
 	}
 
 	return trackers
+}
+
+func parseMaskingPolicyError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "ExceptionBase:") {
+		exceptionBaseIdx := strings.Index(err.Error(), "ExceptionBase:") + len("ExceptionBase:")
+		actualErrorMsg := strings.TrimSpace(err.Error()[exceptionBaseIdx:])
+		return fmt.Errorf("error from maxCompute: %s", actualErrorMsg)
+	}
+
+	return err
 }

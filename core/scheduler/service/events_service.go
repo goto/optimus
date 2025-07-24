@@ -79,6 +79,7 @@ func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error
 		Status:         status,
 		JobEvent:       event,
 		JobWithDetails: jobDetails,
+		AlertManager:   getAlertManagerProjectConfig(tenantWithDetails),
 	})
 	return nil
 }
@@ -213,6 +214,16 @@ func (e *EventsService) Close() error {
 		}
 	}
 	return me.ToErr()
+}
+
+func getAlertManagerProjectConfig(tenantWithDetails *tenant.WithDetails) scheduler.AlertManagerConfig {
+	if tenantWithDetails == nil {
+		return scheduler.AlertManagerConfig{}
+	}
+	alertManagerEndpoint, _ := tenantWithDetails.GetConfig(tenant.ProjectAlertManagerEndpoint)
+	return scheduler.AlertManagerConfig{
+		Endpoint: alertManagerEndpoint,
+	}
 }
 
 func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler, alertsHandler AlertManager) *EventsService {

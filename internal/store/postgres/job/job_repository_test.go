@@ -113,7 +113,7 @@ func TestPostgresJobRepository(t *testing.T) {
 	assert.NoError(t, err)
 	taskName, err := job.TaskNameFrom("bq2bq")
 	assert.NoError(t, err)
-	jobTask := job.NewTask(taskName, jobTaskConfig)
+	jobTask := job.NewTask(taskName, jobTaskConfig, "")
 
 	host := "sample-host"
 	upstreamType := job.UpstreamTypeInferred
@@ -127,7 +127,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			}
 			jobHookConfig, err := job.ConfigFrom(map[string]string{"sample_hook_key": "sample_value"})
 			assert.NoError(t, err)
-			jobHook1, err := job.NewHook("sample_hook", jobHookConfig)
+			jobHook1, err := job.NewHook("sample_hook", jobHookConfig, "")
 			assert.NoError(t, err)
 			jobHooks := []*job.Hook{jobHook1}
 			jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
@@ -247,7 +247,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			}
 			jobHookConfig, err := job.ConfigFrom(map[string]string{"sample_hook_key": "sample_value"})
 			assert.NoError(t, err)
-			jobHook1, err := job.NewHook("sample_hook", jobHookConfig)
+			jobHook1, err := job.NewHook("sample_hook", jobHookConfig, "")
 			assert.NoError(t, err)
 			jobHooks := []*job.Hook{jobHook1}
 			jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
@@ -315,7 +315,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			}
 			jobHookConfig, err := job.ConfigFrom(map[string]string{"sample_hook_key": "sample_value"})
 			assert.NoError(t, err)
-			jobHook1, err := job.NewHook("sample_hook", jobHookConfig)
+			jobHook1, err := job.NewHook("sample_hook", jobHookConfig, "")
 			assert.NoError(t, err)
 			jobHooks := []*job.Hook{jobHook1}
 			jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})

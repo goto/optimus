@@ -82,7 +82,7 @@ func (s *Notifier) Worker(ctx context.Context) {
 		for _, evt := range s.msgQueue {
 			err := s.pdService.SendAlert(ctx, evt)
 			if err != nil {
-				s.workerErrChan <- fmt.Errorf("Worker_SendMessageContext: %w", err)
+				s.workerErrChan <- fmt.Errorf("PagerDuty Failure: event_info: [ JobName: %s, EventType: %s, ScheduledAt: %s, OperatorName:%s ] , err:%w", evt.meta.JobName, evt.meta.Type, evt.meta.JobScheduledAt, evt.meta.OperatorName, err)
 			}
 		}
 		s.msgQueue = nil // empty the queue

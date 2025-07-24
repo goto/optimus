@@ -590,7 +590,7 @@ func (jh *JobHandler) GetJobTask(ctx context.Context, req *pb.GetJobTaskRequest)
 		return nil, err
 	}
 
-	img, err := taskSpec.GetImage(task.Config())
+	img, err := taskSpec.GetImage(task.Version())
 	if err != nil {
 		return nil, errors.NotFound(job.EntityJob, "error in getting image "+task.Name().String())
 	}

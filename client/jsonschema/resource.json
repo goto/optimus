@@ -1,0 +1,590 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goto/optimus/client/local/model/resource-spec",
+  "$ref": "#/$defs/ResourceSpec",
+  "$defs": {
+    "ResourceSpec": {
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "table",
+            "view",
+            "external_table",
+            "schema"
+          ]
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "spec": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "table"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": {
+                "$ref": "#/$defs/Table"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "view"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": {
+                "$ref": "#/$defs/View"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "schema"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": {
+                "$ref": "#/$defs/SchemaDetails"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "external_table"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": {
+                "$ref": "#/$defs/ExternalTable"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "version",
+        "name",
+        "type",
+        "spec"
+      ]
+    },
+    "View": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "view_query": {
+          "type": "string"
+        },
+        "lifecycle": {
+          "type": "integer"
+        },
+        "hints": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "project",
+        "database",
+        "view_query"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Table": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "schema": {
+          "$ref": "#/$defs/Schema"
+        },
+        "cluster": {
+          "$ref": "#/$defs/Cluster"
+        },
+        "partition": {
+          "$ref": "#/$defs/Partition"
+        },
+        "lifecycle": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string"
+        },
+        "table_properties": {
+          "properties": {
+            "table.format.version": {
+              "type": "string",
+              "format": "integer"
+            },
+            "columnar.nested.type": {
+              "type": "string",
+              "format": "boolean"
+            },
+            "transactional": {
+              "type": "string",
+              "format": "boolean"
+            }
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "hints": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "extraConfig": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "project",
+        "database",
+        "schema"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SchemaDetails": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "database",
+        "project"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ExternalTable": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "schema": {
+          "$ref": "#/$defs/Schema"
+        },
+        "source": {
+          "$ref": "#/$defs/ExternalSource"
+        },
+        "hints": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "project",
+        "database",
+        "schema",
+        "source"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ExternalSource": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["GOOGLE_SHEETS", "GOOGLE_DRIVE", "LARK_SHEET", "OSS"]
+        },
+        "content_type": {
+          "type": "string",
+          "enum": ["CSV", "TSV", "JSON", "TEXTFILE", "RCFILE", "ORC", "ORCFILE", "SEQUENCEFILE", "PARQUET", "AVRO"]
+        },
+        "uris": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "serde_properties": {
+          "properties": {
+            "odps.text.option.header.lines.count": {
+              "type": "string",
+              "format": "integer"
+            },
+            "odps.text.option.use.quote": {
+              "type": "string",
+              "format": "boolean"
+            },
+            "odps.sql.text.option.flush.header": {
+              "type": "string",
+              "format": "boolean"
+            },
+            "odps.sql.text.schema.mismatch.mode": {
+              "type": "string",
+              "enum": [
+                "truncate",
+                "ignore",
+                "error"
+              ]
+            }
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "table_properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "sync_interval_in_hrs": {
+          "type": "integer"
+        },
+        "fetch_formatted_datetime": {
+          "type": "boolean"
+        },
+        "fetch_formatted_data": {
+          "type": "boolean"
+        },
+        "clean_gdrive_csv": {
+          "type": "boolean"
+        },
+        "jars": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "location": {
+          "type": "string"
+        },
+        "range": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Schema": {
+      "items": {
+        "$ref": "#/$defs/Field"
+      },
+      "type": "array"
+    },
+    "Field": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "BOOLEAN",
+            "TINYINT",
+            "SMALLINT",
+            "INT",
+            "BIGINT",
+            "BINARY",
+            "FLOAT",
+            "DOUBLE",
+            "DECIMAL",
+            "VARCHAR",
+            "CHAR",
+            "STRING",
+            "DATE",
+            "DATETIME",
+            "TIMESTAMP",
+            "TIMESTAMP_NTZ",
+            "INTERVAL",
+            "ARRAY",
+            "STRUCT",
+            "boolean",
+            "tinyint",
+            "smallint",
+            "int",
+            "bigint",
+            "binary",
+            "float",
+            "double",
+            "decimal",
+            "varchar",
+            "char",
+            "string",
+            "date",
+            "datetime",
+            "timestamp",
+            "timestamp_ntz",
+            "interval",
+            "array",
+            "struct"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default_value": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "source_time_format": {
+          "type": "string",
+          "description": "Time format strings supporting symbolic placeholders like YYYY, MM, DD, hh, mm, and ss, which optimus automatically converts to Go's layout format (e.g., 2006, 01, 02, etc.)—making it easier to define readable and consistent formats without memorizing Go's reference time layout. Examples: 'YYYY-MM-DD hh:mm:ss' → '2006-01-02 15:04:05' ; 'DDDD, MMMM D, YYYY' → 'Monday, January 2, 2006' ; 'hh:mm AM/PM' → '03:04 PM'"
+        },
+        "source_time_formats": {
+          "items": {
+            "type": "string",
+            "description": "Time format strings supporting symbolic placeholders like YYYY, MM, DD, hh, mm, and ss, which optimus automatically converts to Go's layout format (e.g., 2006, 01, 02, etc.)—making it easier to define readable and consistent formats without memorizing Go's reference time layout. Examples: 'YYYY-MM-DD hh:mm:ss' → '2006-01-02 15:04:05' ; 'DDDD, MMMM D, YYYY' → 'Monday, January 2, 2006' ; 'hh:mm AM/PM' → '03:04 PM'"
+          },
+          "type": "array"
+        },
+        "decimal": {
+          "$ref": "#/$defs/Decimal"
+        },
+        "char": {
+          "$ref": "#/$defs/Char"
+        },
+        "varchar": {
+          "$ref": "#/$defs/VarChar"
+        },
+        "struct": {
+          "items": {
+            "$ref": "#/$defs/Field"
+          },
+          "type": "array"
+        },
+        "array": {
+          "$ref": "#/$defs/Field"
+        },
+        "map": {
+          "$ref": "#/$defs/MapSchema"
+        },
+        "mask_policy": {
+          "type": "string"
+        },
+        "unmask_policy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Cluster": {
+      "properties": {
+        "using": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "type": "string"
+        },
+        "sort_by": {
+          "items": {
+            "$ref": "#/$defs/SortColumn"
+          },
+          "type": "array"
+        },
+        "buckets": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Char": {
+      "properties": {
+        "length": {
+          "type": "integer",
+          "maximum": 255
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "length"
+      ]
+    },
+    "Partition": {
+      "properties": {
+        "field": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "field"
+      ]
+    },
+    "Decimal": {
+      "properties": {
+        "precision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 38
+        },
+        "scale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "precision",
+        "scale"
+      ]
+    },
+    "MapSchema": {
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/Field"
+        },
+        "value": {
+          "$ref": "#/$defs/Field"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "value"
+      ]
+    },
+    "SortColumn": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name"
+      ]
+    },
+    "VarChar": {
+      "properties": {
+        "length": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "length"
+      ]
+    }
+  }
+}

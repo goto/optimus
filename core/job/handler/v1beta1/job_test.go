@@ -45,7 +45,7 @@ func TestNewJobHandler(t *testing.T) {
 	assert.NoError(t, err)
 	jobConfig, err := job.ConfigFrom(map[string]string{"sample_key": "sample_value"})
 	assert.NoError(t, err)
-	jobTask := job.NewTask("bq2bq", jobConfig)
+	jobTask := job.NewTask("bq2bq", jobConfig, "")
 	jobBehavior := &pb.JobSpecification_Behavior{
 		Retry: &pb.JobSpecification_Behavior_Retry{ExponentialBackoff: false},
 		Notify: []*pb.JobSpecification_Behavior_Notifiers{
@@ -97,7 +97,9 @@ func TestNewJobHandler(t *testing.T) {
 				StartDate: jobSchedule.StartDate().String(),
 				EndDate:   jobSchedule.EndDate().String(),
 				Interval:  jobSchedule.Interval(),
-				TaskName:  jobTask.Name().String(),
+				Task: &pb.JobSpecTask{
+					Name:  jobTask.Name().String(),Version: jobTask.Version(),
+				},
 				Window: &pb.JobSpecification_Window{
 					Size:       w.GetSimpleConfig().Size,
 					ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -134,7 +136,9 @@ func TestNewJobHandler(t *testing.T) {
 				StartDate: jobSchedule.StartDate().String(),
 				EndDate:   jobSchedule.EndDate().String(),
 				Interval:  jobSchedule.Interval(),
-				TaskName:  jobTask.Name().String(),
+				Task: &pb.JobSpecTask{
+					Name:  jobTask.Name().String(),Version: jobTask.Version(),
+				},
 				Window: &pb.JobSpecification_Window{
 					Size:       w.GetSimpleConfig().Size,
 					ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -189,7 +193,9 @@ func TestNewJobHandler(t *testing.T) {
 						StartDate: jobSchedule.StartDate().String(),
 						EndDate:   jobSchedule.EndDate().String(),
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),Version: jobTask.Version(),
+						},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -203,7 +209,8 @@ func TestNewJobHandler(t *testing.T) {
 						StartDate: jobSchedule.StartDate().String(),
 						EndDate:   jobSchedule.EndDate().String(),
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -242,7 +249,8 @@ func TestNewJobHandler(t *testing.T) {
 						Owner:     sampleOwner,
 						EndDate:   jobSchedule.EndDate().String(),
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -256,7 +264,8 @@ func TestNewJobHandler(t *testing.T) {
 						StartDate: jobSchedule.StartDate().String(),
 						EndDate:   jobSchedule.EndDate().String(),
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -294,7 +303,8 @@ func TestNewJobHandler(t *testing.T) {
 						EndDate:   "invalid",
 						Owner:     sampleOwner,
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -308,7 +318,8 @@ func TestNewJobHandler(t *testing.T) {
 						StartDate: jobSchedule.StartDate().String(),
 						EndDate:   jobSchedule.EndDate().String(),
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -353,7 +364,8 @@ func TestNewJobHandler(t *testing.T) {
 						StartDate: jobSchedule.StartDate().String(),
 						EndDate:   jobSchedule.EndDate().String(),
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -368,7 +380,8 @@ func TestNewJobHandler(t *testing.T) {
 						StartDate: jobSchedule.StartDate().String(),
 						EndDate:   jobSchedule.EndDate().String(),
 						Interval:  jobSchedule.Interval(),
-						TaskName:  jobTask.Name().String(),
+						Task: &pb.JobSpecTask{
+							Name:  jobTask.Name().String(),},
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
 							ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -406,7 +419,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -438,7 +452,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -451,7 +466,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -486,7 +502,8 @@ func TestNewJobHandler(t *testing.T) {
 				StartDate: jobSchedule.StartDate().String(),
 				EndDate:   jobSchedule.EndDate().String(),
 				Interval:  jobSchedule.Interval(),
-				TaskName:  jobTask.Name().String(),
+				Task: &pb.JobSpecTask{
+					Name:  jobTask.Name().String(),},
 				Window: &pb.JobSpecification_Window{
 					Size:       w.GetSimpleConfig().Size,
 					ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -522,7 +539,8 @@ func TestNewJobHandler(t *testing.T) {
 				StartDate:    jobSchedule.StartDate().String(),
 				EndDate:      jobSchedule.EndDate().String(),
 				Interval:     jobSchedule.Interval(),
-				TaskName:     jobTask.Name().String(),
+				Task: &pb.JobSpecTask{
+					Name:     jobTask.Name().String(),},
 				Behavior:     jobBehavior,
 				Dependencies: jobDependencies,
 				Metadata:     jobMetadata,
@@ -575,7 +593,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -589,7 +608,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -622,7 +642,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -656,7 +677,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -669,7 +691,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -704,7 +727,8 @@ func TestNewJobHandler(t *testing.T) {
 				StartDate: jobSchedule.StartDate().String(),
 				EndDate:   jobSchedule.EndDate().String(),
 				Interval:  jobSchedule.Interval(),
-				TaskName:  jobTask.Name().String(),
+				Task: &pb.JobSpecTask{
+					Name:  jobTask.Name().String(),},
 				Window: &pb.JobSpecification_Window{
 					Size:       w.GetSimpleConfig().Size,
 					ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -744,7 +768,8 @@ func TestNewJobHandler(t *testing.T) {
 				StartDate: jobSchedule.StartDate().String(),
 				EndDate:   jobSchedule.EndDate().String(),
 				Interval:  jobSchedule.Interval(),
-				TaskName:  jobTask.Name().String(),
+				Task: &pb.JobSpecTask{
+					Name:  jobTask.Name().String(),},
 				Window: &pb.JobSpecification_Window{
 					Size:       w.GetSimpleConfig().Size,
 					ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -806,7 +831,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -820,7 +846,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -859,7 +886,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -895,7 +923,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -909,7 +938,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1199,7 +1229,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1229,7 +1260,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1269,7 +1301,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1323,7 +1356,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1363,7 +1397,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1377,7 +1412,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1419,7 +1455,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1433,7 +1470,8 @@ func TestNewJobHandler(t *testing.T) {
 					StartDate: jobSchedule.StartDate().String(),
 					EndDate:   jobSchedule.EndDate().String(),
 					Interval:  jobSchedule.Interval(),
-					TaskName:  jobTask.Name().String(),
+					Task: &pb.JobSpecTask{
+						Name:  jobTask.Name().String(),},
 					Window: &pb.JobSpecification_Window{
 						Size:       w.GetSimpleConfig().Size,
 						ShiftBy:    w.GetSimpleConfig().ShiftBy,
@@ -1772,6 +1810,13 @@ func TestNewJobHandler(t *testing.T) {
 						Interval:      specA.Schedule().Interval(),
 						DependsOnPast: specA.Schedule().DependsOnPast(),
 						CatchUp:       specA.Schedule().CatchUp(),
+						Task: &pb.JobSpecTask{
+							Name: specA.Task().Name().String(),
+							Config: []*pb.JobConfigItem{{
+								Name:  "sample_key",
+								Value: "sample_value",
+							}},
+						},
 						TaskName:      specA.Task().Name().String(),
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
@@ -1847,7 +1892,7 @@ func TestNewJobHandler(t *testing.T) {
 				WithSpecHTTPUpstream([]*job.SpecHTTPUpstream{httpUpstream}).
 				WithUpstreamNames([]job.SpecUpstreamName{"job-B"}).Build()
 
-			hook1, _ := job.NewHook("hook-1", jobConfig)
+			hook1, _ := job.NewHook("hook-1", jobConfig, "")
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, w, jobTask).
 				WithSpecUpstream(upstreamSpec).
@@ -1889,6 +1934,9 @@ func TestNewJobHandler(t *testing.T) {
 				Owner:     sampleOwner,
 				StartDate: jobSchedule.StartDate().String(),
 				Interval:  jobSchedule.Interval(),
+				Task: &pb.JobSpecTask{
+					Name: jobTask.Name().String(),
+				},
 				TaskName:  jobTask.Name().String(),
 				Window: &pb.JobSpecification_Window{
 					Size:       w.GetSimpleConfig().Size,
@@ -1918,6 +1966,10 @@ func TestNewJobHandler(t *testing.T) {
 						Interval:      specA.Schedule().Interval(),
 						DependsOnPast: specA.Schedule().DependsOnPast(),
 						CatchUp:       specA.Schedule().CatchUp(),
+						Task: &pb.JobSpecTask{
+							Name:   specA.Task().Name().String(),
+							Config: configs,
+						},
 						TaskName:      specA.Task().Name().String(),
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,
@@ -2070,6 +2122,13 @@ func TestNewJobHandler(t *testing.T) {
 						Interval:      specA.Schedule().Interval(),
 						DependsOnPast: specA.Schedule().DependsOnPast(),
 						CatchUp:       specA.Schedule().CatchUp(),
+						Task: &pb.JobSpecTask{
+							Name: specA.Task().Name().String(),
+							Config: []*pb.JobConfigItem{{
+								Name:  "sample_key",
+								Value: "sample_value",
+							}},
+						},
 						TaskName:      specA.Task().Name().String(),
 						Window: &pb.JobSpecification_Window{
 							Size:       w.GetSimpleConfig().Size,

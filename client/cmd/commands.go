@@ -17,6 +17,7 @@ import (
 	"github.com/goto/optimus/client/cmd/resource"
 	"github.com/goto/optimus/client/cmd/scheduler"
 	"github.com/goto/optimus/client/cmd/secret"
+	"github.com/goto/optimus/client/cmd/verify"
 	"github.com/goto/optimus/client/cmd/version"
 )
 
@@ -69,6 +70,7 @@ func New() *cli.Command {
 		scheduler.NewSchedulerCommand(),
 		replay.NewReplayCommand(),
 		apply.NewApplyCommand(),
+		verify.NewVerifyCommand(),
 	)
 
 	extension.UpdateWithExtension(cmd)

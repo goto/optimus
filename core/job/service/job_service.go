@@ -1617,6 +1617,9 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	result = j.validateWindow(tenantDetails, subjectJob.Spec().WindowConfig())
 	output = append(output, result)
 
+	result = j.validatePlugin(ctx, subjectJob)
+	output = append(output, result)
+
 	result = j.validateRun(ctx, subjectJob, destination)
 	output = append(output, result)
 
@@ -1884,8 +1887,9 @@ func (*JobService) getSchedulerJobWithDetail(subjectJob *job.Job, destination re
 			Tenant:      subjectJob.Tenant(),
 			Destination: destination,
 			Task: &scheduler.Task{
-				Name:   string(subjectJob.Spec().Task().Name()),
-				Config: subjectJob.Spec().Task().Config(),
+				Name:    string(subjectJob.Spec().Task().Name()),
+				Config:  subjectJob.Spec().Task().Config(),
+				Version: subjectJob.Spec().Task().Version(),
 			},
 			Hooks:        hooks,
 			WindowConfig: subjectJob.Spec().WindowConfig(),
@@ -2152,4 +2156,41 @@ func (j *JobService) resolveJobAndDownstreamsDeletion(ctx context.Context, toDel
 	handleDeletion(jobName, nil)
 
 	return deletionTrackers, deletedJobNames
+}
+
+func (j *JobService) validatePlugin(ctx context.Context, job *job.Job) dto.ValidateResult {
+	task := job.Spec().Task()
+	pluginSpec, err := j.pluginService.Info(ctx, task.Name().String())
+	if err != nil {
+		registerJobValidationMetric(job.Tenant(), dto.StagePluginValidation, false)
+		return dto.ValidateResult{
+			Stage: dto.StagePluginValidation,
+			Messages: []string{
+				fmt.Sprintf("plugin [%s] is not found", task.Name()),
+				err.Error(),
+			},
+			Success: false,
+		}
+	}
+
+	if task.Version() != "" { // Check plugin version to be valid
+		_, ok := pluginSpec.PluginVersion[task.Version()]
+		if !ok {
+			registerJobValidationMetric(job.Tenant(), dto.StagePluginValidation, false)
+			return dto.ValidateResult{
+				Stage: dto.StagePluginValidation,
+				Messages: []string{
+					fmt.Sprintf("plugin version [%s:%s] is not found", task.Name(), task.Version()),
+				},
+				Success: false,
+			}
+		}
+	}
+	registerJobValidationMetric(job.Tenant(), dto.StagePluginValidation, true)
+
+	return dto.ValidateResult{
+		Stage:    dto.StagePluginValidation,
+		Messages: []string{"no issue"},
+		Success:  true,
+	}
 }

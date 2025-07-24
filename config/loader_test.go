@@ -291,6 +291,8 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			"broker_urls":           []interface{}{"localhost:9092"},
 		},
 	}
+
+	s.expectedServerConfig.Alerting.EventManager.Enabled = true
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

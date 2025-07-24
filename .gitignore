@@ -8,6 +8,7 @@ dist
 vendor
 .env
 .vscode
+.venv
 *.pem
 TODO
 temp

@@ -15,6 +15,7 @@ const (
 	ProjectSchedulerHost        = "SCHEDULER_HOST"
 	ProjectSchedulerVersion     = "SCHEDULER_VERSION"
 	ProjectDisableJobScheduling = "DISABLE_JOB_SCHEDULING"
+	ProjectAlertManagerEndpoint = "ALERTMANAGER_ENDPOINT"
 )
 
 type ProjectName string

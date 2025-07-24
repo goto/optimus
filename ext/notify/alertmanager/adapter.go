@@ -9,6 +9,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/internal/utils"
 )
 
 const (
@@ -113,6 +114,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 			"identifier": e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
 		},
+		Endpoint: utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type.String(), alertPayload)
 	a.relay(alertPayload)
@@ -137,6 +139,7 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.ChangeType.String()),
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
 	})
 }
 
@@ -158,6 +161,7 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 			"identifier": attr.JobURN,
 			"event_type": strings.ToLower(ReplayLifeCycle.String()),
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(attr.JobWithDetails, ReplayLifeCycle.String(), &alertPayload)
 	a.relay(&alertPayload)
@@ -183,6 +187,7 @@ func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.EventType.String()),
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
 	})
 }
 
@@ -200,5 +205,6 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 			"team":     attr.Tenant.NamespaceName().String(),
 			"severity": "WARNING",
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
 	})
 }

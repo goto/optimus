@@ -180,6 +180,8 @@ type AlertAttrs struct {
 	EventTime  time.Time
 	ChangeType ChangeType
 	Job        *Spec
+
+	AlertManagerEndpoint string
 }
 
 type UpdateImpact string

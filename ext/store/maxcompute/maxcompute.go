@@ -37,7 +37,7 @@ type Client interface {
 	TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
 	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
-	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema) TableMaskingPolicyHandle
+	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema, logger log.Logger) TableMaskingPolicyHandle
 	SchemaHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 }
 
@@ -91,7 +91,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 			maskingPolicyClient = odpsClient
 		}
 
-		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema))
+		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger))
 		return handle.Create(res)
 
 	case KindView:
@@ -109,7 +109,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		if err != nil {
 			maskingPolicyClient = odpsClient
 		}
-		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		return handle.Create(res)
@@ -151,7 +151,7 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 			maskingPolicyClient = odpsClient
 		}
 
-		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema))
+		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger))
 		return handle.Update(res)
 
 	case KindView:
@@ -163,7 +163,7 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 		if err != nil {
 			maskingPolicyClient = odpsClient
 		}
-		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
 		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		return handle.Update(res)
@@ -254,7 +254,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			if err != nil {
 				maskingPolicyClient = client
 			}
-			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
 			return client.TableHandleFrom(projectSchema, maskingPolicyHandle)
 		},
@@ -264,7 +264,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			if err != nil {
 				maskingPolicyClient = client
 			}
-			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
 			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		},

@@ -262,6 +262,7 @@ func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) ([]Change, error) {
 		"ID":        {},
 		"CreatedAt": {},
 		"UpdatedAt": {},
+		"State":     {},
 	}
 	var changelog []Change
 	storageSpecNew, err := toStorageSpec(newJobEntity)
@@ -269,7 +270,9 @@ func getJobDiff(storageSpecOld *Spec, newJobEntity *job.Job) ([]Change, error) {
 		return changelog, err
 	}
 
-	diff, err := utils.GetDiffs(*storageSpecOld, *storageSpecNew, nil)
+	diff, err := utils.GetDiffs(*storageSpecOld, *storageSpecNew, &utils.CmpOptions{
+		IgnoreOrderList: true,
+	})
 	if err != nil {
 		return changelog, err
 	}

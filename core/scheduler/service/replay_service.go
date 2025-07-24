@@ -119,6 +119,12 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 	if err != nil {
 		return uuid.Nil, err
 	}
+
+	tenantDetails, err := r.tenantGetter.GetDetails(ctx, t)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
 	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
 		JobName:        jobName.String(),
 		ReplayID:       replayID.String(),
@@ -126,6 +132,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		JobURN:         jobName.GetJobURN(t),
 		State:          scheduler.ReplayStateCreated,
 		JobWithDetails: jobWithDetails,
+		AlertManager:   getAlertManagerProjectConfig(tenantDetails),
 	})
 
 	go r.executor.Execute(replayID, replayReq.Tenant(), jobName) //nolint:contextcheck

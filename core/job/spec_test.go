@@ -25,10 +25,10 @@ func TestEntitySpec(t *testing.T) {
 		Build()
 	w, _ := window.NewConfig("1d", "1d", "", "")
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
-	jobTask := job.NewTask("bq2bq", jobTaskConfig)
+	jobTask := job.NewTask("bq2bq", jobTaskConfig, "")
 	description := "sample description"
 	lbl := labels.FromMap(map[string]string{"key": "value"})
-	hook, _ := job.NewHook("sample-hook", jobTaskConfig)
+	hook, _ := job.NewHook("sample-hook", jobTaskConfig, "")
 	jobAlertConfig, _ := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})
 
 	httpUpstreamConfig := map[string]string{"host": "sample-host"}

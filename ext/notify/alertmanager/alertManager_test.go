@@ -57,6 +57,7 @@ func TestAlertManager(t *testing.T) {
 			Labels: map[string]string{
 				"JobURN": "urn:optimus:project:job:project.namespace.job_name",
 			},
+			Endpoint: mockServer.URL + alertManagerEndPoint,
 		})
 		assert.Nil(t, err)
 

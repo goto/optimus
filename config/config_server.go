@@ -59,6 +59,7 @@ type ExternalTablesConfig struct {
 type EventManagerConfig struct {
 	Host     string `mapstructure:"host"`
 	Endpoint string `mapstructure:"endpoint"`
+	Enabled  bool   `mapstructure:"enabled" default:"true"`
 }
 
 type ResourceManager struct {

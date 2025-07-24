@@ -161,7 +161,7 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 
 	hooks := []*scheduler.Hook{
 		{Name: "transporter"},
-		{Name: "predator"},
+		{Name: "predator", Version: "3.5"},
 	}
 
 	jobMeta := &scheduler.JobMetadata{
@@ -293,6 +293,9 @@ func setupPluginRepo() mockPluginRepo {
 					Shell:  "/bin/sh",
 					Script: "predator ${SUB_COMMAND} -s ${PREDATOR_URL} -u \"${BQ_PROJECT}.${BQ_DATASET}.${BQ_TABLE}\"",
 				},
+			},
+			"3.5": {
+				Tag: "3.5-alpine",
 			},
 		},
 	}

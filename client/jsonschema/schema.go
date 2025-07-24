@@ -16,7 +16,7 @@ func newJSONSchemaEmbedLoader() *EmbedLoader {
 	return &EmbedLoader{}
 }
 
-func (_ EmbedLoader) Load(url string) (any, error) {
+func (EmbedLoader) Load(url string) (any, error) {
 	fileName := strings.TrimPrefix(url, "embed://")
 	jobSchema, err := embedded.ReadFile(fileName)
 	if err != nil {

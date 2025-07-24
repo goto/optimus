@@ -10,11 +10,10 @@ import (
 	"strings"
 
 	"github.com/goto/salt/log"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-
-	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/logger"
@@ -87,7 +86,7 @@ func (v *validateSpecCommand) readPlan() (*plan.Plan, error) {
 	return plan, err
 }
 
-func (v *validateSpecCommand) PreRunE(cmd *cobra.Command, _ []string) error {
+func (v *validateSpecCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	// Load config
 	conf, err := internal.LoadOptionalConfig(v.configFilePath)
 	if err != nil {
@@ -247,17 +246,6 @@ func (v *validateSpecCommand) validateResourceSpecs(resourcePath string) error {
 	return v.validateResourceSpec(resourceSchema, resourcePath)
 }
 
-func (v *validateSpecCommand) validateSpecUsingPlan(plan *plan.Plan) bool {
-	validationSuccess := true
-	errs := v.checkWithSchema(plan)
-	if len(errs) > 0 {
-		v.logger.Error("Plan validation failed with %d Invalid Spec errors", len(errs))
-		validationSuccess = false
-	}
-
-	return validationSuccess
-}
-
 func (v *validateSpecCommand) sectionBreak() {
 	v.logger.Info("\n%s", strings.Repeat("-", 50))
 }
@@ -406,16 +394,12 @@ func (v *validateSpecCommand) validateResourceOperations(resourceOperations plan
 	return errs
 }
 
-func (v *validateSpecCommand) checkWithSchema(p1 *plan.Plan) []error {
-	var errs []error
-
+func (v *validateSpecCommand) validateSpecUsingPlan(p1 *plan.Plan) {
 	v.sectionBreak()
 	v.validateJobOperations(p1.Job)
 
 	v.sectionBreak()
 	v.validateResourceOperations(p1.Resource)
-
-	return errs
 }
 
 func readSpec(filePath string) (any, error) {

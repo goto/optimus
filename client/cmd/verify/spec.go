@@ -94,13 +94,7 @@ func (v *validateSpecCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	v.clientConfig = conf
-
-	jsonCompiler, err := schema.GetCompiler()
-	if err != nil {
-		return err
-	}
-	v.specCompiler = jsonCompiler
-
+	v.specCompiler = schema.GetCompiler()
 	return nil
 }
 
@@ -162,7 +156,6 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 				return err
 			}
 		}
-
 	default:
 		v.logger.Info("\nNo validation mode specified")
 		v.logger.Info("Available Modes (in order of precedence):")
@@ -178,7 +171,7 @@ func (v *validateSpecCommand) RunE(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func (v *validateSpecCommand) getAllSpecsInDir(rootDir, targetFileName string) ([]string, error) {
+func getAllSpecsInDir(rootDir, targetFileName string) ([]string, error) {
 	fs := afero.NewOsFs()
 
 	var matchedFiles []string
@@ -206,7 +199,7 @@ func (v *validateSpecCommand) validateJobSpecsInDir(jobDir string) error {
 		v.logger.Error("Failed to compile job schema validation, Error: %s", err.Error())
 		return err
 	}
-	allSpecsInDir, err := v.getAllSpecsInDir(jobDir, jobFile)
+	allSpecsInDir, err := getAllSpecsInDir(jobDir, jobFile)
 	if err != nil {
 		v.logger.Error("Failed to get all job specs in directory %s, Error: %s", jobDir, err.Error())
 		return err
@@ -224,7 +217,7 @@ func (v *validateSpecCommand) validateResourceSpecsInDir(resourceDir string) err
 		v.logger.Error("Failed to compile resource schema validation, Error: %s", err.Error())
 		return err
 	}
-	allSpecsInDir, err := v.getAllSpecsInDir(resourceDir, resourceFile)
+	allSpecsInDir, err := getAllSpecsInDir(resourceDir, resourceFile)
 	if err != nil {
 		v.logger.Error("Failed to get all resource specs in directory %s, Error: %s", resourceDir, err.Error())
 		return err
@@ -294,9 +287,8 @@ func (v *validateSpecCommand) validateJobSpec(jobSchema *jsonschema.Schema, jobS
 		}
 		v.logger.Error("\t└─ ❌ Job Spec Validation Failed")
 		return err
-	} else {
-		v.logger.Info("\t└─ ✅ Valid spec")
 	}
+	v.logger.Info("\t└─ ✅ Valid spec")
 	return nil
 }
 
@@ -315,9 +307,8 @@ func (v *validateSpecCommand) validateResourceSpec(resourceSchema *jsonschema.Sc
 		}
 		v.logger.Error("\t└─ ❌ Resource Spec Validation Failed")
 		return err
-	} else {
-		v.logger.Info("\t└─ ✅ Valid spec")
 	}
+	v.logger.Info("\t└─ ✅ Valid spec")
 	return nil
 }
 

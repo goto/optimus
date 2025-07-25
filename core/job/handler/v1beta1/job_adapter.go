@@ -10,7 +10,6 @@ import (
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -44,21 +43,13 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 		Metadata:     fromMetadata(spec.Metadata()),
 		Destination:  jobEntity.Destination().String(),
 		Sources:      fromResourceURNs(jobEntity.Sources()),
-	}
-
-	if spec.Version() == window.NewWindowVersion {
-		j.Window = &pb.JobSpecification_Window{
+		Window: &pb.JobSpecification_Window{
 			Preset:     spec.WindowConfig().Preset,
 			Size:       spec.WindowConfig().GetSimpleConfig().Size,
 			ShiftBy:    spec.WindowConfig().GetSimpleConfig().ShiftBy,
 			Location:   spec.WindowConfig().GetSimpleConfig().Location,
 			TruncateTo: spec.WindowConfig().GetSimpleConfig().TruncateTo,
-		}
-	} else {
-		j.WindowPreset = spec.WindowConfig().Preset
-		j.WindowSize = spec.WindowConfig().GetSize()
-		j.WindowOffset = spec.WindowConfig().GetOffset()
-		j.WindowTruncateTo = spec.WindowConfig().GetTruncateTo()
+		},
 	}
 
 	return j
@@ -263,20 +254,6 @@ func toWindow(js *pb.JobSpecification) (window.Config, error) {
 		}
 	}
 
-	if js.WindowPreset != "" {
-		return window.NewPresetConfig(js.WindowPreset)
-	}
-
-	if js.Version < window.NewWindowVersion {
-		w, err := models.NewWindow(int(js.Version), js.WindowTruncateTo, js.WindowOffset, js.WindowSize)
-		if err != nil {
-			return window.Config{}, err
-		}
-		if err := w.Validate(); err != nil {
-			return window.Config{}, err
-		}
-		return window.NewCustomConfig(w), nil
-	}
 	return window.NewIncrementalConfig(), nil
 }
 

@@ -9,7 +9,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 )
 
 func TestEntityJob(t *testing.T) {
@@ -27,8 +26,7 @@ func TestEntityJob(t *testing.T) {
 	jobVersion := 1
 	startDate, _ := job.ScheduleDateFrom("2022-10-01")
 	jobSchedule, _ := job.NewScheduleBuilder(startDate).Build()
-	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
-	jobWindow := window.NewCustomConfig(w)
+	jobWindow, _ := window.NewConfig("1d", "1d", "", "")
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	jobTask := job.NewTask("bq2bq", jobTaskConfig, "")
 

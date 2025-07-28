@@ -10,5 +10,5 @@ type Diffs []*Diff
 type Commit struct {
 	SHA     string
 	Message string
-	Url     string
+	URL     string
 }

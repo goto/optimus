@@ -171,7 +171,7 @@ func TestAPI(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, actualCommit.SHA, commits[0].ID)
 			assert.Equal(t, actualCommit.Message, commits[0].Message)
-			assert.Equal(t, actualCommit.Url, commits[0].WebURL)
+			assert.Equal(t, actualCommit.URL, commits[0].WebURL)
 		})
 
 		t.Run("return nil and error when commit not found", func(t *testing.T) {

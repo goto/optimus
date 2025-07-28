@@ -219,7 +219,7 @@ func TestAPI(t *testing.T) {
 			assert.NotNil(t, commit)
 			assert.Equal(t, commit.SHA, commits[0].GetSHA())
 			assert.Equal(t, commit.Message, commits[0].GetCommit().GetMessage())
-			assert.Equal(t, commit.Url, commits[0].GetURL())
+			assert.Equal(t, commit.URL, commits[0].GetURL())
 		})
 
 		t.Run("return nil and error when commit not found", func(t *testing.T) {

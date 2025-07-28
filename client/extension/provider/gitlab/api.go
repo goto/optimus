@@ -94,7 +94,7 @@ func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path s
 		commit = &model.Commit{
 			SHA:     c.ID,
 			Message: c.Message,
-			Url:     c.WebURL,
+			URL:     c.WebURL,
 		}
 		break
 	}

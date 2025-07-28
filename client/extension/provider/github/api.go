@@ -130,7 +130,7 @@ func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path s
 		}
 		commit = &model.Commit{
 			SHA: c.GetSHA(),
-			Url: c.GetURL(),
+			URL: c.GetURL(),
 		}
 		if gitCommit := c.GetCommit(); gitCommit != nil {
 			commit.Message = gitCommit.GetMessage()

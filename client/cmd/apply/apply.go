@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/salt/log"
 )
 
 const (

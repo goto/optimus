@@ -114,7 +114,7 @@ func (c *applyCommand) injectFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&c.validation.commitSHA, "commit-sha", os.Getenv("COMMIT_SHA"), "Current commit SHA to compare against latest commit")
 }
 
-func (c *applyCommand) PreRunE(cmd *cobra.Command, _ []string) error {
+func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	// Load config
 	conf, err := internal.LoadOptionalConfig(c.configFilePath)
 	if err != nil {

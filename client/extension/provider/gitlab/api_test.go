@@ -148,6 +148,10 @@ func TestAPI(t *testing.T) {
 			},
 		}
 		path := "job/jobA"
+		opt := &gitlab.ListCommitsOptions{
+			Path:        gitlab.Ptr(path),
+			FirstParent: gitlab.Ptr(true),
+		}
 
 		t.Run("return commit and nil error when success get latest commit", func(t *testing.T) {
 			mockRepo := mock_gitlab.NewRepository(t)
@@ -160,9 +164,6 @@ func TestAPI(t *testing.T) {
 				mockCommit.AssertExpectations(t)
 			}()
 
-			opt := &gitlab.ListCommitsOptions{
-				Path: gitlab.Ptr(path),
-			}
 			mockCommit.EXPECT().ListCommits(projectID, opt, mock.Anything).
 				Return(commits, nil, nil).
 				Once()
@@ -185,9 +186,6 @@ func TestAPI(t *testing.T) {
 				mockCommit.AssertExpectations(t)
 			}()
 
-			opt := &gitlab.ListCommitsOptions{
-				Path: gitlab.Ptr(path),
-			}
 			mockCommit.EXPECT().ListCommits(projectID, opt, mock.Anything).
 				Return([]*gitlab.Commit{}, nil, nil).
 				Once()

@@ -4,6 +4,11 @@ import (
 	"context"
 )
 
+const (
+	ProviderGitHub = "github"
+	ProviderGitLab = "gitlab"
+)
+
 // Parser is contract that will be defined by each provider
 // to parse remote metadata from path
 type Parser func(remotePath string) (*Metadata, error)

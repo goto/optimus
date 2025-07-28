@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goto/salt/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
@@ -17,12 +16,16 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/plan"
+	providermodel "github.com/goto/optimus/client/extension/model"
+	"github.com/goto/optimus/client/extension/provider/github"
+	"github.com/goto/optimus/client/extension/provider/gitlab"
 	"github.com/goto/optimus/client/local"
 	"github.com/goto/optimus/client/local/model"
 	"github.com/goto/optimus/client/local/specio"
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
+	"github.com/goto/salt/log"
 )
 
 const (
@@ -39,10 +42,45 @@ type applyCommand struct {
 	resourceSpecReadWriter local.SpecReadWriter[*model.ResourceSpec]
 	verbose                bool
 	isOperationFail        bool
+	withValidation         bool
+	validation             *applyCommandValidation
 
 	configFilePath string
 	sources        []string
 	output         string
+}
+
+type applyCommandValidation struct {
+	gitURL       string
+	gitToken     string
+	gitProvider  string
+	gitProjectID string
+	commitSHA    string
+	commitAPI    providermodel.CommitAPI
+	pathResDict  map[string]bool
+}
+
+func newApplyValidation(cmd *cobra.Command) (*applyCommandValidation, error) {
+	validation := &applyCommandValidation{
+		pathResDict: make(map[string]bool),
+	}
+	cmd.Flags().StringVar(&validation.gitProvider, "git-provider", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
+	cmd.Flags().StringVar(&validation.gitURL, "git-host", os.Getenv("GIT_HOST"), "Git host based on git provider used in the repository")
+	cmd.Flags().StringVar(&validation.gitToken, "git-token", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
+	cmd.Flags().StringVar(&validation.gitProjectID, "git-project-id", os.Getenv("GIT_PROJECT_ID"), "Determine which git project will be checked")
+	cmd.Flags().StringVar(&validation.commitSHA, "commit-sha", "", "Current commit SHA to compare against latest commit")
+
+	var err error
+	switch validation.gitProvider {
+	case providermodel.ProviderGitHub:
+		validation.commitAPI, err = github.NewAPI(validation.gitURL, validation.gitToken)
+	case providermodel.ProviderGitLab:
+		validation.commitAPI, err = gitlab.NewAPI(validation.gitURL, validation.gitToken)
+	default:
+		return nil, fmt.Errorf("unsupported git provider: %s", validation.gitProvider)
+	}
+
+	return validation, err
 }
 
 // NewApplyCommand apply the job / resource changes
@@ -68,9 +106,10 @@ func (c *applyCommand) injectFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVarP(&c.sources, "sources", "s", c.sources, "Sources of plan result to be executed")
 	cmd.Flags().StringVarP(&c.output, "output", "o", executedPlanFile, "Output of plan result after executed")
 	cmd.Flags().BoolVarP(&c.verbose, "verbose", "v", false, "Determines whether to show the complete message or just the summary")
+	cmd.Flags().BoolVar(&c.withValidation, "with-validation", false, "Determine whether to validate the plan before applying it")
 }
 
-func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
+func (c *applyCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 	// Load config
 	conf, err := internal.LoadOptionalConfig(c.configFilePath)
 	if err != nil {
@@ -94,7 +133,36 @@ func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	c.jobSpecReadWriter = jobSpecReadWriter
 	c.resourceSpecReadWriter = resourceSpecReadWriter
 	c.config = conf
+
+	if c.withValidation {
+		c.validation, err = newApplyValidation(cmd)
+		if err != nil {
+			return fmt.Errorf("couldn't instantiate apply validation: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func (c *applyCommand) isLatestCommit(ctx context.Context, path string) (bool, error) {
+	if !c.withValidation {
+		return false, nil
+	}
+
+	isLatestCommit, exists := c.validation.pathResDict[path]
+	if exists {
+		return isLatestCommit, nil
+	}
+
+	latestCommit, err := c.validation.commitAPI.GetLatestCommitByPath(ctx, c.validation.gitProjectID, path)
+	if err != nil {
+		return false, err
+	}
+
+	c.logger.Info("Latest commit for path %s: %s", path, latestCommit.SHA)
+	isLatestCommit = latestCommit.SHA == c.validation.commitSHA
+	c.validation.pathResDict[path] = isLatestCommit
+	return isLatestCommit, nil
 }
 
 func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
@@ -132,14 +200,14 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		// job request preparation
 		migrateJobs, updateFromMigrateJobs := c.getMigrateJobRequest(namespace, plans)
 		addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
-		updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(namespace, plans)...)
+		updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(ctx, namespace, plans)...)
 		updateJobRequest = append(updateJobRequest, updateFromMigrateJobs...)
 		deleteJobRequest = append(deleteJobRequest, c.getBulkDeleteJobsRequest(namespace, plans)...)
 		migrateJobRequest = append(migrateJobRequest, migrateJobs...)
 		// resource request preparation
 		migrateResources, updateFromMigrateResources := c.getMigrateResourceRequest(namespace, plans)
 		addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(namespace, plans)...)
-		updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(namespace, plans)...)
+		updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(ctx, namespace, plans)...)
 		updateResourceRequest = append(updateResourceRequest, updateFromMigrateResources...)
 		deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(namespace, plans)...)
 		migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
@@ -432,7 +500,7 @@ func convertUpdateResourceRequestToAdd(req *pb.UpdateResourceRequest) *pb.Create
 	}
 }
 
-func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans plan.Plan) []*pb.UpdateJobSpecificationsRequest {
+func (c *applyCommand) getUpdateJobRequest(ctx context.Context, namespace *config.Namespace, plans plan.Plan) []*pb.UpdateJobSpecificationsRequest {
 	jobsToBeSend := []*pb.JobSpecification{}
 	for _, currentPlan := range plans.Job.Update.GetByNamespace(namespace.Name) {
 		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
@@ -441,6 +509,20 @@ func (c *applyCommand) getUpdateJobRequest(namespace *config.Namespace, plans pl
 			c.errors.Append(err)
 			continue
 		}
+
+		isLatestCommit, err := c.isLatestCommit(ctx, currentPlan.Path)
+		if err != nil {
+			c.logger.Error("failed to check latest commit for job %s: %v", currentPlan.Name, err)
+			c.errors.Append(err)
+			continue
+		}
+		if !isLatestCommit {
+			msg := fmt.Sprintf("job %s is not the latest commit, skipping update", currentPlan.Name)
+			c.logger.Error(msg)
+			c.errors.Append(fmt.Errorf(msg))
+			continue
+		}
+
 		jobsToBeSend = append(jobsToBeSend, jobSpec.ToProto())
 	}
 
@@ -530,7 +612,7 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 	return resourcesToBeCreate
 }
 
-func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, plans plan.Plan) []*pb.UpdateResourceRequest {
+func (c *applyCommand) getUpdateResourceRequest(ctx context.Context, namespace *config.Namespace, plans plan.Plan) []*pb.UpdateResourceRequest {
 	resourcesToBeUpdate := []*pb.UpdateResourceRequest{}
 	for _, currentPlan := range plans.Resource.Update.GetByNamespace(namespace.Name) {
 		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
@@ -543,6 +625,18 @@ func (c *applyCommand) getUpdateResourceRequest(namespace *config.Namespace, pla
 		if err != nil {
 			c.logger.Error(err.Error())
 			c.errors.Append(err)
+			continue
+		}
+		isLatestCommit, err := c.isLatestCommit(ctx, currentPlan.Path)
+		if err != nil {
+			c.logger.Error(fmt.Sprintf("failed to check latest commit for resource %s: %v", currentPlan.Name, err))
+			c.errors.Append(err)
+			continue
+		}
+		if !isLatestCommit {
+			msg := fmt.Sprintf("resource %s is not the latest commit, skipping update", currentPlan.Name)
+			c.logger.Error(msg)
+			c.errors.Append(fmt.Errorf(msg))
 			continue
 		}
 		resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{

@@ -163,12 +163,11 @@ func (c *applyCommand) isLatestCommit(ctx context.Context, path string) (bool, e
 		return false, err
 	}
 
-	c.logger.Info("Latest commit for path %s: %s", path, latestCommit.SHA)
 	isLatestCommit = latestCommit.SHA == c.validation.commitSHA
 	if !isLatestCommit {
 		c.logger.Info(
-			"Path %s is not at the latest commit. Current SHA: %s, Latest SHA: %s, Message: %s, URL: %s",
-			path, c.validation.commitSHA, latestCommit.SHA, latestCommit.Message, latestCommit.URL,
+			"- %s: current (%s) is behind (%s). Use this commit instead to apply the changes: %s",
+			path, c.validation.commitSHA, latestCommit.SHA, latestCommit.URL,
 		)
 	}
 	c.validation.pathResDict[path] = isLatestCommit
@@ -522,12 +521,12 @@ func (c *applyCommand) getUpdateJobRequest(ctx context.Context, namespace *confi
 
 		isLatestCommit, err := c.isLatestCommit(ctx, currentPlan.Path)
 		if err != nil {
-			c.logger.Error("failed to check latest commit for job %s: %v", currentPlan.Name, err)
+			c.logger.Error("[%s] job %s: ⚠️ failed to get latest commit ⚠️", namespace.Name, currentPlan.Name, err)
 			c.errors.Append(err)
 			continue
 		}
 		if !isLatestCommit {
-			msg := fmt.Sprintf("job %s is not the latest commit, skipping update", currentPlan.Name)
+			msg := fmt.Sprintf("[%s] job %s: ⚠️ skipping update when it was behind HEAD ⚠️", namespace.Name, currentPlan.Name)
 			c.logger.Error(msg)
 			c.errors.Append(nerrors.New(msg))
 			continue

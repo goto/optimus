@@ -147,7 +147,7 @@ func (c *applyCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 
 func (c *applyCommand) isLatestCommit(ctx context.Context, path string) (bool, error) {
 	if !c.withValidation {
-		return false, nil
+		return true, nil
 	}
 
 	isLatestCommit, exists := c.validation.pathResDict[path]

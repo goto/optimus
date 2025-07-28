@@ -207,9 +207,6 @@ func TestAPI(t *testing.T) {
 				mockCommit.AssertExpectations(t)
 			}()
 
-			opt := &gitlab.ListCommitsOptions{
-				Path: gitlab.Ptr(path),
-			}
 			mockCommit.EXPECT().ListCommits(projectID, opt, mock.Anything).
 				Return([]*gitlab.Commit{}, nil, context.DeadlineExceeded).
 				Once()

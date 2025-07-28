@@ -3,6 +3,7 @@ package apply
 import (
 	"context"
 	"encoding/json"
+	nerrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -519,7 +520,7 @@ func (c *applyCommand) getUpdateJobRequest(ctx context.Context, namespace *confi
 		if !isLatestCommit {
 			msg := fmt.Sprintf("job %s is not the latest commit, skipping update", currentPlan.Name)
 			c.logger.Error(msg)
-			c.errors.Append(fmt.Errorf(msg))
+			c.errors.Append(nerrors.New(msg))
 			continue
 		}
 
@@ -636,7 +637,7 @@ func (c *applyCommand) getUpdateResourceRequest(ctx context.Context, namespace *
 		if !isLatestCommit {
 			msg := fmt.Sprintf("resource %s is not the latest commit, skipping update", currentPlan.Name)
 			c.logger.Error(msg)
-			c.errors.Append(fmt.Errorf(msg))
+			c.errors.Append(nerrors.New(msg))
 			continue
 		}
 		resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{

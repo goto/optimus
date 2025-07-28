@@ -79,7 +79,8 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 
 func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path string) (*model.Commit, error) {
 	opt := &gitlab.ListCommitsOptions{
-		Path: gitlab.Ptr(path),
+		Path:        gitlab.Ptr(path),
+		FirstParent: gitlab.Ptr(true), // FirstParent will return merge commit when it was created from MR
 	}
 	commits, _, err := api.commit.ListCommits(projectID, opt, gitlab.WithContext(ctx))
 	if err != nil {

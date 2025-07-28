@@ -44,7 +44,7 @@ type applyCommand struct {
 	verbose                bool
 	isOperationFail        bool
 	withValidation         bool
-	validation             *applyCommandValidation
+	validation             applyCommandValidation
 
 	configFilePath string
 	sources        []string
@@ -61,27 +61,22 @@ type applyCommandValidation struct {
 	pathResDict  map[string]bool
 }
 
-func newApplyValidation(cmd *cobra.Command) (*applyCommandValidation, error) {
-	validation := &applyCommandValidation{
-		pathResDict: make(map[string]bool),
+func (c *applyCommand) initValidation() error {
+	if !c.withValidation {
+		return nil
 	}
-	cmd.Flags().StringVar(&validation.gitProvider, "git-provider", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
-	cmd.Flags().StringVar(&validation.gitURL, "git-host", os.Getenv("GIT_HOST"), "Git host based on git provider used in the repository")
-	cmd.Flags().StringVar(&validation.gitToken, "git-token", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
-	cmd.Flags().StringVar(&validation.gitProjectID, "git-project-id", os.Getenv("GIT_PROJECT_ID"), "Determine which git project will be checked")
-	cmd.Flags().StringVar(&validation.commitSHA, "commit-sha", "", "Current commit SHA to compare against latest commit")
 
 	var err error
-	switch validation.gitProvider {
+	switch c.validation.gitProvider {
 	case providermodel.ProviderGitHub:
-		validation.commitAPI, err = github.NewAPI(validation.gitURL, validation.gitToken)
+		c.validation.commitAPI, err = github.NewAPI(c.validation.gitURL, c.validation.gitToken)
 	case providermodel.ProviderGitLab:
-		validation.commitAPI, err = gitlab.NewAPI(validation.gitURL, validation.gitToken)
+		c.validation.commitAPI, err = gitlab.NewAPI(c.validation.gitURL, c.validation.gitToken)
 	default:
-		return nil, fmt.Errorf("unsupported git provider: %s", validation.gitProvider)
+		return fmt.Errorf("unsupported git provider: %s", c.validation.gitProvider)
 	}
 
-	return validation, err
+	return err
 }
 
 // NewApplyCommand apply the job / resource changes
@@ -108,6 +103,15 @@ func (c *applyCommand) injectFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&c.output, "output", "o", executedPlanFile, "Output of plan result after executed")
 	cmd.Flags().BoolVarP(&c.verbose, "verbose", "v", false, "Determines whether to show the complete message or just the summary")
 	cmd.Flags().BoolVar(&c.withValidation, "with-validation", false, "Determine whether to validate the plan before applying it")
+
+	c.validation = applyCommandValidation{
+		pathResDict: make(map[string]bool),
+	}
+	cmd.Flags().StringVar(&c.validation.gitProvider, "git-provider", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
+	cmd.Flags().StringVar(&c.validation.gitURL, "git-host", os.Getenv("GIT_HOST"), "Git host based on git provider used in the repository")
+	cmd.Flags().StringVar(&c.validation.gitToken, "git-token", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
+	cmd.Flags().StringVar(&c.validation.gitProjectID, "git-project-id", os.Getenv("GIT_PROJECT_ID"), "Determine which git project will be checked")
+	cmd.Flags().StringVar(&c.validation.commitSHA, "commit-sha", os.Getenv("COMMIT_SHA"), "Current commit SHA to compare against latest commit")
 }
 
 func (c *applyCommand) PreRunE(cmd *cobra.Command, _ []string) error {
@@ -136,8 +140,7 @@ func (c *applyCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 	c.config = conf
 
 	if c.withValidation {
-		c.validation, err = newApplyValidation(cmd)
-		if err != nil {
+		if err := c.initValidation(); err != nil {
 			return fmt.Errorf("couldn't instantiate apply validation: %w", err)
 		}
 	}

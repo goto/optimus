@@ -2,16 +2,27 @@ package gitlab
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/xanzy/go-gitlab"
 
 	"github.com/goto/optimus/client/extension/model"
+	"github.com/goto/optimus/internal/errors"
 )
+
+const EntityGitlab = "gitlab"
 
 type API struct {
 	repository     Repository
 	repositoryFile RepositoryFile
+	commit         Commit
+}
+
+func closeResponse(resp *gitlab.Response) {
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 }
 
 func (api *API) CompareDiff(ctx context.Context, projectID any, target, source string) ([]*model.Diff, error) {
@@ -55,13 +66,44 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 	}
 
 	buff, resp, err = api.repositoryFile.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
+	defer closeResponse(resp)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
 		return nil, err
 	}
+
 	return buff, nil
+}
+
+func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path string) (*model.Commit, error) {
+	opt := &gitlab.ListCommitsOptions{
+		Path: gitlab.Ptr(path),
+	}
+	commits, _, err := api.commit.ListCommits(projectID, opt, gitlab.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	var commit *model.Commit
+	for _, c := range commits {
+		if c == nil {
+			continue
+		}
+		commit = &model.Commit{
+			SHA:     c.ID,
+			Message: c.Message,
+			Url:     c.WebURL,
+		}
+		break
+	}
+
+	if commit == nil {
+		return nil, errors.NotFound(EntityGitlab, fmt.Sprintf("commit not found for path %s", path))
+	}
+
+	return commit, nil
 }
 
 func NewAPI(baseURL, token string) (*API, error) {
@@ -76,12 +118,13 @@ func NewAPI(baseURL, token string) (*API, error) {
 		return nil, err
 	}
 
-	return NewGitLabAPI(client.Repositories, client.RepositoryFiles), nil
+	return NewGitLabAPI(client.Repositories, client.RepositoryFiles, client.Commits), nil
 }
 
-func NewGitLabAPI(repo Repository, repoFile RepositoryFile) *API {
+func NewGitLabAPI(repo Repository, repoFile RepositoryFile, commit Commit) *API {
 	return &API{
 		repository:     repo,
 		repositoryFile: repoFile,
+		commit:         commit,
 	}
 }

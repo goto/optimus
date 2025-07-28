@@ -28,3 +28,7 @@ type RepositoryAPI interface {
 	// GetFileContent fetch file content from specific file path
 	GetFileContent(ctx context.Context, projectID any, ref, filePath string) ([]byte, error)
 }
+
+type CommitAPI interface {
+	GetLatestCommitByPath(ctx context.Context, projectID any, path string) (*Commit, error)
+}

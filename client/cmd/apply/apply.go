@@ -164,8 +164,8 @@ func (c *applyCommand) isLatestCommit(ctx context.Context, path string) (bool, e
 	isLatestCommit = latestCommit.SHA == c.validation.commitSHA
 	if !isLatestCommit {
 		c.logger.Info(
-			fmt.Sprintf("Path %s is not the latest commit, LatestSHA: %s LatestMessage: %s, LatestURL: %s",
-				path, latestCommit.SHA, latestCommit.Message, latestCommit.URL),
+			"Path %s is not at the latest commit. Current SHA: %s, Latest SHA: %s, Message: %s, URL: %s",
+			path, c.validation.commitSHA, latestCommit.SHA, latestCommit.Message, latestCommit.URL,
 		)
 	}
 	c.validation.pathResDict[path] = isLatestCommit

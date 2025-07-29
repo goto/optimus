@@ -3,7 +3,6 @@ package apply
 import (
 	"context"
 	"encoding/json"
-	nerrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -145,24 +144,23 @@ func (c *applyCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func (c *applyCommand) isLatestCommit(ctx context.Context, path string) (bool, error) {
+func (c *applyCommand) validateLatestCommit(ctx context.Context, path string) error {
 	if !c.withValidation {
-		return true, nil
+		return nil
 	}
 
 	latestCommit, err := c.validation.commitAPI.GetLatestCommitByPath(ctx, c.validation.gitProjectID, path)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	isLatestCommit := latestCommit.SHA == c.validation.commitSHA
 	if !isLatestCommit {
-		c.logger.Info(
-			"- %s: current (%s) is behind (%s). Use this commit instead to apply the changes: %s",
-			path, c.validation.commitSHA, latestCommit.SHA, latestCommit.URL,
-		)
+		err := fmt.Errorf("the current commit [%s] is not the latest commit [%s] for path %s - Use this commit instead to apply the changes: %s",
+			c.validation.commitSHA, latestCommit.SHA, path, latestCommit.URL)
+		return err
 	}
-	return isLatestCommit, nil
+	return nil
 }
 
 func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
@@ -196,7 +194,10 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		migrateResourceRequest = []*pb.ChangeResourceNamespaceRequest{}
 	)
 
+	c.logger.Info("Validating Job & Resource UPDATE plans")
 	for _, namespace := range c.config.Namespaces {
+		c.logger.Info(" [%s]", namespace.Name)
+
 		// job request preparation
 		migrateJobs, updateFromMigrateJobs := c.getMigrateJobRequest(namespace, plans)
 		addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
@@ -204,6 +205,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		updateJobRequest = append(updateJobRequest, updateFromMigrateJobs...)
 		deleteJobRequest = append(deleteJobRequest, c.getBulkDeleteJobsRequest(namespace, plans)...)
 		migrateJobRequest = append(migrateJobRequest, migrateJobs...)
+
 		// resource request preparation
 		migrateResources, updateFromMigrateResources := c.getMigrateResourceRequest(namespace, plans)
 		addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(namespace, plans)...)
@@ -212,6 +214,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(namespace, plans)...)
 		migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
 	}
+	c.logger.Info("Validating Job & Resource UPDATE plans finished")
 
 	// send to server based on operation
 	addedResources := c.executeResourceAdd(ctx, resourceClient, addResourceRequest)
@@ -502,26 +505,23 @@ func convertUpdateResourceRequestToAdd(req *pb.UpdateResourceRequest) *pb.Create
 
 func (c *applyCommand) getUpdateJobRequest(ctx context.Context, namespace *config.Namespace, plans plan.Plan) []*pb.UpdateJobSpecificationsRequest {
 	jobsToBeSend := []*pb.JobSpecification{}
+
 	for _, currentPlan := range plans.Job.Update.GetByNamespace(namespace.Name) {
+		c.logger.Info("\t└─ ⏳ Validate Job: %s", currentPlan.Name)
 		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t└─ ❌ Read Job Spec Failed [%s]: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
 
-		isLatestCommit, err := c.isLatestCommit(ctx, currentPlan.Path)
-		if err != nil {
-			c.logger.Error("[%s] job %s: ⚠️ failed to get latest commit ⚠️", namespace.Name, currentPlan.Name, err)
+		if err := c.validateLatestCommit(ctx, currentPlan.Path); err != nil {
+			c.logger.Error("\t└─ ❌ Validation Failed: %v", err)
 			c.errors.Append(err)
 			continue
 		}
-		if !isLatestCommit {
-			msg := fmt.Sprintf("[%s] job %s: ⚠️ skipping update when it was behind HEAD ⚠️", namespace.Name, currentPlan.Name)
-			c.logger.Error(msg)
-			c.errors.Append(nerrors.New(msg))
-			continue
-		}
+
+		c.logger.Info("\t└─ ✅ Valid spec and latest commit")
 
 		jobsToBeSend = append(jobsToBeSend, jobSpec.ToProto())
 	}
@@ -615,30 +615,27 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 func (c *applyCommand) getUpdateResourceRequest(ctx context.Context, namespace *config.Namespace, plans plan.Plan) []*pb.UpdateResourceRequest {
 	resourcesToBeUpdate := []*pb.UpdateResourceRequest{}
 	for _, currentPlan := range plans.Resource.Update.GetByNamespace(namespace.Name) {
+		c.logger.Info("\t└─ ⏳ Validate Resource: %s", currentPlan.Name)
+
 		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t└─ ❌ Read Resource Spec Failed [%s]: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
 		resourceSpecProto, err := resourceSpec.ToProto()
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t└─ ❌ Convert Resource Spec to Proto Failed: %v", err)
 			c.errors.Append(err)
 			continue
 		}
-		isLatestCommit, err := c.isLatestCommit(ctx, currentPlan.Path)
-		if err != nil {
-			c.logger.Error(fmt.Sprintf("failed to check latest commit for resource %s: %v", currentPlan.Name, err))
+		if err := c.validateLatestCommit(ctx, currentPlan.Path); err != nil {
+			c.logger.Error("\t└─ ❌ Validation Failed: %v", err)
 			c.errors.Append(err)
 			continue
 		}
-		if !isLatestCommit {
-			msg := fmt.Sprintf("resource %s is not the latest commit, skipping update", currentPlan.Name)
-			c.logger.Error(msg)
-			c.errors.Append(nerrors.New(msg))
-			continue
-		}
+		c.logger.Info("\t└─ ✅ Valid spec and latest commit")
+
 		resourcesToBeUpdate = append(resourcesToBeUpdate, &pb.UpdateResourceRequest{
 			ProjectName:   c.config.Project.Name,
 			NamespaceName: namespace.Name,

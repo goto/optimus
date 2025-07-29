@@ -156,9 +156,8 @@ func (c *applyCommand) validateLatestCommit(ctx context.Context, path string) er
 
 	isLatestCommit := latestCommit.SHA == c.validation.commitSHA
 	if !isLatestCommit {
-		err := fmt.Errorf("the current commit [%s] is not the latest commit [%s] for path %s - Use this commit instead to apply the changes: %s",
-			c.validation.commitSHA, latestCommit.SHA, path, latestCommit.URL)
-		return err
+		return fmt.Errorf("commit validation failed for path %s: current commit [%s] is not the latest [%s]. Please use the latest commit to apply changes: %s",
+			path, c.validation.commitSHA, latestCommit.SHA, latestCommit.URL)
 	}
 	return nil
 }

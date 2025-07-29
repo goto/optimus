@@ -527,6 +527,7 @@ func (c *applyCommand) getUpdateJobRequest(ctx context.Context, namespace *confi
 	}
 
 	if len(jobsToBeSend) == 0 {
+		c.logger.Info("\t└─ No jobs to validate in plan")
 		return []*pb.UpdateJobSpecificationsRequest{}
 	}
 
@@ -643,6 +644,11 @@ func (c *applyCommand) getUpdateResourceRequest(ctx context.Context, namespace *
 			Resource:      resourceSpecProto,
 		})
 	}
+
+	if len(resourcesToBeUpdate) == 0 {
+		c.logger.Info("\t└─ No resources to validate in plan")
+	}
+
 	return resourcesToBeUpdate
 }
 

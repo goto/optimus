@@ -54,10 +54,11 @@ func (p *planCommand) useReferenceComparison() bool {
 func NewPlanCommand() *cobra.Command {
 	planCmd := &planCommand{logger: logger.NewClientLogger()}
 	cmd := &cobra.Command{
-		Use:     "plan",
-		Short:   "Plan resource deployment",
-		Long:    "Plan resource deployment based on git diff state using git reference (commit SHA, branch, tag)",
-		Example: `optimus resource plan --source <source_ref> --target <target_ref> --output <output_plan_file>   # Create Plan using git diff 2 references`,
+		Use:   "plan",
+		Short: "Plan resource deployment",
+		Long:  "Plan resource deployment based on git diff state using git reference (commit SHA, branch, tag)",
+		Example: `optimus resource plan --source <source_ref> --target <target_ref> --output <output_plan_file>   # Create Plan using git diff 2 references
+optimus resource plan --diff-sha <diff_sha> --output <output_plan_file>   # Create Plan using git diff SHA`,
 		PreRunE: planCmd.PreRunE,
 		RunE:    planCmd.RunE,
 	}

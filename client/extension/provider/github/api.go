@@ -27,13 +27,13 @@ func (*API) GetOwnerAndRepoName(projectID any) (owner, repo string, err error) {
 	case string:
 		splitProjectID := strings.SplitN(value, "/", totalSegmentProjectID)
 		if len(splitProjectID) != totalSegmentProjectID {
-			err = errors.New("unsupported project SHA format for github, it should {{owner}}/{{repo}}")
+			err = errors.New("unsupported projectID format for github, it should {{owner}}/{{repo}}")
 			return
 		}
 		owner, repo = splitProjectID[0], splitProjectID[1]
 		return
 	default:
-		err = errors.New("unsupported project SHA format for github")
+		err = errors.New("unsupported projectID format for github")
 		return
 	}
 }

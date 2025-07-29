@@ -265,7 +265,7 @@ func TestAPI(t *testing.T) {
 				},
 			},
 		}
-		firstApiResp := &github.Response{
+		firstAPIResp := &github.Response{
 			NextPage: 2,
 		}
 		secondPage := &github.ListOptions{
@@ -280,7 +280,7 @@ func TestAPI(t *testing.T) {
 				},
 			},
 		}
-		secondApiResp := &github.Response{
+		secondAPIResp := &github.Response{
 			NextPage: 0,
 		}
 
@@ -290,9 +290,9 @@ func TestAPI(t *testing.T) {
 			defer mockRepo.AssertExpectations(t)
 
 			mockRepo.EXPECT().GetCommit(ctx, owner, repo, sha, firsPage).
-				Return(firstDiffs, firstApiResp, nil).Once()
+				Return(firstDiffs, firstAPIResp, nil).Once()
 			mockRepo.EXPECT().GetCommit(ctx, owner, repo, sha, secondPage).
-				Return(secondDiffs, secondApiResp, nil).Once()
+				Return(secondDiffs, secondAPIResp, nil).Once()
 
 			diffs, err := api.GetCommitDiff(ctx, projectID, sha)
 			assert.NoError(t, err)
@@ -305,7 +305,7 @@ func TestAPI(t *testing.T) {
 			defer mockRepo.AssertExpectations(t)
 
 			mockRepo.EXPECT().GetCommit(ctx, owner, repo, sha, firsPage).
-				Return(firstDiffs, firstApiResp, context.DeadlineExceeded).Once()
+				Return(firstDiffs, firstAPIResp, context.DeadlineExceeded).Once()
 
 			diffs, err := api.GetCommitDiff(ctx, projectID, sha)
 			assert.Error(t, err)

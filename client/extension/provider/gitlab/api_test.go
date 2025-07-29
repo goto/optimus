@@ -2,7 +2,6 @@ package gitlab_test
 
 import (
 	"context"
-	"github.com/goto/optimus/client/extension/model"
 	"net/http"
 	"testing"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/xanzy/go-gitlab"
 
 	mock_gitlab "github.com/goto/optimus/client/extension/mock/provider/gitlab"
+	"github.com/goto/optimus/client/extension/model"
 	gitlabapi "github.com/goto/optimus/client/extension/provider/gitlab"
 )
 

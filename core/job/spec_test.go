@@ -9,7 +9,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/labels"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 )
 
 func TestEntitySpec(t *testing.T) {
@@ -24,8 +23,7 @@ func TestEntitySpec(t *testing.T) {
 		WithRetry(retry).
 		WithDependsOnPast(false).
 		Build()
-	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
-	jobWindow := window.NewCustomConfig(w)
+	w, _ := window.NewConfig("1d", "1d", "", "")
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	jobTask := job.NewTask("bq2bq", jobTaskConfig, "")
 	description := "sample description"
@@ -50,7 +48,7 @@ func TestEntitySpec(t *testing.T) {
 
 	t.Run("Spec", func(t *testing.T) {
 		t.Run("should return values as inserted", func(t *testing.T) {
-			specA, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).
+			specA, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, w, jobTask).
 				WithDescription(description).
 				WithLabels(lbl).WithHooks([]*job.Hook{hook}).WithAlerts([]*job.AlertSpec{alert}).
 				WithSpecUpstream(specUpstream).
@@ -74,8 +72,6 @@ func TestEntitySpec(t *testing.T) {
 			assert.Equal(t, jobSchedule.DependsOnPast(), specA.Schedule().DependsOnPast())
 			assert.Equal(t, jobSchedule.CatchUp(), specA.Schedule().CatchUp())
 			assert.Equal(t, jobSchedule.Interval(), specA.Schedule().Interval())
-
-			assert.Equal(t, jobWindow.Window, specA.WindowConfig().Window)
 
 			assert.Equal(t, jobTask, specA.Task())
 			assert.Equal(t, jobTask.Name(), specA.Task().Name())
@@ -124,7 +120,7 @@ func TestEntitySpec(t *testing.T) {
 				"test_key": "",
 			})
 
-			actualSpec, actualError := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).
+			actualSpec, actualError := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, w, jobTask).
 				WithDescription(description).
 				WithLabels(lbl).WithHooks([]*job.Hook{hook}).WithAlerts([]*job.AlertSpec{alert}).
 				WithSpecUpstream(specUpstream).
@@ -139,10 +135,10 @@ func TestEntitySpec(t *testing.T) {
 
 	t.Run("Specs", func(t *testing.T) {
 		t.Run("ToNameAndSpecMap should return map with name key and spec value", func(t *testing.T) {
-			specA, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specA, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, w, jobTask).Build()
 			assert.NoError(t, err)
 
-			specB, err := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specB, err := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, w, jobTask).Build()
 			assert.NoError(t, err)
 
 			expectedMap := map[job.Name]*job.Spec{
@@ -157,10 +153,10 @@ func TestEntitySpec(t *testing.T) {
 		})
 		t.Run("ToFullNameAndSpecMap should return map with fullname key and spec value", func(t *testing.T) {
 			projectName := tenant.ProjectName("sample-project")
-			specA, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specA, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, w, jobTask).Build()
 			assert.NoError(t, err)
 
-			specB, err := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specB, err := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, w, jobTask).Build()
 			assert.NoError(t, err)
 
 			expectedMap := map[job.FullName]*job.Spec{
@@ -175,13 +171,13 @@ func TestEntitySpec(t *testing.T) {
 		})
 
 		t.Run("GetValid should return valid specs", func(t *testing.T) {
-			specA1, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specA1, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, w, jobTask).Build()
 			assert.NoError(t, err)
 
-			specA2, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specA2, err := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, w, jobTask).Build()
 			assert.NoError(t, err)
 
-			specB, err := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).Build()
+			specB, err := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, w, jobTask).Build()
 			assert.NoError(t, err)
 
 			expectedValidSpecs := []*job.Spec{specB}

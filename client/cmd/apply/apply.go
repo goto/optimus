@@ -58,7 +58,6 @@ type applyCommandValidation struct {
 	gitProjectID string
 	commitSHA    string
 	commitAPI    providermodel.CommitAPI
-	pathResDict  map[string]bool
 }
 
 func (c *applyCommand) initValidation() error {
@@ -104,9 +103,7 @@ func (c *applyCommand) injectFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&c.verbose, "verbose", "v", false, "Determines whether to show the complete message or just the summary")
 	cmd.Flags().BoolVar(&c.withValidation, "with-validation", false, "Determine whether to validate the plan before applying it")
 
-	c.validation = applyCommandValidation{
-		pathResDict: make(map[string]bool),
-	}
+	c.validation = applyCommandValidation{}
 	cmd.Flags().StringVar(&c.validation.gitProvider, "git-provider", os.Getenv("GIT_PROVIDER"), "selected git provider used in the repository")
 	cmd.Flags().StringVar(&c.validation.gitURL, "git-host", os.Getenv("GIT_HOST"), "Git host based on git provider used in the repository")
 	cmd.Flags().StringVar(&c.validation.gitToken, "git-token", os.Getenv("GIT_TOKEN"), "Git token based on git provider used in the repository")
@@ -153,24 +150,18 @@ func (c *applyCommand) isLatestCommit(ctx context.Context, path string) (bool, e
 		return true, nil
 	}
 
-	isLatestCommit, exists := c.validation.pathResDict[path]
-	if exists {
-		return isLatestCommit, nil
-	}
-
 	latestCommit, err := c.validation.commitAPI.GetLatestCommitByPath(ctx, c.validation.gitProjectID, path)
 	if err != nil {
 		return false, err
 	}
 
-	isLatestCommit = latestCommit.SHA == c.validation.commitSHA
+	isLatestCommit := latestCommit.SHA == c.validation.commitSHA
 	if !isLatestCommit {
 		c.logger.Info(
 			"- %s: current (%s) is behind (%s). Use this commit instead to apply the changes: %s",
 			path, c.validation.commitSHA, latestCommit.SHA, latestCommit.URL,
 		)
 	}
-	c.validation.pathResDict[path] = isLatestCommit
 	return isLatestCommit, nil
 }
 

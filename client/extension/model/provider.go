@@ -36,4 +36,5 @@ type RepositoryAPI interface {
 
 type CommitAPI interface {
 	GetLatestCommitByPath(ctx context.Context, projectID any, path string) (*Commit, error)
+	GetCommitDiff(ctx context.Context, projectID any, sha string) ([]*Diff, error)
 }

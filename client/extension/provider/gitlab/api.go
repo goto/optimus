@@ -106,6 +106,31 @@ func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path s
 	return commit, nil
 }
 
+func (api *API) GetCommitDiff(ctx context.Context, projectID any, sha string) ([]*model.Diff, error) {
+	var (
+		opt = &gitlab.GetCommitDiffOptions{
+			Unidiff: gitlab.Ptr(true),
+		}
+		diffs []*gitlab.Diff
+		err   error
+	)
+
+	diffs, _, err = api.commit.GetCommitDiff(projectID, sha, opt, gitlab.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*model.Diff, 0, len(diffs))
+	for _, diff := range diffs {
+		if diff == nil {
+			continue
+		}
+		result = append(result, &model.Diff{OldPath: diff.OldPath, NewPath: diff.NewPath})
+	}
+
+	return result, nil
+}
+
 func NewAPI(baseURL, token string) (*API, error) {
 	var opts []gitlab.ClientOptionFunc
 

@@ -15,4 +15,5 @@ type RepositoryFile interface {
 //go:generate mockery --name Commit --outpkg=mock_gitlab --output=../../mock/provider/gitlab --with-expecter
 type Commit interface {
 	ListCommits(pid interface{}, opt *gitlab.ListCommitsOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.Commit, *gitlab.Response, error)
+	GetCommitDiff(pid interface{}, sha string, opt *gitlab.GetCommitDiffOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.Diff, *gitlab.Response, error)
 }

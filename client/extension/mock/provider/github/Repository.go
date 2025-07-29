@@ -14,6 +14,14 @@ type Repository struct {
 	mock.Mock
 }
 
+type Repository_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *Repository) EXPECT() *Repository_Expecter {
+	return &Repository_Expecter{mock: &_m.Mock}
+}
+
 // CompareCommits provides a mock function with given fields: ctx, owner, repo, base, head, opts
 func (_m *Repository) CompareCommits(ctx context.Context, owner string, repo string, base string, head string, opts *github.ListOptions) (*github.CommitsComparison, *github.Response, error) {
 	ret := _m.Called(ctx, owner, repo, base, head, opts)
@@ -51,6 +59,110 @@ func (_m *Repository) CompareCommits(ctx context.Context, owner string, repo str
 	}
 
 	return r0, r1, r2
+}
+
+// Repository_CompareCommits_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CompareCommits'
+type Repository_CompareCommits_Call struct {
+	*mock.Call
+}
+
+// CompareCommits is a helper method to define mock.On call
+//   - ctx context.Context
+//   - owner string
+//   - repo string
+//   - base string
+//   - head string
+//   - opts *github.ListOptions
+func (_e *Repository_Expecter) CompareCommits(ctx interface{}, owner interface{}, repo interface{}, base interface{}, head interface{}, opts interface{}) *Repository_CompareCommits_Call {
+	return &Repository_CompareCommits_Call{Call: _e.mock.On("CompareCommits", ctx, owner, repo, base, head, opts)}
+}
+
+func (_c *Repository_CompareCommits_Call) Run(run func(ctx context.Context, owner string, repo string, base string, head string, opts *github.ListOptions)) *Repository_CompareCommits_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(string), args[5].(*github.ListOptions))
+	})
+	return _c
+}
+
+func (_c *Repository_CompareCommits_Call) Return(_a0 *github.CommitsComparison, _a1 *github.Response, _a2 error) *Repository_CompareCommits_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *Repository_CompareCommits_Call) RunAndReturn(run func(context.Context, string, string, string, string, *github.ListOptions) (*github.CommitsComparison, *github.Response, error)) *Repository_CompareCommits_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetCommit provides a mock function with given fields: ctx, owner, repo, sha, opts
+func (_m *Repository) GetCommit(ctx context.Context, owner string, repo string, sha string, opts *github.ListOptions) (*github.RepositoryCommit, *github.Response, error) {
+	ret := _m.Called(ctx, owner, repo, sha, opts)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCommit")
+	}
+
+	var r0 *github.RepositoryCommit
+	var r1 *github.Response
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *github.ListOptions) (*github.RepositoryCommit, *github.Response, error)); ok {
+		return rf(ctx, owner, repo, sha, opts)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *github.ListOptions) *github.RepositoryCommit); ok {
+		r0 = rf(ctx, owner, repo, sha, opts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*github.RepositoryCommit)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, *github.ListOptions) *github.Response); ok {
+		r1 = rf(ctx, owner, repo, sha, opts)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(*github.Response)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(context.Context, string, string, string, *github.ListOptions) error); ok {
+		r2 = rf(ctx, owner, repo, sha, opts)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// Repository_GetCommit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCommit'
+type Repository_GetCommit_Call struct {
+	*mock.Call
+}
+
+// GetCommit is a helper method to define mock.On call
+//   - ctx context.Context
+//   - owner string
+//   - repo string
+//   - sha string
+//   - opts *github.ListOptions
+func (_e *Repository_Expecter) GetCommit(ctx interface{}, owner interface{}, repo interface{}, sha interface{}, opts interface{}) *Repository_GetCommit_Call {
+	return &Repository_GetCommit_Call{Call: _e.mock.On("GetCommit", ctx, owner, repo, sha, opts)}
+}
+
+func (_c *Repository_GetCommit_Call) Run(run func(ctx context.Context, owner string, repo string, sha string, opts *github.ListOptions)) *Repository_GetCommit_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(*github.ListOptions))
+	})
+	return _c
+}
+
+func (_c *Repository_GetCommit_Call) Return(_a0 *github.RepositoryCommit, _a1 *github.Response, _a2 error) *Repository_GetCommit_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *Repository_GetCommit_Call) RunAndReturn(run func(context.Context, string, string, string, *github.ListOptions) (*github.RepositoryCommit, *github.Response, error)) *Repository_GetCommit_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetContents provides a mock function with given fields: ctx, owner, repo, path, opts
@@ -101,6 +213,38 @@ func (_m *Repository) GetContents(ctx context.Context, owner string, repo string
 	return r0, r1, r2, r3
 }
 
+// Repository_GetContents_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetContents'
+type Repository_GetContents_Call struct {
+	*mock.Call
+}
+
+// GetContents is a helper method to define mock.On call
+//   - ctx context.Context
+//   - owner string
+//   - repo string
+//   - path string
+//   - opts *github.RepositoryContentGetOptions
+func (_e *Repository_Expecter) GetContents(ctx interface{}, owner interface{}, repo interface{}, path interface{}, opts interface{}) *Repository_GetContents_Call {
+	return &Repository_GetContents_Call{Call: _e.mock.On("GetContents", ctx, owner, repo, path, opts)}
+}
+
+func (_c *Repository_GetContents_Call) Run(run func(ctx context.Context, owner string, repo string, path string, opts *github.RepositoryContentGetOptions)) *Repository_GetContents_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(*github.RepositoryContentGetOptions))
+	})
+	return _c
+}
+
+func (_c *Repository_GetContents_Call) Return(fileContent *github.RepositoryContent, directoryContent []*github.RepositoryContent, resp *github.Response, err error) *Repository_GetContents_Call {
+	_c.Call.Return(fileContent, directoryContent, resp, err)
+	return _c
+}
+
+func (_c *Repository_GetContents_Call) RunAndReturn(run func(context.Context, string, string, string, *github.RepositoryContentGetOptions) (*github.RepositoryContent, []*github.RepositoryContent, *github.Response, error)) *Repository_GetContents_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListCommits provides a mock function with given fields: ctx, owner, repo, opts
 func (_m *Repository) ListCommits(ctx context.Context, owner string, repo string, opts *github.CommitsListOptions) ([]*github.RepositoryCommit, *github.Response, error) {
 	ret := _m.Called(ctx, owner, repo, opts)
@@ -138,6 +282,37 @@ func (_m *Repository) ListCommits(ctx context.Context, owner string, repo string
 	}
 
 	return r0, r1, r2
+}
+
+// Repository_ListCommits_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListCommits'
+type Repository_ListCommits_Call struct {
+	*mock.Call
+}
+
+// ListCommits is a helper method to define mock.On call
+//   - ctx context.Context
+//   - owner string
+//   - repo string
+//   - opts *github.CommitsListOptions
+func (_e *Repository_Expecter) ListCommits(ctx interface{}, owner interface{}, repo interface{}, opts interface{}) *Repository_ListCommits_Call {
+	return &Repository_ListCommits_Call{Call: _e.mock.On("ListCommits", ctx, owner, repo, opts)}
+}
+
+func (_c *Repository_ListCommits_Call) Run(run func(ctx context.Context, owner string, repo string, opts *github.CommitsListOptions)) *Repository_ListCommits_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(*github.CommitsListOptions))
+	})
+	return _c
+}
+
+func (_c *Repository_ListCommits_Call) Return(_a0 []*github.RepositoryCommit, _a1 *github.Response, _a2 error) *Repository_ListCommits_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *Repository_ListCommits_Call) RunAndReturn(run func(context.Context, string, string, *github.CommitsListOptions) ([]*github.RepositoryCommit, *github.Response, error)) *Repository_ListCommits_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewRepository creates a new instance of Repository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

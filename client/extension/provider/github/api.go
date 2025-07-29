@@ -159,7 +159,7 @@ func (api *API) GetCommitDiff(ctx context.Context, projectID any, sha string) ([
 	for {
 		diff, apiResp, err := api.repository.GetCommit(ctx, owner, repo, sha, opt)
 		if err != nil {
-			return nil, errors.AddErrContext(err, EntityGitHub, fmt.Sprintf("failed to get commit diff for sha %s", sha))
+			return nil, fmt.Errorf("failed to get commit diff for %s/%s at sha %s: %w", owner, repo, sha, err)
 		}
 
 		if diff == nil || diff.Files == nil {

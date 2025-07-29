@@ -117,7 +117,7 @@ func (api *API) GetCommitDiff(ctx context.Context, projectID any, sha string) ([
 
 	diffs, _, err = api.commit.GetCommitDiff(projectID, sha, opt, gitlab.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get commit diff for project %v sha %s: %w", projectID, sha, err)
 	}
 
 	result := make([]*model.Diff, 0, len(diffs))

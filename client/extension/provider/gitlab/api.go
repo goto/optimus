@@ -10,8 +10,6 @@ import (
 	"github.com/goto/optimus/client/extension/model"
 )
 
-const EntityGitlab = "gitlab"
-
 type API struct {
 	repository     Repository
 	repositoryFile RepositoryFile

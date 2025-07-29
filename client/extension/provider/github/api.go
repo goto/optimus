@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"github.com/google/go-github/v59/github"
 
 	"github.com/goto/optimus/client/extension/model"
-	"github.com/goto/optimus/internal/errors"
 )
 
 type API struct {
@@ -18,7 +18,6 @@ type API struct {
 }
 
 const (
-	EntityGitHub          = "github"
 	defaultPerPage        = 100
 	totalSegmentProjectID = 2
 )
@@ -28,13 +27,13 @@ func (*API) GetOwnerAndRepoName(projectID any) (owner, repo string, err error) {
 	case string:
 		splitProjectID := strings.SplitN(value, "/", totalSegmentProjectID)
 		if len(splitProjectID) != totalSegmentProjectID {
-			err = errors.InvalidArgument(EntityGitHub, "unsupported project SHA format for github, it should {{owner}}/{{repo}}")
+			err = errors.New("unsupported project SHA format for github, it should {{owner}}/{{repo}}")
 			return
 		}
 		owner, repo = splitProjectID[0], splitProjectID[1]
 		return
 	default:
-		err = errors.InvalidArgument(EntityGitHub, "unsupported project SHA format for github")
+		err = errors.New("unsupported project SHA format for github")
 		return
 	}
 }
@@ -58,7 +57,7 @@ func (api *API) CompareDiff(ctx context.Context, projectID any, target, source s
 		var resp *github.Response
 		compareResp, resp, err = api.repository.CompareCommits(ctx, owner, repo, target, source, pagination)
 		if err != nil {
-			return nil, errors.AddErrContext(err, EntityGitHub, "failed to compare references")
+			return nil, fmt.Errorf("failed to compare commits for %s/%s: %w", owner, repo, err)
 		}
 
 		compareDiffResp = append(compareDiffResp, compareResp)
@@ -102,7 +101,7 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, errors.AddErrContext(err, EntityGitHub, fmt.Sprintf("failed to get file content for %s", fileName))
+		return nil, fmt.Errorf("failed to get file content for %s/%s at ref %s and file %s: %w", owner, repo, ref, fileName, err)
 	}
 
 	content, err := repoContent.GetContent()
@@ -120,7 +119,7 @@ func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path s
 	}
 	commits, _, err := api.repository.ListCommits(ctx, owner, repo, opt)
 	if err != nil {
-		return nil, errors.AddErrContext(err, EntityGitHub, fmt.Sprintf("failed to list commits for path %s", path))
+		return nil, fmt.Errorf("failed to list commits for %s/%s at path %s: %w", owner, repo, path, err)
 	}
 
 	var commit *model.Commit
@@ -139,7 +138,7 @@ func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path s
 	}
 
 	if commit == nil {
-		return nil, errors.NotFound(EntityGitHub, fmt.Sprintf("commit not found for path %s", path))
+		return nil, fmt.Errorf("latest commit not found for path %s in project %s", path, projectID)
 	}
 
 	return commit, nil

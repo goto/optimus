@@ -8,7 +8,6 @@ import (
 	"github.com/xanzy/go-gitlab"
 
 	"github.com/goto/optimus/client/extension/model"
-	"github.com/goto/optimus/internal/errors"
 )
 
 const EntityGitlab = "gitlab"
@@ -39,7 +38,7 @@ func (api *API) CompareDiff(ctx context.Context, projectID any, target, source s
 
 	compareResp, _, err = api.repository.Compare(projectID, compareOption, gitlab.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compare commits for project %v: %w", projectID, err)
 	}
 
 	resp := make([]*model.Diff, 0, len(compareResp.Diffs))
@@ -71,7 +70,7 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to get file content for project %v at ref %s and file %s: %w", projectID, ref, fileName, err)
 	}
 
 	return buff, nil
@@ -101,7 +100,7 @@ func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path s
 	}
 
 	if commit == nil {
-		return nil, errors.NotFound(EntityGitlab, fmt.Sprintf("commit not found for path %s", path))
+		return nil, fmt.Errorf("latest commit not found for projectID %v path %s", projectID, path)
 	}
 
 	return commit, nil

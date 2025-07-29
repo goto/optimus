@@ -192,7 +192,7 @@ func TestAPI(t *testing.T) {
 
 			actualCommit, err := api.GetLatestCommitByPath(ctx, projectID, path)
 			assert.Error(t, err)
-			assert.ErrorContains(t, err, "commit not found for path job/jobA")
+			assert.ErrorContains(t, err, "latest commit not found for projectID goto/optimus path job/jobA")
 			assert.Nil(t, actualCommit)
 		})
 

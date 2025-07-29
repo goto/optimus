@@ -11,3 +11,8 @@ type Repository interface {
 type RepositoryFile interface {
 	GetRawFile(pid interface{}, fileName string, opt *gitlab.GetRawFileOptions, options ...gitlab.RequestOptionFunc) ([]byte, *gitlab.Response, error)
 }
+
+//go:generate mockery --name Commit --outpkg=mock_gitlab --output=../../mock/provider/gitlab --with-expecter
+type Commit interface {
+	ListCommits(pid interface{}, opt *gitlab.ListCommitsOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.Commit, *gitlab.Response, error)
+}

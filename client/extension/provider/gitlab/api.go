@@ -2,6 +2,7 @@ package gitlab
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/xanzy/go-gitlab"
@@ -9,9 +10,18 @@ import (
 	"github.com/goto/optimus/client/extension/model"
 )
 
+const EntityGitlab = "gitlab"
+
 type API struct {
 	repository     Repository
 	repositoryFile RepositoryFile
+	commit         Commit
+}
+
+func closeResponse(resp *gitlab.Response) {
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 }
 
 func (api *API) CompareDiff(ctx context.Context, projectID any, target, source string) ([]*model.Diff, error) {
@@ -28,7 +38,7 @@ func (api *API) CompareDiff(ctx context.Context, projectID any, target, source s
 
 	compareResp, _, err = api.repository.Compare(projectID, compareOption, gitlab.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compare commits for project %v: %w", projectID, err)
 	}
 
 	resp := make([]*model.Diff, 0, len(compareResp.Diffs))
@@ -55,13 +65,45 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 	}
 
 	buff, resp, err = api.repositoryFile.GetRawFile(projectID, fileName, option, gitlab.WithContext(ctx))
+	defer closeResponse(resp)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
+		return nil, fmt.Errorf("failed to get file content for project %v at ref %s and file %s: %w", projectID, ref, fileName, err)
+	}
+
+	return buff, nil
+}
+
+func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path string) (*model.Commit, error) {
+	opt := &gitlab.ListCommitsOptions{
+		Path:        gitlab.Ptr(path),
+		FirstParent: gitlab.Ptr(true), // FirstParent will return merge commit when it was created from MR
+	}
+	commits, _, err := api.commit.ListCommits(projectID, opt, gitlab.WithContext(ctx))
+	if err != nil {
 		return nil, err
 	}
-	return buff, nil
+
+	var commit *model.Commit
+	for _, c := range commits {
+		if c == nil {
+			continue
+		}
+		commit = &model.Commit{
+			SHA:     c.ID,
+			Message: c.Message,
+			URL:     c.WebURL,
+		}
+		break
+	}
+
+	if commit == nil {
+		return nil, fmt.Errorf("latest commit not found for projectID %v path %s", projectID, path)
+	}
+
+	return commit, nil
 }
 
 func NewAPI(baseURL, token string) (*API, error) {
@@ -76,12 +118,13 @@ func NewAPI(baseURL, token string) (*API, error) {
 		return nil, err
 	}
 
-	return NewGitLabAPI(client.Repositories, client.RepositoryFiles), nil
+	return NewGitLabAPI(client.Repositories, client.RepositoryFiles, client.Commits), nil
 }
 
-func NewGitLabAPI(repo Repository, repoFile RepositoryFile) *API {
+func NewGitLabAPI(repo Repository, repoFile RepositoryFile, commit Commit) *API {
 	return &API{
 		repository:     repo,
 		repositoryFile: repoFile,
+		commit:         commit,
 	}
 }

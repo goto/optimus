@@ -6,3 +6,9 @@ type Diff struct {
 }
 
 type Diffs []*Diff
+
+type Commit struct {
+	SHA     string
+	Message string
+	URL     string
+}

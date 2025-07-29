@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -26,13 +27,13 @@ func (*API) GetOwnerAndRepoName(projectID any) (owner, repo string, err error) {
 	case string:
 		splitProjectID := strings.SplitN(value, "/", totalSegmentProjectID)
 		if len(splitProjectID) != totalSegmentProjectID {
-			err = errors.New("unsupported project ID format for github, it should {{owner}}/{{repo}}")
+			err = errors.New("unsupported projectID format for github, it should {{owner}}/{{repo}}")
 			return
 		}
 		owner, repo = splitProjectID[0], splitProjectID[1]
 		return
 	default:
-		err = errors.New("unsupported project ID format for github")
+		err = errors.New("unsupported projectID format for github")
 		return
 	}
 }
@@ -56,7 +57,7 @@ func (api *API) CompareDiff(ctx context.Context, projectID any, target, source s
 		var resp *github.Response
 		compareResp, resp, err = api.repository.CompareCommits(ctx, owner, repo, target, source, pagination)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to compare commits for %s/%s: %w", owner, repo, err)
 		}
 
 		compareDiffResp = append(compareDiffResp, compareResp)
@@ -100,11 +101,47 @@ func (api *API) GetFileContent(ctx context.Context, projectID any, ref, fileName
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to get file content for %s/%s at ref %s and file %s: %w", owner, repo, ref, fileName, err)
 	}
 
 	content, err := repoContent.GetContent()
 	return []byte(content), err
+}
+
+func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path string) (*model.Commit, error) {
+	owner, repo, err := api.GetOwnerAndRepoName(projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	opt := &github.CommitsListOptions{
+		Path: path,
+	}
+	commits, _, err := api.repository.ListCommits(ctx, owner, repo, opt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list commits for %s/%s at path %s: %w", owner, repo, path, err)
+	}
+
+	var commit *model.Commit
+	for _, c := range commits {
+		if c == nil {
+			continue
+		}
+		commit = &model.Commit{
+			SHA: c.GetSHA(),
+			URL: c.GetURL(),
+		}
+		if gitCommit := c.GetCommit(); gitCommit != nil {
+			commit.Message = gitCommit.GetMessage()
+		}
+		break
+	}
+
+	if commit == nil {
+		return nil, fmt.Errorf("latest commit not found for path %s in project %s", path, projectID)
+	}
+
+	return commit, nil
 }
 
 func NewAPI(baseURL, token string) (*API, error) {

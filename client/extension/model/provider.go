@@ -4,6 +4,11 @@ import (
 	"context"
 )
 
+const (
+	ProviderGitHub = "github"
+	ProviderGitLab = "gitlab"
+)
+
 // Parser is contract that will be defined by each provider
 // to parse remote metadata from path
 type Parser func(remotePath string) (*Metadata, error)
@@ -27,4 +32,8 @@ type RepositoryAPI interface {
 	CompareDiff(ctx context.Context, projectID any, target, source string) ([]*Diff, error)
 	// GetFileContent fetch file content from specific file path
 	GetFileContent(ctx context.Context, projectID any, ref, filePath string) ([]byte, error)
+}
+
+type CommitAPI interface {
+	GetLatestCommitByPath(ctx context.Context, projectID any, path string) (*Commit, error)
 }

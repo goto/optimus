@@ -144,6 +144,47 @@ func (api *API) GetLatestCommitByPath(ctx context.Context, projectID any, path s
 	return commit, nil
 }
 
+func (api *API) GetCommitDiff(ctx context.Context, projectID any, sha string) ([]*model.Diff, error) {
+	owner, repo, err := api.GetOwnerAndRepoName(projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	opt := &github.ListOptions{
+		PerPage: defaultPerPage,
+		Page:    1,
+	}
+	results := make([]*model.Diff, 0)
+
+	for {
+		diff, apiResp, err := api.repository.GetCommit(ctx, owner, repo, sha, opt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get commit diff for %s/%s at sha %s: %w", owner, repo, sha, err)
+		}
+
+		if diff == nil || diff.Files == nil {
+			break
+		}
+		opt.Page = apiResp.NextPage
+
+		for _, file := range diff.Files {
+			if file == nil {
+				continue
+			}
+			results = append(results, &model.Diff{
+				OldPath: file.GetPreviousFilename(),
+				NewPath: file.GetFilename(),
+			})
+		}
+
+		if apiResp.NextPage == 0 {
+			break
+		}
+	}
+
+	return results, nil
+}
+
 func NewAPI(baseURL, token string) (*API, error) {
 	client := github.NewClient(nil).WithAuthToken(token)
 	if baseURL != "" {

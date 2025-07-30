@@ -20,6 +20,90 @@ func (_m *Commit) EXPECT() *Commit_Expecter {
 	return &Commit_Expecter{mock: &_m.Mock}
 }
 
+// GetCommitDiff provides a mock function with given fields: pid, sha, opt, options
+func (_m *Commit) GetCommitDiff(pid interface{}, sha string, opt *gitlab.GetCommitDiffOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.Diff, *gitlab.Response, error) {
+	_va := make([]interface{}, len(options))
+	for _i := range options {
+		_va[_i] = options[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, pid, sha, opt)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCommitDiff")
+	}
+
+	var r0 []*gitlab.Diff
+	var r1 *gitlab.Response
+	var r2 error
+	if rf, ok := ret.Get(0).(func(interface{}, string, *gitlab.GetCommitDiffOptions, ...gitlab.RequestOptionFunc) ([]*gitlab.Diff, *gitlab.Response, error)); ok {
+		return rf(pid, sha, opt, options...)
+	}
+	if rf, ok := ret.Get(0).(func(interface{}, string, *gitlab.GetCommitDiffOptions, ...gitlab.RequestOptionFunc) []*gitlab.Diff); ok {
+		r0 = rf(pid, sha, opt, options...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*gitlab.Diff)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(interface{}, string, *gitlab.GetCommitDiffOptions, ...gitlab.RequestOptionFunc) *gitlab.Response); ok {
+		r1 = rf(pid, sha, opt, options...)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(*gitlab.Response)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(interface{}, string, *gitlab.GetCommitDiffOptions, ...gitlab.RequestOptionFunc) error); ok {
+		r2 = rf(pid, sha, opt, options...)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// Commit_GetCommitDiff_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCommitDiff'
+type Commit_GetCommitDiff_Call struct {
+	*mock.Call
+}
+
+// GetCommitDiff is a helper method to define mock.On call
+//   - pid interface{}
+//   - sha string
+//   - opt *gitlab.GetCommitDiffOptions
+//   - options ...gitlab.RequestOptionFunc
+func (_e *Commit_Expecter) GetCommitDiff(pid interface{}, sha interface{}, opt interface{}, options ...interface{}) *Commit_GetCommitDiff_Call {
+	return &Commit_GetCommitDiff_Call{Call: _e.mock.On("GetCommitDiff",
+		append([]interface{}{pid, sha, opt}, options...)...)}
+}
+
+func (_c *Commit_GetCommitDiff_Call) Run(run func(pid interface{}, sha string, opt *gitlab.GetCommitDiffOptions, options ...gitlab.RequestOptionFunc)) *Commit_GetCommitDiff_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]gitlab.RequestOptionFunc, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(gitlab.RequestOptionFunc)
+			}
+		}
+		run(args[0].(interface{}), args[1].(string), args[2].(*gitlab.GetCommitDiffOptions), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *Commit_GetCommitDiff_Call) Return(_a0 []*gitlab.Diff, _a1 *gitlab.Response, _a2 error) *Commit_GetCommitDiff_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *Commit_GetCommitDiff_Call) RunAndReturn(run func(interface{}, string, *gitlab.GetCommitDiffOptions, ...gitlab.RequestOptionFunc) ([]*gitlab.Diff, *gitlab.Response, error)) *Commit_GetCommitDiff_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListCommits provides a mock function with given fields: pid, opt, options
 func (_m *Commit) ListCommits(pid interface{}, opt *gitlab.ListCommitsOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.Commit, *gitlab.Response, error) {
 	_va := make([]interface{}, len(options))

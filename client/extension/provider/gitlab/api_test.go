@@ -10,6 +10,7 @@ import (
 	"github.com/xanzy/go-gitlab"
 
 	mock_gitlab "github.com/goto/optimus/client/extension/mock/provider/gitlab"
+	"github.com/goto/optimus/client/extension/model"
 	gitlabapi "github.com/goto/optimus/client/extension/provider/gitlab"
 )
 
@@ -29,6 +30,14 @@ func TestAPI(t *testing.T) {
 		filePath = "go.mod"
 	)
 
+	diffs := []*gitlab.Diff{
+		{
+			NewPath: "go.mod",
+			OldPath: "go.mod.sum",
+		},
+		nil,
+	}
+
 	t.Run("CompareDiff", func(t *testing.T) {
 		t.Run("success get comparison diff", func(t *testing.T) {
 			mockRepo := mock_gitlab.NewRepository(t)
@@ -41,13 +50,7 @@ func TestAPI(t *testing.T) {
 				mockCommit.AssertExpectations(t)
 			}()
 
-			compareResp := &gitlab.Compare{Diffs: []*gitlab.Diff{
-				{
-					NewPath: "go.mod",
-					OldPath: "go.mod.sum",
-				},
-				nil,
-			}}
+			compareResp := &gitlab.Compare{Diffs: diffs}
 			mockRepo.On("Compare", projectID, compareOption, mock.Anything).
 				Return(compareResp, nil, nil)
 
@@ -215,6 +218,57 @@ func TestAPI(t *testing.T) {
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, context.DeadlineExceeded.Error())
 			assert.Nil(t, actualCommit)
+		})
+	})
+
+	t.Run("GetCommitDiff", func(t *testing.T) {
+		sha := "fdafafaskfasnf"
+		expected := []*model.Diff{
+			{
+				NewPath: diffs[0].NewPath,
+				OldPath: diffs[0].OldPath,
+			},
+		}
+		opt := &gitlab.GetCommitDiffOptions{
+			Unidiff: gitlab.Ptr(true),
+		}
+
+		t.Run("return diff and nil error when success get commit diff", func(t *testing.T) {
+			mockRepo := mock_gitlab.NewRepository(t)
+			mockRepoFile := mock_gitlab.NewRepositoryFile(t)
+			mockCommit := mock_gitlab.NewCommit(t)
+			api := gitlabapi.NewGitLabAPI(mockRepo, mockRepoFile, mockCommit)
+			defer func() {
+				mockRepo.AssertExpectations(t)
+				mockRepoFile.AssertExpectations(t)
+				mockCommit.AssertExpectations(t)
+			}()
+
+			mockCommit.EXPECT().GetCommitDiff(projectID, sha, opt, mock.Anything).
+				Return(diffs, nil, nil).Once()
+
+			actualDiff, err := api.GetCommitDiff(ctx, projectID, sha)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, actualDiff, expected)
+		})
+
+		t.Run("return nil and error when failed get commit diff", func(t *testing.T) {
+			mockRepo := mock_gitlab.NewRepository(t)
+			mockRepoFile := mock_gitlab.NewRepositoryFile(t)
+			mockCommit := mock_gitlab.NewCommit(t)
+			api := gitlabapi.NewGitLabAPI(mockRepo, mockRepoFile, mockCommit)
+			defer func() {
+				mockRepo.AssertExpectations(t)
+				mockRepoFile.AssertExpectations(t)
+				mockCommit.AssertExpectations(t)
+			}()
+
+			mockCommit.EXPECT().GetCommitDiff(projectID, sha, opt, mock.Anything).
+				Return(diffs, nil, context.DeadlineExceeded).Once()
+
+			actualDiff, err := api.GetCommitDiff(ctx, projectID, sha)
+			assert.Error(t, err)
+			assert.Nil(t, actualDiff)
 		})
 	})
 }

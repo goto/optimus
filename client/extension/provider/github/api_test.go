@@ -250,4 +250,66 @@ func TestAPI(t *testing.T) {
 			assert.Nil(t, commit)
 		})
 	})
+
+	t.Run("GetCommitDiff", func(t *testing.T) {
+		sha := "1234567890abcdef"
+		firsPage := &github.ListOptions{
+			PerPage: defaultPerPage,
+			Page:    1,
+		}
+		firstDiffs := &github.RepositoryCommit{
+			Files: []*github.CommitFile{
+				{
+					PreviousFilename: toPtr("go.mod"),
+					Filename:         toPtr("go.mod"),
+				},
+			},
+		}
+		firstAPIResp := &github.Response{
+			NextPage: 2,
+		}
+		secondPage := &github.ListOptions{
+			PerPage: defaultPerPage,
+			Page:    2,
+		}
+		secondDiffs := &github.RepositoryCommit{
+			Files: []*github.CommitFile{
+				{
+					PreviousFilename: toPtr("go.sum"),
+					Filename:         toPtr("go.sum"),
+				},
+			},
+		}
+		secondAPIResp := &github.Response{
+			NextPage: 0,
+		}
+
+		t.Run("return diffs and nil error when success get commit diff", func(t *testing.T) {
+			mockRepo := mock_github.NewRepository(t)
+			api := githubapi.NewGitHubAPI(mockRepo)
+			defer mockRepo.AssertExpectations(t)
+
+			mockRepo.EXPECT().GetCommit(ctx, owner, repo, sha, firsPage).
+				Return(firstDiffs, firstAPIResp, nil).Once()
+			mockRepo.EXPECT().GetCommit(ctx, owner, repo, sha, secondPage).
+				Return(secondDiffs, secondAPIResp, nil).Once()
+
+			diffs, err := api.GetCommitDiff(ctx, projectID, sha)
+			assert.NoError(t, err)
+			assert.Len(t, diffs, 2)
+		})
+
+		t.Run("return nil and error when failed get commit diff", func(t *testing.T) {
+			mockRepo := mock_github.NewRepository(t)
+			api := githubapi.NewGitHubAPI(mockRepo)
+			defer mockRepo.AssertExpectations(t)
+
+			mockRepo.EXPECT().GetCommit(ctx, owner, repo, sha, firsPage).
+				Return(firstDiffs, firstAPIResp, context.DeadlineExceeded).Once()
+
+			diffs, err := api.GetCommitDiff(ctx, projectID, sha)
+			assert.Error(t, err)
+			assert.Empty(t, diffs)
+		})
+	})
 }

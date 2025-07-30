@@ -40,18 +40,25 @@ type planCommand struct {
 
 	sourceRef                     string // sourceRef is new state
 	targetRef                     string // targetRef is current state
+	diffSHA                       string // diffSHA is the commit SHA of the diff
 	gitURL, gitToken, gitProvider string
 	gitProjectID                  string
 	repository                    providermodel.RepositoryAPI
+	commit                        providermodel.CommitAPI
+}
+
+func (p *planCommand) useReferenceComparison() bool {
+	return len(p.sourceRef) > 0 && len(p.targetRef) > 0
 }
 
 func NewPlanCommand() *cobra.Command {
 	planCmd := &planCommand{logger: logger.NewClientLogger()}
 	cmd := &cobra.Command{
-		Use:     "plan",
-		Short:   "Plan resource deployment",
-		Long:    "Plan resource deployment based on git diff state using git reference (commit SHA, branch, tag)",
-		Example: `optimus resource plan --source <source_ref> --target <target_ref> --output <output_plan_file>   # Create Plan using git diff 2 references`,
+		Use:   "plan",
+		Short: "Plan resource deployment",
+		Long:  "Plan resource deployment based on git diff state using git reference (commit SHA, branch, tag)",
+		Example: `optimus resource plan --source <source_ref> --target <target_ref> --output <output_plan_file>   # Create Plan using git diff 2 references
+optimus resource plan --diff-sha <diff_sha> --output <output_plan_file>   # Create Plan using git diff SHA`,
 		PreRunE: planCmd.PreRunE,
 		RunE:    planCmd.RunE,
 	}
@@ -71,11 +78,16 @@ func (p *planCommand) inject(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&p.gitProjectID, "git-project-id", os.Getenv("GIT_PROJECT_ID"), "Determine which git project will be checked")
 	cmd.Flags().StringVar(&p.sourceRef, "source", p.sourceRef, "Git diff source reference (new state) [commit SHA, branch, tag]")
 	cmd.Flags().StringVar(&p.targetRef, "target", p.targetRef, "Git diff target reference (current state) [commit SHA, branch, tag]")
+	cmd.Flags().StringVar(&p.diffSHA, "diff-sha", p.diffSHA, "Git diff commit SHA, it will be ignored if source and target are provided")
 }
 
 func (p *planCommand) PreRunE(_ *cobra.Command, _ []string) error {
 	var err error
-	p.logger.Info("[plan] compare: `%s` ← `%s`", p.targetRef, p.sourceRef)
+	if p.useReferenceComparison() {
+		p.logger.Info("[plan] compare: `%s` ← `%s`", p.targetRef, p.sourceRef)
+	} else {
+		p.logger.Info("[plan] compare with diff SHA: `%s`", p.diffSHA)
+	}
 
 	p.clientConfig, err = config.LoadClientConfig(p.configFilePath)
 	if err != nil {
@@ -84,14 +96,21 @@ func (p *planCommand) PreRunE(_ *cobra.Command, _ []string) error {
 
 	switch p.gitProvider {
 	case "gitlab":
-		p.repository, err = gitlab.NewAPI(p.gitURL, p.gitToken)
+		api, err := gitlab.NewAPI(p.gitURL, p.gitToken)
+		if err != nil {
+			return err
+		}
+		p.repository = api
+		p.commit = api
 	case "github":
-		p.repository, err = github.NewAPI(p.gitURL, p.gitToken)
+		api, err := github.NewAPI(p.gitURL, p.gitToken)
+		if err != nil {
+			return err
+		}
+		p.repository = api
+		p.commit = api
 	default:
 		return errors.New("unsupported git provider, we currently only support: [github,gitlab]")
-	}
-	if err != nil {
-		return err
 	}
 
 	p.specReadWriter, err = specio.NewResourceSpecReadWriter(afero.NewOsFs())
@@ -116,6 +135,13 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 
 	p.printPlan(plans)
 	return p.savePlan(plans)
+}
+
+func (p *planCommand) getDiff(ctx context.Context) ([]*providermodel.Diff, error) {
+	if p.useReferenceComparison() {
+		return p.repository.CompareDiff(ctx, p.gitProjectID, p.targetRef, p.sourceRef)
+	}
+	return p.commit.GetCommitDiff(ctx, p.gitProjectID, p.diffSHA)
 }
 
 func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, error) {
@@ -147,7 +173,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 }
 
 func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error) {
-	diffs, err := p.repository.CompareDiff(ctx, p.gitProjectID, p.targetRef, p.sourceRef)
+	diffs, err := p.getDiff(ctx)
 	if err != nil {
 		return nil, err
 	}

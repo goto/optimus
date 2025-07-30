@@ -22,6 +22,7 @@ const (
 	KindExternalTable              string = "external_table"
 	KindExternalTableGoogle        string = "external_table_google"
 	KindExternalTableLark          string = "external_table_lark"
+	KindFunction                   string = "function"
 	allowedColumnMaskPolicyPattern        = `^[a-zA-Z0-9_-]+$`
 )
 

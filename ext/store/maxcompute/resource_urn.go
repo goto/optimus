@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	EntityProject = "project"
-	EntitySchema  = "schema"
+	EntityProject  = "project"
+	EntitySchema   = "schema"
+	EntityFunction = "function"
 
 	ProjectSchemaSections = 2
 	TableNameSections     = 3

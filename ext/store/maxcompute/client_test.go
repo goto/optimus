@@ -70,6 +70,19 @@ func TestMaxComputeClient(t *testing.T) {
 			assert.NotNil(t, schemaHandle)
 		})
 	})
+
+	t.Run("FunctionHandleFrom", func(t *testing.T) {
+		t.Run("returns success when init the schema handle", func(t *testing.T) {
+			client, err := maxcompute.NewClient(testCredJSON)
+			assert.Nil(t, err)
+
+			projectSchema, err := maxcompute.ProjectSchemaFrom("proj", "schema")
+			assert.Nil(t, err)
+
+			schemaHandle := client.FunctionHandleFrom(projectSchema)
+			assert.NotNil(t, schemaHandle)
+		})
+	})
 }
 
 func TestClientProvider(t *testing.T) {

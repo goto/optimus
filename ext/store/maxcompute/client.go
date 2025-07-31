@@ -100,6 +100,12 @@ func (c *MaxComputeClient) SchemaHandleFrom(projectSchema ProjectSchema) TableRe
 	return NewSchemaHandle(s, interactor)
 }
 
+func (c *MaxComputeClient) FunctionHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
+	c.SetDefaultProjectName(projectSchema.Project)
+	c.SetCurrentSchemaName(projectSchema.Schema)
+	return NewFunctionHandle(odps.NewFunctions(c.Odps))
+}
+
 func collectMaxComputeCredential(jsonData []byte) (*maxComputeCredentials, error) {
 	var creds maxComputeCredentials
 	if err := json.Unmarshal(jsonData, &creds); err != nil {

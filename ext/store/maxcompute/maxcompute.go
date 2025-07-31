@@ -39,6 +39,7 @@ type Client interface {
 	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
 	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema, logger log.Logger) TableMaskingPolicyHandle
 	SchemaHandleFrom(projectSchema ProjectSchema) TableResourceHandle
+	FunctionHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 }
 
 type ClientProvider interface {
@@ -268,6 +269,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 
 			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
 		},
+		KindFunction: client.FunctionHandleFrom,
 	}
 
 	for kind, resourceHandleFn := range kindToHandleFn {

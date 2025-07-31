@@ -617,11 +617,13 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle := new(mockTableResourceHandle)
 			viewHandle := new(mockTableResourceHandle)
 			schemaHandle := new(mockTableResourceHandle)
+			functionHandle := new(mockTableResourceHandle)
 			defer func() {
 				tableHandle.AssertExpectations(t)
 				viewHandle.AssertExpectations(t)
 				mpHandle.AssertExpectations(t)
 				schemaHandle.AssertExpectations(t)
+				functionHandle.AssertExpectations(t)
 			}()
 
 			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
@@ -639,6 +641,8 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle.On("Exists", mock.Anything).Return(true).Maybe()
 			client.On("ViewHandleFrom", mock.Anything).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(true).Maybe()
+			client.On("FunctionHandleFrom", mock.Anything).Return(functionHandle).Maybe()
+			functionHandle.On("Exists", mock.Anything).Return(true).Maybe()
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.True(t, actualExist)
@@ -663,11 +667,13 @@ func TestMaxComputeStore(t *testing.T) {
 			tableHandle := new(mockTableResourceHandle)
 			viewHandle := new(mockTableResourceHandle)
 			schemaHandle := new(mockTableResourceHandle)
+			functionHandle := new(mockTableResourceHandle)
 			defer func() {
 				tableHandle.AssertExpectations(t)
 				viewHandle.AssertExpectations(t)
 				mpHandle.AssertExpectations(t)
 				schemaHandle.AssertExpectations(t)
+				functionHandle.AssertExpectations(t)
 			}()
 
 			mcStore := maxcompute.NewMaxComputeDataStore(log, secretProvider, clientProvider, nil, nil, maxFileSize, maxFileCleanupSize, maxSyncDelayTolerance)
@@ -685,6 +691,8 @@ func TestMaxComputeStore(t *testing.T) {
 			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
 			client.On("ExternalTableHandleFrom", mock.Anything, mock.Anything, mpHandle).Return(viewHandle).Maybe()
 			viewHandle.On("Exists", mock.Anything).Return(false).Maybe()
+			client.On("FunctionHandleFrom", mock.Anything).Return(functionHandle).Maybe()
+			functionHandle.On("Exists", mock.Anything).Return(false).Maybe()
 
 			actualExist, actualError := mcStore.Exist(ctx, tnnt, urn)
 			assert.False(t, actualExist)
@@ -737,6 +745,11 @@ func (m *mockClient) TableMaskingPolicyHandleFrom(schema maxcompute.ProjectSchem
 }
 
 func (m *mockClient) SchemaHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableResourceHandle {
+	args := m.Called(schema)
+	return args.Get(0).(maxcompute.TableResourceHandle)
+}
+
+func (m *mockClient) FunctionHandleFrom(schema maxcompute.ProjectSchema) maxcompute.TableResourceHandle {
 	args := m.Called(schema)
 	return args.Get(0).(maxcompute.TableResourceHandle)
 }

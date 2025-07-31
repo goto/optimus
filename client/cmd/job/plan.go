@@ -191,7 +191,8 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 		affectedDirectories = append(affectedDirectories, diffs[i].OldPath, diffs[i].NewPath)
 	}
 
-	directories := plan.DistinctDirectory(plan.GetValidJobDirectory(affectedDirectories))
+	parentReader := plan.NewJobGetter(p.specReadWriter)
+	directories := plan.DistinctDirectory(plan.GetValidJobDirectory(parentReader, affectedDirectories))
 	p.logger.Info("job plan found changed in directories: %+v", directories)
 	return directories, nil
 }

@@ -8,9 +8,31 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/plan"
 )
 
+type mockEmptyJobReader struct {
+}
+
+func (j *mockEmptyJobReader) GetPathsByParentPath(_ string) ([]string, error) {
+	return []string{}, nil
+}
+
+type mockJobParentReader struct {
+	jobPaths []string
+}
+
+func (j *mockJobParentReader) GetPathsByParentPath(_ string) ([]string, error) {
+	return j.jobPaths, nil
+}
+
+func NewMockJobParentReader(jobPaths []string) *mockJobParentReader {
+	return &mockJobParentReader{
+		jobPaths: jobPaths,
+	}
+}
+
 func TestGetValidJobDirectory(t *testing.T) {
 	type args struct {
 		directories []string
+		reader      plan.JobPathGetter
 	}
 	tests := []struct {
 		name string
@@ -24,6 +46,7 @@ func TestGetValidJobDirectory(t *testing.T) {
 					"namespace-1/job-A/job.yaml",
 					"namespace-1/job-B/assets/query.sql",
 				},
+				reader: new(mockEmptyJobReader),
 			},
 			want: []string{
 				"namespace-1/job-A",
@@ -36,13 +59,34 @@ func TestGetValidJobDirectory(t *testing.T) {
 				directories: []string{
 					"namespace-1/job-A/resource.yaml",
 				},
+				reader: new(mockEmptyJobReader),
 			},
 			want: nil,
+		},
+		{
+			name: "Success - Valid Job Directory with Parent",
+			args: args{
+				directories: []string{
+					"namespace-1/job-A/this.yaml",
+				},
+				reader: NewMockJobParentReader(
+					[]string{
+						"namespace-1/job-A/Z/job.yaml",
+						"namespace-1/job-A/Y/job.yaml",
+						"namespace-1/job-A/X/assets/query.sql",
+					},
+				),
+			},
+			want: []string{
+				"namespace-1/job-A/Z",
+				"namespace-1/job-A/Y",
+				"namespace-1/job-A/X",
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, plan.GetValidJobDirectory(tt.args.directories), "GetValidJobDirectory(%v)", tt.args.directories)
+			assert.Equalf(t, tt.want, plan.GetValidJobDirectory(tt.args.reader, tt.args.directories), "GetValidJobDirectory(%v)", tt.args.directories)
 		})
 	}
 }

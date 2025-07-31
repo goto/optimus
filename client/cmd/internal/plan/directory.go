@@ -5,19 +5,30 @@ type DirectoryParser interface {
 	ParseDirectory(directory string) string
 }
 
-func GetValidJobDirectory(directories []string) []string {
+type JobPathGetter interface {
+	GetPathsByParentPath(parentDirPath string) ([]string, error)
+}
+
+func GetValidJobDirectory(reader JobPathGetter, directories []string) []string {
 	var (
 		jobDirectories []string
 		jobParser      = new(JobPlan)
 	)
 
 	for _, directory := range directories {
-		if jobParser.ValidDirectory(directory) {
-			jobDirectory := jobParser.ParseDirectory(directory)
-			if jobDirectory == "" {
-				continue
+		jobPaths, err := reader.GetPathsByParentPath(directory)
+		if err != nil || len(jobPaths) == 0 {
+			jobPaths = []string{directory}
+		}
+
+		for _, jobPath := range jobPaths {
+			if jobParser.ValidDirectory(jobPath) {
+				jobDirectory := jobParser.ParseDirectory(jobPath)
+				if jobDirectory == "" {
+					continue
+				}
+				jobDirectories = append(jobDirectories, jobDirectory)
 			}
-			jobDirectories = append(jobDirectories, jobDirectory)
 		}
 	}
 

@@ -192,7 +192,14 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 	}
 
 	directories := plan.DistinctDirectory(plan.GetValidJobDirectory(affectedDirectories))
-	p.logger.Info("job plan found changed in directories: %+v", directories)
+	if len(directories) == 0 {
+		p.logger.Info("--------------------------------------------")
+		p.logger.Info("Job plan found changes in directories")
+		for i, v := range directories {
+			p.logger.Info("\t%d: %s", i, v)
+		}
+		p.logger.Info("--------------------------------------------")
+	}
 	return directories, nil
 }
 
@@ -220,35 +227,41 @@ func (p *planCommand) getJobSpec(ctx context.Context, fileName, ref string) (mod
 	return spec, nil
 }
 
+func printPlanByNamespace(logger log.Logger, namespace string, planList plan.KindList[*plan.JobPlan]) {
+	names := planList.GetNames()
+	if len(names) > 0 {
+		logger.Info("\t└─ ✅ [%s] Plan to create jobs: %v", namespace, names)
+	}
+}
+
+func (p *planCommand) PrintPlan(operation, resourceType string, plan plan.ListByNamespace[*plan.JobPlan]) {
+	if len(plan.GetAll()) > 0 {
+		p.logger.Info("[ %s %s ]", operation, resourceType)
+		for _, namespaceName := range plan.GetAllNamespaces() {
+			p.logger.Info("[%s]", namespaceName)
+			planList := plan.GetByNamespace(namespaceName)
+			for i, item := range planList {
+				if i == len(planList)-1 {
+					p.logger.Info("\t└─ ✅ %s", item.Name)
+				} else {
+					p.logger.Info("\t├─ ✅ %s", item.Name)
+				}
+			}
+		}
+		p.logger.Info("\n")
+	}
+}
+
 func (p *planCommand) printPlan(plans plan.Plan) {
 	if !p.verbose {
 		return
 	}
-
-	for namespace, planList := range plans.Job.Create {
-		names := plan.KindList[*plan.JobPlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan create jobs %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Job.Delete {
-		names := plan.KindList[*plan.JobPlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan delete jobs %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Job.Update {
-		names := plan.KindList[*plan.JobPlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan update jobs %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Job.Migrate {
-		for i := range planList {
-			msg := fmt.Sprintf("[%s] plan migrate job %v from old_namespace: %s", namespace, planList[i].GetName(), *planList[i].OldNamespace)
-			p.logger.Info(msg)
-		}
-	}
+	p.logger.Info("--[ PLAN ]-----------------------------")
+	p.PrintPlan("Create", "Job", plans.Job.Create)
+	p.PrintPlan("Delete", "Job", plans.Job.Delete)
+	p.PrintPlan("Update", "Job", plans.Job.Update)
+	p.PrintPlan("Migrate", "Job", plans.Job.Migrate)
+	p.logger.Info("\n---------------------------------------\n")
 }
 
 func (p *planCommand) savePlan(plans plan.Plan) error {

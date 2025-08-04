@@ -132,8 +132,9 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-
-	p.printPlan(plans)
+	if p.verbose {
+		p.logger.Info(plans.PrintComplete())
+	}
 	return p.savePlan(plans)
 }
 
@@ -225,43 +226,6 @@ func (p *planCommand) getJobSpec(ctx context.Context, fileName, ref string) (mod
 		return spec, fmt.Errorf("failed to unmarshal job specification with ref: %s and directory %s: %w", ref, fileName, err)
 	}
 	return spec, nil
-}
-
-func printPlanByNamespace(logger log.Logger, namespace string, planList plan.KindList[*plan.JobPlan]) {
-	names := planList.GetNames()
-	if len(names) > 0 {
-		logger.Info("\t└─ ✅ [%s] Plan to create jobs: %v", namespace, names)
-	}
-}
-
-func (p *planCommand) PrintPlan(operation, resourceType string, plan plan.ListByNamespace[*plan.JobPlan]) {
-	if len(plan.GetAll()) > 0 {
-		p.logger.Info("[ %s %s ]", operation, resourceType)
-		for _, namespaceName := range plan.GetAllNamespaces() {
-			p.logger.Info("[%s]", namespaceName)
-			planList := plan.GetByNamespace(namespaceName)
-			for i, item := range planList {
-				if i == len(planList)-1 {
-					p.logger.Info("\t└─ ✅ %s", item.Name)
-				} else {
-					p.logger.Info("\t├─ ✅ %s", item.Name)
-				}
-			}
-		}
-		p.logger.Info("\n")
-	}
-}
-
-func (p *planCommand) printPlan(plans plan.Plan) {
-	if !p.verbose {
-		return
-	}
-	p.logger.Info("--[ PLAN ]-----------------------------")
-	p.PrintPlan("Create", "Job", plans.Job.Create)
-	p.PrintPlan("Delete", "Job", plans.Job.Delete)
-	p.PrintPlan("Update", "Job", plans.Job.Update)
-	p.PrintPlan("Migrate", "Job", plans.Job.Migrate)
-	p.logger.Info("\n---------------------------------------\n")
 }
 
 func (p *planCommand) savePlan(plans plan.Plan) error {

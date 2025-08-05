@@ -193,28 +193,53 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 		migrateResourceRequest = []*pb.ChangeResourceNamespaceRequest{}
 	)
 
-	c.logger.Info("Validating Job & Resource UPDATE plans")
-	for _, namespace := range c.config.Namespaces {
-		c.logger.Info(" [%s]", namespace.Name)
+	if len(plans.Job.GetAllNamespaces()) > 0 {
+		c.logger.Info("🔄 Processing Jobs from the plan")
+		for _, namespaceName := range plans.Job.GetAllNamespaces() {
+			c.logger.Info("[%s]", namespaceName)
+			namespace, err := c.config.GetNamespaceByName(namespaceName)
+			if err != nil {
+				c.logger.Error("\t├─ ❌ Failed to get namespace config for [%s]\n\t└─ err: %v", namespaceName, err)
+				return fmt.Errorf("failed to get namespace config %s: %w", namespaceName, err)
+			}
 
-		// job request preparation
-		migrateJobs, updateFromMigrateJobs := c.getMigrateJobRequest(namespace, plans)
-		addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
-		updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(ctx, namespace, plans)...)
-		updateJobRequest = append(updateJobRequest, updateFromMigrateJobs...)
-		deleteJobRequest = append(deleteJobRequest, c.getBulkDeleteJobsRequest(namespace, plans)...)
-		migrateJobRequest = append(migrateJobRequest, migrateJobs...)
-
-		// resource request preparation
-		migrateResources, updateFromMigrateResources := c.getMigrateResourceRequest(namespace, plans)
-		addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(namespace, plans)...)
-		updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(ctx, namespace, plans)...)
-		updateResourceRequest = append(updateResourceRequest, updateFromMigrateResources...)
-		deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(namespace, plans)...)
-		migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
+			migrateJobs, updateFromMigrateJobs := c.getMigrateJobRequest(namespace, plans)
+			addJobRequest = append(addJobRequest, c.getAddJobRequest(namespace, plans)...)
+			updateJobRequest = append(updateJobRequest, c.getUpdateJobRequest(ctx, namespace, plans)...)
+			updateJobRequest = append(updateJobRequest, updateFromMigrateJobs...)
+			deleteJobRequest = append(deleteJobRequest, c.getBulkDeleteJobsRequest(namespace, plans)...)
+			migrateJobRequest = append(migrateJobRequest, migrateJobs...)
+		}
+		c.logger.Info("Finished processing jobs for apply")
+		c.logger.Info(strings.Repeat("-", 60))
 	}
-	c.logger.Info("Validating Job & Resource UPDATE plans finished")
 
+	if len(plans.Resource.GetAllNamespaces()) > 0 {
+		c.logger.Info("\n🔄 Processing Resources from the plan")
+		for _, namespaceName := range plans.Resource.GetAllNamespaces() {
+			c.logger.Info("[%s]...", namespaceName)
+			namespace, err := c.config.GetNamespaceByName(namespaceName)
+			if err != nil {
+				c.logger.Error("\t├─ ❌ Failed to get namespace config for [%s]\n\t└─ err: %v", namespaceName, err)
+				return fmt.Errorf("failed to get namespace config %s: %w", namespaceName, err)
+			}
+
+			migrateResources, updateFromMigrateResources := c.getMigrateResourceRequest(namespace, plans)
+			addResourceRequest = append(addResourceRequest, c.getAddResourceRequest(namespace, plans)...)
+			updateResourceRequest = append(updateResourceRequest, c.getUpdateResourceRequest(ctx, namespace, plans)...)
+			updateResourceRequest = append(updateResourceRequest, updateFromMigrateResources...)
+			deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(namespace, plans)...)
+			migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
+		}
+		c.logger.Info("Finished processing resources for apply")
+		c.logger.Info(strings.Repeat("-", 60))
+	}
+
+	c.logger.Info("")
+	c.logger.Info(strings.Repeat("-", 60))
+	c.logger.Info("🚀 Initiating the apply process! Buckle up, executing your plan now...")
+	c.logger.Info(strings.Repeat("-", 60))
+	c.logger.Info("")
 	// send to server based on operation
 	addedResources := c.executeResourceAdd(ctx, resourceClient, addResourceRequest)
 	migratedResources := c.executeResourceMigrate(ctx, resourceClient, migrateResourceRequest)
@@ -238,9 +263,14 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	plans.Resource.Migrate = plans.Resource.Migrate.DeletePlansByNames(migratedResources...)
 	plans.Resource.Update = plans.Resource.Update.DeletePlansByNames(updatedResources...)
 
+	c.logger.Info(strings.Repeat("-", 60))
 	if c.errors.ToErr() != nil {
+		c.logger.Warn("⚠️ Apply phase finished! Some operations failed during apply phase.")
+		c.logger.Info(strings.Repeat("-", 60))
 		return errors.InternalError("ErrorsInApplyCommand", "encountered errors in apply flow", nil)
 	}
+	c.logger.Info("✅ Apply phase finished!")
+	c.logger.Info(strings.Repeat("-", 60))
 
 	if err := c.savePlans(plans); err != nil {
 		return err
@@ -254,21 +284,46 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 }
 
 func (c *applyCommand) printSuccess(namespaceName, operation, kind, name string) {
-	c.logger.Info("[%s] %s: %s %s ✅", namespaceName, operation, kind, name)
+	c.logger.Info("[%s] %s: %s %s ✅\n", namespaceName, operation, kind, name)
+}
+
+func (c *applyCommand) printSuccessBulk(namespaceName, operation, kind string, names []string) {
+	c.logger.Info("[%s] %s: %s ✅\n", namespaceName, operation, kind)
+	for i, n := range names {
+		if i == len(names)-1 {
+			c.logger.Info("\t└─ %s\n", n)
+		} else {
+			c.logger.Info("\t├─ %s", n)
+		}
+	}
+}
+
+func (c *applyCommand) printFailedBulk(namespaceName, operation, kind string, names []string, cause string) { //nolint:unparam
+	c.logger.Error("[%s] %s: %s ❌", namespaceName, operation, kind)
+	for _, v := range names {
+		c.logger.Error("\t├─ %s", v)
+	}
+	if c.verbose && cause != "" {
+		c.logger.Error("\t└─ cause: %s\n", cause)
+	}
+	c.isOperationFail = true
 }
 
 func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause string) {
 	c.logger.Error("[%s] %s: %s %s ❌", namespaceName, operation, kind, name)
 	if c.verbose && cause != "" {
-		c.logger.Error(cause)
+		c.logger.Error("\t└─ cause: %s\n", cause)
 	}
 	c.isOperationFail = true
 }
 
-func (c *applyCommand) printFailedAll(operation, kind, cause string) {
+func (c *applyCommand) printFailedAll(operation, kind string, jobNames []string, cause string) {
 	c.logger.Error("[all] %s: %s %s ❌", operation, kind)
+	for _, v := range jobNames {
+		c.logger.Error("\t├─ %s", v)
+	}
 	if c.verbose && cause != "" {
-		c.logger.Error(cause)
+		c.logger.Error("\t└─ cause: %s\n", cause)
 	}
 	c.isOperationFail = true
 }
@@ -281,7 +336,11 @@ func (c *applyCommand) executeJobBulkDelete(ctx context.Context, client pb.JobSp
 	response, err := client.BulkDeleteJobs(ctx, request)
 	if err != nil {
 		c.errors.Append(err)
-		c.printFailedAll("bulk-delete", "job", err.Error())
+		jobNameList := []string{}
+		for _, spec := range request.Jobs {
+			jobNameList = append(jobNameList, fmt.Sprintf("%s/%s", spec.GetNamespaceName(), spec.JobName))
+		}
+		c.printFailedAll("bulk-delete", "job", jobNameList, err.Error())
 		return nil
 	}
 
@@ -311,27 +370,36 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 		response, err := client.AddJobSpecifications(ctx, request)
 		if err != nil {
 			c.errors.Append(err)
+			jobNameList := []string{}
 			for _, spec := range request.GetSpecs() {
-				c.printFailed(request.NamespaceName, "create", "job", spec.GetName(), "")
+				jobNameList = append(jobNameList, spec.GetName())
 			}
 			if c.verbose {
-				c.logger.Error(err.Error())
+				c.printFailedBulk(request.NamespaceName, "create", "job", jobNameList, err.Error())
+			} else {
+				c.printFailedBulk(request.NamespaceName, "create", "job", jobNameList, "No jobs added, add verbose for more details")
 			}
 			continue
 		}
 		isJobSuccess := map[string]bool{}
 		for _, jobName := range response.GetSuccessfulJobNames() {
-			c.printSuccess(request.NamespaceName, "create", "job", jobName)
 			isJobSuccess[jobName] = true
 		}
+		if len(response.GetSuccessfulJobNames()) == 0 {
+			c.printSuccessBulk(request.NamespaceName, "create", "job", response.GetSuccessfulJobNames())
+		}
+
+		failedJobNameList := []string{}
 		for _, spec := range request.GetSpecs() {
 			if _, ok := isJobSuccess[spec.GetName()]; !ok {
 				c.errors.Append(errors.InternalError("ApplyCommand", "", nil))
-				c.printFailed(request.NamespaceName, "create", "job", spec.GetName(), "")
+				failedJobNameList = append(failedJobNameList, spec.GetName())
 			}
 		}
 		if c.verbose {
-			c.logger.Warn(response.GetLog())
+			c.printFailedBulk(request.NamespaceName, "create", "job", failedJobNameList, response.GetLog())
+		} else {
+			c.printFailedBulk(request.NamespaceName, "create", "job", failedJobNameList, "add verbose for more details")
 		}
 		addedJobs = append(addedJobs, response.GetSuccessfulJobNames()...)
 	}
@@ -362,27 +430,36 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 		}
 		if err != nil {
 			c.errors.Append(err)
+			jobNameList := []string{}
 			for _, spec := range request.GetSpecs() {
-				c.printFailed(request.NamespaceName, "update", "job", spec.GetName(), "")
+				jobNameList = append(jobNameList, spec.GetName())
 			}
 			if c.verbose {
-				c.logger.Error(err.Error())
+				c.printFailedBulk(request.NamespaceName, "update", "job", jobNameList, err.Error())
+			} else {
+				c.printFailedBulk(request.NamespaceName, "update", "job", jobNameList, "No jobs updated, add verbose for more details")
 			}
 			continue
 		}
 		isJobSuccess := map[string]bool{}
 		for _, jobName := range response.GetSuccessfulJobNames() {
-			c.printSuccess(request.NamespaceName, "update", "job", jobName)
 			isJobSuccess[jobName] = true
 		}
+		if len(response.GetSuccessfulJobNames()) == 0 {
+			c.printSuccessBulk(request.NamespaceName, "update", "job", response.GetSuccessfulJobNames())
+		}
+
+		failedJobNameList := []string{}
 		for _, spec := range request.GetSpecs() {
 			if _, ok := isJobSuccess[spec.GetName()]; !ok {
-				c.errors.Append(errors.InternalError("ApplyCommand", "job not success", nil))
-				c.printFailed(request.NamespaceName, "update", "job", spec.GetName(), "")
+				c.errors.Append(errors.InternalError("ApplyCommand", "", nil))
+				failedJobNameList = append(failedJobNameList, spec.GetName())
 			}
 		}
 		if c.verbose {
-			c.logger.Warn(response.GetLog())
+			c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, response.GetLog())
+		} else {
+			c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, "add verbose for more details")
 		}
 		updatedJobs = append(updatedJobs, response.GetSuccessfulJobNames()...)
 	}
@@ -473,7 +550,7 @@ func (c *applyCommand) getAddJobRequest(namespace *config.Namespace, plans plan.
 	for _, currentPlan := range plans.Job.Create.GetByNamespace(namespace.Name) {
 		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t├─ ❌ Read Job Spec Failed for Path:[%s]\n\t└─ err: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
@@ -506,16 +583,16 @@ func (c *applyCommand) getUpdateJobRequest(ctx context.Context, namespace *confi
 	jobsToBeSend := []*pb.JobSpecification{}
 
 	for _, currentPlan := range plans.Job.Update.GetByNamespace(namespace.Name) {
-		c.logger.Info("\t└─ ⏳ Validate Job: %s", currentPlan.Name)
+		c.logger.Info("\t├─ ⏳ Validate Job for Update: %s", currentPlan.Name)
 		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error("\t└─ ❌ Read Job Spec Failed [%s]: %v", currentPlan.Path, err)
+			c.logger.Error("\t├─ ❌ Read Job Spec Failed for Path:[%s]\n\t└─ err: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
 
 		if err := c.validateLatestCommit(ctx, currentPlan.Path); err != nil {
-			c.logger.Error("\t└─ ❌ Validation Failed: %v", err)
+			c.logger.Error("\t└─ ❌ Commit freshness Validation Failed: %v", err)
 			c.errors.Append(err)
 			continue
 		}
@@ -526,7 +603,6 @@ func (c *applyCommand) getUpdateJobRequest(ctx context.Context, namespace *confi
 	}
 
 	if len(jobsToBeSend) == 0 {
-		c.logger.Info("\t└─ No jobs to validate in plan")
 		return []*pb.UpdateJobSpecificationsRequest{}
 	}
 
@@ -558,12 +634,12 @@ func (c *applyCommand) getMigrateJobRequest(namespace *config.Namespace, plans p
 	for _, currentPlan := range plans.Job.Migrate.GetByNamespace(namespace.Name) {
 		jobSpec, err := c.jobSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t├─ ❌ Read Job Spec Failed for Path:[%s]\n\t└─ err: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
 		if currentPlan.OldNamespace == nil {
-			c.logger.Error(fmt.Sprintf("old namespace on job %s could not be nil", jobSpec.Name))
+			c.logger.Error("\t├─ ❌ Old Namespace is nil for Job [%s]\n\t└─ err: %v", jobSpec.Name, err)
 			c.errors.Append(err)
 			continue
 		}
@@ -592,13 +668,13 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 	for _, currentPlan := range plans.Resource.Create.GetByNamespace(namespace.Name) {
 		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t├─ ❌ Read Resource Spec Failed for Path:[%s]\n\t└─ err: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
 		resourceSpecProto, err := resourceSpec.ToProto()
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t└─ ❌ Convert Resource Spec to Proto Failed: %v", err)
 			c.errors.Append(err)
 			continue
 		}
@@ -615,11 +691,11 @@ func (c *applyCommand) getAddResourceRequest(namespace *config.Namespace, plans 
 func (c *applyCommand) getUpdateResourceRequest(ctx context.Context, namespace *config.Namespace, plans plan.Plan) []*pb.UpdateResourceRequest {
 	resourcesToBeUpdate := []*pb.UpdateResourceRequest{}
 	for _, currentPlan := range plans.Resource.Update.GetByNamespace(namespace.Name) {
-		c.logger.Info("\t└─ ⏳ Validate Resource: %s", currentPlan.Name)
+		c.logger.Info("\t└─ ⏳ Validate Resource for Update: %s", currentPlan.Name)
 
 		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error("\t└─ ❌ Read Resource Spec Failed [%s]: %v", currentPlan.Path, err)
+			c.logger.Error("\t├─ ❌ Read Resource Spec Failed for Path:[%s]\n\t└─ err: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
@@ -630,7 +706,7 @@ func (c *applyCommand) getUpdateResourceRequest(ctx context.Context, namespace *
 			continue
 		}
 		if err := c.validateLatestCommit(ctx, currentPlan.Path); err != nil {
-			c.logger.Error("\t└─ ❌ Validation Failed: %v", err)
+			c.logger.Error("\t└─ ❌ Commit freshness Validation Failed: %v", err)
 			c.errors.Append(err)
 			continue
 		}
@@ -642,10 +718,6 @@ func (c *applyCommand) getUpdateResourceRequest(ctx context.Context, namespace *
 			DatastoreName: currentPlan.Datastore,
 			Resource:      resourceSpecProto,
 		})
-	}
-
-	if len(resourcesToBeUpdate) == 0 {
-		c.logger.Info("\t└─ No resources to validate in plan")
 	}
 
 	return resourcesToBeUpdate
@@ -673,18 +745,18 @@ func (c *applyCommand) getMigrateResourceRequest(namespace *config.Namespace, pl
 	for _, currentPlan := range plans.Resource.Migrate.GetByNamespace(namespace.Name) {
 		resourceSpec, err := c.resourceSpecReadWriter.ReadByDirPath(currentPlan.Path)
 		if err != nil {
-			c.logger.Error(err.Error())
+			c.logger.Error("\t├─ ❌ Read Resource Spec Failed for Path:[%s]\n\t└─ err: %v", currentPlan.Path, err)
 			c.errors.Append(err)
 			continue
 		}
 		if currentPlan.OldNamespace == nil {
-			c.logger.Error(fmt.Sprintf("old namespace on resource %s could not be nil", resourceSpec.Name))
+			c.logger.Error("\t├─ ❌ Old Namespace is nil for Resource [%s]\n\t└─ err: %v", resourceSpec.Name, err)
 			c.errors.Append(err)
 			continue
 		}
 		resourceSpecProto, err := resourceSpec.ToProto()
 		if err != nil {
-			c.logger.Error(fmt.Sprintf("resource %s could not be converted to proto", resourceSpec.Name))
+			c.logger.Error("\t├─ ❌ Convert Resource Spec to Proto Failed for Resource [%s]\n\t└─ err: %v", resourceSpec.Name, err)
 			c.errors.Append(err)
 			continue
 		}
@@ -730,6 +802,10 @@ func (c *applyCommand) getPlans() (plan.Plan, error) {
 			plans = plan.NewPlan(currentPlans.ProjectName)
 		}
 		plans = plans.Merge(currentPlans)
+	}
+	if c.verbose {
+		c.logger.Info("Plans loaded from sources: %s", strings.Join(c.sources, ", "))
+		c.logger.Info("Loaded plans: \n%s", plans.String())
 	}
 	return plans, nil
 }

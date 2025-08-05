@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"strings"
 )
 
 type Plan struct {
@@ -36,53 +37,53 @@ func getIcon(operation string) string {
 func PrintJobPlan(operation, resourceType string, p ListByNamespace[*JobPlan]) string {
 	var result string
 	if len(p.GetAll()) > 0 {
-		result += fmt.Sprintf("[ %s %s ]\n", operation, resourceType)
+		result += fmt.Sprintf("[ %s %s ]\n\n", operation, resourceType)
 		for _, namespaceName := range p.GetAllNamespaces() {
-			result += fmt.Sprintf("[%s]\n", namespaceName)
+			result += fmt.Sprintf("  [%s]\n", namespaceName)
 			planList := p.GetByNamespace(namespaceName)
 			for i, item := range planList {
 				if i == len(planList)-1 {
-					result += fmt.Sprintf("\t└─ %s %s\n", getIcon(operation), item.Name)
+					result += fmt.Sprintf("    └─ %s %s\n", getIcon(operation), item.Name)
 				} else {
-					result += fmt.Sprintf("\t├─ %s %s\n", getIcon(operation), item.Name)
+					result += fmt.Sprintf("    ├─ %s %s\n", getIcon(operation), item.Name)
 				}
 			}
 		}
-		result += "\n"
+		result += strings.Repeat("-", 60) + "\n"
 	}
 	return result
 }
 
-func PrintResourcePlan(operation, resourceType string, p ListByNamespace[*JobPlan]) string {
+func PrintResourcePlan(operation, resourceType string, p ListByNamespace[*ResourcePlan]) string {
 	var result string
 	if len(p.GetAll()) > 0 {
-		result += fmt.Sprintf("[ %s %s ]\n", operation, resourceType)
+		result += fmt.Sprintf("[ %s %s ]\n\n", operation, resourceType)
 		for _, namespaceName := range p.GetAllNamespaces() {
-			result += fmt.Sprintf("[%s]\n", namespaceName)
+			result += fmt.Sprintf("  [%s]\n", namespaceName)
 			planList := p.GetByNamespace(namespaceName)
 			for i, item := range planList {
 				if i == len(planList)-1 {
-					result += fmt.Sprintf("\t└─ %s %s\n", getIcon(operation), item.Name)
+					result += fmt.Sprintf("    └─ %s %s\n", getIcon(operation), item.Name)
 				} else {
-					result += fmt.Sprintf("\t├─ %s %s\n", getIcon(operation), item.Name)
+					result += fmt.Sprintf("    ├─ %s %s\n", getIcon(operation), item.Name)
 				}
 			}
 		}
-		result += "\n"
+		result += strings.Repeat("-", 60) + "\n"
 	}
 	return result
 }
 
-func (p Plan) PrintComplete() string {
+func (p Plan) String() string {
 	var result string
 	result += PrintJobPlan("Create", "Job", p.Job.Create)
 	result += PrintJobPlan("Delete", "Job", p.Job.Delete)
 	result += PrintJobPlan("Update", "Job", p.Job.Update)
 	result += PrintJobPlan("Migrate", "Job", p.Job.Migrate)
-	result += PrintJobPlan("Create", "Job", p.Job.Create)
-	result += PrintJobPlan("Delete", "Job", p.Job.Delete)
-	result += PrintJobPlan("Update", "Job", p.Job.Update)
-	result += PrintJobPlan("Migrate", "Job", p.Job.Migrate)
+	result += PrintResourcePlan("Create", "Resource", p.Resource.Create)
+	result += PrintResourcePlan("Delete", "Resource", p.Resource.Delete)
+	result += PrintResourcePlan("Update", "Resource", p.Resource.Update)
+	result += PrintResourcePlan("Migrate", "Resource", p.Resource.Migrate)
 	return result
 }
 

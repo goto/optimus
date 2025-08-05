@@ -133,7 +133,7 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	if p.verbose {
-		p.logger.Info(plans.PrintComplete())
+		p.logger.Info(plans.String())
 	}
 	return p.savePlan(plans)
 }

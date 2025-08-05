@@ -133,7 +133,10 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	p.printPlan(plans)
+	if p.verbose {
+		p.logger.Info(plans.String())
+	}
+
 	return p.savePlan(plans)
 }
 
@@ -213,37 +216,6 @@ func (p *planCommand) getResourceSpec(ctx context.Context, fileName, ref string)
 		return spec, fmt.Errorf("failed to unmarshal resource specification with ref: %s and directory %s: %w", ref, fileName, err)
 	}
 	return spec, nil
-}
-
-func (p *planCommand) printPlan(plans plan.Plan) {
-	if !p.verbose {
-		return
-	}
-
-	for namespace, planList := range plans.Resource.Create {
-		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan create resources %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Resource.Delete {
-		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan delete resources %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Resource.Update {
-		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan update resources %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Resource.Migrate {
-		for i := range planList {
-			msg := fmt.Sprintf("[%s] plan migrate resource %v from old_namespace: %s", namespace, planList[i].GetName(), *planList[i].OldNamespace)
-			p.logger.Info(msg)
-		}
-	}
 }
 
 func (p *planCommand) savePlan(plans plan.Plan) error {

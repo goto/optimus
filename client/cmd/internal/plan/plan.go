@@ -42,10 +42,16 @@ func PrintJobPlan(operation, resourceType string, p ListByNamespace[*JobPlan]) s
 			result += fmt.Sprintf("  [%s]\n", namespaceName)
 			planList := p.GetByNamespace(namespaceName)
 			for i, item := range planList {
-				if i == len(planList)-1 {
-					result += fmt.Sprintf("    └─ %s %s\n", getIcon(operation), item.Name)
+				var log string
+				if operation == "Migrate" {
+					log = fmt.Sprintf("%s %s, %s → %s", getIcon(operation), item.Name, *item.OldNamespace, namespaceName)
 				} else {
-					result += fmt.Sprintf("    ├─ %s %s\n", getIcon(operation), item.Name)
+					log = fmt.Sprintf("%s %s", getIcon(operation), item.Name)
+				}
+				if i == len(planList)-1 {
+					result += fmt.Sprintf("    └─ %s\n", log)
+				} else {
+					result += fmt.Sprintf("    ├─ %s\n", log)
 				}
 			}
 		}
@@ -62,10 +68,16 @@ func PrintResourcePlan(operation, resourceType string, p ListByNamespace[*Resour
 			result += fmt.Sprintf("  [%s]\n", namespaceName)
 			planList := p.GetByNamespace(namespaceName)
 			for i, item := range planList {
-				if i == len(planList)-1 {
-					result += fmt.Sprintf("    └─ %s %s\n", getIcon(operation), item.Name)
+				var log string
+				if operation == "Migrate" {
+					log = fmt.Sprintf("%s %s, %s → %s", getIcon(operation), item.Name, *item.OldNamespace, namespaceName)
 				} else {
-					result += fmt.Sprintf("    ├─ %s %s\n", getIcon(operation), item.Name)
+					log = fmt.Sprintf("%s %s", getIcon(operation), item.Name)
+				}
+				if i == len(planList)-1 {
+					result += fmt.Sprintf("    └─ %s\n", log)
+				} else {
+					result += fmt.Sprintf("    ├─ %s\n", log)
 				}
 			}
 		}

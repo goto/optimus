@@ -194,9 +194,9 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 	)
 
 	if len(plans.Job.GetAllNamespaces()) > 0 {
-		c.logger.Info("🔄 Processing Jobs from the plan")
+		c.logger.Info("🔄 Processing Jobs from the plan\n")
 		for _, namespaceName := range plans.Job.GetAllNamespaces() {
-			c.logger.Info("[%s]", namespaceName)
+			c.logger.Info("[%s]...", namespaceName)
 			namespace, err := c.config.GetNamespaceByName(namespaceName)
 			if err != nil {
 				c.logger.Error("\t├─ ❌ Failed to get namespace config for [%s]\n\t└─ err: %v", namespaceName, err)
@@ -210,12 +210,12 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 			deleteJobRequest = append(deleteJobRequest, c.getBulkDeleteJobsRequest(namespace, plans)...)
 			migrateJobRequest = append(migrateJobRequest, migrateJobs...)
 		}
-		c.logger.Info("Finished processing jobs for apply")
+		c.logger.Info("\nFinished processing jobs for apply")
 		c.logger.Info(strings.Repeat("-", 60))
 	}
 
 	if len(plans.Resource.GetAllNamespaces()) > 0 {
-		c.logger.Info("\n🔄 Processing Resources from the plan")
+		c.logger.Info("\n🔄 Processing Resources from the plan\n")
 		for _, namespaceName := range plans.Resource.GetAllNamespaces() {
 			c.logger.Info("[%s]...", namespaceName)
 			namespace, err := c.config.GetNamespaceByName(namespaceName)
@@ -231,7 +231,7 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 			deleteResourceRequest = append(deleteResourceRequest, c.getDeleteResourceRequest(namespace, plans)...)
 			migrateResourceRequest = append(migrateResourceRequest, migrateResources...)
 		}
-		c.logger.Info("Finished processing resources for apply")
+		c.logger.Info("\nFinished processing resources for apply")
 		c.logger.Info(strings.Repeat("-", 60))
 	}
 

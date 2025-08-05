@@ -154,24 +154,38 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 
 	for _, directory := range affectedDirectories {
 		namespace, err := p.getNamespaceNameByJobPath(directory)
+		p.logger.Info("[%s]...", namespace)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get namespace for directory [%s]\n\t└─ err: %v", directory, err)
 			return plans, err
 		}
 
 		sourceSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.sourceRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get source job spec for [%s]\n\t└─ err: %v", filepath.Join(directory, jobFileName), err)
 			return plans, err
 		}
 
 		targetSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.targetRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get target job spec for [%s]\n\t└─ err: %v", filepath.Join(directory, jobFileName), err)
 			return plans, err
 		}
 
 		if len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0 {
 			if sourceSpec.Version < 3 {
+				p.logger.Error("\t└─ ❌ Job spec [%s] should use version 3, current version: %d", sourceSpec.Name, sourceSpec.Version)
 				return plans, fmt.Errorf("spec[%s] should use version 3", sourceSpec.Name)
 			}
+		}
+
+		switch {
+		case len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0:
+			p.logger.Info("\t└─ ✅ identified job create [%s]", sourceSpec.Name)
+		case len(sourceSpec.Name) == 0 && len(targetSpec.Name) > 0:
+			p.logger.Info("\t└─ ✅ identified job delete [%s]", targetSpec.Name)
+		default:
+			p.logger.Info("\t└─ ✅ identified job update [%s]", targetSpec.Name)
 		}
 
 		plans.Job.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.JobPlan{Path: directory})
@@ -193,7 +207,7 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 	}
 
 	directories := plan.DistinctDirectory(plan.GetValidJobDirectory(affectedDirectories))
-	if len(directories) == 0 {
+	if len(directories) > 0 {
 		p.logger.Info("--------------------------------------------")
 		p.logger.Info("Job plan found changes in directories")
 		for i, v := range directories {

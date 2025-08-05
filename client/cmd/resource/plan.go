@@ -156,17 +156,29 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 
 	for _, directory := range affectedDirectories {
 		namespace, datastore, err := p.getNamespaceAndDatastoreNameByPath(directory)
+		p.logger.Info("[%s]...", namespace)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get namespace for directory [%s]\n\t└─ err: %v", directory, err)
 			return plans, err
 		}
 
 		sourceSpec, err := p.getResourceSpec(ctx, filepath.Join(directory, resourceFileName), p.sourceRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get source resource spec for [%s]\n\t└─ err: %v", filepath.Join(directory, resourceFileName), err)
 			return plans, err
 		}
 		targetSpec, err := p.getResourceSpec(ctx, filepath.Join(directory, resourceFileName), p.targetRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get target resource spec for [%s]\n\t└─ err: %v", filepath.Join(directory, resourceFileName), err)
 			return plans, err
+		}
+		switch {
+		case len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0:
+			p.logger.Info("\t└─ ✅ identified resource create [%s]", sourceSpec.Name)
+		case len(sourceSpec.Name) == 0 && len(targetSpec.Name) > 0:
+			p.logger.Info("\t└─ ✅ identified resource delete [%s]", targetSpec.Name)
+		default:
+			p.logger.Info("\t└─ ✅ identified resource update [%s]", targetSpec.Name)
 		}
 
 		plans.Resource.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.ResourcePlan{Datastore: datastore, Path: directory})
@@ -188,7 +200,14 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 	}
 
 	directories := plan.DistinctDirectory(plan.GetValidResourceDirectory(affectedDirectories))
-	p.logger.Info("resource plan found changed in directories: %+v", directories)
+	if len(directories) > 0 {
+		p.logger.Info("--------------------------------------------")
+		p.logger.Info("Resource plan found changes in directories")
+		for i, v := range directories {
+			p.logger.Info("\t%d: %s", i, v)
+		}
+		p.logger.Info("--------------------------------------------")
+	}
 	return directories, nil
 }
 

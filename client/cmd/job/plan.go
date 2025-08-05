@@ -133,6 +133,8 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	if p.verbose {
+		p.logger.Info(strings.Repeat("-", 60))
+		p.logger.Info("\n✨ Generated job deployment plan:\n")
 		p.logger.Info(plans.String())
 	}
 	return p.savePlan(plans)
@@ -151,7 +153,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 	if err != nil {
 		return plans, err
 	}
-
+	p.logger.Info("✨ Generating job deployment plan for %d affected directories...\n", len(affectedDirectories))
 	for _, directory := range affectedDirectories {
 		namespace, err := p.getNamespaceNameByJobPath(directory)
 		p.logger.Info("[%s]...", namespace)
@@ -181,11 +183,11 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 
 		switch {
 		case len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0:
-			p.logger.Info("\t└─ ✅ identified job create [%s]", sourceSpec.Name)
+			p.logger.Info("\t└─ ➕ job [%s], at %s", sourceSpec.Name, directory)
 		case len(sourceSpec.Name) == 0 && len(targetSpec.Name) > 0:
-			p.logger.Info("\t└─ ✅ identified job delete [%s]", targetSpec.Name)
+			p.logger.Info("\t└─ ➖ job [%s], at %s", targetSpec.Name, directory)
 		default:
-			p.logger.Info("\t└─ ✅ identified job update [%s]", targetSpec.Name)
+			p.logger.Info("\t└─ ✏️ job [%s], at %s", targetSpec.Name, directory)
 		}
 
 		plans.Job.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.JobPlan{Path: directory})

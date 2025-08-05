@@ -134,6 +134,8 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	if p.verbose {
+		p.logger.Info(strings.Repeat("-", 60))
+		p.logger.Info("\n✨ Generated resource deployment plan:\n")
 		p.logger.Info(plans.String())
 	}
 
@@ -153,7 +155,7 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 	if err != nil {
 		return plans, err
 	}
-
+	p.logger.Info("✨ Generating resources deployment plan for %d affected directories...\n", len(affectedDirectories))
 	for _, directory := range affectedDirectories {
 		namespace, datastore, err := p.getNamespaceAndDatastoreNameByPath(directory)
 		p.logger.Info("[%s]...", namespace)
@@ -174,11 +176,11 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 		}
 		switch {
 		case len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0:
-			p.logger.Info("\t└─ ✅ identified resource create [%s]", sourceSpec.Name)
+			p.logger.Info("\t└─ ➕ resource [%s], at %s", sourceSpec.Name, directory)
 		case len(sourceSpec.Name) == 0 && len(targetSpec.Name) > 0:
-			p.logger.Info("\t└─ ✅ identified resource delete [%s]", targetSpec.Name)
+			p.logger.Info("\t└─ ➖ resource [%s], at %s", targetSpec.Name, directory)
 		default:
-			p.logger.Info("\t└─ ✅ identified resource update [%s]", targetSpec.Name)
+			p.logger.Info("\t└─ ✏️ resource [%s], at %s", targetSpec.Name, directory)
 		}
 
 		plans.Resource.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.ResourcePlan{Datastore: datastore, Path: directory})

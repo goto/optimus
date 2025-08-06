@@ -288,20 +288,20 @@ func (c *applyCommand) printSuccess(namespaceName, operation, kind, name string)
 }
 
 func (c *applyCommand) printSuccessBulk(namespaceName, operation, kind string, names []string) {
-	c.logger.Info("[%s] %s: %s ✅\n", namespaceName, operation, kind)
+	c.logger.Info("[%s] %s: %s\n", namespaceName, operation, kind)
 	for i, n := range names {
 		if i == len(names)-1 {
-			c.logger.Info("\t└─ %s\n", n)
+			c.logger.Info("\t└─ %s ✅\n", n)
 		} else {
-			c.logger.Info("\t├─ %s", n)
+			c.logger.Info("\t├─ %s ✅", n)
 		}
 	}
 }
 
 func (c *applyCommand) printFailedBulk(namespaceName, operation, kind string, names []string, cause string) { //nolint:unparam
-	c.logger.Error("[%s] %s: %s ❌", namespaceName, operation, kind)
+	c.logger.Error("[%s] %s: %s", namespaceName, operation, kind)
 	for _, v := range names {
-		c.logger.Error("\t├─ %s", v)
+		c.logger.Error("\t├─ %s ❌", v)
 	}
 	if c.verbose && cause != "" {
 		c.logger.Error("\t└─ cause: %s\n", cause)
@@ -374,10 +374,12 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 			for _, spec := range request.GetSpecs() {
 				jobNameList = append(jobNameList, spec.GetName())
 			}
-			if c.verbose {
-				c.printFailedBulk(request.NamespaceName, "create", "job", jobNameList, err.Error())
-			} else {
-				c.printFailedBulk(request.NamespaceName, "create", "job", jobNameList, "No jobs added, add verbose for more details")
+			if len(jobNameList) > 0 {
+				if c.verbose {
+					c.printFailedBulk(request.NamespaceName, "create", "job", jobNameList, err.Error())
+				} else {
+					c.printFailedBulk(request.NamespaceName, "create", "job", jobNameList, "No jobs added, add verbose for more details")
+				}
 			}
 			continue
 		}
@@ -396,11 +398,14 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 				failedJobNameList = append(failedJobNameList, spec.GetName())
 			}
 		}
-		if c.verbose {
-			c.printFailedBulk(request.NamespaceName, "create", "job", failedJobNameList, response.GetLog())
-		} else {
-			c.printFailedBulk(request.NamespaceName, "create", "job", failedJobNameList, "add verbose for more details")
+		if len(failedJobNameList) > 0 {
+			if c.verbose {
+				c.printFailedBulk(request.NamespaceName, "create", "job", failedJobNameList, response.GetLog())
+			} else {
+				c.printFailedBulk(request.NamespaceName, "create", "job", failedJobNameList, "add verbose for more details")
+			}
 		}
+
 		addedJobs = append(addedJobs, response.GetSuccessfulJobNames()...)
 	}
 	return addedJobs
@@ -425,19 +430,18 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 	updatedJobs := []string{}
 	for _, request := range requests {
 		response, err := client.UpdateJobSpecifications(ctx, request)
-		if c.verbose {
-			c.logger.Info(response.GetLog())
-		}
 		if err != nil {
 			c.errors.Append(err)
 			jobNameList := []string{}
 			for _, spec := range request.GetSpecs() {
 				jobNameList = append(jobNameList, spec.GetName())
 			}
-			if c.verbose {
-				c.printFailedBulk(request.NamespaceName, "update", "job", jobNameList, err.Error())
-			} else {
-				c.printFailedBulk(request.NamespaceName, "update", "job", jobNameList, "No jobs updated, add verbose for more details")
+			if len(jobNameList) > 0 {
+				if c.verbose {
+					c.printFailedBulk(request.NamespaceName, "update", "job", jobNameList, err.Error())
+				} else {
+					c.printFailedBulk(request.NamespaceName, "update", "job", jobNameList, "No jobs updated, add verbose for more details")
+				}
 			}
 			continue
 		}
@@ -456,10 +460,12 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 				failedJobNameList = append(failedJobNameList, spec.GetName())
 			}
 		}
-		if c.verbose {
-			c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, response.GetLog())
-		} else {
-			c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, "add verbose for more details")
+		if len(failedJobNameList) > 0 {
+			if c.verbose {
+				c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, response.GetLog())
+			} else {
+				c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, "add verbose for more details")
+			}
 		}
 		updatedJobs = append(updatedJobs, response.GetSuccessfulJobNames()...)
 	}

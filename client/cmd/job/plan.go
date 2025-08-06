@@ -132,8 +132,11 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-
-	p.printPlan(plans)
+	if p.verbose {
+		p.logger.Info(strings.Repeat("-", 60))
+		p.logger.Info("\n✨ Generated job deployment plan:\n")
+		p.logger.Info(plans.String())
+	}
 	return p.savePlan(plans)
 }
 
@@ -150,27 +153,41 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 	if err != nil {
 		return plans, err
 	}
-
+	p.logger.Info("✨ Generating job deployment plan for %d affected directories...\n", len(affectedDirectories))
 	for _, directory := range affectedDirectories {
 		namespace, err := p.getNamespaceNameByJobPath(directory)
+		p.logger.Info("[%s]...", namespace)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get namespace for directory [%s]\n\t└─ err: %v", directory, err)
 			return plans, err
 		}
 
 		sourceSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.sourceRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get source job spec for [%s]\n\t└─ err: %v", filepath.Join(directory, jobFileName), err)
 			return plans, err
 		}
 
 		targetSpec, err := p.getJobSpec(ctx, filepath.Join(directory, jobFileName), p.targetRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get target job spec for [%s]\n\t└─ err: %v", filepath.Join(directory, jobFileName), err)
 			return plans, err
 		}
 
 		if len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0 {
 			if sourceSpec.Version < 3 {
+				p.logger.Error("\t└─ ❌ Job spec [%s] should use version 3, current version: %d", sourceSpec.Name, sourceSpec.Version)
 				return plans, fmt.Errorf("spec[%s] should use version 3", sourceSpec.Name)
 			}
+		}
+
+		switch {
+		case len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0:
+			p.logger.Info("\t└─ ➕ job [%s], at %s", sourceSpec.Name, directory)
+		case len(sourceSpec.Name) == 0 && len(targetSpec.Name) > 0:
+			p.logger.Info("\t└─ ➖ job [%s], at %s", targetSpec.Name, directory)
+		default:
+			p.logger.Info("\t└─ ✏️ job [%s], at %s", targetSpec.Name, directory)
 		}
 
 		plans.Job.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.JobPlan{Path: directory})
@@ -192,7 +209,14 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 	}
 
 	directories := plan.DistinctDirectory(plan.GetValidJobDirectory(affectedDirectories))
-	p.logger.Info("job plan found changed in directories: %+v", directories)
+	if len(directories) > 0 {
+		p.logger.Info("--------------------------------------------")
+		p.logger.Info("Job plan found changes in directories")
+		for i, v := range directories {
+			p.logger.Info("\t%d: %s", i, v)
+		}
+		p.logger.Info("--------------------------------------------")
+	}
 	return directories, nil
 }
 
@@ -218,37 +242,6 @@ func (p *planCommand) getJobSpec(ctx context.Context, fileName, ref string) (mod
 		return spec, fmt.Errorf("failed to unmarshal job specification with ref: %s and directory %s: %w", ref, fileName, err)
 	}
 	return spec, nil
-}
-
-func (p *planCommand) printPlan(plans plan.Plan) {
-	if !p.verbose {
-		return
-	}
-
-	for namespace, planList := range plans.Job.Create {
-		names := plan.KindList[*plan.JobPlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan create jobs %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Job.Delete {
-		names := plan.KindList[*plan.JobPlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan delete jobs %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Job.Update {
-		names := plan.KindList[*plan.JobPlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan update jobs %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Job.Migrate {
-		for i := range planList {
-			msg := fmt.Sprintf("[%s] plan migrate job %v from old_namespace: %s", namespace, planList[i].GetName(), *planList[i].OldNamespace)
-			p.logger.Info(msg)
-		}
-	}
 }
 
 func (p *planCommand) savePlan(plans plan.Plan) error {

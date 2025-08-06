@@ -133,7 +133,12 @@ func (p *planCommand) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	p.printPlan(plans)
+	if p.verbose {
+		p.logger.Info(strings.Repeat("-", 60))
+		p.logger.Info("\n✨ Generated resource deployment plan:\n")
+		p.logger.Info(plans.String())
+	}
+
 	return p.savePlan(plans)
 }
 
@@ -150,20 +155,32 @@ func (p *planCommand) generatePlanWithGitDiff(ctx context.Context) (plan.Plan, e
 	if err != nil {
 		return plans, err
 	}
-
+	p.logger.Info("✨ Generating resources deployment plan for %d affected directories...\n", len(affectedDirectories))
 	for _, directory := range affectedDirectories {
 		namespace, datastore, err := p.getNamespaceAndDatastoreNameByPath(directory)
+		p.logger.Info("[%s]...", namespace)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get namespace for directory [%s]\n\t└─ err: %v", directory, err)
 			return plans, err
 		}
 
 		sourceSpec, err := p.getResourceSpec(ctx, filepath.Join(directory, resourceFileName), p.sourceRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get source resource spec for [%s]\n\t└─ err: %v", filepath.Join(directory, resourceFileName), err)
 			return plans, err
 		}
 		targetSpec, err := p.getResourceSpec(ctx, filepath.Join(directory, resourceFileName), p.targetRef)
 		if err != nil {
+			p.logger.Error("\t├─ ❌ Failed to get target resource spec for [%s]\n\t└─ err: %v", filepath.Join(directory, resourceFileName), err)
 			return plans, err
+		}
+		switch {
+		case len(sourceSpec.Name) > 0 && len(targetSpec.Name) == 0:
+			p.logger.Info("\t└─ ➕ resource [%s], at %s", sourceSpec.Name, directory)
+		case len(sourceSpec.Name) == 0 && len(targetSpec.Name) > 0:
+			p.logger.Info("\t└─ ➖ resource [%s], at %s", targetSpec.Name, directory)
+		default:
+			p.logger.Info("\t└─ ✏️ resource [%s], at %s", targetSpec.Name, directory)
 		}
 
 		plans.Resource.Add(namespace, sourceSpec.Name, targetSpec.Name, &plan.ResourcePlan{Datastore: datastore, Path: directory})
@@ -185,7 +202,14 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 	}
 
 	directories := plan.DistinctDirectory(plan.GetValidResourceDirectory(affectedDirectories))
-	p.logger.Info("resource plan found changed in directories: %+v", directories)
+	if len(directories) > 0 {
+		p.logger.Info("--------------------------------------------")
+		p.logger.Info("Resource plan found changes in directories")
+		for i, v := range directories {
+			p.logger.Info("\t%d: %s", i, v)
+		}
+		p.logger.Info("--------------------------------------------")
+	}
 	return directories, nil
 }
 
@@ -213,37 +237,6 @@ func (p *planCommand) getResourceSpec(ctx context.Context, fileName, ref string)
 		return spec, fmt.Errorf("failed to unmarshal resource specification with ref: %s and directory %s: %w", ref, fileName, err)
 	}
 	return spec, nil
-}
-
-func (p *planCommand) printPlan(plans plan.Plan) {
-	if !p.verbose {
-		return
-	}
-
-	for namespace, planList := range plans.Resource.Create {
-		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan create resources %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Resource.Delete {
-		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan delete resources %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Resource.Update {
-		names := plan.KindList[*plan.ResourcePlan](planList).GetNames()
-		msg := fmt.Sprintf("[%s] plan update resources %v", namespace, names)
-		p.logger.Info(msg)
-	}
-
-	for namespace, planList := range plans.Resource.Migrate {
-		for i := range planList {
-			msg := fmt.Sprintf("[%s] plan migrate resource %v from old_namespace: %s", namespace, planList[i].GetName(), *planList[i].OldNamespace)
-			p.logger.Info(msg)
-		}
-	}
 }
 
 func (p *planCommand) savePlan(plans plan.Plan) error {

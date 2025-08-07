@@ -13,7 +13,12 @@ try:
     from airflow.models import XCOM_RETURN_KEY
 except ImportError:
     from airflow.utils.xcom import XCOM_RETURN_KEY  # airflow >= 2.5
-from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+try:
+    is_support_init_container_logs = False
+    from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+except ImportError:
+    is_support_init_container_logs = True
+    from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator # providers-cncf-kubernetes >= 10.4.3
 from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.state import TaskInstanceState
@@ -63,6 +68,8 @@ class SuperKubernetesPodOperator(KubernetesPodOperator):
     def __init__(self, *args, **kwargs):
         kwargs["startup_timeout_seconds"] = STARTUP_TIMEOUT_IN_SECS
         kwargs["log_events_on_failure"] = True
+        if is_support_init_container_logs:
+            kwargs["init_container_logs"] = True
         super(SuperKubernetesPodOperator, self).__init__(*args, **kwargs)
         self.do_xcom_push = kwargs.get('do_xcom_push')
         self.namespace = kwargs.get('namespace')

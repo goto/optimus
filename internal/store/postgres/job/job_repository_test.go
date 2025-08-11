@@ -13,7 +13,6 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	postgres "github.com/goto/optimus/internal/store/postgres/job"
 	tenantPostgres "github.com/goto/optimus/internal/store/postgres/tenant"
 	"github.com/goto/optimus/tests/setup"
@@ -108,9 +107,8 @@ func TestPostgresJobRepository(t *testing.T) {
 	assert.NoError(t, err)
 	jobSchedule, err := job.NewScheduleBuilder(startDate).WithRetry(jobRetry).Build()
 	assert.NoError(t, err)
-	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
+	customConfig, err := window.NewConfig("1d", "1d", "", "")
 	assert.NoError(t, err)
-	customConfig := window.NewCustomConfig(jobWindow)
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	assert.NoError(t, err)
 	taskName, err := job.TaskNameFrom("bq2bq")

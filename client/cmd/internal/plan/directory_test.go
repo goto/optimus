@@ -121,3 +121,61 @@ func TestDistinctDirectory(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterArchiveDirectories(t *testing.T) {
+	type args struct {
+		directories []string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{
+			name: "Success - No archive directories",
+			args: args{
+				directories: []string{
+					"namespace-1/job-A",
+					"namespace-1/resource-A",
+					"namespace-1/job-B",
+				},
+			},
+			want: []string{
+				"namespace-1/job-A",
+				"namespace-1/resource-A",
+				"namespace-1/job-B",
+			},
+		},
+		{
+			name: "Success - Filter archive directory",
+			args: args{
+				directories: []string{
+					"namespace-1/archive",
+					"namespace-1/job-A",
+					"archive",
+					"archive/apple/1.txt",
+					"./archive/namespace-1/job.yaml",
+					".archive.yaml",
+					"./archive.yaml",
+					"namespace-2/resource-B",
+				},
+			},
+			want: []string{
+				"namespace-1/archive",
+				"namespace-1/job-A",
+				"namespace-2/resource-B",
+			},
+		},
+		{
+			name: "Success - Empty input",
+			args: args{
+				directories: []string{},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, plan.FilterArchiveDirectories(tt.args.directories), "FilterArchiveDirectories(%v)", tt.args.directories)
+		})
+	}
+}

@@ -209,6 +209,8 @@ func (p *planCommand) getAffectedDirectory(ctx context.Context) ([]string, error
 	}
 
 	directories := plan.DistinctDirectory(plan.GetValidJobDirectory(affectedDirectories))
+	directories = plan.FilterArchiveDirectories(directories)
+
 	if len(directories) > 0 {
 		p.logger.Info("--------------------------------------------")
 		p.logger.Info("Job plan found changes in directories")

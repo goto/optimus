@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/plan"
+	"github.com/goto/optimus/client/cmd/internal/utils"
 	providermodel "github.com/goto/optimus/client/extension/model"
 	"github.com/goto/optimus/client/extension/provider/github"
 	"github.com/goto/optimus/client/extension/provider/gitlab"
@@ -31,6 +33,11 @@ import (
 const (
 	applyTimeout     = time.Minute * 60
 	executedPlanFile = "plan_apply.json"
+)
+
+var (
+	unableToGetJob  = regexp.MustCompile(`(?m).*unable to get job (.*)`)
+	jobNotExistsYet = regexp.MustCompile(`(?m)not found for entity job: job (.*) not.*`)
 )
 
 type applyCommand struct {
@@ -288,7 +295,10 @@ func (c *applyCommand) printSuccess(namespaceName, operation, kind, name string)
 }
 
 func (c *applyCommand) printSuccessBulk(namespaceName, operation, kind string, names []string) {
-	c.logger.Info("[%s] %s: %s\n", namespaceName, operation, kind)
+	if len(names) == 0 {
+		return
+	}
+	c.logger.Info("[%s] %s: %s", namespaceName, operation, kind)
 	for i, n := range names {
 		if i == len(names)-1 {
 			c.logger.Info("\t└─ %s ✅\n", n)
@@ -298,7 +308,23 @@ func (c *applyCommand) printSuccessBulk(namespaceName, operation, kind string, n
 	}
 }
 
+func (c *applyCommand) printWarnBulk(namespaceName, operation, kind string, names []string, cause string) { //nolint:unparam
+	if len(names) == 0 {
+		return
+	}
+	c.logger.Warn("[%s] %s: %s", namespaceName, operation, kind)
+	for _, v := range names {
+		c.logger.Warn("\t├─ %s ⚠️", v)
+	}
+	if c.verbose && cause != "" {
+		c.logger.Warn("\t└─ cause: %s\n", cause)
+	}
+}
+
 func (c *applyCommand) printFailedBulk(namespaceName, operation, kind string, names []string, cause string) { //nolint:unparam
+	if len(names) == 0 {
+		return
+	}
 	c.logger.Error("[%s] %s: %s", namespaceName, operation, kind)
 	for _, v := range names {
 		c.logger.Error("\t├─ %s ❌", v)
@@ -318,6 +344,9 @@ func (c *applyCommand) printFailed(namespaceName, operation, kind, name, cause s
 }
 
 func (c *applyCommand) printFailedAll(operation, kind string, jobNames []string, cause string) {
+	if len(jobNames) == 0 {
+		return
+	}
 	c.logger.Error("[all] %s: %s %s ❌", operation, kind)
 	for _, v := range jobNames {
 		c.logger.Error("\t├─ %s", v)
@@ -387,7 +416,7 @@ func (c *applyCommand) executeJobAdd(ctx context.Context, client pb.JobSpecifica
 		for _, jobName := range response.GetSuccessfulJobNames() {
 			isJobSuccess[jobName] = true
 		}
-		if len(response.GetSuccessfulJobNames()) == 0 {
+		if len(response.GetSuccessfulJobNames()) > 0 {
 			c.printSuccessBulk(request.NamespaceName, "create", "job", response.GetSuccessfulJobNames())
 		}
 
@@ -449,27 +478,79 @@ func (c *applyCommand) executeJobUpdate(ctx context.Context, client pb.JobSpecif
 		for _, jobName := range response.GetSuccessfulJobNames() {
 			isJobSuccess[jobName] = true
 		}
-		if len(response.GetSuccessfulJobNames()) == 0 {
+		if len(response.GetSuccessfulJobNames()) > 0 {
 			c.printSuccessBulk(request.NamespaceName, "update", "job", response.GetSuccessfulJobNames())
 		}
 
 		failedJobNameList := []string{}
 		for _, spec := range request.GetSpecs() {
 			if _, ok := isJobSuccess[spec.GetName()]; !ok {
-				c.errors.Append(errors.InternalError("ApplyCommand", "", nil))
 				failedJobNameList = append(failedJobNameList, spec.GetName())
 			}
 		}
+
 		if len(failedJobNameList) > 0 {
-			if c.verbose {
-				c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, response.GetLog())
-			} else {
-				c.printFailedBulk(request.NamespaceName, "update", "job", failedJobNameList, "add verbose for more details")
-			}
+			addedJobs := c.handleFailedJobs(ctx, client, request, failedJobNameList, response.GetLog())
+			updatedJobs = append(updatedJobs, addedJobs...)
 		}
 		updatedJobs = append(updatedJobs, response.GetSuccessfulJobNames()...)
 	}
 	return updatedJobs
+}
+
+func (c *applyCommand) handleFailedJobs(ctx context.Context, jobClient pb.JobSpecificationServiceClient, request *pb.UpdateJobSpecificationsRequest, failedJobNameList []string, jobFailureLogs string) []string {
+	filteredLog, jobsWithNotFoundErrors := findUpdateErrorsFromLog(jobFailureLogs)
+
+	remainingFailedJobs := utils.RemoveFromStringArray(failedJobNameList, jobsWithNotFoundErrors)
+	if len(remainingFailedJobs) > 0 {
+		c.errors.Append(errors.InternalError("ApplyCommand", "", nil))
+		if c.verbose {
+			c.printFailedBulk(request.NamespaceName, "update", "job", remainingFailedJobs, filteredLog)
+		} else {
+			c.printFailedBulk(request.NamespaceName, "update", "job", remainingFailedJobs, "add verbose for more details")
+		}
+	}
+
+	c.printWarnBulk(request.NamespaceName, "update", "job", jobsWithNotFoundErrors, "unable to update job due to not found error, will attempt to create it instead")
+
+	jobsWithNotFoundErrorsMap := make(map[string]struct{})
+	for _, v := range jobsWithNotFoundErrors {
+		jobsWithNotFoundErrorsMap[v] = struct{}{}
+	}
+	var specsToRecreate []*pb.JobSpecification
+	for _, spec := range request.Specs {
+		if _, ok := jobsWithNotFoundErrorsMap[spec.Name]; ok {
+			specsToRecreate = append(specsToRecreate, spec)
+		}
+	}
+
+	var addedJobs []string
+	if len(specsToRecreate) > 0 {
+		addJobRequest := []*pb.AddJobSpecificationsRequest{{
+			ProjectName:   request.ProjectName,
+			NamespaceName: request.NamespaceName,
+			Specs:         specsToRecreate,
+		}}
+		addedJobs = c.executeJobAdd(ctx, jobClient, addJobRequest)
+	}
+	return addedJobs
+}
+
+// findUpdateErrorsFromLog parses the log from the response and returns a logs other than update errors,
+// and a list of job names that were unable to be updated due to not found errors
+func findUpdateErrorsFromLog(inputLogs string) (string, []string) {
+	var filteredResponseLog []string
+	var jobsWithUpdateErrorsDueToNotFound []string
+	logs := strings.Split(inputLogs, ":\n")
+	for _, log := range logs[1:] {
+		matches := utils.FindGroupsAll(unableToGetJob, jobNotExistsYet, log)
+		if len(matches) > 0 {
+			jobsWithUpdateErrorsDueToNotFound = append(jobsWithUpdateErrorsDueToNotFound, matches...)
+		} else {
+			filteredResponseLog = append(filteredResponseLog, log)
+		}
+	}
+	return strings.Join(filteredResponseLog, ":\n"), utils.GetDistinctStrings(jobsWithUpdateErrorsDueToNotFound)
 }
 
 func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.DeleteResourceRequest) []string {
@@ -530,14 +611,17 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\tThis resource is in 'create_failure' state on the server.\n\tAttempting to re-create the resource instead",
 					request.NamespaceName, "resource", resourceName, resourceName)
 				addResourceRequest := convertUpdateResourceRequestToAdd(request)
-				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
+				resourceAdded := c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
+				updatedResources = append(updatedResources, resourceAdded...)
 				continue
 			}
-			if strings.Contains(err.Error(), "Not Found") {
+
+			if strings.Contains(err.Error(), "Not Found") || strings.Contains(err.Error(), "not found") {
 				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\tThis resource does not exist on the server.\n\tAttempting to Create the resource instead",
 					request.NamespaceName, "resource", resourceName, resourceName)
 				addResourceRequest := convertUpdateResourceRequestToAdd(request)
-				c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
+				resourceAdded := c.executeResourceAdd(ctx, client, []*pb.CreateResourceRequest{addResourceRequest})
+				updatedResources = append(updatedResources, resourceAdded...)
 				continue
 			}
 

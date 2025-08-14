@@ -550,7 +550,7 @@ func findUpdateErrorsFromLog(inputLogs string) (string, []string) {
 			filteredResponseLog = append(filteredResponseLog, log)
 		}
 	}
-	return strings.Join(filteredResponseLog, ":\n"), utils.GetDistinctStrings(jobsWithUpdateErrorsDueToNotFound)
+	return strings.Join(filteredResponseLog, ":\n"), utils.GetDistinct[string](jobsWithUpdateErrorsDueToNotFound)
 }
 
 func (c *applyCommand) executeResourceDelete(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.DeleteResourceRequest) []string {

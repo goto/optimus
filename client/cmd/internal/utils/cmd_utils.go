@@ -20,12 +20,12 @@ func FindGroupsAll(re1, re2 *regexp.Regexp, input string) []string {
 	return results
 }
 
-func GetDistinctStrings(input []string) []string {
-	distinctMap := make(map[string]struct{})
+func GetDistinct[T comparable](input []T) []T {
+	distinctMap := make(map[T]struct{})
 	for _, v := range input {
 		distinctMap[v] = struct{}{}
 	}
-	var res []string
+	var res []T
 	for v := range distinctMap {
 		res = append(res, v)
 	}

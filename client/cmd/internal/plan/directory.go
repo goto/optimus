@@ -1,5 +1,9 @@
 package plan
 
+import (
+	"strings"
+)
+
 type DirectoryParser interface {
 	ValidDirectory(directory string) bool
 	ParseDirectory(directory string) string
@@ -50,4 +54,18 @@ func DistinctDirectory(directories []string) []string {
 		res = append(res, directory)
 	}
 	return res
+}
+
+func FilterArchiveDirectories(directories []string) []string {
+	var filteredDirectories []string
+	for _, directory := range directories {
+		if strings.HasPrefix(directory, "./archive") ||
+			strings.HasPrefix(directory, "/archive") ||
+			strings.HasPrefix(directory, "archive") ||
+			strings.HasPrefix(directory, ".archive") {
+			continue
+		}
+		filteredDirectories = append(filteredDirectories, directory)
+	}
+	return filteredDirectories
 }

@@ -161,7 +161,7 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 		},
 		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
-	handleSpecBasedAlerts(attr.JobWithDetails, scheduler.ReplayEvent.String(), &alertPayload)
+	handleSpecBasedAlerts(attr.JobWithDetails, scheduler.ReplayEvent, &alertPayload)
 	a.relay(&alertPayload)
 }
 

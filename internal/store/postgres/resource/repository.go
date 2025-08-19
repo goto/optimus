@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -53,7 +54,14 @@ func (r Repository) Create(ctx context.Context, resourceModel *resource.Resource
 	insertResource := `INSERT INTO resource (` + columnsToStore + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())`
 	_, err := r.db.Exec(ctx, insertResource, res.FullName, res.Kind, res.Store, res.Status, res.URN,
 		res.ProjectName, res.NamespaceName, res.Metadata, res.Spec)
-	return errors.WrapIfErr(tenant.EntityNamespace, "error creating resource to database", err)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return fmt.Errorf("error creating resource, err: %s, %s ", pgErr.Message, pgErr.Detail)
+		}
+		return fmt.Errorf("error creating resource: %s, in Project: %s, Namespace: %s, err: %w", res.FullName, res.ProjectName, res.NamespaceName, err)
+	}
+	return nil
 }
 
 func (r Repository) Update(ctx context.Context, resourceModel *resource.Resource) error {

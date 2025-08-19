@@ -53,7 +53,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualFirstError := repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, actualFirstError)
 			actualSecondError := repository.Create(ctx, resourceToCreate)
-			assert.ErrorContains(t, actualSecondError, "error creating resource to database")
+			assert.ErrorContains(t, actualSecondError, "error creating resource")
 		})
 
 		t.Run("stores resource to database and returns nil if no error is encountered", func(t *testing.T) {

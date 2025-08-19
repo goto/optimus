@@ -33,6 +33,7 @@ const (
 	SLAMissEvent    JobEventType = "sla_miss"
 	JobFailureEvent JobEventType = "failure"
 	JobSuccessEvent JobEventType = "job_success"
+	ReplayEvent     JobEventType = "replay_lifecycle"
 
 	TaskStartEvent   JobEventType = "task_start"
 	TaskRetryEvent   JobEventType = "task_retry"
@@ -137,6 +138,10 @@ func (event JobEventType) IsOfType(category EventCategory) bool {
 		}
 	case EventCategorySLAMiss:
 		if event == SLAMissEvent {
+			return true
+		}
+	case EventCategoryReplay:
+		if event == ReplayEvent {
 			return true
 		}
 	}

@@ -92,7 +92,7 @@
       "properties": {
         "on": {
           "type": "string",
-          "enum": ["sla_miss", "failure", "job_success", "replay_lifecycle"],
+          "enum": ["sla_miss", "failure", "job_success", "replay-lifecycle"],
           "description": "Job event for which we want to be notified"
         },
         "config": {

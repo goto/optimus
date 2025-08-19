@@ -22,8 +22,6 @@ const (
 	slaAlertTemplate            = "optimus-job-sla-miss"
 	successNotificationTemplate = "optimus-job-success"
 
-	ReplayLifeCycle ReplayEventType = "replay-lifecycle"
-
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"
 	CriticalSeverity = "CRITICAL"
@@ -49,10 +47,10 @@ func getSeverity(severity string) string {
 	}
 }
 
-func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType string, alertPayload *AlertPayload) {
+func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType scheduler.JobEventType, alertPayload *AlertPayload) {
 	var severity string
 	for _, notify := range jobDetails.Alerts {
-		if strings.EqualFold(eventType, notify.On.String()) {
+		if eventType.IsOfType(notify.On) {
 			severity = getSeverity(notify.Severity)
 			if len(notify.Team) > 0 {
 				alertPayload.Labels["team"] = notify.Team
@@ -116,7 +114,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		},
 		Endpoint: utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
 	}
-	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type.String(), alertPayload)
+	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type, alertPayload)
 	a.relay(alertPayload)
 }
 
@@ -159,11 +157,11 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 		Template: replayTemplate,
 		Labels: map[string]string{
 			"identifier": attr.JobURN,
-			"event_type": strings.ToLower(ReplayLifeCycle.String()),
+			"event_type": strings.ToLower(scheduler.ReplayEvent.String()),
 		},
 		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
-	handleSpecBasedAlerts(attr.JobWithDetails, ReplayLifeCycle.String(), &alertPayload)
+	handleSpecBasedAlerts(attr.JobWithDetails, scheduler.ReplayEvent, &alertPayload)
 	a.relay(&alertPayload)
 }
 

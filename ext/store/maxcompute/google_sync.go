@@ -87,14 +87,6 @@ func processGoogleSheet(ctx context.Context, sheetSrv *gsheet.GSheets, ossClient
 	return writeToBucket(ctx, ossClient, bucketName, objectKey, content)
 }
 
-func (s *SyncerService) GetGoogleSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error) {
-	ets, err := ConvertSpecsTo[ExternalTable](resources)
-	if err != nil {
-		return nil, err
-	}
-	return s.getGoogleSourceLastModified(ctx, tnnt, ets)
-}
-
 func (s *SyncerService) getGoogleSourceLastModified(ctx context.Context, tnnt tenant.Tenant, ets []*ExternalTable) ([]resource.SourceModifiedTimeStatus, error) {
 	var response []resource.SourceModifiedTimeStatus
 

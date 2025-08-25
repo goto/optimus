@@ -95,8 +95,8 @@ func (w *ResourceWorker) SyncExternalSheets(ctx context.Context, sourceSyncInter
 	}
 }
 
-func lastModifiedListToMap(input []resource.SourceModifiedTimeStatus) map[string]resource.SourceModifiedTimeStatus {
-	output := make(map[string]resource.SourceModifiedTimeStatus)
+func lastModifiedListToMap(input []*resource.SourceRevisionInfo) map[string]*resource.SourceRevisionInfo {
+	output := make(map[string]*resource.SourceRevisionInfo)
 	for _, status := range input {
 		output[status.FullName] = status
 	}
@@ -113,7 +113,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 		}
 
 		// get replay requests from DB
-		failedResources, err := w.repo.GetExternalCreateFailures(ctx, KindExternalTableGoogle)
+		failedResources, err := w.repo.GetExternalCreateFailures(ctx)
 		if err != nil {
 			w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to scan for resources with status create failure due to auth, err:%s", err.Error()))
 			continue
@@ -123,7 +123,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 		}
 		mapTenantResources := groupByTenant(failedResources)
 		for tnnt, resources := range mapTenantResources {
-			lastModifiedList, err := w.syncer.GetGoogleSourceLastModified(ctx, tnnt, resources)
+			lastModifiedList, err := w.syncer.GetSourceRevisionInfo(ctx, tnnt, resources)
 			if err != nil {
 				w.logger.Error(fmt.Sprintf("[RetrySheetsAccessIssues] unable to get last modified time for resource, err:%s", err.Error()))
 				continue
@@ -132,7 +132,7 @@ func (w *ResourceWorker) RetrySheetsAccessIssues(ctx context.Context, accessIssu
 			for _, res := range resources {
 				w.logger.Info("[RetrySheetsAccessIssues] Retrying Create for resource [%s]", res.FullName())
 				if lastUpdateTimeMap[res.FullName()].Err != nil {
-					w.logger.Warn(fmt.Sprintf("[RetrySheetsAccessIssues] auth issue not yet resolved for resource [%s], got error: [%s]", res.FullName(), lastUpdateTimeMap[res.FullName()].Err))
+					w.logger.Warn(fmt.Sprintf("[RetrySheetsAccessIssues] create issues not yet resolved for resource [%s], got error: [%s]", res.FullName(), lastUpdateTimeMap[res.FullName()].Err))
 					continue
 				}
 				res.MarkStatusUnknown()

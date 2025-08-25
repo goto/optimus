@@ -36,7 +36,7 @@ type ResourceRepository interface {
 	GetAllExternal(ctx context.Context, store resource.Store) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
 	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
-	GetExternalCreateFailures(ctx context.Context, resourceType string) ([]*resource.Resource, error)
+	GetExternalCreateFailures(ctx context.Context) ([]*resource.Resource, error)
 }
 
 type Syncer interface {
@@ -44,7 +44,7 @@ type Syncer interface {
 	TouchUnModified(ctx context.Context, project tenant.ProjectName, resources []*resource.Resource) error
 	GetSyncInterval(res *resource.Resource) (int64, error)
 	GetExternalTablesDueForSync(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource, lastUpdateMap map[string]*resource.SourceVersioningInfo) ([]*resource.Resource, []*resource.Resource, error)
-	GetGoogleSourceLastModified(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]resource.SourceModifiedTimeStatus, error)
+	GetSourceRevisionInfo(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]*resource.SourceRevisionInfo, error)
 }
 
 type ResourceManager interface {

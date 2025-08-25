@@ -9,6 +9,13 @@ import (
 
 type Status string
 
+type SourceRevisionInfo struct {
+	FullName         string
+	LastModifiedTime time.Time
+	Revision         int
+	Err              error
+}
+
 type SourceModifiedTimeStatus struct {
 	FullName         string
 	LastModifiedTime time.Time

@@ -65,6 +65,45 @@ func NewSyncer(log log.Logger, secretProvider SecretProvider, tenantDetailsGette
 	}
 }
 
+func (s *SyncerService) GetSourceRevisionInfo(ctx context.Context, tnnt tenant.Tenant, resources []*resource.Resource) ([]*resource.SourceRevisionInfo, error) {
+	ets, err := ConvertSpecsTo[ExternalTable](resources)
+	if err != nil {
+		return nil, err
+	}
+
+	me := errors.NewMultiError("GetSourceRevisionInfo")
+
+	var revisionInfoList []*resource.SourceRevisionInfo
+
+	externalTablesBySourceTypes := groupBySourceType(ets)
+	for sourceType, externalTables := range externalTablesBySourceTypes {
+		switch sourceType {
+		case GoogleSheet, GoogleDrive:
+			lastSourceModifiedList, err := s.getGoogleSourceLastModified(ctx, tnnt, externalTables)
+			me.Append(err)
+			for _, status := range lastSourceModifiedList {
+				revisionInfoList = append(revisionInfoList, &resource.SourceRevisionInfo{
+					FullName:         status.FullName,
+					LastModifiedTime: status.LastModifiedTime,
+					Err:              status.Err,
+				})
+			}
+
+		case LarkSheet:
+			lastSourceModifiedList, err := s.getLarkRevisionIDs(ctx, tnnt, externalTables)
+			me.Append(err)
+			for _, status := range lastSourceModifiedList {
+				revisionInfoList = append(revisionInfoList, &resource.SourceRevisionInfo{
+					FullName: status.FullName,
+					Revision: status.Revision,
+					Err:      status.Err,
+				})
+			}
+		}
+	}
+	return revisionInfoList, me.ToErr()
+}
+
 func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) error {
 	ets, err := ConvertSpecsTo[ExternalTable](resources)
 	if err != nil {

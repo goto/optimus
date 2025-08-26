@@ -464,10 +464,10 @@ func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resou
 	return FromModelToResource(&res)
 }
 
-func (r Repository) GetExternalCreateFailures(ctx context.Context, resourceType string) ([]*resource.Resource, error) {
-	query := `select ` + resColumnsPrefix + ` from resource rs join sync_status ss on rs.full_name = ss.identifier  where rs.status = $1 and rs.store = $2 and kind = $3 and ss.remarks ->> 'error' is not null;`
+func (r Repository) GetExternalCreateFailures(ctx context.Context) ([]*resource.Resource, error) {
+	query := `select ` + resColumnsPrefix + ` from resource rs join sync_status ss on rs.full_name = ss.identifier  where rs.status = $1 and rs.store = $2 and kind = 'external_table' and ss.remarks ->> 'error' is not null;`
 
-	rows, err := r.db.Query(ctx, query, resource.StatusCreateFailure, resource.MaxCompute, resourceType)
+	rows, err := r.db.Query(ctx, query, resource.StatusCreateFailure, resource.MaxCompute)
 	if err != nil {
 		return nil, errors.Wrap(resource.EntityResource, "error in ReadAll", err)
 	}

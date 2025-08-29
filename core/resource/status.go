@@ -39,6 +39,7 @@ const (
 	StatusSkipped           Status = "skipped"
 	StatusCreateFailure     Status = "create_failure"
 	StatusUpdateFailure     Status = "update_failure"
+	StatusDeleteFailure     Status = "delete_failure"
 	StatusExistInStore      Status = "exist_in_store"
 	StatusSuccess           Status = "success"
 

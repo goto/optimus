@@ -92,7 +92,7 @@ func getJobLabelsString(labels map[string]string) string {
 	return strings.Join(labelStringArray, ",")
 }
 
-func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
+func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
 	tenantDetails, err := i.tenantService.GetDetails(ctx, job.Job.Tenant)
 	if err != nil {
 		i.logger.Error("error getting tenant details: %s", err)
@@ -109,7 +109,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		return nil, err
 	}
 
-	systemDefinedVars := getSystemDefinedConfigs(job.Job, interval, executedAt, config.ScheduledAt)
+	systemDefinedVars := getSystemDefinedConfigs(job.Job, interval, config.ScheduledAt)
 
 	// Prepare template context and compile task config
 	taskContext := compiler.PrepareContext(
@@ -218,20 +218,16 @@ func (i InputCompiler) compileConfigs(configs map[string]string, templateCtx map
 	return conf, secretsConfig, nil
 }
 
-func getSystemDefinedConfigs(job *scheduler.Job, interval interval.Interval, executedAt, scheduledAt time.Time) map[string]string {
+func getSystemDefinedConfigs(job *scheduler.Job, interval interval.Interval, scheduledAt time.Time) map[string]string {
 	vars := map[string]string{
 		configDstart:        interval.Start().Format(TimeISOFormat),
 		configDend:          interval.End().Format(TimeISOFormat),
-		configExecutionTime: executedAt.Format(TimeSQLFormat), // TODO: remove this once ali support RFC3339 format
 		configDestination:   job.Destination.String(),
-	}
-	// TODO: remove this condition after v1/v2 removal, add to map directly
-	if job.WindowConfig.GetVersion() == window.NewWindowVersion {
-		vars[configStartDate] = interval.Start().Format(time.DateOnly)
-		vars[configEndDate] = interval.End().Format(time.DateOnly)
-		vars[configExecutionTime] = scheduledAt.Format(TimeSQLFormat) // TODO: remove this once ali support RFC3339 format
-		vars[configScheduleTime] = scheduledAt.Format(TimeISOFormat)
-		vars[configScheduleDate] = scheduledAt.Format(time.DateOnly)
+		configStartDate:     interval.Start().Format(time.DateOnly),
+		configEndDate:       interval.End().Format(time.DateOnly),
+		configExecutionTime: scheduledAt.Format(TimeSQLFormat), // TODO: remove this once ali support RFC3339 format
+		configScheduleTime:  scheduledAt.Format(TimeISOFormat),
+		configScheduleDate:  scheduledAt.Format(time.DateOnly),
 	}
 
 	return vars

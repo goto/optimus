@@ -23,7 +23,6 @@ import (
 	"github.com/goto/optimus/internal/lib/duration"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils/filter"
 )
 
@@ -61,7 +60,6 @@ type JobRepository interface {
 }
 
 type JobRunRepository interface {
-	GetByID(ctx context.Context, id scheduler.JobRunID) (*scheduler.JobRun, error)
 	GetByScheduledAt(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
 	GetLatestRun(ctx context.Context, project tenant.ProjectName, name scheduler.JobName, status *scheduler.State) (*scheduler.JobRun, error)
 	GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, status *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error)
@@ -85,7 +83,7 @@ type OperatorRunRepository interface {
 }
 
 type JobInputCompiler interface {
-	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 }
 
 type PriorityResolver interface {
@@ -131,25 +129,7 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		s.l.Error("error getting job [%s]: %s", jobName, err)
 		return nil, err
 	}
-	// TODO: Use scheduled_at instead of executed_at for computations, for deterministic calculations
-	// Todo: later, always return scheduleTime, for scheduleTimes greater than a given date
-	var jobRun *scheduler.JobRun
-	if config.JobRunID.IsEmpty() {
-		s.l.Warn("getting job run by scheduled at")
-		jobRun, err = s.repo.GetByScheduledAt(ctx, details.Job.Tenant, jobName, config.ScheduledAt)
-	} else {
-		s.l.Warn("getting job run by id")
-		jobRun, err = s.repo.GetByID(ctx, config.JobRunID)
-	}
 
-	var executedAt time.Time
-	if err != nil { // Fallback for executed_at to scheduled_at
-		executedAt = config.ScheduledAt
-		s.l.Warn("suppressed error is encountered when getting job run: %s", err)
-	} else {
-		executedAt = jobRun.StartTime
-	}
-	// Additional task config from existing replay
 	replayJobConfig, err := s.replayRepo.GetReplayJobConfig(ctx, details.Job.Tenant, details.Job.Name, config.ScheduledAt)
 	if err != nil {
 		s.l.Error("error getting replay job config from db: %s", err)
@@ -159,7 +139,7 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		details.Job.Task.Config[k] = v
 	}
 
-	return s.compiler.Compile(ctx, details, config, executedAt)
+	return s.compiler.Compile(ctx, details, config)
 }
 
 func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {
@@ -462,52 +442,27 @@ func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobW
 		return w.GetInterval(referenceTime)
 	}
 
-	if windowConfig.Type() == window.Preset || windowConfig.GetVersion() == window.NewWindowVersion {
-		var config window.SimpleConfig
-		if windowConfig.Type() == window.Preset {
-			preset, err := project.GetPreset(windowConfig.Preset)
-			if err != nil {
-				s.l.Error("error getting preset [%s] for project [%s]: %v", windowConfig.Preset, project.Name(), err)
-				return interval.Interval{}, err
-			}
-
-			config = preset.Config()
-		} else {
-			config = windowConfig.GetSimpleConfig()
-		}
-
-		config.ShiftBy = ""
-		config.TruncateTo = string(duration.None)
-
-		cw, err := window.FromCustomConfig(config)
+	var config window.SimpleConfig
+	if windowConfig.Type() == window.Preset {
+		preset, err := project.GetPreset(windowConfig.Preset)
 		if err != nil {
+			s.l.Error("error getting preset [%s] for project [%s]: %v", windowConfig.Preset, project.Name(), err)
 			return interval.Interval{}, err
 		}
-		return cw.GetInterval(referenceTime)
+
+		config = preset.Config()
+	} else {
+		config = windowConfig.GetSimpleConfig()
 	}
 
-	w, err := models.NewWindow(windowConfig.GetVersion(), "", "0", windowConfig.GetSize())
-	if err != nil {
-		s.l.Error("error initializing window: %v", err)
-		return interval.Interval{}, err
-	}
+	config.ShiftBy = ""
+	config.TruncateTo = string(duration.None)
 
-	if err := w.Validate(); err != nil {
-		s.l.Error("error validating window: %v", err)
-		return interval.Interval{}, err
-	}
-
-	startTime, err := w.GetStartTime(referenceTime)
+	cw, err := window.FromCustomConfig(config)
 	if err != nil {
 		return interval.Interval{}, err
 	}
-
-	endTime, err := w.GetEndTime(referenceTime)
-	if err != nil {
-		return interval.Interval{}, err
-	}
-
-	return interval.NewInterval(startTime, endTime), nil
+	return cw.GetInterval(referenceTime)
 }
 
 func getExpectedRuns(spec *cron.ScheduleSpec, startTime, endTime time.Time) []*scheduler.JobRunStatus {

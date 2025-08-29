@@ -16,7 +16,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	jobRepo "github.com/goto/optimus/internal/store/postgres/job"
 	postgres "github.com/goto/optimus/internal/store/postgres/scheduler"
 	tenantPostgres "github.com/goto/optimus/internal/store/postgres/tenant"
@@ -161,8 +160,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	jobSchedule, err := job.NewScheduleBuilder(startDate).WithRetry(jobRetry).WithCatchUp(true).WithDependsOnPast(true).Build()
 	assert.NoError(t, err)
-	jobWindow, err := models.NewWindow(jobVersion, "d", "24h", "24h")
-	customConfig := window.NewCustomConfig(jobWindow)
+	customConfig, _ := window.NewConfig("1d", "1d", "", "")
 	assert.NoError(t, err)
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	assert.NoError(t, err)

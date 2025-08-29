@@ -19,7 +19,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
 )
 
@@ -142,7 +141,7 @@ type Window struct {
 	Type             string
 }
 
-func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
+func fromStorageWindow(raw []byte, _ int) (window.Config, error) {
 	var storageWindow Window
 	if err := json.Unmarshal(raw, &storageWindow); err != nil {
 		return window.Config{}, err
@@ -156,27 +155,13 @@ func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 		return window.NewIncrementalConfig(), nil
 	}
 
-	if jobVersion == window.NewWindowVersion {
-		sc := window.SimpleConfig{
-			Size:       storageWindow.WindowSize,
-			ShiftBy:    storageWindow.WindowShiftBy,
-			Location:   storageWindow.WindowLocation,
-			TruncateTo: storageWindow.WindowTruncateTo,
-		}
-		return window.NewCustomConfigWithTimezone(sc), nil
+	sc := window.SimpleConfig{
+		Size:       storageWindow.WindowSize,
+		ShiftBy:    storageWindow.WindowShiftBy,
+		Location:   storageWindow.WindowLocation,
+		TruncateTo: storageWindow.WindowTruncateTo,
 	}
-
-	w, err := models.NewWindow(
-		jobVersion,
-		storageWindow.WindowTruncateTo,
-		storageWindow.WindowOffset,
-		storageWindow.WindowSize,
-	)
-	if err != nil {
-		return window.Config{}, err
-	}
-
-	return window.NewCustomConfig(w), nil
+	return window.NewCustomConfigWithTimezone(sc), nil
 }
 
 type Metadata struct {
@@ -467,7 +452,7 @@ func (j *JobRepository) GetAll(ctx context.Context, projectName tenant.ProjectNa
 		jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
 	}
 
-	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), multiError.ToErr()
+	return utils.MapToList(jobsMap), multiError.ToErr()
 }
 
 func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error) {
@@ -509,7 +494,7 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 		jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
 	}
 
-	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
+	return utils.MapToList(jobsMap), errors.MultiToError(multiError)
 }
 
 func NewJobProviderRepository(pool *pgxpool.Pool) *JobRepository {

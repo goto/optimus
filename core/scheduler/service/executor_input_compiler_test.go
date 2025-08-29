@@ -19,7 +19,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/optimus/internal/models"
 )
 
 func TestExecutorCompiler(t *testing.T) {
@@ -68,19 +67,24 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, nil, nil, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour))
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "get details error")
 			assert.Nil(t, inputExecutor)
 		})
 		t.Run("should give error if get interval fails", func(t *testing.T) {
-			w1, _ := models.NewWindow(1, "d", "2h", "2")
-			window1 := window.NewCustomConfig(w1)
+			conf := window.SimpleConfig{
+				Size:       "1d",
+				ShiftBy:    "",
+				Location:   "",
+				TruncateTo: "2",
+			}
+			window2 := window.NewCustomConfigWithTimezone(conf)
 			job := scheduler.Job{
 				Name:         "job1",
 				Tenant:       tnnt,
-				WindowConfig: window1,
+				WindowConfig: window2,
 			}
 			details := scheduler.JobWithDetails{
 				Job: &job,
@@ -103,15 +107,14 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, nil, nil, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour))
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
-			assert.EqualError(t, err, "failed to parse task window with size 2: time: missing unit in duration \"2\"")
+			assert.ErrorContains(t, err, "invalid value for unit 2, accepted values are [h,d,w,M,y]")
 			assert.Nil(t, inputExecutor)
 		})
 		t.Run("should give error if CompileJobRunAssets fails", func(t *testing.T) {
-			w, _ := models.NewWindow(2, "d", "1h", "24h")
-			cw := window.NewCustomConfig(w)
+			cw, _ := window.NewConfig("1d", "1h", "", "")
 			job := scheduler.Job{
 				Name:         "job1",
 				Tenant:       tnnt,
@@ -141,14 +144,19 @@ func TestExecutorCompiler(t *testing.T) {
 			tenantService.On("GetDetails", ctx, tnnt).Return(tenantDetails, nil)
 			defer tenantService.AssertExpectations(t)
 
-			interval, err := window.FromBaseWindow(w).GetInterval(config.ScheduledAt)
+			win, err := window.FromCustomConfig(cw.GetSimpleConfig())
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
+			intr, err := win.GetInterval(config.ScheduledAt)
+			assert.NoError(t, err)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start().Format(time.RFC3339),
-				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
+				"DSTART":          intr.Start().Format(time.RFC3339),
+				"DEND":            intr.End().Format(time.RFC3339),
+				"EXECUTION_TIME":  config.ScheduledAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
+				"END_DATE":        intr.End().Format(time.DateOnly),
+				"SCHEDULE_DATE":   config.ScheduledAt.Format(time.DateOnly),
+				"SCHEDULE_TIME":   config.ScheduledAt.Format(service.TimeISOFormat),
+				"START_DATE":      intr.Start().Format(time.DateOnly),
 			}
 			taskContext := mock.Anything
 
@@ -156,19 +164,19 @@ func TestExecutorCompiler(t *testing.T) {
 			templateCompiler.On("Compile", mock.Anything, taskContext).Return(map[string]string{}, nil)
 			defer templateCompiler.AssertExpectations(t)
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(nil, fmt.Errorf("CompileJobRunAssets error"))
+			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, intr, taskContext).Return(nil, fmt.Errorf("CompileJobRunAssets error"))
 			defer assetCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "CompileJobRunAssets error")
 			assert.Nil(t, inputExecutor)
 		})
 		t.Run("compileConfigs for Executor type Task ", func(t *testing.T) {
-			w1, _ := models.NewWindow(2, "d", "1h", "24h")
-			window1 := window.NewCustomConfig(w1)
+			window1, err := window.NewConfig("1d", "1d", "", "")
+			assert.NoError(t, err)
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
@@ -209,15 +217,20 @@ func TestExecutorCompiler(t *testing.T) {
 			tenantService.On("GetDetails", ctx, tnnt).Return(tenantDetails, nil)
 			defer tenantService.AssertExpectations(t)
 
-			interval, err := window.FromBaseWindow(w1).GetInterval(config.ScheduledAt)
+			win, err := window.FromCustomConfig(window1.GetSimpleConfig())
+			assert.NoError(t, err)
+			intr, err := win.GetInterval(config.ScheduledAt)
 			assert.NoError(t, err)
 
-			executedAt := currentTime.Add(time.Hour)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start().Format(time.RFC3339),
-				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
+				"DSTART":          intr.Start().Format(time.RFC3339),
+				"DEND":            intr.End().Format(time.RFC3339),
+				"EXECUTION_TIME":  config.ScheduledAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
+				"END_DATE":        intr.End().Format(time.DateOnly),
+				"SCHEDULE_DATE":   config.ScheduledAt.Format(time.DateOnly),
+				"SCHEDULE_TIME":   config.ScheduledAt.Format(service.TimeISOFormat),
+				"START_DATE":      intr.Start().Format(time.DateOnly),
 			}
 			taskContext := mock.Anything
 
@@ -233,7 +246,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler := new(mockAssetCompiler)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "some.config compilation error")
@@ -249,7 +262,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler := new(mockAssetCompiler)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutor, err := inputCompiler.Compile(ctx, &details, config)
 
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "secret.config compilation error")
@@ -263,19 +276,23 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(map[string]string{"secret.config.compiled": "a.secret.val.compiled"}, nil)
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, intr, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 				assert.Nil(t, err)
 				expectedInputExecutor := &scheduler.ExecutorInput{
 					Configs: map[string]string{
-						"DSTART":               interval.Start().Format(time.RFC3339),
-						"DEND":                 interval.End().Format(time.RFC3339),
-						"EXECUTION_TIME":       executedAt.Format(time.DateTime),
+						"DSTART":               intr.Start().Format(time.RFC3339),
+						"DEND":                 intr.End().Format(time.RFC3339),
 						"JOB_DESTINATION":      job.Destination.String(),
 						"some.config.compiled": "val.compiled",
+						"EXECUTION_TIME":       config.ScheduledAt.Format(time.DateTime),
+						"END_DATE":             intr.End().Format(time.DateOnly),
+						"SCHEDULE_DATE":        config.ScheduledAt.Format(time.DateOnly),
+						"SCHEDULE_TIME":        config.ScheduledAt.Format(service.TimeISOFormat),
+						"START_DATE":           intr.Start().Format(time.DateOnly),
 					},
 					Secrets: map[string]string{"secret.config.compiled": "a.secret.val.compiled"},
 					Files:   compiledFile,
@@ -313,21 +330,25 @@ func TestExecutorCompiler(t *testing.T) {
 				}
 
 				assetCompilerNew := new(mockAssetCompiler)
-				assetCompilerNew.On("CompileJobRunAssets", ctx, &jobNew, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+				assetCompilerNew.On("CompileJobRunAssets", ctx, &jobNew, systemDefinedVars, intr, taskContext).Return(compiledFile, nil)
 				defer assetCompilerNew.AssertExpectations(t)
 
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompilerNew, logger)
 
-				inputExecutorResp, err := inputCompiler.Compile(ctx, &detailsNew, config, executedAt)
+				inputExecutorResp, err := inputCompiler.Compile(ctx, &detailsNew, config)
 				assert.Nil(t, err)
 
 				expectedInputExecutor := &scheduler.ExecutorInput{
 					Configs: map[string]string{
-						"DSTART":               interval.Start().Format(time.RFC3339),
-						"DEND":                 interval.End().Format(time.RFC3339),
-						"EXECUTION_TIME":       executedAt.Format(time.DateTime),
+						"DSTART":               intr.Start().Format(time.RFC3339),
+						"DEND":                 intr.End().Format(time.RFC3339),
 						"JOB_DESTINATION":      job.Destination.String(),
 						"some.config.compiled": "val.compiled",
+						"EXECUTION_TIME":       config.ScheduledAt.Format(time.DateTime),
+						"END_DATE":             intr.End().Format(time.DateOnly),
+						"SCHEDULE_DATE":        config.ScheduledAt.Format(time.DateOnly),
+						"SCHEDULE_TIME":        config.ScheduledAt.Format(service.TimeISOFormat),
+						"START_DATE":           intr.Start().Format(time.DateOnly),
 					},
 					Secrets: map[string]string{"secret.config.compiled": "a.secret.val.compiled"},
 					Files:   compiledFile,
@@ -349,8 +370,8 @@ func TestExecutorCompiler(t *testing.T) {
 			})
 		})
 		t.Run("compileConfigs for Executor type Hook", func(t *testing.T) {
-			w1, _ := models.NewWindow(2, "d", "1h", "24h")
-			window1 := window.NewCustomConfig(w1)
+			window1, err := window.NewConfig("1d", "1h", "", "")
+			assert.NoError(t, err)
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
@@ -393,14 +414,19 @@ func TestExecutorCompiler(t *testing.T) {
 			tenantService.On("GetDetails", ctx, tnnt).Return(tenantDetails, nil)
 			defer tenantService.AssertExpectations(t)
 
-			interval, err := window.FromBaseWindow(w1).GetInterval(config.ScheduledAt)
+			win, err := window.FromCustomConfig(window1.GetSimpleConfig())
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
+			intr, err := win.GetInterval(config.ScheduledAt)
+			assert.NoError(t, err)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start().Format(time.RFC3339),
-				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
+				"DSTART":          intr.Start().Format(time.RFC3339),
+				"DEND":            intr.End().Format(time.RFC3339),
 				"JOB_DESTINATION": job.Destination.String(),
+				"END_DATE":        intr.End().Format(time.DateOnly),
+				"EXECUTION_TIME":  config.ScheduledAt.Format(time.DateTime),
+				"SCHEDULE_DATE":   config.ScheduledAt.Format(time.DateOnly),
+				"SCHEDULE_TIME":   config.ScheduledAt.Format(service.TimeISOFormat),
+				"START_DATE":      intr.Start().Format(time.DateOnly),
 			}
 			taskContext := mock.Anything
 
@@ -408,7 +434,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"someFileName": "fileContents",
 			}
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, intr, taskContext).Return(compiledFile, nil)
 			defer assetCompiler.AssertExpectations(t)
 
 			templateCompiler := new(mockTemplateCompiler)
@@ -423,17 +449,21 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.Nil(t, err)
 			expectedInputExecutor := &scheduler.ExecutorInput{
 				Configs: map[string]string{
-					"DSTART":          interval.Start().Format(time.RFC3339),
-					"DEND":            interval.End().Format(time.RFC3339),
-					"EXECUTION_TIME":  executedAt.Format(time.DateTime),
+					"DSTART":          intr.Start().Format(time.RFC3339),
+					"DEND":            intr.End().Format(time.RFC3339),
+					"EXECUTION_TIME":  config.ScheduledAt.Format(time.DateTime),
 					"JOB_DESTINATION": job.Destination.String(),
 					"hook.compiled":   "hook.val.compiled",
 					"JOB_LABELS":      "job_id=00000000-0000-0000-0000-000000000000,job_name=job1,namespace=ns1,project=proj1",
+					"END_DATE":        intr.End().Format(time.DateOnly),
+					"SCHEDULE_DATE":   config.ScheduledAt.Format(time.DateOnly),
+					"SCHEDULE_TIME":   config.ScheduledAt.Format(service.TimeISOFormat),
+					"START_DATE":      intr.Start().Format(time.DateOnly),
 				},
 				Secrets: map[string]string{"secret.hook.compiled": "hook.s.val.compiled"},
 				Files:   compiledFile,
@@ -448,8 +478,7 @@ func TestExecutorCompiler(t *testing.T) {
 			assert.Equal(t, expectedInputExecutor, inputExecutorResp)
 		})
 		t.Run("compileConfigs for Executor type Hook should fail if error in hook compilation", func(t *testing.T) {
-			w1, _ := models.NewWindow(2, "d", "1h", "24h")
-			window1 := window.NewCustomConfig(w1)
+			window1, _ := window.NewConfig("1d", "1h", "", "")
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
@@ -492,14 +521,19 @@ func TestExecutorCompiler(t *testing.T) {
 			tenantService.On("GetDetails", ctx, tnnt).Return(tenantDetails, nil)
 			defer tenantService.AssertExpectations(t)
 
-			interval, err := window.FromBaseWindow(w1).GetInterval(config.ScheduledAt)
+			win, err := window.FromCustomConfig(window1.GetSimpleConfig())
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
+			intr, err := win.GetInterval(config.ScheduledAt)
+			assert.NoError(t, err)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start().Format(time.RFC3339),
-				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
+				"DSTART":          intr.Start().Format(time.RFC3339),
+				"DEND":            intr.End().Format(time.RFC3339),
+				"EXECUTION_TIME":  config.ScheduledAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
+				"END_DATE":        intr.End().Format(time.DateOnly),
+				"SCHEDULE_DATE":   config.ScheduledAt.Format(time.DateOnly),
+				"SCHEDULE_TIME":   config.ScheduledAt.Format(service.TimeISOFormat),
+				"START_DATE":      intr.Start().Format(time.DateOnly),
 			}
 			taskContext := mock.Anything
 
@@ -507,7 +541,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"someFileName": "fileContents",
 			}
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, intr, taskContext).Return(compiledFile, nil)
 			defer assetCompiler.AssertExpectations(t)
 
 			templateCompiler := new(mockTemplateCompiler)
@@ -521,15 +555,14 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "error in compiling hook template")
 			assert.Nil(t, inputExecutorResp)
 		})
 		t.Run("compileConfigs for Executor type Hook, should raise error if hooks not there in job", func(t *testing.T) {
-			w1, _ := models.NewWindow(2, "d", "1h", "24h")
-			window1 := window.NewCustomConfig(w1)
+			window1, _ := window.NewConfig("1d", "1h", "", "")
 			job := scheduler.Job{
 				Name:        "job1",
 				Tenant:      tnnt,
@@ -564,14 +597,19 @@ func TestExecutorCompiler(t *testing.T) {
 			tenantService.On("GetDetails", ctx, tnnt).Return(tenantDetails, nil)
 			defer tenantService.AssertExpectations(t)
 
-			interval, err := window.FromBaseWindow(w1).GetInterval(config.ScheduledAt)
+			win, err := window.FromCustomConfig(window1.GetSimpleConfig())
 			assert.NoError(t, err)
-			executedAt := currentTime.Add(time.Hour)
+			intr, err := win.GetInterval(config.ScheduledAt)
+			assert.NoError(t, err)
 			systemDefinedVars := map[string]string{
-				"DSTART":          interval.Start().Format(time.RFC3339),
-				"DEND":            interval.End().Format(time.RFC3339),
-				"EXECUTION_TIME":  executedAt.Format(time.DateTime),
+				"DSTART":          intr.Start().Format(time.RFC3339),
+				"DEND":            intr.End().Format(time.RFC3339),
+				"EXECUTION_TIME":  config.ScheduledAt.Format(time.DateTime),
 				"JOB_DESTINATION": job.Destination.String(),
+				"END_DATE":        intr.End().Format(time.DateOnly),
+				"SCHEDULE_DATE":   config.ScheduledAt.Format(time.DateOnly),
+				"SCHEDULE_TIME":   config.ScheduledAt.Format(service.TimeISOFormat),
+				"START_DATE":      intr.Start().Format(time.DateOnly),
 			}
 			taskContext := mock.Anything
 
@@ -579,7 +617,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"someFileName": "fileContents",
 			}
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, intr, taskContext).Return(compiledFile, nil)
 			defer assetCompiler.AssertExpectations(t)
 
 			templateCompiler := new(mockTemplateCompiler)
@@ -590,7 +628,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config)
 
 			assert.NotNil(t, err)
 			assert.Nil(t, inputExecutorResp)

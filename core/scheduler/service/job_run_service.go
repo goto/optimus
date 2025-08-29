@@ -692,11 +692,12 @@ func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.E
 	}
 	jobRuns, err := s.repo.GetByScheduledTimes(ctx, event.Tenant, event.JobName, scheduleTimesList)
 	if err != nil {
-		s.l.Error("error getting job runs by schedule time, skipping the filter", err)
+		s.l.Error("error getting job runs by schedule time, skipping the filter. jobName: %s, scheduleTimesList: %v, err: %s", event.JobName, scheduleTimesList, err.Error())
 		return unfilteredSLAObj, slaBreachedJobRunScheduleTimes
 	}
 	if len(jobRuns) == 0 {
-		s.l.Error("no job runs found for given schedule time, skipping the filter (perhaps the sla is due to schedule delay, in such cases the job wont be persisted in optimus DB)", err)
+		s.l.Error("no job runs found for given schedule time, skipping the filter (perhaps the sla is due to schedule delay, in such cases the job wont be persisted in optimus DB). jobName: %s, scheduleTimes: %v",
+			event.JobName, scheduleTimesList)
 		event.Status = scheduler.StateNotScheduled
 		event.JobScheduledAt = event.SLAObjectList[0].JobScheduledAt // pick the first reported sla
 		return unfilteredSLAObj, slaBreachedJobRunScheduleTimes

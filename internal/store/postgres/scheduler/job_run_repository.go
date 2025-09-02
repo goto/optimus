@@ -20,7 +20,7 @@ import (
 const (
 	columnsToStore = `job_name, namespace_name, project_name, scheduled_at, start_time, end_time, window_start, window_end, status, sla_definition, sla_alert`
 	jobRunColumns  = `id, ` + columnsToStore + `, monitoring`
-	dbTimeFormat   = "2006-01-02 15:04:05.000000"
+	dbTimeFormat   = "2006-01-02 15:04:05.000000+00"
 )
 
 type JobRunRepository struct {

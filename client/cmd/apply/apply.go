@@ -601,6 +601,32 @@ func (c *applyCommand) executeResourceMigrate(ctx context.Context, client pb.Res
 	return migratedResources
 }
 
+func (c *applyCommand) executeResourceApply(ctx context.Context, client pb.ResourceServiceClient, request *pb.UpdateResourceRequest) []string {
+	const operation = "apply"
+	resourceApplied := make([]string, 0)
+	resourceName := request.GetResource().Name
+
+	response, err := client.ApplyResources(ctx, convertUpdateResourceRequestToApply(request))
+	if err != nil {
+		c.errors.Append(err)
+		c.printFailed(request.NamespaceName, operation, "resource", resourceName, err.Error())
+		return resourceApplied
+	}
+
+	for _, status := range response.GetStatuses() {
+		switch status.Status {
+		case "success":
+			c.printSuccess(request.NamespaceName, operation, "resource", resourceName)
+			resourceApplied = append(resourceApplied, resourceName)
+		case "failure":
+			c.errors.Append(fmt.Errorf("failed to apply resource %s: %s", resourceName, status.Reason))
+			c.printFailed(request.NamespaceName, operation, "resource", resourceName, status.Reason)
+		}
+	}
+
+	return resourceApplied
+}
+
 func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.ResourceServiceClient, requests []*pb.UpdateResourceRequest) []string {
 	updatedResources := []string{}
 	for _, request := range requests {
@@ -617,6 +643,16 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 			}
 
 			if strings.Contains(err.Error(), "Not Found") || strings.Contains(err.Error(), "not found") {
+				if strings.Contains(err.Error(), "error in update resource") {
+					c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\tThis resource does not exist on store.\n\tAttempting to Apply the resource instead",
+						request.NamespaceName, "resource", resourceName, resourceName)
+					resourceApplied := c.executeResourceApply(ctx, client, request)
+					if len(resourceApplied) > 0 {
+						updatedResources = append(updatedResources, resourceApplied...)
+						continue
+					}
+				}
+
 				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\tThis resource does not exist on the server.\n\tAttempting to Create the resource instead",
 					request.NamespaceName, "resource", resourceName, resourceName)
 				addResourceRequest := convertUpdateResourceRequestToAdd(request)
@@ -665,6 +701,15 @@ func convertUpdateResourceRequestToAdd(req *pb.UpdateResourceRequest) *pb.Create
 		ProjectName:   req.ProjectName,
 		DatastoreName: req.DatastoreName,
 		Resource:      req.Resource,
+		NamespaceName: req.NamespaceName,
+	}
+}
+
+func convertUpdateResourceRequestToApply(req *pb.UpdateResourceRequest) *pb.ApplyResourcesRequest {
+	return &pb.ApplyResourcesRequest{
+		ProjectName:   req.ProjectName,
+		DatastoreName: req.DatastoreName,
+		ResourceNames: []string{req.Resource.Name},
 		NamespaceName: req.NamespaceName,
 	}
 }

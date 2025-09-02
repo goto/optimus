@@ -608,7 +608,6 @@ func (c *applyCommand) executeResourceApply(ctx context.Context, client pb.Resou
 
 	response, err := client.ApplyResources(ctx, convertUpdateResourceRequestToApply(request))
 	if err != nil {
-		c.errors.Append(err)
 		c.printFailed(request.NamespaceName, operation, "resource", resourceName, err.Error())
 		return resourceApplied
 	}
@@ -619,7 +618,6 @@ func (c *applyCommand) executeResourceApply(ctx context.Context, client pb.Resou
 			c.printSuccess(request.NamespaceName, operation, "resource", resourceName)
 			resourceApplied = append(resourceApplied, resourceName)
 		case "failure":
-			c.errors.Append(fmt.Errorf("failed to apply resource %s: %s", resourceName, status.Reason))
 			c.printFailed(request.NamespaceName, operation, "resource", resourceName, status.Reason)
 		}
 	}

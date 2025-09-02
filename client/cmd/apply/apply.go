@@ -608,6 +608,7 @@ func (c *applyCommand) executeResourceApply(ctx context.Context, client pb.Resou
 
 	response, err := client.ApplyResources(ctx, convertUpdateResourceRequestToApply(request))
 	if err != nil {
+		c.errors.Append(err)
 		c.printFailed(request.NamespaceName, operation, "resource", resourceName, err.Error())
 		return resourceApplied
 	}
@@ -618,6 +619,7 @@ func (c *applyCommand) executeResourceApply(ctx context.Context, client pb.Resou
 			c.printSuccess(request.NamespaceName, operation, "resource", resourceName)
 			resourceApplied = append(resourceApplied, resourceName)
 		case "failure":
+			c.errors.Append(fmt.Errorf("resource %s apply failed: %s", resourceName, status.Reason))
 			c.printFailed(request.NamespaceName, operation, "resource", resourceName, status.Reason)
 		}
 	}
@@ -647,8 +649,8 @@ func (c *applyCommand) executeResourceUpdate(ctx context.Context, client pb.Reso
 					resourceApplied := c.executeResourceApply(ctx, client, request)
 					if len(resourceApplied) > 0 {
 						updatedResources = append(updatedResources, resourceApplied...)
-						continue
 					}
+					continue
 				}
 
 				c.logger.Warn("[%s] %s: update %s ⚠️, \n\tReceived an update request for resource %s.\n\tThis resource does not exist on the server.\n\tAttempting to Create the resource instead",

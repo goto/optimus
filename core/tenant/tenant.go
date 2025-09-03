@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/utils"
@@ -45,6 +46,16 @@ func NewTenant(projectName, namespaceName string) (Tenant, error) {
 		projName: projName,
 		nsName:   nsName,
 	}, nil
+}
+
+func TenantFromString(tenantKey string) (Tenant, error) {
+	parts := strings.Split(tenantKey, ":")
+	if len(parts) != 2 {
+		return Tenant{}, errors.InvalidArgument(EntityTenant, fmt.Sprintf("invalid tenant format %s", tenantKey))
+	}
+
+	projectName, namespaceName := parts[0], parts[1]
+	return NewTenant(projectName, namespaceName)
 }
 
 type WithDetails struct {

@@ -415,26 +415,36 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
 
-	// if force delete, all direct downstreams of the deleted job must be resolved
-	toResolveDownstreamJobs := []*job.Job{}
+	// if force delete, upstreams of all direct downstreams of the deleted job must be resolved
 	if forceFlag && len(downstreamList) > 0 {
+		toResolveDownstreamJobs := []*job.Job{}
+		me := errors.NewMultiError("downstream resolve on force delete errors")
+
 		for _, downstream := range downstreamList {
 			downstreamJob, err := j.jobRepo.GetByJobName(ctx, downstream.ProjectName(), downstream.Name())
 			if err != nil {
-				j.logger.Error("error getting downstream job [%s]: %s", downstream.Name(), err)
-				return downstreamFullNames, err
+				me.Append(err)
+				continue
 			}
+
 			toResolveDownstreamJobs = append(toResolveDownstreamJobs, downstreamJob)
 		}
 
 		err = j.resolveAndSaveUpstreams(ctx, jobTenant, writer.NewLogWriter(j.logger), toResolveDownstreamJobs)
-		if err != nil {
-			j.logger.Error("error resolving upstreams for downstreams of deleted job [%s]: %s", jobName, err)
-			return downstreamFullNames, err
+		me.Append(err)
+
+		err = j.uploadJobs(ctx, jobTenant, toResolveDownstreamJobs, nil)
+		me.Append(err)
+
+		if len(toResolveDownstreamJobs) > 0 {
+			raiseJobEventMetric(jobTenant, job.MetricJobEventStateUpdated, len(toResolveDownstreamJobs))
+		}
+		if me.ToErr() != nil {
+			j.logger.Error("error resolving upstreams of downstream jobs of deleted job [%s]: %s", jobName, me.ToErr())
 		}
 	}
 
-	if err := j.uploadJobs(ctx, jobTenant, toResolveDownstreamJobs, []job.Name{jobName}); err != nil {
+	if err := j.uploadJobs(ctx, jobTenant, nil, []job.Name{jobName}); err != nil {
 		j.logger.Error("error uploading job [%s]: %s", jobName, err)
 		return downstreamFullNames, err
 	}

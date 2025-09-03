@@ -1977,7 +1977,9 @@ func TestJobService(t *testing.T) {
 			upstreamRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobBWithUpstream, jobCWithUpstream}).Return(nil)
 
 			jobNamesToRemove := []string{specA.Name().String()}
-			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, []string{"job-B", "job-C"}, jobNamesToRemove).Return(nil)
+			downstreamUpdatedJobNames := []string{"job-B", "job-C"}
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, downstreamUpdatedJobNames, emptyJobNames).Return(nil)
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, emptyJobNames, jobNamesToRemove).Return(nil)
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
 			alertManager := new(AlertManager)

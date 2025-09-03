@@ -415,7 +415,26 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
 
-	if err := j.uploadJobs(ctx, jobTenant, nil, []job.Name{jobName}); err != nil {
+	// if force delete, all direct downstreams of the deleted job must be resolved
+	toResolveDownstreamJobs := []*job.Job{}
+	if forceFlag && len(downstreamList) > 0 {
+		for _, downstream := range downstreamList {
+			downstreamJob, err := j.jobRepo.GetByJobName(ctx, downstream.ProjectName(), downstream.Name())
+			if err != nil {
+				j.logger.Error("error getting downstream job [%s]: %s", downstream.Name(), err)
+				return downstreamFullNames, err
+			}
+			toResolveDownstreamJobs = append(toResolveDownstreamJobs, downstreamJob)
+		}
+
+		err = j.resolveAndSaveUpstreams(ctx, jobTenant, writer.NewLogWriter(j.logger), toResolveDownstreamJobs)
+		if err != nil {
+			j.logger.Error("error resolving upstreams for downstreams of deleted job [%s]: %s", jobName, err)
+			return downstreamFullNames, err
+		}
+	}
+
+	if err := j.uploadJobs(ctx, jobTenant, toResolveDownstreamJobs, []job.Name{jobName}); err != nil {
 		j.logger.Error("error uploading job [%s]: %s", jobName, err)
 		return downstreamFullNames, err
 	}

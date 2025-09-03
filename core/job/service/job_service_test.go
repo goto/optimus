@@ -1955,12 +1955,12 @@ func TestJobService(t *testing.T) {
 
 			jobCDestination := resourceURNB
 			jobCUpstreamName := []resource.URN{resourceURNA}
-			jobC := job.NewJob(sampleTenant, specC, jobCDestination, jobCUpstreamName, false)
+			jobC := job.NewJob(otherTenant, specC, jobCDestination, jobCUpstreamName, false)
 
 			downstreamFullNames := []job.FullName{"test-proj/job-B", "test-proj/job-C"}
 			downstreamList := []*job.Downstream{
 				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
-				job.NewDownstream("job-C", project.Name(), namespace.Name(), taskName),
+				job.NewDownstream("job-C", project.Name(), otherNamespace.Name(), taskName),
 			}
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(downstreamList, nil)
@@ -1976,9 +1976,12 @@ func TestJobService(t *testing.T) {
 			upstreamResolver.On("BulkResolve", ctx, project.Name(), []*job.Job{jobB, jobC}, mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream, jobCWithUpstream}, nil, nil)
 			upstreamRepo.On("ReplaceUpstreams", ctx, []*job.WithUpstream{jobBWithUpstream, jobCWithUpstream}).Return(nil)
 
+			// simulate deletion on other tenant as well
 			jobNamesToRemove := []string{specA.Name().String()}
-			downstreamUpdatedJobNames := []string{"job-B", "job-C"}
-			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, downstreamUpdatedJobNames, emptyJobNames).Return(nil)
+			downstreamBUpdatedJobNames := []string{"job-B"}
+			downstreamCUpdatedJobNames := []string{"job-C"}
+			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, downstreamBUpdatedJobNames, emptyJobNames).Return(nil)
+			jobDeploymentService.On("UploadJobs", ctx, otherTenant, downstreamCUpdatedJobNames, emptyJobNames).Return(nil)
 			jobDeploymentService.On("UploadJobs", ctx, sampleTenant, emptyJobNames, jobNamesToRemove).Return(nil)
 
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)

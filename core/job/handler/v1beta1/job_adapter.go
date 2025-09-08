@@ -233,7 +233,7 @@ func toTask(js *pb.JobSpecification) (job.Task, error) {
 			}
 		}
 
-		return job.NewTask(t1, taskConfig, ""), err
+		return job.NewTask(t1, taskConfig, "", nil), err
 	}
 
 	var taskConfig job.Config
@@ -247,7 +247,22 @@ func toTask(js *pb.JobSpecification) (job.Task, error) {
 	if err != nil {
 		return job.Task{}, err
 	}
-	task := job.NewTask(taskName, taskConfig, js.Task.Version)
+
+	var taskSLA *job.OperatorSLA
+	if js.Task.Sla != nil {
+		sla := js.Task.Sla
+		severity, err := job.SeverityFromString(sla.Severity)
+		if err != nil {
+			return job.Task{}, err
+		}
+		taskSLA = &job.OperatorSLA{
+			Duration: sla.Duration.AsDuration(),
+			Severity: severity,
+			Team:     sla.Team,
+		}
+	}
+
+	task := job.NewTask(taskName, taskConfig, js.Task.Version, taskSLA)
 	return task, nil
 }
 

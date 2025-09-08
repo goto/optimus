@@ -410,14 +410,46 @@ func (t TaskName) String() string {
 	return string(t)
 }
 
+type Severity string
+
+const (
+	Critical Severity = "CRITICAL"
+	Warning  Severity = "WARNING"
+	Info     Severity = "INFO"
+)
+
+func SeverityFromString(severity string) (Severity, error) {
+	switch {
+	case strings.EqualFold(severity, Critical.String()):
+		return Critical, nil
+	case strings.EqualFold(severity, Warning.String()):
+		return Warning, nil
+	case strings.EqualFold(severity, Info.String()):
+		return Info, nil
+	default:
+		return "", errors.InvalidArgument(EntityJob, "invalid severity, expected on of 'WARNING', 'INFO' or 'CRITICAL'")
+	}
+}
+
+func (s Severity) String() string {
+	return string(s)
+}
+
+type OperatorSLA struct {
+	Duration time.Duration
+	Severity Severity
+	Team     string
+}
+
 type Task struct {
 	name    TaskName
 	version string
+	sla     *OperatorSLA
 	config  Config
 }
 
-func NewTask(name TaskName, config Config, version string) Task {
-	return Task{name: name, config: config, version: version}
+func NewTask(name TaskName, config Config, version string, sla *OperatorSLA) Task {
+	return Task{name: name, config: config, version: version, sla: sla}
 }
 
 func (t Task) Name() TaskName {
@@ -430,6 +462,10 @@ func (t Task) Version() string {
 
 func (t Task) Config() Config {
 	return t.config
+}
+
+func (t Task) SLA() *OperatorSLA {
+	return t.sla
 }
 
 type MetadataResourceConfig struct {

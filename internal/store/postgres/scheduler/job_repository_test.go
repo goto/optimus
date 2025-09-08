@@ -168,7 +168,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	assert.NoError(t, err)
 	taskName, err := job.TaskNameFrom("bq2bq")
 	assert.NoError(t, err)
-	jobTask := job.NewTask(taskName, jobTaskConfig, "")
+	jobTask := job.NewTask(taskName, jobTaskConfig, "", nil)
 
 	jobLabels := map[string]string{
 		"environment": "integration",

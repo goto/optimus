@@ -65,10 +65,17 @@ type JobSpecBehaviorWebhook struct {
 	Endpoints []WebhookEndpoint `yaml:"endpoints"`
 }
 
+type OperatorSLA struct {
+	Duration time.Duration `yaml:"duration"`
+	Severity string        `yaml:"severity"`
+	Team     string        `yaml:"team,omitempty"`
+}
+
 type JobSpecTask struct {
 	Name    string            `yaml:"name"`
 	Version string            `yaml:"version,omitempty"`
 	Config  map[string]string `yaml:"config,omitempty"`
+	SLA     *OperatorSLA      `yaml:"sla,omitempty"`
 	Window  JobSpecTaskWindow `yaml:"window,omitempty"`
 }
 
@@ -138,6 +145,7 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 			Name:    j.Task.Name,
 			Version: j.Task.Version,
 			Config:  taskConfig,
+			Sla:     j.getProtoTaskSLA(),
 		},
 		Dependencies: j.getProtoJobDependencies(),
 		Assets:       j.Asset,
@@ -289,6 +297,23 @@ func (j *JobSpec) getProtoJobDependencies() []*pb.JobDependency {
 		protoJobDependencies[i] = &jobSpecDependencyProto
 	}
 	return protoJobDependencies
+}
+
+func (j *JobSpec) getProtoTaskSLA() *pb.OperatorSLA {
+	if j.Task.SLA == nil {
+		return nil
+	}
+	protoOperatorSLA := &pb.OperatorSLA{
+		Duration: durationpb.New(j.Task.SLA.Duration),
+	}
+	if j.Task.SLA.Severity != "" {
+		protoOperatorSLA.Severity = j.Task.SLA.Severity
+	}
+	if j.Task.SLA.Team != "" {
+		protoOperatorSLA.Team = j.Task.SLA.Team
+	}
+
+	return protoOperatorSLA
 }
 
 func (j *JobSpec) getProtoJobConfigItems() []*pb.JobConfigItem {

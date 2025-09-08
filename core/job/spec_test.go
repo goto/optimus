@@ -27,7 +27,7 @@ func TestEntitySpec(t *testing.T) {
 	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
 	jobWindow := window.NewCustomConfig(w)
 	jobTaskConfig, _ := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
-	jobTask := job.NewTask("bq2bq", jobTaskConfig, "")
+	jobTask := job.NewTask("bq2bq", jobTaskConfig, "", nil)
 	description := "sample description"
 	lbl := labels.FromMap(map[string]string{"key": "value"})
 	hook, _ := job.NewHook("sample-hook", jobTaskConfig, "")

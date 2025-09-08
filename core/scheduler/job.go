@@ -89,9 +89,41 @@ func (j *Job) URN() string {
 	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, j.Tenant.ProjectName(), j.Tenant.ProjectName(), j.Tenant.NamespaceName(), j.Name)
 }
 
+type Severity string
+
+const (
+	Critical Severity = "CRITICAL"
+	Warning  Severity = "WARNING"
+	Info     Severity = "INFO"
+)
+
+func SeverityFromString(severity string) (Severity, error) {
+	switch {
+	case strings.EqualFold(severity, Critical.String()):
+		return Critical, nil
+	case strings.EqualFold(severity, Warning.String()):
+		return Warning, nil
+	case strings.EqualFold(severity, Info.String()):
+		return Info, nil
+	default:
+		return "", errors.InvalidArgument(EntityJobRun, "invalid severity, expected on of 'WARNING', 'INFO' or 'CRITICAL'")
+	}
+}
+
+func (s Severity) String() string {
+	return string(s)
+}
+
+type OperatorSLA struct {
+	Duration time.Duration
+	Severity Severity
+	Team     string
+}
+
 type Task struct {
 	Name    string
 	Version string
+	SLA     *OperatorSLA
 	Config  map[string]string
 }
 

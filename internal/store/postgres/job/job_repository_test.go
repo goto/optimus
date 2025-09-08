@@ -115,7 +115,7 @@ func TestPostgresJobRepository(t *testing.T) {
 	assert.NoError(t, err)
 	taskName, err := job.TaskNameFrom("bq2bq")
 	assert.NoError(t, err)
-	jobTask := job.NewTask(taskName, jobTaskConfig, "")
+	jobTask := job.NewTask(taskName, jobTaskConfig, "", nil)
 
 	host := "sample-host"
 	upstreamType := job.UpstreamTypeInferred

@@ -116,9 +116,16 @@ type Asset struct {
 	Value string
 }
 
+type OperatorSLA struct {
+	Duration time.Duration
+	Severity string
+	Team     string
+}
+
 type TaskConfig struct {
 	Version string
 	Config  map[string]string
+	SLA     *OperatorSLA `json:"SLA,omitempty"`
 }
 
 type Hook struct {
@@ -286,6 +293,14 @@ func toStorageTaskConfig(spec job.Task) ([]byte, error) {
 	t1 := TaskConfig{
 		Version: spec.Version(),
 		Config:  spec.Config(),
+	}
+	if spec.SLA() != nil {
+		s := spec.SLA()
+		t1.SLA = &OperatorSLA{
+			Duration: s.Duration,
+			Severity: s.Severity.String(),
+			Team:     s.Team,
+		}
 	}
 
 	taskConf, err := json.Marshal(t1)
@@ -624,7 +639,7 @@ func fromStorageSchedule(raw []byte) (*job.Schedule, error) {
 
 func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
 	if raw == nil {
-		task := job.NewTask(name, nil, "")
+		task := job.NewTask(name, nil, "", nil)
 		return task, nil
 	}
 
@@ -638,7 +653,20 @@ func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
 		taskConf.Config = config
 	}
 
-	jobTask := job.NewTask(name, taskConf.Config, taskConf.Version)
+	var taskSLA *job.OperatorSLA
+	if taskConf.SLA != nil {
+		severity, err := job.SeverityFromString(taskConf.SLA.Severity)
+		if err != nil {
+			return job.Task{}, err
+		}
+		taskSLA = &job.OperatorSLA{
+			Duration: taskConf.SLA.Duration,
+			Severity: severity,
+			Team:     taskConf.SLA.Team,
+		}
+	}
+
+	jobTask := job.NewTask(name, taskConf.Config, taskConf.Version, taskSLA)
 	return jobTask, nil
 }
 

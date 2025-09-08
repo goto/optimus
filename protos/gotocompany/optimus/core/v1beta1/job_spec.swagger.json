@@ -1623,14 +1623,17 @@
         "name": {
           "type": "string"
         },
-        "version": {
-          "type": "string"
-        },
         "config": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/v1beta1JobConfigItem"
           }
+        },
+        "version": {
+          "type": "string"
+        },
+        "sla": {
+          "$ref": "#/definitions/v1beta1OperatorSLA"
         }
       }
     },
@@ -1814,6 +1817,20 @@
           "$ref": "#/definitions/v1beta1Level"
         },
         "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1OperatorSLA": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "team": {
           "type": "string"
         }
       }

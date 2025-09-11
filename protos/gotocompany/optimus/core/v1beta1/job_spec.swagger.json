@@ -1334,6 +1334,14 @@
       },
       "title": "DeployJobSpecificationResponse hold the value of DeploymentID\nand the log messages"
     },
+    "v1beta1FailureAlertConfig": {
+      "type": "object",
+      "properties": {
+        "severity": {
+          "type": "string"
+        }
+      }
+    },
     "v1beta1GetDeployJobsStatusResponse": {
       "type": "object",
       "properties": {
@@ -1632,8 +1640,8 @@
         "version": {
           "type": "string"
         },
-        "sla": {
-          "$ref": "#/definitions/v1beta1OperatorSLA"
+        "alert": {
+          "$ref": "#/definitions/v1beta1OperatorAlertConfig"
         }
       }
     },
@@ -1821,14 +1829,29 @@
         }
       }
     },
-    "v1beta1OperatorSLA": {
+    "v1beta1OperatorAlertConfig": {
       "type": "object",
       "properties": {
-        "duration": {
-          "type": "string"
+        "disableAnomalyDetection": {
+          "type": "boolean"
         },
-        "severity": {
-          "type": "string"
+        "slaMiss": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1SLAMissAlertConfig"
+          }
+        },
+        "retry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1RetryAlertConfig"
+          }
+        },
+        "success": {
+          "$ref": "#/definitions/v1beta1SuccessAlertConfig"
+        },
+        "failure": {
+          "$ref": "#/definitions/v1beta1FailureAlertConfig"
         },
         "team": {
           "type": "string"
@@ -1848,6 +1871,37 @@
       "properties": {
         "logStatus": {
           "$ref": "#/definitions/v1beta1Log"
+        }
+      }
+    },
+    "v1beta1RetryAlertConfig": {
+      "type": "object",
+      "properties": {
+        "countThreshold": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "severity": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1SLAMissAlertConfig": {
+      "type": "object",
+      "properties": {
+        "durationThreshold": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1SuccessAlertConfig": {
+      "type": "object",
+      "properties": {
+        "severity": {
+          "type": "string"
         }
       }
     },

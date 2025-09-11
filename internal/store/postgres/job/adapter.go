@@ -116,16 +116,20 @@ type Asset struct {
 	Value string
 }
 
-type OperatorSLA struct {
-	Duration time.Duration
-	Severity string
-	Team     string
+type SLAMissAlert struct {
+	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
+	Severity          string        `json:"severity,omitempty"`
+}
+
+type OperatorAlertConfig struct {
+	SLAMissAlert []*SLAMissAlert `json:"sla_miss_alert,omitempty"`
+	Team         string          `json:"team,omitempty"`
 }
 
 type TaskConfig struct {
-	Version string
-	Config  map[string]string
-	SLA     *OperatorSLA `json:"SLA,omitempty"`
+	Version     string
+	Config      map[string]string
+	AlertConfig *OperatorAlertConfig `json:"AlertConfig,omitempty"`
 }
 
 type Hook struct {
@@ -294,12 +298,13 @@ func toStorageTaskConfig(spec job.Task) ([]byte, error) {
 		Version: spec.Version(),
 		Config:  spec.Config(),
 	}
-	if spec.SLA() != nil {
-		s := spec.SLA()
-		t1.SLA = &OperatorSLA{
-			Duration: s.Duration,
-			Severity: s.Severity.String(),
-			Team:     s.Team,
+	if spec.AlertConfig() != nil {
+		s := spec.AlertConfig()
+		if s != nil && s.SLAMissAlert != nil && len(s.SLAMissAlert) > 0 {
+		}
+		t1.AlertConfig = &OperatorAlertConfig{
+			SLAMissAlert: nil,
+			Team:         s.Team,
 		}
 	}
 
@@ -653,20 +658,27 @@ func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
 		taskConf.Config = config
 	}
 
-	var taskSLA *job.OperatorSLA
-	if taskConf.SLA != nil {
-		severity, err := job.SeverityFromString(taskConf.SLA.Severity)
-		if err != nil {
-			return job.Task{}, err
+	var alertConfig *job.OperatorAlertConfig
+	if taskConf.AlertConfig != nil {
+		alertConfig = &job.OperatorAlertConfig{
+			Team: taskConf.AlertConfig.Team,
 		}
-		taskSLA = &job.OperatorSLA{
-			Duration: taskConf.SLA.Duration,
-			Severity: severity,
-			Team:     taskConf.SLA.Team,
+		if taskConf.AlertConfig.SLAMissAlert != nil && len(taskConf.AlertConfig.SLAMissAlert) > 0 {
+			alertConfig.SLAMissAlert = make([]*job.SLAMissAlert, len(taskConf.AlertConfig.SLAMissAlert))
+			for i, alert := range taskConf.AlertConfig.SLAMissAlert {
+				severity, err := job.SeverityFromString(alert.Severity)
+				if err != nil {
+					return job.Task{}, err
+				}
+				alertConfig.SLAMissAlert[i] = &job.SLAMissAlert{
+					DurationThreshold: alert.DurationThreshold,
+					Severity:          severity,
+				}
+			}
 		}
 	}
 
-	jobTask := job.NewTask(name, taskConf.Config, taskConf.Version, taskSLA)
+	jobTask := job.NewTask(name, taskConf.Config, taskConf.Version, alertConfig)
 	return jobTask, nil
 }
 

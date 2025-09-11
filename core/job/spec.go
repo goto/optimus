@@ -435,21 +435,25 @@ func (s Severity) String() string {
 	return string(s)
 }
 
-type OperatorSLA struct {
-	Duration time.Duration
-	Severity Severity
-	Team     string
+type SLAMissAlert struct {
+	DurationThreshold time.Duration
+	Severity          Severity
+}
+
+type OperatorAlertConfig struct {
+	SLAMissAlert []*SLAMissAlert
+	Team         string
 }
 
 type Task struct {
-	name    TaskName
-	version string
-	sla     *OperatorSLA
-	config  Config
+	name        TaskName
+	version     string
+	alertConfig *OperatorAlertConfig
+	config      Config
 }
 
-func NewTask(name TaskName, config Config, version string, sla *OperatorSLA) Task {
-	return Task{name: name, config: config, version: version, sla: sla}
+func NewTask(name TaskName, config Config, version string, alertConfig *OperatorAlertConfig) Task {
+	return Task{name: name, config: config, version: version, alertConfig: alertConfig}
 }
 
 func (t Task) Name() TaskName {
@@ -464,8 +468,8 @@ func (t Task) Config() Config {
 	return t.config
 }
 
-func (t Task) SLA() *OperatorSLA {
-	return t.sla
+func (t Task) AlertConfig() *OperatorAlertConfig {
+	return t.alertConfig
 }
 
 type MetadataResourceConfig struct {

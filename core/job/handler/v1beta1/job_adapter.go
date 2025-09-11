@@ -218,6 +218,28 @@ func fromRetryAndAlerts(jobRetry *job.Retry, alerts []*job.AlertSpec) *pb.JobSpe
 	}
 }
 
+func toTaskAlert(alerts *pb.OperatorAlertConfig) (*job.OperatorAlertConfig, error) {
+	if alerts == nil {
+		return nil, nil
+	}
+	alertConfig := &job.OperatorAlertConfig{}
+	if len(alerts.SlaMiss) > 0 {
+		alertConfig.SLAMissAlert = make([]*job.SLAMissAlert, len(alerts.SlaMiss))
+		for i, alert := range alerts.SlaMiss {
+			severity, err := job.SeverityFromString(alert.Severity)
+			if err != nil {
+				return nil, err
+			}
+			alertConfig.SLAMissAlert[i] = &job.SLAMissAlert{
+				DurationThreshold: alert.DurationThreshold.AsDuration(),
+				Severity:          severity,
+			}
+		}
+	}
+
+	return alertConfig, nil
+}
+
 func toTask(js *pb.JobSpecification) (job.Task, error) {
 	var err error
 	if js.Task == nil { // Old flow
@@ -248,21 +270,12 @@ func toTask(js *pb.JobSpecification) (job.Task, error) {
 		return job.Task{}, err
 	}
 
-	var taskSLA *job.OperatorSLA
-	if js.Task.Sla != nil {
-		sla := js.Task.Sla
-		severity, err := job.SeverityFromString(sla.Severity)
-		if err != nil {
-			return job.Task{}, err
-		}
-		taskSLA = &job.OperatorSLA{
-			Duration: sla.Duration.AsDuration(),
-			Severity: severity,
-			Team:     sla.Team,
-		}
+	taskAlert, err := toTaskAlert(js.Task.Alert)
+	if err != nil {
+		return job.Task{}, err
 	}
 
-	task := job.NewTask(taskName, taskConfig, js.Task.Version, taskSLA)
+	task := job.NewTask(taskName, taskConfig, js.Task.Version, taskAlert)
 	return task, nil
 }
 

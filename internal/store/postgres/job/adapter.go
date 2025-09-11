@@ -300,11 +300,19 @@ func toStorageTaskConfig(spec job.Task) ([]byte, error) {
 	}
 	if spec.AlertConfig() != nil {
 		s := spec.AlertConfig()
-		if s != nil && s.SLAMissAlert != nil && len(s.SLAMissAlert) > 0 {
-		}
-		t1.AlertConfig = &OperatorAlertConfig{
-			SLAMissAlert: nil,
-			Team:         s.Team,
+		if s != nil {
+			t1.AlertConfig = &OperatorAlertConfig{
+				Team: s.Team,
+			}
+			if len(s.SLAMissAlert) > 0 {
+				slaAlert := make([]*SLAMissAlert, len(s.SLAMissAlert))
+				for i, alert := range s.SLAMissAlert {
+					slaAlert[i] = &SLAMissAlert{
+						DurationThreshold: alert.DurationThreshold,
+						Severity:          alert.Severity.String(),
+					}
+				}
+			}
 		}
 	}
 
@@ -663,7 +671,7 @@ func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
 		alertConfig = &job.OperatorAlertConfig{
 			Team: taskConf.AlertConfig.Team,
 		}
-		if taskConf.AlertConfig.SLAMissAlert != nil && len(taskConf.AlertConfig.SLAMissAlert) > 0 {
+		if len(taskConf.AlertConfig.SLAMissAlert) > 0 {
 			alertConfig.SLAMissAlert = make([]*job.SLAMissAlert, len(taskConf.AlertConfig.SLAMissAlert))
 			for i, alert := range taskConf.AlertConfig.SLAMissAlert {
 				severity, err := job.SeverityFromString(alert.Severity)

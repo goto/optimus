@@ -220,7 +220,7 @@ func fromRetryAndAlerts(jobRetry *job.Retry, alerts []*job.AlertSpec) *pb.JobSpe
 
 func toTaskAlert(alerts *pb.OperatorAlertConfig) (*job.OperatorAlertConfig, error) {
 	if alerts == nil {
-		return nil, nil
+		return &job.OperatorAlertConfig{}, nil
 	}
 	alertConfig := &job.OperatorAlertConfig{}
 	if len(alerts.SlaMiss) > 0 {

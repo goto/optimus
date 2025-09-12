@@ -42,7 +42,7 @@ func TestUpstreamResolver(t *testing.T) {
 	jobTaskConfig, err := job.ConfigFrom(map[string]string{"sample_task_key": "sample_value"})
 	assert.NoError(t, err)
 	taskName, _ := job.TaskNameFrom("sample-task")
-	jobTask := job.NewTask(taskName, jobTaskConfig, "")
+	jobTask := job.NewTask(taskName, jobTaskConfig, "", nil)
 	sampleOwner := "sample-owner"
 
 	resourceURNA, err := resource.ParseURN("store://resource-A")

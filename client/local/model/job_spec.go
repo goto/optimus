@@ -65,10 +65,38 @@ type JobSpecBehaviorWebhook struct {
 	Endpoints []WebhookEndpoint `yaml:"endpoints"`
 }
 
+type OperatorAlerts struct {
+	DisableAnomalyDetection bool                  `yaml:"disable_anomaly_detection,omitempty"`
+	SLAMiss                 []*SLAMissAlertConfig `yaml:"sla_miss,omitempty"`
+	Retry                   []*RetryAlertConfig   `yaml:"retry,omitempty"`
+	Success                 *SuccessAlertConfig   `yaml:"success,omitempty"`
+	Failure                 *FailureAlertConfig   `yaml:"failure,omitempty"`
+	Team                    string                `yaml:"team,omitempty"`
+}
+
+type SLAMissAlertConfig struct {
+	DurationThreshold time.Duration `yaml:"duration_threshold"`
+	Severity          string        `yaml:"severity"`
+}
+
+type RetryAlertConfig struct {
+	CountThreshold int32  `yaml:"count_threshold"`
+	Severity       string `yaml:"severity"`
+}
+
+type SuccessAlertConfig struct {
+	Severity string `yaml:"severity"`
+}
+
+type FailureAlertConfig struct {
+	Severity string `yaml:"severity"`
+}
+
 type JobSpecTask struct {
 	Name    string            `yaml:"name"`
 	Version string            `yaml:"version,omitempty"`
 	Config  map[string]string `yaml:"config,omitempty"`
+	Alerts  *OperatorAlerts   `yaml:"alert,omitempty"`
 	Window  JobSpecTaskWindow `yaml:"window,omitempty"`
 }
 
@@ -138,6 +166,7 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 			Name:    j.Task.Name,
 			Version: j.Task.Version,
 			Config:  taskConfig,
+			Alert:   j.getProtoTaskAlert(),
 		},
 		Dependencies: j.getProtoJobDependencies(),
 		Assets:       j.Asset,
@@ -289,6 +318,51 @@ func (j *JobSpec) getProtoJobDependencies() []*pb.JobDependency {
 		protoJobDependencies[i] = &jobSpecDependencyProto
 	}
 	return protoJobDependencies
+}
+
+func (j *JobSpec) getProtoTaskAlert() *pb.OperatorAlertConfig {
+	alerts := j.Task.Alerts
+	if alerts == nil {
+		return nil
+	}
+	protoOperatorAlert := &pb.OperatorAlertConfig{
+		DisableAnomalyDetection: alerts.DisableAnomalyDetection,
+		Team:                    alerts.Team,
+	}
+
+	if len(alerts.SLAMiss) > 0 {
+		protoOperatorAlert.SlaMiss = make([]*pb.SLAMissAlertConfig, len(alerts.SLAMiss))
+
+		for i, cfg := range alerts.SLAMiss {
+			protoOperatorAlert.SlaMiss[i] = &pb.SLAMissAlertConfig{
+				DurationThreshold: durationpb.New(cfg.DurationThreshold),
+				Severity:          cfg.Severity,
+			}
+		}
+	}
+
+	if len(alerts.Retry) > 0 {
+		protoOperatorAlert.Retry = make([]*pb.RetryAlertConfig, len(alerts.Retry))
+		for i, cfg := range alerts.Retry {
+			protoOperatorAlert.Retry[i] = &pb.RetryAlertConfig{
+				CountThreshold: cfg.CountThreshold,
+				Severity:       cfg.Severity,
+			}
+		}
+	}
+
+	if alerts.Failure != nil {
+		protoOperatorAlert.Failure = &pb.FailureAlertConfig{
+			Severity: alerts.Failure.Severity,
+		}
+	}
+	if alerts.Success != nil {
+		protoOperatorAlert.Success = &pb.SuccessAlertConfig{
+			Severity: alerts.Success.Severity,
+		}
+	}
+
+	return protoOperatorAlert
 }
 
 func (j *JobSpec) getProtoJobConfigItems() []*pb.JobConfigItem {

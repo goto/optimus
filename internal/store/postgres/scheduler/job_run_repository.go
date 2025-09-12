@@ -261,7 +261,7 @@ where
     job_name = $1 and project_name = $2 and scheduled_at IN ('` + strings.Join(scheduleTimesListString, "', '") + "')"
 	_, err := j.db.Exec(ctx, query, jobName, projectName)
 
-	return errors.WrapIfErr(scheduler.EntityJobRun, "cannot update job Run State as Sla miss", err)
+	return errors.WrapIfErr(scheduler.EntityJobRun, "cannot update job Run State as SLA miss", err)
 }
 
 func (j *JobRunRepository) UpdateMonitoring(ctx context.Context, jobRunID uuid.UUID, monitoringValues map[string]any) error {

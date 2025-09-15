@@ -218,19 +218,21 @@ func fromRetryAndAlerts(jobRetry *job.Retry, alerts []*job.AlertSpec) *pb.JobSpe
 	}
 }
 
-func toTaskAlert(alerts *pb.OperatorAlertConfig) (*job.OperatorAlertConfig, error) {
+func toOperatorAlert(alerts *pb.OperatorAlertConfig) (*job.OperatorAlertConfig, error) {
 	if alerts == nil {
 		return &job.OperatorAlertConfig{}, nil
 	}
-	alertConfig := &job.OperatorAlertConfig{}
+	alertConfig := &job.OperatorAlertConfig{
+		Team: alerts.Team,
+	}
 	if len(alerts.SlaMiss) > 0 {
-		alertConfig.SLAMissAlert = make([]*job.SLAMissAlert, len(alerts.SlaMiss))
+		alertConfig.SLAAlertConfigs = make([]*job.SLAAlertConfig, len(alerts.SlaMiss))
 		for i, alert := range alerts.SlaMiss {
 			severity, err := job.SeverityFromString(alert.Severity)
 			if err != nil {
 				return nil, err
 			}
-			alertConfig.SLAMissAlert[i] = &job.SLAMissAlert{
+			alertConfig.SLAAlertConfigs[i] = &job.SLAAlertConfig{
 				DurationThreshold: alert.DurationThreshold.AsDuration(),
 				Severity:          severity,
 			}
@@ -270,7 +272,7 @@ func toTask(js *pb.JobSpecification) (job.Task, error) {
 		return job.Task{}, err
 	}
 
-	taskAlert, err := toTaskAlert(js.Task.Alert)
+	taskAlert, err := toOperatorAlert(js.Task.Alert)
 	if err != nil {
 		return job.Task{}, err
 	}
@@ -333,7 +335,11 @@ func toHooks(hooksProto []*pb.JobSpecHook) ([]*job.Hook, error) {
 		if err != nil {
 			return nil, err
 		}
-		hookSpec, err := job.NewHook(hookProto.Name, hookConfig, hookProto.Version)
+		hookAlert, err := toOperatorAlert(hookProto.Alert)
+		if err != nil {
+			return nil, err
+		}
+		hookSpec, err := job.NewHook(hookProto.Name, hookConfig, hookProto.Version, hookAlert)
 		if err != nil {
 			return nil, err
 		}

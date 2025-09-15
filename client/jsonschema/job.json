@@ -195,6 +195,9 @@
         },
         "config": {
           "type": "object"
+        },
+        "alert": {
+          "$ref": "#/$defs/OperatorAlert"
         }
       },
       "additionalProperties": false,
@@ -296,6 +299,10 @@
     "OperatorAlert": {
       "type": "object",
       "properties": {
+        "team": {
+          "type": "string",
+          "description": "By default, the alerting team is inferred from the job namespace_name. Use this property to override that default and route alerts to a different team."
+        },
         "sla_miss": {
           "type": "array",
           "description": "A list of Service Level Agreements (SLAs) that users can define for the given task (e.g., mc2mc). These rules specify thresholds for task run duration. Users might configure a notification if the task is taking longer than usual, and escalate to a PagerDuty alert if the task exceeds a longer threshold that could impact the overall job completion SLA of downstream dependencies.",

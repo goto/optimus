@@ -116,26 +116,27 @@ type Asset struct {
 	Value string
 }
 
-type SLAMissAlert struct {
+type SLAAlertConfig struct {
 	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
 	Severity          string        `json:"severity,omitempty"`
 }
 
 type OperatorAlertConfig struct {
-	SLAMissAlert []*SLAMissAlert `json:"sla_miss_alert,omitempty"`
-	Team         string          `json:"team,omitempty"`
+	SLAAlertConfigs []*SLAAlertConfig `json:"sla_alert_configs,omitempty"`
+	Team            string            `json:"team,omitempty"`
 }
 
 type TaskConfig struct {
-	Version     string
-	Config      map[string]string
-	AlertConfig *OperatorAlertConfig `json:"AlertConfig,omitempty"`
+	Version     string               `json:"version,omitempty"`
+	Config      map[string]string    `json:"config,omitempty"`
+	AlertConfig *OperatorAlertConfig `json:"alert_config,omitempty"`
 }
 
 type Hook struct {
-	Name    string
-	Version string
-	Config  map[string]string
+	Name        string               `json:"name,omitempty"`
+	Version     string               `json:"version,omitempty"`
+	Config      map[string]string    `json:"config,omitempty"`
+	AlertConfig *OperatorAlertConfig `json:"alert_config,omitempty"`
 }
 
 type Metadata struct {
@@ -293,27 +294,31 @@ func toStorageHooks(hookSpecs []*job.Hook) ([]byte, error) {
 	return hooksJSON, nil
 }
 
-func toStorageTaskConfig(spec job.Task) ([]byte, error) {
-	t1 := TaskConfig{
-		Version: spec.Version(),
-		Config:  spec.Config(),
+func toStorageOperatorAlert(alertConfig *job.OperatorAlertConfig) *OperatorAlertConfig {
+	if alertConfig == nil {
+		return nil
 	}
-	if spec.AlertConfig() != nil {
-		s := spec.AlertConfig()
-		if s != nil {
-			t1.AlertConfig = &OperatorAlertConfig{
-				Team: s.Team,
-			}
-			if len(s.SLAMissAlert) > 0 {
-				slaAlert := make([]*SLAMissAlert, len(s.SLAMissAlert))
-				for i, alert := range s.SLAMissAlert {
-					slaAlert[i] = &SLAMissAlert{
-						DurationThreshold: alert.DurationThreshold,
-						Severity:          alert.Severity.String(),
-					}
-				}
+	storageAlertConfig := &OperatorAlertConfig{
+		Team: alertConfig.Team,
+	}
+	if len(alertConfig.SLAAlertConfigs) > 0 {
+		slaAlert := make([]*SLAAlertConfig, len(alertConfig.SLAAlertConfigs))
+		for i, alert := range alertConfig.SLAAlertConfigs {
+			slaAlert[i] = &SLAAlertConfig{
+				DurationThreshold: alert.DurationThreshold,
+				Severity:          alert.Severity.String(),
 			}
 		}
+		storageAlertConfig.SLAAlertConfigs = slaAlert
+	}
+	return storageAlertConfig
+}
+
+func toStorageTaskConfig(spec job.Task) ([]byte, error) {
+	t1 := TaskConfig{
+		Version:     spec.Version(),
+		Config:      spec.Config(),
+		AlertConfig: toStorageOperatorAlert(spec.AlertConfig()),
 	}
 
 	taskConf, err := json.Marshal(t1)
@@ -324,11 +329,13 @@ func toStorageTaskConfig(spec job.Task) ([]byte, error) {
 }
 
 func toStorageHook(spec *job.Hook) Hook {
-	return Hook{
-		Name:    spec.Name(),
-		Version: spec.Version(),
-		Config:  spec.Config(),
+	h := Hook{
+		Name:        spec.Name(),
+		Version:     spec.Version(),
+		Config:      spec.Config(),
+		AlertConfig: toStorageOperatorAlert(spec.AlertConfig()),
 	}
+	return h
 }
 
 func toStorageAlerts(alertSpecs []*job.AlertSpec) ([]byte, error) {
@@ -650,6 +657,29 @@ func fromStorageSchedule(raw []byte) (*job.Schedule, error) {
 	return scheduleBuilder.Build()
 }
 
+func fromStorageOperatorAlert(opAlertConfig *OperatorAlertConfig) (*job.OperatorAlertConfig, error) {
+	if opAlertConfig == nil {
+		return &job.OperatorAlertConfig{}, nil
+	}
+	alertConfig := &job.OperatorAlertConfig{
+		Team: opAlertConfig.Team,
+	}
+	if len(opAlertConfig.SLAAlertConfigs) > 0 {
+		alertConfig.SLAAlertConfigs = make([]*job.SLAAlertConfig, len(opAlertConfig.SLAAlertConfigs))
+		for i, alert := range opAlertConfig.SLAAlertConfigs {
+			severity, err := job.SeverityFromString(alert.Severity)
+			if err != nil {
+				return alertConfig, err
+			}
+			alertConfig.SLAAlertConfigs[i] = &job.SLAAlertConfig{
+				DurationThreshold: alert.DurationThreshold,
+				Severity:          severity,
+			}
+		}
+	}
+	return alertConfig, nil
+}
+
 func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
 	if raw == nil {
 		task := job.NewTask(name, nil, "", nil)
@@ -666,24 +696,9 @@ func fromStorageTask(name job.TaskName, raw []byte) (job.Task, error) {
 		taskConf.Config = config
 	}
 
-	var alertConfig *job.OperatorAlertConfig
-	if taskConf.AlertConfig != nil {
-		alertConfig = &job.OperatorAlertConfig{
-			Team: taskConf.AlertConfig.Team,
-		}
-		if len(taskConf.AlertConfig.SLAMissAlert) > 0 {
-			alertConfig.SLAMissAlert = make([]*job.SLAMissAlert, len(taskConf.AlertConfig.SLAMissAlert))
-			for i, alert := range taskConf.AlertConfig.SLAMissAlert {
-				severity, err := job.SeverityFromString(alert.Severity)
-				if err != nil {
-					return job.Task{}, err
-				}
-				alertConfig.SLAMissAlert[i] = &job.SLAMissAlert{
-					DurationThreshold: alert.DurationThreshold,
-					Severity:          severity,
-				}
-			}
-		}
+	alertConfig, err := fromStorageOperatorAlert(taskConf.AlertConfig)
+	if err != nil {
+		return job.Task{}, err
 	}
 
 	jobTask := job.NewTask(name, taskConf.Config, taskConf.Version, alertConfig)
@@ -717,7 +732,11 @@ func fromStorageHook(hook Hook) (*job.Hook, error) {
 	if err != nil {
 		return nil, err
 	}
-	return job.NewHook(hook.Name, config, hook.Version)
+	operatorAlertConfig, err := fromStorageOperatorAlert(hook.AlertConfig)
+	if err != nil {
+		return nil, err
+	}
+	return job.NewHook(hook.Name, config, hook.Version, operatorAlertConfig)
 }
 
 func fromStorageAlerts(raw []byte) ([]*job.AlertSpec, error) {

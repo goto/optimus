@@ -1921,7 +1921,7 @@ func TestNewJobHandler(t *testing.T) {
 				WithSpecHTTPUpstream([]*job.SpecHTTPUpstream{httpUpstream}).
 				WithUpstreamNames([]job.SpecUpstreamName{"job-B"}).Build()
 
-			hook1, _ := job.NewHook("hook-1", jobConfig, "")
+			hook1, _ := job.NewHook("hook-1", jobConfig, "", nil)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", sampleOwner, jobSchedule, jobWindow, jobTask).
 				WithSpecUpstream(upstreamSpec).

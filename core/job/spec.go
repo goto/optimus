@@ -435,14 +435,14 @@ func (s Severity) String() string {
 	return string(s)
 }
 
-type SLAMissAlert struct {
+type SLAAlertConfig struct {
 	DurationThreshold time.Duration
 	Severity          Severity
 }
 
 type OperatorAlertConfig struct {
-	SLAMissAlert []*SLAMissAlert
-	Team         string
+	SLAAlertConfigs []*SLAAlertConfig
+	Team            string
 }
 
 type Task struct {
@@ -551,16 +551,17 @@ func (m *MetadataBuilder) WithScheduler(scheduler map[string]string) *MetadataBu
 }
 
 type Hook struct {
-	name    string
-	version string
-	config  Config
+	name        string
+	version     string
+	config      Config
+	alertConfig *OperatorAlertConfig
 }
 
-func NewHook(name string, config Config, version string) (*Hook, error) {
+func NewHook(name string, config Config, version string, alertConfig *OperatorAlertConfig) (*Hook, error) {
 	if name == "" {
 		return nil, errors.InvalidArgument(EntityJob, "hook name is empty")
 	}
-	return &Hook{name: name, config: config, version: version}, nil
+	return &Hook{name: name, config: config, version: version, alertConfig: alertConfig}, nil
 }
 
 func (h Hook) Name() string {
@@ -573,6 +574,10 @@ func (h Hook) Config() Config {
 
 func (h Hook) Version() string {
 	return h.version
+}
+
+func (h Hook) AlertConfig() *OperatorAlertConfig {
+	return h.alertConfig
 }
 
 type Asset map[string]string

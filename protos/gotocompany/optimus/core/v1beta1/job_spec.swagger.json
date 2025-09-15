@@ -1589,6 +1589,9 @@
         },
         "version": {
           "type": "string"
+        },
+        "alert": {
+          "$ref": "#/definitions/v1beta1OperatorAlertConfig"
         }
       }
     },

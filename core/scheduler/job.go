@@ -114,23 +114,28 @@ func (s Severity) String() string {
 	return string(s)
 }
 
-type OperatorSLA struct {
-	Duration time.Duration
-	Severity Severity
-	Team     string
+type SLAAlertConfig struct {
+	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
+	Severity          Severity      `json:"severity,omitempty"`
+}
+
+type OperatorAlertConfig struct {
+	SLAAlertConfigs []*SLAAlertConfig `json:"sla_alert_configs,omitempty"`
+	Team            string            `json:"team,omitempty"`
 }
 
 type Task struct {
-	Name    string
-	Version string
-	SLA     *OperatorSLA
-	Config  map[string]string
+	Name        string               `json:"name,omitempty"`
+	Version     string               `json:"version,omitempty"`
+	Config      map[string]string    `json:"config,omitempty"`
+	AlertConfig *OperatorAlertConfig `json:"alert_config,omitempty"`
 }
 
 type Hook struct {
-	Name    string
-	Version string
-	Config  map[string]string
+	Name        string               `json:"name,omitempty"`
+	Version     string               `json:"version,omitempty"`
+	Config      map[string]string    `json:"config,omitempty"`
+	AlertConfig *OperatorAlertConfig `json:"alert_config,omitempty"`
 }
 
 // JobWithDetails contains the details for a job

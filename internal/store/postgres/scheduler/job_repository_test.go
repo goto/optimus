@@ -196,7 +196,7 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 
 	jobHookConfig, err := job.ConfigFrom(map[string]string{"sample_hook_key": "sample_value"})
 	assert.NoError(t, err)
-	hookSpec, err := job.NewHook("sample_hook", jobHookConfig, "")
+	hookSpec, err := job.NewHook("sample_hook", jobHookConfig, "", nil)
 	assert.NoError(t, err)
 	jobHooks := []*job.Hook{hookSpec}
 	jobAlertConfig, err := job.ConfigFrom(map[string]string{"sample_alert_key": "sample_value"})

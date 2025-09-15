@@ -1826,7 +1826,11 @@ func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant
 		return "resource exists in db but not in store", false
 	}
 
-	return "resource does not exist in both db and store", false
+	// TODO there are issues related to the upstream checker which we use.
+	// for example, resource checker can return nested struct columns (which is not a table) and return validation error
+	// because the referenced table name won't exist in both DB & store.
+	// revert the return value back to "false" if we already fixed the upstream checker issue
+	return "resource does not exist in both db and store", true
 }
 
 func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination resource.URN) dto.ValidateResult {

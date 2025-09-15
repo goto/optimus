@@ -52,13 +52,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "name",
-        "owner",
-        "schedule",
-        "behavior",
-        "task"
-      ]
+      "required": ["name", "owner", "schedule", "behavior", "task"]
     },
     "JobSpecBehavior": {
       "properties": {
@@ -116,9 +110,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "on"
-      ]
+      "required": ["on"]
     },
     "JobSpecBehaviorRetry": {
       "properties": {
@@ -150,10 +142,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "on",
-        "endpoints"
-      ]
+      "required": ["on", "endpoints"]
     },
     "JobSpecDependency": {
       "properties": {
@@ -193,10 +182,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "name",
-        "url"
-      ]
+      "required": ["name", "url"]
     },
     "JobSpecHook": {
       "properties": {
@@ -209,13 +195,14 @@
         },
         "config": {
           "type": "object"
+        },
+        "alert": {
+          "$ref": "#/$defs/OperatorAlert"
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "name"
-      ]
+      "required": ["name"]
     },
     "JobSpecMetadata": {
       "properties": {
@@ -284,10 +271,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "start_date",
-        "interval"
-      ]
+      "required": ["start_date", "interval"]
     },
     "JobSpecTask": {
       "properties": {
@@ -303,13 +287,45 @@
         },
         "window": {
           "$ref": "#/$defs/JobSpecTaskWindow"
+        },
+        "alert": {
+          "$ref": "#/$defs/OperatorAlert"
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "name"
-      ]
+      "required": ["name"]
+    },
+    "OperatorAlert": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "By default, the alerting team is inferred from the job namespace_name. Use this property to override that default and route alerts to a different team."
+        },
+        "sla_miss": {
+          "type": "array",
+          "description": "A list of Service Level Agreements (SLAs) that users can define for the given task (e.g., mc2mc). These rules specify thresholds for task run duration. Users might configure a notification if the task is taking longer than usual, and escalate to a PagerDuty alert if the task exceeds a longer threshold that could impact the overall job completion SLA of downstream dependencies.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "duration_threshold": {
+                "type": "string",
+                "pattern": "^((\\d+h)?(\\d+m)?)$",
+                "description": "Duration in hours and/or minutes, e.g. '1h', '30m', '1h30m'"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["INFO", "WARNING", "CRITICAL"],
+                "description": "Alert severity level. Use INFO for informational alerts, WARNING for potential issues, and CRITICAL for urgent conditions. Configuring severity as CRITICAL will trigger a PagerDuty alert as set up in the console."
+              }
+            },
+            "required": ["duration_threshold", "severity"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "JobSpecTaskWindow": {
       "description": "Configure the data consumption window for job",
@@ -321,7 +337,7 @@
         },
         "truncate_to": {
           "type": "string",
-          "enum": [ "h", "d","w", "M", "y", "None"]
+          "enum": ["h", "d", "w", "M", "y", "None"]
         },
         "preset": {
           "type": "string"
@@ -336,11 +352,14 @@
           "description": "IANA country location codes like Asia/Jakarta"
         }
       },
-      "oneOf" : [{
-        "required" : ["size" ]
-      }, {
-        "required" : ["preset"]
-      }],
+      "oneOf": [
+        {
+          "required": ["size"]
+        },
+        {
+          "required": ["preset"]
+        }
+      ],
       "additionalProperties": false,
       "type": "object"
     },
@@ -359,9 +378,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "url"
-      ]
+      "required": ["url"]
     }
   }
 }

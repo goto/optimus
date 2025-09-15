@@ -271,6 +271,7 @@ func (j *Job) toJob() (*scheduler.Job, error) {
 		}
 		schedulerJob.Task.Config = taskConf.Config
 		schedulerJob.Task.Version = taskConf.Version
+		schedulerJob.Task.AlertConfig = taskConf.AlertConfig
 	}
 
 	if j.Hooks != nil {

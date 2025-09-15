@@ -65,10 +65,82 @@ type JobSpecBehaviorWebhook struct {
 	Endpoints []WebhookEndpoint `yaml:"endpoints"`
 }
 
+type OperatorAlerts struct {
+	DisableAnomalyDetection bool                  `yaml:"disable_anomaly_detection,omitempty"`
+	SLAMiss                 []*SLAMissAlertConfig `yaml:"sla_miss,omitempty"`
+	Retry                   []*RetryAlertConfig   `yaml:"retry,omitempty"`
+	Success                 *SuccessAlertConfig   `yaml:"success,omitempty"`
+	Failure                 *FailureAlertConfig   `yaml:"failure,omitempty"`
+	Team                    string                `yaml:"team,omitempty"`
+}
+
+func (o *OperatorAlerts) GetOperatorAlertProto() *pb.OperatorAlertConfig {
+	if o == nil {
+		return nil
+	}
+	protoOperatorAlert := &pb.OperatorAlertConfig{
+		DisableAnomalyDetection: o.DisableAnomalyDetection,
+		Team:                    o.Team,
+	}
+
+	if len(o.SLAMiss) > 0 {
+		protoOperatorAlert.SlaMiss = make([]*pb.SLAMissAlertConfig, len(o.SLAMiss))
+
+		for i, cfg := range o.SLAMiss {
+			protoOperatorAlert.SlaMiss[i] = &pb.SLAMissAlertConfig{
+				DurationThreshold: durationpb.New(cfg.DurationThreshold),
+				Severity:          cfg.Severity,
+			}
+		}
+	}
+
+	if len(o.Retry) > 0 {
+		protoOperatorAlert.Retry = make([]*pb.RetryAlertConfig, len(o.Retry))
+		for i, cfg := range o.Retry {
+			protoOperatorAlert.Retry[i] = &pb.RetryAlertConfig{
+				CountThreshold: cfg.CountThreshold,
+				Severity:       cfg.Severity,
+			}
+		}
+	}
+
+	if o.Failure != nil {
+		protoOperatorAlert.Failure = &pb.FailureAlertConfig{
+			Severity: o.Failure.Severity,
+		}
+	}
+	if o.Success != nil {
+		protoOperatorAlert.Success = &pb.SuccessAlertConfig{
+			Severity: o.Success.Severity,
+		}
+	}
+
+	return protoOperatorAlert
+}
+
+type SLAMissAlertConfig struct {
+	DurationThreshold time.Duration `yaml:"duration_threshold"`
+	Severity          string        `yaml:"severity"`
+}
+
+type RetryAlertConfig struct {
+	CountThreshold int32  `yaml:"count_threshold"`
+	Severity       string `yaml:"severity"`
+}
+
+type SuccessAlertConfig struct {
+	Severity string `yaml:"severity"`
+}
+
+type FailureAlertConfig struct {
+	Severity string `yaml:"severity"`
+}
+
 type JobSpecTask struct {
 	Name    string            `yaml:"name"`
 	Version string            `yaml:"version,omitempty"`
 	Config  map[string]string `yaml:"config,omitempty"`
+	Alerts  *OperatorAlerts   `yaml:"alert,omitempty"`
 	Window  JobSpecTaskWindow `yaml:"window,omitempty"`
 }
 
@@ -86,6 +158,7 @@ type JobSpecHook struct {
 	Name    string            `yaml:"name"`
 	Version string            `yaml:"version,omitempty"`
 	Config  map[string]string `yaml:"config,omitempty"`
+	Alerts  *OperatorAlerts   `yaml:"alert,omitempty"`
 }
 
 type JobSpecDependency struct {
@@ -138,6 +211,7 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 			Name:    j.Task.Name,
 			Version: j.Task.Version,
 			Config:  taskConfig,
+			Alert:   j.Task.Alerts.GetOperatorAlertProto(),
 		},
 		Dependencies: j.getProtoJobDependencies(),
 		Assets:       j.Asset,
@@ -266,6 +340,7 @@ func (j *JobSpec) getProtoJobSpecHooks() []*pb.JobSpecHook {
 			Name:    hook.Name,
 			Version: hook.Version,
 			Config:  protoJobConfigItems,
+			Alert:   hook.Alerts.GetOperatorAlertProto(),
 		}
 	}
 	return protoJobSpecHooks

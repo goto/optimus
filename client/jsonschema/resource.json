@@ -391,6 +391,7 @@
             "INTERVAL",
             "ARRAY",
             "STRUCT",
+            "MAP",
             "boolean",
             "tinyint",
             "smallint",
@@ -409,7 +410,8 @@
             "timestamp_ntz",
             "interval",
             "array",
-            "struct"
+            "struct",
+            "map"
           ]
         },
         "description": {

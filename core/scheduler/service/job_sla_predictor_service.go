@@ -118,14 +118,16 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 			if currentTime.After(*job.InferredSLA) && jobTarget.JobRuns[jobNameTarget.String()].TaskEndTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
 				potentialBreachJobs = append(potentialBreachJobs, jobTarget)
-				paths[jobNameTarget] = path
+				paths[jobNameTarget] = make([]scheduler.JobName, len(path))
+				copy(paths[jobNameTarget], path)
 				break
 			}
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
 			if currentTime.After(job.InferredSLA.Add(-*job.EstimatedDuration)) && jobTarget.JobRuns[jobNameTarget.String()].TaskStartTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
 				potentialBreachJobs = append(potentialBreachJobs, jobTarget)
-				paths[jobNameTarget] = path
+				paths[jobNameTarget] = make([]scheduler.JobName, len(path))
+				copy(paths[jobNameTarget], path)
 				break
 			}
 			path = path[:len(path)-1] // backtrack

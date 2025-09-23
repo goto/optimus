@@ -96,7 +96,7 @@ func (o *OperatorRunRepository) GetOperatorRunStateIfExist(ctx context.Context, 
 		if errors.IsErrorType(err, errors.ErrNotFound) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, err //nolint:nilnil
 	}
 	return &opRun.Status, nil
 }

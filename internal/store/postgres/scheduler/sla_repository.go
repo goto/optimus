@@ -66,7 +66,7 @@ func (s *SLARepository) UpdateSLA(ctx context.Context, operatorType string, runI
 	return nil
 }
 
-func (s *SLARepository) FinishSla(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error {
+func (s *SLARepository) FinishSLA(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error {
 	slaQuery := "delete from sla where operator_type = $1 and run_id = $2 and SLA_time > $3 "
 
 	_, err := s.db.Exec(ctx, slaQuery, operatorType, runID, operatorEndTime)

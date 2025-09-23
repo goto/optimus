@@ -88,7 +88,7 @@ type OperatorRunRepository interface {
 type SLARepository interface {
 	RegisterSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time, description string) error
 	UpdateSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time) error
-	FinishSla(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error
+	FinishSLA(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error
 }
 
 type JobInputCompiler interface {
@@ -921,7 +921,7 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 	case scheduler.TaskSuccessEvent, scheduler.TaskFailEvent, scheduler.HookSuccessEvent, scheduler.HookFailEvent:
 		// todo: change this to Operator end time from Airflow Context
 		operatorEndTime := event.EventTime
-		err = s.slaRepo.FinishSla(ctx, operatorType.String(), operatorEndTime, operatorRun.ID)
+		err = s.slaRepo.FinishSLA(ctx, operatorType.String(), operatorEndTime, operatorRun.ID)
 		if err != nil {
 			s.l.Error("error finishing sla update for operator run id [%s]: %s", operatorRun.ID, err)
 			return err

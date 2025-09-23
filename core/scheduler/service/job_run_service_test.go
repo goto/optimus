@@ -666,7 +666,7 @@ func TestJobRunService(t *testing.T) {
 					//defer jobRepo.AssertExpectations(t)
 
 					slaRepo := new(mockSLARepository)
-					slaRepo.On("FinishSla", ctx, scheduler.OperatorTask.String(), event.EventTime, operatorRun.ID).Return(nil)
+					slaRepo.On("FinishSLA", ctx, scheduler.OperatorTask.String(), event.EventTime, operatorRun.ID).Return(nil)
 					defer slaRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
@@ -1971,7 +1971,7 @@ func (m *mockSLARepository) UpdateSLA(ctx context.Context, operatorType string, 
 	return args.Error(0)
 }
 
-func (m *mockSLARepository) FinishSla(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error {
+func (m *mockSLARepository) FinishSLA(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error {
 	args := m.Called(ctx, operatorType, operatorEndTime, runID)
 	return args.Error(0)
 }

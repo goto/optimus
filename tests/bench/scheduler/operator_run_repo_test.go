@@ -90,7 +90,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			name := fmt.Sprintf("operator_for_test_%d", i)
-			actualError := schedulerOperatorRunRepo.CreateOperatorRun(ctx, name, serviceScheduler.OperatorTask, storedJobRun.ID, time.Now())
+			_, actualError := schedulerOperatorRunRepo.CreateOperatorRun(ctx, name, serviceScheduler.OperatorTask, storedJobRun.ID, time.Now())
 			assert.NoError(b, actualError)
 		}
 	})
@@ -121,7 +121,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 		operatorRunNames := make([]string, maxNumberOfOperatorRuns)
 		for i := 0; i < maxNumberOfOperatorRuns; i++ {
 			name := fmt.Sprintf("operator_for_test_%d", i)
-			err = schedulerOperatorRunRepo.CreateOperatorRun(ctx, name, serviceScheduler.OperatorTask, storedJobRun.ID, time.Now())
+			_, err = schedulerOperatorRunRepo.CreateOperatorRun(ctx, name, serviceScheduler.OperatorTask, storedJobRun.ID, time.Now())
 			assert.NoError(b, err)
 
 			operatorRunNames[i] = name
@@ -166,7 +166,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 		operatorStartTime := time.Now()
 		for i := 0; i < maxNumberOfOperatorRuns; i++ {
 			name := fmt.Sprintf("operator_for_test_%d", i)
-			err = schedulerOperatorRunRepo.CreateOperatorRun(ctx, name, serviceScheduler.OperatorTask, storedJobRun.ID, operatorStartTime)
+			_, err = schedulerOperatorRunRepo.CreateOperatorRun(ctx, name, serviceScheduler.OperatorTask, storedJobRun.ID, operatorStartTime)
 			assert.NoError(b, err)
 
 			operatorRunNames[i] = name

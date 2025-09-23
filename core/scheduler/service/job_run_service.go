@@ -789,7 +789,8 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 }
 
 func (s *JobRunService) registerSLA(ctx context.Context, operatorRunID uuid.UUID, operatorStartTime time.Time,
-	operatorType scheduler.OperatorType, operatorName string, slaAlertConfigs []*scheduler.SLAAlertConfig) error {
+	operatorType scheduler.OperatorType, operatorName string, slaAlertConfigs []*scheduler.SLAAlertConfig,
+) error {
 	me := errors.NewMultiError("errorInRegisterSLA")
 	for _, slaAlertConfig := range slaAlertConfigs {
 		slaBoundary := operatorStartTime.Add(slaAlertConfig.DurationThreshold)
@@ -918,7 +919,7 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 
 	switch event.Type {
 	case scheduler.TaskSuccessEvent, scheduler.TaskFailEvent, scheduler.HookSuccessEvent, scheduler.HookFailEvent:
-		//todo: change this to Operator end time from Airflow Context
+		// todo: change this to Operator end time from Airflow Context
 		operatorEndTime := event.EventTime
 		err = s.slaRepo.FinishSla(ctx, operatorType.String(), operatorEndTime, operatorRun.ID)
 		if err != nil {

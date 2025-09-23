@@ -40,7 +40,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 			assert.Nil(t, err)
 
 			operatorRunRepo := postgres.NewOperatorRunRepository(db)
-			err = operatorRunRepo.CreateOperatorRun(ctx, "some-operator-name", scheduler.OperatorSensor, jobRun.ID, operatorStartTime)
+			_, err = operatorRunRepo.CreateOperatorRun(ctx, "some-operator-name", scheduler.OperatorSensor, jobRun.ID, operatorStartTime)
 			assert.Nil(t, err)
 
 			operatorRun, err := operatorRunRepo.GetOperatorRun(ctx, "some-operator-name", scheduler.OperatorSensor, jobRun.ID)
@@ -93,7 +93,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 			assert.Nil(t, err)
 
 			operatorRunRepo := postgres.NewOperatorRunRepository(db)
-			err = operatorRunRepo.CreateOperatorRun(ctx, "some-operator-name", scheduler.OperatorTask, jobRun.ID, operatorStartTime)
+			_, err = operatorRunRepo.CreateOperatorRun(ctx, "some-operator-name", scheduler.OperatorTask, jobRun.ID, operatorStartTime)
 			assert.Nil(t, err)
 
 			operatorRun, err := operatorRunRepo.GetOperatorRun(ctx, "some-operator-name", scheduler.OperatorTask, jobRun.ID)

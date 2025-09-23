@@ -11,7 +11,7 @@ type JobSchedule struct {
 	ScheduledAt time.Time
 }
 
-type JobRunLineageSummary struct {
+type JobLineageSummary struct {
 	JobName JobName
 	Tenant  tenant.Tenant
 
@@ -19,7 +19,7 @@ type JobRunLineageSummary struct {
 	ScheduleInterval string
 
 	JobRuns   map[string]*JobRunSummary
-	Upstreams []*JobRunLineageSummary
+	Upstreams []*JobLineageSummary
 }
 
 type SLAConfig struct {

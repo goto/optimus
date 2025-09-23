@@ -15,8 +15,10 @@ type JobLineageSummary struct {
 	JobName JobName
 	Tenant  tenant.Tenant
 
-	SLA              SLAConfig
-	ScheduleInterval string
+	ScheduleInterval  string
+	SLA               SLAConfig
+	InferredSLA       *time.Time
+	EstimatedDuration *time.Duration
 
 	JobRuns   map[string]*JobRunSummary
 	Upstreams []*JobLineageSummary

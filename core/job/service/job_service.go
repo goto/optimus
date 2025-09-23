@@ -415,6 +415,14 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 
 	raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleted, 1)
 
+	if forceFlag && len(downstreamList) > 0 {
+		// if force delete, upstreams of all direct downstreams of the deleted job must be resolved
+		err := j.resolveDownstreamsForDeletedUpstream(ctx, jobTenant, downstreamList)
+		if err != nil {
+			j.logger.Error("error resolving upstreams of downstream jobs of deleted job [%s]: %s", jobName, err.Error())
+		}
+	}
+
 	if err := j.uploadJobs(ctx, jobTenant, nil, []job.Name{jobName}); err != nil {
 		j.logger.Error("error uploading job [%s]: %s", jobName, err)
 		return downstreamFullNames, err
@@ -423,6 +431,46 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 	j.raiseDeleteEvent(jobTenant, jobName)
 
 	return downstreamFullNames, nil
+}
+
+func (j *JobService) resolveDownstreamsForDeletedUpstream(ctx context.Context, jobTenant tenant.Tenant, downstreamList []*job.Downstream) error {
+	toResolveDownstreamJobs := []*job.Job{}
+	me := errors.NewMultiError("downstream resolve on force delete errors")
+
+	for _, downstream := range downstreamList {
+		downstreamJob, err := j.jobRepo.GetByJobName(ctx, downstream.ProjectName(), downstream.Name())
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		toResolveDownstreamJobs = append(toResolveDownstreamJobs, downstreamJob)
+	}
+
+	err := j.resolveAndSaveUpstreams(ctx, jobTenant, writer.NewLogWriter(j.logger), toResolveDownstreamJobs)
+	me.Append(err)
+
+	// since downstream can be cross-tenant, update of jobs must also be done per tenant
+	downstreamJobsByTenant := make(map[string][]*job.Job)
+	for _, downstreamJob := range toResolveDownstreamJobs {
+		tenantKey := downstreamJob.Tenant().String()
+		downstreamJobsByTenant[tenantKey] = append(downstreamJobsByTenant[tenantKey], downstreamJob)
+	}
+
+	for tenantKey, jobsForTenant := range downstreamJobsByTenant {
+		tenantForJobs, err := tenant.TenantFromString(tenantKey)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		err = j.uploadJobs(ctx, tenantForJobs, jobsForTenant, nil)
+		me.Append(err)
+
+		raiseJobEventMetric(tenantForJobs, job.MetricJobEventStateUpdated, len(jobsForTenant))
+	}
+
+	return me.ToErr()
 }
 
 func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenant tenant.Tenant, jobName job.Name) error {
@@ -1826,7 +1874,11 @@ func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant
 		return "resource exists in db but not in store", false
 	}
 
-	return "resource does not exist in both db and store", false
+	// TODO there are issues related to the upstream checker which we use.
+	// for example, resource checker can return nested struct columns (which is not a table) and return validation error
+	// because the referenced table name won't exist in both DB & store.
+	// revert the return value back to "false" if we already fixed the upstream checker issue
+	return "resource does not exist in both db and store", true
 }
 
 func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination resource.URN) dto.ValidateResult {

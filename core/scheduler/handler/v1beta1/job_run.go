@@ -19,7 +19,7 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
+	PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) ([]*scheduler.JobLineageSummary, error)
 }
 
 type JobRunService interface {

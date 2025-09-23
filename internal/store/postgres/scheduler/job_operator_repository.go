@@ -90,14 +90,29 @@ func (o *OperatorRunRepository) GetOperatorRun(ctx context.Context, name string,
 	return opRun.toOperatorRun()
 }
 
-func (o *OperatorRunRepository) CreateOperatorRun(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error {
+func (o *OperatorRunRepository) GetOperatorRunStateIfExist(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.State, error) {
+	opRun, err := o.GetOperatorRun(ctx, name, operatorType, jobRunID)
+	if err != nil {
+		if errors.IsErrorType(err, errors.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &opRun.Status, nil
+}
+
+func (o *OperatorRunRepository) CreateOperatorRun(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) (uuid.UUID, error) {
 	operatorTableName, err := operatorTypeToTableName(operatorType)
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
-	insertOperatorRun := "INSERT INTO " + operatorTableName + " ( " + jobOperatorColumnsToStore + ", created_at, updated_at) values ( $1, $2, $3, $4, null, NOW(), NOW())"
-	_, err = o.db.Exec(ctx, insertOperatorRun, name, jobRunID, scheduler.StateRunning, startTime)
-	return errors.WrapIfErr(scheduler.EntityJobRun, "error while inserting the run", err)
+	insertOperatorRun := "INSERT INTO " + operatorTableName + " ( " + jobOperatorColumnsToStore + ", created_at, updated_at) values ( $1, $2, $3, $4, null, NOW(), NOW()) RETURNING id"
+	var insertedID uuid.UUID
+	err = o.db.QueryRow(ctx, insertOperatorRun, name, jobRunID, scheduler.StateRunning, startTime).Scan(&insertedID)
+	if err != nil {
+		return uuid.Nil, errors.WrapIfErr(scheduler.EntityJobRun, "error while inserting the run", err)
+	}
+	return insertedID, nil
 }
 
 func (o *OperatorRunRepository) UpdateOperatorRun(ctx context.Context, operatorType scheduler.OperatorType, operatorRunID uuid.UUID, eventTime time.Time, state scheduler.State) error {

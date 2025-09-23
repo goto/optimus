@@ -80,8 +80,15 @@ type JobReplayRepository interface {
 
 type OperatorRunRepository interface {
 	GetOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error)
-	CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error
+	GetOperatorRunStateIfExist(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.State, error)
+	CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) (uuid.UUID, error)
 	UpdateOperatorRun(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID, eventTime time.Time, state scheduler.State) error
+}
+
+type SLARepository interface {
+	RegisterSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time, description string) error
+	UpdateSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time) error
+	FinishSla(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error
 }
 
 type JobInputCompiler interface {
@@ -115,6 +122,7 @@ type JobRunService struct {
 	l                log.Logger
 	repo             JobRunRepository
 	replayRepo       JobReplayRepository
+	slaRepo          SLARepository
 	operatorRunRepo  OperatorRunRepository
 	eventHandler     EventHandler
 	scheduler        Scheduler
@@ -780,6 +788,23 @@ func (s *JobRunService) raiseJobRunStateChangeEvent(jobRun *scheduler.JobRun) {
 	s.eventHandler.HandleEvent(schedulerEvent)
 }
 
+func (s *JobRunService) registerSLA(ctx context.Context, operatorRunID uuid.UUID, operatorStartTime time.Time,
+	operatorType scheduler.OperatorType, operatorName string, slaAlertConfigs []*scheduler.SLAAlertConfig) error {
+	me := errors.NewMultiError("errorInRegisterSLA")
+	for _, slaAlertConfig := range slaAlertConfigs {
+		slaBoundary := operatorStartTime.Add(slaAlertConfig.DurationThreshold)
+		slaDescription := fmt.Sprintf("%s: %s, durationSLA: %s", operatorType, operatorName, slaAlertConfig.DurationThreshold.String())
+		err := s.slaRepo.RegisterSLA(ctx, operatorType.String(), operatorRunID, slaBoundary, slaDescription)
+		if err != nil {
+			//	also emmit critical metric here, such that Optimus Devs can be alerted
+			errMsg := fmt.Sprintf("error registering sla for operator Run Id: %s, Type: %s, Sla: %s, err: %s", operatorRunID.String(), operatorType.String(), slaDescription, err.Error())
+			me.Append(errors.Wrap(scheduler.EntityEvent, errMsg, err))
+			s.l.Error(errMsg)
+		}
+	}
+	return me.ToErr()
+}
+
 func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {
 	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt)
 	if err != nil {
@@ -801,7 +826,52 @@ func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.
 		s.raiseJobRunStateChangeEvent(jobRun)
 	}
 
-	return s.operatorRunRepo.CreateOperatorRun(ctx, event.OperatorName, operatorType, jobRun.ID, event.EventTime)
+	job, err := s.jobRepo.GetJob(ctx, event.Tenant.ProjectName(), event.JobName)
+	if err != nil {
+		s.l.Error("error getting job by job name [%s]: %s", event.JobName, err)
+		return err
+	}
+
+	existingOperatorRunState, err := s.operatorRunRepo.GetOperatorRunStateIfExist(ctx, event.OperatorName, operatorType, jobRun.ID)
+	if err != nil {
+		s.l.Error("error checking existing operator run state [%s], operatorName [%s] : %s", jobRun.ID, event.OperatorName, err)
+		return err
+	}
+
+	operatorRunID, err := s.operatorRunRepo.CreateOperatorRun(ctx, event.OperatorName, operatorType, jobRun.ID, event.EventTime)
+	if err != nil {
+		s.l.Error("error registering operator run job [%s], type [%s], operator [%s] : %s", event.JobName, operatorType, event.OperatorName, err)
+		return err
+	}
+
+	if existingOperatorRunState == nil || *existingOperatorRunState != scheduler.StateRetry {
+		switch operatorType {
+		case scheduler.OperatorTask:
+			if job.Task.AlertConfig != nil {
+				err = s.registerSLA(ctx, operatorRunID, event.EventTime, operatorType, event.OperatorName, job.Task.AlertConfig.SLAAlertConfigs)
+				if err != nil {
+					s.l.Error("error registering operator run job [%s], type [%s], operator [%s] : %s", event.JobName, operatorType, event.OperatorName, err)
+					return err
+				}
+			}
+		case scheduler.OperatorHook:
+			for _, hook := range job.Hooks {
+				if hook.Name != event.OperatorName {
+					if hook.AlertConfig != nil {
+						err = s.registerSLA(ctx, operatorRunID, event.EventTime, operatorType, event.OperatorName, job.Task.AlertConfig.SLAAlertConfigs)
+						if err != nil {
+							s.l.Error("error registering operator run job [%s], type [%s], operator [%s] : %s", event.JobName, operatorType, event.OperatorName, err)
+							return err
+						}
+					}
+					break
+				}
+			}
+		default:
+		}
+	}
+
+	return err
 }
 
 func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error) {
@@ -845,6 +915,18 @@ func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.
 		s.l.Error("error updating operator run id [%s]: %s", operatorRun.ID, err)
 		return err
 	}
+
+	switch event.Type {
+	case scheduler.TaskSuccessEvent, scheduler.TaskFailEvent, scheduler.HookSuccessEvent, scheduler.HookFailEvent:
+		//todo: change this to Operator end time from Airflow Context
+		operatorEndTime := event.EventTime
+		err = s.slaRepo.FinishSla(ctx, operatorType.String(), operatorEndTime, operatorRun.ID)
+		if err != nil {
+			s.l.Error("error finishing sla update for operator run id [%s]: %s", operatorRun.ID, err)
+			return err
+		}
+	}
+
 	jobRunDdurationsBreakdownSeconds.WithLabelValues(
 		event.Tenant.ProjectName().String(),
 		event.Tenant.NamespaceName().String(),
@@ -907,13 +989,14 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 }
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
-	operatorRunRepo OperatorRunRepository, scheduler Scheduler, resolver PriorityResolver, compiler JobInputCompiler, eventHandler EventHandler,
-	projectGetter ProjectGetter, features config.FeaturesConfig,
+	operatorRunRepo OperatorRunRepository, slaRepo SLARepository, scheduler Scheduler, resolver PriorityResolver,
+	compiler JobInputCompiler, eventHandler EventHandler, projectGetter ProjectGetter, features config.FeaturesConfig,
 ) *JobRunService {
 	return &JobRunService{
 		l:                logger,
 		repo:             jobRunRepo,
 		operatorRunRepo:  operatorRunRepo,
+		slaRepo:          slaRepo,
 		scheduler:        scheduler,
 		eventHandler:     eventHandler,
 		replayRepo:       replayRepo,

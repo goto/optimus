@@ -27,6 +27,14 @@ func NewJobSLAPredictorService(buffer time.Duration, lastNDays int, jobLineageFe
 	}
 }
 
+// PredictJobSLAs predicts job SLAs for the given jobs based on their lineage and estimated durations.
+// It returns a list of jobs that might breach their SLAs along with the paths of upstream jobs causing the potential breach.
+// The prediction is based on the following logic:
+// 1. Fetch job lineage for the given jobs.
+// 2. Estimate the duration for each job using P95 of the last N days plus a buffer.
+// 3. Infer SLAs for each job based on their downstream critical jobs and estimated durations.
+// 4. Identify jobs that might breach their SLAs based on current time and inferred SLAs.
+// Precondition: cyclic dependency should be handled in validation, so here we can safely assume no cyclic dependency
 func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) ([]*scheduler.JobLineageSummary, map[scheduler.JobName][]scheduler.JobName, error) {
 	// get job lineage first
 	jobsWithLineage, err := s.jobLineageFetcher.GetJobLineage(ctx, jobs)
@@ -34,16 +42,21 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 		return nil, nil, err
 	}
 	// recursively get all upstream job names
-	jobNames := []scheduler.JobName{}
+	jobNamesMap := map[scheduler.JobName]bool{}
 	queue := jobsWithLineage
 	for len(queue) > 0 {
 		job := queue[0]
 		queue = queue[1:]
-		jobNames = append(jobNames, job.JobName)
+		jobNamesMap[job.JobName] = true
 		for _, upstreamJob := range job.Upstreams {
 			queue = append(queue, upstreamJob)
 		}
 	}
+	jobNames := make([]scheduler.JobName, 0, len(jobNamesMap))
+	for jobName := range jobNamesMap {
+		jobNames = append(jobNames, jobName)
+	}
+
 	// calculate estimated duration for each job, P95 of 7 last runs + buffer, D(j) = P95(j) + buffer
 	jobDurations, err := s.durationEstimator.GetP95DurationByJobNames(ctx, jobNames, s.lastNDays)
 	if err != nil {

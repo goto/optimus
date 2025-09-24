@@ -48,9 +48,7 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 		job := queue[0]
 		queue = queue[1:]
 		jobNamesMap[job.JobName] = true
-		for _, upstreamJob := range job.Upstreams {
-			queue = append(queue, upstreamJob)
-		}
+		queue = append(queue, job.Upstreams...)
 	}
 	jobNames := make([]scheduler.JobName, 0, len(jobNamesMap))
 	for jobName := range jobNamesMap {
@@ -71,9 +69,7 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 			estimatedDuration := duration + s.buffer
 			job.EstimatedDuration = &estimatedDuration
 		}
-		for _, upstreamJob := range job.Upstreams {
-			queue = append(queue, upstreamJob)
-		}
+		queue = append(queue, job.Upstreams...)
 	}
 
 	// infer SLA for each job based on its jobs and their inferred SLAs. bottom up calculation, leaf node should meet targetedSLA

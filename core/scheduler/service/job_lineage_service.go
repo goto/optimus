@@ -11,22 +11,24 @@ type JobLineageFetcher interface {
 	GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error)
 }
 
-type JobLineageService struct {
+type LineageBuilder interface {
+	BuildLineage(jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error)
 }
 
-func NewJobLineageService() *JobLineageService {
-	return &JobLineageService{}
+type JobLineageService struct {
+	lineageBuilder LineageBuilder
+}
+
+func NewJobLineageService(
+	lineageBuilder LineageBuilder,
+) *JobLineageService {
+	return &JobLineageService{
+		lineageBuilder: lineageBuilder,
+	}
 }
 
 func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
 	jobSummaries := make([]*scheduler.JobLineageSummary, 0, len(jobSchedules))
-
-	for _, jobSchedule := range jobSchedules {
-		jobSummary := &scheduler.JobLineageSummary{
-			JobName: jobSchedule.JobName,
-		}
-		jobSummaries = append(jobSummaries, jobSummary)
-	}
 
 	return jobSummaries, nil
 }

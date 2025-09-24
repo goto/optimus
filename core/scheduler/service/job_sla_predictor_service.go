@@ -12,13 +12,18 @@ type DurationEstimator interface {
 }
 
 type JobSLAPredictorService struct {
+	buffer            time.Duration
+	lastNDays         int
 	jobLineageFetcher JobLineageFetcher
 	durationEstimator DurationEstimator
 }
 
-func NewJobSLAPredictorService(jobLineageFetcher JobLineageFetcher) *JobSLAPredictorService {
+func NewJobSLAPredictorService(buffer time.Duration, lastNDays int, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
+		buffer:            buffer,
+		lastNDays:         lastNDays,
 		jobLineageFetcher: jobLineageFetcher,
+		durationEstimator: durationEstimator,
 	}
 }
 
@@ -40,18 +45,17 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 		}
 	}
 	// calculate estimated duration for each job, P95 of 7 last runs + buffer, D(j) = P95(j) + buffer
-	jobDurations, err := s.durationEstimator.GetP95DurationByJobNames(ctx, jobNames, 7)
+	jobDurations, err := s.durationEstimator.GetP95DurationByJobNames(ctx, jobNames, s.lastNDays)
 	if err != nil {
 		return nil, nil, err
 	}
 	// assign duration to each job in the lineage
-	buffer := 10 * time.Minute // TODO: configurable
 	queue = jobsWithLineage
 	for len(queue) > 0 {
 		job := queue[0]
 		queue = queue[1:]
 		if duration, ok := jobDurations[job.JobName]; ok {
-			estimatedDuration := duration + buffer
+			estimatedDuration := duration + s.buffer
 			job.EstimatedDuration = &estimatedDuration
 		}
 		for _, upstreamJob := range job.Upstreams {
@@ -81,6 +85,9 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 			}
 			inferredSLA := targetedInferredSLA.Add(-*job.EstimatedDuration)
 			for _, upstreamJob := range job.Upstreams {
+				if upstreamJob.InferredSLAByJobName == nil {
+					upstreamJob.InferredSLAByJobName = make(map[scheduler.JobName]*time.Time)
+				}
 				upstreamJob.InferredSLAByJobName[jobTarget.JobName] = &inferredSLA
 				stack = append(stack, upstreamJob)
 			}
@@ -93,20 +100,24 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 	// return the job that might breach its SLA
 	currentTime := time.Now().UTC()
 	potentialBreachJobs := []*scheduler.JobLineageSummary{}
-	paths := make(map[scheduler.JobName][]scheduler.JobName)
+	potentialBreachPaths := make(map[scheduler.JobName][]scheduler.JobName)
 	for _, jobTarget := range jobsWithLineage {
-		// DFS to traverse all upstream jobs
-		stack := []*scheduler.JobLineageSummary{jobTarget}
-		path := []scheduler.JobName{}
+		// DFS to traverse all upstream jobs with paths
+		type state struct {
+			job   *scheduler.JobLineageSummary
+			paths []scheduler.JobName
+		}
+		stack := []*state{{job: jobTarget, paths: []scheduler.JobName{}}}
 		for len(stack) > 0 {
-			job := stack[len(stack)-1]
+			jobWithState := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
-			path = append(path, job.JobName)
+			job := jobWithState.job
+			paths := append(jobWithState.paths, job.JobName)
 			if job.InferredSLAByJobName[jobTarget.JobName] == nil || job.EstimatedDuration == nil {
 				continue
 			}
 			for _, upstreamJob := range job.Upstreams {
-				stack = append(stack, upstreamJob)
+				stack = append(stack, &state{job: upstreamJob, paths: paths})
 			}
 			if job.JobName == jobTarget.JobName {
 				// skip the target job itself
@@ -117,21 +128,24 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
 			if currentTime.After(inferredSLA) && job.JobRuns[jobTarget.JobName.String()].TaskEndTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
-				potentialBreachJobs = append(potentialBreachJobs, jobTarget)
-				paths[jobTarget.JobName] = make([]scheduler.JobName, len(path))
-				copy(paths[jobTarget.JobName], path)
-				break
+				potentialBreachPaths[jobTarget.JobName] = paths
 			}
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
 			if currentTime.After(inferredSLA.Add(-*job.EstimatedDuration)) && job.JobRuns[jobTarget.JobName.String()].TaskStartTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
-				potentialBreachJobs = append(potentialBreachJobs, jobTarget)
-				paths[jobTarget.JobName] = make([]scheduler.JobName, len(path))
-				copy(paths[jobTarget.JobName], path)
-				break
+				potentialBreachPaths[jobTarget.JobName] = paths
 			}
-			path = path[:len(path)-1] // backtrack
 		}
 	}
-	return potentialBreachJobs, paths, nil
+
+	// collect unique jobs that might breach their SLAs
+	for jobName := range potentialBreachPaths {
+		for _, job := range jobsWithLineage {
+			if job.JobName == jobName {
+				potentialBreachJobs = append(potentialBreachJobs, job)
+			}
+		}
+	}
+
+	return potentialBreachJobs, potentialBreachPaths, nil
 }

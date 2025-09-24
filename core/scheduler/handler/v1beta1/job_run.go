@@ -19,7 +19,7 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) ([]*scheduler.JobLineageSummary, error)
+	PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (jobBreaches []*scheduler.JobLineageSummary, paths map[scheduler.JobName][]scheduler.JobName, err error)
 }
 
 type JobRunService interface {

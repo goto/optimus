@@ -39,7 +39,7 @@ func NewSLARepository(pool *pgxpool.Pool) *SLARepository {
 }
 
 func (s *SLARepository) RegisterSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error {
-	slaQuery := "INSERT INTO sla ( job_name, operator_name, operator_type, run_id, sla_time, description) values ( $1, $2, $3, $4, $5, $6)"
+	slaQuery := "INSERT INTO operator_sla ( job_name, operator_name, operator_type, run_id, sla_time, description) values ( $1, $2, $3, $4, $5, $6)"
 
 	tag, err := s.db.Exec(ctx, slaQuery, jobName, operatorName, operatorType, runID, slaTime, description)
 	if err != nil {
@@ -54,7 +54,7 @@ func (s *SLARepository) RegisterSLA(ctx context.Context, jobName, operatorName, 
 }
 
 func (s *SLARepository) UpdateSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
-	slaQuery := "update sla set sla_time = $1 where job_name = $2 and  operator_name = $3 and operator_type = $4 and run_id = $5 "
+	slaQuery := "update operator_sla set sla_time = $1 where job_name = $2 and  operator_name = $3 and operator_type = $4 and run_id = $5 "
 
 	tag, err := s.db.Exec(ctx, slaQuery, slaTime, jobName, operatorName, operatorType, runID)
 	if err != nil {
@@ -69,7 +69,7 @@ func (s *SLARepository) UpdateSLA(ctx context.Context, jobName, operatorName, op
 }
 
 func (s *SLARepository) FinishSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, operatorEndTime time.Time) error {
-	slaQuery := "delete from sla where job_name = $1 and  operator_name = $2 and operator_type = $3 and run_id = $4 and SLA_time > $5 "
+	slaQuery := "delete from operator_sla where job_name = $1 and  operator_name = $2 and operator_type = $3 and run_id = $4 and SLA_time > $5 "
 
 	_, err := s.db.Exec(ctx, slaQuery, jobName, operatorName, operatorType, runID, operatorEndTime)
 	if err != nil {

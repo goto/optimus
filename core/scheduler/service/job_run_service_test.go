@@ -502,7 +502,7 @@ func TestJobRunService(t *testing.T) {
 
 				t.Run("should pass creating new operator run ", func(t *testing.T) {
 					operatorRunRepository := new(mockOperatorRunRepository)
-					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(uuid.New(), nil)
+					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(nil)
 					state := scheduler.StateRetry
 					operatorRunRepository.On("GetOperatorRunStateIfExist", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).Return(&state, nil)
 					defer operatorRunRepository.AssertExpectations(t)
@@ -558,7 +558,7 @@ func TestJobRunService(t *testing.T) {
 					operatorRunRepository := new(mockOperatorRunRepository)
 					operatorRunRepository.On("GetOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).Return(nil, errors.NotFound(scheduler.EntityEvent, "operator not found in db")).Once()
 					operatorRunRepository.On("GetOperatorRunStateIfExist", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).Return(nil, nil)
-					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(uuid.New(), fmt.Errorf("some error in creating operator run"))
+					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(fmt.Errorf("some error in creating operator run"))
 					defer operatorRunRepository.AssertExpectations(t)
 
 					jobRunRepo := new(mockJobRunRepository)
@@ -599,7 +599,7 @@ func TestJobRunService(t *testing.T) {
 					operatorRunRepository := new(mockOperatorRunRepository)
 					operatorRunRepository.On("GetOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).Return(nil, errors.NotFound(scheduler.EntityEvent, "operator not found in db")).Once()
 					operatorRunRepository.On("GetOperatorRunStateIfExist", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).Return(nil, nil)
-					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(uuid.New(), nil)
+					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(nil)
 					operatorRunRepository.On("GetOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).Return(nil, fmt.Errorf("some error in getting operator run")).Once()
 					defer operatorRunRepository.AssertExpectations(t)
 
@@ -654,19 +654,8 @@ func TestJobRunService(t *testing.T) {
 					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(&jobRun, nil)
 					defer jobRunRepo.AssertExpectations(t)
 
-					//job := scheduler.Job{
-					//	Name:   jobName,
-					//	Tenant: tnnt,
-					//	Task: &scheduler.Task{
-					//		Config: map[string]string{},
-					//	},
-					//}
-					//jobRepo := new(JobRepository)
-					//jobRepo.On("GetJob", ctx, projName, jobName).Return(&job, nil)
-					//defer jobRepo.AssertExpectations(t)
-
 					slaRepo := new(mockSLARepository)
-					slaRepo.On("FinishSLA", ctx, scheduler.OperatorTask.String(), event.EventTime, operatorRun.ID).Return(nil)
+					slaRepo.On("FinishSLA", ctx, jobName.String(), event.OperatorName, scheduler.OperatorTask.String(), event.JobScheduledAt.Format(time.RFC3339), event.EventTime).Return(nil)
 					defer slaRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
@@ -1961,18 +1950,18 @@ type mockSLARepository struct {
 	mock.Mock
 }
 
-func (m *mockSLARepository) RegisterSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time, description string) error {
-	args := m.Called(ctx, operatorType, runID, slaTime, description)
+func (m *mockSLARepository) RegisterSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error {
+	args := m.Called(ctx, jobName, operatorName, operatorType, runID, slaTime, description)
 	return args.Error(0)
 }
 
-func (m *mockSLARepository) UpdateSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time) error {
-	args := m.Called(ctx, operatorType, runID, slaTime)
+func (m *mockSLARepository) UpdateSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
+	args := m.Called(ctx, jobName, operatorName, operatorType, runID, slaTime)
 	return args.Error(0)
 }
 
-func (m *mockSLARepository) FinishSLA(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error {
-	args := m.Called(ctx, operatorType, operatorEndTime, runID)
+func (m *mockSLARepository) FinishSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, operatorEndTime time.Time) error {
+	args := m.Called(ctx, jobName, operatorName, operatorType, runID, operatorEndTime)
 	return args.Error(0)
 }
 
@@ -2147,9 +2136,9 @@ func (m *mockOperatorRunRepository) GetOperatorRunStateIfExist(ctx context.Conte
 	return args.Get(0).(*scheduler.State), args.Error(1)
 }
 
-func (m *mockOperatorRunRepository) CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) (uuid.UUID, error) {
+func (m *mockOperatorRunRepository) CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error {
 	args := m.Called(ctx, operatorName, operator, jobRunID, startTime)
-	return args.Get(0).(uuid.UUID), args.Error(1)
+	return args.Error(0)
 }
 
 func (m *mockOperatorRunRepository) UpdateOperatorRun(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID, eventTime time.Time, state scheduler.State) error {

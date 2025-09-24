@@ -4,10 +4,12 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
-CREATE TABLE IF NOT EXISTS sla (
+CREATE TABLE IF NOT EXISTS operator_sla (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     job_name TEXT NOT NULL,
+     operator_name TEXT NOT NULL,
+     run_id string NOT NULL,
      operator_type operator_type NOT NULL,
-     run_id UUID NOT NULL,
      sla_time TIMESTAMPTZ NOT NULL,
      description TEXT,
      worker_signature UUID,

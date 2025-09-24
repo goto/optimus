@@ -12,10 +12,12 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-type SLA struct {
+type OperatorsSLA struct {
 	ID           uuid.UUID
+	JobName      string
+	OperatorName string
+	RunID        string
 	OperatorType string
-	RunID        uuid.UUID
 	SLATime      time.Time
 	Description  string
 
@@ -36,42 +38,42 @@ func NewSLARepository(pool *pgxpool.Pool) *SLARepository {
 	}
 }
 
-func (s *SLARepository) RegisterSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time, description string) error {
-	slaQuery := "INSERT INTO sla ( operator_type, run_id, sla_time, description) values ( $1, $2, $3, $4)"
+func (s *SLARepository) RegisterSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error {
+	slaQuery := "INSERT INTO sla ( job_name, operator_name, operator_type, run_id, sla_time, description) values ( $1, $2, $3, $4, $5, $6)"
 
-	tag, err := s.db.Exec(ctx, slaQuery, operatorType, runID, slaTime, description)
+	tag, err := s.db.Exec(ctx, slaQuery, jobName, operatorName, operatorType, runID, slaTime, description)
 	if err != nil {
-		errMsg := fmt.Sprintf("error executing sla insert, params: %s, %s, %s, %s", operatorType, runID, slaTime, description)
+		errMsg := fmt.Sprintf("error executing sla insert, params: %s, %s, %s, %s, %s, %s", jobName, operatorName, operatorType, runID, slaTime, description)
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)
 	}
 	if tag.RowsAffected() == 0 {
-		errMsg := fmt.Sprintf("error executing sla insert, params: %s, %s, %s, %s, err: now new rows created", operatorType, runID, slaTime, description)
+		errMsg := fmt.Sprintf("error executing sla insert, params: %s, %s, %s, %s, %s, %s, err: now new rows created", jobName, operatorName, operatorType, runID, slaTime, description)
 		return errors.NewError(errors.ErrInternalError, scheduler.EntityEvent, errMsg)
 	}
 	return nil
 }
 
-func (s *SLARepository) UpdateSLA(ctx context.Context, operatorType string, runID uuid.UUID, slaTime time.Time) error {
-	slaQuery := "update sla set sla_time = $1 where operator_type = $2 and run_id = $3 "
+func (s *SLARepository) UpdateSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
+	slaQuery := "update sla set sla_time = $1 where job_name = $2 and  operator_name = $3 and operator_type = $4 and run_id = $5 "
 
-	tag, err := s.db.Exec(ctx, slaQuery, slaTime, operatorType, runID)
+	tag, err := s.db.Exec(ctx, slaQuery, slaTime, jobName, operatorName, operatorType, runID)
 	if err != nil {
-		errMsg := fmt.Sprintf("error executing sla update, params: %s, %s, %s", operatorType, runID, slaTime)
+		errMsg := fmt.Sprintf("error executing sla update, params: %s:%s, %s, %s, %s", jobName, operatorName, operatorType, runID, slaTime)
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)
 	}
 	if tag.RowsAffected() == 0 {
-		errMsg := fmt.Sprintf("error executing sla update, params: %s, %s, %s, err: now new rows created", operatorType, runID, slaTime)
+		errMsg := fmt.Sprintf("error executing sla update, params: %s:%s, %s, %s, %s, err: now new rows created", jobName, operatorName, operatorType, runID, slaTime)
 		return errors.NewError(errors.ErrInternalError, scheduler.EntityEvent, errMsg)
 	}
 	return nil
 }
 
-func (s *SLARepository) FinishSLA(ctx context.Context, operatorType string, operatorEndTime time.Time, runID uuid.UUID) error {
-	slaQuery := "delete from sla where operator_type = $1 and run_id = $2 and SLA_time > $3 "
+func (s *SLARepository) FinishSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, operatorEndTime time.Time) error {
+	slaQuery := "delete from sla where job_name = $1 and  operator_name = $2 and operator_type = $3 and run_id = $4 and SLA_time > $5 "
 
-	_, err := s.db.Exec(ctx, slaQuery, operatorType, runID, operatorEndTime)
+	_, err := s.db.Exec(ctx, slaQuery, jobName, operatorName, operatorType, runID, operatorEndTime)
 	if err != nil {
-		errMsg := fmt.Sprintf("error finishing SLA, params: operatorType:%s, runID:%s, operatorEndTime:%s", operatorType, runID, operatorEndTime)
+		errMsg := fmt.Sprintf("error finishing SLA, params: %s:%s operatorType:%s, runID:%s, operatorEndTime:%s", jobName, operatorName, operatorType, runID, operatorEndTime)
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)
 	}
 

@@ -410,14 +410,50 @@ func (t TaskName) String() string {
 	return string(t)
 }
 
-type Task struct {
-	name    TaskName
-	version string
-	config  Config
+type Severity string
+
+const (
+	Critical Severity = "CRITICAL"
+	Warning  Severity = "WARNING"
+	Info     Severity = "INFO"
+)
+
+func SeverityFromString(severity string) (Severity, error) {
+	switch {
+	case strings.EqualFold(severity, Critical.String()):
+		return Critical, nil
+	case strings.EqualFold(severity, Warning.String()):
+		return Warning, nil
+	case strings.EqualFold(severity, Info.String()):
+		return Info, nil
+	default:
+		return "", errors.InvalidArgument(EntityJob, "invalid severity, expected on of 'WARNING', 'INFO' or 'CRITICAL'")
+	}
 }
 
-func NewTask(name TaskName, config Config, version string) Task {
-	return Task{name: name, config: config, version: version}
+func (s Severity) String() string {
+	return string(s)
+}
+
+type SLAAlertConfig struct {
+	DurationThreshold time.Duration
+	Severity          Severity
+}
+
+type OperatorAlertConfig struct {
+	SLAAlertConfigs []*SLAAlertConfig
+	Team            string
+}
+
+type Task struct {
+	name        TaskName
+	version     string
+	alertConfig *OperatorAlertConfig
+	config      Config
+}
+
+func NewTask(name TaskName, config Config, version string, alertConfig *OperatorAlertConfig) Task {
+	return Task{name: name, config: config, version: version, alertConfig: alertConfig}
 }
 
 func (t Task) Name() TaskName {
@@ -430,6 +466,10 @@ func (t Task) Version() string {
 
 func (t Task) Config() Config {
 	return t.config
+}
+
+func (t Task) AlertConfig() *OperatorAlertConfig {
+	return t.alertConfig
 }
 
 type MetadataResourceConfig struct {
@@ -511,16 +551,17 @@ func (m *MetadataBuilder) WithScheduler(scheduler map[string]string) *MetadataBu
 }
 
 type Hook struct {
-	name    string
-	version string
-	config  Config
+	name        string
+	version     string
+	config      Config
+	alertConfig *OperatorAlertConfig
 }
 
-func NewHook(name string, config Config, version string) (*Hook, error) {
+func NewHook(name string, config Config, version string, alertConfig *OperatorAlertConfig) (*Hook, error) {
 	if name == "" {
 		return nil, errors.InvalidArgument(EntityJob, "hook name is empty")
 	}
-	return &Hook{name: name, config: config, version: version}, nil
+	return &Hook{name: name, config: config, version: version, alertConfig: alertConfig}, nil
 }
 
 func (h Hook) Name() string {
@@ -533,6 +574,10 @@ func (h Hook) Config() Config {
 
 func (h Hook) Version() string {
 	return h.version
+}
+
+func (h Hook) AlertConfig() *OperatorAlertConfig {
+	return h.alertConfig
 }
 
 type Asset map[string]string

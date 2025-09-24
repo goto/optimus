@@ -89,16 +89,53 @@ func (j *Job) URN() string {
 	return fmt.Sprintf("urn:%s:%s:job:%s.%s.%s", urnContext, j.Tenant.ProjectName(), j.Tenant.ProjectName(), j.Tenant.NamespaceName(), j.Name)
 }
 
+type Severity string
+
+const (
+	Critical Severity = "CRITICAL"
+	Warning  Severity = "WARNING"
+	Info     Severity = "INFO"
+)
+
+func SeverityFromString(severity string) (Severity, error) {
+	switch {
+	case strings.EqualFold(severity, Critical.String()):
+		return Critical, nil
+	case strings.EqualFold(severity, Warning.String()):
+		return Warning, nil
+	case strings.EqualFold(severity, Info.String()):
+		return Info, nil
+	default:
+		return "", errors.InvalidArgument(EntityJobRun, "invalid severity, expected on of 'WARNING', 'INFO' or 'CRITICAL'")
+	}
+}
+
+func (s Severity) String() string {
+	return string(s)
+}
+
+type SLAAlertConfig struct {
+	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
+	Severity          Severity      `json:"severity,omitempty"`
+}
+
+type OperatorAlertConfig struct {
+	SLAAlertConfigs []*SLAAlertConfig `json:"sla_alert_configs,omitempty"`
+	Team            string            `json:"team,omitempty"`
+}
+
 type Task struct {
-	Name    string
-	Version string
-	Config  map[string]string
+	Name        string               `json:"name,omitempty"`
+	Version     string               `json:"version,omitempty"`
+	Config      map[string]string    `json:"config,omitempty"`
+	AlertConfig *OperatorAlertConfig `json:"alert_config,omitempty"`
 }
 
 type Hook struct {
-	Name    string
-	Version string
-	Config  map[string]string
+	Name        string               `json:"name,omitempty"`
+	Version     string               `json:"version,omitempty"`
+	Config      map[string]string    `json:"config,omitempty"`
+	AlertConfig *OperatorAlertConfig `json:"alert_config,omitempty"`
 }
 
 // JobWithDetails contains the details for a job

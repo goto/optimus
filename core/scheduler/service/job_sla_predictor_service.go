@@ -66,27 +66,27 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 	// such that, the inferred SLA for any upstream job in level n un induced by a downstream job j as:
 	// S(un|j) = S(un-1|j) - D(un-1)
 	// where, S(u0|j) = S(j), D(u0) = D(j)
-	for _, job := range jobsWithLineage {
+	for _, jobTarget := range jobsWithLineage {
 		// inferred SLA for leaf node = targetedSLA S(j)
-		job.InferredSLA = &targetedSLA
-	}
-	stack := jobsWithLineage
-	for len(stack) > 0 {
-		job := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		targetedInferredSLA := job.InferredSLA
-		for _, upstreamJob := range job.Upstreams {
-			if upstreamJob.EstimatedDuration == nil || targetedInferredSLA == nil {
+		jobTarget.InferredSLAByJobName = make(map[scheduler.JobName]*time.Time)
+		jobTarget.InferredSLAByJobName[jobTarget.JobName] = &targetedSLA
+		// bottom up calculation of inferred SLA for upstream jobs
+		stack := []*scheduler.JobLineageSummary{jobTarget}
+		for len(stack) > 0 {
+			job := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			targetedInferredSLA := job.InferredSLAByJobName[jobTarget.JobName]
+			if job.EstimatedDuration == nil || targetedInferredSLA == nil {
 				continue
 			}
-			inferredSLA := targetedInferredSLA.Add(-*upstreamJob.EstimatedDuration)
-			// take the earliest inferred SLA if there are multiple downstream jobs referencing the same upstream job
-			if upstreamJob.InferredSLA == nil || inferredSLA.Before(*upstreamJob.InferredSLA) {
-				upstreamJob.InferredSLA = &inferredSLA
+			inferredSLA := targetedInferredSLA.Add(-*job.EstimatedDuration)
+			for _, upstreamJob := range job.Upstreams {
+				upstreamJob.InferredSLAByJobName[jobTarget.JobName] = &inferredSLA
+				stack = append(stack, upstreamJob)
 			}
-			stack = append(stack, upstreamJob)
 		}
 	}
+
 	// if any upstream job u of a critical downstream job j meets either of the following conditions, it means job j might breach its SLA:
 	// - Given current time in UTC T(now), T(now)>= S(u|j) (the inferred SLA for u induced by j has passed) and the upstream job u has not completed yet. Or,
 	// - Given current time in UTC T(now), T(now)>= S(u|j) - D(u) (the inferred SLA for u induced by j minus the average duration of u has passed) and the upstream job u has not started yet.
@@ -95,39 +95,39 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 	potentialBreachJobs := []*scheduler.JobLineageSummary{}
 	paths := make(map[scheduler.JobName][]scheduler.JobName)
 	for _, jobTarget := range jobsWithLineage {
-		jobNameTarget := jobTarget.JobName
-		stack = []*scheduler.JobLineageSummary{jobTarget}
-		path := []scheduler.JobName{}
 		// DFS to traverse all upstream jobs
+		stack := []*scheduler.JobLineageSummary{jobTarget}
+		path := []scheduler.JobName{}
 		for len(stack) > 0 {
 			job := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 			path = append(path, job.JobName)
-			if job.InferredSLA == nil || job.EstimatedDuration == nil {
+			if job.InferredSLAByJobName[jobTarget.JobName] == nil || job.EstimatedDuration == nil {
 				continue
 			}
 			for _, upstreamJob := range job.Upstreams {
 				stack = append(stack, upstreamJob)
 			}
-			if job.JobName == jobNameTarget {
+			if job.JobName == jobTarget.JobName {
 				// skip the target job itself
 				continue
 			}
+			inferredSLA := *job.InferredSLAByJobName[jobTarget.JobName]
 			// check if job meets either of the conditions
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
-			if currentTime.After(*job.InferredSLA) && jobTarget.JobRuns[jobNameTarget.String()].TaskEndTime == nil {
+			if currentTime.After(inferredSLA) && job.JobRuns[jobTarget.JobName.String()].TaskEndTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
 				potentialBreachJobs = append(potentialBreachJobs, jobTarget)
-				paths[jobNameTarget] = make([]scheduler.JobName, len(path))
-				copy(paths[jobNameTarget], path)
+				paths[jobTarget.JobName] = make([]scheduler.JobName, len(path))
+				copy(paths[jobTarget.JobName], path)
 				break
 			}
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
-			if currentTime.After(job.InferredSLA.Add(-*job.EstimatedDuration)) && jobTarget.JobRuns[jobNameTarget.String()].TaskStartTime == nil {
+			if currentTime.After(inferredSLA.Add(-*job.EstimatedDuration)) && job.JobRuns[jobTarget.JobName.String()].TaskStartTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
 				potentialBreachJobs = append(potentialBreachJobs, jobTarget)
-				paths[jobNameTarget] = make([]scheduler.JobName, len(path))
-				copy(paths[jobNameTarget], path)
+				paths[jobTarget.JobName] = make([]scheduler.JobName, len(path))
+				copy(paths[jobTarget.JobName], path)
 				break
 			}
 			path = path[:len(path)-1] // backtrack

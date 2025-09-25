@@ -20,6 +20,7 @@ type LineageBuilder interface {
 type JobLineageService struct {
 	l              log.Logger
 	lineageBuilder LineageBuilder
+	jobRunService  JobRunService
 }
 
 func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error) {
@@ -60,9 +61,11 @@ func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*s
 func NewJobLineageService(
 	l log.Logger,
 	lineageBuilder LineageBuilder,
+	jobRunService JobRunService,
 ) *JobLineageService {
 	return &JobLineageService{
 		l:              l,
 		lineageBuilder: lineageBuilder,
+		jobRunService:  jobRunService,
 	}
 }

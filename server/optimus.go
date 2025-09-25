@@ -403,13 +403,9 @@ func (s *OptimusServer) setupHandlers() error {
 
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
-	lineageBuilder := schedulerResolver.NewLineageResolver(jobProviderRepo, jobProviderRepo, newJobRunService, tProjectService, s.logger)
+	lineageBuilder := schedulerResolver.NewLineageResolver(jobProviderRepo, jobProviderRepo, newJobRunService, tProjectService)
 	// TODO: since no service consume this yet, we can wait to initialize this when needed
-	jobLineageService := schedulerService.NewJobLineageService(s.logger, lineageBuilder)
-
-	// SLA Predictor Service
-	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(jobRunRepo, s.conf.Alerting.PotentialSLABreachConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.BufferPercentage)
-	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, jobLineageService, newDurationEstimatorService, jobProviderRepo)
+	_ = schedulerService.NewJobLineageService(s.logger, lineageBuilder)
 
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)

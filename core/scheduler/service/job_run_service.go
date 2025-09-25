@@ -73,7 +73,7 @@ type JobRunRepository interface {
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
 	UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error
 	UpdateMonitoring(ctx context.Context, jobRunID uuid.UUID, monitoring map[string]any) error
-	GetRunSummaryByIdentifiers(ctx context.Context, identifiers []*scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error)
+	GetRunSummaryByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error)
 }
 
 type JobReplayRepository interface {
@@ -1026,7 +1026,7 @@ func (s *JobRunService) GetExpectedRunSchedules(ctx context.Context, sourceProje
 	return scheduleTimes, nil
 }
 
-func (s *JobRunService) GetJobRunsByIdentifiers(ctx context.Context, identifiers []*scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+func (s *JobRunService) GetJobRunsByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
 	if len(identifiers) == 0 {
 		return []*scheduler.JobRunSummary{}, nil
 	}

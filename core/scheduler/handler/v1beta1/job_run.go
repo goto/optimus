@@ -410,6 +410,9 @@ func getLevel(currentJob *scheduler.JobLineageSummary, job *scheduler.JobLineage
 	if currentJob.JobName == job.JobName {
 		return currentLevel
 	}
+	if memo == nil {
+		memo = make(map[*scheduler.JobLineageSummary]int32)
+	}
 	if level, ok := memo[currentJob]; ok {
 		return level
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/salt/log"
 )
 
 // Contract that can be used by other callers to fetch job lineage information
@@ -12,31 +13,24 @@ type JobLineageFetcher interface {
 }
 
 type LineageBuilder interface {
-	BuildLineage(jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error)
+	BuildLineage(context.Context, []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error)
 }
 
 type JobLineageService struct {
+	l              log.Logger
 	lineageBuilder LineageBuilder
-	jobRunService  JobRunService
-}
-
-func NewJobLineageService(
-	lineageBuilder LineageBuilder,
-	jobRunService JobRunService,
-) *JobLineageService {
-	return &JobLineageService{
-		lineageBuilder: lineageBuilder,
-		jobRunService:  jobRunService,
-	}
 }
 
 func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
-	jobSummaries := make([]*scheduler.JobLineageSummary, 0, len(jobSchedules))
+	return j.lineageBuilder.BuildLineage(ctx, jobSchedules)
+}
 
-	jobLineages, err := j.lineageBuilder.BuildLineage(jobSchedules)
-	if err != nil {
-		return nil, err
+func NewJobLineageService(
+	l log.Logger,
+	lineageBuilder LineageBuilder,
+) *JobLineageService {
+	return &JobLineageService{
+		l:              l,
+		lineageBuilder: lineageBuilder,
 	}
-
-	return jobSummaries, nil
 }

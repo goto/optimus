@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/interval"
@@ -18,7 +19,7 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (jobBreaches []*scheduler.JobLineageSummary, paths map[scheduler.JobName][]scheduler.JobName, err error)
+	PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (rootCauses map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary, jobSLAStates map[*scheduler.JobLineageSummary]*service.JobSLAState, err error)
 }
 
 type JobRunService interface {
@@ -343,13 +344,92 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
+// TriggerPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time
+func (h JobRunHandler) TriggerPotentialSLABreach(ctx context.Context, req *pb.TriggerPotentialSLABreachRequest) (*pb.TriggerPotentialSLABreachResponse, error) {
+	// populate map of targetedSLA to jobSchedules
+	jobSchedulesByTargetedSLA := make(map[time.Time][]*scheduler.JobSchedule)
+	for _, jobTarget := range req.GetJobTargets() {
+		targetedSLA := jobTarget.GetTargetedSlaTime().AsTime()
+		if _, ok := jobSchedulesByTargetedSLA[targetedSLA]; !ok {
+			jobSchedulesByTargetedSLA[targetedSLA] = make([]*scheduler.JobSchedule, 0)
+		}
+		jobName, err := scheduler.JobNameFrom(jobTarget.GetJobName())
+		if err != nil {
+			h.l.Error("error adapting job name [%s]: %v", jobTarget.GetJobName(), err)
+			return nil, errors.GRPCErr(err, "unable to adapt job name")
+		}
+		jobSchedulesByTargetedSLA[targetedSLA] = append(jobSchedulesByTargetedSLA[targetedSLA], &scheduler.JobSchedule{
+			JobName:     jobName,
+			ScheduledAt: jobTarget.ScheduledAt.AsTime(),
+		})
+	}
+	// TODO: get job based on labels
+
+	response := pb.TriggerPotentialSLABreachResponse{Jobs: make(map[string]*pb.PotentialSLABreachJobs)}
+	// for each targetedSLA, predict SLA breaches
+	for targetedSLA, jobSchedules := range jobSchedulesByTargetedSLA {
+		jobBreachRootCause, jobSLAStates, err := h.JobSLAPredictorService.PredictJobSLAs(ctx, jobSchedules, targetedSLA)
+		if err != nil {
+			h.l.Error("error predicting SLA breaches for targetedSLA [%s]: %v", targetedSLA.String(), err)
+			return nil, errors.GRPCErr(err, "error predicting SLA breaches")
+		}
+		if len(jobBreachRootCause) == 0 {
+			h.l.Info("No SLA breaches predicted for targetedSLA %s", targetedSLA.String())
+			continue
+		}
+		h.l.Info("Predicted %d SLA breaches for targetedSLA %s", len(jobBreachRootCause), targetedSLA.String())
+		for jobTarget, jobs := range jobBreachRootCause {
+			response.Jobs[jobTarget.JobName.String()] = &pb.PotentialSLABreachJobs{}
+			response.Jobs[jobTarget.JobName.String()].Jobs = make([]*pb.PotentialSLABreachJob, 0)
+			response.Jobs[jobTarget.JobName.String()].Jobs = append(response.Jobs[jobTarget.JobName.String()].Jobs, &pb.PotentialSLABreachJob{
+				ProjectName:     jobTarget.Tenant.ProjectName().String(),
+				JobName:         jobTarget.JobName.String(),
+				InferredSlaTime: timestamppb.New(*jobSLAStates[jobTarget].InferredSLAByJobName[jobTarget.JobName]),
+				RelativeLevel:   0,
+				// Status: jobTarget.JobRuns[],
+			})
+			// add root causes
+			for _, job := range jobs {
+				response.Jobs[jobTarget.JobName.String()].Jobs = append(response.Jobs[jobTarget.JobName.String()].Jobs, &pb.PotentialSLABreachJob{
+					ProjectName:     job.Tenant.ProjectName().String(),
+					JobName:         job.JobName.String(),
+					InferredSlaTime: timestamppb.New(*jobSLAStates[job].InferredSLAByJobName[jobTarget.JobName]),
+					RelativeLevel:   getLevel(jobTarget, job, nil, 0),
+					// Status: job.JobRuns[],
+				})
+			}
+		}
+	}
+
+	// TODO: grouping based on the namespace, and send notification for each namespace once
+
+	return &response, nil
+}
+
+func getLevel(currentJob *scheduler.JobLineageSummary, job *scheduler.JobLineageSummary, memo map[*scheduler.JobLineageSummary]int32, currentLevel int32) int32 {
+	if currentJob.JobName == job.JobName {
+		return currentLevel
+	}
+	if level, ok := memo[currentJob]; ok {
+		return level
+	}
+	maxLevel := int32(-1)
+	for _, up := range currentJob.Upstreams {
+		level := getLevel(up, job, memo, currentLevel+1)
+		if level > maxLevel {
+			maxLevel = level
+		}
+	}
+	memo[currentJob] = maxLevel
+	return maxLevel
+}
+
 func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJobRunLineageSummaryRequest) (*pb.GetJobRunLineageSummaryResponse, error) {
 	targetJobSchedules, err := fromJobRunLineageSummaryRequest(req)
 	if err != nil {
 		h.l.Error("error parsing job schedules from request: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse job schedules from request")
 	}
-
 	jobRunLineages, err := h.jobLineageService.GetJobExecutionSummary(ctx, targetJobSchedules, int(req.GetNumberOfUpstreamPerLevel()))
 	if err != nil {
 		h.l.Error("error getting job run lineage summary: %s", err)

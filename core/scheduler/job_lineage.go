@@ -32,10 +32,13 @@ type SLAConfig struct {
 }
 
 type JobRunSummary struct {
+	JobName     JobName
 	ScheduledAt time.Time
 
-	WaitStartTime time.Time
-	WaitEndTime   time.Time
+	JobStartTime  *time.Time
+	JobEndTime    *time.Time
+	WaitStartTime *time.Time
+	WaitEndTime   *time.Time
 	TaskStartTime *time.Time
 	TaskEndTime   *time.Time
 	HookStartTime *time.Time

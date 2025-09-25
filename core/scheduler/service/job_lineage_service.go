@@ -17,18 +17,26 @@ type LineageBuilder interface {
 
 type JobLineageService struct {
 	lineageBuilder LineageBuilder
+	jobRunService  JobRunService
 }
 
 func NewJobLineageService(
 	lineageBuilder LineageBuilder,
+	jobRunService JobRunService,
 ) *JobLineageService {
 	return &JobLineageService{
 		lineageBuilder: lineageBuilder,
+		jobRunService:  jobRunService,
 	}
 }
 
 func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
 	jobSummaries := make([]*scheduler.JobLineageSummary, 0, len(jobSchedules))
+
+	jobLineages, err := j.lineageBuilder.BuildLineage(jobSchedules)
+	if err != nil {
+		return nil, err
+	}
 
 	return jobSummaries, nil
 }

@@ -1,8 +1,6 @@
 package dag
 
 import (
-	"time"
-
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -175,23 +173,4 @@ func ToAirflowConfig(schedulerConf map[string]string) AirflowConfig {
 		conf.Queue = queue
 	}
 	return conf
-}
-
-func SLAMissDuration(job *scheduler.JobWithDetails) (int64, error) {
-	var slaMissDurationInSec int64
-	for _, notify := range job.Alerts { // We are ranging and picking one value
-		if notify.On == scheduler.EventCategorySLAMiss {
-			duration, ok := notify.Config["duration"]
-			if !ok {
-				continue
-			}
-
-			dur, err := time.ParseDuration(duration)
-			if err != nil {
-				return 0, errors.InvalidArgument(EntitySchedulerAirflow, "failed to parse sla_miss duration "+duration)
-			}
-			slaMissDurationInSec = int64(dur.Seconds())
-		}
-	}
-	return slaMissDurationInSec, nil
 }

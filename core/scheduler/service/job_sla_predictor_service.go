@@ -43,11 +43,11 @@ func NewJobSLAPredictorService(l log.Logger, buffer time.Duration, lastNDays int
 // 3. Infer SLAs for each job based on their downstream critical jobs and estimated durations.
 // 4. Identify jobs that might breach their SLAs based on current time and inferred SLAs.
 // Precondition: cyclic dependency should be handled in validation, so here we can safely assume no cyclic dependency
-func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) ([]*scheduler.JobLineageSummary, map[scheduler.JobName][]scheduler.JobName, error) {
+func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary, error) {
 	// get job lineage first
 	jobsWithLineage, err := s.jobLineageFetcher.GetJobLineage(ctx, jobs)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// recursively get all upstream job names
@@ -76,34 +76,20 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 	// calculate estimated duration for each job, P95 of N last runs + buffer, D(j) = P95(j) + buffer
 	jobSLAStates, err = s.calculateEstimatedDuration(ctx, jobNames, jobsWithLineage, jobSLAStates, targetedSLA)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// calculate inferred SLAs for each job based on their downstream critical jobs and estimated durations
 	// S(u|j) = S(j) - D(u)
 	jobSLAStates, err = s.calculateInferredSLAs(jobsWithLineage, jobSLAStates, targetedSLA)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// identify jobs that might breach their SLAs based on current time and inferred SLAs
 	// T(now)>= S(u|j) and the job u has not completed yet
 	// T(now)>= S(u|j) - D(u) and the job u has not started yet
-	potentialBreachJobs, potentialBreachPaths, err := s.identifyPotentialBreachJobs(jobsWithLineage, jobSLAStates, time.Now().UTC())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// collect unique jobs that might breach their SLAs
-	for jobName := range potentialBreachPaths {
-		for _, job := range jobsWithLineage {
-			if job.JobName == jobName {
-				potentialBreachJobs = append(potentialBreachJobs, job)
-			}
-		}
-	}
-
-	return potentialBreachJobs, potentialBreachPaths, nil
+	return s.identifyPotentialBreachJobs(jobsWithLineage, jobSLAStates, time.Now().UTC())
 }
 
 // calculateEstimatedDuration calculates the estimated duration for each job using P95 of the last N days plus a buffer.
@@ -163,21 +149,21 @@ func (s *JobSLAPredictorService) calculateInferredSLAs(jobsWithLineage []*schedu
 // - Given current time in UTC T(now), T(now)>= S(u|j) (the inferred SLA for u induced by j has passed) and the upstream job u has not completed yet. Or,
 // - Given current time in UTC T(now), T(now)>= S(u|j) - D(u) (the inferred SLA for u induced by j minus the average duration of u has passed) and the upstream job u has not started yet.
 // return the job that might breach its SLA
-func (s *JobSLAPredictorService) identifyPotentialBreachJobs(jobsWithLineage []*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*jobSLAState, referenceTime time.Time) ([]*scheduler.JobLineageSummary, map[scheduler.JobName][]scheduler.JobName, error) {
-	potentialBreachJobs := []*scheduler.JobLineageSummary{}
-	potentialBreachPaths := make(map[scheduler.JobName][]scheduler.JobName)
+func (s *JobSLAPredictorService) identifyPotentialBreachJobs(jobsWithLineage []*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*jobSLAState, referenceTime time.Time) (map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary, error) {
+	potentialBreachPaths := make(map[*scheduler.JobLineageSummary][][]*scheduler.JobLineageSummary)
 	for _, jobTarget := range jobsWithLineage {
+		potentialBreachPaths[jobTarget] = [][]*scheduler.JobLineageSummary{}
 		// DFS to traverse all upstream jobs with paths
 		type state struct {
 			job   *scheduler.JobLineageSummary
-			paths []scheduler.JobName
+			paths []*scheduler.JobLineageSummary
 		}
-		stack := []*state{{job: jobTarget, paths: []scheduler.JobName{}}}
+		stack := []*state{{job: jobTarget, paths: []*scheduler.JobLineageSummary{}}}
 		for len(stack) > 0 {
 			jobWithState := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 			job := jobWithState.job
-			paths := append(jobWithState.paths, job.JobName)
+			paths := append(jobWithState.paths, job)
 			if jobSLAStates[job.JobName].InferredSLAByJobName[jobTarget.JobName] == nil || jobSLAStates[job.JobName].EstimatedDuration == nil {
 				continue
 			}
@@ -193,14 +179,55 @@ func (s *JobSLAPredictorService) identifyPotentialBreachJobs(jobsWithLineage []*
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
 			if referenceTime.After(inferredSLA) && job.JobRuns[jobTarget.JobName.String()].TaskEndTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
-				potentialBreachPaths[jobTarget.JobName] = paths
+				potentialBreachPaths[jobTarget] = append(potentialBreachPaths[jobTarget], paths)
 			}
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
 			if referenceTime.After(inferredSLA.Add(-*jobSLAStates[job.JobName].EstimatedDuration)) && job.JobRuns[jobTarget.JobName.String()].TaskStartTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
-				potentialBreachPaths[jobTarget.JobName] = paths
+				potentialBreachPaths[jobTarget] = append(potentialBreachPaths[jobTarget], paths)
 			}
 		}
 	}
-	return potentialBreachJobs, potentialBreachPaths, nil
+	// find root causes from potentialBreachPaths
+	rootCauses := make(map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary)
+	for jobTarget, paths := range potentialBreachPaths {
+		leaves := findLeaves(paths)
+		if len(leaves) > 0 {
+			rootCauses[jobTarget] = leaves
+		}
+	}
+	return rootCauses, nil
+}
+
+// findLeaves finds the leaf nodes from the given paths.
+// For example, given paths:
+// A->B
+// A->B->C
+// A->B->C->D
+// A->Z->C
+// A->Z->X
+// A->B->Y
+// The leaf nodes are D, Y, X
+func findLeaves(paths [][]*scheduler.JobLineageSummary) []*scheduler.JobLineageSummary {
+	endings := make(map[*scheduler.JobLineageSummary]bool)
+	prefixes := make(map[*scheduler.JobLineageSummary]bool)
+
+	for _, path := range paths {
+		for i, node := range path {
+			if i < len(path)-1 { // prefix
+				prefixes[node] = true
+			} else { // last element
+				endings[node] = true
+			}
+		}
+	}
+
+	// result = endings - prefixes
+	var result []*scheduler.JobLineageSummary
+	for node := range endings {
+		if !prefixes[node] {
+			result = append(result, node)
+		}
+	}
+	return result
 }

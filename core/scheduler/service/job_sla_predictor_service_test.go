@@ -78,7 +78,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, _, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 1)
@@ -152,7 +152,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, _, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 1)
@@ -226,7 +226,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, _, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 0)
@@ -314,7 +314,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobA1Schedule, jobA2Schedule}, targetedSLA)
+		jobBreachRootCause, _, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobA1Schedule, jobA2Schedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 1)

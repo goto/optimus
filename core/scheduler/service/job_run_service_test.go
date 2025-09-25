@@ -2176,7 +2176,7 @@ func (m *mockJobRunRepository) UpdateMonitoring(ctx context.Context, jobRunID uu
 	return args.Error(0)
 }
 
-func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, identifiers []*scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
 	args := m.Called(ctx, identifiers)
 	return args.Get(0).([]*scheduler.JobRunSummary), args.Error(1)
 }

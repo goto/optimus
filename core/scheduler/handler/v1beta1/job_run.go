@@ -338,6 +338,8 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
+// Trigger
+
 func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier, schedulerService SchedulerService, jobSLAPredictorService JobSLAPredictorService) *JobRunHandler {
 	return &JobRunHandler{
 		l:                      l,

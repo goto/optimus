@@ -78,15 +78,13 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobLineages, jobToUpstreamMap, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
-		assert.Len(t, jobLineages, 1)
-		assert.Len(t, jobToUpstreamMap, 1)
-		assert.Equal(t, jobALineage, jobLineages[0])
-		assert.Equal(t, map[scheduler.JobName][]scheduler.JobName{
-			"job-A": {"job-A", "job-B", "job-C"},
-		}, jobToUpstreamMap)
+		assert.Len(t, jobBreachRootCause, 1)
+		assert.Equal(t, jobBreachRootCause, map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary{
+			jobALineage: {jobCLineage},
+		})
 	})
 	t.Run("given 1 job that potentially breach due to upstream not started, return job lineage with its path", func(t *testing.T) {
 		// job-C -> job-B -> job-A
@@ -154,15 +152,13 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobLineages, jobToUpstreamMap, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
-		assert.Len(t, jobLineages, 1)
-		assert.Len(t, jobToUpstreamMap, 1)
-		assert.Equal(t, jobALineage, jobLineages[0])
-		assert.Equal(t, map[scheduler.JobName][]scheduler.JobName{
-			"job-A": {"job-A", "job-B"},
-		}, jobToUpstreamMap)
+		assert.Len(t, jobBreachRootCause, 1)
+		assert.Equal(t, jobBreachRootCause, map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary{
+			jobALineage: {jobBLineage},
+		})
 	})
 	t.Run("given 1 job that no potentially breach, return no breaches", func(t *testing.T) {
 		// job-C -> job-B -> job-A
@@ -230,11 +226,10 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobLineages, jobToUpstreamMap, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
-		assert.Len(t, jobLineages, 0)
-		assert.Len(t, jobToUpstreamMap, 0)
+		assert.Len(t, jobBreachRootCause, 0)
 	})
 	t.Run("given 2 jobs that refer to the same upstream job, and only 1 job that has potential breach, return 1 job lineages with its path", func(t *testing.T) {
 		// job-C -> job-B -> job-A1
@@ -319,15 +314,13 @@ func TestPredictJobSLAs(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobLineages, jobToUpstreamMap, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobA1Schedule, jobA2Schedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.PredictJobSLAs(ctx, []*scheduler.JobSchedule{jobA1Schedule, jobA2Schedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
-		assert.Len(t, jobLineages, 1)
-		assert.Len(t, jobToUpstreamMap, 1)
-		assert.Equal(t, jobA1Lineage, jobLineages[0])
-		assert.Equal(t, map[scheduler.JobName][]scheduler.JobName{
-			"job-A1": {"job-A1", "job-B", "job-C"},
-		}, jobToUpstreamMap)
+		assert.Len(t, jobBreachRootCause, 1)
+		assert.Equal(t, jobBreachRootCause, map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary{
+			jobA1Lineage: {jobCLineage},
+		})
 	})
 }
 

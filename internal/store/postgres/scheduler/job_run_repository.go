@@ -391,7 +391,7 @@ func (j *JobRunRepository) Create(ctx context.Context, t tenant.Tenant, jobName 
 	return errors.WrapIfErr(scheduler.EntityJobRun, "unable to create job run", err)
 }
 
-func (j *JobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+func (j *JobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, identifiers []*scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
 	if len(identifiers) == 0 {
 		return []*scheduler.JobRunSummary{}, nil
 	}

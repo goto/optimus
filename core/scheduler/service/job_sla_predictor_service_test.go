@@ -7,12 +7,14 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestPredictJobSLAs(t *testing.T) {
 	ctx := context.Background()
+	l := log.NewNoop()
 	t.Run("given 1 job that potentially breach due to upstream late, return job lineage with its path", func(t *testing.T) {
 		// job-C -> job-B -> job-A
 		// job-A is the target job
@@ -25,7 +27,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)
@@ -98,7 +100,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)
@@ -173,7 +175,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)
@@ -248,7 +250,7 @@ func TestPredictJobSLAs(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)

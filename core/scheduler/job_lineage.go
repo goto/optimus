@@ -21,9 +21,6 @@ type JobLineageSummary struct {
 	SLA              SLAConfig
 	Window           *window.Config
 
-	InferredSLAByJobName map[JobName]*time.Time
-	EstimatedDuration    *time.Duration
-
 	JobRuns map[string]*JobRunSummary
 }
 

@@ -2019,10 +2019,8 @@ func TestJobRunService(t *testing.T) {
 			// 2023-12-15 08:00 UTC
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
-				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
-				upstreamJob.Schedule.Interval, downstreamScheduledAt)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, upstreamJob, downstreamScheduledAt)
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
@@ -2038,11 +2036,8 @@ func TestJobRunService(t *testing.T) {
 		t.Run("should return recent schedule if downstream schedule = upstream schedule", func(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
-				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
-				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
-
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, upstreamJobWithEqualSchedule, downstreamScheduledAt)
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
 			// expected to only have one schedule which is 2023-12-15 08:00 UTC
@@ -2057,10 +2052,8 @@ func TestJobRunService(t *testing.T) {
 		t.Run("should return multiple expected run schedules for multi-day window config", func(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
-				sourceJobWithMultiDayConfig.Schedule.Interval, sourceJobWithMultiDayConfig.Job.WindowConfig,
-				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithMultiDayConfig, upstreamJobWithEqualSchedule, downstreamScheduledAt)
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
@@ -2092,13 +2085,9 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
-				sourceJobWithYesterdayConfig.Schedule.Interval,
-				sourceJobWithYesterdayConfig.Job.WindowConfig,
-				invalidUpstreamJob.Schedule.Interval,
-				referenceTime)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, invalidUpstreamJob, referenceTime)
 
 			assert.Error(t, err)
 			assert.Nil(t, schedules)
@@ -2119,11 +2108,9 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
-				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
-				hourlyUpstreamJob.Schedule.Interval, referenceTime)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, hourlyUpstreamJob, referenceTime)
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
@@ -2152,11 +2139,9 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
-				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
-				monthlyUpstreamJob.Schedule.Interval, referenceTime)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, monthlyUpstreamJob, referenceTime)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, schedules)
@@ -2169,7 +2154,6 @@ func TestJobRunService(t *testing.T) {
 		})
 	})
 }
-
 func mockGetJobRuns(afterDays int, date time.Time, interval string, status scheduler.State) ([]*scheduler.JobRunStatus, error) {
 	var expRuns []*scheduler.JobRunStatus
 	schSpec, err := cron.ParseCronSchedule(interval)
@@ -2286,39 +2270,9 @@ func (m *mockJobRunRepository) UpdateMonitoring(ctx context.Context, jobRunID uu
 	return args.Error(0)
 }
 
-func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, identifiers []*scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
 	args := m.Called(ctx, identifiers)
 	return args.Get(0).([]*scheduler.JobRunSummary), args.Error(1)
-}
-
-// GetP95DurationByJobNames provides a mock function with given fields: ctx, jobNames, tasks, lastNRuns
-func (m *mockJobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
-	ret := m.Called(ctx, jobNames, tasks, lastNRuns)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetP95DurationByJobNames")
-	}
-
-	var r0 map[scheduler.JobName]*time.Duration
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int) (map[scheduler.JobName]*time.Duration, error)); ok {
-		return rf(ctx, jobNames, tasks, lastNRuns)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int) map[scheduler.JobName]*time.Duration); ok {
-		r0 = rf(ctx, jobNames, tasks, lastNRuns)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[scheduler.JobName]*time.Duration)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, []scheduler.JobName, map[string][]string, int) error); ok {
-		r1 = rf(ctx, jobNames, tasks, lastNRuns)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
 }
 
 type JobRepository struct {

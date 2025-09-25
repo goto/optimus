@@ -42,10 +42,11 @@ type Notifier interface {
 }
 
 type JobRunHandler struct {
-	l                log.Logger
-	service          JobRunService
-	schedulerService SchedulerService
-	notifier         Notifier
+	l                      log.Logger
+	service                JobRunService
+	schedulerService       SchedulerService
+	JobSLAPredictorService JobSLAPredictorService
+	notifier               Notifier
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -337,11 +338,12 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier, schedulerService SchedulerService) *JobRunHandler {
+func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier, schedulerService SchedulerService, jobSLAPredictorService JobSLAPredictorService) *JobRunHandler {
 	return &JobRunHandler{
-		l:                l,
-		service:          service,
-		notifier:         notifier,
-		schedulerService: schedulerService,
+		l:                      l,
+		service:                service,
+		notifier:               notifier,
+		schedulerService:       schedulerService,
+		JobSLAPredictorService: jobSLAPredictorService,
 	}
 }

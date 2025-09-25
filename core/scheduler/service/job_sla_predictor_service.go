@@ -12,6 +12,11 @@ type DurationEstimator interface {
 	GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, lastNDays int) (map[scheduler.JobName]time.Duration, error)
 }
 
+type jobSLAState struct {
+	EstimatedDuration    *time.Duration
+	InferredSLAByJobName map[scheduler.JobName]*time.Time // inferred SLA for this job induced by each downstream critical job
+}
+
 type JobSLAPredictorService struct {
 	l                 log.Logger
 	buffer            time.Duration
@@ -60,10 +65,6 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 	}
 
 	// initialize jobSLAStates to hold estimated duration and inferred SLAs for each job
-	type jobSLAState struct {
-		EstimatedDuration    *time.Duration
-		InferredSLAByJobName map[scheduler.JobName]*time.Time // inferred SLA for this job induced by each downstream critical job
-	}
 	jobSLAStates := make(map[scheduler.JobName]*jobSLAState)
 	for jobName := range jobNamesMap {
 		jobSLAStates[jobName] = &jobSLAState{
@@ -72,13 +73,48 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 		}
 	}
 
-	// calculate estimated duration for each job, P95 of 7 last runs + buffer, D(j) = P95(j) + buffer
-	jobDurations, err := s.durationEstimator.GetP95DurationByJobNames(ctx, jobNames, s.lastNDays)
+	// calculate estimated duration for each job, P95 of N last runs + buffer, D(j) = P95(j) + buffer
+	jobSLAStates, err = s.calculateEstimatedDuration(ctx, jobNames, jobsWithLineage, jobSLAStates, targetedSLA)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// calculate inferred SLAs for each job based on their downstream critical jobs and estimated durations
+	// S(u|j) = S(j) - D(u)
+	jobSLAStates, err = s.calculateInferredSLAs(jobsWithLineage, jobSLAStates, targetedSLA)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// identify jobs that might breach their SLAs based on current time and inferred SLAs
+	// T(now)>= S(u|j) and the job u has not completed yet
+	// T(now)>= S(u|j) - D(u) and the job u has not started yet
+	potentialBreachJobs, potentialBreachPaths, err := s.identifyPotentialBreachJobs(jobsWithLineage, jobSLAStates, time.Now().UTC())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// collect unique jobs that might breach their SLAs
+	for jobName := range potentialBreachPaths {
+		for _, job := range jobsWithLineage {
+			if job.JobName == jobName {
+				potentialBreachJobs = append(potentialBreachJobs, job)
+			}
+		}
+	}
+
+	return potentialBreachJobs, potentialBreachPaths, nil
+}
+
+// calculateEstimatedDuration calculates the estimated duration for each job using P95 of the last N days plus a buffer.
+// It updates the jobSLAStates map with the estimated durations.
+func (s *JobSLAPredictorService) calculateEstimatedDuration(ctx context.Context, jobNames []scheduler.JobName, jobsWithLineage []*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*jobSLAState, targetedSLA time.Time) (map[scheduler.JobName]*jobSLAState, error) {
+	jobDurations, err := s.durationEstimator.GetP95DurationByJobNames(ctx, jobNames, s.lastNDays)
+	if err != nil {
+		return nil, err
+	}
 	// assign duration to each job in the lineage
-	queue = jobsWithLineage
+	queue := jobsWithLineage
 	for len(queue) > 0 {
 		job := queue[0]
 		queue = queue[1:]
@@ -88,14 +124,18 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 		}
 		queue = append(queue, job.Upstreams...)
 	}
+	return jobSLAStates, nil
+}
 
-	// infer SLA for each job based on its jobs and their inferred SLAs. bottom up calculation, leaf node should meet targetedSLA
-	// for an upstream job u and a downstream critical job j with SLA S(j) and average duration D(j), the inferred SLA for u induced by j (S(u|j)) = S(j) - D(u)
-	// suppose, there's a chain of jobs: u2 -> u1 -> j, where u2 is upstream of u1, and u1 is upstream of j. The inferred SLA for u2 induced by j would be:
-	// S(u2|j) = S(u1|j) - D(u1)
-	// such that, the inferred SLA for any upstream job in level n un induced by a downstream job j as:
-	// S(un|j) = S(un-1|j) - D(un-1)
-	// where, S(u0|j) = S(j), D(u0) = D(j)
+// calculateInferredSLAs calculates the inferred SLAs for each job based on their downstream critical jobs and estimated durations.
+// infer SLA for each job based on its jobs and their inferred SLAs. bottom up calculation, leaf node should meet targetedSLA
+// for an upstream job u and a downstream critical job j with SLA S(j) and average duration D(j), the inferred SLA for u induced by j (S(u|j)) = S(j) - D(u)
+// suppose, there's a chain of jobs: u2 -> u1 -> j, where u2 is upstream of u1, and u1 is upstream of j. The inferred SLA for u2 induced by j would be:
+// S(u2|j) = S(u1|j) - D(u1)
+// such that, the inferred SLA for any upstream job in level n un induced by a downstream job j as:
+// S(un|j) = S(un-1|j) - D(un-1)
+// where, S(u0|j) = S(j), D(u0) = D(j)
+func (s *JobSLAPredictorService) calculateInferredSLAs(jobsWithLineage []*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*jobSLAState, targetedSLA time.Time) (map[scheduler.JobName]*jobSLAState, error) {
 	for _, jobTarget := range jobsWithLineage {
 		// inferred SLA for leaf node = targetedSLA S(j)
 		jobSLAStates[jobTarget.JobName].InferredSLAByJobName[jobTarget.JobName] = &targetedSLA
@@ -115,12 +155,15 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 			}
 		}
 	}
+	return jobSLAStates, nil
+}
 
-	// if any upstream job u of a critical downstream job j meets either of the following conditions, it means job j might breach its SLA:
-	// - Given current time in UTC T(now), T(now)>= S(u|j) (the inferred SLA for u induced by j has passed) and the upstream job u has not completed yet. Or,
-	// - Given current time in UTC T(now), T(now)>= S(u|j) - D(u) (the inferred SLA for u induced by j minus the average duration of u has passed) and the upstream job u has not started yet.
-	// return the job that might breach its SLA
-	currentTime := time.Now().UTC()
+// identifyPotentialBreachJobs identifies jobs that might breach their SLAs based on current time and inferred SLAs.
+// if any upstream job u of a critical downstream job j meets either of the following conditions, it means job j might breach its SLA:
+// - Given current time in UTC T(now), T(now)>= S(u|j) (the inferred SLA for u induced by j has passed) and the upstream job u has not completed yet. Or,
+// - Given current time in UTC T(now), T(now)>= S(u|j) - D(u) (the inferred SLA for u induced by j minus the average duration of u has passed) and the upstream job u has not started yet.
+// return the job that might breach its SLA
+func (s *JobSLAPredictorService) identifyPotentialBreachJobs(jobsWithLineage []*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*jobSLAState, referenceTime time.Time) ([]*scheduler.JobLineageSummary, map[scheduler.JobName][]scheduler.JobName, error) {
 	potentialBreachJobs := []*scheduler.JobLineageSummary{}
 	potentialBreachPaths := make(map[scheduler.JobName][]scheduler.JobName)
 	for _, jobTarget := range jobsWithLineage {
@@ -148,26 +191,16 @@ func (s *JobSLAPredictorService) PredictJobSLAs(ctx context.Context, jobs []*sch
 			inferredSLA := *jobSLAStates[job.JobName].InferredSLAByJobName[jobTarget.JobName]
 			// check if job meets either of the conditions
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
-			if currentTime.After(inferredSLA) && job.JobRuns[jobTarget.JobName.String()].TaskEndTime == nil {
+			if referenceTime.After(inferredSLA) && job.JobRuns[jobTarget.JobName.String()].TaskEndTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
 				potentialBreachPaths[jobTarget.JobName] = paths
 			}
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
-			if currentTime.After(inferredSLA.Add(-*jobSLAStates[job.JobName].EstimatedDuration)) && job.JobRuns[jobTarget.JobName.String()].TaskStartTime == nil {
+			if referenceTime.After(inferredSLA.Add(-*jobSLAStates[job.JobName].EstimatedDuration)) && job.JobRuns[jobTarget.JobName.String()].TaskStartTime == nil {
 				// found a job that might breach its SLA, return the jobTarget
 				potentialBreachPaths[jobTarget.JobName] = paths
 			}
 		}
 	}
-
-	// collect unique jobs that might breach their SLAs
-	for jobName := range potentialBreachPaths {
-		for _, job := range jobsWithLineage {
-			if job.JobName == jobName {
-				potentialBreachJobs = append(potentialBreachJobs, job)
-			}
-		}
-	}
-
 	return potentialBreachJobs, potentialBreachPaths, nil
 }

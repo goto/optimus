@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"maps"
 	"time"
 
 	"github.com/goto/optimus/core/scheduler"
@@ -47,12 +48,23 @@ func NewLineageResolver(
 }
 
 func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
-	upstreamsByJob, err := r.upstreamRepo.GetAllResolvedUpstreams(ctx)
+	lineage, err := r.buildLineageStructure(ctx, jobSchedules)
 	if err != nil {
 		return nil, err
 	}
 
-	uniqueJobs := map[scheduler.JobName]struct{}{}
+	if err := r.enrichWithJobDetails(ctx, lineage); err != nil {
+		return nil, err
+	}
+
+	if err := r.enrichWithJobRunDetails(ctx, lineage); err != nil {
+		return nil, err
+	}
+
+	return lineage, nil
+}
+
+func (r *LineageResolver) buildLineageStructure(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
 	queue := []*scheduler.JobLineageSummary{}
 	for _, jobSchedule := range jobSchedules {
 		queue = append(queue, &scheduler.JobLineageSummary{
@@ -64,7 +76,11 @@ func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*sche
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		})
-		uniqueJobs[jobSchedule.JobName] = struct{}{}
+	}
+
+	upstreamsByJob, err := r.upstreamRepo.GetAllResolvedUpstreams(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	jobWithLineages := queue
@@ -80,39 +96,33 @@ func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*sche
 					JobName:   upstreamJobName,
 					Upstreams: []*scheduler.JobLineageSummary{},
 				}
-
 				jobWithLineageByNameMap[upstreamJobName] = upstreamJobWithLineage
 			}
-
 			jobWithLineage.Upstreams = append(jobWithLineage.Upstreams, jobWithLineageByNameMap[upstreamJobName])
-			uniqueJobs[upstreamJobName] = struct{}{}
 		}
+
+		queue = append(queue, jobWithLineage.Upstreams...)
 	}
+
+	return jobWithLineages, nil
+}
+
+func (r *LineageResolver) enrichWithJobDetails(ctx context.Context, lineage []*scheduler.JobLineageSummary) error {
+	uniqueJobs := r.collectUniqueJobs(lineage)
 
 	jobNames := make([]scheduler.JobName, 0, len(uniqueJobs))
 	for jobName := range uniqueJobs {
 		jobNames = append(jobNames, jobName)
 	}
+
 	jobsByName, err := r.jobRepo.FindByNames(ctx, jobNames)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	projectMap := map[tenant.ProjectName]*tenant.Project{}
-	for _, job := range jobsByName {
-		projectName := job.Job.Tenant.ProjectName()
-		if _, ok := projectMap[projectName]; !ok {
-			project, err := r.projectGetter.Get(ctx, projectName)
-			if err != nil {
-				return nil, err
-			}
-			projectMap[projectName] = project
-		}
-	}
+	queue := make([]*scheduler.JobLineageSummary, len(lineage))
+	copy(queue, lineage)
 
-	jobRunsByJobName := map[scheduler.JobName]map[string]*scheduler.JobRunSummary{}
-
-	queue = jobWithLineages
 	for len(queue) > 0 {
 		jobWithLineage := queue[0]
 		queue = queue[1:]
@@ -126,7 +136,96 @@ func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*sche
 			jobWithLineage.SLA = scheduler.SLAConfig{
 				Duration: time.Duration(slaDuration) * time.Second,
 			}
+		}
 
+		queue = append(queue, jobWithLineage.Upstreams...)
+	}
+
+	return nil
+}
+
+func (r *LineageResolver) enrichWithJobRunDetails(ctx context.Context, lineage []*scheduler.JobLineageSummary) error {
+	jobsByName, projectMap, err := r.getJobsAndProjects(ctx, lineage)
+	if err != nil {
+		return err
+	}
+
+	jobRunsByJobName, err := r.calculateExpectedJobRuns(ctx, lineage, jobsByName, projectMap)
+	if err != nil {
+		return err
+	}
+
+	if err := r.fetchAndUpdateJobRunDetails(ctx, jobRunsByJobName); err != nil {
+		return err
+	}
+
+	for _, jobWithLineage := range lineage {
+		r.populateJobRunsInTree(jobWithLineage, jobRunsByJobName)
+	}
+
+	return nil
+}
+
+func (r *LineageResolver) collectUniqueJobs(lineage []*scheduler.JobLineageSummary) map[scheduler.JobName]struct{} {
+	uniqueJobs := map[scheduler.JobName]struct{}{}
+	queue := make([]*scheduler.JobLineageSummary, len(lineage))
+	copy(queue, lineage)
+
+	for len(queue) > 0 {
+		jobWithLineage := queue[0]
+		queue = queue[1:]
+		uniqueJobs[jobWithLineage.JobName] = struct{}{}
+		queue = append(queue, jobWithLineage.Upstreams...)
+	}
+
+	return uniqueJobs
+}
+
+func (r *LineageResolver) getJobsAndProjects(ctx context.Context, lineage []*scheduler.JobLineageSummary) (map[scheduler.JobName]*scheduler.JobWithDetails, map[tenant.ProjectName]*tenant.Project, error) {
+	uniqueJobs := r.collectUniqueJobs(lineage)
+
+	jobNames := make([]scheduler.JobName, 0, len(uniqueJobs))
+	for jobName := range uniqueJobs {
+		jobNames = append(jobNames, jobName)
+	}
+
+	jobsByName, err := r.jobRepo.FindByNames(ctx, jobNames)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	projectMap := map[tenant.ProjectName]*tenant.Project{}
+	for _, job := range jobsByName {
+		projectName := job.Job.Tenant.ProjectName()
+		if _, ok := projectMap[projectName]; !ok {
+			project, err := r.projectGetter.Get(ctx, projectName)
+			if err != nil {
+				return nil, nil, err
+			}
+			projectMap[projectName] = project
+		}
+	}
+
+	return jobsByName, projectMap, nil
+}
+
+func (r *LineageResolver) calculateExpectedJobRuns(ctx context.Context, lineage []*scheduler.JobLineageSummary, jobsByName map[scheduler.JobName]*scheduler.JobWithDetails, projectMap map[tenant.ProjectName]*tenant.Project) (map[scheduler.JobName]map[string]*scheduler.JobRunSummary, error) {
+	jobRunsByJobName := map[scheduler.JobName]map[string]*scheduler.JobRunSummary{}
+	for _, jobWithLineage := range lineage {
+		if _, ok := jobRunsByJobName[jobWithLineage.JobName]; !ok {
+			jobRunsByJobName[jobWithLineage.JobName] = make(map[string]*scheduler.JobRunSummary)
+		}
+		maps.Copy(jobRunsByJobName[jobWithLineage.JobName], jobWithLineage.JobRuns)
+	}
+
+	queue := make([]*scheduler.JobLineageSummary, len(lineage))
+	copy(queue, lineage)
+
+	for len(queue) > 0 {
+		jobWithLineage := queue[0]
+		queue = queue[1:]
+
+		if job, ok := jobsByName[jobWithLineage.JobName]; ok {
 			for _, jobRun := range jobWithLineage.JobRuns {
 				for i := range jobWithLineage.Upstreams {
 					upstream := jobWithLineage.Upstreams[i]
@@ -166,6 +265,10 @@ func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*sche
 		queue = append(queue, jobWithLineage.Upstreams...)
 	}
 
+	return jobRunsByJobName, nil
+}
+
+func (r *LineageResolver) fetchAndUpdateJobRunDetails(ctx context.Context, jobRunsByJobName map[scheduler.JobName]map[string]*scheduler.JobRunSummary) error {
 	allJobRunsToFetch := []scheduler.JobRunIdentifier{}
 	for jobName, jobRuns := range jobRunsByJobName {
 		for _, jobRun := range jobRuns {
@@ -176,34 +279,33 @@ func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*sche
 		}
 	}
 
-	if len(allJobRunsToFetch) > 0 {
-		jobRunDetails, err := r.jobRunService.GetJobRunsByIdentifiers(ctx, allJobRunsToFetch)
-		if err != nil {
-			return nil, err
-		}
+	if len(allJobRunsToFetch) == 0 {
+		return nil
+	}
 
-		for _, jobRunDetail := range jobRunDetails {
-			scheduleKey := jobRunDetail.ScheduledAt.Format(time.RFC3339)
-			if jobRuns, exists := jobRunsByJobName[jobRunDetail.JobName]; exists {
-				if jobRun, exists := jobRuns[scheduleKey]; exists {
-					jobRun.JobStartTime = jobRunDetail.JobStartTime
-					jobRun.JobEndTime = jobRunDetail.JobEndTime
-					jobRun.WaitStartTime = jobRunDetail.WaitStartTime
-					jobRun.WaitEndTime = jobRunDetail.WaitEndTime
-					jobRun.TaskStartTime = jobRunDetail.TaskStartTime
-					jobRun.TaskEndTime = jobRunDetail.TaskEndTime
-					jobRun.HookStartTime = jobRunDetail.HookStartTime
-					jobRun.HookEndTime = jobRunDetail.HookEndTime
-				}
+	jobRunDetails, err := r.jobRunService.GetJobRunsByIdentifiers(ctx, allJobRunsToFetch)
+	if err != nil {
+		return err
+	}
+
+	for _, jobRunDetail := range jobRunDetails {
+		scheduleKey := jobRunDetail.ScheduledAt.Format(time.RFC3339)
+		if jobRuns, exists := jobRunsByJobName[jobRunDetail.JobName]; exists {
+			if jobRun, exists := jobRuns[scheduleKey]; exists {
+				jobRun.JobName = jobRunDetail.JobName
+				jobRun.JobStartTime = jobRunDetail.JobStartTime
+				jobRun.JobEndTime = jobRunDetail.JobEndTime
+				jobRun.WaitStartTime = jobRunDetail.WaitStartTime
+				jobRun.WaitEndTime = jobRunDetail.WaitEndTime
+				jobRun.TaskStartTime = jobRunDetail.TaskStartTime
+				jobRun.TaskEndTime = jobRunDetail.TaskEndTime
+				jobRun.HookStartTime = jobRunDetail.HookStartTime
+				jobRun.HookEndTime = jobRunDetail.HookEndTime
 			}
 		}
 	}
 
-	for _, jobWithLineage := range jobWithLineages {
-		r.populateJobRunsInTree(jobWithLineage, jobRunsByJobName)
-	}
-
-	return jobWithLineages, nil
+	return nil
 }
 
 func (r *LineageResolver) populateJobRunsInTree(jobWithLineage *scheduler.JobLineageSummary, jobRunsByJobName map[scheduler.JobName]map[string]*scheduler.JobRunSummary) {

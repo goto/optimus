@@ -365,6 +365,8 @@ func (s *OptimusServer) setupHandlers() error {
 
 	newSchedulerService := schedulerService.NewSchedulerService(newScheduler)
 
+	_ = schedulerService.NewJobSLAPredictorService(s.logger, 10*time.Minute, 7, nil, jobRunRepo)
+
 	// Plugin
 	upstreamIdentifierFactory, _ := upstreamidentifier.NewUpstreamIdentifierFactory(s.logger)
 	evaluatorFactory, _ := evaluator.NewEvaluatorFactory(s.logger)

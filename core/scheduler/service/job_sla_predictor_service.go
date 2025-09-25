@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/salt/log"
 )
 
 type DurationEstimator interface {
@@ -12,14 +13,16 @@ type DurationEstimator interface {
 }
 
 type JobSLAPredictorService struct {
+	l                 log.Logger
 	buffer            time.Duration
 	lastNDays         int
 	jobLineageFetcher JobLineageFetcher
 	durationEstimator DurationEstimator
 }
 
-func NewJobSLAPredictorService(buffer time.Duration, lastNDays int, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, buffer time.Duration, lastNDays int, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
+		l:                 l,
 		buffer:            buffer,
 		lastNDays:         lastNDays,
 		jobLineageFetcher: jobLineageFetcher,

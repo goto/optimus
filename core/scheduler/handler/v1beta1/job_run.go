@@ -47,11 +47,12 @@ type Notifier interface {
 }
 
 type JobRunHandler struct {
-	l                 log.Logger
-	service           JobRunService
-	schedulerService  SchedulerService
-	notifier          Notifier
-	jobLineageService JobLineageService
+	l                      log.Logger
+	service                JobRunService
+	schedulerService       SchedulerService
+	notifier               Notifier
+	jobLineageService      JobLineageService
+	jobSLAPredictorService JobSLAPredictorService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -365,12 +366,14 @@ func NewJobRunHandler(
 	notifier Notifier,
 	schedulerService SchedulerService,
 	jobLineageService JobLineageService,
+	jobSLAPredictorService JobSLAPredictorService,
 ) *JobRunHandler {
 	return &JobRunHandler{
-		l:                 l,
-		service:           service,
-		notifier:          notifier,
-		schedulerService:  schedulerService,
-		jobLineageService: jobLineageService,
+		l:                      l,
+		service:                service,
+		notifier:               notifier,
+		schedulerService:       schedulerService,
+		jobLineageService:      jobLineageService,
+		jobSLAPredictorService: jobSLAPredictorService,
 	}
 }

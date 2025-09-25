@@ -72,6 +72,7 @@ type JobRunRepository interface {
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
 	UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error
 	UpdateMonitoring(ctx context.Context, jobRunID uuid.UUID, monitoring map[string]any) error
+	GetRunSummaryByIdentifiers(ctx context.Context, identifiers []*scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error)
 }
 
 type JobReplayRepository interface {
@@ -993,6 +994,45 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	default:
 		return errors.InvalidArgument(scheduler.EntityEvent, "invalid event type: "+string(event.Type))
 	}
+}
+
+func (s *JobRunService) GetExpectedRunSchedules(ctx context.Context, sourceProject *tenant.Project, sourceJob *scheduler.JobWithDetails, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error) {
+	// this will get the latest upstream schedule time before the reference time - usually the downstream schedule time
+	referenceTimeSecondAhead := referenceTime.Add(time.Second * 1)
+	upstreamCronSpec, err := cron.ParseCronSchedule(upstreamJob.Schedule.Interval)
+	if err != nil {
+		s.l.Error("error parsing cron schedule [%s]: %s", upstreamJob.Schedule.Interval, err)
+		return nil, err
+	}
+	lastUpstreamScheduleTime := upstreamCronSpec.Prev(referenceTimeSecondAhead)
+
+	interval, err := s.getInterval(sourceProject, sourceJob, lastUpstreamScheduleTime)
+	if err != nil {
+		s.l.Error("error getting interval for job [%s]: %s", sourceJob.Name, err)
+		return nil, err
+	}
+
+	// now, based on this interval, we need to get all the schedule times that fall within this interval
+	expectedRuns := getExpectedRuns(upstreamCronSpec, upstreamCronSpec.Next(interval.Start()), interval.End())
+	scheduleTimes := make([]time.Time, len(expectedRuns))
+	for i, run := range expectedRuns {
+		scheduleTimes[i] = run.ScheduledAt
+	}
+	return scheduleTimes, nil
+}
+
+func (s *JobRunService) GetJobRunsByIdentifiers(ctx context.Context, identifiers []*scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+	if len(identifiers) == 0 {
+		return []*scheduler.JobRunSummary{}, nil
+	}
+
+	jobRuns, err := s.repo.GetRunSummaryByIdentifiers(ctx, identifiers)
+	if err != nil {
+		s.l.Error("error getting job runs by identifiers: %s", err)
+		return nil, err
+	}
+
+	return jobRuns, nil
 }
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,

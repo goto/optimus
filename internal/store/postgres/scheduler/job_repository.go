@@ -513,6 +513,78 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
 }
 
+func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {
+	query := `SELECT job_name, upstream_job_name 
+				FROM job_upstream 
+				WHERE upstream_state = 'resolved'`
+
+	rows, err := j.db.Query(ctx, query)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting resolved upstreams", err)
+	}
+	defer rows.Close()
+
+	upstreamMap := make(map[scheduler.JobName][]scheduler.JobName)
+
+	for rows.Next() {
+		var jobName, upstreamJobName string
+		err := rows.Scan(&jobName, &upstreamJobName)
+		if err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning upstream row", err)
+		}
+
+		jobKey := scheduler.JobName(jobName)
+		upstreamJob := scheduler.JobName(upstreamJobName)
+		upstreamMap[jobKey] = append(upstreamMap[jobKey], upstreamJob)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error iterating upstream rows", err)
+	}
+
+	return upstreamMap, nil
+}
+
+func (j *JobRepository) FindByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobWithDetails, error) {
+	if len(jobNames) == 0 {
+		return make(map[scheduler.JobName]*scheduler.JobWithDetails), nil
+	}
+
+	jobNameStrings := make([]string, len(jobNames))
+	for i, jobName := range jobNames {
+		jobNameStrings[i] = string(jobName)
+	}
+
+	query := `SELECT ` + jobColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL`
+	rows, err := j.db.Query(ctx, query, jobNameStrings)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while finding jobs by names", err)
+	}
+	defer rows.Close()
+
+	jobsMap := make(map[scheduler.JobName]*scheduler.JobWithDetails)
+	multiError := errors.NewMultiError("errorInFindByNames")
+
+	for rows.Next() {
+		spec, err := FromRow(rows)
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job:"+spec.Name, err))
+			continue
+		}
+
+		jobWithDetails, err := spec.toJobWithDetails()
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error converting job:"+spec.Name, err))
+			continue
+		}
+
+		jobName := scheduler.JobName(spec.Name)
+		jobsMap[jobName] = jobWithDetails
+	}
+
+	return jobsMap, multiError.ToErr()
+}
+
 func NewJobProviderRepository(pool *pgxpool.Pool) *JobRepository {
 	return &JobRepository{
 		db: pool,

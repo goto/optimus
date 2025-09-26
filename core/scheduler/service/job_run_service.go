@@ -796,10 +796,10 @@ func (s *JobRunService) registerConfiguredSLA(ctx context.Context, event *schedu
 	eventCtx := event.EventContext
 
 	alertConfig := job.GetOperatorAlertConfigByName(eventCtx.OperatorType, eventCtx.OperatorRunInstance.OperatorName)
-	if alertConfig != nil {
-		return s.registerSLAs(ctx, eventCtx, alertConfig.SLAAlertConfigs)
+	if alertConfig == nil {
+		return nil
 	}
-	return nil
+	return s.registerSLAs(ctx, eventCtx, alertConfig.SLAAlertConfigs)
 }
 
 func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.EventContext, slaAlertConfigs []*scheduler.SLAAlertConfig) error {

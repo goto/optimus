@@ -582,6 +582,7 @@ class EventContext:
             ),
             operator_type=get_run_type(ctx),
             event_type=event_type,
+            event_reason = ctx.get("reason") if ctx.get("reason") != None else "",
         )
 
     def to_dict(self):

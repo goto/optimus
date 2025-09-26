@@ -38,6 +38,8 @@ type JobRunServiceClient interface {
 	UploadToScheduler(ctx context.Context, in *UploadToSchedulerRequest, opts ...grpc.CallOption) (*UploadToSchedulerResponse, error)
 	// GetInterval gets interval on specific job given reference time.
 	GetInterval(ctx context.Context, in *GetIntervalRequest, opts ...grpc.CallOption) (*GetIntervalResponse, error)
+	// GetJobRunLineageSummary gets the summary of a specific job run execution & all its upstream dependencies.
+	GetJobRunLineageSummary(ctx context.Context, in *GetJobRunLineageSummaryRequest, opts ...grpc.CallOption) (*GetJobRunLineageSummaryResponse, error)
 }
 
 type jobRunServiceClient struct {
@@ -120,6 +122,15 @@ func (c *jobRunServiceClient) GetInterval(ctx context.Context, in *GetIntervalRe
 	return out, nil
 }
 
+func (c *jobRunServiceClient) GetJobRunLineageSummary(ctx context.Context, in *GetJobRunLineageSummaryRequest, opts ...grpc.CallOption) (*GetJobRunLineageSummaryResponse, error) {
+	out := new(GetJobRunLineageSummaryResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobRunLineageSummary", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobRunServiceServer is the server API for JobRunService service.
 // All implementations must embed UnimplementedJobRunServiceServer
 // for forward compatibility
@@ -140,6 +151,8 @@ type JobRunServiceServer interface {
 	UploadToScheduler(context.Context, *UploadToSchedulerRequest) (*UploadToSchedulerResponse, error)
 	// GetInterval gets interval on specific job given reference time.
 	GetInterval(context.Context, *GetIntervalRequest) (*GetIntervalResponse, error)
+	// GetJobRunLineageSummary gets the summary of a specific job run execution & all its upstream dependencies.
+	GetJobRunLineageSummary(context.Context, *GetJobRunLineageSummaryRequest) (*GetJobRunLineageSummaryResponse, error)
 	mustEmbedUnimplementedJobRunServiceServer()
 }
 
@@ -170,6 +183,9 @@ func (UnimplementedJobRunServiceServer) UploadToScheduler(context.Context, *Uplo
 }
 func (UnimplementedJobRunServiceServer) GetInterval(context.Context, *GetIntervalRequest) (*GetIntervalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInterval not implemented")
+}
+func (UnimplementedJobRunServiceServer) GetJobRunLineageSummary(context.Context, *GetJobRunLineageSummaryRequest) (*GetJobRunLineageSummaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetJobRunLineageSummary not implemented")
 }
 func (UnimplementedJobRunServiceServer) mustEmbedUnimplementedJobRunServiceServer() {}
 
@@ -328,6 +344,24 @@ func _JobRunService_GetInterval_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobRunService_GetJobRunLineageSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetJobRunLineageSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobRunServiceServer).GetJobRunLineageSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobRunLineageSummary",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobRunServiceServer).GetJobRunLineageSummary(ctx, req.(*GetJobRunLineageSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobRunService_ServiceDesc is the grpc.ServiceDesc for JobRunService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -366,6 +400,10 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetInterval",
 			Handler:    _JobRunService_GetInterval_Handler,
+		},
+		{
+			MethodName: "GetJobRunLineageSummary",
+			Handler:    _JobRunService_GetJobRunLineageSummary_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

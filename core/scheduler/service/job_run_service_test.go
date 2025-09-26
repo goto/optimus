@@ -572,6 +572,7 @@ func TestJobRunService(t *testing.T) {
 			t.Run("on TaskSuccessEvent should create task_run row", func(t *testing.T) {
 				scheduledAtTimeStamp, _ := time.Parse(scheduler.ISODateFormat, "2022-01-02T15:04:05Z")
 				eventTime := time.Unix(todayDate.Add(time.Hour).Unix(), 0)
+				dagRunID := "manual__2025-09-26T11:17:01+00:00"
 				event := &scheduler.Event{
 					JobName:        jobName,
 					Tenant:         tnnt,
@@ -589,6 +590,10 @@ func TestJobRunService(t *testing.T) {
 						OperatorRunInstance: scheduler.OperatorRunInstance{
 							OperatorName: "task_bq2bq",
 							EndTime:      &eventTime,
+						},
+						DagRun: scheduler.DagRun{
+							RunID:   dagRunID,
+							JobName: jobName.String(),
 						},
 					},
 				}
@@ -676,7 +681,7 @@ func TestJobRunService(t *testing.T) {
 					defer jobRunRepo.AssertExpectations(t)
 
 					slaRepo := new(mockSLARepository)
-					slaRepo.On("FinishSLA", ctx, jobName.String(), event.OperatorName, scheduler.OperatorTask.String(), event.JobScheduledAt.Format(time.RFC3339), event.EventTime).Return(nil)
+					slaRepo.On("FinishSLA", ctx, jobName.String(), event.OperatorName, scheduler.OperatorTask.String(), dagRunID, event.EventTime).Return(nil)
 					defer slaRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,

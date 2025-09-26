@@ -90,17 +90,6 @@ func (o *OperatorRunRepository) GetOperatorRun(ctx context.Context, name string,
 	return opRun.toOperatorRun()
 }
 
-func (o *OperatorRunRepository) GetOperatorRunStateIfExist(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.State, error) {
-	opRun, err := o.GetOperatorRun(ctx, name, operatorType, jobRunID)
-	if err != nil {
-		if errors.IsErrorType(err, errors.ErrNotFound) {
-			return nil, nil //nolint:nilnil
-		}
-		return nil, err
-	}
-	return &opRun.Status, nil
-}
-
 func (o *OperatorRunRepository) CreateOperatorRun(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error {
 	operatorTableName, err := operatorTypeToTableName(operatorType)
 	if err != nil {

@@ -996,7 +996,7 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	}
 }
 
-func (s *JobRunService) GetExpectedRunSchedules(ctx context.Context, sourceProject *tenant.Project, sourceJob *scheduler.JobWithDetails, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error) {
+func (s *JobRunService) GetExpectedRunSchedules(_ context.Context, sourceProject *tenant.Project, sourceJob, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error) {
 	// this will get the latest upstream schedule time before the reference time - usually the downstream schedule time
 	referenceTimeSecondAhead := referenceTime.Add(time.Second * 1)
 	upstreamCronSpec, err := cron.ParseCronSchedule(upstreamJob.Schedule.Interval)

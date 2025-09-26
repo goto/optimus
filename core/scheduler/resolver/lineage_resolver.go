@@ -18,7 +18,7 @@ type JobRepository interface {
 }
 
 type JobRunService interface {
-	GetExpectedRunSchedules(ctx context.Context, sourceProject *tenant.Project, sourceJob *scheduler.JobWithDetails, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error)
+	GetExpectedRunSchedules(ctx context.Context, sourceProject *tenant.Project, sourceJob, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error)
 	GetJobRunsByIdentifiers(ctx context.Context, jobRuns []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error)
 }
 
@@ -108,7 +108,7 @@ func (r *LineageResolver) buildLineageStructure(ctx context.Context, jobSchedule
 }
 
 func (r *LineageResolver) enrichWithJobDetails(ctx context.Context, lineage []*scheduler.JobLineageSummary) error {
-	uniqueJobs := r.collectUniqueJobs(lineage)
+	uniqueJobs := collectUniqueJobs(lineage)
 
 	jobNames := make([]scheduler.JobName, 0, len(uniqueJobs))
 	for jobName := range uniqueJobs {
@@ -120,8 +120,8 @@ func (r *LineageResolver) enrichWithJobDetails(ctx context.Context, lineage []*s
 		return err
 	}
 
-	queue := make([]*scheduler.JobLineageSummary, len(lineage))
-	copy(queue, lineage)
+	queue := make([]*scheduler.JobLineageSummary, 0, len(lineage))
+	queue = append(queue, lineage...)
 
 	for len(queue) > 0 {
 		jobWithLineage := queue[0]
@@ -166,23 +166,8 @@ func (r *LineageResolver) enrichWithJobRunDetails(ctx context.Context, lineage [
 	return nil
 }
 
-func (r *LineageResolver) collectUniqueJobs(lineage []*scheduler.JobLineageSummary) map[scheduler.JobName]struct{} {
-	uniqueJobs := map[scheduler.JobName]struct{}{}
-	queue := make([]*scheduler.JobLineageSummary, len(lineage))
-	copy(queue, lineage)
-
-	for len(queue) > 0 {
-		jobWithLineage := queue[0]
-		queue = queue[1:]
-		uniqueJobs[jobWithLineage.JobName] = struct{}{}
-		queue = append(queue, jobWithLineage.Upstreams...)
-	}
-
-	return uniqueJobs
-}
-
 func (r *LineageResolver) getJobsAndProjects(ctx context.Context, lineage []*scheduler.JobLineageSummary) (map[scheduler.JobName]*scheduler.JobWithDetails, map[tenant.ProjectName]*tenant.Project, error) {
-	uniqueJobs := r.collectUniqueJobs(lineage)
+	uniqueJobs := collectUniqueJobs(lineage)
 
 	jobNames := make([]scheduler.JobName, 0, len(uniqueJobs))
 	for jobName := range uniqueJobs {
@@ -218,8 +203,8 @@ func (r *LineageResolver) calculateExpectedJobRuns(ctx context.Context, lineage 
 		maps.Copy(jobRunsByJobName[jobWithLineage.JobName], jobWithLineage.JobRuns)
 	}
 
-	queue := make([]*scheduler.JobLineageSummary, len(lineage))
-	copy(queue, lineage)
+	queue := make([]*scheduler.JobLineageSummary, 0, len(lineage))
+	queue = append(queue, lineage...)
 
 	for len(queue) > 0 {
 		jobWithLineage := queue[0]
@@ -321,4 +306,19 @@ func (r *LineageResolver) populateJobRunsInTree(jobWithLineage *scheduler.JobLin
 	for _, upstream := range jobWithLineage.Upstreams {
 		r.populateJobRunsInTree(upstream, jobRunsByJobName)
 	}
+}
+
+func collectUniqueJobs(lineage []*scheduler.JobLineageSummary) map[scheduler.JobName]struct{} {
+	uniqueJobs := map[scheduler.JobName]struct{}{}
+	queue := make([]*scheduler.JobLineageSummary, 0, len(lineage))
+	queue = append(queue, lineage...)
+
+	for len(queue) > 0 {
+		jobWithLineage := queue[0]
+		queue = queue[1:]
+		uniqueJobs[jobWithLineage.JobName] = struct{}{}
+		queue = append(queue, jobWithLineage.Upstreams...)
+	}
+
+	return uniqueJobs
 }

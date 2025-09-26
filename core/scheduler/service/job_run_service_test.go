@@ -2155,6 +2155,7 @@ func TestJobRunService(t *testing.T) {
 		})
 	})
 }
+
 func mockGetJobRuns(afterDays int, date time.Time, interval string, status scheduler.State) ([]*scheduler.JobRunStatus, error) {
 	var expRuns []*scheduler.JobRunStatus
 	schSpec, err := cron.ParseCronSchedule(interval)

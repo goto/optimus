@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 
-	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/salt/log"
+
+	"github.com/goto/optimus/core/scheduler"
 )
 
 // Contract that can be used by other callers to fetch job lineage information

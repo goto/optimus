@@ -898,7 +898,7 @@ func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Eve
 func (s *JobRunService) CleanupSLA(ctx context.Context, event *scheduler.Event) error {
 	if event.EventContext.Type == scheduler.OperatorSuccessEvent || event.EventContext.Type == scheduler.OperatorFailEvent {
 		operatorEndTime := *event.EventContext.OperatorRunInstance.EndTime
-		err := s.slaRepo.FinishSLA(ctx, event.JobName.String(), event.OperatorName, event.EventContext.OperatorType.String(), event.JobScheduledAt.Format(time.RFC3339), operatorEndTime)
+		err := s.slaRepo.FinishSLA(ctx, event.JobName.String(), event.OperatorName, event.EventContext.OperatorType.String(), event.EventContext.DagRun.RunID, operatorEndTime)
 		if err != nil {
 			s.l.Error("error finishing sla update for operator run [%s:%s:%s]: %s",
 				event.JobName.String(), event.OperatorName, event.JobScheduledAt.Format(time.RFC3339), err)

@@ -405,7 +405,7 @@ func (s *OptimusServer) setupHandlers() error {
 
 	lineageBuilder := schedulerResolver.NewLineageResolver(jobProviderRepo, jobProviderRepo, newJobRunService, tProjectService, s.logger)
 	// TODO: since no service consume this yet, we can wait to initialize this when needed
-	_ = schedulerService.NewJobLineageService(s.logger, lineageBuilder)
+	jobLineageService := schedulerService.NewJobLineageService(s.logger, lineageBuilder)
 
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)
@@ -448,7 +448,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Resource Handler
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService))
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

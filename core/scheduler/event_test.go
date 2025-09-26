@@ -190,12 +190,37 @@ func TestFromStringToEventType(t *testing.T) {
 				"task_id":      "some_txbq",
 				"status":       "running",
 				"scheduled_at": "2022-01-02T15:04:05Z",
+				"event_context": map[string]any{
+					"task_instance": map[string]any{
+						"max_tries":             1,
+						"task_id":               "mc2mc",
+						"task_instance_key_str": "campaign__mc2mc__20250926",
+						"attempt":               2,
+						"log_url":               "http://localhost:8080/dags/campaign/grid?dag_run_id=scheduled__2025-09-26T03%3A40%3A00%2B00%3A00&task_id=mc2mc&map_index=-1&tab=logs",
+						"start_date":            "2025-09-26T03:46:39Z",
+					},
+					"dag_run": map[string]any{
+						"dag_id":         "campaign",
+						"scheduled_at":   "2025-09-26T03:50:00Z",
+						"execution_date": "2025-09-26T03:40:00Z",
+						"run_id":         "scheduled__2025-09-26T03:40:00+00:00",
+						"start_date":     "2025-09-26T03:45:00Z",
+					},
+					"task":          map[string]any{"downstream_task_ids": []string{"hook_predator"}},
+					"operator_type": "TASK",
+					"event_type":    "operator_retry",
+				},
+				"event_type": "TYPE_TASK_RETRY",
 			}
 			jobName := scheduler.JobName("some_job")
 			tnnt, err := tenant.NewTenant("someProject", "someNamespace")
 			eventTypeName := "TYPE_TASK_RETRY"
 			assert.Nil(t, err)
 
+			startTime, _ := time.Parse(time.RFC3339, "2025-09-26T03:46:39Z")
+			jobScheduledAt, _ := time.Parse(time.RFC3339, "2025-09-26T03:50:00Z")
+			executionDate, _ := time.Parse(time.RFC3339, "2025-09-26T03:40:00Z")
+			jobstartDate, _ := time.Parse(time.RFC3339, "2025-09-26T03:45:00Z")
 			outputObj := scheduler.Event{
 				JobName:        jobName,
 				Tenant:         tnnt,
@@ -205,6 +230,32 @@ func TestFromStringToEventType(t *testing.T) {
 				Status:         scheduler.StateRunning,
 				JobScheduledAt: time.Date(2022, time.January, 2, 15, 0o4, 0o5, 0, time.UTC),
 				Values:         eventValues,
+				EventContext: &scheduler.EventContext{
+					Type:         scheduler.OperatorRetryEvent,
+					OperatorType: scheduler.OperatorTask,
+					OperatorRunInstance: scheduler.OperatorRunInstance{
+						MaxTries:     1,
+						OperatorName: "mc2mc",
+						StartTime:    startTime,
+						OperatorKey:  "campaign__mc2mc__20250926",
+						TryNumber:    2,
+						EndTime:      nil,
+						LogURL:       "http://localhost:8080/dags/campaign/grid?dag_run_id=scheduled__2025-09-26T03%3A40%3A00%2B00%3A00&task_id=mc2mc&map_index=-1&tab=logs",
+					},
+					DagRun: scheduler.DagRun{
+						RunID:         "scheduled__2025-09-26T03:40:00+00:00",
+						JobName:       "campaign",
+						ScheduledAt:   jobScheduledAt,
+						ExecutionDate: executionDate,
+						StartTime:     jobstartDate,
+						EndTime:       nil,
+					},
+					Task: scheduler.OperatorObj{
+						DownstreamTaskIDs: []string{"hook_predator"},
+					},
+					EventReason: nil,
+					Tenant:      tnnt,
+				},
 			}
 			output, err := scheduler.EventFrom(eventTypeName, eventValues, jobName, tnnt)
 			assert.Nil(t, err)

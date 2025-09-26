@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS sla;
+DROP TYPE IF EXISTS operator_type;

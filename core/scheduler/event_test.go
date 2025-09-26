@@ -219,7 +219,7 @@ func TestFromStringToEventType(t *testing.T) {
 
 			startTime, _ := time.Parse(time.RFC3339, "2025-09-26T03:46:39Z")
 			jobScheduledAt, _ := time.Parse(time.RFC3339, "2025-09-26T03:50:00Z")
-			ExecutionDate, _ := time.Parse(time.RFC3339, "2025-09-26T03:40:00Z")
+			executionDate, _ := time.Parse(time.RFC3339, "2025-09-26T03:40:00Z")
 			jobstartDate, _ := time.Parse(time.RFC3339, "2025-09-26T03:45:00Z")
 			outputObj := scheduler.Event{
 				JobName:        jobName,
@@ -246,7 +246,7 @@ func TestFromStringToEventType(t *testing.T) {
 						RunID:         "scheduled__2025-09-26T03:40:00+00:00",
 						JobName:       "campaign",
 						ScheduledAt:   jobScheduledAt,
-						ExecutionDate: ExecutionDate,
+						ExecutionDate: executionDate,
 						StartTime:     jobstartDate,
 						EndTime:       nil,
 					},

@@ -39,9 +39,9 @@ func (c *Compiler) Compile(project *tenant.Project, jobDetails *scheduler.JobWit
 		return nil, err
 	}
 
-	slaDuration, err := jobDetails.SLADuration()
+	slaDuration, err := SLAMissDuration(jobDetails)
 	if err != nil {
-		return nil, errors.InvalidArgument(EntitySchedulerAirflow, err.Error())
+		return nil, err
 	}
 
 	runtimeConfig := SetupRuntimeConfig(jobDetails)

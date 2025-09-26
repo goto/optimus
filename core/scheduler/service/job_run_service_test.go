@@ -681,7 +681,7 @@ func TestJobRunService(t *testing.T) {
 					defer jobRunRepo.AssertExpectations(t)
 
 					slaRepo := new(mockSLARepository)
-					slaRepo.On("FinishSLA", ctx, jobName.String(), event.OperatorName, scheduler.OperatorTask.String(), dagRunID, event.EventTime).Return(nil)
+					slaRepo.On("FinishSLA", ctx, tnnt.ProjectName(), jobName.String(), event.OperatorName, scheduler.OperatorTask.String(), dagRunID, event.EventTime).Return(nil)
 					defer slaRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
@@ -1984,18 +1984,18 @@ type mockSLARepository struct {
 	mock.Mock
 }
 
-func (m *mockSLARepository) RegisterSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error {
-	args := m.Called(ctx, jobName, operatorName, operatorType, runID, slaTime, description)
+func (m *mockSLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error {
+	args := m.Called(ctx, projectName, jobName, operatorName, operatorType, runID, slaTime, description)
 	return args.Error(0)
 }
 
-func (m *mockSLARepository) UpdateSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
-	args := m.Called(ctx, jobName, operatorName, operatorType, runID, slaTime)
+func (m *mockSLARepository) UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
+	args := m.Called(ctx, projectName, jobName, operatorName, operatorType, runID, slaTime)
 	return args.Error(0)
 }
 
-func (m *mockSLARepository) FinishSLA(ctx context.Context, jobName, operatorName, operatorType, runID string, operatorEndTime time.Time) error {
-	args := m.Called(ctx, jobName, operatorName, operatorType, runID, operatorEndTime)
+func (m *mockSLARepository) FinishSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, operatorEndTime time.Time) error {
+	args := m.Called(ctx, projectName, jobName, operatorName, operatorType, runID, operatorEndTime)
 	return args.Error(0)
 }
 

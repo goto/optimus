@@ -85,9 +85,9 @@ type OperatorRunRepository interface {
 }
 
 type SLARepository interface {
-	RegisterSLA(ctx context.Context, jobName, OperatorName, operatorType, runID string, slaTime time.Time, description string) error
-	UpdateSLA(ctx context.Context, jobName, OperatorName, operatorType, runID string, slaTime time.Time) error
-	FinishSLA(ctx context.Context, jobName, OperatorName, operatorType, runID string, operatorEndTime time.Time) error
+	RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error
+	UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, OperatorName, operatorType, runID string, slaTime time.Time) error
+	FinishSLA(ctx context.Context, projectName tenant.ProjectName, jobName, OperatorName, operatorType, runID string, operatorEndTime time.Time) error
 }
 
 type JobInputCompiler interface {
@@ -813,7 +813,7 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 	for _, slaAlertConfig := range slaAlertConfigs {
 		slaBoundary := operatorStartTime.Add(slaAlertConfig.DurationThreshold)
 		slaDescription := fmt.Sprintf("%s: %s, durationSLA: %s", operatorType, operatorName, slaAlertConfig.DurationThreshold.String())
-		err := s.slaRepo.RegisterSLA(ctx, jobName, operatorName, operatorType.String(), jobRunID, slaBoundary, slaDescription)
+		err := s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(), jobRunID, slaBoundary, slaDescription)
 		if err != nil {
 			errMsg := fmt.Sprintf("error registering sla for operator Run Id: %s, Type: %s, Sla: %s, err: %s", jobRunID, operatorType.String(), slaDescription, err.Error())
 			me.Append(errors.Wrap(scheduler.EntityEvent, errMsg, err))
@@ -898,7 +898,7 @@ func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Eve
 func (s *JobRunService) CleanupSLA(ctx context.Context, event *scheduler.Event) error {
 	if event.EventContext.Type == scheduler.OperatorSuccessEvent || event.EventContext.Type == scheduler.OperatorFailEvent {
 		operatorEndTime := *event.EventContext.OperatorRunInstance.EndTime
-		err := s.slaRepo.FinishSLA(ctx, event.JobName.String(), event.OperatorName, event.EventContext.OperatorType.String(), event.EventContext.DagRun.RunID, operatorEndTime)
+		err := s.slaRepo.FinishSLA(ctx, event.Tenant.ProjectName(), event.JobName.String(), event.OperatorName, event.EventContext.OperatorType.String(), event.EventContext.DagRun.RunID, operatorEndTime)
 		if err != nil {
 			s.l.Error("error finishing sla update for operator run [%s:%s:%s]: %s",
 				event.JobName.String(), event.OperatorName, event.JobScheduledAt.Format(time.RFC3339), err)

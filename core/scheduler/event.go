@@ -130,6 +130,7 @@ type OperatorObj struct {
 }
 
 type EventContext struct {
+	Tenant              tenant.Tenant
 	Type                JobEventType        `json:"event_type"`
 	OperatorType        OperatorType        `json:"operator_type"`
 	OperatorRunInstance OperatorRunInstance `json:"task_instance"`
@@ -285,6 +286,7 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 		if err != nil {
 			return nil, err
 		}
+		eventObj.EventContext.Tenant = eventObj.Tenant
 	}
 
 	return &eventObj, nil

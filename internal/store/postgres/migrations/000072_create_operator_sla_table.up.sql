@@ -6,6 +6,7 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS operator_sla (
      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     project_name   TEXT NOT NULL,
      job_name       TEXT NOT NULL,
      operator_name  TEXT NOT NULL,
      run_id         TEXT NOT NULL,
@@ -16,6 +17,6 @@ CREATE TABLE IF NOT EXISTS operator_sla (
      worker_signature  UUID,
      worker_lock_until TIMESTAMPTZ,
 
-     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

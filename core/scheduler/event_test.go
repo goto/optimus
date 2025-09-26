@@ -254,6 +254,7 @@ func TestFromStringToEventType(t *testing.T) {
 						DownstreamTaskIDs: []string{"hook_predator"},
 					},
 					EventReason: nil,
+					Tenant:      tnnt,
 				},
 			}
 			output, err := scheduler.EventFrom(eventTypeName, eventValues, jobName, tnnt)

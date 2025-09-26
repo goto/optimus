@@ -593,7 +593,7 @@ type MockJobRunService struct {
 	mock.Mock
 }
 
-func (m *MockJobRunService) GetExpectedRunSchedules(ctx context.Context, sourceProject *tenant.Project, sourceJob *scheduler.JobWithDetails, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error) {
+func (m *MockJobRunService) GetExpectedRunSchedules(ctx context.Context, sourceProject *tenant.Project, sourceJob, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error) {
 	args := m.Called(ctx, sourceProject, sourceJob, upstreamJob, referenceTime)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

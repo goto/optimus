@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 from typing import Any, Dict, Optional
+from dataclasses import dataclass, asdict
 
 import pendulum
 import requests
@@ -39,6 +40,17 @@ TIMESTAMP_MS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 SCHEDULER_ERR_MSG = "scheduler_error"
 STARTUP_TIMEOUT_IN_SECS = int(Variable.get("startup_timeout_in_secs", default_var=2 * 60))
 OPTIMUS_REQUEST_TIMEOUT_IN_SECS = int(Variable.get("optimus_request_timeout_in_secs", default_var=5 * 60))
+
+# --- EVENT TYPES -----------------------------------
+OPERATOR_START_EVENT      = "operator_start"
+OPERATOR_RETRY_EVENT      = "operator_retry"
+OPERATOR_SUCCESS_EVENT    = "operator_success"
+OPERATOR_FAIL_EVENT       = "operator_fail"
+
+JOB_SUCCESS_EVENT   = "job_success"
+JOB_FAIL_EVENT      = "job_fail"
+JOB_SLA_MISS_EVENT  = "job_sla_miss"
+# ---------------------------------------------------
 
 def lookup_non_standard_cron_expression(expr: str) -> str:
     expr_mapping = {
@@ -477,6 +489,7 @@ def get_run_type(context):
 def job_success_event(context):
     try:
         meta = {
+            "event_context": EventContext.from_ctx(context, JOB_SUCCESS_EVENT).to_dict(),
             "event_type": "TYPE_JOB_SUCCESS",
             "status": "success"
         }
@@ -491,6 +504,7 @@ def job_success_event(context):
 def job_failure_event(context):
     try:
         meta = {
+            "event_context": EventContext.from_ctx(context, JOB_FAIL_EVENT).to_dict(),
             "event_type": "TYPE_FAILURE",
             "status": "failed"
         }
@@ -502,6 +516,76 @@ def job_failure_event(context):
     except Exception as e:
         print(e)
 
+@dataclass
+class EventContext:
+    @dataclass
+    class TaskInstance:
+        max_tries: int
+        task_id: str
+        task_instance_key_str: str
+        attempt: int
+        log_url: str
+        start_date: str = None
+        end_date: str = None
+
+    @dataclass
+    class DagRun:
+        dag_id: str
+        scheduled_at: str
+        execution_date: str
+        run_id: str
+        start_date: str = None
+        end_date: str = None
+
+    @dataclass
+    class Task:
+        downstream_task_ids: list
+
+    task_instance: TaskInstance
+    dag_run: DagRun
+    task: Task
+    operator_type: str
+    event_type: str
+    event_reason: str
+
+    @staticmethod
+    def format_dt(dt):
+        return dt.strftime(TIMESTAMP_FORMAT) if dt else None
+
+    @classmethod
+    def from_ctx(cls, ctx, event_type: str):
+        ti = ctx.get("task_instance")
+        dag_run = ctx.get("dag_run")
+        current_execution_date = ctx.get("execution_date")
+        current_schedule_date = get_scheduled_at(ctx)
+
+        return cls(
+            task_instance=cls.TaskInstance(
+                max_tries=ti.max_tries,
+                task_id=ti.task_id,
+                task_instance_key_str = ctx.get("task_instance_key_str"),
+                attempt=ti.try_number,
+                log_url=ti.log_url,
+                start_date=cls.format_dt(ti.start_date),
+                end_date=cls.format_dt(ti.end_date),
+            ),
+            dag_run=cls.DagRun(
+                dag_id=ti.dag_id,
+                scheduled_at=current_schedule_date.strftime(TIMESTAMP_FORMAT),
+                execution_date=current_execution_date.strftime(TIMESTAMP_FORMAT),
+                run_id=dag_run.run_id,
+                start_date=cls.format_dt(dag_run.start_date),
+                end_date=cls.format_dt(dag_run.end_date),
+            ),
+            task=cls.Task(
+                downstream_task_ids=list(ti.task.downstream_task_ids),
+            ),
+            operator_type=get_run_type(ctx),
+            event_type=event_type,
+        )
+
+    def to_dict(self):
+        return asdict(self)
 
 # task level events
 def operator_start_event(context):
@@ -511,6 +595,7 @@ def operator_start_event(context):
             if not shouldSendSensorStartEvent(context):
                 return
         meta = {
+            "event_context": EventContext.from_ctx(context , OPERATOR_START_EVENT).to_dict(),
             "event_type": "TYPE_{}_START".format(run_type),
             "status": "running"
         }
@@ -522,6 +607,7 @@ def operator_success_event(context):
     try:
         run_type = get_run_type(context)
         meta = {
+            "event_context": EventContext.from_ctx(context, OPERATOR_SUCCESS_EVENT).to_dict(),
             "event_type": "TYPE_{}_SUCCESS".format(run_type),
             "status": "success"
         }
@@ -534,6 +620,7 @@ def operator_retry_event(context):
     try:
         run_type = get_run_type(context)
         meta = {
+            "event_context": EventContext.from_ctx(context, OPERATOR_RETRY_EVENT).to_dict(),
             "event_type": "TYPE_{}_RETRY".format(run_type),
             "status": "retried"
         }
@@ -546,6 +633,7 @@ def operator_failure_event(context):
     try:
         run_type = get_run_type(context)
         meta = {
+            "event_context": EventContext.from_ctx(context, OPERATOR_FAIL_EVENT).to_dict(),
             "event_type": "TYPE_{}_FAIL".format(run_type),
             "status": "failed"
         }

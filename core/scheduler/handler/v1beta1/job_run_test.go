@@ -583,6 +583,10 @@ func TestJobRunHandler(t *testing.T) {
 					"task_id":      "wait_sample_select",
 					"status":       "success",
 					"scheduled_at": "2022-01-02T15:04:05Z",
+					"event_context": map[string]any{
+						"operator_type": "SENSOR",
+						"event_type":    "operator_success",
+					},
 				},
 			)
 			req := &pb.RegisterJobEventRequest{
@@ -630,6 +634,10 @@ func TestJobRunHandler(t *testing.T) {
 					"status":       "success",
 					"scheduled_at": "2022-01-02T15:04:05Z",
 					"task_id":      "wait_sample_select",
+					"event_context": map[string]any{
+						"operator_type": "SENSOR",
+						"event_type":    "operator_success",
+					},
 				},
 			)
 			req := &pb.RegisterJobEventRequest{

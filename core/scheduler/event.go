@@ -50,6 +50,11 @@ const (
 	SensorFailEvent    JobEventType = "sensor_fail"
 	SensorSuccessEvent JobEventType = "sensor_success"
 
+	OperatorStartEvent   JobEventType = "operator_start"
+	OperatorRetryEvent   JobEventType = "operator_retry"
+	OperatorFailEvent    JobEventType = "operator_fail"
+	OperatorSuccessEvent JobEventType = "operator_success"
+
 	StatusFiring   EventStatus = "firing"
 	StatusResolved EventStatus = "resolved"
 )
@@ -101,6 +106,38 @@ func (s *SLAObject) String() string {
 	return fmt.Sprintf("(job: %s,scheduledAt: %s)", s.JobName, s.JobScheduledAt.Format(time.RFC3339))
 }
 
+type OperatorRunInstance struct {
+	MaxTries     int        `json:"max_tries"`
+	OperatorName string     `json:"task_id"`
+	StartTime    time.Time  `json:"start_date"`
+	OperatorKey  string     `json:"task_instance_key_str"`
+	TryNumber    int        `json:"attempt"`
+	EndTime      *time.Time `json:"end_date,omitempty"`
+	LogURL       string     `json:"log_url"`
+}
+
+type DagRun struct {
+	RunID         string     `json:"run_id"`
+	JobName       string     `json:"dag_id"`
+	ScheduledAt   time.Time  `json:"scheduled_at"`
+	ExecutionDate time.Time  `json:"execution_date"`
+	StartTime     time.Time  `json:"start_date"`
+	EndTime       *time.Time `json:"end_date,omitempty"`
+}
+
+type OperatorObj struct {
+	DownstreamTaskIDs []string `json:"downstream_task_ids"`
+}
+
+type EventContext struct {
+	Type                JobEventType        `json:"event_type"`
+	OperatorType        OperatorType        `json:"operator_type"`
+	OperatorRunInstance OperatorRunInstance `json:"task_instance"`
+	DagRun              DagRun              `json:"dag_run"`
+	Task                OperatorObj         `json:"task"`
+	EventReason         *string             `json:"event_reason,omitempty"`
+}
+
 type Event struct {
 	JobName        JobName
 	URN            string
@@ -112,6 +149,8 @@ type Event struct {
 	JobScheduledAt time.Time
 	Values         map[string]any
 	SLAObjectList  []*SLAObject
+
+	EventContext *EventContext
 }
 
 func (e Event) String() string {
@@ -150,6 +189,23 @@ func (event JobEventType) IsOfType(category EventCategory) bool {
 
 func (event JobEventType) String() string {
 	return string(event)
+}
+
+func EventContextFrom(rawEventContext any) (*EventContext, error) {
+	sc := EventContext{}
+	bytesArr, err := json.Marshal(rawEventContext)
+	if err != nil {
+		return nil, errors.InvalidArgument(EntityEvent, "unable to marshal event")
+	}
+	err = json.Unmarshal(bytesArr, &sc)
+	if err != nil {
+		return nil, errors.InvalidArgument(EntityEvent, "unable to unmarshal event, err:"+err.Error())
+	}
+	sc.OperatorType, err = NewOperatorType(strings.ToLower(sc.OperatorType.String()))
+	if err != nil {
+		return nil, err
+	}
+	return &sc, nil
 }
 
 func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName, tenent tenant.Tenant) (*Event, error) {
@@ -224,6 +280,12 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 			return nil, errors.InvalidArgument(EntityEvent, "property 'scheduled_at' is not in appropriate format")
 		}
 		eventObj.JobScheduledAt = scheduledAtTimeStamp
+
+		eventObj.EventContext, err = EventContextFrom(eventValues["event_context"])
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return &eventObj, nil
 }

@@ -947,7 +947,7 @@ func (s *JobRunService) trackEvent(event *scheduler.Event) {
 			event.Type, event.EventTime.Format("01/02/06 15:04:05 MST"), event.JobName, event.OperatorName, event.JobScheduledAt.Format("01/02/06 15:04:05 MST"), event.Status)
 	}
 
-	if !(event.Type == scheduler.SLAMissEvent || event.Type == scheduler.JobSuccessEvent || event.Type == scheduler.JobFailureEvent) {
+	if event.Type != scheduler.SLAMissEvent && event.Type != scheduler.JobSuccessEvent && event.Type != scheduler.JobFailureEvent {
 		jobRunEventsMetric.WithLabelValues(
 			event.OperatorName,
 			event.EventContext.OperatorType.String(),
@@ -981,12 +981,14 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 			return nil
 		}
 		return s.registerConfiguredSLA(ctx, event)
-	case scheduler.TaskSuccessEvent, scheduler.TaskRetryEvent, scheduler.TaskFailEvent, scheduler.HookSuccessEvent, scheduler.HookRetryEvent, scheduler.HookFailEvent:
+	case scheduler.TaskSuccessEvent, scheduler.TaskFailEvent, scheduler.HookSuccessEvent, scheduler.HookFailEvent:
 		err := s.updateOperatorRun(ctx, event, event.EventContext.OperatorType)
 		if err != nil {
 			return err
 		}
 		return s.CleanupSLA(ctx, event)
+	case scheduler.TaskRetryEvent, scheduler.HookRetryEvent:
+		return s.updateOperatorRun(ctx, event, event.EventContext.OperatorType)
 	default:
 		return errors.InvalidArgument(scheduler.EntityEvent, "invalid event type: "+string(event.Type))
 	}

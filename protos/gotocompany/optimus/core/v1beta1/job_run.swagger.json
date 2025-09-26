@@ -22,7 +22,7 @@
   ],
   "paths": {
     "/v1beta1/job-run-lineage-summary": {
-      "post": {
+      "get": {
         "summary": "GetJobRunLineageSummary gets the summary of a specific job run execution \u0026 all its upstream dependencies.",
         "operationId": "JobRunService_GetJobRunLineageSummary",
         "responses": {
@@ -41,12 +41,11 @@
         },
         "parameters": [
           {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1beta1GetJobRunLineageSummaryRequest"
-            }
+            "name": "numberOfUpstreamPerLevel",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
           }
         ],
         "tags": [
@@ -550,7 +549,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -583,21 +582,6 @@
         "endTime": {
           "type": "string",
           "format": "date-time"
-        }
-      }
-    },
-    "v1beta1GetJobRunLineageSummaryRequest": {
-      "type": "object",
-      "properties": {
-        "targetJobs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1beta1TargetJobRunIdentifier"
-          }
-        },
-        "numberOfUpstreamPerLevel": {
-          "type": "integer",
-          "format": "int32"
         }
       }
     },
@@ -777,10 +761,6 @@
       "type": "object",
       "properties": {
         "scheduledAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "slaTime": {
           "type": "string",
           "format": "date-time"
         },

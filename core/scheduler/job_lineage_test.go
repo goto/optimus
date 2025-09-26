@@ -11,7 +11,7 @@ import (
 	"github.com/goto/optimus/internal/lib/window"
 )
 
-func TestJobLineageSummary_Flatten(t *testing.T) {
+func TestJobLineageSummary_PruneUpstreamLineage(t *testing.T) {
 	projName := tenant.ProjectName("proj")
 	namespaceName := tenant.ProjectName("ns1")
 	tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
@@ -89,7 +89,7 @@ func TestJobLineageSummary_Flatten(t *testing.T) {
 			},
 		}
 
-		jobRunSums := jobLineage.Flatten()
+		jobRunSums := jobLineage.PruneUpstreamLineage(0)
 		assert.Len(t, jobRunSums, 5)
 
 		jobNames := make(map[scheduler.JobName]bool)

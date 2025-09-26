@@ -3,11 +3,10 @@ package v1beta1
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
 	"github.com/goto/optimus/core/scheduler"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func fromJobRunLineageSummaryRequest(req *pb.GetJobRunLineageSummaryRequest) ([]*scheduler.JobSchedule, error) {
@@ -76,11 +75,6 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				taskEndTime = timestamppb.New(*run.JobRunSummary.TaskEndTime)
 			}
 
-			var slaTime *timestamppb.Timestamp
-			if run.JobRunSummary.SLATime != nil {
-				slaTime = timestamppb.New(*run.JobRunSummary.SLATime)
-			}
-
 			pbJobRuns = append(pbJobRuns, &pb.JobExecutionSummary{
 				JobName: run.JobName.String(),
 				Sla: &pb.SLAConfig{
@@ -88,7 +82,6 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				},
 				JobRunSummary: &pb.JobRunSummary{
 					ScheduledAt:   timestamppb.New(run.JobRunSummary.ScheduledAt),
-					SlaTime:       slaTime,
 					JobStartTime:  jobStartTime,
 					JobEndTime:    jobEndTime,
 					HookStartTime: hookStartTime,

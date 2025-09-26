@@ -47,12 +47,11 @@ type Notifier interface {
 }
 
 type JobRunHandler struct {
-	l                      log.Logger
-	service                JobRunService
-	schedulerService       SchedulerService
-	notifier               Notifier
-	jobLineageService      JobLineageService
-	jobSLAPredictorService JobSLAPredictorService
+	l                 log.Logger
+	service           JobRunService
+	schedulerService  SchedulerService
+	notifier          Notifier
+	jobLineageService JobLineageService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -344,73 +343,13 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-// IdentifyPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time
-func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.IdentifyPotentialSLABreachRequest) (*pb.IdentifyPotentialSLABreachResponse, error) {
-	response := pb.IdentifyPotentialSLABreachResponse{}
-
-	jobNames := []scheduler.JobName{}
-	for _, jn := range req.GetJobNames() {
-		jobName, err := scheduler.JobNameFrom(jn)
-		if err != nil {
-			h.l.Error("error adapting job name [%s]: %v", jn, err)
-			return nil, errors.GRPCErr(err, "unable to adapt job name")
-		}
-		jobNames = append(jobNames, jobName)
-	}
-
-	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
-	if err != nil {
-		h.l.Error("error adapting project name [%s]: %v", req.GetProjectName(), err)
-		return nil, errors.GRPCErr(err, "unable to adapt project name")
-	}
-	// consider jobs with next schedule within next nextScheduleRangeInHours hours
-	nextScheduleRangeInHours := time.Duration(req.GetNextScheduledRangeInHours()) * time.Hour
-	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduleRangeInHours, jobNames, req.GetJobLabels())
-	if err != nil {
-		h.l.Error("error identifying potential SLA breaches: %v", err)
-		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")
-	}
-
-	jobs := make(map[string]*pb.UpstreamJobsStatus)
-	for jobNameTarget, upstreamJobStates := range jobBreaches {
-		upstreamStatus := []*pb.UpstreamJobStatus{}
-		for upstreamJobName, upstreamJobState := range upstreamJobStates {
-			if upstreamJobState == nil || upstreamJobState.InferredSLA == nil {
-				continue
-			}
-			upstreamStatus = append(upstreamStatus, &pb.UpstreamJobStatus{
-				ProjectName:     upstreamJobState.Tenant.ProjectName().String(),
-				JobName:         upstreamJobName.String(),
-				InferredSlaTime: timestamppb.New(*upstreamJobState.InferredSLA),
-				RelativeLevel:   int32(upstreamJobState.RelativeLevel),
-				Status:          string(upstreamJobState.Status),
-			})
-		}
-		if len(upstreamStatus) == 0 {
-			continue
-		}
-		jobs[jobNameTarget.String()] = &pb.UpstreamJobsStatus{
-			JobsStatus: upstreamStatus,
-		}
-	}
-
-	if len(jobs) > 0 {
-		response.Jobs = jobs
-	}
-
-	if req.AlertOnBreach && len(response.Jobs) > 0 { //nolint: revive,staticcheck
-		// TODO: alert if there are potential SLA breaches and alerting is enabled
-	}
-
-	return &response, nil
-}
-
 func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJobRunLineageSummaryRequest) (*pb.GetJobRunLineageSummaryResponse, error) {
 	targetJobSchedules, err := fromJobRunLineageSummaryRequest(req)
 	if err != nil {
 		h.l.Error("error parsing job schedules from request: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse job schedules from request")
 	}
+
 	jobRunLineages, err := h.jobLineageService.GetJobExecutionSummary(ctx, targetJobSchedules, int(req.GetNumberOfUpstreamPerLevel()))
 	if err != nil {
 		h.l.Error("error getting job run lineage summary: %s", err)
@@ -426,14 +365,12 @@ func NewJobRunHandler(
 	notifier Notifier,
 	schedulerService SchedulerService,
 	jobLineageService JobLineageService,
-	jobSLAPredictorService JobSLAPredictorService,
 ) *JobRunHandler {
 	return &JobRunHandler{
-		l:                      l,
-		service:                service,
-		notifier:               notifier,
-		schedulerService:       schedulerService,
-		jobLineageService:      jobLineageService,
-		jobSLAPredictorService: jobSLAPredictorService,
+		l:                 l,
+		service:           service,
+		notifier:          notifier,
+		schedulerService:  schedulerService,
+		jobLineageService: jobLineageService,
 	}
 }

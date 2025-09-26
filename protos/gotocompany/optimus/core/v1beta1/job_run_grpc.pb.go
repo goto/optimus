@@ -40,8 +40,6 @@ type JobRunServiceClient interface {
 	GetInterval(ctx context.Context, in *GetIntervalRequest, opts ...grpc.CallOption) (*GetIntervalResponse, error)
 	// GetJobRunLineageSummary gets the summary of a specific job run execution & all its upstream dependencies.
 	GetJobRunLineageSummary(ctx context.Context, in *GetJobRunLineageSummaryRequest, opts ...grpc.CallOption) (*GetJobRunLineageSummaryResponse, error)
-	// IdentifyPotentialSLABreach notifies optimus service about potential SLA breach for given job(s)
-	IdentifyPotentialSLABreach(ctx context.Context, in *IdentifyPotentialSLABreachRequest, opts ...grpc.CallOption) (*IdentifyPotentialSLABreachResponse, error)
 }
 
 type jobRunServiceClient struct {
@@ -133,15 +131,6 @@ func (c *jobRunServiceClient) GetJobRunLineageSummary(ctx context.Context, in *G
 	return out, nil
 }
 
-func (c *jobRunServiceClient) IdentifyPotentialSLABreach(ctx context.Context, in *IdentifyPotentialSLABreachRequest, opts ...grpc.CallOption) (*IdentifyPotentialSLABreachResponse, error) {
-	out := new(IdentifyPotentialSLABreachResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/IdentifyPotentialSLABreach", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // JobRunServiceServer is the server API for JobRunService service.
 // All implementations must embed UnimplementedJobRunServiceServer
 // for forward compatibility
@@ -164,8 +153,6 @@ type JobRunServiceServer interface {
 	GetInterval(context.Context, *GetIntervalRequest) (*GetIntervalResponse, error)
 	// GetJobRunLineageSummary gets the summary of a specific job run execution & all its upstream dependencies.
 	GetJobRunLineageSummary(context.Context, *GetJobRunLineageSummaryRequest) (*GetJobRunLineageSummaryResponse, error)
-	// IdentifyPotentialSLABreach notifies optimus service about potential SLA breach for given job(s)
-	IdentifyPotentialSLABreach(context.Context, *IdentifyPotentialSLABreachRequest) (*IdentifyPotentialSLABreachResponse, error)
 	mustEmbedUnimplementedJobRunServiceServer()
 }
 
@@ -199,9 +186,6 @@ func (UnimplementedJobRunServiceServer) GetInterval(context.Context, *GetInterva
 }
 func (UnimplementedJobRunServiceServer) GetJobRunLineageSummary(context.Context, *GetJobRunLineageSummaryRequest) (*GetJobRunLineageSummaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobRunLineageSummary not implemented")
-}
-func (UnimplementedJobRunServiceServer) IdentifyPotentialSLABreach(context.Context, *IdentifyPotentialSLABreachRequest) (*IdentifyPotentialSLABreachResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method IdentifyPotentialSLABreach not implemented")
 }
 func (UnimplementedJobRunServiceServer) mustEmbedUnimplementedJobRunServiceServer() {}
 
@@ -378,24 +362,6 @@ func _JobRunService_GetJobRunLineageSummary_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobRunService_IdentifyPotentialSLABreach_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(IdentifyPotentialSLABreachRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(JobRunServiceServer).IdentifyPotentialSLABreach(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/IdentifyPotentialSLABreach",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobRunServiceServer).IdentifyPotentialSLABreach(ctx, req.(*IdentifyPotentialSLABreachRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // JobRunService_ServiceDesc is the grpc.ServiceDesc for JobRunService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -438,10 +404,6 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetJobRunLineageSummary",
 			Handler:    _JobRunService_GetJobRunLineageSummary_Handler,
-		},
-		{
-			MethodName: "IdentifyPotentialSLABreach",
-			Handler:    _JobRunService_IdentifyPotentialSLABreach_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

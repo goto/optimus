@@ -1,6 +1,8 @@
 package scheduler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -157,6 +159,12 @@ func (s Severity) String() string {
 type SLAAlertConfig struct {
 	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
 	Severity          Severity      `json:"severity,omitempty"`
+}
+
+func (s SLAAlertConfig) Tag() string {
+	tagStr := fmt.Sprintf("%s:%s", s.Severity, s.DurationThreshold)
+	hash := sha256.Sum256([]byte(tagStr))
+	return hex.EncodeToString(hash[:])
 }
 
 type OperatorAlertConfig struct {

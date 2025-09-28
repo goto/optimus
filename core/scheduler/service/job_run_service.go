@@ -812,10 +812,9 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 	me := errors.NewMultiError("errorInRegisterSLA")
 	for _, slaAlertConfig := range slaAlertConfigs {
 		slaBoundary := operatorStartTime.Add(slaAlertConfig.DurationThreshold)
-		slaDescription := fmt.Sprintf("%s: %s, durationSLA: %s", operatorType, operatorName, slaAlertConfig.DurationThreshold.String())
-		err := s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(), jobRunID, slaBoundary, slaDescription)
+		err := s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(), jobRunID, slaBoundary, slaAlertConfig.Tag())
 		if err != nil {
-			errMsg := fmt.Sprintf("error registering sla for operator Run Id: %s, Type: %s, Sla: %s, err: %s", jobRunID, operatorType.String(), slaDescription, err.Error())
+			errMsg := fmt.Sprintf("error registering sla for operator Run Id: %s, Type: %s, Sla: %s, err: %s", jobRunID, operatorType.String(), alertTag, err.Error())
 			me.Append(errors.Wrap(scheduler.EntityEvent, errMsg, err))
 			s.l.Error(errMsg)
 		}

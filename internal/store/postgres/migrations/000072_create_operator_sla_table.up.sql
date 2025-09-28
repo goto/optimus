@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS operator_sla (
      run_id         TEXT NOT NULL,
      operator_type  operator_type NOT NULL,
      sla_time       TIMESTAMPTZ NOT NULL,
-     description    TEXT,
+     alert_tag    TEXT,
 
      worker_signature  UUID,
      worker_lock_until TIMESTAMPTZ,

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/goto/optimus/core/tenant"
@@ -19,6 +20,20 @@ type (
 	JobEventType  string
 	EventCategory string
 )
+
+type OperatorsSLA struct {
+	ID           uuid.UUID
+	JobName      JobName
+	ProjectName  tenant.ProjectName
+	OperatorName string
+	RunID        string
+	OperatorType OperatorType
+	SLATime      time.Time
+	AlertTag     string
+
+	WorkerSignature string
+	WorkerLockUntil time.Time
+}
 
 const (
 	EntityEvent = "event"

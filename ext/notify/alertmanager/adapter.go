@@ -66,6 +66,21 @@ func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType sched
 	}
 }
 
+func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs) {
+	alertPayload := &AlertPayload{
+		Project:  attr.Tenant.ProjectName().String(),
+		LogTag:   attr.OperatorType,
+		Data:     map[string]string{}, // todo: enrich the data here
+		Template: "sla",
+		Labels: map[string]string{
+			"team":     attr.Tenant.NamespaceName().String(),
+			"severity": attr.Severity,
+		},
+	}
+	//Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
+	a.relay(alertPayload)
+}
+
 func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 	projectName := e.JobEvent.Tenant.ProjectName().String()
 	jobName := e.JobEvent.JobName.String()

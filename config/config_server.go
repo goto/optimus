@@ -1,11 +1,14 @@
 package config
 
+import "time"
+
 type ServerConfig struct {
 	Version                Version              `mapstructure:"version"`
 	Log                    LogConfig            `mapstructure:"log"`
 	Serve                  Serve                `mapstructure:"serve"`
 	Telemetry              TelemetryConfig      `mapstructure:"telemetry"`
 	Alerting               AlertingConfig       `mapstructure:"alerting"`
+	SLAConfig              SLAConfig            `mapstructure:"sla"`
 	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
 	Replay                 ReplayConfig         `mapstructure:"replay"`
 	Publisher              *Publisher           `mapstructure:"publisher"`
@@ -46,6 +49,11 @@ type AlertingConfig struct {
 	DataConsole     string             `mapstructure:"data_console"`
 	EnableSlack     bool               `mapstructure:"enable_slack"`
 	EnablePagerDuty bool               `mapstructure:"enable_pager_duty"`
+}
+
+type SLAConfig struct {
+	WorkerInterval time.Duration `mapstructure:"worker_interval"`
+	LockDuration   time.Duration `mapstructure:"worker_lock_duration"`
 }
 
 type ExternalTablesConfig struct {

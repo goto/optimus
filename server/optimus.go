@@ -286,6 +286,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Scheduler bounded context
 	jobRunRepo := schedulerRepo.NewJobRunRepository(s.dbPool)
 	operatorRunRepository := schedulerRepo.NewOperatorRunRepository(s.dbPool)
+	slaRepository := schedulerRepo.NewSLARepository(s.dbPool)
 	jobProviderRepo := schedulerRepo.NewJobProviderRepository(s.dbPool)
 
 	notificationContext, cancelNotifiers := context.WithCancel(context.Background())
@@ -357,7 +358,7 @@ func (s *OptimusServer) setupHandlers() error {
 	)
 
 	newJobRunService := schedulerService.NewJobRunService(
-		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository,
+		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, slaRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
 		s.conf.Features,
 	)

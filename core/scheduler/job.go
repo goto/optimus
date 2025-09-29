@@ -1,6 +1,8 @@
 package scheduler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -22,6 +24,19 @@ type (
 
 func (o OperatorType) String() string {
 	return string(o)
+}
+
+func NewOperatorType(op string) (OperatorType, error) {
+	switch strings.ToLower(op) {
+	case OperatorTask.String():
+		return OperatorTask, nil
+	case OperatorSensor.String():
+		return OperatorSensor, nil
+	case OperatorHook.String():
+		return OperatorHook, nil
+	default:
+		return OperatorType(op), errors.InvalidArgument(EntityEvent, "invalid operator type, supported : task, sensor, hook")
+	}
 }
 
 const (
@@ -76,6 +91,33 @@ func (j *Job) IsDryRun() bool {
 	return false
 }
 
+func (j *Job) GetTaskAlertConfig() *OperatorAlertConfig {
+	if j.Task == nil {
+		return nil
+	}
+	return j.Task.AlertConfig
+}
+
+func (j *Job) GetHookAlertConfigByName(hookName string) *OperatorAlertConfig {
+	for _, hook := range j.Hooks {
+		if hook.Name == hookName {
+			return hook.AlertConfig
+		}
+	}
+	return nil
+}
+
+func (j *Job) GetOperatorAlertConfigByName(operatorType OperatorType, operatorName string) *OperatorAlertConfig {
+	switch operatorType {
+	case OperatorTask:
+		return j.GetTaskAlertConfig()
+	case OperatorHook:
+		return j.GetHookAlertConfigByName(operatorName)
+	default:
+		return nil
+	}
+}
+
 func (j *Job) GetHook(hookName string) (*Hook, error) {
 	for _, hook := range j.Hooks {
 		if hook.Name == hookName {
@@ -117,6 +159,12 @@ func (s Severity) String() string {
 type SLAAlertConfig struct {
 	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
 	Severity          Severity      `json:"severity,omitempty"`
+}
+
+func (s SLAAlertConfig) Tag() string {
+	tagStr := fmt.Sprintf("%s:%s", s.Severity, s.DurationThreshold)
+	hash := sha256.Sum256([]byte(tagStr))
+	return hex.EncodeToString(hash[:])
 }
 
 type OperatorAlertConfig struct {

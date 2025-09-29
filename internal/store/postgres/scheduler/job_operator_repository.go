@@ -97,7 +97,10 @@ func (o *OperatorRunRepository) CreateOperatorRun(ctx context.Context, name stri
 	}
 	insertOperatorRun := "INSERT INTO " + operatorTableName + " ( " + jobOperatorColumnsToStore + ", created_at, updated_at) values ( $1, $2, $3, $4, null, NOW(), NOW())"
 	_, err = o.db.Exec(ctx, insertOperatorRun, name, jobRunID, scheduler.StateRunning, startTime)
-	return errors.WrapIfErr(scheduler.EntityJobRun, "error while inserting the run", err)
+	if err != nil {
+		return errors.WrapIfErr(scheduler.EntityJobRun, "error while inserting the run", err)
+	}
+	return nil
 }
 
 func (o *OperatorRunRepository) UpdateOperatorRun(ctx context.Context, operatorType scheduler.OperatorType, operatorRunID uuid.UUID, eventTime time.Time, state scheduler.State) error {

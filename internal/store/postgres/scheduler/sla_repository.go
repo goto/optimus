@@ -15,14 +15,16 @@ import (
 )
 
 type OperatorsSLA struct {
-	ID           uuid.UUID
-	JobName      string
-	ProjectName  string
-	OperatorName string
-	RunID        string
-	OperatorType string
-	SLATime      time.Time
-	AlertTag     string
+	ID                uuid.UUID
+	JobName           string
+	ProjectName       string
+	OperatorName      string
+	RunID             string
+	OperatorType      string
+	SLATime           time.Time
+	AlertTag          string
+	ScheduledAt       time.Time
+	OperatorStartTime time.Time
 
 	WorkerSignature string
 	WorkerLockUntil time.Time
@@ -47,21 +49,25 @@ func (o OperatorsSLA) toSchedulerSLAObject() (*scheduler.OperatorsSLA, error) {
 	}
 
 	return &scheduler.OperatorsSLA{
-		ID:              o.ID,
-		JobName:         jobName,
-		ProjectName:     projectName,
-		OperatorName:    o.OperatorName,
-		RunID:           o.RunID,
-		OperatorType:    operatorType,
-		SLATime:         o.SLATime,
-		AlertTag:        o.AlertTag,
-		WorkerSignature: o.WorkerSignature,
-		WorkerLockUntil: o.WorkerLockUntil,
+		ID:                o.ID,
+		JobName:           jobName,
+		ProjectName:       projectName,
+		OperatorName:      o.OperatorName,
+		RunID:             o.RunID,
+		OperatorType:      operatorType,
+		SLATime:           o.SLATime,
+		AlertTag:          o.AlertTag,
+		ScheduledAt:       o.ScheduledAt,
+		OperatorStartTime: o.OperatorStartTime,
+		WorkerSignature:   o.WorkerSignature,
+		WorkerLockUntil:   o.WorkerLockUntil,
 	}, nil
 }
 
-var operatorSLAColumnsToUpdate = "project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag"
-var operatorSLAColumns = operatorSLAColumnsToUpdate + ", worker_signature , worker_lock_until,  created_at, updated_at"
+var (
+	operatorSLAColumnsToUpdate = "project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag, scheduled_at, operator_start_time"
+	operatorSLAColumns         = operatorSLAColumnsToUpdate + ", worker_signature , worker_lock_until,  created_at, updated_at"
+)
 
 type SLARepository struct {
 	db *pgxpool.Pool
@@ -73,16 +79,8 @@ func NewSLARepository(pool *pgxpool.Pool) *SLARepository {
 	}
 }
 
-<<<<<<< Updated upstream
 func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, alertTag string, scheduledAt, operatorStartTime time.Time) error {
-	slaQuery := "INSERT INTO operator_sla ( project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag, scheduled_at, operator_start_time) values ( $1, $2, $3, $4, $5, $6, $7, $8, $9)"
-=======
-func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, alertTag string) error {
-	slaQuery := "INSERT INTO operator_sla ( " + operatorSLAColumnsToUpdate + ") values ( $1, $2, $3, $4, $5, $6, $7)"
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+	slaQuery := "INSERT INTO operator_sla ( " + operatorSLAColumnsToUpdate + ") values ( $1, $2, $3, $4, $5, $6, $7, $8, $9)"
 
 	tag, err := s.db.Exec(ctx, slaQuery, projectName, jobName, operatorName, operatorType, runID, slaTime, alertTag, scheduledAt, operatorStartTime)
 	if err != nil {
@@ -124,13 +122,11 @@ func (s *SLARepository) FinishSLA(ctx context.Context, projectName tenant.Projec
 }
 
 func (s *SLARepository) GetExpiredSLAsForProcessing(ctx context.Context, signature string, processingDuration time.Duration) ([]*scheduler.OperatorsSLA, error) {
-
-	slaQuery := "update operator_sla set worker_signature = $1 , worker_lock_untill = $2 , updated_at = now() where  worker_lock_untill < now() and sla_time < now()"
+	slaQuery := "update operator_sla set worker_signature = $1 , worker_lock_until = now()+$2 , updated_at = now() where  (worker_lock_until is null or worker_lock_until < now()) and sla_time < now()"
 
 	tag, err := s.db.Exec(ctx, slaQuery, signature, processingDuration)
 	if err != nil {
-		errMsg := fmt.Sprintf("error acquiring sla breaches")
-		return nil, errors.Wrap(scheduler.EntityEvent, errMsg, err)
+		return nil, errors.Wrap(scheduler.EntityEvent, "error acquiring sla breaches", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return nil, nil //nolint:nilnil
@@ -140,6 +136,9 @@ func (s *SLARepository) GetExpiredSLAsForProcessing(ctx context.Context, signatu
 	multiError := errors.NewMultiError("GetExpiredSLAsForProcessing")
 	getAcquiredSlaRecords := "select id, " + operatorSLAColumns + " from operator_sla where worker_signature = $1 "
 	rows, err := s.db.Query(ctx, getAcquiredSlaRecords, signature)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityEvent, "error reading acquired sla breaches", err)
+	}
 	for rows.Next() {
 		slaRecord, err := SLAFromRow(rows)
 		if err != nil {
@@ -174,7 +173,7 @@ func (s *SLARepository) RemoveProcessedSLA(ctx context.Context, slaID uuid.UUID)
 func SLAFromRow(row pgx.Row) (*OperatorsSLA, error) {
 	var sla OperatorsSLA
 	err := row.Scan(&sla.ID, &sla.ProjectName, &sla.JobName, &sla.OperatorName, &sla.OperatorType, &sla.RunID,
-		&sla.SLATime, &sla.AlertTag, &sla.WorkerSignature, &sla.WorkerLockUntil, &sla.CreatedAt, &sla.UpdatedAt)
+		&sla.SLATime, &sla.AlertTag, &sla.ScheduledAt, &sla.OperatorStartTime, &sla.WorkerSignature, &sla.WorkerLockUntil, &sla.CreatedAt, &sla.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityEvent, "sla record not found")

@@ -809,12 +809,6 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 	operatorName := eventCtx.OperatorRunInstance.OperatorName
 	jobName := eventCtx.DagRun.JobName
 
-	jobRun, err := s.getJobRunByScheduledAt(ctx, eventCtx.Tenant, eventCtx.DagRun.JobName, event.JobScheduledAt)
-	if err != nil {
-		s.l.Error("error getting job run by scheduled time [%s]: %s", event.JobScheduledAt, err)
-		return nil, err
-	}
-
 	me := errors.NewMultiError("errorInRegisterSLA")
 	for _, slaAlertConfig := range slaAlertConfigs {
 		slaBoundary := operatorStartTime.Add(slaAlertConfig.DurationThreshold)

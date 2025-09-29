@@ -68,16 +68,26 @@ func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType sched
 
 func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs) {
 	alertPayload := &AlertPayload{
-		Project:  attr.Tenant.ProjectName().String(),
-		LogTag:   attr.OperatorType,
-		Data:     map[string]string{}, // todo: enrich the data here
-		Template: "sla",
+		Project: attr.Project,
+		LogTag:  attr.OperatorType,
+		Data: map[string]string{
+			"operator_name":       attr.OperatorName,
+			"operator_type":       attr.OperatorType,
+			"project":             attr.Project,
+			"namespace":           attr.Namespace,
+			"Message":             attr.Message,
+			"job_name":            attr.JobName,
+			"scheduled_at":        attr.ScheduledAt.String(),
+			"operator_started_at": attr.StartTime.String(),
+			"state":               attr.CurrentState.String(),
+		},
+		Template: "operator_sla",
 		Labels: map[string]string{
-			"team":     attr.Tenant.NamespaceName().String(),
+			"team":     attr.Team,
 			"severity": attr.Severity,
 		},
+		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
-	//Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	a.relay(alertPayload)
 }
 

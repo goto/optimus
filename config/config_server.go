@@ -1,7 +1,5 @@
 package config
 
-import "time"
-
 type ServerConfig struct {
 	Version                Version              `mapstructure:"version"`
 	Log                    LogConfig            `mapstructure:"log"`
@@ -52,8 +50,8 @@ type AlertingConfig struct {
 }
 
 type SLAConfig struct {
-	WorkerInterval time.Duration `mapstructure:"worker_interval"`
-	LockDuration   time.Duration `mapstructure:"worker_lock_duration"`
+	WorkerIntervalMinutes int `mapstructure:"worker_interval_minutes"`
+	LockDurationMinutes   int `mapstructure:"worker_lock_duration_minutes"`
 }
 
 type ExternalTablesConfig struct {

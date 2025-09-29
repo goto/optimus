@@ -99,6 +99,8 @@ type ReplayNotificationAttrs struct {
 
 type OperatorSLAAlertAttrs struct {
 	Team               string
+	Project            string
+	Namespace          string
 	JobName            string
 	OperatorName       string
 	OperatorType       string
@@ -108,6 +110,8 @@ type OperatorSLAAlertAttrs struct {
 	StartTime          time.Time
 	ExpectedSLAEndTime time.Time
 	CurrentState       State
+
+	AlertManager AlertManagerConfig
 }
 
 type WebhookAttrs struct {

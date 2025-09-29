@@ -22,47 +22,61 @@ type OperatorSLARepo interface {
 }
 
 type SLAWorker struct {
+	alertManager    AlertManager
 	operatorSLARepo OperatorSLARepo
 	jobRepo         JobRepo
+	jobRunRepo      JobRunRepository
+	operatorRunRepo OperatorRunRepository
+	tenantService   TenantService
 	logger          log.Logger
-	alertManager    AlertManager
 }
 
-func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo OperatorSLARepo) *SLAWorker {
+func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo OperatorSLARepo, jobRepo JobRepo,
+	jobRunRepo JobRunRepository, operatorRunRepo OperatorRunRepository, tenantService TenantService,
+) *SLAWorker {
 	return &SLAWorker{
 		logger:          logger,
 		alertManager:    alertManager,
 		operatorSLARepo: operatorSLARepo,
+		jobRepo:         jobRepo,
+		jobRunRepo:      jobRunRepo,
+		operatorRunRepo: operatorRunRepo,
+		tenantService:   tenantService,
 	}
 }
 
-func (w *SLAWorker) ScheduleSLAHandling(ctx context.Context, interval time.Duration, processDuration time.Duration) error {
+func (w *SLAWorker) ScheduleSLAHandling(ctx context.Context, interval, processDuration time.Duration) {
 	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			signature := uuid.New().String()
-			w.handleSLACalculation(ctx, signature, processDuration)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				signature := uuid.New().String()
+				w.handleSLACalculation(ctx, signature, processDuration)
+			}
 		}
-	}
+	}()
 }
 
-func getAlertAttributes(team, severity, msg string, slaObj *scheduler.OperatorsSLA) *scheduler.OperatorSLAAlertAttrs {
-
+func getAlertAttributes(teanatWithDetails *tenant.WithDetails, team, severity, msg string, currentState scheduler.State, slaObj *scheduler.OperatorsSLA) *scheduler.OperatorSLAAlertAttrs {
 	alertAttr := scheduler.OperatorSLAAlertAttrs{
 		Team:               team,
+		Project:            teanatWithDetails.Project().Name().String(),
+		Namespace:          teanatWithDetails.Namespace().Name().String(),
 		JobName:            slaObj.JobName.String(),
 		OperatorType:       slaObj.OperatorType.String(),
 		OperatorName:       slaObj.OperatorName,
 		Message:            msg,
 		Severity:           severity,
-		ScheduledAt:        time.Time{},
-		StartTime:          time.Time{},
+		ScheduledAt:        slaObj.ScheduledAt,
+		StartTime:          slaObj.OperatorStartTime,
 		ExpectedSLAEndTime: slaObj.SLATime,
-		CurrentState:       "",
+		CurrentState:       currentState,
+
+		AlertManager: getAlertManagerProjectConfig(teanatWithDetails),
 	}
 	return &alertAttr
 }
@@ -72,6 +86,21 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, slaObj *scheduler.
 	if err != nil {
 		return err
 	}
+	jobRun, err := w.jobRunRepo.GetByScheduledAt(ctx, job.Tenant, job.Name, slaObj.ScheduledAt)
+	if err != nil {
+		return err
+	}
+
+	tenantWithDetails, err := w.tenantService.GetDetails(ctx, job.Tenant)
+	if err != nil {
+		return err
+	}
+
+	operatorRun, err := w.operatorRunRepo.GetOperatorRun(ctx, slaObj.OperatorName, slaObj.OperatorType, jobRun.ID)
+	if err != nil {
+		return err
+	}
+
 	alertConfig := job.GetOperatorAlertConfigByName(slaObj.OperatorType, slaObj.OperatorName)
 	if alertConfig == nil {
 		w.logger.Warn("no alert config found for job %s operator %s", job.Name, slaObj.OperatorName)
@@ -84,7 +113,7 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, slaObj *scheduler.
 	if alertConfig != nil {
 		alertTeam = job.Tenant.NamespaceName().String()
 		alertSeverity = scheduler.Warning
-		if alertConfig.Team != nil && alertConfig.Team != "" {
+		if alertConfig.Team != "" {
 			alertTeam = alertConfig.Team
 		}
 		slaAlertConfig := alertConfig.GetSLAOperatorAlertConfigByTag(slaObj.AlertTag)
@@ -94,8 +123,9 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, slaObj *scheduler.
 		}
 	}
 
-	alertAttr := getAlertAttributes(alertTeam, alertSeverity.String(), alertMsg, slaObj)
-
+	alertAttr := getAlertAttributes(tenantWithDetails, alertTeam, alertSeverity.String(), alertMsg, operatorRun.Status, slaObj)
+	w.alertManager.SendOperatorSLAEvent(alertAttr)
+	return nil
 }
 
 func (w *SLAWorker) handleSLACalculation(ctx context.Context, signature string, processDuration time.Duration) {
@@ -104,10 +134,11 @@ func (w *SLAWorker) handleSLACalculation(ctx context.Context, signature string, 
 		w.logger.Error("failed to fetch expired SLAs: %v", err)
 		return
 	}
-	// todo: think of dooing this paralel
+
 	for _, sla := range expiredSLAs {
-		// check if airflow the task is finished
-		if err := w.alertManager.SendOperatorSLAEvent(ctx, sla); err != nil {
+		// check in airflow if the task is finished
+
+		if err := w.SendOperatorSLAEvent(ctx, sla); err != nil {
 			w.logger.Error("failed to notify SLA for job %s: %v", sla.JobName, err)
 			continue
 		}

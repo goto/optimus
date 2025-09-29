@@ -420,8 +420,10 @@ func (s *OptimusServer) setupHandlers() error {
 
 	slaWorkerCtx, closeSLAWorker := context.WithCancel(context.Background())
 	s.cleanupFn = append(s.cleanupFn, closeSLAWorker)
-	slaWorker := schedulerService.NewSLAWorker(s.logger, alertsHandler, slaRepository)
-	slaWorker.ScheduleSLAHandling(slaWorkerCtx, s.conf.SLAConfig.WorkerInterval, s.conf.SLAConfig.LockDuration)
+	slaWorker := schedulerService.NewSLAWorker(s.logger, alertsHandler, slaRepository, jobProviderRepo, jobRunRepo, operatorRunRepository, tenantService)
+	slaWorker.ScheduleSLAHandling(slaWorkerCtx,
+		time.Minute*time.Duration(s.conf.SLAConfig.WorkerIntervalMinutes),
+		time.Minute*time.Duration(s.conf.SLAConfig.LockDurationMinutes))
 
 	resourceWorkerCtx, closeResourceWorker := context.WithCancel(context.Background())
 	s.cleanupFn = append(s.cleanupFn, closeResourceWorker)

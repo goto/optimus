@@ -29,7 +29,11 @@ type OperatorsSLA struct {
 	RunID        string
 	OperatorType OperatorType
 	SLATime      time.Time
-	AlertTag     string
+
+	AlertTag string
+
+	ScheduledAt       time.Time
+	OperatorStartTime time.Time
 
 	WorkerSignature string
 	WorkerLockUntil time.Time

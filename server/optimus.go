@@ -402,7 +402,7 @@ func (s *OptimusServer) setupHandlers() error {
 
 	jchangeLogService := jService.NewChangeLogService(jJobRepo)
 
-	lineageBuilder := schedulerResolver.NewLineageResolver(jobProviderRepo, jobProviderRepo, newJobRunService, tProjectService)
+	lineageBuilder := schedulerResolver.NewLineageResolver(jobProviderRepo, jobProviderRepo, newJobRunService, tProjectService, s.logger)
 	// TODO: since no service consume this yet, we can wait to initialize this when needed
 	_ = schedulerService.NewJobLineageService(s.logger, lineageBuilder)
 

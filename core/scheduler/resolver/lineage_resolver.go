@@ -7,6 +7,7 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/salt/log"
 )
 
 type JobUpstreamRepository interface {
@@ -31,6 +32,7 @@ type LineageResolver struct {
 	jobRepo       JobRepository
 	jobRunService JobRunService
 	projectGetter ProjectGetter
+	logger        log.Logger
 }
 
 func NewLineageResolver(
@@ -38,12 +40,14 @@ func NewLineageResolver(
 	jobRepo JobRepository,
 	jobRunService JobRunService,
 	projectGetter ProjectGetter,
+	logger log.Logger,
 ) *LineageResolver {
 	return &LineageResolver{
 		upstreamRepo:  upstreamRepo,
 		jobRepo:       jobRepo,
 		jobRunService: jobRunService,
 		projectGetter: projectGetter,
+		logger:        logger,
 	}
 }
 
@@ -65,9 +69,9 @@ func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*sche
 }
 
 func (r *LineageResolver) buildLineageStructure(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
-	queue := []*scheduler.JobLineageSummary{}
+	stack := []*scheduler.JobLineageSummary{}
 	for _, jobSchedule := range jobSchedules {
-		queue = append(queue, &scheduler.JobLineageSummary{
+		stack = append(stack, &scheduler.JobLineageSummary{
 			JobName: jobSchedule.JobName,
 			JobRuns: map[string]*scheduler.JobRunSummary{
 				jobSchedule.ScheduledAt.Format(time.RFC3339): {
@@ -78,30 +82,33 @@ func (r *LineageResolver) buildLineageStructure(ctx context.Context, jobSchedule
 		})
 	}
 
+	// fetch list of jobs and their direct upstreams
 	upstreamsByJob, err := r.upstreamRepo.GetAllResolvedUpstreams(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	jobWithLineages := queue
-	jobWithLineageByNameMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
+	jobWithLineages := stack
+	visited := map[scheduler.JobName]bool{}
 
-	for len(queue) > 0 {
-		jobWithLineage := queue[0]
-		queue = queue[1:]
+	for len(stack) > 0 {
+		jobWithLineage := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		if _, ok := visited[jobWithLineage.JobName]; ok {
+			continue
+		}
+		visited[jobWithLineage.JobName] = true
 
 		for _, upstreamJobName := range upstreamsByJob[jobWithLineage.JobName] {
-			if _, ok := jobWithLineageByNameMap[upstreamJobName]; !ok {
-				upstreamJobWithLineage := &scheduler.JobLineageSummary{
-					JobName:   upstreamJobName,
-					Upstreams: []*scheduler.JobLineageSummary{},
-				}
-				jobWithLineageByNameMap[upstreamJobName] = upstreamJobWithLineage
-			}
-			jobWithLineage.Upstreams = append(jobWithLineage.Upstreams, jobWithLineageByNameMap[upstreamJobName])
+			jobWithLineage.Upstreams = append(jobWithLineage.Upstreams, &scheduler.JobLineageSummary{
+				JobName:   upstreamJobName,
+				JobRuns:   map[string]*scheduler.JobRunSummary{},
+				Upstreams: []*scheduler.JobLineageSummary{},
+			})
 		}
 
-		queue = append(queue, jobWithLineage.Upstreams...)
+		stack = append(stack, jobWithLineage.Upstreams...)
 	}
 
 	return jobWithLineages, nil

@@ -22,7 +22,7 @@
   ],
   "paths": {
     "/v1beta1/job-run-lineage-summary": {
-      "get": {
+      "post": {
         "summary": "GetJobRunLineageSummary gets the summary of a specific job run execution \u0026 all its upstream dependencies.",
         "operationId": "JobRunService_GetJobRunLineageSummary",
         "responses": {
@@ -41,11 +41,12 @@
         },
         "parameters": [
           {
-            "name": "numberOfUpstreamPerLevel",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetJobRunLineageSummaryRequest"
+            }
           }
         ],
         "tags": [
@@ -519,6 +520,21 @@
         "endTime": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1beta1GetJobRunLineageSummaryRequest": {
+      "type": "object",
+      "properties": {
+        "targetJobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1TargetJobRunIdentifier"
+          }
+        },
+        "numberOfUpstreamPerLevel": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

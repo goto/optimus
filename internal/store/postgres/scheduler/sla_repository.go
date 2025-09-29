@@ -60,7 +60,8 @@ func (o OperatorsSLA) toSchedulerSLAObject() (*scheduler.OperatorsSLA, error) {
 	}, nil
 }
 
-var operatorSLAColumns = "project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag"
+var operatorSLAColumnsToUpdate = "project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag"
+var operatorSLAColumns = operatorSLAColumnsToUpdate + ", worker_signature , worker_lock_until,  created_at, updated_at"
 
 type SLARepository struct {
 	db *pgxpool.Pool
@@ -72,10 +73,15 @@ func NewSLARepository(pool *pgxpool.Pool) *SLARepository {
 	}
 }
 
+<<<<<<< Updated upstream
+func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, alertTag string, scheduledAt, operatorStartTime time.Time) error {
+	slaQuery := "INSERT INTO operator_sla ( project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag, scheduled_at, operator_start_time) values ( $1, $2, $3, $4, $5, $6, $7, $8, $9)"
+=======
 func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, alertTag string) error {
-	slaQuery := "INSERT INTO operator_sla ( " + operatorSLAColumns + ") values ( $1, $2, $3, $4, $5, $6, $7)"
+	slaQuery := "INSERT INTO operator_sla ( " + operatorSLAColumnsToUpdate + ") values ( $1, $2, $3, $4, $5, $6, $7)"
+>>>>>>> Stashed changes
 
-	tag, err := s.db.Exec(ctx, slaQuery, projectName, jobName, operatorName, operatorType, runID, slaTime, alertTag)
+	tag, err := s.db.Exec(ctx, slaQuery, projectName, jobName, operatorName, operatorType, runID, slaTime, alertTag, scheduledAt, operatorStartTime)
 	if err != nil {
 		errMsg := fmt.Sprintf("error executing sla insert, params: %s, %s, %s, %s, %s, %s", jobName, operatorName, operatorType, runID, slaTime, alertTag)
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)
@@ -87,10 +93,10 @@ func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.Proj
 	return nil
 }
 
-func (s *SLARepository) UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
-	slaQuery := "update operator_sla set sla_time = $1 , updated_at = now() where project_name = $2 and job_name = $3 and  operator_name = $4 and operator_type = $5 and  run_id = $6 "
+func (s *SLARepository) UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime, operatorStartTime time.Time) error {
+	slaQuery := "update operator_sla set sla_time = $1, operator_start_time = $2 where project_name = $3 and job_name = $4 and  operator_name = $5 and operator_type = $6 and  run_id = $7 "
 
-	tag, err := s.db.Exec(ctx, slaQuery, slaTime, projectName, jobName, operatorName, operatorType, runID)
+	tag, err := s.db.Exec(ctx, slaQuery, slaTime, operatorStartTime, projectName, jobName, operatorName, operatorType, runID)
 	if err != nil {
 		errMsg := fmt.Sprintf("error executing sla update, params: %s:%s, %s, %s, %s", jobName, operatorName, operatorType, runID, slaTime)
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)
@@ -164,7 +170,8 @@ func (s *SLARepository) RemoveProcessedSLA(ctx context.Context, slaID uuid.UUID)
 
 func SLAFromRow(row pgx.Row) (*OperatorsSLA, error) {
 	var sla OperatorsSLA
-	err := row.Scan(&sla.ID, &sla.ProjectName, &sla.JobName, &sla.OperatorName, &sla.OperatorType, &sla.RunID, &sla.SLATime, &sla.AlertTag)
+	err := row.Scan(&sla.ID, &sla.ProjectName, &sla.JobName, &sla.OperatorName, &sla.OperatorType, &sla.RunID,
+		&sla.SLATime, &sla.AlertTag, &sla.WorkerSignature, &sla.WorkerLockUntil, &sla.CreatedAt, &sla.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityEvent, "sla record not found")

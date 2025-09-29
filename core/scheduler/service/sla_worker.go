@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,8 +50,21 @@ func (w *SLAWorker) ScheduleSLAHandling(ctx context.Context, interval time.Durat
 	}
 }
 
-func getAlertAttributes() *scheduler.OperatorSLAAlertAttrs {
+func getAlertAttributes(team, severity, msg string, slaObj *scheduler.OperatorsSLA) *scheduler.OperatorSLAAlertAttrs {
 
+	alertAttr := scheduler.OperatorSLAAlertAttrs{
+		Team:               team,
+		JobName:            slaObj.JobName.String(),
+		OperatorType:       slaObj.OperatorType.String(),
+		OperatorName:       slaObj.OperatorName,
+		Message:            msg,
+		Severity:           severity,
+		ScheduledAt:        time.Time{},
+		StartTime:          time.Time{},
+		ExpectedSLAEndTime: slaObj.SLATime,
+		CurrentState:       "",
+	}
+	return &alertAttr
 }
 
 func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, slaObj *scheduler.OperatorsSLA) error {
@@ -63,30 +77,24 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, slaObj *scheduler.
 		w.logger.Warn("no alert config found for job %s operator %s", job.Name, slaObj.OperatorName)
 		return nil
 	}
-	var alertNamespaceName string
-	var alertSeverity string
+
+	var alertTeam string
+	var alertSeverity scheduler.Severity
+	var alertMsg string
 	if alertConfig != nil {
-		alertNamespaceName = job.Tenant.NamespaceName().String()
-		alertSeverity = scheduler.Warning.String()
+		alertTeam = job.Tenant.NamespaceName().String()
+		alertSeverity = scheduler.Warning
 		if alertConfig.Team != nil && alertConfig.Team != "" {
-			alertNamespaceName = alertConfig.Team
+			alertTeam = alertConfig.Team
 		}
-		for 
-
+		slaAlertConfig := alertConfig.GetSLAOperatorAlertConfigByTag(slaObj.AlertTag)
+		if slaAlertConfig != nil {
+			alertSeverity = slaAlertConfig.Severity
+			alertMsg = fmt.Sprintf("%s: %s, durationSLA: %s", slaObj.OperatorType.String(), slaObj.OperatorName, slaAlertConfig.DurationThreshold.String())
+		}
 	}
 
-	alertAttr := scheduler.OperatorSLAAlertAttrs{
-		Team:               alertNamespaceName,
-		JobName:            slaObj.JobName.String(),
-		OperatorType:       slaObj.OperatorType.String(),
-		OperatorName:       slaObj.OperatorName,
-		Message:            slaObj.Description,
-		Severity:           "",
-		ScheduledAt:        time.Time{},
-		StartTime:          time.Time{},
-		ExpectedSLAEndTime: time.Time{},
-		CurrentState:       "",
-	}
+	alertAttr := getAlertAttributes(alertTeam, alertSeverity.String(), alertMsg, slaObj)
 
 }
 

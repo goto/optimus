@@ -71,6 +71,11 @@ func (s *SyncerService) GetSourceRevisionInfo(ctx context.Context, tnnt tenant.T
 		return nil, err
 	}
 
+	etNameResourcesMap, err := getETNameToResourceMap(resources)
+	if err != nil {
+		return nil, err
+	}
+
 	me := errors.NewMultiError("GetSourceRevisionInfo")
 
 	var revisionInfoList []*resource.SourceRevisionInfo
@@ -83,7 +88,7 @@ func (s *SyncerService) GetSourceRevisionInfo(ctx context.Context, tnnt tenant.T
 			me.Append(err)
 			for _, status := range lastSourceModifiedList {
 				revisionInfoList = append(revisionInfoList, &resource.SourceRevisionInfo{
-					FullName:         status.FullName,
+					FullName:         etNameResourcesMap[status.FullName].FullName(),
 					LastModifiedTime: status.LastModifiedTime,
 					Err:              status.Err,
 				})
@@ -94,7 +99,7 @@ func (s *SyncerService) GetSourceRevisionInfo(ctx context.Context, tnnt tenant.T
 			me.Append(err)
 			for _, status := range lastSourceModifiedList {
 				revisionInfoList = append(revisionInfoList, &resource.SourceRevisionInfo{
-					FullName: status.FullName,
+					FullName: etNameResourcesMap[status.FullName].FullName(),
 					Revision: status.Revision,
 					Err:      status.Err,
 				})
@@ -105,29 +110,12 @@ func (s *SyncerService) GetSourceRevisionInfo(ctx context.Context, tnnt tenant.T
 }
 
 func (s *SyncerService) TouchUnModified(ctx context.Context, projectName tenant.ProjectName, resources []*resource.Resource) error {
-	ets, err := ConvertSpecsTo[ExternalTable](resources)
-	if err != nil {
-		return err
+	resourceNamesToTouch := make([]string, len(resources))
+	for i, r := range resources {
+		resourceNamesToTouch[i] = r.FullName()
 	}
-	etSourceMap := groupBySourceType(ets)
-	me := errors.NewMultiError("error while update last sync attempt time")
-	for sourceType, externalTables := range etSourceMap {
-		switch sourceType {
-		case GoogleSheet, GoogleDrive:
-			tableIdentifiers := make([]string, len(externalTables))
-			for i, table := range externalTables {
-				tableIdentifiers[i] = table.FullName()
-			}
-			me.Append(s.SyncRepo.Touch(ctx, projectName, KindExternalTableGoogle, tableIdentifiers))
-		case LarkSheet:
-			tableIdentifiers := make([]string, len(externalTables))
-			for i, table := range externalTables {
-				tableIdentifiers[i] = table.FullName()
-			}
-			me.Append(s.SyncRepo.Touch(ctx, projectName, KindExternalTableLark, tableIdentifiers))
-		}
-	}
-	return me.ToErr()
+
+	return s.SyncRepo.Touch(ctx, projectName, resourceNamesToTouch)
 }
 
 func getAllSourceTypes(et []*ExternalTable) ExternalTableSources {

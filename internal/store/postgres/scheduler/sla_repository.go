@@ -134,11 +134,12 @@ func (s *SLARepository) GetExpiredSLAsForProcessing(ctx context.Context, signatu
 
 	var breachedSLAs []*scheduler.OperatorsSLA
 	multiError := errors.NewMultiError("GetExpiredSLAsForProcessing")
-	getAcquiredSlaRecords := "select id, " + operatorSLAColumns + " from operator_sla where worker_signature = $1 "
-	rows, err := s.db.Query(ctx, getAcquiredSlaRecords, signature)
+	getAcquiredSLARecords := "select id, " + operatorSLAColumns + " from operator_sla where worker_signature = $1 "
+	rows, err := s.db.Query(ctx, getAcquiredSLARecords, signature)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityEvent, "error reading acquired sla breaches", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		slaRecord, err := SLAFromRow(rows)
 		if err != nil {
@@ -161,8 +162,8 @@ func (s *SLARepository) GetExpiredSLAsForProcessing(ctx context.Context, signatu
 }
 
 func (s *SLARepository) RemoveProcessedSLA(ctx context.Context, slaID uuid.UUID) error {
-	deleteSlaRecords := "delete from operator_sla where id = $1"
-	_, err := s.db.Exec(ctx, deleteSlaRecords, slaID)
+	deleteSLARecords := "delete from operator_sla where id = $1"
+	_, err := s.db.Exec(ctx, deleteSLARecords, slaID)
 	if err != nil {
 		errMsg := fmt.Sprintf("error removing SLA record, with SLA ID: %s", slaID.String())
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)

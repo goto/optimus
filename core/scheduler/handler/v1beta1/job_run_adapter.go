@@ -3,10 +3,11 @@ package v1beta1
 import (
 	"fmt"
 
-	"github.com/goto/optimus/core/scheduler"
-	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/goto/optimus/core/scheduler"
+	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
 func fromJobRunLineageSummaryRequest(req *pb.GetJobRunLineageSummaryRequest) ([]*scheduler.JobSchedule, error) {

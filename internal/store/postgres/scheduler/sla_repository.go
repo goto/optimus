@@ -41,10 +41,10 @@ func NewSLARepository(pool *pgxpool.Pool) *SLARepository {
 	}
 }
 
-func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, alertTag string) error {
-	slaQuery := "INSERT INTO operator_sla ( project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag) values ( $1, $2, $3, $4, $5, $6, $7)"
+func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, alertTag string, scheduledAt, operatorStartTime time.Time) error {
+	slaQuery := "INSERT INTO operator_sla ( project_name, job_name, operator_name, operator_type, run_id, sla_time, alert_tag, scheduled_at, operator_start_time) values ( $1, $2, $3, $4, $5, $6, $7, $8, $9)"
 
-	tag, err := s.db.Exec(ctx, slaQuery, projectName, jobName, operatorName, operatorType, runID, slaTime, alertTag)
+	tag, err := s.db.Exec(ctx, slaQuery, projectName, jobName, operatorName, operatorType, runID, slaTime, alertTag, scheduledAt, operatorStartTime)
 	if err != nil {
 		errMsg := fmt.Sprintf("error executing sla insert, params: %s, %s, %s, %s, %s, %s", jobName, operatorName, operatorType, runID, slaTime, alertTag)
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)
@@ -56,10 +56,10 @@ func (s *SLARepository) RegisterSLA(ctx context.Context, projectName tenant.Proj
 	return nil
 }
 
-func (s *SLARepository) UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
-	slaQuery := "update operator_sla set sla_time = $1 where project_name = $2 and job_name = $3 and  operator_name = $4 and operator_type = $5 and  run_id = $6 "
+func (s *SLARepository) UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime, operatorStartTime time.Time) error {
+	slaQuery := "update operator_sla set sla_time = $1, operator_start_time = $2 where project_name = $3 and job_name = $4 and  operator_name = $5 and operator_type = $6 and  run_id = $7 "
 
-	tag, err := s.db.Exec(ctx, slaQuery, slaTime, projectName, jobName, operatorName, operatorType, runID)
+	tag, err := s.db.Exec(ctx, slaQuery, slaTime, operatorStartTime, projectName, jobName, operatorName, operatorType, runID)
 	if err != nil {
 		errMsg := fmt.Sprintf("error executing sla update, params: %s:%s, %s, %s, %s", jobName, operatorName, operatorType, runID, slaTime)
 		return errors.Wrap(scheduler.EntityEvent, errMsg, err)

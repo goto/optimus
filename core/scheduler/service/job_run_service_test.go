@@ -1984,13 +1984,13 @@ type mockSLARepository struct {
 	mock.Mock
 }
 
-func (m *mockSLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error {
-	args := m.Called(ctx, projectName, jobName, operatorName, operatorType, runID, slaTime, description)
+func (m *mockSLARepository) RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string, scheduledAt, operatorStartTime time.Time) error {
+	args := m.Called(ctx, projectName, jobName, operatorName, operatorType, runID, slaTime, description, scheduledAt, operatorStartTime)
 	return args.Error(0)
 }
 
-func (m *mockSLARepository) UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time) error {
-	args := m.Called(ctx, projectName, jobName, operatorName, operatorType, runID, slaTime)
+func (m *mockSLARepository) UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime, operatorStartTime time.Time) error {
+	args := m.Called(ctx, projectName, jobName, operatorName, operatorType, runID, slaTime, operatorStartTime)
 	return args.Error(0)
 }
 

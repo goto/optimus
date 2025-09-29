@@ -85,9 +85,9 @@ type OperatorRunRepository interface {
 }
 
 type SLARepository interface {
-	RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string) error
-	UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, OperatorName, operatorType, runID string, slaTime time.Time) error
-	FinishSLA(ctx context.Context, projectName tenant.ProjectName, jobName, OperatorName, operatorType, runID string, operatorEndTime time.Time) error
+	RegisterSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime time.Time, description string, scheduledAt, operatorStartTime time.Time) error
+	UpdateSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, slaTime, operatorStartTime time.Time) error
+	FinishSLA(ctx context.Context, projectName tenant.ProjectName, jobName, operatorName, operatorType, runID string, operatorEndTime time.Time) error
 }
 
 type JobInputCompiler interface {
@@ -812,7 +812,8 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 	me := errors.NewMultiError("errorInRegisterSLA")
 	for _, slaAlertConfig := range slaAlertConfigs {
 		slaBoundary := operatorStartTime.Add(slaAlertConfig.DurationThreshold)
-		err := s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(), jobRunID, slaBoundary, slaAlertConfig.Tag())
+		err := s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(),
+			jobRunID, slaBoundary, slaAlertConfig.Tag(), eventCtx.DagRun.ScheduledAt, eventCtx.OperatorRunInstance.StartTime)
 		if err != nil {
 			errMsg := fmt.Sprintf("error registering sla for operator Run Id: %s, Type: %s, Sla: %s, err: %s", jobRunID, operatorType.String(), slaAlertConfig.Tag(), err.Error())
 			me.Append(errors.Wrap(scheduler.EntityEvent, errMsg, err))
@@ -968,6 +969,7 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
 		return s.updateOperatorRun(ctx, event, scheduler.OperatorSensor)
 	case scheduler.TaskStartEvent, scheduler.HookStartEvent:
+
 		existingOperatorRun, err := s.getExistingOperatorRun(ctx, event)
 		if err != nil {
 			return err

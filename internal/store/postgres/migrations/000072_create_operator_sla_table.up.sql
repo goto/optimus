@@ -5,7 +5,7 @@ EXCEPTION
 END $$;
 
 CREATE TABLE IF NOT EXISTS operator_sla (
-     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
      project_name   TEXT NOT NULL,
      job_name       TEXT NOT NULL,
      operator_name  TEXT NOT NULL,

@@ -232,7 +232,7 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 	return jobRunList, nil
 }
 
-func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
+func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, lastNRuns int, bufferPercentage int) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
@@ -282,6 +282,10 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 		}
 		duration := time.Duration(p95DurationSeconds * float64(time.Second))
+		if bufferPercentage > 0 {
+			buffer := (duration * time.Duration(bufferPercentage)) / 100
+			duration = duration + buffer
+		}
 		jobDurations[scheduler.JobName(jobName)] = &duration
 	}
 	return jobDurations, nil

@@ -400,3 +400,7 @@ func (m *mockAlertManager) SendJobRunEvent(attr *scheduler.AlertAttrs) {
 func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
 	m.Called(attr)
 }
+
+func (m *mockAlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs) {
+	m.Called(attr)
+}

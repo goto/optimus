@@ -418,6 +418,13 @@ func (s *OptimusServer) setupHandlers() error {
 		syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported, s.conf.ExternalTables.DriveFileCleanupSizeLimit, maxSyncDelayTolerance)
 	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
+	slaWorkerCtx, closeSLAWorker := context.WithCancel(context.Background())
+	s.cleanupFn = append(s.cleanupFn, closeSLAWorker)
+	slaWorker := schedulerService.NewSLAWorker(s.logger, alertsHandler, slaRepository, jobProviderRepo, jobRunRepo, operatorRunRepository, tenantService, newScheduler)
+	slaWorker.ScheduleSLAHandling(slaWorkerCtx,
+		time.Minute*time.Duration(s.conf.SLAConfig.WorkerIntervalMinutes),
+		time.Minute*time.Duration(s.conf.SLAConfig.LockDurationMinutes))
+
 	resourceWorkerCtx, closeResourceWorker := context.WithCancel(context.Background())
 	s.cleanupFn = append(s.cleanupFn, closeResourceWorker)
 

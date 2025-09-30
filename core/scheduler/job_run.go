@@ -97,6 +97,23 @@ type ReplayNotificationAttrs struct {
 	AlertManager AlertManagerConfig
 }
 
+type OperatorSLAAlertAttrs struct {
+	Team               string
+	Project            string
+	Namespace          string
+	JobName            string
+	OperatorName       string
+	OperatorType       string
+	Message            string
+	Severity           string
+	ScheduledAt        time.Time
+	StartTime          time.Time
+	ExpectedSLAEndTime time.Time
+	CurrentState       State
+
+	AlertManager AlertManagerConfig
+}
+
 type WebhookAttrs struct {
 	Owner    string
 	JobEvent *Event

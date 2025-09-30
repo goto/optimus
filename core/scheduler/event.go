@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/goto/optimus/core/tenant"
@@ -19,6 +20,24 @@ type (
 	JobEventType  string
 	EventCategory string
 )
+
+type OperatorsSLA struct {
+	ID           uuid.UUID
+	JobName      JobName
+	ProjectName  tenant.ProjectName
+	OperatorName string
+	RunID        string
+	OperatorType OperatorType
+	SLATime      time.Time
+
+	AlertTag string
+
+	ScheduledAt       time.Time
+	OperatorStartTime time.Time
+
+	WorkerSignature string
+	WorkerLockUntil time.Time
+}
 
 const (
 	EntityEvent = "event"
@@ -112,8 +131,16 @@ type OperatorRunInstance struct {
 	StartTime    time.Time  `json:"start_date"`
 	OperatorKey  string     `json:"task_instance_key_str"`
 	TryNumber    int        `json:"attempt"`
+	State        string     `json:"status"`
 	EndTime      *time.Time `json:"end_date,omitempty"`
 	LogURL       string     `json:"log_url"`
+}
+
+func (o *OperatorRunInstance) IsTerminated() bool {
+	if strings.EqualFold(o.State, StateFailed.String()) || strings.EqualFold(o.State, StateSuccess.String()) {
+		return true
+	}
+	return false
 }
 
 type DagRun struct {

@@ -41,6 +41,7 @@ const (
 	dagURL             = "api/v1/dags"
 	dagRunClearURL     = "api/v1/dags/%s/clearTaskInstances"
 	dagRunCreateURL    = "api/v1/dags/%s/dagRuns"
+	getTaskInstanceURL = "api/v1/dags/%s/dagRuns/%s/taskInstances/%s"
 	dagRunModifyURL    = "api/v1/dags/%s/dagRuns/%s"
 	airflowDateFormat  = "2006-01-02T15:04:05+00:00"
 
@@ -91,6 +92,66 @@ type DAGObj struct {
 	SchedulerLock               *string  `json:"scheduler_lock"`
 	Tags                        []Tag    `json:"tags"`
 	TimetableDescription        string   `json:"timetable_description"`
+}
+
+type TaskInstance struct {
+	TaskID          string   `json:"task_id"`
+	TaskDisplayName string   `json:"task_display_name"`
+	DagID           string   `json:"dag_id"`
+	DagRunID        string   `json:"dag_run_id"`
+	ExecutionDate   string   `json:"execution_date"`
+	StartDate       string   `json:"start_date"`
+	EndDate         string   `json:"end_date"`
+	Duration        *float64 `json:"duration"`
+	State           *string  `json:"state"` // nullable
+	TryNumber       int      `json:"try_number"`
+	MapIndex        int      `json:"map_index"`
+	MaxTries        int      `json:"max_tries"`
+	Hostname        string   `json:"hostname"`
+	Pool            string   `json:"pool"`
+	PoolSlots       int      `json:"pool_slots"`
+	Queue           string   `json:"queue"`
+	PriorityWeight  int      `json:"priority_weight"`
+	Operator        string   `json:"operator"`
+	QueuedWhen      string   `json:"queued_when"`
+	Pid             int      `json:"pid"`
+	Note            string   `json:"note"`
+}
+
+func parseTaskInstance(data []byte) (*TaskInstance, error) {
+	var ti TaskInstance
+	if err := json.Unmarshal(data, &ti); err != nil {
+		return nil, fmt.Errorf("failed to parse task instance: %w", err)
+	}
+	return &ti, nil
+}
+
+func (ti *TaskInstance) toSchedulerOperatorRunInstance() (*scheduler.OperatorRunInstance, error) {
+	startTime, err := time.Parse(time.RFC3339, ti.StartDate)
+	if err != nil {
+		return nil, err
+	}
+	var endTime *time.Time
+	if ti.EndDate != "" {
+		parsedEndTime, err := time.Parse(time.RFC3339, ti.EndDate)
+		if err != nil {
+			return nil, err
+		}
+		endTime = &parsedEndTime
+	}
+	opr := &scheduler.OperatorRunInstance{
+		MaxTries:     ti.MaxTries,
+		OperatorName: ti.TaskID,
+		StartTime:    startTime,
+		OperatorKey:  ti.TaskDisplayName,
+		TryNumber:    ti.TryNumber,
+		EndTime:      endTime,
+		LogURL:       "",
+	}
+	if ti.State != nil {
+		opr.State = *ti.State
+	}
+	return opr, nil
 }
 
 type Schedule struct {
@@ -688,6 +749,30 @@ func (s *Scheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName s
 		return errors.Wrap(EntityAirflow, "failure while creating airflow dag run", err)
 	}
 	return nil
+}
+
+func (s *Scheduler) GetOperatorInstance(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, dagRunID, operatorID string) (*scheduler.OperatorRunInstance, error) {
+	spanCtx, span := startChildSpan(ctx, "GetOperatorInstance")
+	defer span.End()
+
+	req := airflowRequest{
+		path:   fmt.Sprintf(getTaskInstanceURL, jobName.String(), dagRunID, operatorID),
+		method: http.MethodGet,
+	}
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.client.Invoke(spanCtx, req, schdAuth)
+	if err != nil {
+		return nil, err
+	}
+	taskInstance, err := parseTaskInstance(resp)
+	if err != nil {
+		return nil, errors.Wrap(EntityAirflow, "failure while creating airflow dag run", err)
+	}
+
+	return taskInstance.toSchedulerOperatorRunInstance()
 }
 
 func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler DagCompiler, projectGetter ProjectGetter, secretGetter SecretGetter) *Scheduler {

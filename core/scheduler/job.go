@@ -172,6 +172,15 @@ type OperatorAlertConfig struct {
 	Team            string            `json:"team,omitempty"`
 }
 
+func (o OperatorAlertConfig) GetSLAOperatorAlertConfigByTag(alertTag string) *SLAAlertConfig {
+	for _, config := range o.SLAAlertConfigs {
+		if config.Tag() == alertTag {
+			return config
+		}
+	}
+	return nil
+}
+
 type Task struct {
 	Name        string               `json:"name,omitempty"`
 	Version     string               `json:"version,omitempty"`

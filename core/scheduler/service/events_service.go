@@ -38,6 +38,7 @@ type Webhook interface {
 type AlertManager interface {
 	SendJobRunEvent(attr *scheduler.AlertAttrs)
 	SendReplayEvent(attr *scheduler.ReplayNotificationAttrs)
+	SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs)
 }
 
 type EventsService struct {

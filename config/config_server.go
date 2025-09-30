@@ -6,6 +6,7 @@ type ServerConfig struct {
 	Serve                  Serve                `mapstructure:"serve"`
 	Telemetry              TelemetryConfig      `mapstructure:"telemetry"`
 	Alerting               AlertingConfig       `mapstructure:"alerting"`
+	SLAConfig              SLAConfig            `mapstructure:"sla"`
 	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
 	Replay                 ReplayConfig         `mapstructure:"replay"`
 	Publisher              *Publisher           `mapstructure:"publisher"`
@@ -46,6 +47,11 @@ type AlertingConfig struct {
 	DataConsole     string             `mapstructure:"data_console"`
 	EnableSlack     bool               `mapstructure:"enable_slack"`
 	EnablePagerDuty bool               `mapstructure:"enable_pager_duty"`
+}
+
+type SLAConfig struct {
+	WorkerIntervalMinutes int `mapstructure:"worker_interval_minutes"`
+	LockDurationMinutes   int `mapstructure:"worker_lock_duration_minutes"`
 }
 
 type ExternalTablesConfig struct {

@@ -961,6 +961,30 @@ func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.
 	return args.Get(0).(interval.Interval), args.Error(1)
 }
 
+func (m *mockJobRunService) GetJobSchedulesByNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) ([]*scheduler.JobSchedule, error) {
+	args := m.Called(ctx, projectName, jobNames)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.JobSchedule), args.Error(1)
+}
+
+func (m *mockJobRunService) GetJobSchedulesByLabels(ctx context.Context, projectName tenant.ProjectName, labels []map[string]string) ([]*scheduler.JobSchedule, error) {
+	args := m.Called(ctx, projectName, labels)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.JobSchedule), args.Error(1)
+}
+
+func (m *mockJobRunService) GetTargetedSLAByJobNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) (map[time.Time][]scheduler.JobName, error) {
+	args := m.Called(ctx, projectName, jobNames)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[time.Time][]scheduler.JobName), args.Error(1)
+}
+
 type mockNotifier struct {
 	mock.Mock
 }

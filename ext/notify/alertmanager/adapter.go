@@ -21,7 +21,7 @@ const (
 	failureAlertTemplate        = "optimus-job-failure"
 	slaAlertTemplate            = "optimus-job-sla-miss"
 	successNotificationTemplate = "optimus-job-success"
-	operatorSlaMissTemplate     = "optimus-operator-sla-miss"
+	operatorSLAMissTemplate     = "optimus-operator-sla-miss"
 
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"
@@ -82,7 +82,7 @@ func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttr
 			"operator_started_at": attr.StartTime.String(),
 			"state":               attr.CurrentState.String(),
 		},
-		Template: operatorSlaMissTemplate,
+		Template: operatorSLAMissTemplate,
 		Labels: map[string]string{
 			"team":     attr.Team,
 			"severity": attr.Severity,

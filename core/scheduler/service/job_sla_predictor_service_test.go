@@ -7,12 +7,13 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-func TestIndentifySLABreaches(t *testing.T) {
+func TestIdentifySLABreaches(t *testing.T) {
 	ctx := context.Background()
 	l := log.NewNoop()
 	t.Run("given 1 job that potentially breach due to upstream late, return job lineage with its path", func(t *testing.T) {
@@ -27,7 +28,7 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)
@@ -71,20 +72,22 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// mock duration estimator
 		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)
-		}), 7).Return(map[scheduler.JobName]*time.Duration{
+		}), 7, 0).Return(map[scheduler.JobName]*time.Duration{
 			"job-A": func() *time.Duration { d := 20 * time.Minute; return &d }(), // target sla now + 30 mins
 			"job-B": func() *time.Duration { d := 15 * time.Minute; return &d }(), // inferred sla now + 10 mins
 			"job-C": func() *time.Duration { d := 10 * time.Minute; return &d }(), // inferred sla now - 5 mins
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, _, err := jobSLAPredictorService.IndentifySLABreaches(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 1)
-		assert.Equal(t, map[scheduler.JobName][]scheduler.JobName{
-			jobA: {jobC},
-		}, jobBreachRootCause)
+		assert.Len(t, jobBreachRootCause[jobA], 1)
+		assert.Equal(t, jobC, jobBreachRootCause[jobA][jobC].JobName)
+		assert.Equal(t, tenant.Tenant{}, jobBreachRootCause[jobA][jobC].Tenant)
+		assert.Equal(t, 2, jobBreachRootCause[jobA][jobC].RelativeLevel)
+		assert.Equal(t, "RUNNING_LATE", jobBreachRootCause[jobA][jobC].Status)
 	})
 	t.Run("given 1 job that potentially breach due to upstream not started, return job lineage with its path", func(t *testing.T) {
 		// job-C -> job-B -> job-A
@@ -98,7 +101,7 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)
@@ -145,20 +148,22 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// mock duration estimator
 		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)
-		}), 7).Return(map[scheduler.JobName]*time.Duration{
+		}), 7, 0).Return(map[scheduler.JobName]*time.Duration{
 			"job-A": func() *time.Duration { d := 20 * time.Minute; return &d }(), // target sla now + 30 mins
 			"job-B": func() *time.Duration { d := 15 * time.Minute; return &d }(), // inferred sla now + 10 mins
 			"job-C": func() *time.Duration { d := 10 * time.Minute; return &d }(), // inferred sla now - 5 mins
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, _, err := jobSLAPredictorService.IndentifySLABreaches(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 1)
-		assert.Equal(t, map[scheduler.JobName][]scheduler.JobName{
-			jobA: {jobB},
-		}, jobBreachRootCause)
+		assert.Len(t, jobBreachRootCause[jobA], 1)
+		assert.Equal(t, jobB, jobBreachRootCause[jobA][jobB].JobName)
+		assert.Equal(t, tenant.Tenant{}, jobBreachRootCause[jobA][jobB].Tenant)
+		assert.Equal(t, 1, jobBreachRootCause[jobA][jobB].RelativeLevel)
+		assert.Equal(t, "NOT_STARTED", jobBreachRootCause[jobA][jobB].Status)
 	})
 	t.Run("given 1 job that no potentially breach, return no breaches", func(t *testing.T) {
 		// job-C -> job-B -> job-A
@@ -171,7 +176,7 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)
@@ -219,14 +224,14 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// mock duration estimator
 		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)
-		}), 7).Return(map[scheduler.JobName]*time.Duration{
+		}), 7, 0).Return(map[scheduler.JobName]*time.Duration{
 			"job-A": func() *time.Duration { d := 20 * time.Minute; return &d }(), // target sla now + 30 mins
 			"job-B": func() *time.Duration { d := 15 * time.Minute; return &d }(), // inferred sla now + 10 mins
 			"job-C": func() *time.Duration { d := 10 * time.Minute; return &d }(), // inferred sla now - 5 mins
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, _, err := jobSLAPredictorService.IndentifySLABreaches(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, []*scheduler.JobSchedule{jobASchedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 0)
@@ -245,7 +250,7 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// given
 		jobLineageFetcher := new(MockJobLineageFetcher)
 		durationEstimator := new(MockDurationEstimator)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, 0*time.Minute, 7, jobLineageFetcher, durationEstimator)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, jobLineageFetcher, durationEstimator)
 
 		now := time.Now().Truncate(time.Second)
 		targetedSLA := now.Add(30 * time.Minute)
@@ -306,7 +311,7 @@ func TestIndentifySLABreaches(t *testing.T) {
 		// mock duration estimator
 		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A1", "job-A2", "job-B", "job-C"}, jobNames)
-		}), 7).Return(map[scheduler.JobName]*time.Duration{
+		}), 7, 0).Return(map[scheduler.JobName]*time.Duration{
 			"job-A1": func() *time.Duration { d := 20 * time.Minute; return &d }(), // target sla now + 30 mins
 			"job-A2": func() *time.Duration { d := 25 * time.Minute; return &d }(), // target sla now + 30 mins
 			"job-B":  func() *time.Duration { d := 15 * time.Minute; return &d }(), // inferred sla w.r.t job-A1 now + 10 mins
@@ -314,13 +319,15 @@ func TestIndentifySLABreaches(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, _, err := jobSLAPredictorService.IndentifySLABreaches(ctx, []*scheduler.JobSchedule{jobA1Schedule, jobA2Schedule}, targetedSLA)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, []*scheduler.JobSchedule{jobA1Schedule, jobA2Schedule}, targetedSLA)
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 1)
-		assert.Equal(t, jobBreachRootCause, map[scheduler.JobName][]scheduler.JobName{
-			jobA1: {jobC},
-		})
+		assert.Len(t, jobBreachRootCause[jobA1], 1)
+		assert.Equal(t, jobC, jobBreachRootCause[jobA1][jobC].JobName)
+		assert.Equal(t, tenant.Tenant{}, jobBreachRootCause[jobA1][jobC].Tenant)
+		assert.Equal(t, 2, jobBreachRootCause[jobA1][jobC].RelativeLevel)
+		assert.Equal(t, "RUNNING_LATE", jobBreachRootCause[jobA1][jobC].Status)
 	})
 }
 
@@ -347,13 +354,11 @@ func (m *MockDurationEstimator) GetP95DurationByJobNames(
 	ctx context.Context,
 	jobNames []scheduler.JobName,
 	lastNRuns int,
+	bufferPercentage int,
 ) (map[scheduler.JobName]*time.Duration, error) {
-	args := m.Called(ctx, jobNames, lastNRuns)
-
-	var result map[scheduler.JobName]*time.Duration
-	if args.Get(0) != nil {
-		result = args.Get(0).(map[scheduler.JobName]*time.Duration)
+	args := m.Called(ctx, jobNames, lastNRuns, bufferPercentage)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
-
-	return result, args.Error(1)
+	return args.Get(0).(map[scheduler.JobName]*time.Duration), args.Error(1)
 }

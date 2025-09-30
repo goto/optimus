@@ -1001,19 +1001,19 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	}
 }
 
-func (s *JobRunService) GetExpectedRunSchedules(_ context.Context, sourceProject *tenant.Project, sourceJob, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error) {
+func (s *JobRunService) GetExpectedRunSchedules(_ context.Context, sourceProject *tenant.Project, sourceSchedule string, sourceWindow window.Config, upstreamSchedule string, referenceTime time.Time) ([]time.Time, error) {
 	// this will get the latest upstream schedule time before the reference time - usually the downstream schedule time
 	referenceTimeSecondAhead := referenceTime.Add(time.Second * 1)
-	upstreamCronSpec, err := cron.ParseCronSchedule(upstreamJob.Schedule.Interval)
+	upstreamCronSpec, err := cron.ParseCronSchedule(upstreamSchedule)
 	if err != nil {
-		s.l.Error("error parsing cron schedule [%s]: %s", upstreamJob.Schedule.Interval, err)
+		s.l.Error("error parsing cron schedule [%s]: %s", upstreamSchedule, err)
 		return nil, err
 	}
 	lastUpstreamScheduleTime := upstreamCronSpec.Prev(referenceTimeSecondAhead)
 
-	interval, err := s.getInterval(sourceProject, sourceJob, lastUpstreamScheduleTime)
+	interval, err := s.getIntervalForSchedule(sourceProject, sourceWindow, sourceSchedule, lastUpstreamScheduleTime)
 	if err != nil {
-		s.l.Error("error getting interval for job [%s]: %s", sourceJob.Name, err)
+		s.l.Error("error getting interval for job [%s]: %s", sourceSchedule, err)
 		return nil, err
 	}
 

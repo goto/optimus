@@ -18,7 +18,6 @@ type Optimus struct {
 	Log       LogConfig       `mapstructure:"log"`
 	Telemetry TelemetryConfig `mapstructure:"telemetry"`
 	Alerting  AlertingConfig  `mapstructure:"alerting"`
-	SLA       AlertingConfig  `mapstructure:"alerting"`
 
 	namespaceNameToNamespace map[string]*Namespace
 }

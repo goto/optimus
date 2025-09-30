@@ -3,6 +3,8 @@ package v1beta1
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,7 +21,7 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	PredictJobSLAs(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (rootCauses map[*scheduler.JobLineageSummary][]*scheduler.JobLineageSummary, jobSLAStates map[*scheduler.JobLineageSummary]*service.JobSLAState, err error)
+	IndentifySLABreaches(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (map[scheduler.JobName][]scheduler.JobName, map[scheduler.JobName]map[scheduler.JobName]*service.JobSLAState, error)
 }
 
 type JobRunService interface {
@@ -27,6 +29,9 @@ type JobRunService interface {
 	UpdateJobState(context.Context, *scheduler.Event) error
 	GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error)
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error)
+	GetJobSchedulesByNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) ([]*scheduler.JobSchedule, error)
+	GetJobSchedulesByLabels(ctx context.Context, projectName tenant.ProjectName, labels []map[string]string) ([]*scheduler.JobSchedule, error)
+	GetTargetedSLAByJobNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) (map[time.Time][]scheduler.JobName, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
 }
@@ -344,64 +349,109 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-// TriggerPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time
-func (h JobRunHandler) TriggerPotentialSLABreach(ctx context.Context, req *pb.TriggerPotentialSLABreachRequest) (*pb.TriggerPotentialSLABreachResponse, error) {
-	// populate map of targetedSLA to jobSchedules
-	jobSchedulesByTargetedSLA := make(map[time.Time][]*scheduler.JobSchedule)
-	for _, jobTarget := range req.GetJobTargets() {
-		targetedSLA := jobTarget.GetTargetedSlaTime().AsTime()
-		if _, ok := jobSchedulesByTargetedSLA[targetedSLA]; !ok {
-			jobSchedulesByTargetedSLA[targetedSLA] = make([]*scheduler.JobSchedule, 0)
-		}
-		jobName, err := scheduler.JobNameFrom(jobTarget.GetJobName())
+// IdentifyPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time
+func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.IdentifyPotentialSLABreachRequest) (*pb.IdentifyPotentialSLABreachResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %v", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt project name")
+	}
+
+	var jobNames []scheduler.JobName
+	for _, jn := range req.GetJobNames() {
+		jobName, err := scheduler.JobNameFrom(jn)
 		if err != nil {
-			h.l.Error("error adapting job name [%s]: %v", jobTarget.GetJobName(), err)
+			h.l.Error("error adapting job name [%s]: %v", jn, err)
 			return nil, errors.GRPCErr(err, "unable to adapt job name")
 		}
-		jobSchedulesByTargetedSLA[targetedSLA] = append(jobSchedulesByTargetedSLA[targetedSLA], &scheduler.JobSchedule{
-			JobName:     jobName,
-			ScheduledAt: jobTarget.ScheduledAt.AsTime(),
-		})
+		jobNames = append(jobNames, jobName)
 	}
-	// TODO: get job based on labels
 
-	response := pb.TriggerPotentialSLABreachResponse{Jobs: make(map[string]*pb.PotentialSLABreachJobs)}
-	// for each targetedSLA, predict SLA breaches
-	for targetedSLA, jobSchedules := range jobSchedulesByTargetedSLA {
-		jobBreachRootCause, jobSLAStates, err := h.JobSLAPredictorService.PredictJobSLAs(ctx, jobSchedules, targetedSLA)
-		if err != nil {
-			h.l.Error("error predicting SLA breaches for targetedSLA [%s]: %v", targetedSLA.String(), err)
-			return nil, errors.GRPCErr(err, "error predicting SLA breaches")
-		}
-		if len(jobBreachRootCause) == 0 {
-			h.l.Info("No SLA breaches predicted for targetedSLA %s", targetedSLA.String())
-			continue
-		}
-		h.l.Info("Predicted %d SLA breaches for targetedSLA %s", len(jobBreachRootCause), targetedSLA.String())
-		for jobTarget, jobs := range jobBreachRootCause {
-			response.Jobs[jobTarget.JobName.String()] = &pb.PotentialSLABreachJobs{}
-			response.Jobs[jobTarget.JobName.String()].Jobs = make([]*pb.PotentialSLABreachJob, 0)
-			response.Jobs[jobTarget.JobName.String()].Jobs = append(response.Jobs[jobTarget.JobName.String()].Jobs, &pb.PotentialSLABreachJob{
-				ProjectName:     jobTarget.Tenant.ProjectName().String(),
-				JobName:         jobTarget.JobName.String(),
-				InferredSlaTime: timestamppb.New(*jobSLAStates[jobTarget].InferredSLAByJobName[jobTarget.JobName]),
-				RelativeLevel:   0,
-				// Status: jobTarget.JobRuns[],
-			})
-			// add root causes
-			for _, job := range jobs {
-				response.Jobs[jobTarget.JobName.String()].Jobs = append(response.Jobs[jobTarget.JobName.String()].Jobs, &pb.PotentialSLABreachJob{
-					ProjectName:     job.Tenant.ProjectName().String(),
-					JobName:         job.JobName.String(),
-					InferredSlaTime: timestamppb.New(*jobSLAStates[job].InferredSLAByJobName[jobTarget.JobName]),
-					RelativeLevel:   getLevel(jobTarget, job, nil, 0),
-					// Status: job.JobRuns[],
-				})
+	jobSchedules := []*scheduler.JobSchedule{}
+
+	// get job schedules by names and labels
+	jobSchedulesByNames, err := h.service.GetJobSchedulesByNames(ctx, projectName, jobNames)
+	if err != nil {
+		h.l.Error("error getting job schedules: %v", err)
+		return nil, errors.GRPCErr(err, "unable to get job schedules")
+	}
+	labels := []map[string]string{}
+	for _, lbl := range req.GetJobLabels() {
+		labels = append(labels, lbl.GetLabels())
+	}
+	jobSchedulesByLabels, err := h.service.GetJobSchedulesByLabels(ctx, projectName, labels)
+	if err != nil {
+		h.l.Error("error getting job schedules: %v", err)
+		return nil, errors.GRPCErr(err, "unable to get job schedules")
+	}
+	jobSchedules = append(jobSchedules, jobSchedulesByNames...)
+	jobSchedules = append(jobSchedules, jobSchedulesByLabels...)
+
+	if len(jobSchedules) == 0 {
+		return &pb.IdentifyPotentialSLABreachResponse{}, nil
+	}
+
+	// get targeted SLA time and the jobs that target the same SLA time
+	targetedSLAMap, err := h.service.GetTargetedSLAByJobNames(ctx, projectName, jobNames)
+	if err != nil {
+		h.l.Error("error getting targeted SLA: %v", err)
+		return nil, errors.GRPCErr(err, "unable to get targeted SLA")
+	}
+
+	// for each targeted SLA time, identify potential SLA breaches
+	response := pb.IdentifyPotentialSLABreachResponse{}
+	for targetedSLA, jobsAtTargetedSLA := range targetedSLAMap {
+		targetedJobSchedules := []*scheduler.JobSchedule{}
+		for _, js := range jobSchedules {
+			if slices.Contains(jobsAtTargetedSLA, js.JobName) {
+				targetedJobSchedules = append(targetedJobSchedules, js)
 			}
 		}
-	}
+		if len(targetedJobSchedules) == 0 {
+			continue
+		}
 
-	// TODO: grouping based on the namespace, and send notification for each namespace once
+		potentialBreaches, slaStates, err := h.JobSLAPredictorService.IndentifySLABreaches(ctx, targetedJobSchedules, targetedSLA)
+		if err != nil {
+			h.l.Error("error identifying potential SLA breaches: %v", err)
+			return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")
+		}
+
+		if len(potentialBreaches) == 0 {
+			continue
+		}
+
+		jobs := make(map[string]*pb.UpStreamBreachedJobs)
+		for jobNameTarget, jobNameUpstreams := range potentialBreaches {
+			upstreamStates := []*pb.UpstreamJobStatus{}
+			for _, upstreamJobName := range jobNameUpstreams {
+				slaState := slaStates[jobNameTarget][upstreamJobName]
+				if slaState == nil || slaState.InferredSLA == nil {
+					continue
+				}
+				upstreamStates = append(upstreamStates, &pb.UpstreamJobStatus{
+					// ProjectName: ,
+					JobName:         upstreamJobName.String(),
+					InferredSlaTime: timestamppb.New(*slaState.InferredSLA),
+					// RelativeLevel:
+					// Status:
+				})
+			}
+			jobs[jobNameTarget.String()] = &pb.UpStreamBreachedJobs{
+				UpstreamJobs: upstreamStates,
+			}
+		}
+
+		if len(jobs) == 0 {
+			continue
+		}
+
+		// build response
+		if response.Jobs == nil {
+			response.Jobs = make(map[string]*pb.UpStreamBreachedJobs)
+		}
+		maps.Copy(response.Jobs, jobs)
+	}
 
 	return &response, nil
 }

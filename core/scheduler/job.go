@@ -224,7 +224,11 @@ func GroupJobsByTenant(j []*JobWithDetails) map[tenant.Tenant][]*JobWithDetails 
 }
 
 func (j *JobWithDetails) SLADuration() (int64, error) {
-	for _, notify := range j.Alerts {
+	return GetSLADuration(j.Alerts)
+}
+
+func GetSLADuration(alerts []Alert) (int64, error) {
+	for _, notify := range alerts {
 		if notify.On == EventCategorySLAMiss {
 			if _, ok := notify.Config["duration"]; !ok {
 				continue
@@ -386,4 +390,12 @@ type JobUpstream struct {
 	Type           string
 	External       bool
 	State          string
+}
+
+type JobSummary struct {
+	JobName          JobName
+	Tenant           tenant.Tenant
+	ScheduleInterval string
+	SLA              SLAConfig
+	Window           window.Config
 }

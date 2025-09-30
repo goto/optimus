@@ -458,10 +458,14 @@ func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.Proj
 
 // TODO: this method is only for backward compatibility, it will be deprecated soon
 func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobWithDetails, referenceTime time.Time) (interval.Interval, error) {
-	windowConfig := job.Job.WindowConfig
+	return s.getIntervalForSchedule(project, job.Job.WindowConfig, job.Schedule.Interval, referenceTime)
+}
+
+func (s *JobRunService) getIntervalForSchedule(project *tenant.Project, windowCfg window.Config, scheduleCron string, referenceTime time.Time) (interval.Interval, error) {
+	windowConfig := windowCfg
 
 	if windowConfig.Type() == window.Incremental {
-		w, err := window.FromSchedule(job.Schedule.Interval)
+		w, err := window.FromSchedule(scheduleCron)
 		if err != nil {
 			s.l.Error("error getting window with type incremental: %v", err)
 			return interval.Interval{}, err
@@ -996,19 +1000,19 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	}
 }
 
-func (s *JobRunService) GetExpectedRunSchedules(_ context.Context, sourceProject *tenant.Project, sourceJob, upstreamJob *scheduler.JobWithDetails, referenceTime time.Time) ([]time.Time, error) {
+func (s *JobRunService) GetExpectedRunSchedules(_ context.Context, sourceProject *tenant.Project, sourceSchedule string, sourceWindow window.Config, upstreamSchedule string, referenceTime time.Time) ([]time.Time, error) {
 	// this will get the latest upstream schedule time before the reference time - usually the downstream schedule time
 	referenceTimeSecondAhead := referenceTime.Add(time.Second * 1)
-	upstreamCronSpec, err := cron.ParseCronSchedule(upstreamJob.Schedule.Interval)
+	upstreamCronSpec, err := cron.ParseCronSchedule(upstreamSchedule)
 	if err != nil {
-		s.l.Error("error parsing cron schedule [%s]: %s", upstreamJob.Schedule.Interval, err)
+		s.l.Error("error parsing cron schedule [%s]: %s", upstreamSchedule, err)
 		return nil, err
 	}
 	lastUpstreamScheduleTime := upstreamCronSpec.Prev(referenceTimeSecondAhead)
 
-	interval, err := s.getInterval(sourceProject, sourceJob, lastUpstreamScheduleTime)
+	interval, err := s.getIntervalForSchedule(sourceProject, sourceWindow, sourceSchedule, lastUpstreamScheduleTime)
 	if err != nil {
-		s.l.Error("error getting interval for job [%s]: %s", sourceJob.Name, err)
+		s.l.Error("error getting interval for job [%s]: %s", sourceSchedule, err)
 		return nil, err
 	}
 

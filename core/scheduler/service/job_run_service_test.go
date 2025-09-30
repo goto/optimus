@@ -42,8 +42,7 @@ func TestJobRunService(t *testing.T) {
 	vars := map[string]string{}
 
 	task := scheduler.Task{
-		Name:   "mc2mc",
-		Config: map[string]string{"NAME": "T1"},
+		Name: "mc2mc",
 	}
 
 	project, err := tenant.NewProject(projName.String(), conf, vars)
@@ -1945,7 +1944,9 @@ func TestJobRunService(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, upstreamJob, downstreamScheduledAt)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
+				upstreamJob.Schedule.Interval, downstreamScheduledAt)
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
@@ -1962,7 +1963,10 @@ func TestJobRunService(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, upstreamJobWithEqualSchedule, downstreamScheduledAt)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
+				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
+
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
 			// expected to only have one schedule which is 2023-12-15 08:00 UTC
@@ -1978,7 +1982,9 @@ func TestJobRunService(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithMultiDayConfig, upstreamJobWithEqualSchedule, downstreamScheduledAt)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithMultiDayConfig.Schedule.Interval, sourceJobWithMultiDayConfig.Job.WindowConfig,
+				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
@@ -2012,7 +2018,11 @@ func TestJobRunService(t *testing.T) {
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, invalidUpstreamJob, referenceTime)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithYesterdayConfig.Schedule.Interval,
+				sourceJobWithYesterdayConfig.Job.WindowConfig,
+				invalidUpstreamJob.Schedule.Interval,
+				referenceTime)
 
 			assert.Error(t, err)
 			assert.Nil(t, schedules)
@@ -2035,7 +2045,9 @@ func TestJobRunService(t *testing.T) {
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, hourlyUpstreamJob, referenceTime)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
+				hourlyUpstreamJob.Schedule.Interval, referenceTime)
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, schedules)
@@ -2066,7 +2078,9 @@ func TestJobRunService(t *testing.T) {
 
 			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
-			schedules, err := runService.GetExpectedRunSchedules(ctx, project, sourceJobWithYesterdayConfig, monthlyUpstreamJob, referenceTime)
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
+				monthlyUpstreamJob.Schedule.Interval, referenceTime)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, schedules)

@@ -122,6 +122,7 @@ func (r *LineageResolver) enrichWithJobDetails(ctx context.Context, lineage []*s
 		jobNames = append(jobNames, jobName)
 	}
 
+	// only do a single call to fetch all jobs
 	jobsByName, err := r.jobRepo.FindByNames(ctx, jobNames)
 	if err != nil {
 		return err
@@ -281,7 +282,7 @@ func (r *LineageResolver) fetchAndUpdateJobRunDetails(ctx context.Context, jobRu
 	}
 
 	for _, jobRunDetail := range jobRunDetails {
-		scheduleKey := jobRunDetail.ScheduledAt.Format(time.RFC3339)
+		scheduleKey := jobRunDetail.ScheduledAt.UTC().Format(time.RFC3339)
 		if jobRuns, exists := jobRunsByJobName[jobRunDetail.JobName]; exists {
 			if jobRun, exists := jobRuns[scheduleKey]; exists {
 				jobRun.JobName = jobRunDetail.JobName

@@ -609,9 +609,9 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 	return upstreamMap, nil
 }
 
-func (j *JobRepository) FindByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobWithDetails, error) {
+func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobSummary, error) {
 	if len(jobNames) == 0 {
-		return make(map[scheduler.JobName]*scheduler.JobWithDetails), nil
+		return make(map[scheduler.JobName]*scheduler.JobSummary), nil
 	}
 
 	jobNameStrings := make([]string, len(jobNames))
@@ -619,31 +619,30 @@ func (j *JobRepository) FindByNames(ctx context.Context, jobNames []scheduler.Jo
 		jobNameStrings[i] = string(jobName)
 	}
 
-	query := `SELECT ` + jobColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL`
+	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL`
 	rows, err := j.db.Query(ctx, query, jobNameStrings)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while finding jobs by names", err)
 	}
 	defer rows.Close()
 
-	jobsMap := make(map[scheduler.JobName]*scheduler.JobWithDetails)
+	jobsMap := make(map[scheduler.JobName]*scheduler.JobSummary)
 	multiError := errors.NewMultiError("errorInFindByNames")
 
 	for rows.Next() {
-		spec, err := FromRow(rows)
+		spec, err := fromJobSummaryRow(rows)
 		if err != nil {
-			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job:"+spec.Name, err))
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job summary", err))
 			continue
 		}
 
-		jobWithDetails, err := spec.toJobWithDetails()
+		jobSummary, err := spec.toJobSummary()
 		if err != nil {
-			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error converting job:"+spec.Name, err))
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error converting to job summary", err))
 			continue
 		}
 
-		jobName := scheduler.JobName(spec.Name)
-		jobsMap[jobName] = jobWithDetails
+		jobsMap[jobSummary.JobName] = jobSummary
 	}
 
 	return jobsMap, multiError.ToErr()

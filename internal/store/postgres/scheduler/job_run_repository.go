@@ -232,44 +232,57 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 	return jobRunList, nil
 }
 
-func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, lastNDays int) (map[scheduler.JobName]time.Duration, error) {
+func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
-		return map[scheduler.JobName]time.Duration{}, nil
+		return map[scheduler.JobName]*time.Duration{}, nil
 	}
 	var jobNamesString []string
 	for _, jobName := range jobNames {
 		jobNamesString = append(jobNamesString, fmt.Sprintf("'%s'", jobName))
 	}
 	query := `
+	WITH last_n_runs AS (
+		SELECT
+			j.id AS job_run_id,
+			j.job_name,
+			t.start_time,
+			t.end_time,
+			ROW_NUMBER() OVER (
+				PARTITION BY j.job_name
+				ORDER BY j.scheduled_at DESC
+			) AS rn
+		FROM job_run j
+		JOIN task_run t ON t.job_run_id = j.id
+		WHERE t.end_time IS NOT NULL
+		AND j.job_name IN (%s)
+	)
 	SELECT
-	    j.job_name,
-	    percentile_cont(0.95) WITHIN GROUP (
-	        ORDER BY EXTRACT(EPOCH FROM (t.end_time - t.start_time))
-	    ) AS p95_duration_seconds
-	FROM job_run j
-	JOIN task_run t ON t.job_run_id = j.id
-	WHERE t.end_time IS NOT NULL
-	  AND j.scheduled_at >= NOW() - INTERVAL '%d days'
-	  AND j.job_name IN (%s)
-	GROUP BY j.job_name
+		job_name,
+		percentile_cont(0.95) WITHIN GROUP (
+			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
+		) AS p95_duration_seconds
+	FROM last_n_runs
+	WHERE rn <= %d  -- keep only last N runs per job
+	GROUP BY job_name
 	ORDER BY p95_duration_seconds DESC;`
-	query = fmt.Sprintf(query, lastNDays, strings.Join(jobNamesString, ","))
+	query = fmt.Sprintf(query, lastNRuns, strings.Join(jobNamesString, ","))
 	rows, err := j.db.Query(ctx, query)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 	}
-	jobDurations := make(map[scheduler.JobName]time.Duration)
+	jobDurations := make(map[scheduler.JobName]*time.Duration)
 	for rows.Next() {
 		var jobName string
 		var p95DurationSeconds float64
 		err := rows.Scan(&jobName, &p95DurationSeconds)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return map[scheduler.JobName]time.Duration{}, nil
+				return map[scheduler.JobName]*time.Duration{}, nil
 			}
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 		}
-		jobDurations[scheduler.JobName(jobName)] = time.Duration(p95DurationSeconds * float64(time.Second))
+		duration := time.Duration(p95DurationSeconds * float64(time.Second))
+		jobDurations[scheduler.JobName(jobName)] = &duration
 	}
 	return jobDurations, nil
 }

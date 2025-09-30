@@ -95,31 +95,27 @@ type DAGObj struct {
 }
 
 type TaskInstance struct {
-	TaskID           string            `json:"task_id"`
-	TaskDisplayName  string            `json:"task_display_name"`
-	DagID            string            `json:"dag_id"`
-	DagRunID         string            `json:"dag_run_id"`
-	ExecutionDate    string            `json:"execution_date"`
-	StartDate        string            `json:"start_date"`
-	EndDate          string            `json:"end_date"`
-	Duration         int               `json:"duration"`
-	State            *string           `json:"state"` // nullable
-	TryNumber        int               `json:"try_number"`
-	MapIndex         int               `json:"map_index"`
-	MaxTries         int               `json:"max_tries"`
-	Hostname         string            `json:"hostname"`
-	Unixname         string            `json:"unixname"`
-	Pool             string            `json:"pool"`
-	PoolSlots        int               `json:"pool_slots"`
-	Queue            string            `json:"queue"`
-	PriorityWeight   int               `json:"priority_weight"`
-	Operator         string            `json:"operator"`
-	QueuedWhen       string            `json:"queued_when"`
-	Pid              int               `json:"pid"`
-	ExecutorConfig   string            `json:"executor_config"`
-	RenderedMapIndex string            `json:"rendered_map_index"`
-	RenderedFields   map[string]string `json:"rendered_fields"`
-	Note             string            `json:"note"`
+	TaskID          string   `json:"task_id"`
+	TaskDisplayName string   `json:"task_display_name"`
+	DagID           string   `json:"dag_id"`
+	DagRunID        string   `json:"dag_run_id"`
+	ExecutionDate   string   `json:"execution_date"`
+	StartDate       string   `json:"start_date"`
+	EndDate         string   `json:"end_date"`
+	Duration        *float64 `json:"duration"`
+	State           *string  `json:"state"` // nullable
+	TryNumber       int      `json:"try_number"`
+	MapIndex        int      `json:"map_index"`
+	MaxTries        int      `json:"max_tries"`
+	Hostname        string   `json:"hostname"`
+	Pool            string   `json:"pool"`
+	PoolSlots       int      `json:"pool_slots"`
+	Queue           string   `json:"queue"`
+	PriorityWeight  int      `json:"priority_weight"`
+	Operator        string   `json:"operator"`
+	QueuedWhen      string   `json:"queued_when"`
+	Pid             int      `json:"pid"`
+	Note            string   `json:"note"`
 }
 
 func parseTaskInstance(data []byte) (*TaskInstance, error) {
@@ -131,13 +127,13 @@ func parseTaskInstance(data []byte) (*TaskInstance, error) {
 }
 
 func (ti *TaskInstance) toSchedulerOperatorRunInstance() (*scheduler.OperatorRunInstance, error) {
-	startTime, err := time.Parse(ti.StartDate, time.RFC3339)
+	startTime, err := time.Parse(time.RFC3339, ti.StartDate)
 	if err != nil {
 		return nil, err
 	}
 	var endTime *time.Time
 	if ti.EndDate != "" {
-		parsedEndTime, err := time.Parse(ti.EndDate, time.RFC3339)
+		parsedEndTime, err := time.Parse(time.RFC3339, ti.EndDate)
 		if err != nil {
 			return nil, err
 		}
@@ -151,6 +147,9 @@ func (ti *TaskInstance) toSchedulerOperatorRunInstance() (*scheduler.OperatorRun
 		TryNumber:    ti.TryNumber,
 		EndTime:      endTime,
 		LogURL:       "",
+	}
+	if ti.State != nil {
+		opr.State = *ti.State
 	}
 	return opr, nil
 }

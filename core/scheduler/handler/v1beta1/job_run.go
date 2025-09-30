@@ -21,7 +21,12 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	IndentifySLABreaches(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (map[scheduler.JobName][]scheduler.JobName, map[scheduler.JobName]map[scheduler.JobName]*service.JobSLAState, error)
+	IdentifySLABreaches(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
+}
+
+type JobScheduleService interface {
+	GetJobSchedulesByFilter(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, filters ...filter.FilterOpt) ([]*scheduler.JobSchedule, error)
+	GetTargetedSLAByJobNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) (map[time.Time][]scheduler.JobName, error)
 }
 
 type JobRunService interface {
@@ -29,9 +34,6 @@ type JobRunService interface {
 	UpdateJobState(context.Context, *scheduler.Event) error
 	GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error)
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error)
-	GetJobSchedulesByNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) ([]*scheduler.JobSchedule, error)
-	GetJobSchedulesByLabels(ctx context.Context, projectName tenant.ProjectName, labels []map[string]string) ([]*scheduler.JobSchedule, error)
-	GetTargetedSLAByJobNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) (map[time.Time][]scheduler.JobName, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
 }
@@ -58,6 +60,7 @@ type JobRunHandler struct {
 	notifier               Notifier
 	jobLineageService      JobLineageService
 	jobSLAPredictorService JobSLAPredictorService
+	jobScheduleService     JobScheduleService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -367,32 +370,37 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		jobNames = append(jobNames, jobName)
 	}
 
-	jobSchedules := []*scheduler.JobSchedule{}
-
 	// get job schedules by names and labels
-	jobSchedulesByNames, err := h.service.GetJobSchedulesByNames(ctx, projectName, jobNames)
-	if err != nil {
-		h.l.Error("error getting job schedules: %v", err)
-		return nil, errors.GRPCErr(err, "unable to get job schedules")
-	}
 	labels := []map[string]string{}
 	for _, lbl := range req.GetJobLabels() {
 		labels = append(labels, lbl.GetLabels())
 	}
-	jobSchedulesByLabels, err := h.service.GetJobSchedulesByLabels(ctx, projectName, labels)
+	filters := []filter.FilterOpt{}
+	if len(req.GetJobNames()) > 0 {
+		filters = append(filters, filter.WithStringArray(filter.JobNames, req.GetJobNames()))
+	}
+	if len(labels) > 0 {
+		filters = append(filters, filter.WithMapArray(filter.Labels, labels))
+	}
+	// consider jobs with next schedule within next nextScheduleRangeInHours hours
+	nextScheduleRangeInHours := time.Duration(req.GetNextScheduledRangeInHours()) * time.Hour
+	jobSchedules, err := h.jobScheduleService.GetJobSchedulesByFilter(ctx, projectName, nextScheduleRangeInHours, filters...)
 	if err != nil {
 		h.l.Error("error getting job schedules: %v", err)
 		return nil, errors.GRPCErr(err, "unable to get job schedules")
 	}
-	jobSchedules = append(jobSchedules, jobSchedulesByNames...)
-	jobSchedules = append(jobSchedules, jobSchedulesByLabels...)
 
 	if len(jobSchedules) == 0 {
 		return &pb.IdentifyPotentialSLABreachResponse{}, nil
 	}
 
+	jobNameTargets := []scheduler.JobName{}
+	for _, js := range jobSchedules {
+		jobNameTargets = append(jobNameTargets, js.JobName)
+	}
+
 	// get targeted SLA time and the jobs that target the same SLA time
-	targetedSLAMap, err := h.service.GetTargetedSLAByJobNames(ctx, projectName, jobNames)
+	targetedSLAMap, err := h.jobScheduleService.GetTargetedSLAByJobNames(ctx, projectName, jobNameTargets)
 	if err != nil {
 		h.l.Error("error getting targeted SLA: %v", err)
 		return nil, errors.GRPCErr(err, "unable to get targeted SLA")
@@ -411,7 +419,7 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 			continue
 		}
 
-		potentialBreaches, slaStates, err := h.JobSLAPredictorService.IndentifySLABreaches(ctx, targetedJobSchedules, targetedSLA)
+		potentialBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, targetedJobSchedules, targetedSLA)
 		if err != nil {
 			h.l.Error("error identifying potential SLA breaches: %v", err)
 			return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")
@@ -422,19 +430,18 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		}
 
 		jobs := make(map[string]*pb.UpStreamBreachedJobs)
-		for jobNameTarget, jobNameUpstreams := range potentialBreaches {
+		for jobNameTarget, upstreamJobStates := range potentialBreaches {
 			upstreamStates := []*pb.UpstreamJobStatus{}
-			for _, upstreamJobName := range jobNameUpstreams {
-				slaState := slaStates[jobNameTarget][upstreamJobName]
-				if slaState == nil || slaState.InferredSLA == nil {
+			for upstreamJobName, upstreamJobState := range upstreamJobStates {
+				if upstreamJobState == nil || upstreamJobState.InferredSLA == nil {
 					continue
 				}
 				upstreamStates = append(upstreamStates, &pb.UpstreamJobStatus{
-					// ProjectName: ,
+					ProjectName:     upstreamJobState.Tenant.ProjectName().String(),
 					JobName:         upstreamJobName.String(),
-					InferredSlaTime: timestamppb.New(*slaState.InferredSLA),
-					// RelativeLevel:
-					// Status:
+					InferredSlaTime: timestamppb.New(*upstreamJobState.InferredSLA),
+					RelativeLevel:   int32(upstreamJobState.RelativeLevel),
+					Status:          upstreamJobState.Status,
 				})
 			}
 			jobs[jobNameTarget.String()] = &pb.UpStreamBreachedJobs{
@@ -451,6 +458,10 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 			response.Jobs = make(map[string]*pb.UpStreamBreachedJobs)
 		}
 		maps.Copy(response.Jobs, jobs)
+	}
+
+	if req.AlertOnBreach && len(response.Jobs) > 0 {
+		// TODO: alert if there are potential SLA breaches and alerting is enabled
 	}
 
 	return &response, nil
@@ -499,6 +510,7 @@ func NewJobRunHandler(
 	schedulerService SchedulerService,
 	jobLineageService JobLineageService,
 	jobSLAPredictorService JobSLAPredictorService,
+	jobScheduleService JobScheduleService,
 ) *JobRunHandler {
 	return &JobRunHandler{
 		l:                      l,
@@ -507,5 +519,6 @@ func NewJobRunHandler(
 		schedulerService:       schedulerService,
 		jobLineageService:      jobLineageService,
 		jobSLAPredictorService: jobSLAPredictorService,
+		jobScheduleService:     jobScheduleService,
 	}
 }

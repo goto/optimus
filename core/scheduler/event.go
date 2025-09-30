@@ -131,8 +131,16 @@ type OperatorRunInstance struct {
 	StartTime    time.Time  `json:"start_date"`
 	OperatorKey  string     `json:"task_instance_key_str"`
 	TryNumber    int        `json:"attempt"`
+	State        string     `json:"status"`
 	EndTime      *time.Time `json:"end_date,omitempty"`
 	LogURL       string     `json:"log_url"`
+}
+
+func (o *OperatorRunInstance) IsTerminated() bool {
+	if strings.EqualFold(o.State, StateFailed.String()) || strings.EqualFold(o.State, StateSuccess.String()) {
+		return true
+	}
+	return false
 }
 
 type DagRun struct {

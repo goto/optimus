@@ -525,6 +525,7 @@ class EventContext:
         task_instance_key_str: str
         attempt: int
         log_url: str
+        state: str
         start_date: str = None
         end_date: str = None
 
@@ -566,6 +567,7 @@ class EventContext:
                 task_instance_key_str = ctx.get("task_instance_key_str"),
                 attempt=ti.try_number,
                 log_url=ti.log_url,
+                state=ti.State,
                 start_date=cls.format_dt(ti.start_date),
                 end_date=cls.format_dt(ti.end_date),
             ),

@@ -21,6 +21,10 @@ type OperatorSLARepo interface {
 	RemoveProcessedSLA(ctx context.Context, slaID uuid.UUID) error
 }
 
+type RunScheduler interface {
+	GetOperatorInstance(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, jobRunID, operatorName string) (*scheduler.OperatorRunInstance, error)
+}
+
 type SLAWorker struct {
 	alertManager    AlertManager
 	operatorSLARepo OperatorSLARepo
@@ -28,11 +32,12 @@ type SLAWorker struct {
 	jobRunRepo      JobRunRepository
 	operatorRunRepo OperatorRunRepository
 	tenantService   TenantService
+	scheduler       RunScheduler
 	logger          log.Logger
 }
 
 func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo OperatorSLARepo, jobRepo JobRepo,
-	jobRunRepo JobRunRepository, operatorRunRepo OperatorRunRepository, tenantService TenantService,
+	jobRunRepo JobRunRepository, operatorRunRepo OperatorRunRepository, tenantService TenantService, scheduler RunScheduler,
 ) *SLAWorker {
 	return &SLAWorker{
 		logger:          logger,
@@ -42,6 +47,7 @@ func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo 
 		jobRunRepo:      jobRunRepo,
 		operatorRunRepo: operatorRunRepo,
 		tenantService:   tenantService,
+		scheduler:       scheduler,
 	}
 }
 
@@ -81,11 +87,7 @@ func getAlertAttributes(teanatWithDetails *tenant.WithDetails, team, severity, m
 	return &alertAttr
 }
 
-func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, slaObj *scheduler.OperatorsSLA) error {
-	job, err := w.jobRepo.GetJob(ctx, slaObj.ProjectName, slaObj.JobName)
-	if err != nil {
-		return err
-	}
+func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, job *scheduler.Job, slaObj *scheduler.OperatorsSLA) error {
 	jobRun, err := w.jobRunRepo.GetByScheduledAt(ctx, job.Tenant, job.Name, slaObj.ScheduledAt)
 	if err != nil {
 		return err
@@ -135,15 +137,32 @@ func (w *SLAWorker) handleSLACalculation(ctx context.Context, signature string, 
 		return
 	}
 
-	for _, sla := range expiredSLAs {
-		// check in airflow if the task is finished
-
-		if err := w.SendOperatorSLAEvent(ctx, sla); err != nil {
-			w.logger.Error("failed to notify SLA for job %s: %v", sla.JobName, err)
+	for _, slaObj := range expiredSLAs {
+		job, err := w.jobRepo.GetJob(ctx, slaObj.ProjectName, slaObj.JobName)
+		if err != nil {
+			w.logger.Error("failed to fetch job %s for SLA %s: %v", slaObj.JobName, slaObj.ID, err)
 			continue
 		}
-		if err := w.operatorSLARepo.RemoveProcessedSLA(ctx, sla.ID); err != nil {
-			w.logger.Error("failed to update SLA processed for job %s: %v", sla.JobName, err)
+		// check in airflow if the task is finished
+		taskInstance, err := w.scheduler.GetOperatorInstance(ctx, job.Tenant, job.Name, slaObj.RunID, slaObj.OperatorName)
+		if err != nil {
+			w.logger.Error("failed to fetch operator instance from scheduler, proceeding to alert the user about SLA breach err: %v", err)
+		}
+		if taskInstance != nil {
+			if taskInstance.IsTerminated() && taskInstance.EndTime != nil && taskInstance.EndTime.Before(slaObj.SLATime) {
+				w.logger.Error("Operator Finished Before SLA time, removing it from SLA records table")
+				if err := w.operatorSLARepo.RemoveProcessedSLA(ctx, slaObj.ID); err != nil {
+					w.logger.Error("failed to update SLA processed for job %s: %v", slaObj.JobName, err)
+				}
+				continue
+			}
+		}
+		if err := w.SendOperatorSLAEvent(ctx, job, slaObj); err != nil {
+			w.logger.Error("failed to notify SLA for job %s: %v", slaObj.JobName, err)
+			continue
+		}
+		if err := w.operatorSLARepo.RemoveProcessedSLA(ctx, slaObj.ID); err != nil {
+			w.logger.Error("failed to update SLA processed for job %s: %v", slaObj.JobName, err)
 		}
 	}
 }

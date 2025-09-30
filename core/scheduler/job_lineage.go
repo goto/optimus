@@ -31,41 +31,57 @@ func (j *JobLineageSummary) PruneUpstreamLineage(numberOfUpstreamPerLevel int) [
 	}
 
 	var result []*JobExecutionSummary
-
+	visited := make(map[JobName]bool)
 	queue := []*JobLineageSummary{j}
 	level := 0
+	maxLevels := 50
 
-	for len(queue) > 0 {
+	for len(queue) > 0 && level < maxLevels {
 		levelSize := len(queue)
 		var currentLevelJobs []*JobExecutionSummary
 		var nextLevelUpstreams []*JobLineageSummary
+		currentQueue := make([]*JobLineageSummary, levelSize)
+		copy(currentQueue, queue)
 
-		for i := range levelSize {
-			current := queue[i]
+		for i := 0; i < levelSize; i++ {
+			current := currentQueue[i]
+
+			if visited[current.JobName] {
+				continue
+			}
+			visited[current.JobName] = true
+
+			var latestJobRun *JobRunSummary
+			var latestScheduledAt time.Time
 
 			for _, jobRun := range current.JobRuns {
 				if jobRun.JobStartTime != nil && jobRun.JobEndTime != nil {
-					execSummary := &JobExecutionSummary{
-						JobName:       current.JobName,
-						SLA:           current.SLA,
-						JobRunSummary: jobRun,
-						Level:         level,
+					if latestJobRun == nil || jobRun.ScheduledAt.After(latestScheduledAt) {
+						latestJobRun = jobRun
+						latestScheduledAt = jobRun.ScheduledAt
 					}
-					currentLevelJobs = append(currentLevelJobs, execSummary)
+				}
+			}
+
+			if latestJobRun != nil {
+				execSummary := &JobExecutionSummary{
+					JobName:       current.JobName,
+					SLA:           current.SLA,
+					JobRunSummary: latestJobRun,
+					Level:         level,
+				}
+				currentLevelJobs = append(currentLevelJobs, execSummary)
+			}
+
+			for _, upstream := range current.Upstreams {
+				if upstream != nil && !visited[upstream.JobName] {
+					nextLevelUpstreams = append(nextLevelUpstreams, upstream)
 				}
 			}
 		}
 
 		if len(currentLevelJobs) > 0 {
-			for i := 0; i < len(currentLevelJobs)-1; i++ {
-				for k := i + 1; k < len(currentLevelJobs); k++ {
-					duration1 := currentLevelJobs[i].JobRunSummary.JobEndTime.Sub(*currentLevelJobs[i].JobRunSummary.JobStartTime)
-					duration2 := currentLevelJobs[k].JobRunSummary.JobEndTime.Sub(*currentLevelJobs[k].JobRunSummary.JobStartTime)
-					if duration1 < duration2 {
-						currentLevelJobs[i], currentLevelJobs[k] = currentLevelJobs[k], currentLevelJobs[i]
-					}
-				}
-			}
+			sortJobsByDurationDesc(currentLevelJobs)
 
 			var selectedJobs []*JobExecutionSummary
 			if numberOfUpstreamPerLevel == 0 {
@@ -75,15 +91,6 @@ func (j *JobLineageSummary) PruneUpstreamLineage(numberOfUpstreamPerLevel int) [
 				selectedJobs = currentLevelJobs[:limit]
 			}
 			result = append(result, selectedJobs...)
-
-			for _, selectedJob := range selectedJobs {
-				for i := range levelSize {
-					if queue[i].JobName == selectedJob.JobName {
-						nextLevelUpstreams = append(nextLevelUpstreams, queue[i].Upstreams...)
-						break
-					}
-				}
-			}
 		}
 
 		queue = nextLevelUpstreams
@@ -91,6 +98,24 @@ func (j *JobLineageSummary) PruneUpstreamLineage(numberOfUpstreamPerLevel int) [
 	}
 
 	return result
+}
+
+func sortJobsByDurationDesc(jobs []*JobExecutionSummary) {
+	for i := 1; i < len(jobs); i++ {
+		key := jobs[i]
+		keyDuration := key.JobRunSummary.JobEndTime.Sub(*key.JobRunSummary.JobStartTime)
+		j := i - 1
+
+		for j >= 0 {
+			currentDuration := jobs[j].JobRunSummary.JobEndTime.Sub(*jobs[j].JobRunSummary.JobStartTime)
+			if currentDuration >= keyDuration {
+				break
+			}
+			jobs[j+1] = jobs[j]
+			j--
+		}
+		jobs[j+1] = key
+	}
 }
 
 type JobRunLineage struct {

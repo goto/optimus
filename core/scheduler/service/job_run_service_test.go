@@ -2499,13 +2499,14 @@ func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, i
 func (m *mockJobRunRepository) GetP95DurationByJobNames(
 	ctx context.Context,
 	jobNames []scheduler.JobName,
-	lastNDays int,
-) (map[scheduler.JobName]time.Duration, error) {
-	args := m.Called(ctx, jobNames, lastNDays)
+	lastNRuns int,
+	bufferPercentage int,
+) (map[scheduler.JobName]*time.Duration, error) {
+	args := m.Called(ctx, jobNames, lastNRuns, bufferPercentage)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(map[scheduler.JobName]time.Duration), args.Error(1)
+	return args.Get(0).(map[scheduler.JobName]*time.Duration), args.Error(1)
 }
 
 type JobRepository struct {

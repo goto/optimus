@@ -248,9 +248,11 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, scheduledAt time.Time, lineageData *LineageData) (*scheduler.JobLineageSummary, error) {
 	allJobRunsMap := make(map[scheduler.JobName]map[string]*scheduler.JobRunSummary)
 	// initialize first job run in the lineage
+	baseSLATime := scheduledAt.Add(lineage.SLA.Duration)
 	lineage.JobRuns = map[string]*scheduler.JobRunSummary{
 		scheduledAt.UTC().Format(time.RFC3339): {
 			ScheduledAt: scheduledAt,
+			SLATime:     &baseSLATime,
 		},
 	}
 
@@ -304,8 +306,10 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 			for _, schedule := range upstreamSchedules {
 				scheduleKey := schedule.Format(time.RFC3339)
 				if _, exists := allJobRunsMap[upstream.JobName][scheduleKey]; !exists {
+					baseSLATime := schedule.Add(upstream.SLA.Duration)
 					allJobRunsMap[upstream.JobName][scheduleKey] = &scheduler.JobRunSummary{
 						ScheduledAt: schedule,
+						SLATime:     &baseSLATime,
 					}
 				}
 				if upstream.JobRuns == nil {
@@ -471,6 +475,7 @@ func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {
 	return &scheduler.JobRunSummary{
 		JobName:       source.JobName,
 		ScheduledAt:   source.ScheduledAt,
+		SLATime:       source.SLATime,
 		JobStartTime:  source.JobStartTime,
 		JobEndTime:    source.JobEndTime,
 		WaitStartTime: source.WaitStartTime,

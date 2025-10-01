@@ -76,6 +76,11 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				taskEndTime = timestamppb.New(*run.JobRunSummary.TaskEndTime)
 			}
 
+			var slaTime *timestamppb.Timestamp
+			if run.JobRunSummary.SLATime != nil {
+				slaTime = timestamppb.New(*run.JobRunSummary.SLATime)
+			}
+
 			pbJobRuns = append(pbJobRuns, &pb.JobExecutionSummary{
 				JobName: run.JobName.String(),
 				Sla: &pb.SLAConfig{
@@ -83,6 +88,7 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				},
 				JobRunSummary: &pb.JobRunSummary{
 					ScheduledAt:   timestamppb.New(run.JobRunSummary.ScheduledAt),
+					SlaTime:       slaTime,
 					JobStartTime:  jobStartTime,
 					JobEndTime:    jobEndTime,
 					HookStartTime: hookStartTime,

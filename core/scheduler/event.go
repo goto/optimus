@@ -39,6 +39,10 @@ type OperatorsSLA struct {
 	WorkerLockUntil time.Time
 }
 
+func (o OperatorsSLA) String() string {
+	return fmt.Sprintf("%s:%s:%s, SLATime: %s, OperatorStartTime: %s", o.JobName, o.OperatorName, o.RunID, o.SLATime, o.OperatorStartTime)
+}
+
 const (
 	EntityEvent = "event"
 
@@ -309,11 +313,17 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 		}
 		eventObj.JobScheduledAt = scheduledAtTimeStamp
 
-		eventObj.EventContext, err = EventContextFrom(eventValues["event_context"])
-		if err != nil {
-			return nil, err
+		switch eventType {
+		case TaskFailEvent, TaskStartEvent, TaskRetryEvent, TaskSuccessEvent,
+			HookFailEvent, HookStartEvent, HookRetryEvent, HookSuccessEvent,
+			SensorFailEvent, SensorStartEvent, SensorRetryEvent, SensorSuccessEvent:
+
+			eventObj.EventContext, err = EventContextFrom(eventValues["event_context"])
+			if err != nil {
+				return nil, err
+			}
+			eventObj.EventContext.Tenant = eventObj.Tenant
 		}
-		eventObj.EventContext.Tenant = eventObj.Tenant
 	}
 
 	return &eventObj, nil

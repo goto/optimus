@@ -577,6 +577,13 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
 }
 
+func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.ProjectName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
+	if len(labels) == 0 {
+		return []*scheduler.JobWithDetails{}, nil
+	}
+	return nil, nil
+}
+
 func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {
 	query := `SELECT job_name, upstream_job_name 
 				FROM job_upstream 

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/goto/optimus/core/scheduler/resolver"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
-	"github.com/goto/salt/log"
 )
 
 func matchValues[T any](expected []T, getIdentifier func(T) string) any {

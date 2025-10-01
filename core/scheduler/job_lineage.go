@@ -63,7 +63,6 @@ func (j *JobLineageSummary) Flatten() []*JobExecutionSummary {
 	}
 
 	return result
-
 }
 
 type JobRunLineage struct {

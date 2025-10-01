@@ -2019,7 +2019,7 @@ func TestJobRunService(t *testing.T) {
 			// 2023-12-15 08:00 UTC
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
 				upstreamJob.Schedule.Interval, downstreamScheduledAt)
@@ -2038,7 +2038,7 @@ func TestJobRunService(t *testing.T) {
 		t.Run("should return recent schedule if downstream schedule = upstream schedule", func(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
 				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
@@ -2057,7 +2057,7 @@ func TestJobRunService(t *testing.T) {
 		t.Run("should return multiple expected run schedules for multi-day window config", func(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithMultiDayConfig.Schedule.Interval, sourceJobWithMultiDayConfig.Job.WindowConfig,
 				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
@@ -2092,7 +2092,7 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval,
@@ -2119,7 +2119,7 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
@@ -2152,7 +2152,7 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
 
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,

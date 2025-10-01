@@ -2,12 +2,18 @@ package resolver
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/salt/log"
+)
+
+const (
+	// MaxLineageDepth is a safeguard to avoid infinite recursion in case of unexpected cycles
+	MaxLineageDepth = 50
 )
 
 type JobUpstreamRepository interface {
@@ -57,19 +63,19 @@ type LineageData struct {
 	ProjectsByName map[tenant.ProjectName]*tenant.Project
 }
 
-func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
+func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule, maxUpstreamsPerLevel int) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error) {
 	lineageData, err := r.prepareAllLineageData(ctx, jobSchedules)
 	if err != nil {
 		return nil, err
 	}
 
-	var results []*scheduler.JobLineageSummary
+	results := make(map[*scheduler.JobSchedule]*scheduler.JobLineageSummary)
 	for _, schedule := range jobSchedules {
-		lineage, err := r.buildSingleJobLineage(ctx, schedule, lineageData)
+		lineage, err := r.buildSingleJobLineage(ctx, schedule, lineageData, maxUpstreamsPerLevel)
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, lineage)
+		results[schedule] = lineage
 	}
 
 	return results, nil
@@ -140,27 +146,111 @@ func (r *LineageResolver) collectJobs(jobName scheduler.JobName, upstreamsByJob 
 	}
 }
 
-func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *scheduler.JobSchedule, lineageData *LineageData) (*scheduler.JobLineageSummary, error) {
-	baseJobRuns := map[string]*scheduler.JobRunSummary{
-		schedule.ScheduledAt.Format(time.RFC3339): {
-			ScheduledAt: schedule.ScheduledAt,
-		},
-	}
+func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *scheduler.JobSchedule, lineageData *LineageData, maxUpstreamsPerLevel int) (*scheduler.JobLineageSummary, error) {
 
-	lineage := r.buildLineageTree(schedule.JobName, baseJobRuns, lineageData, make(map[scheduler.JobName]bool), 0)
+	lineage := r.buildLineageTree(schedule.JobName, lineageData, make(map[scheduler.JobName]bool), 0)
 
-	enrichedLineage := r.enrichJobsWithJobDetails(lineage, lineageData.JobsByName, lineageData.ProjectsByName)
-
-	finalLineage, err := r.getAllUpstreamRuns(ctx, enrichedLineage, lineageData)
+	finalLineage, err := r.getAllUpstreamRuns(ctx, lineage, schedule.ScheduledAt, lineageData)
 	if err != nil {
 		return nil, err
+	}
+
+	if maxUpstreamsPerLevel > 0 {
+		finalLineage = r.pruneLineage(finalLineage, maxUpstreamsPerLevel, 0)
 	}
 
 	return finalLineage, nil
 }
 
-func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, jobRuns map[string]*scheduler.JobRunSummary, lineageData *LineageData, visited map[scheduler.JobName]bool, depth int) *scheduler.JobLineageSummary {
-	if visited[jobName] {
+type upstreamCandidate struct {
+	JobName  scheduler.JobName
+	Duration time.Duration
+}
+
+func (r *LineageResolver) pruneLineage(lineage *scheduler.JobLineageSummary, maxUpstreamsPerLevel, depth int) *scheduler.JobLineageSummary {
+	// base case: stop if max depth reached or number of upstreams is already within limit
+	if depth > MaxLineageDepth || len(lineage.Upstreams) <= maxUpstreamsPerLevel {
+		prunedUpstreams := make([]*scheduler.JobLineageSummary, len(lineage.Upstreams))
+		for i, upstream := range lineage.Upstreams {
+			prunedUpstreams[i] = r.pruneLineage(upstream, maxUpstreamsPerLevel, depth+1)
+		}
+
+		return &scheduler.JobLineageSummary{
+			JobName:          lineage.JobName,
+			Tenant:           lineage.Tenant,
+			Window:           lineage.Window,
+			ScheduleInterval: lineage.ScheduleInterval,
+			SLA:              lineage.SLA,
+			JobRuns:          r.copyJobRuns(lineage.JobRuns),
+			Upstreams:        prunedUpstreams,
+		}
+	}
+
+	candidates := r.extractUpstreamCandidatesSortedByDuration(lineage)
+
+	topUpstreams := []*scheduler.JobLineageSummary{}
+	for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
+		targetJobName := candidates[i].JobName
+		for _, upstream := range lineage.Upstreams {
+			if upstream.JobName == targetJobName {
+				prunedUpstream := r.pruneLineage(upstream, maxUpstreamsPerLevel, depth+1)
+				topUpstreams = append(topUpstreams, prunedUpstream)
+				break
+			}
+		}
+	}
+
+	return &scheduler.JobLineageSummary{
+		JobName:          lineage.JobName,
+		Tenant:           lineage.Tenant,
+		Window:           lineage.Window,
+		ScheduleInterval: lineage.ScheduleInterval,
+		SLA:              lineage.SLA,
+		JobRuns:          r.copyJobRuns(lineage.JobRuns),
+		Upstreams:        topUpstreams,
+	}
+}
+
+func (r *LineageResolver) extractUpstreamCandidatesSortedByDuration(lineage *scheduler.JobLineageSummary) []upstreamCandidate {
+	candidates := []upstreamCandidate{}
+
+	for _, upstream := range lineage.Upstreams {
+		duration := r.getJobRunDuration(upstream.JobRuns)
+		candidates = append(candidates, upstreamCandidate{
+			JobName:  upstream.JobName,
+			Duration: duration,
+		})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Duration > candidates[j].Duration
+	})
+
+	return candidates
+}
+
+func (r *LineageResolver) getJobRunDuration(jobRuns map[string]*scheduler.JobRunSummary) time.Duration {
+	var duration time.Duration
+
+	// for now, we only select the latest scheduled job run to calculate duration
+	// there is an assumption made here that latest scheduled job run should be the one
+	// contributing to the bottleneck
+	var latestRun *scheduler.JobRunSummary
+	for _, jobRun := range jobRuns {
+		if latestRun == nil || jobRun.ScheduledAt.After(latestRun.ScheduledAt) {
+			latestRun = jobRun
+		}
+	}
+
+	if latestRun != nil && latestRun.JobStartTime != nil && latestRun.JobEndTime != nil {
+		duration = latestRun.JobEndTime.Sub(*latestRun.JobStartTime)
+	}
+
+	return duration
+}
+
+func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageData *LineageData, visited map[scheduler.JobName]bool, depth int) *scheduler.JobLineageSummary {
+	if visited[jobName] || depth > MaxLineageDepth {
 		return &scheduler.JobLineageSummary{
 			JobName:   jobName,
 			JobRuns:   make(map[string]*scheduler.JobRunSummary),
@@ -169,44 +259,38 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, jobRuns ma
 	}
 
 	visited[jobName] = true
-	defer func() { delete(visited, jobName) }()
+	defer delete(visited, jobName)
 
 	var upstreams []*scheduler.JobLineageSummary
 	for _, upstreamName := range lineageData.UpstreamsByJob[jobName] {
-		upstreamLineage := r.buildLineageTree(upstreamName, make(map[string]*scheduler.JobRunSummary), lineageData, visited, depth+1)
+		upstreamLineage := r.buildLineageTree(upstreamName, lineageData, visited, depth+1)
 		upstreams = append(upstreams, upstreamLineage)
 	}
 
-	return &scheduler.JobLineageSummary{
+	enriched := &scheduler.JobLineageSummary{
 		JobName:   jobName,
-		JobRuns:   r.copyJobRuns(jobRuns),
+		JobRuns:   make(map[string]*scheduler.JobRunSummary),
 		Upstreams: upstreams,
 	}
-}
 
-func (r *LineageResolver) enrichJobsWithJobDetails(lineage *scheduler.JobLineageSummary, jobsByName map[scheduler.JobName]*scheduler.JobSummary, projectsByName map[tenant.ProjectName]*tenant.Project) *scheduler.JobLineageSummary {
-	enriched := &scheduler.JobLineageSummary{
-		JobName:   lineage.JobName,
-		JobRuns:   r.copyJobRuns(lineage.JobRuns),
-		Upstreams: make([]*scheduler.JobLineageSummary, len(lineage.Upstreams)),
-	}
-
-	if job, exists := jobsByName[lineage.JobName]; exists {
+	if job, exists := lineageData.JobsByName[jobName]; exists {
 		enriched.Tenant = job.Tenant
 		enriched.Window = &job.Window
 		enriched.ScheduleInterval = job.ScheduleInterval
 		enriched.SLA = job.SLA
 	}
 
-	for i, upstream := range lineage.Upstreams {
-		enriched.Upstreams[i] = r.enrichJobsWithJobDetails(upstream, jobsByName, projectsByName)
-	}
-
 	return enriched
 }
 
-func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, lineageData *LineageData) (*scheduler.JobLineageSummary, error) {
+func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, scheduledAt time.Time, lineageData *LineageData) (*scheduler.JobLineageSummary, error) {
 	allJobRunsMap := make(map[scheduler.JobName]map[string]*scheduler.JobRunSummary)
+	// initialize first job run in the lineage
+	lineage.JobRuns = map[string]*scheduler.JobRunSummary{
+		scheduledAt.UTC().Format(time.RFC3339): {
+			ScheduledAt: scheduledAt,
+		},
+	}
 
 	err := r.calculateAllUpstreamRuns(ctx, lineage, lineageData, allJobRunsMap, make(map[scheduler.JobName]bool))
 	if err != nil {
@@ -284,13 +368,15 @@ func (r *LineageResolver) getUpstreamRuns(ctx context.Context, sourceJob, upstre
 		return []time.Time{}, nil
 	}
 
+	// GetExpectedRunSchedules return sorted schedule
 	schedules, err := r.jobRunService.GetExpectedRunSchedules(ctx, project, sourceJob.ScheduleInterval, sourceJob.Window, upstreamJob.ScheduleInterval, referenceTime)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(schedules) > 1000 {
-		return schedules[:1000], nil
+	// assumption: only fetch the latest schedule from the interval
+	if len(schedules) > 1 {
+		schedules = []time.Time{schedules[len(schedules)-1]}
 	}
 
 	return schedules, nil

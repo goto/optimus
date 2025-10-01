@@ -25,97 +25,45 @@ type JobLineageSummary struct {
 	JobRuns map[string]*JobRunSummary
 }
 
-func (j *JobLineageSummary) PruneUpstreamLineage(numberOfUpstreamPerLevel int) []*JobExecutionSummary {
-	if numberOfUpstreamPerLevel < 0 {
-		return nil
-	}
-
+func (j *JobLineageSummary) Flatten() []*JobExecutionSummary {
 	var result []*JobExecutionSummary
-	visited := make(map[JobName]bool)
 	queue := []*JobLineageSummary{j}
 	level := 0
-	maxLevels := 50
 
-	for len(queue) > 0 && level < maxLevels {
+	for len(queue) > 0 {
 		levelSize := len(queue)
-		var currentLevelJobs []*JobExecutionSummary
-		var nextLevelUpstreams []*JobLineageSummary
-		currentQueue := make([]*JobLineageSummary, levelSize)
-		copy(currentQueue, queue)
 
-		for i := 0; i < levelSize; i++ {
-			current := currentQueue[i]
-
-			if visited[current.JobName] {
-				continue
-			}
-			visited[current.JobName] = true
+		for range levelSize {
+			current := queue[0]
+			queue = queue[1:]
 
 			var latestJobRun *JobRunSummary
 			var latestScheduledAt time.Time
 
 			for _, jobRun := range current.JobRuns {
-				if jobRun.JobStartTime != nil && jobRun.JobEndTime != nil {
-					if latestJobRun == nil || jobRun.ScheduledAt.After(latestScheduledAt) {
-						latestJobRun = jobRun
-						latestScheduledAt = jobRun.ScheduledAt
-					}
+				if jobRun.ScheduledAt.After(latestScheduledAt) {
+					latestScheduledAt = jobRun.ScheduledAt
+					latestJobRun = jobRun
 				}
 			}
 
 			if latestJobRun != nil {
-				execSummary := &JobExecutionSummary{
+				result = append(result, &JobExecutionSummary{
 					JobName:       current.JobName,
 					SLA:           current.SLA,
-					JobRunSummary: latestJobRun,
 					Level:         level,
-				}
-				currentLevelJobs = append(currentLevelJobs, execSummary)
+					JobRunSummary: latestJobRun,
+				})
 			}
 
-			for _, upstream := range current.Upstreams {
-				if upstream != nil && !visited[upstream.JobName] {
-					nextLevelUpstreams = append(nextLevelUpstreams, upstream)
-				}
-			}
+			queue = append(queue, current.Upstreams...)
 		}
 
-		if len(currentLevelJobs) > 0 {
-			sortJobsByDurationDesc(currentLevelJobs)
-
-			var selectedJobs []*JobExecutionSummary
-			if numberOfUpstreamPerLevel == 0 {
-				selectedJobs = currentLevelJobs
-			} else {
-				limit := min(len(currentLevelJobs), numberOfUpstreamPerLevel)
-				selectedJobs = currentLevelJobs[:limit]
-			}
-			result = append(result, selectedJobs...)
-		}
-
-		queue = nextLevelUpstreams
 		level++
 	}
 
 	return result
-}
 
-func sortJobsByDurationDesc(jobs []*JobExecutionSummary) {
-	for i := 1; i < len(jobs); i++ {
-		key := jobs[i]
-		keyDuration := key.JobRunSummary.JobEndTime.Sub(*key.JobRunSummary.JobStartTime)
-		j := i - 1
-
-		for j >= 0 {
-			currentDuration := jobs[j].JobRunSummary.JobEndTime.Sub(*jobs[j].JobRunSummary.JobStartTime)
-			if currentDuration >= keyDuration {
-				break
-			}
-			jobs[j+1] = jobs[j]
-			j--
-		}
-		jobs[j+1] = key
-	}
 }
 
 type JobRunLineage struct {
@@ -140,6 +88,7 @@ type SLAConfig struct {
 type JobRunSummary struct {
 	JobName     JobName
 	ScheduledAt time.Time
+	SLATime     *time.Time
 
 	JobStartTime  *time.Time
 	JobEndTime    *time.Time

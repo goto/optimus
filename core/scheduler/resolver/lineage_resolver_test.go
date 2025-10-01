@@ -123,24 +123,21 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		// from jobB to jobC, expected runs are 2023-01-01 07:00 UTC, 2022-12-31 07:00 UTC, 2022-12-30 07:00 UTC (last 3 days of jobB's scheduled time)
 		// and also 2023-12-29 07:00 UTC, 2023-12-28 07:00 UTC, 2023-12-27 07:00 UTC (last 3 days of jobB's scheduled time in previous year)
 		jobCExpectedSchedules := []time.Time{
-			time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC),
-			time.Date(2022, 12, 31, 7, 0, 0, 0, time.UTC),
-			time.Date(2022, 12, 30, 7, 0, 0, 0, time.UTC),
-			time.Date(2023, 12, 29, 7, 0, 0, 0, time.UTC),
-			time.Date(2023, 12, 28, 7, 0, 0, 0, time.UTC),
 			time.Date(2023, 12, 27, 7, 0, 0, 0, time.UTC),
+			time.Date(2023, 12, 28, 7, 0, 0, 0, time.UTC),
+			time.Date(2023, 12, 29, 7, 0, 0, 0, time.UTC),
+			time.Date(2022, 12, 30, 7, 0, 0, 0, time.UTC),
+			time.Date(2022, 12, 31, 7, 0, 0, 0, time.UTC),
+			time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC),
 		}
 		// total 8 job runs to be fetched
+		selectedCSchedule := jobCExpectedSchedules[len(jobCExpectedSchedules)-1]
 
+		// although there are multiple expected schedules for jobC, only fetch the latest one
 		jobRunsToFetch := []scheduler.JobRunIdentifier{
 			{JobName: jobNameA, ScheduledAt: time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC)},
 			{JobName: jobNameB, ScheduledAt: time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)},
 			{JobName: jobNameC, ScheduledAt: time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC)},
-			{JobName: jobNameC, ScheduledAt: time.Date(2022, 12, 31, 7, 0, 0, 0, time.UTC)},
-			{JobName: jobNameC, ScheduledAt: time.Date(2022, 12, 30, 7, 0, 0, 0, time.UTC)},
-			{JobName: jobNameC, ScheduledAt: time.Date(2023, 12, 29, 7, 0, 0, 0, time.UTC)},
-			{JobName: jobNameC, ScheduledAt: time.Date(2023, 12, 28, 7, 0, 0, 0, time.UTC)},
-			{JobName: jobNameC, ScheduledAt: time.Date(2023, 12, 27, 7, 0, 0, 0, time.UTC)},
 		}
 
 		fetchedJobRunSummaries := []*scheduler.JobRunSummary{
@@ -180,66 +177,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 				HookStartTime: timePtr(time.Date(2023, 1, 1, 7, 5, 0, 0, time.UTC)),
 				HookEndTime:   timePtr(time.Date(2023, 1, 1, 7, 10, 0, 0, time.UTC)),
 			},
-			{
-				JobName:       jobNameC,
-				ScheduledAt:   time.Date(2022, 12, 31, 7, 0, 0, 0, time.UTC),
-				JobStartTime:  timePtr(time.Date(2022, 12, 31, 7, 0, 0, 0, time.UTC)),
-				JobEndTime:    timePtr(time.Date(2022, 12, 31, 7, 10, 0, 0, time.UTC)),
-				WaitStartTime: nil,
-				WaitEndTime:   nil,
-				TaskStartTime: timePtr(time.Date(2022, 12, 31, 7, 0, 0, 0, time.UTC)),
-				TaskEndTime:   timePtr(time.Date(2022, 12, 31, 7, 5, 0, 0, time.UTC)),
-				HookStartTime: timePtr(time.Date(2022, 12, 31, 7, 5, 0, 0, time.UTC)),
-				HookEndTime:   timePtr(time.Date(2022, 12, 31, 7, 10, 0, 0, time.UTC)),
-			},
-			{
-				JobName:       jobNameC,
-				ScheduledAt:   time.Date(2022, 12, 30, 7, 0, 0, 0, time.UTC),
-				JobStartTime:  timePtr(time.Date(2022, 12, 30, 7, 0, 0, 0, time.UTC)),
-				JobEndTime:    timePtr(time.Date(2022, 12, 30, 7, 10, 0, 0, time.UTC)),
-				WaitStartTime: nil,
-				WaitEndTime:   nil,
-				TaskStartTime: timePtr(time.Date(2022, 12, 30, 7, 0, 0, 0, time.UTC)),
-				TaskEndTime:   timePtr(time.Date(2022, 12, 30, 7, 5, 0, 0, time.UTC)),
-				HookStartTime: timePtr(time.Date(2022, 12, 30, 7, 5, 0, 0, time.UTC)),
-				HookEndTime:   timePtr(time.Date(2022, 12, 30, 7, 10, 0, 0, time.UTC)),
-			},
-			{
-				JobName:       jobNameC,
-				ScheduledAt:   time.Date(2023, 12, 29, 7, 0, 0, 0, time.UTC),
-				JobStartTime:  timePtr(time.Date(2023, 12, 29, 7, 0, 0, 0, time.UTC)),
-				JobEndTime:    timePtr(time.Date(2023, 12, 29, 7, 10, 0, 0, time.UTC)),
-				WaitStartTime: nil,
-				WaitEndTime:   nil,
-				TaskStartTime: timePtr(time.Date(2023, 12, 29, 7, 0, 0, 0, time.UTC)),
-				TaskEndTime:   timePtr(time.Date(2023, 12, 29, 7, 5, 0, 0, time.UTC)),
-				HookStartTime: timePtr(time.Date(2023, 12, 29, 7, 5, 0, 0, time.UTC)),
-				HookEndTime:   timePtr(time.Date(2023, 12, 29, 7, 10, 0, 0, time.UTC)),
-			},
-			{
-				JobName:       jobNameC,
-				ScheduledAt:   time.Date(2023, 12, 28, 7, 0, 0, 0, time.UTC),
-				JobStartTime:  timePtr(time.Date(2023, 12, 28, 7, 0, 0, 0, time.UTC)),
-				JobEndTime:    timePtr(time.Date(2023, 12, 28, 7, 10, 0, 0, time.UTC)),
-				WaitStartTime: nil,
-				WaitEndTime:   nil,
-				TaskStartTime: timePtr(time.Date(2023, 12, 28, 7, 0, 0, 0, time.UTC)),
-				TaskEndTime:   timePtr(time.Date(2023, 12, 28, 7, 5, 0, 0, time.UTC)),
-				HookStartTime: timePtr(time.Date(2023, 12, 28, 7, 5, 0, 0, time.UTC)),
-				HookEndTime:   timePtr(time.Date(2023, 12, 28, 7, 10, 0, 0, time.UTC)),
-			},
-			{
-				JobName:       jobNameC,
-				ScheduledAt:   time.Date(2023, 12, 27, 7, 0, 0, 0, time.UTC),
-				JobStartTime:  timePtr(time.Date(2023, 12, 27, 7, 0, 0, 0, time.UTC)),
-				JobEndTime:    timePtr(time.Date(2023, 12, 27, 7, 10, 0, 0, time.UTC)),
-				WaitStartTime: nil,
-				WaitEndTime:   nil,
-				TaskStartTime: timePtr(time.Date(2023, 12, 27, 7, 0, 0, 0, time.UTC)),
-				TaskEndTime:   timePtr(time.Date(2023, 12, 27, 7, 5, 0, 0, time.UTC)),
-				HookStartTime: timePtr(time.Date(2023, 12, 27, 7, 5, 0, 0, time.UTC)),
-				HookEndTime:   timePtr(time.Date(2023, 12, 27, 7, 10, 0, 0, time.UTC)),
-			},
 		}
 
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(jobUpstreams, nil)
@@ -263,21 +200,23 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules)
+		resultMap, err := resolver.BuildLineage(ctx, jobSchedules, 0)
 
 		assert.NoError(t, err)
-		assert.Len(t, result, 1)
+		assert.Len(t, resultMap, 1)
+		result := resultMap[jobSchedules[0]]
+
 		// assert job A results
-		assert.Equal(t, jobNameA, result[0].JobName)
-		assert.EqualValues(t, result[0].ScheduleInterval, jobAWithDetails.ScheduleInterval)
-		assert.EqualValues(t, result[0].Window, &yestWindowCfg)
-		assert.Equal(t, len(result[0].JobRuns), 1)
-		assert.Equal(t, scheduledTime, result[0].JobRuns[scheduledTime.Format(time.RFC3339)].ScheduledAt)
-		assert.Equal(t, jobNameA, result[0].JobRuns[scheduledTime.Format(time.RFC3339)].JobName)
+		assert.Equal(t, jobNameA, result.JobName)
+		assert.EqualValues(t, result.ScheduleInterval, jobAWithDetails.ScheduleInterval)
+		assert.EqualValues(t, result.Window, &yestWindowCfg)
+		assert.Equal(t, len(result.JobRuns), 1)
+		assert.Equal(t, scheduledTime, result.JobRuns[scheduledTime.Format(time.RFC3339)].ScheduledAt)
+		assert.Equal(t, jobNameA, result.JobRuns[scheduledTime.Format(time.RFC3339)].JobName)
 
 		// assert job B results
-		assert.Len(t, result[0].Upstreams, 1)
-		upstreamB := result[0].Upstreams[0]
+		assert.Len(t, result.Upstreams, 1)
+		upstreamB := result.Upstreams[0]
 		assert.Equal(t, jobNameB, upstreamB.JobName)
 		assert.EqualValues(t, upstreamB.ScheduleInterval, jobBWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamB.Window, &multidayWindowCfg)
@@ -292,13 +231,11 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameC, upstreamC.JobName)
 		assert.EqualValues(t, upstreamC.ScheduleInterval, jobCWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamC.Window, &yestWindowCfg)
-		assert.Len(t, upstreamC.JobRuns, 6)
-		for _, expectedSchedule := range jobCExpectedSchedules {
-			jobRunKey := expectedSchedule.Format(time.RFC3339)
-			assert.Contains(t, upstreamC.JobRuns, jobRunKey)
-			assert.Equal(t, expectedSchedule, upstreamC.JobRuns[jobRunKey].ScheduledAt)
-			assert.Equal(t, jobNameC, upstreamC.JobRuns[jobRunKey].JobName)
-		}
+		assert.Len(t, upstreamC.JobRuns, 1)
+		expectedCSchedule := selectedCSchedule
+		assert.Equal(t, expectedCSchedule, upstreamC.JobRuns[expectedCSchedule.Format(time.RFC3339)].ScheduledAt)
+		assert.Equal(t, jobNameC, upstreamC.JobRuns[expectedCSchedule.Format(time.RFC3339)].JobName)
+
 		assert.Empty(t, upstreamC.Upstreams)
 
 		upstreamRepo.AssertExpectations(t)
@@ -322,7 +259,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 0)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -354,7 +291,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 0)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -390,7 +327,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 0)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -431,7 +368,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, nil)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 0)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -475,7 +412,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 0)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -500,7 +437,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, []*scheduler.JobSchedule{})
+		result, err := resolver.BuildLineage(ctx, []*scheduler.JobSchedule{}, 0)
 
 		assert.NoError(t, err)
 		assert.Empty(t, result)
@@ -539,12 +476,14 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules)
+		resultMap, err := resolver.BuildLineage(ctx, jobSchedules, 0)
 
 		assert.NoError(t, err)
-		assert.Len(t, result, 1)
-		assert.Equal(t, jobNameA, result[0].JobName)
-		assert.Empty(t, result[0].Upstreams)
+		assert.Len(t, resultMap, 1)
+		result := resultMap[jobSchedules[0]]
+
+		assert.Equal(t, jobNameA, result.JobName)
+		assert.Empty(t, result.Upstreams)
 
 		upstreamRepo.AssertExpectations(t)
 		jobRepo.AssertExpectations(t)

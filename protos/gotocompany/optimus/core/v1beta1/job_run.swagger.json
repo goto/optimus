@@ -780,6 +780,10 @@
           "type": "string",
           "format": "date-time"
         },
+        "slaTime": {
+          "type": "string",
+          "format": "date-time"
+        },
         "jobStartTime": {
           "type": "string",
           "format": "date-time"

@@ -8,7 +8,7 @@ import (
 )
 
 type DurationEstimatorRepo interface {
-	GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error)
+	GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error)
 }
 
 type DurationEstimatorService struct {
@@ -17,7 +17,7 @@ type DurationEstimatorService struct {
 	durationEstimator DurationEstimatorRepo
 }
 
-func NewDurationEstimatorService(durationEstimator DurationEstimatorRepo, lastNRuns, bufferPercentage int) *DurationEstimatorService {
+func NewDurationEstimatorService(durationEstimator DurationEstimatorRepo, lastNRuns int, bufferPercentage int) *DurationEstimatorService {
 	return &DurationEstimatorService{
 		durationEstimator: durationEstimator,
 		lastNRuns:         lastNRuns,

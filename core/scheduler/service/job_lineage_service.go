@@ -10,11 +10,11 @@ import (
 
 // Contract that can be used by other callers to fetch job lineage information
 type JobLineageFetcher interface {
-	GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error)
+	GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error)
 }
 
 type LineageBuilder interface {
-	BuildLineage(context.Context, []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error)
+	BuildLineage(context.Context, []*scheduler.JobSchedule, int) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error)
 }
 
 type JobLineageService struct {
@@ -23,7 +23,7 @@ type JobLineageService struct {
 }
 
 func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error) {
-	downstreamLineages, err := j.GetJobLineage(ctx, jobSchedules)
+	downstreamLineages, err := j.lineageBuilder.BuildLineage(ctx, jobSchedules, numberOfUpstreamPerLevel)
 	if err != nil {
 		j.l.Error("failed to get job lineage", "error", err)
 		return nil, err
@@ -31,24 +31,20 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 
 	var result []*scheduler.JobRunLineage
 	for _, lineage := range downstreamLineages {
-		prunedLineage := lineage.PruneUpstreamLineage(numberOfUpstreamPerLevel)
-		if len(prunedLineage) == 0 {
-			continue
-		}
-
+		flattenedLineage := lineage.Flatten()
 		result = append(result, &scheduler.JobRunLineage{
 			JobName: lineage.JobName,
 			// index 0 should contain the original job in question
-			ScheduledAt: prunedLineage[0].JobRunSummary.ScheduledAt,
-			JobRuns:     prunedLineage,
+			ScheduledAt: flattenedLineage[0].JobRunSummary.ScheduledAt,
+			JobRuns:     flattenedLineage,
 		})
 	}
 
 	return result, nil
 }
 
-func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) ([]*scheduler.JobLineageSummary, error) {
-	return j.lineageBuilder.BuildLineage(ctx, jobSchedules)
+func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error) {
+	return j.lineageBuilder.BuildLineage(ctx, jobSchedules, 0)
 }
 
 func NewJobLineageService(

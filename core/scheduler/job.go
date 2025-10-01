@@ -35,7 +35,7 @@ func NewOperatorType(op string) (OperatorType, error) {
 	case OperatorHook.String():
 		return OperatorHook, nil
 	default:
-		return OperatorType(op), errors.InvalidArgument(EntityEvent, "invalid operator type, supported : task, sensor, hook")
+		return OperatorType(op), errors.InvalidArgument(EntityEvent, fmt.Sprintf("invalid operator type: [%s], supported : task, sensor, hook", op))
 	}
 }
 

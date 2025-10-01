@@ -133,13 +133,13 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, job *scheduler.Job
 func (w *SLAWorker) process(ctx context.Context, signature string, processDuration time.Duration) {
 	expiredSLAs, err := w.operatorSLARepo.GetExpiredSLAsForProcessing(ctx, signature, processDuration)
 	if err != nil {
-		w.logger.Error("failed to fetch expired SLAs: %v", err)
+		w.logger.Error("[processSLABreach] failed to fetch expired SLAs: %v", err)
 		return
 	}
 	for _, slaObj := range expiredSLAs {
 		if err := w.processSLABreach(ctx, slaObj); err == nil {
 			if err := w.operatorSLARepo.RemoveProcessedSLA(ctx, slaObj.ID); err != nil {
-				w.logger.Error("failed to update SLA processed for job %s: %v", slaObj.JobName, err)
+				w.logger.Error("[processSLABreach] failed to update SLA processed for %s: %v", slaObj, err)
 			}
 		}
 	}
@@ -148,22 +148,22 @@ func (w *SLAWorker) process(ctx context.Context, signature string, processDurati
 func (w *SLAWorker) processSLABreach(ctx context.Context, slaObj *scheduler.OperatorsSLA) error {
 	job, err := w.jobRepo.GetJob(ctx, slaObj.ProjectName, slaObj.JobName)
 	if err != nil {
-		w.logger.Error("failed to fetch job %s for SLA %s: %v", slaObj.JobName, slaObj.ID, err)
+		w.logger.Error("[processSLABreach] failed to fetch job %s for SLA %s: %v", slaObj.JobName, slaObj.ID, err)
 		return err
 	}
 
 	taskInstance, err := w.scheduler.GetOperatorInstance(ctx, job.Tenant, job.Name, slaObj.RunID, slaObj.OperatorName)
 	if err != nil {
-		w.logger.Error("failed to fetch operator instance from scheduler, proceeding to alert the user about SLA breach err: %v", err)
+		w.logger.Error("[processSLABreach] failed to fetch operator instance from scheduler, proceeding to alert the user about SLA breach err: %v, %s", err, slaObj)
 	}
 	if taskInstance != nil {
 		if taskInstance.IsTerminated() && taskInstance.EndTime != nil && taskInstance.EndTime.Before(slaObj.SLATime) {
-			w.logger.Info("Operator Finished Before SLA time, removing it from SLA records table")
+			w.logger.Info("[processSLABreach] Operator Finished Before SLA time, removing it from SLA records table, %s", slaObj)
 			return nil
 		}
 	}
 	if err := w.SendOperatorSLAEvent(ctx, job, slaObj); err != nil {
-		w.logger.Error("failed to notify SLA for job %s: %v", slaObj.JobName, err)
+		w.logger.Error("[processSLABreach] failed to notify SLA for %s: %v", slaObj, err)
 		return err
 	}
 	return nil

@@ -34,7 +34,7 @@ func TestJobRunHandler(t *testing.T) {
 
 	t.Run("GetJobRun", func(t *testing.T) {
 		t.Run("should return error if project name is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "",
 				JobName:     "job1",
@@ -49,7 +49,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should return error if job name is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "",
@@ -64,7 +64,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should return error if state is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "job1",
@@ -90,7 +90,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(jobRuns, nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "job1",
@@ -123,7 +123,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(jobRuns, fmt.Errorf("service error"))
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "job1",
@@ -141,7 +141,7 @@ func TestJobRunHandler(t *testing.T) {
 	t.Run("JobRunInput", func(t *testing.T) {
 		t.Run("returns error when project name is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "",
@@ -159,7 +159,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when job name is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -177,7 +177,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when executor is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -195,7 +195,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when scheduled_at is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -212,7 +212,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when run config is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -234,7 +234,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(&scheduler.ExecutorInput{}, fmt.Errorf("error in service"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -260,7 +260,7 @@ func TestJobRunHandler(t *testing.T) {
 				}, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -301,7 +301,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, "", nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil)
 
 			req := &pb.JobRunRequest{
 				ProjectName: projectName,
@@ -346,7 +346,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, "", nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil)
 
 			req := &pb.JobRunRequest{
 				ProjectName: projectName,
@@ -384,7 +384,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(nil, "", fmt.Errorf("some random error"))
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil)
 
 			req := &pb.JobRunRequest{
 				ProjectName: projectName,
@@ -398,7 +398,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should not return job runs if project name is not valid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			req := &pb.JobRunRequest{
 				ProjectName: "",
 				JobName:     "transform-tables",
@@ -413,7 +413,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should not return job runs if job name is not valid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			req := &pb.JobRunRequest{
 				ProjectName: "some-project",
 				JobName:     "",
@@ -427,7 +427,7 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Nil(t, resp)
 		})
 		t.Run("should not return job runs if only start date is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			req := &pb.JobRunRequest{
 				ProjectName: "some-project",
 				JobName:     "jobname",
@@ -440,7 +440,7 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Nil(t, resp)
 		})
 		t.Run("should not return job runs if only end date is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			req := &pb.JobRunRequest{
 				ProjectName: "some-project",
 				JobName:     "jobname",
@@ -455,7 +455,7 @@ func TestJobRunHandler(t *testing.T) {
 	})
 	t.Run("UploadToScheduler", func(t *testing.T) {
 		t.Run("should fail deployment if project name empty", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 			namespaceName := "namespace-name"
 			req := &pb.UploadToSchedulerRequest{
 				ProjectName:   "",
@@ -474,7 +474,7 @@ func TestJobRunHandler(t *testing.T) {
 			}
 			jobRunService := new(mockJobRunService)
 			jobRunService.On("UploadToScheduler", ctx, tenant.ProjectName(projectName)).Return(nil)
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil)
 
 			_, err := jobRunHandler.UploadToScheduler(ctx, req)
 			assert.Nil(t, err)
@@ -495,7 +495,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -519,7 +519,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -542,7 +542,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -566,7 +566,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -617,7 +617,7 @@ func TestJobRunHandler(t *testing.T) {
 			notifier.On("Relay", ctx, event).Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -668,7 +668,7 @@ func TestJobRunHandler(t *testing.T) {
 			notifier.On("Relay", ctx, event).Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -683,7 +683,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "",
 				JobName:       "test_job",
@@ -701,7 +701,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "",
@@ -719,7 +719,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "test_job",
@@ -737,7 +737,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "test_job",
@@ -793,7 +793,7 @@ func TestJobRunHandler(t *testing.T) {
 			assert.NotNil(t, interval)
 			assert.NoError(t, err)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "test_job",

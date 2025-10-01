@@ -163,8 +163,8 @@ func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *s
 }
 
 type upstreamCandidate struct {
-	JobName  scheduler.JobName
-	Duration time.Duration
+	JobName scheduler.JobName
+	EndTime time.Time
 }
 
 func (r *LineageResolver) pruneLineage(lineage *scheduler.JobLineageSummary, maxUpstreamsPerLevel, depth int) *scheduler.JobLineageSummary {
@@ -270,10 +270,14 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 }
 
 func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, lineageData *LineageData, allJobRunsMap map[scheduler.JobName]map[string]*scheduler.JobRunSummary, visited map[scheduler.JobName]bool) error {
-	if visited[lineage.JobName] || len(visited) > 1000 {
+	if len(visited) > 1000 {
 		return nil
 	}
-	visited[lineage.JobName] = true
+
+	currentJob := lineageData.JobsByName[lineage.JobName]
+	if currentJob == nil {
+		return nil
+	}
 
 	if _, exists := allJobRunsMap[lineage.JobName]; !exists {
 		allJobRunsMap[lineage.JobName] = make(map[string]*scheduler.JobRunSummary)
@@ -282,25 +286,20 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 		allJobRunsMap[lineage.JobName][key] = jobRun
 	}
 
-	currentJob := lineageData.JobsByName[lineage.JobName]
-	if currentJob == nil {
-		return nil
-	}
-
 	for _, upstream := range lineage.Upstreams {
 		upstreamJob := lineageData.JobsByName[upstream.JobName]
 		if upstreamJob == nil {
 			continue
 		}
 
+		if _, exists := allJobRunsMap[upstream.JobName]; !exists {
+			allJobRunsMap[upstream.JobName] = make(map[string]*scheduler.JobRunSummary)
+		}
+
 		for _, jobRun := range lineage.JobRuns {
 			upstreamSchedules, err := r.getUpstreamRuns(ctx, currentJob, upstreamJob, jobRun.ScheduledAt, lineageData.ProjectsByName)
 			if err != nil {
 				return err
-			}
-
-			if _, exists := allJobRunsMap[upstream.JobName]; !exists {
-				allJobRunsMap[upstream.JobName] = make(map[string]*scheduler.JobRunSummary)
 			}
 
 			for _, schedule := range upstreamSchedules {
@@ -319,9 +318,13 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 			}
 		}
 
-		err := r.calculateAllUpstreamRuns(ctx, upstream, lineageData, allJobRunsMap, visited)
-		if err != nil {
-			return err
+		if !visited[upstream.JobName] {
+			visited[upstream.JobName] = true
+			err := r.calculateAllUpstreamRuns(ctx, upstream, lineageData, allJobRunsMap, visited)
+			delete(visited, upstream.JobName)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -407,7 +410,13 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 	}
 
 	if jobRuns, exists := jobRunDetails[lineage.JobName]; exists {
-		result.JobRuns = copyJobRuns(jobRuns)
+		// only fetch job runs that are necessary in the lineage
+		result.JobRuns = map[string]*scheduler.JobRunSummary{}
+		for scheduleKey := range lineage.JobRuns {
+			if jobRun, exists := jobRuns[scheduleKey]; exists {
+				result.JobRuns[scheduleKey] = copyJobRun(jobRun)
+			}
+		}
 	} else {
 		result.JobRuns = copyJobRuns(lineage.JobRuns)
 	}
@@ -423,18 +432,30 @@ func extractUpstreamCandidatesSortedByDuration(lineage *scheduler.JobLineageSumm
 	candidates := []upstreamCandidate{}
 
 	for _, upstream := range lineage.Upstreams {
-		duration := getJobRunDuration(upstream.JobRuns)
+		latestFinishTime := getLatestFinishTime(upstream.JobRuns)
 		candidates = append(candidates, upstreamCandidate{
-			JobName:  upstream.JobName,
-			Duration: duration,
+			JobName: upstream.JobName,
+			EndTime: latestFinishTime,
 		})
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].Duration > candidates[j].Duration
+		return candidates[i].EndTime.After(candidates[j].EndTime)
 	})
 
 	return candidates
+}
+
+func getLatestFinishTime(jobRuns map[string]*scheduler.JobRunSummary) time.Time {
+	var latestFinishTime time.Time
+
+	for _, jobRun := range jobRuns {
+		if jobRun.JobEndTime != nil && (latestFinishTime.IsZero() || jobRun.JobEndTime.After(latestFinishTime)) {
+			latestFinishTime = *jobRun.JobEndTime
+		}
+	}
+
+	return latestFinishTime
 }
 
 func copyJobRuns(source map[string]*scheduler.JobRunSummary) map[string]*scheduler.JobRunSummary {
@@ -446,26 +467,6 @@ func copyJobRuns(source map[string]*scheduler.JobRunSummary) map[string]*schedul
 		result[key] = copyJobRun(jobRun)
 	}
 	return result
-}
-
-func getJobRunDuration(jobRuns map[string]*scheduler.JobRunSummary) time.Duration {
-	var duration time.Duration
-
-	// for now, we only select the latest scheduled job run to calculate duration
-	// there is an assumption made here that latest scheduled job run should be the one
-	// contributing to the bottleneck
-	var latestRun *scheduler.JobRunSummary
-	for _, jobRun := range jobRuns {
-		if latestRun == nil || jobRun.ScheduledAt.After(latestRun.ScheduledAt) {
-			latestRun = jobRun
-		}
-	}
-
-	if latestRun != nil && latestRun.JobStartTime != nil && latestRun.JobEndTime != nil {
-		duration = latestRun.JobEndTime.Sub(*latestRun.JobStartTime)
-	}
-
-	return duration
 }
 
 func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {

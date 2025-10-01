@@ -219,11 +219,21 @@ func (event JobEventType) IsOfType(category EventCategory) bool {
 	return false
 }
 
+func (event JobEventType) IsOperatorType() bool {
+	switch event {
+	case TaskFailEvent, TaskStartEvent, TaskRetryEvent, TaskSuccessEvent,
+		HookFailEvent, HookStartEvent, HookRetryEvent, HookSuccessEvent,
+		SensorFailEvent, SensorStartEvent, SensorRetryEvent, SensorSuccessEvent:
+		return true
+	}
+	return false
+}
+
 func (event JobEventType) String() string {
 	return string(event)
 }
 
-func EventContextFrom(rawEventContext any) (*EventContext, error) {
+func EventContextFrom(eventType JobEventType, rawEventContext any) (*EventContext, error) {
 	sc := EventContext{}
 	bytesArr, err := json.Marshal(rawEventContext)
 	if err != nil {
@@ -233,9 +243,12 @@ func EventContextFrom(rawEventContext any) (*EventContext, error) {
 	if err != nil {
 		return nil, errors.InvalidArgument(EntityEvent, "unable to unmarshal event, err:"+err.Error())
 	}
-	sc.OperatorType, err = NewOperatorType(strings.ToLower(sc.OperatorType.String()))
-	if err != nil {
-		return nil, err
+
+	if eventType.IsOperatorType() {
+		sc.OperatorType, err = NewOperatorType(strings.ToLower(sc.OperatorType.String()))
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &sc, nil
 }
@@ -313,17 +326,11 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 		}
 		eventObj.JobScheduledAt = scheduledAtTimeStamp
 
-		switch eventType {
-		case TaskFailEvent, TaskStartEvent, TaskRetryEvent, TaskSuccessEvent,
-			HookFailEvent, HookStartEvent, HookRetryEvent, HookSuccessEvent,
-			SensorFailEvent, SensorStartEvent, SensorRetryEvent, SensorSuccessEvent:
-
-			eventObj.EventContext, err = EventContextFrom(eventValues["event_context"])
-			if err != nil {
-				return nil, err
-			}
-			eventObj.EventContext.Tenant = eventObj.Tenant
+		eventObj.EventContext, err = EventContextFrom(eventType, eventValues["event_context"])
+		if err != nil {
+			return nil, err
 		}
+		eventObj.EventContext.Tenant = eventObj.Tenant
 	}
 
 	return &eventObj, nil

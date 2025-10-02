@@ -2496,17 +2496,33 @@ func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, i
 	return args.Get(0).([]*scheduler.JobRunSummary), args.Error(1)
 }
 
-func (m *mockJobRunRepository) GetP95DurationByJobNames(
-	ctx context.Context,
-	jobNames []scheduler.JobName,
-	lastNRuns int,
-	bufferPercentage int,
-) (map[scheduler.JobName]*time.Duration, error) {
-	args := m.Called(ctx, jobNames, lastNRuns, bufferPercentage)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+func (_m *mockJobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
+	ret := _m.Called(ctx, jobNames, tasks, lastNRuns)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetP95DurationByJobNames")
 	}
-	return args.Get(0).(map[scheduler.JobName]*time.Duration), args.Error(1)
+
+	var r0 map[scheduler.JobName]*time.Duration
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int) (map[scheduler.JobName]*time.Duration, error)); ok {
+		return rf(ctx, jobNames, tasks, lastNRuns)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int) map[scheduler.JobName]*time.Duration); ok {
+		r0 = rf(ctx, jobNames, tasks, lastNRuns)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[scheduler.JobName]*time.Duration)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []scheduler.JobName, map[string][]string, int) error); ok {
+		r1 = rf(ctx, jobNames, tasks, lastNRuns)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 type JobRepository struct {

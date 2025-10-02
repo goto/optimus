@@ -19,19 +19,8 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	// IdentifySLABreaches(ctx context.Context, jobs []*scheduler.JobWithDetails) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
 	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
-	// IdentifySLABreach(ctx context.Context, jobLineageSummary scheduler.JobLineageSummary) error
-	// IdentifySLABreaches(ctx context.Context, jobs []*scheduler.JobSchedule, targetedSLA time.Time) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
 }
-
-// type JobScheduleService interface {
-// 	// GetJobWithDetails(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []string, labels map[string]string) ([]*scheduler.JobWithDetails, error)
-// 	// GetTargetedSLA(ctx context.Context, jobs []*scheduler.JobWithDetails) (map[scheduler.JobName]time.Time, error)
-// 	// GetJobSchedules(ctx context.Context, jobs []*scheduler.JobWithDetails) (map[scheduler.JobName]*scheduler.JobSchedule, error)
-// 	// GetJobSchedulesByFilter(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, filters ...filter.FilterOpt) ([]*scheduler.JobSchedule, error)
-// 	// GetTargetedSLAByJobNames(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName) (map[time.Time][]scheduler.JobName, error)
-// }
 
 type JobRunService interface {
 	JobRunInput(context.Context, tenant.ProjectName, scheduler.JobName, scheduler.RunConfig) (*scheduler.ExecutorInput, error)
@@ -397,7 +386,7 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 				JobName:         upstreamJobName.String(),
 				InferredSlaTime: timestamppb.New(*upstreamJobState.InferredSLA),
 				RelativeLevel:   int32(upstreamJobState.RelativeLevel),
-				Status:          upstreamJobState.Status,
+				Status:          string(upstreamJobState.Status),
 			})
 		}
 		if len(upstreamStates) == 0 {

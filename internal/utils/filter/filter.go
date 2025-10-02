@@ -54,18 +54,6 @@ func (f *filter) GetStringArrayValue(operand Operand) []string {
 	return val
 }
 
-func (f *filter) GetMapArrayValue(operand Operand) []map[string]string {
-	v, ok := f.value[operand]
-	if !ok {
-		return nil
-	}
-	val, ok := v.([]map[string]string)
-	if !ok {
-		return nil
-	}
-	return val
-}
-
 // Contains provide conditional check for the filter if all operands satisfied by the filter.
 func (f *filter) Contains(operands ...Operand) bool {
 	for _, operand := range operands {

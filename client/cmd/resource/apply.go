@@ -62,7 +62,7 @@ func NewApplyCommand() *cobra.Command {
 	cmd.Flags().StringSliceVarP(&apply.resourceNames, "resource-names", "R", nil, "Selected resources of optimus project")
 	cmd.Flags().BoolVarP(&apply.verbose, "verbose", "v", false, "Print details related to upload-all stages")
 	cmd.Flags().StringVarP(&apply.namespaceName, "namespace", "n", "", "Namespace name within project")
-	cmd.Flags().StringVarP(&apply.storeName, "datastore", "s", "bigquery", "Datastore type where the resource belongs")
+	cmd.Flags().StringVarP(&apply.storeName, "datastore", "s", "", "Datastore type where the resource belongs")
 	return cmd
 }
 

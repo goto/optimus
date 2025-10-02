@@ -21,7 +21,6 @@ const (
 	bitOnStartDate           uint64 = 1 << 10
 	bitOnEndDate             uint64 = 1 << 11
 	bitOnTableName           uint64 = 1 << 12
-	bitOnLabels              uint64 = 1 << 13
 )
 
 const (
@@ -38,7 +37,6 @@ const (
 	StartDate           = Operand(bitOnStartDate)
 	EndDate             = Operand(bitOnEndDate)
 	TableName           = Operand(bitOnTableName)
-	Labels              = Operand(bitOnLabels)
 )
 
 func WithTime(operand Operand, value time.Time) FilterOpt {
@@ -64,15 +62,6 @@ func WithStringArray(operand Operand, value []string) FilterOpt {
 		if len(value) > 0 {
 			f.bits |= uint64(operand)
 			f.value[operand] = value
-		}
-	}
-}
-
-func WithMapArray(operand Operand, values []map[string]string) FilterOpt {
-	return func(f *filter) {
-		if len(values) > 0 {
-			f.bits |= uint64(operand)
-			f.value[operand] = values
 		}
 	}
 }

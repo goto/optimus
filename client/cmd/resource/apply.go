@@ -63,6 +63,9 @@ func NewApplyCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&apply.verbose, "verbose", "v", false, "Print details related to upload-all stages")
 	cmd.Flags().StringVarP(&apply.namespaceName, "namespace", "n", "", "Namespace name within project")
 	cmd.Flags().StringVarP(&apply.storeName, "datastore", "s", "", "Datastore type where the resource belongs")
+
+	_ = cmd.MarkFlagRequired("datastore")
+
 	return cmd
 }
 

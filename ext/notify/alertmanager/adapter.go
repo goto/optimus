@@ -22,6 +22,7 @@ const (
 	slaAlertTemplate            = "optimus-job-sla-miss"
 	successNotificationTemplate = "optimus-job-success"
 	operatorSLAMissTemplate     = "optimus-operator-sla-miss"
+	potentialSLABreachTemplate  = "optimus-potential-sla-breach"
 
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"
@@ -234,5 +235,32 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 			"severity": "WARNING",
 		},
 		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
+	})
+}
+
+func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreachAttrs) {
+	content := ""
+	for jobName, upstreamCauses := range attr.JobToUpstreamsCause {
+		content += fmt.Sprintf("**Job:** %s\n", jobName)
+		content += strings.Join(func() []string {
+			var res []string
+			for _, cause := range upstreamCauses {
+				res = append(res, fmt.Sprintf("- %s (level: %d) (status: %s)", cause.JobName, cause.RelativeLevel, cause.Status))
+			}
+			return res
+		}(), "\n")
+		content += "\n\n"
+	}
+
+	a.relay(&AlertPayload{
+		Data: map[string]string{
+			"content": content,
+		},
+		Template: optimusChangeTemplate,
+		Labels: map[string]string{
+			"team":     attr.TeamName,
+			"severity": WarningSeverity,
+		},
+		Endpoint: a.endpoint,
 	})
 }

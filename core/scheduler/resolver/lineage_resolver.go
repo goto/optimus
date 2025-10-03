@@ -487,18 +487,3 @@ func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {
 		HookEndTime:   source.HookEndTime,
 	}
 }
-
-func (r *LineageResolver) populateJobRunsInTree(jobWithLineage *scheduler.JobLineageSummary, jobRunsByJobName map[scheduler.JobName]map[string]*scheduler.JobRunSummary) {
-	if jobRuns, exists := jobRunsByJobName[jobWithLineage.JobName]; exists {
-		if jobWithLineage.JobRuns == nil {
-			jobWithLineage.JobRuns = make(map[string]*scheduler.JobRunSummary)
-		}
-		for scheduleKey := range jobWithLineage.JobRuns {
-			jobWithLineage.JobRuns[scheduleKey] = jobRuns[scheduleKey]
-		}
-	}
-
-	for _, upstream := range jobWithLineage.Upstreams {
-		r.populateJobRunsInTree(upstream, jobRunsByJobName)
-	}
-}

@@ -129,6 +129,17 @@ type NotifyAttrs struct {
 	Secret   string
 }
 
+type UpstreamAttrs struct {
+	JobName       string
+	RelativeLevel int
+	Status        string
+}
+
+type PotentialSLABreachAttrs struct {
+	TeamName            string
+	JobToUpstreamsCause map[string][]UpstreamAttrs
+}
+
 const (
 	MetricNotificationQueue         = "notification_queue_total"
 	MetricNotificationWorkerBatch   = "notification_worker_batch_total"

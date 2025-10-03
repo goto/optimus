@@ -17,6 +17,10 @@ const (
 	SLABreachCauseRunningLate SLABreachCause = "RUNNING_LATE"
 )
 
+type PotentialSLANotifier interface {
+	SendPotentialSLABreach(attr *scheduler.PotentialSLABreachAttrs)
+}
+
 type DurationEstimator interface {
 	GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
 }
@@ -44,18 +48,22 @@ type JobSLAPredictorService struct {
 	jobDetailsGetter  JobDetailsGetter
 	jobLineageFetcher JobLineageFetcher
 	durationEstimator DurationEstimator
+	// alerting purpose
+	teamName             string
+	potentialSLANotifier PotentialSLANotifier
 }
 
-func NewJobSLAPredictorService(l log.Logger, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
-		l:                 l,
-		jobLineageFetcher: jobLineageFetcher,
-		durationEstimator: durationEstimator,
-		jobDetailsGetter:  jobDetailsGetter,
+		l:                    l,
+		jobLineageFetcher:    jobLineageFetcher,
+		durationEstimator:    durationEstimator,
+		jobDetailsGetter:     jobDetailsGetter,
+		potentialSLANotifier: potentialSLANotifier,
 	}
 }
 
-func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
+func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
 	// map of jobName -> map of upstreamJobName -> JobState
 	jobBreaches := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
 
@@ -115,6 +123,10 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		if len(breachesCauses) > 0 {
 			jobBreaches[jobSchedule.JobName] = breachesCauses
 		}
+	}
+
+	if enableAlert && len(jobBreaches) > 0 {
+		s.sendAlert(jobBreaches)
 	}
 
 	return jobBreaches, nil
@@ -340,6 +352,26 @@ func (*JobSLAPredictorService) populateJobSLAStates(jobDurations map[scheduler.J
 		}
 	}
 	return jobSLAStatesByJobName
+}
+
+// sendAlert sends an alert to the potentialSLANotifier with the job breaches information.
+func (s *JobSLAPredictorService) sendAlert(jobBreaches map[scheduler.JobName]map[scheduler.JobName]*JobState) {
+	jobToUpstreamsCause := make(map[string][]scheduler.UpstreamAttrs)
+	for jobName, upstreamCauses := range jobBreaches {
+		upstreamAttrs := make([]scheduler.UpstreamAttrs, 0, len(upstreamCauses))
+		for _, cause := range upstreamCauses {
+			upstreamAttrs = append(upstreamAttrs, scheduler.UpstreamAttrs{
+				JobName:       jobName.String(),
+				RelativeLevel: cause.RelativeLevel,
+				Status:        string(cause.Status),
+			})
+		}
+		jobToUpstreamsCause[jobName.String()] = upstreamAttrs
+	}
+	s.potentialSLANotifier.SendPotentialSLABreach(&scheduler.PotentialSLABreachAttrs{
+		TeamName:            s.teamName,
+		JobToUpstreamsCause: jobToUpstreamsCause,
+	})
 }
 
 // findLeaves finds the leaf nodes from the given paths.

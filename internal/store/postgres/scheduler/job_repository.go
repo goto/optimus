@@ -581,7 +581,59 @@ func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.
 	if len(labels) == 0 {
 		return []*scheduler.JobWithDetails{}, nil
 	}
-	return nil, nil
+
+	// Convert labels map into a JSON string for the @> operator
+	labelsJSON, err := json.Marshal(labels)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "failed to marshal labels", err)
+	}
+
+	query := `SELECT ` + jobColumns + `
+		FROM job
+		WHERE project_name = $1
+		AND deleted_at IS NULL
+		AND labels @> $2::jsonb`
+
+	rows, err := j.db.Query(ctx, query, projectName, string(labelsJSON))
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while querying jobs by labels", err)
+	}
+	defer rows.Close()
+
+	jobsMap := map[string]*scheduler.JobWithDetails{}
+	var jobNameList []string
+	multiError := errors.NewMultiError("errorInGetJobsByLabels")
+
+	for rows.Next() {
+		spec, err := FromRow(rows)
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job:"+spec.Name, err))
+			continue
+		}
+
+		job, err := spec.toJobWithDetails()
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job:"+spec.Name, err))
+			continue
+		}
+
+		jobNameList = append(jobNameList, job.GetName())
+		jobsMap[job.GetName()] = job
+	}
+
+	// Load upstreams for the filtered jobs
+	if len(jobNameList) > 0 {
+		jobUpstreamGroupedByName, err := j.getJobsUpstreams(ctx, projectName, jobNameList)
+		multiError.Append(err)
+
+		for jobName, upstreamList := range jobUpstreamGroupedByName {
+			if job, ok := jobsMap[jobName]; ok {
+				job.Upstreams.UpstreamJobs = upstreamList
+			}
+		}
+	}
+
+	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
 }
 
 func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {

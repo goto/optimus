@@ -346,9 +346,6 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 
 // IdentifyPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time
 func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.IdentifyPotentialSLABreachRequest) (*pb.IdentifyPotentialSLABreachResponse, error) {
-	// get job schedules by names and labels
-	labels := map[string]string{} // TODO: use map[string]string instead
-
 	response := pb.IdentifyPotentialSLABreachResponse{}
 
 	jobNames := []scheduler.JobName{}
@@ -368,20 +365,20 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 	}
 	// consider jobs with next schedule within next nextScheduleRangeInHours hours
 	nextScheduleRangeInHours := time.Duration(req.GetNextScheduledRangeInHours()) * time.Hour
-	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduleRangeInHours, jobNames, labels)
+	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduleRangeInHours, jobNames, req.GetJobLabels())
 	if err != nil {
 		h.l.Error("error identifying potential SLA breaches: %v", err)
 		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")
 	}
 
-	jobs := make(map[string]*pb.UpStreamBreachedJobs)
+	jobs := make(map[string]*pb.UpstreamJobsStatus)
 	for jobNameTarget, upstreamJobStates := range jobBreaches {
-		upstreamStates := []*pb.UpstreamJobStatus{}
+		upstreamStatus := []*pb.UpstreamJobStatus{}
 		for upstreamJobName, upstreamJobState := range upstreamJobStates {
 			if upstreamJobState == nil || upstreamJobState.InferredSLA == nil {
 				continue
 			}
-			upstreamStates = append(upstreamStates, &pb.UpstreamJobStatus{
+			upstreamStatus = append(upstreamStatus, &pb.UpstreamJobStatus{
 				ProjectName:     upstreamJobState.Tenant.ProjectName().String(),
 				JobName:         upstreamJobName.String(),
 				InferredSlaTime: timestamppb.New(*upstreamJobState.InferredSLA),
@@ -389,11 +386,11 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 				Status:          string(upstreamJobState.Status),
 			})
 		}
-		if len(upstreamStates) == 0 {
+		if len(upstreamStatus) == 0 {
 			continue
 		}
-		jobs[jobNameTarget.String()] = &pb.UpStreamBreachedJobs{
-			UpstreamJobs: upstreamStates,
+		jobs[jobNameTarget.String()] = &pb.UpstreamJobsStatus{
+			JobsStatus: upstreamStatus,
 		}
 	}
 
@@ -406,27 +403,6 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 	}
 
 	return &response, nil
-}
-
-func getLevel(currentJob *scheduler.JobLineageSummary, job *scheduler.JobLineageSummary, memo map[*scheduler.JobLineageSummary]int32, currentLevel int32) int32 {
-	if currentJob.JobName == job.JobName {
-		return currentLevel
-	}
-	if memo == nil {
-		memo = make(map[*scheduler.JobLineageSummary]int32)
-	}
-	if level, ok := memo[currentJob]; ok {
-		return level
-	}
-	maxLevel := int32(-1)
-	for _, up := range currentJob.Upstreams {
-		level := getLevel(up, job, memo, currentLevel+1)
-		if level > maxLevel {
-			maxLevel = level
-		}
-	}
-	memo[currentJob] = maxLevel
-	return maxLevel
 }
 
 func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJobRunLineageSummaryRequest) (*pb.GetJobRunLineageSummaryResponse, error) {

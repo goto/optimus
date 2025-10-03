@@ -10,7 +10,7 @@ import (
 
 // Contract that can be used by other callers to fetch job lineage information
 type JobLineageFetcher interface {
-	GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error)
+	GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)
 }
 
 type LineageBuilder interface {

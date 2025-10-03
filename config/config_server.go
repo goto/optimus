@@ -42,11 +42,18 @@ type TelemetryConfig struct {
 }
 
 type AlertingConfig struct {
-	EventManager    EventManagerConfig `mapstructure:"alert_manager"`
-	Dashboard       string             `mapstructure:"dashboard"`
-	DataConsole     string             `mapstructure:"data_console"`
-	EnableSlack     bool               `mapstructure:"enable_slack"`
-	EnablePagerDuty bool               `mapstructure:"enable_pager_duty"`
+	EventManager             EventManagerConfig      `mapstructure:"alert_manager"`
+	Dashboard                string                  `mapstructure:"dashboard"`
+	DataConsole              string                  `mapstructure:"data_console"`
+	EnableSlack              bool                    `mapstructure:"enable_slack"`
+	EnablePagerDuty          bool                    `mapstructure:"enable_pager_duty"`
+	AlertingConfig           DurationEstimatorConfig `mapstructure:"alerting_config"`
+	PotentialSLABreachConfig DurationEstimatorConfig `mapstructure:"potential_sla_breach_config"`
+}
+
+type DurationEstimatorConfig struct {
+	LastNRuns        int `mapstructure:"last_n_runs"`
+	BufferPercentage int `mapstructure:"buffer_percentage"`
 }
 
 type SLAConfig struct {

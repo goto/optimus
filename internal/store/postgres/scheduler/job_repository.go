@@ -29,6 +29,8 @@ const (
 	upstreamColumns = `
     job_name, project_name, upstream_job_name, upstream_project_name, upstream_host,
     upstream_namespace_name, upstream_resource_urn, upstream_task_name, upstream_type, upstream_external, upstream_state`
+
+	jobSummaryColumns = `name, version, project_name, namespace_name, schedule, window_spec, alert`
 )
 
 type JobRepository struct {
@@ -140,6 +142,68 @@ type Window struct {
 	WindowOffset     string `json:",omitempty"`
 	Preset           string `json:",omitempty"`
 	Type             string
+}
+
+type jobSummary struct {
+	Version       int
+	JobName       string
+	ProjectName   string
+	NamespaceName string
+	Schedule      json.RawMessage
+	WindowSpec    json.RawMessage
+	Alert         json.RawMessage
+}
+
+func fromJobSummaryRow(row pgx.Row) (*jobSummary, error) {
+	var js jobSummary
+
+	err := row.Scan(&js.JobName, &js.Version, &js.ProjectName, &js.NamespaceName, &js.Schedule, &js.WindowSpec, &js.Alert)
+	if err != nil {
+		return nil, err
+	}
+
+	return &js, nil
+}
+
+func (j *jobSummary) toJobSummary() (*scheduler.JobSummary, error) {
+	tnnt, err := tenant.NewTenant(j.ProjectName, j.NamespaceName)
+	if err != nil {
+		return nil, err
+	}
+
+	var schedule Schedule
+	if err := json.Unmarshal(j.Schedule, &schedule); err != nil {
+		return nil, err
+	}
+
+	var windowConfig window.Config
+	if j.WindowSpec != nil {
+		windowConfig, err = fromStorageWindow(j.WindowSpec, j.Version)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	slaDuration := time.Duration(0)
+	if j.Alert != nil {
+		var alerts []scheduler.Alert
+		if err := json.Unmarshal(j.Alert, &alerts); err != nil {
+			return nil, err
+		}
+		duration, _ := scheduler.GetSLADuration(alerts)
+		slaDuration = time.Duration(duration) * time.Second
+	}
+
+	jobSummary := &scheduler.JobSummary{
+		JobName:          scheduler.JobName(j.JobName),
+		Tenant:           tnnt,
+		ScheduleInterval: schedule.Interval,
+		Window:           windowConfig,
+		SLA: scheduler.SLAConfig{
+			Duration: slaDuration,
+		},
+	}
+	return jobSummary, nil
 }
 
 func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
@@ -511,6 +575,77 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 	}
 
 	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
+}
+
+func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {
+	query := `SELECT job_name, upstream_job_name 
+				FROM job_upstream 
+				WHERE upstream_state = 'resolved'`
+
+	rows, err := j.db.Query(ctx, query)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting resolved upstreams", err)
+	}
+	defer rows.Close()
+
+	upstreamMap := make(map[scheduler.JobName][]scheduler.JobName)
+
+	for rows.Next() {
+		var jobName, upstreamJobName string
+		err := rows.Scan(&jobName, &upstreamJobName)
+		if err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning upstream row", err)
+		}
+
+		jobKey := scheduler.JobName(jobName)
+		upstreamJob := scheduler.JobName(upstreamJobName)
+		upstreamMap[jobKey] = append(upstreamMap[jobKey], upstreamJob)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error iterating upstream rows", err)
+	}
+
+	return upstreamMap, nil
+}
+
+func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobSummary, error) {
+	if len(jobNames) == 0 {
+		return make(map[scheduler.JobName]*scheduler.JobSummary), nil
+	}
+
+	jobNameStrings := make([]string, len(jobNames))
+	for i, jobName := range jobNames {
+		jobNameStrings[i] = string(jobName)
+	}
+
+	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL`
+	rows, err := j.db.Query(ctx, query, jobNameStrings)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while finding jobs by names", err)
+	}
+	defer rows.Close()
+
+	jobsMap := make(map[scheduler.JobName]*scheduler.JobSummary)
+	multiError := errors.NewMultiError("errorInFindByNames")
+
+	for rows.Next() {
+		spec, err := fromJobSummaryRow(rows)
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job summary", err))
+			continue
+		}
+
+		jobSummary, err := spec.toJobSummary()
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error converting to job summary", err))
+			continue
+		}
+
+		jobsMap[jobSummary.JobName] = jobSummary
+	}
+
+	return jobsMap, multiError.ToErr()
 }
 
 func NewJobProviderRepository(pool *pgxpool.Pool) *JobRepository {

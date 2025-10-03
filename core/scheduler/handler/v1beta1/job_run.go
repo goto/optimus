@@ -26,6 +26,10 @@ type JobRunService interface {
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
 }
 
+type JobLineageService interface {
+	GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error)
+}
+
 type SchedulerService interface {
 	CreateSchedulerRole(ctx context.Context, t tenant.Tenant, roleName string) error
 	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
@@ -38,10 +42,11 @@ type Notifier interface {
 }
 
 type JobRunHandler struct {
-	l                log.Logger
-	service          JobRunService
-	schedulerService SchedulerService
-	notifier         Notifier
+	l                 log.Logger
+	service           JobRunService
+	schedulerService  SchedulerService
+	notifier          Notifier
+	jobLineageService JobLineageService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -333,11 +338,34 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-func NewJobRunHandler(l log.Logger, service JobRunService, notifier Notifier, schedulerService SchedulerService) *JobRunHandler {
+func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJobRunLineageSummaryRequest) (*pb.GetJobRunLineageSummaryResponse, error) {
+	targetJobSchedules, err := fromJobRunLineageSummaryRequest(req)
+	if err != nil {
+		h.l.Error("error parsing job schedules from request: %s", err)
+		return nil, errors.GRPCErr(err, "unable to parse job schedules from request")
+	}
+
+	jobRunLineages, err := h.jobLineageService.GetJobExecutionSummary(ctx, targetJobSchedules, int(req.GetNumberOfUpstreamPerLevel()))
+	if err != nil {
+		h.l.Error("error getting job run lineage summary: %s", err)
+		return nil, errors.GRPCErr(err, "unable to get job run lineage summary")
+	}
+
+	return toJobRunLineageSummaryResponse(jobRunLineages), nil
+}
+
+func NewJobRunHandler(
+	l log.Logger,
+	service JobRunService,
+	notifier Notifier,
+	schedulerService SchedulerService,
+	jobLineageService JobLineageService,
+) *JobRunHandler {
 	return &JobRunHandler{
-		l:                l,
-		service:          service,
-		notifier:         notifier,
-		schedulerService: schedulerService,
+		l:                 l,
+		service:           service,
+		notifier:          notifier,
+		schedulerService:  schedulerService,
+		jobLineageService: jobLineageService,
 	}
 }

@@ -141,3 +141,8 @@ const (
 type AlertManagerConfig struct {
 	Endpoint string
 }
+
+type JobRunIdentifier struct {
+	JobName     JobName
+	ScheduledAt time.Time
+}

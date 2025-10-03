@@ -233,7 +233,6 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 }
 
 func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
-	// TODO: calculate based on task type
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
@@ -241,32 +240,18 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 	for _, jobName := range jobNames {
 		jobNamesString = append(jobNamesString, fmt.Sprintf("'%s'", jobName))
 	}
-	query := `
-	WITH last_n_runs AS (
-		SELECT
-			j.id AS job_run_id,
-			j.job_name,
-			t.start_time,
-			t.end_time,
-			ROW_NUMBER() OVER (
-				PARTITION BY j.job_name
-				ORDER BY j.scheduled_at DESC
-			) AS rn
-		FROM job_run j
-		JOIN task_run t ON t.job_run_id = j.id
-		WHERE t.end_time IS NOT NULL
-		AND j.job_name IN (%s)
-	)
-	SELECT
-		job_name,
-		percentile_cont(0.95) WITHIN GROUP (
-			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
-		) AS p95_duration_seconds
-	FROM last_n_runs
-	WHERE rn <= %d  -- keep only last N runs per job
-	GROUP BY job_name
-	ORDER BY p95_duration_seconds DESC;`
-	query = fmt.Sprintf(query, lastNRuns, strings.Join(jobNamesString, ","))
+	var taskNames []string
+	var hookNames []string
+	if tasks != nil {
+		if val, ok := tasks["task"]; ok {
+			taskNames = val
+		}
+		if val, ok := tasks["hook"]; ok {
+			hookNames = val
+		}
+	}
+
+	query := getQueryTaskAndHooks(jobNamesString, lastNRuns, taskNames, hookNames)
 	rows, err := j.db.Query(ctx, query)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
@@ -286,6 +271,75 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 		jobDurations[scheduler.JobName(jobName)] = &duration
 	}
 	return jobDurations, nil
+}
+
+func getQueryTaskAndHooks(jobNames []string, lastNRuns int, taskNames, hookNames []string) string {
+	// Build job name list
+	quotedJobs := make([]string, len(jobNames))
+	for i, j := range jobNames {
+		quotedJobs[i] = fmt.Sprintf("'%s'", j)
+	}
+	jobList := strings.Join(quotedJobs, ", ")
+
+	// Build task name filter
+	taskFilter := ""
+	if len(taskNames) > 0 {
+		quotedTasks := make([]string, len(taskNames))
+		for i, t := range taskNames {
+			quotedTasks[i] = fmt.Sprintf("'%s'", t)
+		}
+		taskFilter = fmt.Sprintf("AND t.name IN (%s)", strings.Join(quotedTasks, ", "))
+	}
+
+	// Build hook name filter
+	hookFilter := ""
+	if len(hookNames) > 0 {
+		quotedHooks := make([]string, len(hookNames))
+		for i, h := range hookNames {
+			quotedHooks[i] = fmt.Sprintf("'%s'", h)
+		}
+		hookFilter = fmt.Sprintf("AND h.name IN (%s)", strings.Join(quotedHooks, ", "))
+	}
+
+	// Full query with placeholders for filters
+	query := fmt.Sprintf(`
+	WITH task_and_hooks AS (
+		SELECT
+			j.id AS job_run_id,
+			j.job_name,
+			t.start_time,
+			t.end_time,
+			COALESCE(SUM(EXTRACT(EPOCH FROM (h.end_time - h.start_time))), 0) AS hook_duration_seconds,
+			ROW_NUMBER() OVER (
+				PARTITION BY j.job_name
+				ORDER BY j.scheduled_at DESC
+			) AS rn
+		FROM job_run j
+		JOIN task_run t ON t.job_run_id = j.id
+		LEFT JOIN hook_run h ON h.job_run_id = j.id
+		WHERE t.end_time IS NOT NULL
+		AND j.job_name IN (%s)
+		%s
+		%s
+		GROUP BY j.id, j.job_name, t.start_time, t.end_time
+	),
+	last_n_runs AS (
+		SELECT
+			job_name,
+			EXTRACT(EPOCH FROM (end_time - start_time)) + hook_duration_seconds AS total_duration_seconds,
+			rn
+		FROM task_and_hooks
+	)
+	SELECT
+		job_name,
+		percentile_cont(0.95) WITHIN GROUP (ORDER BY total_duration_seconds) AS p95_duration_seconds
+	FROM last_n_runs
+	WHERE rn <= %d
+	GROUP BY job_name
+	ORDER BY p95_duration_seconds DESC;
+	`, jobList, taskFilter, hookFilter, lastNRuns)
+
+	return query
 }
 
 func (j *JobRunRepository) UpdateState(ctx context.Context, jobRunID uuid.UUID, status scheduler.State) error {

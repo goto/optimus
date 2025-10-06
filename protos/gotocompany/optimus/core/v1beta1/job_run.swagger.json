@@ -423,6 +423,69 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/potential_sla_breach/identify": {
+      "post": {
+        "summary": "IdentifyPotentialSLABreach notifies optimus service about potential SLA breach for given job(s)",
+        "operationId": "JobRunService_IdentifyPotentialSLABreach",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1IdentifyPotentialSLABreachResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "jobNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "jobLabels": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "nextScheduledRangeInHours": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "alertOnBreach": {
+                  "type": "boolean"
+                },
+                "severity": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/upload": {
       "put": {
         "summary": "UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler",
@@ -487,7 +550,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -567,6 +630,17 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "v1beta1IdentifyPotentialSLABreachResponse": {
+      "type": "object",
+      "properties": {
+        "jobs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1beta1UpstreamJobsStatus"
           }
         }
       }
@@ -795,6 +869,39 @@
         },
         "errorMessage": {
           "type": "string"
+        }
+      }
+    },
+    "v1beta1UpstreamJobStatus": {
+      "type": "object",
+      "properties": {
+        "projectName": {
+          "type": "string"
+        },
+        "jobName": {
+          "type": "string"
+        },
+        "inferredSlaTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "relativeLevel": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1UpstreamJobsStatus": {
+      "type": "object",
+      "properties": {
+        "jobsStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1UpstreamJobStatus"
+          }
         }
       }
     }

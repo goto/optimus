@@ -72,6 +72,7 @@ type JobRunRepository interface {
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
 	UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error
 	UpdateMonitoring(ctx context.Context, jobRunID uuid.UUID, monitoring map[string]any) error
+	GetRunSummaryByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error)
 }
 
 type JobReplayRepository interface {
@@ -457,10 +458,14 @@ func (s *JobRunService) GetInterval(ctx context.Context, projectName tenant.Proj
 
 // TODO: this method is only for backward compatibility, it will be deprecated soon
 func (s *JobRunService) getInterval(project *tenant.Project, job *scheduler.JobWithDetails, referenceTime time.Time) (interval.Interval, error) {
-	windowConfig := job.Job.WindowConfig
+	return s.getIntervalForSchedule(project, job.Job.WindowConfig, job.Schedule.Interval, referenceTime)
+}
+
+func (s *JobRunService) getIntervalForSchedule(project *tenant.Project, windowCfg window.Config, scheduleCron string, referenceTime time.Time) (interval.Interval, error) {
+	windowConfig := windowCfg
 
 	if windowConfig.Type() == window.Incremental {
-		w, err := window.FromSchedule(job.Schedule.Interval)
+		w, err := window.FromSchedule(scheduleCron)
 		if err != nil {
 			s.l.Error("error getting window with type incremental: %v", err)
 			return interval.Interval{}, err
@@ -993,6 +998,45 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	default:
 		return errors.InvalidArgument(scheduler.EntityEvent, "invalid event type: "+string(event.Type))
 	}
+}
+
+func (s *JobRunService) GetExpectedRunSchedules(_ context.Context, sourceProject *tenant.Project, sourceSchedule string, sourceWindow window.Config, upstreamSchedule string, referenceTime time.Time) ([]time.Time, error) {
+	// this will get the latest upstream schedule time before the reference time - usually the downstream schedule time
+	referenceTimeSecondAhead := referenceTime.Add(time.Second * 1)
+	upstreamCronSpec, err := cron.ParseCronSchedule(upstreamSchedule)
+	if err != nil {
+		s.l.Error("error parsing cron schedule [%s]: %s", upstreamSchedule, err)
+		return nil, err
+	}
+	lastUpstreamScheduleTime := upstreamCronSpec.Prev(referenceTimeSecondAhead)
+
+	interval, err := s.getIntervalForSchedule(sourceProject, sourceWindow, sourceSchedule, lastUpstreamScheduleTime)
+	if err != nil {
+		s.l.Error("error getting interval for job [%s]: %s", sourceSchedule, err)
+		return nil, err
+	}
+
+	// now, based on this interval, we need to get all the schedule times that fall within this interval
+	expectedRuns := getExpectedRuns(upstreamCronSpec, upstreamCronSpec.Next(interval.Start()), interval.End())
+	scheduleTimes := make([]time.Time, len(expectedRuns))
+	for i, run := range expectedRuns {
+		scheduleTimes[i] = run.ScheduledAt
+	}
+	return scheduleTimes, nil
+}
+
+func (s *JobRunService) GetJobRunsByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+	if len(identifiers) == 0 {
+		return []*scheduler.JobRunSummary{}, nil
+	}
+
+	jobRuns, err := s.repo.GetRunSummaryByIdentifiers(ctx, identifiers)
+	if err != nil {
+		s.l.Error("error getting job runs by identifiers: %s", err)
+		return nil, err
+	}
+
+	return jobRuns, nil
 }
 
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,

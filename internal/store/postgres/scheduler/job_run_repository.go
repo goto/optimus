@@ -281,6 +281,113 @@ func (j *JobRunRepository) Create(ctx context.Context, t tenant.Tenant, jobName 
 	return errors.WrapIfErr(scheduler.EntityJobRun, "unable to create job run", err)
 }
 
+func (j *JobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+	if len(identifiers) == 0 {
+		return []*scheduler.JobRunSummary{}, nil
+	}
+
+	var conditions []string
+	var args []any
+	argIndex := 1
+
+	for _, identifier := range identifiers {
+		condition := fmt.Sprintf("(jr.job_name = $%d AND jr.scheduled_at = $%d)",
+			argIndex, argIndex+1)
+		conditions = append(conditions, condition)
+		args = append(args, identifier.JobName, identifier.ScheduledAt.UTC().Format(dbTimeFormat))
+		argIndex += 2
+	}
+
+	query := fmt.Sprintf(`
+WITH operations AS (
+	SELECT 
+		jr.job_name,
+		jr.scheduled_at,
+		jr.start_time AS job_start_time,
+		jr.end_time AS job_end_time,
+		opr.operation_type,
+		opr.start_time,
+		COALESCE(opr.end_time, CASE WHEN jr.status IN ('failed', 'success') THEN jr.end_time ELSE NOW() END) AS end_time,
+		ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY EXTRACT(EPOCH FROM (COALESCE(opr.end_time, jr.end_time) - opr.start_time)) DESC) as rn
+	FROM job_run jr
+	JOIN (
+		SELECT job_run_id, start_time, end_time, 'sensor' AS operation_type FROM sensor_run 
+		UNION ALL 
+		SELECT job_run_id, start_time, end_time, 'task' AS operation_type FROM task_run 
+		UNION ALL 
+		SELECT job_run_id, start_time, end_time, 'hook' AS operation_type FROM hook_run 
+	) opr ON opr.job_run_id = jr.id
+	WHERE %s
+	AND opr.start_time IS NOT NULL
+)
+SELECT 
+	job_name,
+	scheduled_at,
+	job_start_time,
+	job_end_time,
+	MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN start_time END) as sensor_start_time,
+	MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN end_time END) as sensor_end_time,
+	MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN start_time END) as task_start_time,
+	MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN end_time END) as task_end_time,
+	MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN start_time END) as hook_start_time,
+	MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN end_time END) as hook_end_time
+FROM operations
+WHERE rn = 1
+GROUP BY job_name, scheduled_at, job_start_time, job_end_time
+ORDER BY scheduled_at DESC
+	`, strings.Join(conditions, " OR "))
+
+	rows, err := j.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job run summaries", err)
+	}
+	defer rows.Close()
+
+	var summaries []*scheduler.JobRunSummary
+	for rows.Next() {
+		var (
+			jobName         string
+			scheduledAt     time.Time
+			jobStartTime    *time.Time
+			jobEndTime      *time.Time
+			sensorStartTime *time.Time
+			sensorEndTime   *time.Time
+			taskStartTime   *time.Time
+			taskEndTime     *time.Time
+			hookStartTime   *time.Time
+			hookEndTime     *time.Time
+		)
+
+		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime,
+			&sensorStartTime, &sensorEndTime,
+			&taskStartTime, &taskEndTime,
+			&hookStartTime, &hookEndTime)
+		if err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error while scanning job run summary", err)
+		}
+
+		summary := &scheduler.JobRunSummary{
+			JobName:       scheduler.JobName(jobName),
+			ScheduledAt:   scheduledAt,
+			JobStartTime:  jobStartTime,
+			JobEndTime:    jobEndTime,
+			WaitStartTime: sensorStartTime,
+			WaitEndTime:   sensorEndTime,
+			TaskStartTime: taskStartTime,
+			TaskEndTime:   taskEndTime,
+			HookStartTime: hookStartTime,
+			HookEndTime:   hookEndTime,
+		}
+		summaries = append(summaries, summary)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error iterating job run rows", err)
+	}
+
+	return summaries, nil
+}
+
 func NewJobRunRepository(pool *pgxpool.Pool) *JobRunRepository {
 	return &JobRunRepository{
 		db: pool,

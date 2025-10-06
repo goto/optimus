@@ -21,6 +21,39 @@
     "application/json"
   ],
   "paths": {
+    "/v1beta1/job-run-lineage-summary": {
+      "post": {
+        "summary": "GetJobRunLineageSummary gets the summary of a specific job run execution \u0026 all its upstream dependencies.",
+        "operationId": "JobRunService_GetJobRunLineageSummary",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetJobRunLineageSummaryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetJobRunLineageSummaryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/job/{jobName}/interval": {
       "get": {
         "summary": "GetInterval gets interval on specific job given reference time.",
@@ -454,7 +487,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -487,6 +520,32 @@
         "endTime": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1beta1GetJobRunLineageSummaryRequest": {
+      "type": "object",
+      "properties": {
+        "targetJobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1TargetJobRunIdentifier"
+          }
+        },
+        "numberOfUpstreamPerLevel": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1beta1GetJobRunLineageSummaryResponse": {
+      "type": "object",
+      "properties": {
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobRunLineageSummary"
+          }
         }
       }
     },
@@ -555,6 +614,24 @@
       ],
       "default": "TYPE_UNSPECIFIED"
     },
+    "v1beta1JobExecutionSummary": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "sla": {
+          "$ref": "#/definitions/v1beta1SLAConfig"
+        },
+        "level": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "jobRunSummary": {
+          "$ref": "#/definitions/v1beta1JobRunSummary"
+        }
+      }
+    },
     "v1beta1JobRun": {
       "type": "object",
       "properties": {
@@ -590,6 +667,24 @@
         }
       }
     },
+    "v1beta1JobRunLineageSummary": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "jobRuns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobExecutionSummary"
+          }
+        }
+      }
+    },
     "v1beta1JobRunResponse": {
       "type": "object",
       "properties": {
@@ -601,6 +696,51 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1beta1JobRunSummary": {
+      "type": "object",
+      "properties": {
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "slaTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "jobStartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "jobEndTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "waitStartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "waitEndTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "taskStartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "taskEndTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "hookStartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "hookEndTime": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -626,6 +766,26 @@
     },
     "v1beta1RegisterJobEventResponse": {
       "type": "object"
+    },
+    "v1beta1SLAConfig": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1TargetJobRunIdentifier": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     },
     "v1beta1UploadToSchedulerResponse": {
       "type": "object",

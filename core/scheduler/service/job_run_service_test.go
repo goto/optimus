@@ -2292,8 +2292,8 @@ func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, i
 }
 
 // GetP95DurationByJobNames provides a mock function with given fields: ctx, jobNames, tasks, lastNRuns
-func (_m *mockJobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
-	ret := _m.Called(ctx, jobNames, tasks, lastNRuns)
+func (m *mockJobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
+	ret := m.Called(ctx, jobNames, tasks, lastNRuns)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetP95DurationByJobNames")

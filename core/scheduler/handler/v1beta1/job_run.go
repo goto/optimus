@@ -398,7 +398,7 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		response.Jobs = jobs
 	}
 
-	if req.AlertOnBreach && len(response.Jobs) > 0 {
+	if req.AlertOnBreach && len(response.Jobs) > 0 { //nolint: revive,staticcheck
 		// TODO: alert if there are potential SLA breaches and alerting is enabled
 	}
 

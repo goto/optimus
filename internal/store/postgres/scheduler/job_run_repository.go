@@ -232,7 +232,7 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 	return jobRunList, nil
 }
 
-func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
+func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
@@ -242,11 +242,11 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 	}
 	var taskNames []string
 	var hookNames []string
-	if tasks != nil {
-		if val, ok := tasks["task"]; ok {
+	if operators != nil {
+		if val, ok := operators["task"]; ok {
 			taskNames = val
 		}
-		if val, ok := tasks["hook"]; ok {
+		if val, ok := operators["hook"]; ok {
 			hookNames = val
 		}
 	}

@@ -251,8 +251,17 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 		}
 	}
 
-	query := getQueryTaskAndHooks(jobNamesString, lastNRuns, taskNames, hookNames)
-	rows, err := j.db.Query(ctx, query)
+	query := getQueryTaskAndHooks(lastNRuns, taskNames, hookNames)
+
+	args := []interface{}{jobNames}
+	if len(taskNames) > 0 {
+		args = append(args, taskNames)
+	}
+	if len(hookNames) > 0 {
+		args = append(args, hookNames)
+	}
+
+	rows, err := j.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 	}
@@ -265,7 +274,7 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 			if errors.Is(err, pgx.ErrNoRows) {
 				return map[scheduler.JobName]*time.Duration{}, nil
 			}
-			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration on scan", err)
 		}
 		duration := time.Duration(p95DurationSeconds * float64(time.Second))
 		jobDurations[scheduler.JobName(jobName)] = &duration
@@ -273,35 +282,22 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 	return jobDurations, nil
 }
 
-func getQueryTaskAndHooks(jobNames []string, lastNRuns int, taskNames, hookNames []string) string {
-	// Build job name list
-	quotedJobs := make([]string, len(jobNames))
-	for i, j := range jobNames {
-		quotedJobs[i] = fmt.Sprintf("'%s'", j)
-	}
-	jobList := strings.Join(quotedJobs, ", ")
-
-	// Build task name filter
+func getQueryTaskAndHooks(lastNRuns int, taskNames, hookNames []string) string {
 	taskFilter := ""
 	if len(taskNames) > 0 {
-		quotedTasks := make([]string, len(taskNames))
-		for i, t := range taskNames {
-			quotedTasks[i] = fmt.Sprintf("'%s'", t)
-		}
-		taskFilter = fmt.Sprintf("AND t.name IN (%s)", strings.Join(quotedTasks, ", "))
+		taskFilter = "AND t.name = ANY($2)"
 	}
 
-	// Build hook name filter
 	hookFilter := ""
 	if len(hookNames) > 0 {
-		quotedHooks := make([]string, len(hookNames))
-		for i, h := range hookNames {
-			quotedHooks[i] = fmt.Sprintf("'%s'", h)
+		// Shift placeholder index if task filter exists
+		if len(taskNames) > 0 {
+			hookFilter = "AND h.name = ANY($3)"
+		} else {
+			hookFilter = "AND h.name = ANY($2)"
 		}
-		hookFilter = fmt.Sprintf("AND h.name IN (%s)", strings.Join(quotedHooks, ", "))
 	}
 
-	// Full query with placeholders for filters
 	query := fmt.Sprintf(`
 	WITH task_and_hooks AS (
 		SELECT
@@ -318,7 +314,7 @@ func getQueryTaskAndHooks(jobNames []string, lastNRuns int, taskNames, hookNames
 		JOIN task_run t ON t.job_run_id = j.id
 		LEFT JOIN hook_run h ON h.job_run_id = j.id
 		WHERE t.end_time IS NOT NULL
-		AND j.job_name IN (%s)
+		AND j.job_name = ANY($1)
 		%s
 		%s
 		GROUP BY j.id, j.job_name, t.start_time, t.end_time
@@ -337,7 +333,7 @@ func getQueryTaskAndHooks(jobNames []string, lastNRuns int, taskNames, hookNames
 	WHERE rn <= %d
 	GROUP BY job_name
 	ORDER BY p95_duration_seconds DESC;
-	`, jobList, taskFilter, hookFilter, lastNRuns)
+	`, taskFilter, hookFilter, lastNRuns)
 
 	return query
 }

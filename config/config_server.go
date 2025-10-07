@@ -54,6 +54,8 @@ type AlertingConfig struct {
 type DurationEstimatorConfig struct {
 	LastNRuns        int `mapstructure:"last_n_runs"`
 	BufferPercentage int `mapstructure:"buffer_percentage"`
+	MinBufferMinutes int `mapstructure:"minimum_buffer_minutes"`
+	MaxBufferMinutes int `mapstructure:"max_buffer_minutes"`
 }
 
 type SLAConfig struct {

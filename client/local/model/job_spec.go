@@ -90,6 +90,8 @@ func (o *OperatorAlerts) GetOperatorAlertProto() *pb.OperatorAlertConfig {
 			protoOperatorAlert.SlaMiss[i] = &pb.SLAMissAlertConfig{
 				DurationThreshold: durationpb.New(cfg.DurationThreshold),
 				Severity:          cfg.Severity,
+				Team:              cfg.Team,
+				AutoThreshold:     cfg.AutoThreshold,
 			}
 		}
 	}
@@ -119,8 +121,10 @@ func (o *OperatorAlerts) GetOperatorAlertProto() *pb.OperatorAlertConfig {
 }
 
 type SLAMissAlertConfig struct {
-	DurationThreshold time.Duration `yaml:"duration_threshold"`
+	DurationThreshold time.Duration `yaml:"duration_threshold,omitempty"`
 	Severity          string        `yaml:"severity"`
+	Team              string        `yaml:"team,omitempty"`
+	AutoThreshold     bool          `yaml:"auto_threshold,omitempty"`
 }
 
 type RetryAlertConfig struct {

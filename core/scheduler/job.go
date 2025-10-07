@@ -159,6 +159,8 @@ func (s Severity) String() string {
 type SLAAlertConfig struct {
 	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
 	Severity          Severity      `json:"severity,omitempty"`
+	Team              string        `json:"team,omitempty"`
+	AutoThreshold     bool          `json:"auto_threshold,omitempty"`
 }
 
 func (s SLAAlertConfig) Tag() string {

@@ -238,7 +238,7 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 	}
 	var jobNamesString []string
 	for _, jobName := range jobNames {
-		jobNamesString = append(jobNamesString, fmt.Sprintf("'%s'", jobName))
+		jobNamesString = append(jobNamesString, jobName.String())
 	}
 	var taskNames []string
 	var hookNames []string

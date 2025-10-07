@@ -852,6 +852,16 @@ type DurationEstimator struct {
 	mock.Mock
 }
 
+func (_m *DurationEstimator) GetP95DurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
+	args := _m.Called(ctx, jobNames)
+	return args.Get(0).(map[scheduler.JobName]*time.Duration), args.Error(1)
+}
+
+func (_m *DurationEstimator) GetP95DurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error) {
+	args := _m.Called(ctx, jobNames, hookNames)
+	return args.Get(0).(map[scheduler.JobName]*time.Duration), args.Error(1)
+}
+
 // GetP95DurationByJobNames provides a mock function with given fields: ctx, jobNames
 func (_m *DurationEstimator) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
 	ret := _m.Called(ctx, jobNames)

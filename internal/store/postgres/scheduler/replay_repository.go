@@ -289,7 +289,7 @@ func (r ReplayRepository) getReplayRequestWithFilters(ctx context.Context, proje
 	}
 	if f.Contains(filter.ScheduledAt) {
 		scheduledAt := f.GetTimeValue(filter.ScheduledAt)
-		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("start_time<='%s' AND '%s'<=end_time", scheduledAt.Format(time.DateTime), scheduledAt.Format(time.DateTime)))
+		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("start_time<='%s' AND '%s'<=end_time", scheduledAt.Format(dbTimeFormat), scheduledAt.Format(dbTimeFormat)))
 	}
 	if f.Contains(filter.ReplayStatus) {
 		replayStatusString := f.GetStringValue(filter.ReplayStatus)

@@ -70,9 +70,7 @@ func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*s
 		}
 		visited[current.JobName] = true
 
-		for _, upstream := range current.Upstreams {
-			stack = append(stack, upstream)
-		}
+		stack = append(stack, current.Upstreams...)
 	}
 
 	return lineageToJobName, nil

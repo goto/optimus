@@ -240,7 +240,7 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 // such that, the inferred SLA for any upstream job in level n un induced by a downstream job j as:
 // S(un|j) = S(un-1|j) - D(un-1)
 // where, S(u0|j) = S(j), D(u0) = D(j)
-func (s *JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time) map[scheduler.JobName]*time.Time {
+func (*JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time) map[scheduler.JobName]*time.Time {
 	jobSLAs := make(map[scheduler.JobName]*time.Time)
 	// inferred SLA for leaf node = targetedSLA S(j)
 	jobSLAs[jobTarget.JobName] = targetedSLA
@@ -293,7 +293,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		job := jobWithState.job
 		paths := make([]scheduler.JobName, len(jobWithState.paths))
 		copy(paths, jobWithState.paths)
-		paths = append(paths, job.JobName)
+		paths = append(paths, job.JobName) //nolint:makezero
 
 		if visited[job.JobName] {
 			continue
@@ -304,7 +304,6 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 			continue
 		}
 
-		// jobRun := job.JobRuns[jobTarget.JobName.String()]
 		inferredSLA := *jobSLAStates[job.JobName].InferredSLA
 
 		isPotentialBreach := false

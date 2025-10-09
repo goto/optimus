@@ -405,7 +405,6 @@ func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[
 			JobToUpstreamsCause: jobToUpstreamsCause,
 		})
 	}
-
 }
 
 // findLeaves finds the leaf nodes from the given paths.

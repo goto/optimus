@@ -19,7 +19,7 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
+	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
 }
 
 type JobRunService interface {
@@ -365,7 +365,7 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 	}
 	// consider jobs with next schedule within next nextScheduleRangeInHours hours
 	nextScheduleRangeInHours := time.Duration(req.GetNextScheduledRangeInHours()) * time.Hour
-	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduleRangeInHours, jobNames, req.GetJobLabels())
+	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduleRangeInHours, jobNames, req.GetJobLabels(), req.GetAlertOnBreach())
 	if err != nil {
 		h.l.Error("error identifying potential SLA breaches: %v", err)
 		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")

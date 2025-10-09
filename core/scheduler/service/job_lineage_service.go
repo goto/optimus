@@ -54,6 +54,27 @@ func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*s
 	for _, lineage := range jobLineages {
 		lineageToJobName[lineage.JobName] = lineage
 	}
+
+	stack := []*scheduler.JobLineageSummary{}
+	for _, lineage := range jobLineages {
+		stack = append(stack, lineage)
+	}
+
+	visited := make(map[scheduler.JobName]bool)
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		if _, ok := visited[current.JobName]; ok {
+			continue
+		}
+		visited[current.JobName] = true
+
+		for _, upstream := range current.Upstreams {
+			stack = append(stack, upstream)
+		}
+	}
+
 	return lineageToJobName, nil
 }
 

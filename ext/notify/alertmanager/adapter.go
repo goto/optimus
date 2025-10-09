@@ -256,7 +256,7 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 		Data: map[string]string{
 			"content": content,
 		},
-		Template: optimusChangeTemplate,
+		Template: potentialSLABreachTemplate,
 		Labels: map[string]string{
 			"team":     attr.TeamName,
 			"severity": WarningSeverity,

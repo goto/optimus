@@ -47,7 +47,7 @@ func TestAlertManager(t *testing.T) {
 		err := am.PrepareAndSendEvent(&alertmanager.AlertPayload{
 			Project: projectName,
 			LogTag:  jobName.String(),
-			Data: map[string]string{
+			Data: map[string]interface{}{
 				"project":   projectName,
 				"namespace": "some-ns",
 				"job_name":  jobName.String(),

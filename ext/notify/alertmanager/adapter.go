@@ -72,7 +72,7 @@ func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttr
 	alertPayload := &AlertPayload{
 		Project: attr.Project,
 		LogTag:  attr.OperatorType,
-		Data: map[string]string{
+		Data: map[string]interface{}{
 			"operator_name":       attr.OperatorName,
 			"operator_type":       attr.OperatorType,
 			"project":             attr.Project,
@@ -107,7 +107,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 	q.Set("var-job", jobName)
 	q.Set("var-schedule_time", e.JobEvent.JobScheduledAt.Format(radarTimeFormat))
 	dashURL.RawQuery = q.Encode()
-	templateContext := map[string]string{
+	templateContext := map[string]interface{}{
 		"project":      projectName,
 		"namespace":    e.JobEvent.Tenant.NamespaceName().String(),
 		"job_name":     jobName,
@@ -155,7 +155,7 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 	a.relay(&AlertPayload{
 		Project: projectName,
 		LogTag:  attr.URN,
-		Data: map[string]string{
+		Data: map[string]interface{}{
 			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
 			"job_name":     jobName,
@@ -177,7 +177,7 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 	alertPayload := AlertPayload{
 		Project: projectName,
 		LogTag:  attr.JobURN,
-		Data: map[string]string{
+		Data: map[string]interface{}{
 			"job_name":     attr.JobName,
 			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
@@ -203,7 +203,7 @@ func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 	a.relay(&AlertPayload{
 		Project: projectName,
 		LogTag:  attr.URN,
-		Data: map[string]string{
+		Data: map[string]interface{}{
 			"project":      projectName,
 			"namespace":    attr.Tenant.NamespaceName().String(),
 			"job_name":     resourceName,
@@ -224,7 +224,7 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 	a.relay(&AlertPayload{
 		Project: attr.Tenant.ProjectName().String(),
 		LogTag:  attr.EventType + "-" + attr.URN,
-		Data: map[string]string{
+		Data: map[string]interface{}{
 			"table_name": attr.URN,
 			"event_type": attr.EventType,
 			"message":    attr.Message,
@@ -239,21 +239,16 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 }
 
 func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreachAttrs) {
-	content := ""
+	content := map[string][]string{}
 	for jobName, upstreamCauses := range attr.JobToUpstreamsCause {
-		content += fmt.Sprintf("**Job:** %s\n", jobName)
-		content += strings.Join(func() []string {
-			var res []string
-			for _, cause := range upstreamCauses {
-				res = append(res, fmt.Sprintf("- %s (level: %d) (status: %s)", cause.JobName, cause.RelativeLevel, cause.Status))
-			}
-			return res
-		}(), "\n")
-		content += "\n\n"
+		content[jobName] = []string{}
+		for _, cause := range upstreamCauses {
+			content[jobName] = append(content[jobName], fmt.Sprintf("- %s (level: %d) (status: %s)", cause.JobName, cause.RelativeLevel, cause.Status))
+		}
 	}
 
 	a.relay(&AlertPayload{
-		Data: map[string]string{
+		Data: map[string]interface{}{
 			"content": content,
 		},
 		Template: potentialSLABreachTemplate,

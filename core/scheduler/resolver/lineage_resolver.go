@@ -391,11 +391,6 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 		return result[lineage.JobName]
 	}
 
-	jobRun := jobRunDetails[lineage.JobName]
-	if jobRun == nil {
-		r.logger.Info("no job run details found for job", "job", lineage.JobName)
-	}
-
 	result[lineage.JobName] = &scheduler.JobLineageSummary{
 		JobName:          lineage.JobName,
 		Tenant:           lineage.Tenant,

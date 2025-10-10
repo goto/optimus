@@ -182,10 +182,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{scheduler.JobName("job-A")}
 		labels := map[string]string{}
 
+		referenceTime := time.Now().UTC()
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
-		startDate := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
 		// get hour from now + nextScheduledRangeInHours + 1 hours to make sure it's outside of next schedule range
-		scheduledAt := time.Now().Add(nextScheduledRangeInHours + 1*time.Hour).Truncate(time.Hour)
+		scheduledAt := referenceTime.Add(nextScheduledRangeInHours + 1*time.Hour).Truncate(time.Hour)
 		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour()) // daily
 		jobA := &scheduler.JobWithDetails{
 			Name: "job-A",
@@ -227,10 +228,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{scheduler.JobName("job-A")}
 		labels := map[string]string{}
 
+		referenceTime := time.Now().UTC()
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
-		startDate := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
 		// get hour from now + nextScheduledRangeInHours - 1 hours to make sure it's within next schedule range
-		scheduledAt := time.Now().Add(nextScheduledRangeInHours - 1*time.Hour).Truncate(time.Hour)
+		scheduledAt := referenceTime.Add(nextScheduledRangeInHours - 1*time.Hour).Truncate(time.Hour)
 		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour()) // daily
 
 		jobA := &scheduler.JobWithDetails{
@@ -274,10 +276,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{scheduler.JobName("job-A")}
 		labels := map[string]string{}
 
+		referenceTime := time.Now().UTC()
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
-		startDate := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
 		// get hour from now + nextScheduledRangeInHours - 1 hours to make sure it's within next schedule range
-		scheduledAt := time.Now().Add(nextScheduledRangeInHours - 1*time.Hour).Truncate(time.Hour)
+		scheduledAt := referenceTime.Add(nextScheduledRangeInHours - 1*time.Hour).Truncate(time.Hour)
 		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour()) // daily
 		jobA := &scheduler.JobWithDetails{
 			Name: "job-A",
@@ -310,7 +313,9 @@ func TestIdentifySLABreaches(t *testing.T) {
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		jobLineageFetcher.On("GetJobLineage", ctx, mock.MatchedBy(func(jobSchedules []*scheduler.JobSchedule) bool {
+			return len(jobSchedules) == 1 && jobSchedules[0].JobName == jobASchedule.JobName && jobSchedules[0].ScheduledAt.Equal(jobASchedule.ScheduledAt)
+		})).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil)
 		durationEstimator.On("GetP95DurationByJobNames", ctx, []scheduler.JobName{jobA.Name}).Return(nil, assert.AnError).Once()
@@ -344,10 +349,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{scheduler.JobName("job-A")}
 		labels := map[string]string{}
 
+		referenceTime := time.Now().UTC()
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
-		startDate := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
 		// get hour from now for simulation purpose, we set scheduledAt to be now
-		scheduledAt := time.Now().Truncate(time.Minute)
+		scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
 		interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
 		jobA := &scheduler.JobWithDetails{
 			Name: "job-A",
@@ -375,7 +381,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.String(): {
 					ScheduledAt: scheduledAt,
 				},
 			},
@@ -386,7 +392,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.Add(-15 * time.Minute).String(): {
 					ScheduledAt:   scheduledAt.Add(-15 * time.Minute),
 					TaskStartTime: &jobBTaskStartTime,
 				},
@@ -399,10 +405,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.Add(-25 * time.Minute).String(): {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
 					TaskStartTime: &jobCTaskStartTime,
 					TaskEndTime:   &jobCTaskEndTime,
+					JobEndTime:    &jobCTaskEndTime,
 				},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
@@ -452,10 +459,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{scheduler.JobName("job-A")}
 		labels := map[string]string{}
 
+		referenceTime := time.Now().UTC()
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
-		startDate := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
 		// get hour from now for simulation purpose, we set scheduledAt to be now
-		scheduledAt := time.Now().Truncate(time.Minute)
+		scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
 		interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
 		jobA := &scheduler.JobWithDetails{
 			Name: "job-A",
@@ -483,7 +491,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.String(): {
 					ScheduledAt: scheduledAt,
 				},
 			},
@@ -493,7 +501,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.Add(-15 * time.Minute).String(): {
 					ScheduledAt: scheduledAt.Add(-15 * time.Minute),
 				},
 			},
@@ -504,7 +512,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.Add(-25 * time.Minute).String(): {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
 					TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
 				},
@@ -560,10 +568,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{scheduler.JobName("job-A")}
 		labels := map[string]string{}
 
+		referenceTime := time.Now().UTC()
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
-		startDate := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
 		// get hour from now for simulation purpose, we set scheduledAt to be now
-		scheduledAt := time.Now().Truncate(time.Minute)
+		scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
 		interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
 		jobA := &scheduler.JobWithDetails{
 			Name: "job-A",
@@ -591,7 +600,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.String(): {
 					ScheduledAt: scheduledAt,
 				},
 			},
@@ -601,7 +610,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.Add(-15 * time.Minute).String(): {
 					ScheduledAt: scheduledAt.Add(-15 * time.Minute), // job-B is not started yet, it should have started 5 mins ago
 				},
 			},
@@ -613,10 +622,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A": {
+				scheduledAt.Add(-25 * time.Minute).String(): {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
 					TaskStartTime: &jobCTaskStartTime,
 					TaskEndTime:   &jobCTaskEndTime,
+					JobEndTime:    &jobCTaskEndTime,
 				},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
@@ -672,10 +682,11 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{scheduler.JobName("job-A1"), scheduler.JobName("job-A2")}
 		labels := map[string]string{}
 
+		referenceTime := time.Now().UTC()
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
-		startDate := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
 		// get hour from now for simulation purpose, we set scheduledAt to be now
-		scheduledAt := time.Now().Truncate(time.Minute)
+		scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
 		interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
 		jobA1 := &scheduler.JobWithDetails{
 			Name: "job-A1",
@@ -724,7 +735,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A1",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A1": {
+				scheduledAt.String(): {
 					ScheduledAt: scheduledAt,
 				},
 			},
@@ -734,7 +745,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A2",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A2": {
+				scheduledAt.String(): {
 					ScheduledAt: scheduledAt,
 				},
 			},
@@ -744,7 +755,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A1": {
+				scheduledAt.Add(-15 * time.Minute).String(): {
 					ScheduledAt: scheduledAt.Add(-15 * time.Minute),
 				},
 			},
@@ -755,11 +766,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			JobRuns: map[string]*scheduler.JobRunSummary{
-				"job-A1": {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
-				},
-				"job-A2": {
+				scheduledAt.Add(-25 * time.Minute).String(): {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
 					TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
 				},

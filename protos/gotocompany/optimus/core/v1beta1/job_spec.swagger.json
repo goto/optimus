@@ -1897,6 +1897,12 @@
         },
         "severity": {
           "type": "string"
+        },
+        "autoThreshold": {
+          "type": "boolean"
+        },
+        "team": {
+          "type": "string"
         }
       }
     },

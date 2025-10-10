@@ -32,7 +32,7 @@ func (r *AlertRepository) Insert(ctx context.Context, alertPayload *alertmanager
 	}
 
 	query := `
-		INSERT INTO alert_logs (project_name, data, template, labels, endpoint)
+		INSERT INTO alert_logs (project_name, data, template_name, labels, endpoint)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id;
 	`
 

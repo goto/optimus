@@ -132,6 +132,8 @@ type JobRunService struct {
 	compiler         JobInputCompiler
 	projectGetter    ProjectGetter
 	features         config.FeaturesConfig
+
+	durationEstimatorService DurationEstimator
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {
@@ -808,6 +810,33 @@ func (s *JobRunService) registerConfiguredSLA(ctx context.Context, event *schedu
 	return s.registerSLAs(ctx, eventCtx, alertConfig.SLAAlertConfigs)
 }
 
+func (s *JobRunService) GetSLADuration(ctx context.Context, jobName, operatorName, operatorType string, slaAlertConfig *scheduler.SLAAlertConfig) (*time.Duration, error) {
+	jobN := scheduler.JobName(jobName)
+	if slaAlertConfig.AutoThreshold {
+		durationMap := make(map[scheduler.JobName]*time.Duration)
+		var err error
+		switch operatorType {
+		case scheduler.ExecutorHook.String():
+			durationMap, err = s.durationEstimatorService.GetP95DurationByJobNamesByHookName(ctx, []scheduler.JobName{jobN}, []string{operatorName})
+			if err != nil {
+				return nil, err
+			}
+
+		case scheduler.ExecutorTask.String():
+			durationMap, err = s.durationEstimatorService.GetP95DurationByJobNamesByTask(ctx, []scheduler.JobName{jobN})
+			if err != nil {
+				return nil, err
+			}
+		}
+		if p95Duration, ok := durationMap[jobN]; ok {
+			return p95Duration, nil
+		}
+		return nil, nil //nolint:nilnil
+	}
+
+	return &slaAlertConfig.DurationThreshold, nil
+}
+
 func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.EventContext, slaAlertConfigs []*scheduler.SLAAlertConfig) error {
 	jobRunID := eventCtx.DagRun.RunID
 	operatorStartTime := eventCtx.OperatorRunInstance.StartTime
@@ -817,8 +846,18 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 
 	me := errors.NewMultiError("errorInRegisterSLA")
 	for _, slaAlertConfig := range slaAlertConfigs {
-		slaBoundary := operatorStartTime.Add(slaAlertConfig.DurationThreshold)
-		err := s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(),
+		slaDuration, err := s.GetSLADuration(ctx, jobName, operatorName, operatorType.String(), slaAlertConfig)
+		if err != nil {
+			s.l.Error("unable to get sla duration, skipping sla registration for jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s, err: %s", jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag(), err.Error())
+			return err
+		}
+		if slaDuration == nil {
+			s.l.Warn("sla duration is nil, skipping sla registration for jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s", jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag())
+			return nil
+		}
+		slaBoundary := operatorStartTime.Add(*slaDuration)
+
+		err = s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(),
 			jobRunID, slaBoundary, slaAlertConfig.Tag(), eventCtx.DagRun.ScheduledAt, eventCtx.OperatorRunInstance.StartTime)
 		if err != nil {
 			errMsg := fmt.Sprintf("error registering sla for operator Run Id: %s, Type: %s, Sla: %s, err: %s", jobRunID, operatorType.String(), slaAlertConfig.Tag(), err.Error())
@@ -1043,20 +1082,22 @@ func (s *JobRunService) GetJobRunsByIdentifiers(ctx context.Context, identifiers
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
 	operatorRunRepo OperatorRunRepository, slaRepo SLARepository, scheduler Scheduler, resolver PriorityResolver,
 	compiler JobInputCompiler, eventHandler EventHandler, projectGetter ProjectGetter, features config.FeaturesConfig,
+	durationEstimatorService DurationEstimator,
 ) *JobRunService {
 	return &JobRunService{
-		l:                logger,
-		repo:             jobRunRepo,
-		operatorRunRepo:  operatorRunRepo,
-		slaRepo:          slaRepo,
-		scheduler:        scheduler,
-		eventHandler:     eventHandler,
-		replayRepo:       replayRepo,
-		jobRepo:          jobRepo,
-		priorityResolver: resolver,
-		compiler:         compiler,
-		projectGetter:    projectGetter,
-		features:         features,
+		l:                        logger,
+		repo:                     jobRunRepo,
+		operatorRunRepo:          operatorRunRepo,
+		slaRepo:                  slaRepo,
+		scheduler:                scheduler,
+		eventHandler:             eventHandler,
+		replayRepo:               replayRepo,
+		jobRepo:                  jobRepo,
+		priorityResolver:         resolver,
+		compiler:                 compiler,
+		projectGetter:            projectGetter,
+		features:                 features,
+		durationEstimatorService: durationEstimatorService,
 	}
 }
 

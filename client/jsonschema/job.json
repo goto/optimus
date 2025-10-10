@@ -314,13 +314,28 @@
                 "pattern": "^((\\d+h)?(\\d+m)?)$",
                 "description": "Duration in hours and/or minutes, e.g. '1h', '30m', '1h30m'"
               },
+              "auto_threshold": {
+                "type": "boolean",
+                "description": "If set to true, the system will automatically determine the duration threshold based on historical task run data. This helps in setting dynamic thresholds that adapt to the task's performance over time."
+              },
+              "team": {
+                "type": "string",
+                "description": "By default, the alerting team is inferred from the job namespace_name. Use this property to override that default and route alerts to a different team."
+              },
               "severity": {
                 "type": "string",
                 "enum": ["INFO", "WARNING", "CRITICAL"],
                 "description": "Alert severity level. Use INFO for informational alerts, WARNING for potential issues, and CRITICAL for urgent conditions. Configuring severity as CRITICAL will trigger a PagerDuty alert as set up in the console."
               }
             },
-            "required": ["duration_threshold", "severity"],
+            "oneOf": [
+              {
+                "required": ["duration_threshold", "severity"]
+              },
+              {
+                "required": ["auto_threshold", "severity"]
+              }
+            ],
             "additionalProperties": false
           }
         }

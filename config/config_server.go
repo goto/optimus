@@ -47,13 +47,14 @@ type AlertingConfig struct {
 	DataConsole              string                  `mapstructure:"data_console"`
 	EnableSlack              bool                    `mapstructure:"enable_slack"`
 	EnablePagerDuty          bool                    `mapstructure:"enable_pager_duty"`
-	AlertingConfig           DurationEstimatorConfig `mapstructure:"alerting_config"`
 	PotentialSLABreachConfig DurationEstimatorConfig `mapstructure:"potential_sla_breach_config"`
 }
 
 type DurationEstimatorConfig struct {
-	LastNRuns        int `mapstructure:"last_n_runs"`
-	BufferPercentage int `mapstructure:"buffer_percentage"`
+	LastNRuns         int `mapstructure:"last_n_runs" default:"7"`
+	PaddingPercentage int `mapstructure:"padding_percentage" default:"0"`
+	MinPaddingMinutes int `mapstructure:"min_padding_minutes" default:"0"`
+	MaxPaddingMinutes int `mapstructure:"max_padding_minutes" default:"1000"`
 }
 
 type SLAConfig struct {

@@ -68,7 +68,7 @@ func TestJobRunService(t *testing.T) {
 	t.Run("UpdateJobState", func(t *testing.T) {
 		t.Run("should reject unregistered events", func(t *testing.T) {
 			runService := service.NewJobRunService(logger,
-				nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+				nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			event := &scheduler.Event{
 				JobName: jobName,
@@ -99,7 +99,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					jobRepo, jobRunRepository, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					jobRepo, jobRunRepository, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				event := &scheduler.Event{
 					JobName:        jobName,
@@ -148,7 +148,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepository.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					jobRepo, jobRunRepository, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					jobRepo, jobRunRepository, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				event := &scheduler.Event{
 					JobName:        jobName,
@@ -240,7 +240,7 @@ func TestJobRunService(t *testing.T) {
 				defer eventHandler.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					jobRepo, jobRunRepo, nil, operatorRunRepo, nil, nil, nil, nil, eventHandler, projectGetter, feats)
+					jobRepo, jobRunRepo, nil, operatorRunRepo, nil, nil, nil, nil, eventHandler, projectGetter, feats, nil)
 
 				err = runService.UpdateJobState(ctx, event)
 				assert.Nil(t, err)
@@ -283,7 +283,7 @@ func TestJobRunService(t *testing.T) {
 				defer eventHandler.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, eventHandler, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, eventHandler, nil, feats, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.Nil(t, err)
@@ -344,7 +344,7 @@ func TestJobRunService(t *testing.T) {
 					defer jobRunRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
-						nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+						nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.NotNil(t, err)
@@ -365,7 +365,7 @@ func TestJobRunService(t *testing.T) {
 					projectGetter.On("Get", ctx, projName).Return(project, nil)
 
 					runService := service.NewJobRunService(logger,
-						jobRepo, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats)
+						jobRepo, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.NotNil(t, err)
@@ -386,7 +386,7 @@ func TestJobRunService(t *testing.T) {
 					defer jobRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
-						jobRepo, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats)
+						jobRepo, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.NotNil(t, err)
@@ -414,7 +414,7 @@ func TestJobRunService(t *testing.T) {
 					defer jobRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
-						jobRepo, jobRunRepo, nil, nil, nil, nil, nil, nil, eventHandler, projectGetter, feats)
+						jobRepo, jobRunRepo, nil, nil, nil, nil, nil, nil, eventHandler, projectGetter, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.Nil(t, err)
@@ -444,7 +444,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.NotNil(t, err)
@@ -471,7 +471,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.NotNil(t, err)
@@ -498,7 +498,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.NotNil(t, err)
@@ -560,7 +560,7 @@ func TestJobRunService(t *testing.T) {
 						Return(&job, nil)
 
 					runService := service.NewJobRunService(logger,
-						jobRepo, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats)
+						jobRepo, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.Nil(t, err)
@@ -619,7 +619,7 @@ func TestJobRunService(t *testing.T) {
 					defer eventHandler.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
-						nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats)
+						nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.NotNil(t, err)
@@ -649,7 +649,7 @@ func TestJobRunService(t *testing.T) {
 					defer eventHandler.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
-						nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats)
+						nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.NotNil(t, err)
@@ -684,7 +684,7 @@ func TestJobRunService(t *testing.T) {
 					defer slaRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
-						nil, jobRunRepo, nil, operatorRunRepository, slaRepo, nil, nil, nil, nil, nil, feats)
+						nil, jobRunRepo, nil, operatorRunRepository, slaRepo, nil, nil, nil, nil, nil, feats, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.Nil(t, err)
@@ -714,7 +714,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.NotNil(t, err)
@@ -755,7 +755,7 @@ func TestJobRunService(t *testing.T) {
 				// operatorRunRepository.On("UpdateOperatorRun", ctx, scheduler.OperatorSensor, operatorRun.ID, eventTime, "success").Return(nil)
 				defer operatorRunRepository.AssertExpectations(t)
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.NotNil(t, err)
@@ -822,7 +822,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 				err := runService.UpdateJobState(ctx, event)
 				assert.Nil(t, err)
@@ -845,7 +845,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+				jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 			executorInput, err := runService.JobRunInput(ctx, projName, jobName, scheduler.RunConfig{})
 			assert.Nil(t, executorInput)
 			assert.NotNil(t, err)
@@ -905,7 +905,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobInputCompiler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats)
+				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats, nil)
 			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
 
 			assert.Equal(t, &dummyExecutorInput, executorInput)
@@ -967,7 +967,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobInputCompiler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats)
+				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats, nil)
 			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
 
 			assert.Equal(t, &dummyExecutorInput, executorInput)
@@ -1022,7 +1022,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobInputCompiler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats)
+				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats, nil)
 			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
 
 			assert.Equal(t, &dummyExecutorInput, executorInput)
@@ -1076,7 +1076,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobInputCompiler.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats)
+				jobRepo, jobRunRepo, jobReplayRepo, nil, nil, nil, nil, jobInputCompiler, nil, nil, feats, nil)
 			executorInput, err := runService.JobRunInput(ctx, projName, jobName, runConfig)
 
 			assert.Nil(t, err)
@@ -1111,7 +1111,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+				jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, criteria)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "unable to get job details for jobName: sample_select, project:proj")
@@ -1158,7 +1158,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobRunRepo.AssertExpectations(t)
 
 			runService := service.NewJobRunService(logger,
-				jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter, feats)
+				jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter, feats, nil)
 			var err error
 			var returnedRuns []*scheduler.JobRunStatus
 			returnedRuns, _, err = runService.GetJobRuns(ctx, projName, jobName, criteria)
@@ -1306,7 +1306,7 @@ func TestJobRunService(t *testing.T) {
 					defer jobRunRepo.AssertExpectations(t)
 
 					runService := service.NewJobRunService(logger,
-						jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter, feats)
+						jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter, feats, nil)
 					returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, scenario.input)
 					assert.Nil(t, err)
 					assert.Equal(t, scenario.expectedResult, returnedRuns)
@@ -1387,7 +1387,7 @@ func TestJobRunService(t *testing.T) {
 			sch.On("GetJobRuns", ctx, tnnt, criteria, jobCron).Return(runs, nil)
 			defer sch.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter, feats)
+			runService := service.NewJobRunService(logger, jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter, feats, nil)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Nil(t, err)
 			assert.Equal(t, 2, len(returnedRuns))
@@ -1421,7 +1421,7 @@ func TestJobRunService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "unable to parse job cron interval: expected exactly 5 fields, found 2: [invalid interval]")
@@ -1455,7 +1455,7 @@ func TestJobRunService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "cannot get job runs, job interval is empty")
@@ -1491,7 +1491,7 @@ func TestJobRunService(t *testing.T) {
 			jobRepo := new(JobRepository)
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
-			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats)
+			runService := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats, nil)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "job schedule startDate not found in job")
@@ -1544,7 +1544,7 @@ func TestJobRunService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 			defer jobRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, nil, feats, nil)
 			returnedRuns, _, err := runService.GetJobRuns(ctx, projName, jobName, criteria)
 			assert.Nil(t, err)
 			assert.Equal(t, runs, returnedRuns)
@@ -1563,7 +1563,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 				returnedRuns, count := runService.FilterRunsV3(ctx, tnnt, criteria)
 				assert.Equal(t, -1, count)
 				assert.Nil(t, returnedRuns)
@@ -1587,7 +1587,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 				returnedRuns, count := runService.FilterRunsV3(ctx, tnnt, criteria)
 				assert.Equal(t, 1, count)
 				assert.Equal(t, 1, len(returnedRuns))
@@ -1611,7 +1611,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 				returnedRuns, count := runService.FilterRunsV3(ctx, tnnt, criteria)
 				assert.Equal(t, 0, count)
 				assert.Equal(t, 1, len(returnedRuns))
@@ -1642,7 +1642,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 				returnedRuns, count := runService.FilterRunsV3(ctx, tnnt, criteria)
 				assert.Equal(t, 1, count)
 				assert.Equal(t, 3, len(returnedRuns))
@@ -1689,7 +1689,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 				returnedRuns, count := runService.FilterRunsV3(ctx, tnnt, criteria)
 				assert.Equal(t, 1, count)
 				assert.Equal(t, 5, len(returnedRuns))
@@ -1731,7 +1731,7 @@ func TestJobRunService(t *testing.T) {
 				defer jobRunRepo.AssertExpectations(t)
 
 				runService := service.NewJobRunService(logger,
-					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+					nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 				returnedRuns, count := runService.FilterRunsV3(ctx, tnnt, criteria)
 				assert.Equal(t, 24, count)
 				assert.Equal(t, 24, len(returnedRuns))
@@ -1748,7 +1748,7 @@ func TestJobRunService(t *testing.T) {
 
 			projectGetter.On("Get", ctx, projName).Return(nil, errors.NewError(errors.ErrInternalError, tenant.EntityProject, "unexpected error"))
 
-			service := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats)
+			service := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats, nil)
 
 			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
 
@@ -1767,7 +1767,7 @@ func TestJobRunService(t *testing.T) {
 
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(nil, errors.NewError(errors.ErrInternalError, job.EntityJob, "unexpected error"))
 
-			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats)
+			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats, nil)
 
 			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
 
@@ -1802,7 +1802,7 @@ func TestJobRunService(t *testing.T) {
 			}
 
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(job, nil)
-			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats)
+			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats, nil)
 
 			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
 
@@ -1835,7 +1835,7 @@ func TestJobRunService(t *testing.T) {
 
 			jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(job, nil)
 
-			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats)
+			service := service.NewJobRunService(logger, jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, projectGetter, feats, nil)
 
 			actualInterval, actualError := service.GetInterval(ctx, projName, jobName, referenceTime)
 
@@ -1862,7 +1862,7 @@ func TestJobRunService(t *testing.T) {
 			}, nil)
 			defer jobRunRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			filters := []filter.FilterOpt{
 				filter.WithTime(filter.StartDate, startDate),
@@ -1891,7 +1891,7 @@ func TestJobRunService(t *testing.T) {
 			jobRunRepo.On("GetLatestRun", ctx, projName, jobName, &runState).Return(jobRun, nil)
 			defer jobRunRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			filters := []filter.FilterOpt{
 				filter.WithString(filter.RunState, runState.String()),
@@ -1914,7 +1914,7 @@ func TestJobRunService(t *testing.T) {
 			jobRunRepo.On("GetRunsByTimeRange", ctx, projName, jobName, &runState, startDate, endDate).Return(runsByTimeRange, fmt.Errorf("some error"))
 			defer jobRunRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			filters := []filter.FilterOpt{
 				filter.WithTime(filter.StartDate, startDate),
@@ -1936,7 +1936,7 @@ func TestJobRunService(t *testing.T) {
 			jobRunRepo.On("GetLatestRun", ctx, projName, jobName, &runState).Return(jobRun, fmt.Errorf("some error"))
 			defer jobRunRepo.AssertExpectations(t)
 
-			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, jobRunRepo, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			filters := []filter.FilterOpt{
 				filter.WithString(filter.RunState, runState.String()),
@@ -2019,7 +2019,7 @@ func TestJobRunService(t *testing.T) {
 			// 2023-12-15 08:00 UTC
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
 				upstreamJob.Schedule.Interval, downstreamScheduledAt)
@@ -2038,7 +2038,7 @@ func TestJobRunService(t *testing.T) {
 		t.Run("should return recent schedule if downstream schedule = upstream schedule", func(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
 				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
@@ -2057,7 +2057,7 @@ func TestJobRunService(t *testing.T) {
 		t.Run("should return multiple expected run schedules for multi-day window config", func(t *testing.T) {
 			downstreamScheduledAt := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithMultiDayConfig.Schedule.Interval, sourceJobWithMultiDayConfig.Job.WindowConfig,
 				upstreamJobWithEqualSchedule.Schedule.Interval, downstreamScheduledAt)
@@ -2092,7 +2092,7 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval,
@@ -2119,7 +2119,7 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
@@ -2152,7 +2152,7 @@ func TestJobRunService(t *testing.T) {
 
 			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
 
-			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats)
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
 
 			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
 				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,

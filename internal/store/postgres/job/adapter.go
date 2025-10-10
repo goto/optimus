@@ -119,6 +119,8 @@ type Asset struct {
 type SLAAlertConfig struct {
 	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
 	Severity          string        `json:"severity,omitempty"`
+	Team              string        `json:"team,omitempty"`
+	AutoThreshold     bool          `json:"auto_threshold,omitempty"`
 }
 
 type OperatorAlertConfig struct {
@@ -307,6 +309,8 @@ func toStorageOperatorAlert(alertConfig *job.OperatorAlertConfig) *OperatorAlert
 			slaAlert[i] = &SLAAlertConfig{
 				DurationThreshold: alert.DurationThreshold,
 				Severity:          alert.Severity.String(),
+				Team:              alert.Team,
+				AutoThreshold:     alert.AutoThreshold,
 			}
 		}
 		storageAlertConfig.SLAAlertConfigs = slaAlert
@@ -674,6 +678,8 @@ func fromStorageOperatorAlert(opAlertConfig *OperatorAlertConfig) (*job.Operator
 			alertConfig.SLAAlertConfigs[i] = &job.SLAAlertConfig{
 				DurationThreshold: alert.DurationThreshold,
 				Severity:          severity,
+				AutoThreshold:     alert.AutoThreshold,
+				Team:              alert.Team,
 			}
 		}
 	}

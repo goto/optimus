@@ -112,16 +112,23 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, job *scheduler.Job
 	var alertTeam string
 	var alertSeverity scheduler.Severity
 	var alertMsg string
-	if alertConfig != nil {
-		alertTeam = job.Tenant.NamespaceName().String()
-		alertSeverity = scheduler.Warning
-		if alertConfig.Team != "" {
-			alertTeam = alertConfig.Team
+	alertTeam = job.Tenant.NamespaceName().String()
+	alertSeverity = scheduler.Warning
+	if alertConfig.Team != "" {
+		alertTeam = alertConfig.Team
+	}
+	slaAlertConfig := alertConfig.GetSLAOperatorAlertConfigByTag(slaObj.AlertTag)
+	if slaAlertConfig != nil {
+		alertSeverity = slaAlertConfig.Severity
+		if slaAlertConfig.Team != "" {
+			alertTeam = slaAlertConfig.Team
 		}
-		slaAlertConfig := alertConfig.GetSLAOperatorAlertConfigByTag(slaObj.AlertTag)
-		if slaAlertConfig != nil {
-			alertSeverity = slaAlertConfig.Severity
-			alertMsg = fmt.Sprintf("%s: %s, durationSLA: %s", slaObj.OperatorType.String(), slaObj.OperatorName, slaAlertConfig.DurationThreshold.String())
+		alertMsg = fmt.Sprintf("%s: %s", slaObj.OperatorType.String(), slaObj.OperatorName)
+		if slaAlertConfig.AutoThreshold {
+			autoThresholdDuration := slaObj.SLATime.Sub(slaObj.OperatorStartTime)
+			alertMsg += fmt.Sprintf(" Automatic Trend based SLA alert, Determined Duration Threshold: %s", autoThresholdDuration.String())
+		} else {
+			alertMsg += fmt.Sprintf(" Configured SLA Alert Duration: %s", slaAlertConfig.DurationThreshold.String())
 		}
 	}
 

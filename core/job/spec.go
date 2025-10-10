@@ -438,6 +438,8 @@ func (s Severity) String() string {
 type SLAAlertConfig struct {
 	DurationThreshold time.Duration
 	Severity          Severity
+	AutoThreshold     bool
+	Team              string
 }
 
 type OperatorAlertConfig struct {

@@ -232,9 +232,19 @@ func toOperatorAlert(alerts *pb.OperatorAlertConfig) (*job.OperatorAlertConfig, 
 			if err != nil {
 				return nil, err
 			}
+
 			alertConfig.SLAAlertConfigs[i] = &job.SLAAlertConfig{
-				DurationThreshold: alert.DurationThreshold.AsDuration(),
-				Severity:          severity,
+				Severity: severity,
+			}
+
+			if alert.AutoThreshold {
+				alertConfig.SLAAlertConfigs[i].AutoThreshold = true
+			} else {
+				alertConfig.SLAAlertConfigs[i].DurationThreshold = alert.DurationThreshold.AsDuration()
+			}
+
+			if alert.Team != "" {
+				alertConfig.SLAAlertConfigs[i].Team = alert.Team
 			}
 		}
 	}

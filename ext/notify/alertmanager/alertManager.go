@@ -47,12 +47,12 @@ var (
 )
 
 type AlertPayload struct {
-	Project  string            `json:"-"`
-	LogTag   string            `json:"-"`
-	Data     map[string]string `json:"data"`
-	Template string            `json:"template"`
-	Labels   map[string]string `json:"labels"`
-	Endpoint string            `json:"-"`
+	Project  string                 `json:"-"`
+	LogTag   string                 `json:"-"`
+	Data     map[string]interface{} `json:"data"`
+	Template string                 `json:"template"`
+	Labels   map[string]string      `json:"labels"`
+	Endpoint string                 `json:"-"`
 }
 
 type AlertManager struct {

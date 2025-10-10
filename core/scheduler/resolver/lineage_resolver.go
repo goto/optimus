@@ -221,7 +221,6 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 	}
 
 	visited[jobName] = true
-	defer delete(visited, jobName)
 
 	var upstreams []*scheduler.JobLineageSummary
 	for _, upstreamName := range lineageData.UpstreamsByJob[jobName] {

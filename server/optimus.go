@@ -412,7 +412,8 @@ func (s *OptimusServer) setupHandlers() error {
 	jobLineageService := schedulerService.NewJobLineageService(s.logger, lineageBuilder)
 
 	// SLA Predictor Service
-	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, jobLineageService, newDurationEstimatorService, jobProviderRepo)
+
+	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService)
 
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)

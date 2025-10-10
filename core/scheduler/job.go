@@ -159,6 +159,8 @@ func (s Severity) String() string {
 type SLAAlertConfig struct {
 	DurationThreshold time.Duration `json:"duration_threshold,omitempty"`
 	Severity          Severity      `json:"severity,omitempty"`
+	Team              string        `json:"team,omitempty"`
+	AutoThreshold     bool          `json:"auto_threshold,omitempty"`
 }
 
 func (s SLAAlertConfig) Tag() string {
@@ -291,6 +293,27 @@ func (s *Schedule) GetScheduleStartTime() (time.Time, error) {
 	logicalStartTime := jobCron.Next(s.StartDate.Add(-time.Second * 1))
 	scheduleStartTime := jobCron.Next(logicalStartTime)
 	return scheduleStartTime, nil
+}
+
+func (s *Schedule) GetNextSchedule(after time.Time) (time.Time, error) {
+	if s.StartDate.IsZero() {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "job schedule startDate not found in job")
+	}
+	interval := s.Interval
+	if interval == "" {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "cannot get job schedule start date, job interval is empty")
+	}
+	jobCron, err := cron.ParseCronSchedule(interval)
+	if err != nil {
+		msg := fmt.Sprintf("unable to parse job cron interval: %s", err)
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, msg)
+	}
+
+	if after.Before(s.StartDate) {
+		return s.GetScheduleStartTime()
+	}
+
+	return jobCron.Next(after), nil
 }
 
 func (j *JobWithDetails) GetLabelsAsString() string {

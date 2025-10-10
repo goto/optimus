@@ -28,6 +28,10 @@ const (
 	WarningSeverity  = "WARNING"
 	CriticalSeverity = "CRITICAL"
 	DefaultSeverity  = WarningSeverity
+
+	DefaultChannelLabel = "team"
+	SeverityLabel       = "severity"
+	EnvironmentLabel    = "environment"
 )
 
 type ReplayEventType string
@@ -55,13 +59,13 @@ func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType sched
 		if eventType.IsOfType(notify.On) {
 			severity = getSeverity(notify.Severity)
 			if len(notify.Team) > 0 {
-				alertPayload.Labels["team"] = notify.Team
+				alertPayload.Labels[DefaultChannelLabel] = notify.Team
 			} else {
-				alertPayload.Labels["team"] = jobDetails.Job.Tenant.NamespaceName().String()
+				alertPayload.Labels[DefaultChannelLabel] = jobDetails.Job.Tenant.NamespaceName().String()
 			}
-			alertPayload.Labels["severity"] = severity
+			alertPayload.Labels[SeverityLabel] = severity
 			if severity == CriticalSeverity {
-				alertPayload.Labels["environment"] = "production"
+				alertPayload.Labels[EnvironmentLabel] = "production"
 			}
 			return
 		}
@@ -85,13 +89,13 @@ func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttr
 		},
 		Template: operatorSLAMissTemplate,
 		Labels: map[string]string{
-			"team":     attr.Team,
-			"severity": attr.Severity,
+			DefaultChannelLabel: attr.Team,
+			SeverityLabel:       attr.Severity,
 		},
 		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
 	if attr.Severity == CriticalSeverity {
-		alertPayload.Labels["environment"] = "production"
+		alertPayload.Labels[EnvironmentLabel] = "production"
 	}
 
 	a.relay(alertPayload)
@@ -231,8 +235,8 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 		},
 		Template: externalTables,
 		Labels: map[string]string{
-			"team":     attr.Tenant.NamespaceName().String(),
-			"severity": "WARNING",
+			DefaultChannelLabel: attr.Tenant.NamespaceName().String(),
+			SeverityLabel:       WarningSeverity,
 		},
 		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
 	})
@@ -253,8 +257,8 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 		},
 		Template: potentialSLABreachTemplate,
 		Labels: map[string]string{
-			"team":     attr.TeamName,
-			"severity": WarningSeverity,
+			DefaultChannelLabel: attr.TeamName,
+			SeverityLabel:       WarningSeverity,
 		},
 		Endpoint: a.endpoint,
 	})

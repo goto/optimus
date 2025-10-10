@@ -14,14 +14,18 @@ type DurationEstimatorRepo interface {
 type DurationEstimatorService struct {
 	lastNRuns         int
 	bufferPercentage  int
+	minBufferDuration time.Duration
+	maxBufferDuration time.Duration
 	durationEstimator DurationEstimatorRepo
 }
 
-func NewDurationEstimatorService(durationEstimator DurationEstimatorRepo, lastNRuns, bufferPercentage int) *DurationEstimatorService {
+func NewDurationEstimatorService(durationEstimator DurationEstimatorRepo, lastNRuns, bufferPercentage, minBufferMinutes, maxBufferMinutes int) *DurationEstimatorService {
 	return &DurationEstimatorService{
 		durationEstimator: durationEstimator,
 		lastNRuns:         lastNRuns,
 		bufferPercentage:  bufferPercentage,
+		minBufferDuration: time.Duration(minBufferMinutes) * time.Minute,
+		maxBufferDuration: time.Duration(maxBufferMinutes) * time.Minute,
 	}
 }
 
@@ -55,8 +59,9 @@ func (s *DurationEstimatorService) GetP95DurationByJobNamesByHookName(ctx contex
 func (s *DurationEstimatorService) calculateBufferedDuration(jobDurations map[scheduler.JobName]*time.Duration) map[scheduler.JobName]*time.Duration {
 	for jobName, duration := range jobDurations {
 		if duration != nil && s.bufferPercentage > 0 {
-			bufferedDuration := time.Duration(int(duration.Milliseconds()) * (100 + s.bufferPercentage) / 100)
-			jobDurations[jobName] = &bufferedDuration
+			bufferedDuration := time.Second * time.Duration(duration.Seconds()*(1+float64(s.bufferPercentage)/100))
+			adjustedBuffer := time.Millisecond * time.Duration(min(max(s.minBufferDuration.Milliseconds(), bufferedDuration.Milliseconds()), s.maxBufferDuration.Milliseconds()))
+			jobDurations[jobName] = &adjustedBuffer
 		}
 	}
 	return jobDurations

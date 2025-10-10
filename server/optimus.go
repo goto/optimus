@@ -40,6 +40,7 @@ import (
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/store/postgres"
+	"github.com/goto/optimus/internal/store/postgres/alerts"
 	jRepo "github.com/goto/optimus/internal/store/postgres/job"
 	"github.com/goto/optimus/internal/store/postgres/resource"
 	schedulerRepo "github.com/goto/optimus/internal/store/postgres/scheduler"
@@ -320,6 +321,8 @@ func (s *OptimusServer) setupHandlers() error {
 		},
 	)
 
+	alertsLogRepo := alerts.NewAlertRepository(s.dbPool)
+
 	alertsHandler := new(alertmanager.AlertManager)
 	if s.conf.Alerting.EventManager.Enabled {
 		alertsHandler = alertmanager.New(
@@ -329,6 +332,7 @@ func (s *OptimusServer) setupHandlers() error {
 			s.conf.Alerting.EventManager.Endpoint,
 			s.conf.Alerting.Dashboard,
 			s.conf.Alerting.DataConsole,
+			alertsLogRepo,
 		)
 	}
 
@@ -357,10 +361,14 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames, alertsHandler,
 	)
 
+	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(jobRunRepo,
+		s.conf.Alerting.PotentialSLABreachConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.PaddingPercentage,
+		s.conf.Alerting.PotentialSLABreachConfig.MinPaddingMinutes, s.conf.Alerting.PotentialSLABreachConfig.MaxPaddingMinutes)
+
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, slaRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
-		s.conf.Features,
+		s.conf.Features, newDurationEstimatorService,
 	)
 
 	newSchedulerService := schedulerService.NewSchedulerService(newScheduler)
@@ -408,7 +416,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jobLineageService := schedulerService.NewJobLineageService(s.logger, lineageBuilder)
 
 	// SLA Predictor Service
-	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(jobRunRepo, s.conf.Alerting.PotentialSLABreachConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.BufferPercentage)
+
 	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService)
 
 	// Resource Bounded Context

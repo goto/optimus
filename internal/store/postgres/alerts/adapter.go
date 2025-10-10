@@ -27,7 +27,7 @@ func toDBSpec(payload *alertmanager.AlertPayload) (*AlertLog, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &AlertLog{
 		Project:  payload.Project,
 		Data:     dataJSON,

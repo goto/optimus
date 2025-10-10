@@ -101,37 +101,37 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 }
 
 func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
-	eventId := uuid.New()
+	eventID := uuid.New()
 	payloadJSON, err := json.Marshal(alertPayload)
 	if err != nil {
-		return fmt.Errorf("[alert manager] %s unable to serialise request body err: %w", eventId, err)
+		return fmt.Errorf("[alert manager] %s unable to serialise request body err: %w", eventID, err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
 	defer cancel()
 	endpoint := alertPayload.Endpoint
 
-	a.logger.Debug(fmt.Sprintf("[alert manager] %s sending request to alert manager url:%s, body:%s", eventId, endpoint, payloadJSON))
+	a.logger.Debug(fmt.Sprintf("[alert manager] %s sending request to alert manager url:%s, body:%s", eventID, endpoint, payloadJSON))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
-		return fmt.Errorf("[alert manager] %s unable to prepare request for Alert Manager err: %w", eventId, err)
+		return fmt.Errorf("[alert manager] %s unable to prepare request for Alert Manager err: %w", eventID, err)
 	}
 	req.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("[alert manager] %s unable to send request to Alert Manager err: %w", eventId, err)
+		return fmt.Errorf("[alert manager] %s unable to send request to Alert Manager err: %w", eventID, err)
 	}
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return fmt.Errorf("[alert manager] %s unable to read response body err: %w", eventId, err)
+		return fmt.Errorf("[alert manager] %s unable to read response body err: %w", eventID, err)
 	}
-	a.logger.Debug(fmt.Sprintf("[alert manager] %s  response code:%s, resp:%s, eventId: %s", eventId, res.Status, body))
+	a.logger.Debug(fmt.Sprintf("[alert manager] %s  response code:%s, resp:%s", eventID, res.Status, body))
 
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("[alert manager] %s non 200 status code received status: %s", eventId, res.Status)
+		return fmt.Errorf("[alert manager] %s non 200 status code received status: %s", eventID, res.Status)
 	}
 
 	return res.Body.Close()

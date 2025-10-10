@@ -358,8 +358,8 @@ func (s *OptimusServer) setupHandlers() error {
 	)
 
 	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(jobRunRepo,
-		s.conf.Alerting.PotentialSLABreachConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.BufferPercentage,
-		s.conf.Alerting.PotentialSLABreachConfig.MinBufferMinutes, s.conf.Alerting.PotentialSLABreachConfig.MaxBufferMinutes)
+		s.conf.Alerting.PotentialSLABreachConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.PaddingPercentage,
+		s.conf.Alerting.PotentialSLABreachConfig.MinPaddingMinutes, s.conf.Alerting.PotentialSLABreachConfig.MaxPaddingMinutes)
 
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, slaRepository,

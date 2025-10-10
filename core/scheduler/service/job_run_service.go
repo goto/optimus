@@ -848,6 +848,7 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 	for _, slaAlertConfig := range slaAlertConfigs {
 		slaDuration, err := s.GetSLADuration(ctx, jobName, operatorName, operatorType.String(), slaAlertConfig)
 		if err != nil {
+			s.l.Error("unable to get sla duration, skipping sla registration for jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s, err: %s", jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag(), err.Error())
 			return err
 		}
 		if slaDuration == nil {

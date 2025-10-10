@@ -216,7 +216,6 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 		if job.Schedule == nil {
 			continue
 		}
-		s.l.Info("interval", "job", job.Name, "interval", job.Schedule.Interval)
 		scheduledAt, err := job.Schedule.GetNextSchedule(referenceTime)
 		if err != nil {
 			s.l.Warn("failed to get scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)

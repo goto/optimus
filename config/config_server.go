@@ -47,7 +47,6 @@ type AlertingConfig struct {
 	DataConsole              string                  `mapstructure:"data_console"`
 	EnableSlack              bool                    `mapstructure:"enable_slack"`
 	EnablePagerDuty          bool                    `mapstructure:"enable_pager_duty"`
-	AlertingConfig           DurationEstimatorConfig `mapstructure:"alerting_config"`
 	PotentialSLABreachConfig DurationEstimatorConfig `mapstructure:"potential_sla_breach_config"`
 }
 

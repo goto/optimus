@@ -43,7 +43,7 @@ func TestAlertManager(t *testing.T) {
 		mockServer := httptest.NewServer(httpHandler)
 		defer mockServer.Close()
 		ctx := context.Background()
-		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url")
+		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", nil)
 		err := am.PrepareAndSendEvent(&alertmanager.AlertPayload{
 			Project: projectName,
 			LogTag:  jobName.String(),

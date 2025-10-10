@@ -216,6 +216,7 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 		if job.Schedule == nil {
 			continue
 		}
+		s.l.Info("interval", "job", job.Name, "interval", job.Schedule.Interval)
 		scheduledAt, err := job.Schedule.GetNextSchedule(referenceTime)
 		if err != nil {
 			s.l.Warn("failed to get scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
@@ -314,7 +315,6 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 				// found a job that might breach its SLA
 				potentialBreachPaths = append(potentialBreachPaths, paths)
 				// add to jobStateByName
-				// if _, ok := jobStateByName[job.JobName]; !ok {
 				jobStateByName[job.JobName] = &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],
 					JobName:       job.JobName,
@@ -331,7 +331,6 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 				// found a job that might breach its SLA
 				potentialBreachPaths = append(potentialBreachPaths, paths)
 				// add to jobStateByName
-				// if _, ok := jobStateByName[job.JobName]; !ok {
 				jobStateByName[job.JobName] = &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],
 					JobName:       job.JobName,
@@ -346,7 +345,6 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 
 		if isPotentialBreach {
 			s.l.Info("potential SLA breach found", "job", job.JobName, "inferred_sla", inferredSLA, "duration", jobSLAStates[job.JobName].EstimatedDuration, "path", paths)
-			continue // do not need to check its upstream jobs
 		}
 
 		for _, upstreamJob := range job.Upstreams {

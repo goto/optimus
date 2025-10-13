@@ -251,6 +251,11 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 		}
 	}
 
+	severity := attr.Severity
+	if severity == "" || (severity != InfoSeverity && severity != WarningSeverity && severity != CriticalSeverity) {
+		severity = WarningSeverity
+	}
+
 	a.relay(&AlertPayload{
 		Data: map[string]interface{}{
 			"content": content,
@@ -258,7 +263,7 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 		Template: potentialSLABreachTemplate,
 		Labels: map[string]string{
 			DefaultChannelLabel: attr.TeamName,
-			SeverityLabel:       WarningSeverity,
+			SeverityLabel:       severity,
 		},
 		Endpoint: a.endpoint,
 	})

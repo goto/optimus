@@ -66,7 +66,7 @@ func NewJobSLAPredictorService(l log.Logger, jobLineageFetcher JobLineageFetcher
 	}
 }
 
-func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
+func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
 	// map of jobName -> map of upstreamJobName -> JobState
 	jobBreaches := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
 
@@ -136,7 +136,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 
 	if enableAlert && len(jobBreaches) > 0 {
 		s.l.Info("potential SLA breaches found", "count", len(jobBreaches))
-		s.sendAlert(ctx, jobBreaches)
+		s.sendAlert(ctx, jobBreaches, severity)
 	}
 
 	return jobBreaches, nil
@@ -380,7 +380,7 @@ func (*JobSLAPredictorService) populateJobSLAStates(jobDurations map[scheduler.J
 }
 
 // sendAlert sends an alert to the potentialSLANotifier with the job breaches information.
-func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[scheduler.JobName]map[scheduler.JobName]*JobState) {
+func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[scheduler.JobName]map[scheduler.JobName]*JobState, severity string) {
 	jobToUpstreamsCause := make(map[string][]scheduler.UpstreamAttrs)
 	for jobName, upstreamCauses := range jobBreaches {
 		upstreamAttrs := make([]scheduler.UpstreamAttrs, 0, len(upstreamCauses))
@@ -427,6 +427,7 @@ func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[
 		s.potentialSLANotifier.SendPotentialSLABreach(&scheduler.PotentialSLABreachAttrs{
 			TeamName:            teamName,
 			JobToUpstreamsCause: jobToUpstreamsCause,
+			Severity:            severity,
 		})
 	}
 }

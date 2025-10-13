@@ -247,35 +247,153 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 		}
 	}
 
-	query := getQueryTaskAndHooks(lastNRuns, percentile, taskNames, hookNames)
-
-	args := []interface{}{jobNames}
+	jobTaskDurations := make(map[scheduler.JobName]*time.Duration)
+	jobHookDurations := make(map[scheduler.JobName]*time.Duration)
+	var err error
 	if len(taskNames) > 0 {
-		args = append(args, taskNames)
+		jobTaskDurations, err = j.getTaskDuration(ctx, jobNames, taskNames, lastNRuns, percentile)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if len(hookNames) > 0 {
-		args = append(args, hookNames)
+		jobHookDurations, err = j.getHookDuration(ctx, jobNames, hookNames, lastNRuns, percentile)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	rows, err := j.db.Query(ctx, query, args...)
+	// merge task and hook durations
+	jobDurations := make(map[scheduler.JobName]*time.Duration)
+	for jobName, duration := range jobTaskDurations {
+		jobDurations[jobName] = duration
+	}
+	for jobName, duration := range jobHookDurations {
+		if existingDuration, ok := jobDurations[jobName]; ok {
+			// sum durations if both task and hook exist for the job
+			sum := *existingDuration + *duration
+			jobDurations[jobName] = &sum
+		} else {
+			jobDurations[jobName] = duration
+		}
+	}
+
+	return jobDurations, nil
+}
+
+func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName, taskNames []string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+	if len(jobNames) == 0 || len(taskNames) == 0 {
+		return map[scheduler.JobName]*time.Duration{}, nil
+	}
+	query := getQueryTask(lastNRuns, percentile)
+	rows, err := j.db.Query(ctx, query, jobNames, taskNames)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 	}
 	jobDurations := make(map[scheduler.JobName]*time.Duration)
 	for rows.Next() {
 		var jobName string
-		var p95DurationSeconds float64
-		err := rows.Scan(&jobName, &p95DurationSeconds)
+		var percentileDurationSeconds float64
+		err := rows.Scan(&jobName, &percentileDurationSeconds)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return map[scheduler.JobName]*time.Duration{}, nil
 			}
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration on scan", err)
 		}
-		duration := time.Duration(p95DurationSeconds * float64(time.Second))
+		duration := time.Duration(percentileDurationSeconds * float64(time.Second))
 		jobDurations[scheduler.JobName(jobName)] = &duration
 	}
 	return jobDurations, nil
+}
+
+func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName, hookNames []string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+	if len(jobNames) == 0 || len(hookNames) == 0 {
+		return map[scheduler.JobName]*time.Duration{}, nil
+	}
+	query := getQueryHook(lastNRuns, percentile)
+	rows, err := j.db.Query(ctx, query, jobNames, hookNames)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
+	}
+	jobDurations := make(map[scheduler.JobName]*time.Duration)
+	for rows.Next() {
+		var jobName string
+		var percentileDurationSeconds float64
+		err := rows.Scan(&jobName, &percentileDurationSeconds)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return map[scheduler.JobName]*time.Duration{}, nil
+			}
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration on scan", err)
+		}
+		duration := time.Duration(percentileDurationSeconds * float64(time.Second))
+		jobDurations[scheduler.JobName(jobName)] = &duration
+	}
+	return jobDurations, nil
+}
+
+func getQueryTask(lastNRuns, percentile int) string {
+	query := fmt.Sprintf(`
+	WITH last_n_runs AS (
+		SELECT
+			j.id AS job_run_id,
+			j.job_name,
+			t.start_time,
+			t.end_time,
+			ROW_NUMBER() OVER (
+				PARTITION BY j.job_name
+				ORDER BY j.scheduled_at DESC
+			) AS rn
+		FROM job_run j
+		JOIN task_run t ON t.job_run_id = j.id
+		WHERE t.end_time IS NOT NULL
+		AND j.job_name = ANY($1)
+		AND t.name = ANY($2)
+	)
+	SELECT
+		job_name,
+		percentile_cont(0.%d) WITHIN GROUP (
+			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
+		) AS percentile_duration_seconds
+	FROM last_n_runs
+	WHERE rn <= %d
+	GROUP BY job_name
+	ORDER BY percentile_duration_seconds DESC;
+	`, percentile, lastNRuns)
+
+	return query
+}
+
+func getQueryHook(lastNRuns, percentile int) string {
+	query := fmt.Sprintf(`
+	WITH last_n_runs AS (
+		SELECT
+			j.id AS job_run_id,
+			j.job_name,
+			h.start_time,
+			h.end_time,
+			ROW_NUMBER() OVER (
+				PARTITION BY j.job_name
+				ORDER BY j.scheduled_at DESC
+			) AS rn
+		FROM job_run j
+		JOIN hook_run h ON h.job_run_id = j.id
+		WHERE h.end_time IS NOT NULL
+		AND j.job_name = ANY($1)
+	)
+	SELECT
+		job_name,
+		percentile_cont(0.%d) WITHIN GROUP (
+			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
+		) AS percentile_duration_seconds
+	FROM last_n_runs
+	WHERE rn <= %d
+	GROUP BY job_name
+	ORDER BY percentile_duration_seconds DESC;
+	`, percentile, lastNRuns)
+
+	return query
 }
 
 func getQueryTaskAndHooks(lastNRuns, percentile int, taskNames, hookNames []string) string {

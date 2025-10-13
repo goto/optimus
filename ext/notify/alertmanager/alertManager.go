@@ -166,9 +166,9 @@ func (a *AlertManager) worker(ctx context.Context) {
 			}
 			if e.HasDefaultChannelLabel() {
 				if err != nil {
-					a.alertsRepo.UpdateStatus(ctx, logID, alertDeliveryStatus, "")
-				} else {
 					a.alertsRepo.UpdateStatus(ctx, logID, alertDeliveryStatus, err.Error())
+				} else {
+					a.alertsRepo.UpdateStatus(ctx, logID, alertDeliveryStatus, "")
 				}
 			}
 

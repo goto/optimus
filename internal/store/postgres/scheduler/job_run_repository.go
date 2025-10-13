@@ -299,8 +299,7 @@ func getQueryTaskAndHooks(lastNRuns, percentile int, taskNames, hookNames []stri
 		SELECT
 			j.id AS job_run_id,
 			j.job_name,
-			t.start_time,
-			t.end_time,
+			COALESCE(SUM(EXTRACT(EPOCH FROM (t.end_time - t.start_time))), 0) AS task_duration_seconds,
 			COALESCE(SUM(EXTRACT(EPOCH FROM (h.end_time - h.start_time))), 0) AS hook_duration_seconds,
 			ROW_NUMBER() OVER (
 				PARTITION BY j.job_name
@@ -308,17 +307,16 @@ func getQueryTaskAndHooks(lastNRuns, percentile int, taskNames, hookNames []stri
 			) AS rn
 		FROM job_run j
 		JOIN task_run t ON t.job_run_id = j.id
-		LEFT JOIN hook_run h ON h.job_run_id = j.id
-		WHERE t.end_time IS NOT NULL
+		JOIN hook_run h ON h.job_run_id = j.id
 		AND j.job_name = ANY($1)
 		%s
 		%s
-		GROUP BY j.id, j.job_name, t.start_time, t.end_time
+		GROUP BY j.id, j.job_name
 	),
 	last_n_runs AS (
 		SELECT
 			job_name,
-			EXTRACT(EPOCH FROM (end_time - start_time)) + hook_duration_seconds AS total_duration_seconds,
+			task_duration_seconds + hook_duration_seconds AS total_duration_seconds,
 			rn
 		FROM task_and_hooks
 	)

@@ -2291,29 +2291,29 @@ func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, i
 	return args.Get(0).([]*scheduler.JobRunSummary), args.Error(1)
 }
 
-// GetP95DurationByJobNames provides a mock function with given fields: ctx, jobNames, tasks, lastNRuns
-func (m *mockJobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, tasks map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
-	ret := m.Called(ctx, jobNames, tasks, lastNRuns)
+// GetPercentileDurationByJobNames provides a mock function with given fields: ctx, jobNames, operators, lastNRuns, percentile
+func (m *mockJobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+	ret := m.Called(ctx, jobNames, operators, lastNRuns, percentile)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetP95DurationByJobNames")
+		panic("no return value specified for GetPercentileDurationByJobNames")
 	}
 
 	var r0 map[scheduler.JobName]*time.Duration
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int) (map[scheduler.JobName]*time.Duration, error)); ok {
-		return rf(ctx, jobNames, tasks, lastNRuns)
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int, int) (map[scheduler.JobName]*time.Duration, error)); ok {
+		return rf(ctx, jobNames, operators, lastNRuns, percentile)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int) map[scheduler.JobName]*time.Duration); ok {
-		r0 = rf(ctx, jobNames, tasks, lastNRuns)
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, map[string][]string, int, int) map[scheduler.JobName]*time.Duration); ok {
+		r0 = rf(ctx, jobNames, operators, lastNRuns, percentile)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(map[scheduler.JobName]*time.Duration)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, []scheduler.JobName, map[string][]string, int) error); ok {
-		r1 = rf(ctx, jobNames, tasks, lastNRuns)
+	if rf, ok := ret.Get(1).(func(context.Context, []scheduler.JobName, map[string][]string, int, int) error); ok {
+		r1 = rf(ctx, jobNames, operators, lastNRuns, percentile)
 	} else {
 		r1 = ret.Error(1)
 	}

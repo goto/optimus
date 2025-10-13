@@ -295,12 +295,14 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 	s.expectedServerConfig.Alerting.EventManager.Enabled = true
 	s.expectedServerConfig.Alerting.AutoSLABreachConfig = config.DurationEstimatorConfig{
 		LastNRuns:         7,
+		Percentile:        95,
 		PaddingPercentage: 0,
 		MinPaddingMinutes: 0,
 		MaxPaddingMinutes: 1000,
 	}
 	s.expectedServerConfig.Alerting.PotentialSLABreachConfig = config.DurationEstimatorConfig{
 		LastNRuns:         7,
+		Percentile:        95,
 		PaddingPercentage: 0,
 		MinPaddingMinutes: 0,
 		MaxPaddingMinutes: 1000,

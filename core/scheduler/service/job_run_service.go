@@ -67,7 +67,7 @@ type JobRunRepository interface {
 	GetRunsByTimeRange(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, status *scheduler.State, since, until time.Time) ([]*scheduler.JobRun, error)
 	GetRunsByInterval(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, interval interval.Interval) ([]*scheduler.JobRun, error)
 	GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error)
-	GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error)
 	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, interval interval.Interval, slaDefinitionInSec int64) error
 	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
@@ -817,13 +817,13 @@ func (s *JobRunService) GetSLADuration(ctx context.Context, jobName, operatorNam
 		var err error
 		switch operatorType {
 		case scheduler.ExecutorHook.String():
-			durationMap, err = s.durationEstimatorService.GetP95DurationByJobNamesByHookName(ctx, []scheduler.JobName{jobN}, []string{operatorName})
+			durationMap, err = s.durationEstimatorService.GetPercentileDurationByJobNamesByHookName(ctx, []scheduler.JobName{jobN}, []string{operatorName})
 			if err != nil {
 				return nil, err
 			}
 
 		case scheduler.ExecutorTask.String():
-			durationMap, err = s.durationEstimatorService.GetP95DurationByJobNamesByTask(ctx, []scheduler.JobName{jobN})
+			durationMap, err = s.durationEstimatorService.GetPercentileDurationByJobNamesByTask(ctx, []scheduler.JobName{jobN})
 			if err != nil {
 				return nil, err
 			}

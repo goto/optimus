@@ -32,7 +32,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		labels := map[string]string{}
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 		// then
 		assert.NoError(t, err)
 		assert.Len(t, jobBreachRootCause, 0)
@@ -53,7 +53,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -72,10 +72,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobNames := []scheduler.JobName{}
 		labels := map[string]string{"criticality": "critical"}
 
-		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels, false).Return([]*scheduler.JobWithDetails{}, nil).Once()
+		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels, false, "").Return([]*scheduler.JobWithDetails{}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -97,7 +97,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return(nil, assert.AnError).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.Error(t, err)
@@ -128,7 +128,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -163,7 +163,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -209,7 +209,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -257,7 +257,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher.On("GetJobLineage", ctx, mock.Anything).Return(nil, assert.AnError).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.Error(t, err)
@@ -318,10 +318,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 		})).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil)
-		durationEstimator.On("GetP95DurationByJobNames", ctx, []scheduler.JobName{jobA.Name}).Return(nil, assert.AnError).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, []scheduler.JobName{jobA.Name}).Return(nil, assert.AnError).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 		// then
 		assert.Error(t, err)
 		assert.Len(t, jobBreachRootCause, 0)
@@ -421,7 +421,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
-		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)
 		})).Return(map[scheduler.JobName]*time.Duration{
 			"job-A": func() *time.Duration { d := 20 * time.Minute; return &d }(),
@@ -430,7 +430,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -526,7 +526,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
-		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)
 		})).Return(map[scheduler.JobName]*time.Duration{
 			"job-A": func() *time.Duration { d := 20 * time.Minute; return &d }(),
@@ -535,7 +535,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -638,7 +638,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
-		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)
 		})).Return(map[scheduler.JobName]*time.Duration{
 			"job-A": func() *time.Duration { d := 20 * time.Minute; return &d }(),
@@ -647,7 +647,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -782,7 +782,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			jobASchedule1.JobName: jobA1Lineage,
 			jobASchedule2.JobName: jobA2Lineage,
 		}, nil).Once()
-		durationEstimator.On("GetP95DurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A1", "job-A2", "job-B", "job-C"}, jobNames)
 		})).Return(map[scheduler.JobName]*time.Duration{
 			"job-A1": func() *time.Duration { d := 20 * time.Minute; return &d }(), // target sla now + 30 mins
@@ -792,7 +792,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		}, nil).Once()
 
 		// when
-		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false)
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, nextScheduledRangeInHours, jobNames, labels, false, "")
 
 		// then
 		assert.NoError(t, err)
@@ -859,22 +859,72 @@ type DurationEstimator struct {
 	mock.Mock
 }
 
-func (_m *DurationEstimator) GetP95DurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
-	args := _m.Called(ctx, jobNames)
-	return args.Get(0).(map[scheduler.JobName]*time.Duration), args.Error(1)
-}
-
-func (_m *DurationEstimator) GetP95DurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error) {
-	args := _m.Called(ctx, jobNames, hookNames)
-	return args.Get(0).(map[scheduler.JobName]*time.Duration), args.Error(1)
-}
-
-// GetP95DurationByJobNames provides a mock function with given fields: ctx, jobNames
-func (_m *DurationEstimator) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
+// GetPercentileDurationByJobNames provides a mock function with given fields: ctx, jobNames
+func (_m *DurationEstimator) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
 	ret := _m.Called(ctx, jobNames)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetP95DurationByJobNames")
+		panic("no return value specified for GetPercentileDurationByJobNames")
+	}
+
+	var r0 map[scheduler.JobName]*time.Duration
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)); ok {
+		return rf(ctx, jobNames)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName) map[scheduler.JobName]*time.Duration); ok {
+		r0 = rf(ctx, jobNames)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[scheduler.JobName]*time.Duration)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []scheduler.JobName) error); ok {
+		r1 = rf(ctx, jobNames)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetPercentileDurationByJobNamesByHookName provides a mock function with given fields: ctx, jobNames, hookNames
+func (_m *DurationEstimator) GetPercentileDurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error) {
+	ret := _m.Called(ctx, jobNames, hookNames)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPercentileDurationByJobNamesByHookName")
+	}
+
+	var r0 map[scheduler.JobName]*time.Duration
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, []string) (map[scheduler.JobName]*time.Duration, error)); ok {
+		return rf(ctx, jobNames, hookNames)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobName, []string) map[scheduler.JobName]*time.Duration); ok {
+		r0 = rf(ctx, jobNames, hookNames)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[scheduler.JobName]*time.Duration)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []scheduler.JobName, []string) error); ok {
+		r1 = rf(ctx, jobNames, hookNames)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetPercentileDurationByJobNamesByTask provides a mock function with given fields: ctx, jobNames
+func (_m *DurationEstimator) GetPercentileDurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
+	ret := _m.Called(ctx, jobNames)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPercentileDurationByJobNamesByTask")
 	}
 
 	var r0 map[scheduler.JobName]*time.Duration
@@ -951,7 +1001,7 @@ func (_m *JobDetailsGetter) GetJobs(ctx context.Context, projectName tenant.Proj
 
 // GetJobsByLabels provides a mock function with given fields: ctx, projectName, labels
 func (_m *JobDetailsGetter) GetJobsByLabels(ctx context.Context, projectName tenant.ProjectName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
-	ret := _m.Called(ctx, projectName, labels, false)
+	ret := _m.Called(ctx, projectName, labels, false, "")
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetJobsByLabels")

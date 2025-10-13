@@ -409,7 +409,7 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 	FROM last_n_runs
 	WHERE rn <= %d
 	GROUP BY job_name, hook_name;
-	`, percentile, lastNRuns, hookFilter)
+	`, hookFilter, percentile, lastNRuns)
 
 	return query
 }

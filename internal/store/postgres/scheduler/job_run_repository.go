@@ -379,7 +379,6 @@ func getQueryTask(lastNRuns, percentile int) string {
 func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 	hookFilter := ""
 	if len(hookNames) > 0 {
-		// 		AND h.name = ANY($2)
 		hookFilter = " AND h.name = ANY($2) "
 	}
 
@@ -388,6 +387,7 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 		SELECT
 			j.id AS job_run_id,
 			j.job_name,
+			h.name AS hook_name,
 			h.start_time,
 			h.end_time,
 			ROW_NUMBER() OVER (
@@ -402,12 +402,13 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 	)
 	SELECT
 		job_name,
+		hook_name,
 		percentile_cont(0.%d) WITHIN GROUP (
 			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
 		) AS percentile_duration_seconds
 	FROM last_n_runs
 	WHERE rn <= %d
-	GROUP BY job_name;
+	GROUP BY job_name, hook_name;
 	`, percentile, lastNRuns, hookFilter)
 
 	return query

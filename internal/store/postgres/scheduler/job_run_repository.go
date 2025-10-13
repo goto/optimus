@@ -251,7 +251,7 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	jobHookDurations := make(map[scheduler.JobName]*time.Duration)
 	var err error
 	if len(taskNames) > 0 {
-		jobTaskDurations, err = j.getTaskDuration(ctx, jobNames, taskNames, lastNRuns, percentile)
+		jobTaskDurations, err = j.getTaskDuration(ctx, jobNames, lastNRuns, percentile)
 		if err != nil {
 			return nil, err
 		}
@@ -281,12 +281,12 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	return jobDurations, nil
 }
 
-func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName, taskNames []string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
-	if len(jobNames) == 0 || len(taskNames) == 0 {
+func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
 	query := getQueryTask(lastNRuns, percentile)
-	rows, err := j.db.Query(ctx, query, jobNames, taskNames)
+	rows, err := j.db.Query(ctx, query, jobNames)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 	}
@@ -349,7 +349,6 @@ func getQueryTask(lastNRuns, percentile int) string {
 		JOIN task_run t ON t.job_run_id = j.id
 		WHERE t.end_time IS NOT NULL
 		AND j.job_name = ANY($1)
-		AND t.name = ANY($2)
 	)
 	SELECT
 		job_name,
@@ -358,8 +357,7 @@ func getQueryTask(lastNRuns, percentile int) string {
 		) AS percentile_duration_seconds
 	FROM last_n_runs
 	WHERE rn <= %d
-	GROUP BY job_name
-	ORDER BY percentile_duration_seconds DESC;
+	GROUP BY job_name;
 	`, percentile, lastNRuns)
 
 	return query
@@ -381,6 +379,7 @@ func getQueryHook(lastNRuns, percentile int) string {
 		JOIN hook_run h ON h.job_run_id = j.id
 		WHERE h.end_time IS NOT NULL
 		AND j.job_name = ANY($1)
+		AND h.name = ANY($2)
 	)
 	SELECT
 		job_name,
@@ -389,63 +388,8 @@ func getQueryHook(lastNRuns, percentile int) string {
 		) AS percentile_duration_seconds
 	FROM last_n_runs
 	WHERE rn <= %d
-	GROUP BY job_name
-	ORDER BY percentile_duration_seconds DESC;
+	GROUP BY job_name;
 	`, percentile, lastNRuns)
-
-	return query
-}
-
-func getQueryTaskAndHooks(lastNRuns, percentile int, taskNames, hookNames []string) string {
-	taskFilter := ""
-	if len(taskNames) > 0 {
-		taskFilter = "AND t.name = ANY($2)"
-	}
-
-	hookFilter := ""
-	if len(hookNames) > 0 {
-		// Shift placeholder index if task filter exists
-		if len(taskNames) > 0 {
-			hookFilter = "AND h.name = ANY($3)"
-		} else {
-			hookFilter = "AND h.name = ANY($2)"
-		}
-	}
-
-	query := fmt.Sprintf(`
-	WITH task_and_hooks AS (
-		SELECT
-			j.id AS job_run_id,
-			j.job_name,
-			COALESCE(SUM(EXTRACT(EPOCH FROM (t.end_time - t.start_time))), 0) AS task_duration_seconds,
-			COALESCE(SUM(EXTRACT(EPOCH FROM (h.end_time - h.start_time))), 0) AS hook_duration_seconds,
-			ROW_NUMBER() OVER (
-				PARTITION BY j.job_name
-				ORDER BY j.scheduled_at DESC
-			) AS rn
-		FROM job_run j
-		JOIN task_run t ON t.job_run_id = j.id
-		JOIN hook_run h ON h.job_run_id = j.id
-		AND j.job_name = ANY($1)
-		%s
-		%s
-		GROUP BY j.id, j.job_name
-	),
-	last_n_runs AS (
-		SELECT
-			job_name,
-			task_duration_seconds + hook_duration_seconds AS total_duration_seconds,
-			rn
-		FROM task_and_hooks
-	)
-	SELECT
-		job_name,
-		percentile_cont(0.%d) WITHIN GROUP (ORDER BY total_duration_seconds) AS percentile_duration_seconds
-	FROM last_n_runs
-	WHERE rn <= %d
-	GROUP BY job_name
-	ORDER BY percentile_duration_seconds DESC;
-	`, taskFilter, hookFilter, percentile, lastNRuns)
 
 	return query
 }

@@ -165,7 +165,11 @@ func (a *AlertManager) worker(ctx context.Context) {
 				alertDeliveryStatus = StatusSent
 			}
 			if e.HasDefaultChannelLabel() {
-				a.alertsRepo.UpdateStatus(ctx, logID, alertDeliveryStatus, err.Error())
+				if err != nil {
+					a.alertsRepo.UpdateStatus(ctx, logID, alertDeliveryStatus, "")
+				} else {
+					a.alertsRepo.UpdateStatus(ctx, logID, alertDeliveryStatus, err.Error())
+				}
 			}
 
 		case <-ctx.Done():

@@ -53,6 +53,7 @@ type AlertingConfig struct {
 
 type DurationEstimatorConfig struct {
 	LastNRuns         int `mapstructure:"last_n_runs" default:"7"`
+	Percentile        int `mapstructure:"percentile" default:"95"`
 	PaddingPercentage int `mapstructure:"padding_percentage" default:"0"`
 	MinPaddingMinutes int `mapstructure:"min_padding_minutes" default:"0"`
 	MaxPaddingMinutes int `mapstructure:"max_padding_minutes" default:"1000"`

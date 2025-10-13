@@ -232,7 +232,7 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 	return jobRunList, nil
 }
 
-func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns int) (map[scheduler.JobName]*time.Duration, error) {
+func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
@@ -247,7 +247,7 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 		}
 	}
 
-	query := getQueryTaskAndHooks(lastNRuns, taskNames, hookNames)
+	query := getQueryTaskAndHooks(lastNRuns, percentile, taskNames, hookNames)
 
 	args := []interface{}{jobNames}
 	if len(taskNames) > 0 {
@@ -278,7 +278,7 @@ func (j *JobRunRepository) GetP95DurationByJobNames(ctx context.Context, jobName
 	return jobDurations, nil
 }
 
-func getQueryTaskAndHooks(lastNRuns int, taskNames, hookNames []string) string {
+func getQueryTaskAndHooks(lastNRuns, percentile int, taskNames, hookNames []string) string {
 	taskFilter := ""
 	if len(taskNames) > 0 {
 		taskFilter = "AND t.name = ANY($2)"
@@ -324,12 +324,12 @@ func getQueryTaskAndHooks(lastNRuns int, taskNames, hookNames []string) string {
 	)
 	SELECT
 		job_name,
-		percentile_cont(0.95) WITHIN GROUP (ORDER BY total_duration_seconds) AS p95_duration_seconds
+		percentile_cont(0.%d) WITHIN GROUP (ORDER BY total_duration_seconds) AS percentile_duration_seconds
 	FROM last_n_runs
 	WHERE rn <= %d
 	GROUP BY job_name
-	ORDER BY p95_duration_seconds DESC;
-	`, taskFilter, hookFilter, lastNRuns)
+	ORDER BY percentile_duration_seconds DESC;
+	`, taskFilter, hookFilter, percentile, lastNRuns)
 
 	return query
 }

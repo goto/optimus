@@ -22,9 +22,9 @@ type PotentialSLANotifier interface {
 }
 
 type DurationEstimator interface {
-	GetP95DurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
-	GetP95DurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
-	GetP95DurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error)
 }
 
 type JobDetailsGetter interface {
@@ -112,7 +112,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	uniqueJobNames := collectJobNames(jobsWithLineageMap)
 
 	// get job durations estimation
-	jobDurations, err := s.durationEstimator.GetP95DurationByJobNames(ctx, uniqueJobNames)
+	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, uniqueJobNames)
 	if err != nil {
 		s.l.Error("failed to get job duration estimation, skipping SLA prediction", "error", err)
 		return nil, err

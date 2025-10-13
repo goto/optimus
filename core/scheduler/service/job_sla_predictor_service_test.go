@@ -956,7 +956,7 @@ func NewDurationEstimator(t interface {
 	Cleanup(func())
 }) *DurationEstimator {
 	mock := &DurationEstimator{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

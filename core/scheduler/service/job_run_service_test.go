@@ -2292,8 +2292,8 @@ func (m *mockJobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, i
 }
 
 // GetPercentileDurationByJobNames provides a mock function with given fields: ctx, jobNames, operators, lastNRuns, percentile
-func (_m *mockJobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns int, percentile int) (map[scheduler.JobName]*time.Duration, error) {
-	ret := _m.Called(ctx, jobNames, operators, lastNRuns, percentile)
+func (m *mockJobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns int, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+	ret := m.Called(ctx, jobNames, operators, lastNRuns, percentile)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetPercentileDurationByJobNames")

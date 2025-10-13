@@ -153,19 +153,20 @@ func (a *AlertManager) worker(ctx context.Context) {
 			if err != nil {
 				a.logger.Error("failed to log event", "error", err)
 			}
-			var alertDeliveryStatus AlertStatus
 			err = a.PrepareAndSendEvent(e) // nolint:contextcheck
 			if err != nil {
 				eventWorkerSendErrCounter.WithLabelValues(e.Project, e.LogTag, err.Error()).Inc()
 				eventDataBytes, _ := json.Marshal(e.Data)
 				a.workerErrChan <- fmt.Errorf("alert worker: event_info: [ %s ], err: %w", string(eventDataBytes), err)
-				alertDeliveryStatus = StatusFailed
 			} else {
 				successSentCounter.WithLabelValues(e.Project, e.LogTag).Inc()
-				alertDeliveryStatus = StatusSent
 			}
 			if e.HasDefaultChannelLabel() {
-				a.alertsRepo.UpdateStatus(ctx, logID, alertDeliveryStatus, err.Error())
+				if err != nil {
+					a.alertsRepo.UpdateStatus(ctx, logID, StatusFailed, err.Error())
+				} else {
+					a.alertsRepo.UpdateStatus(ctx, logID, StatusSent, "")
+				}
 			}
 
 		case <-ctx.Done():

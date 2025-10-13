@@ -42,7 +42,7 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNames(ctx context.C
 		return nil, err
 	}
 	for jobName, duration := range jobDurations {
-		s.l.Info(fmt.Sprintf("GetPercentileDurationByJobNames jobName: %s, duration: %v", jobName, duration))
+		s.l.Debug(fmt.Sprintf("GetPercentileDurationByJobNames jobName: %s, duration: %v", jobName, duration))
 	}
 	// add buffer to the estimated duration
 	return s.calculateBufferedDuration(jobDurations), nil
@@ -54,7 +54,7 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByTask(ctx con
 		return nil, err
 	}
 	for jobName, duration := range jobDurations {
-		s.l.Info(fmt.Sprintf("GetPercentileDurationByJobNamesByTask jobName: %s, duration: %v", jobName, duration))
+		s.l.Debug(fmt.Sprintf("GetPercentileDurationByJobNamesByTask jobName: %s, duration: %v", jobName, duration))
 	}
 	// add buffer to the estimated duration
 	return s.calculateBufferedDuration(jobDurations), nil
@@ -66,7 +66,7 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByHookName(ctx
 		return nil, err
 	}
 	for jobName, duration := range jobDurations {
-		s.l.Info(fmt.Sprintf("GetPercentileDurationByJobNamesByHookName jobName: %s, duration: %v", jobName, duration))
+		s.l.Debug(fmt.Sprintf("GetPercentileDurationByJobNamesByHookName jobName: %s, duration: %v", jobName, duration))
 	}
 	// add buffer to the estimated duration
 	return s.calculateBufferedDuration(jobDurations), nil

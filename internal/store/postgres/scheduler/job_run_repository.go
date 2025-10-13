@@ -296,8 +296,9 @@ func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []sched
 	jobDurations := make(map[scheduler.JobName]*time.Duration)
 	for rows.Next() {
 		var jobName string
+		var hookName string
 		var percentileDurationSeconds float64
-		err := rows.Scan(&jobName, &percentileDurationSeconds)
+		err := rows.Scan(&jobName, &hookName, &percentileDurationSeconds)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return map[scheduler.JobName]*time.Duration{}, nil

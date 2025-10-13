@@ -361,7 +361,7 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger, s.conf.Replay.PluginExecutionProjectConfigNames, alertsHandler,
 	)
 
-	autoSLADurationEstimatorService := schedulerService.NewDurationEstimatorService(jobRunRepo,
+	autoSLADurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,
 		s.conf.Alerting.AutoSLABreachConfig.LastNRuns, s.conf.Alerting.AutoSLABreachConfig.Percentile,
 		s.conf.Alerting.AutoSLABreachConfig.PaddingPercentage, s.conf.Alerting.AutoSLABreachConfig.MinPaddingMinutes,
 		s.conf.Alerting.AutoSLABreachConfig.MaxPaddingMinutes)
@@ -417,7 +417,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jobLineageService := schedulerService.NewJobLineageService(s.logger, lineageBuilder)
 
 	// SLA Predictor Service
-	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(jobRunRepo,
+	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,
 		s.conf.Alerting.PotentialSLABreachConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.Percentile,
 		s.conf.Alerting.PotentialSLABreachConfig.PaddingPercentage, s.conf.Alerting.PotentialSLABreachConfig.MinPaddingMinutes,
 		s.conf.Alerting.PotentialSLABreachConfig.MaxPaddingMinutes)

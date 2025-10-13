@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/scheduler"
 )
@@ -12,6 +15,7 @@ type DurationEstimatorRepo interface {
 }
 
 type DurationEstimatorService struct {
+	l                 log.Logger
 	lastNRuns         int
 	percentile        int
 	bufferPercentage  int
@@ -20,8 +24,9 @@ type DurationEstimatorService struct {
 	durationEstimator DurationEstimatorRepo
 }
 
-func NewDurationEstimatorService(durationEstimator DurationEstimatorRepo, lastNRuns, percentile, bufferPercentage, minBufferMinutes, maxBufferMinutes int) *DurationEstimatorService {
+func NewDurationEstimatorService(logger log.Logger, durationEstimator DurationEstimatorRepo, lastNRuns, percentile, bufferPercentage, minBufferMinutes, maxBufferMinutes int) *DurationEstimatorService {
 	return &DurationEstimatorService{
+		l:                 logger,
 		durationEstimator: durationEstimator,
 		lastNRuns:         lastNRuns,
 		percentile:        percentile,
@@ -36,6 +41,9 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNames(ctx context.C
 	if err != nil {
 		return nil, err
 	}
+	for jobName, duration := range jobDurations {
+		s.l.Info(fmt.Sprintf("GetPercentileDurationByJobNames jobName: %s, duration: %v", jobName, duration))
+	}
 	// add buffer to the estimated duration
 	return s.calculateBufferedDuration(jobDurations), nil
 }
@@ -45,6 +53,9 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByTask(ctx con
 	if err != nil {
 		return nil, err
 	}
+	for jobName, duration := range jobDurations {
+		s.l.Info(fmt.Sprintf("GetPercentileDurationByJobNamesByTask jobName: %s, duration: %v", jobName, duration))
+	}
 	// add buffer to the estimated duration
 	return s.calculateBufferedDuration(jobDurations), nil
 }
@@ -53,6 +64,9 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByHookName(ctx
 	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, map[string][]string{"hook": hookNames}, s.lastNRuns, s.percentile)
 	if err != nil {
 		return nil, err
+	}
+	for jobName, duration := range jobDurations {
+		s.l.Info(fmt.Sprintf("GetPercentileDurationByJobNamesByHookName jobName: %s, duration: %v", jobName, duration))
 	}
 	// add buffer to the estimated duration
 	return s.calculateBufferedDuration(jobDurations), nil

@@ -302,7 +302,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		}
 		visited[job.JobName] = true
 
-		if jobSLAStates[job.JobName].InferredSLA == nil || jobSLAStates[job.JobName].EstimatedDuration == nil { // less likely occur, but just in case
+		if jobSLAStates[job.JobName] == nil || jobSLAStates[job.JobName].InferredSLA == nil || jobSLAStates[job.JobName].EstimatedDuration == nil { // less likely occur, but just in case
 			continue
 		}
 

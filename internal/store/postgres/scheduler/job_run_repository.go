@@ -236,11 +236,12 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
-	var taskNames []string
+
+	var isTask bool
 	var hookNames []string
 	if operators != nil {
-		if val, ok := operators["task"]; ok {
-			taskNames = val
+		if _, ok := operators["task"]; ok {
+			isTask = true
 		}
 		if val, ok := operators["hook"]; ok {
 			hookNames = val
@@ -250,13 +251,13 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	jobTaskDurations := make(map[scheduler.JobName]*time.Duration)
 	jobHookDurations := make(map[scheduler.JobName][]*time.Duration)
 	var err error
-	if len(taskNames) > 0 {
+	if operators == nil || isTask {
 		jobTaskDurations, err = j.getTaskDuration(ctx, jobNames, lastNRuns, percentile)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if len(hookNames) > 0 {
+	if operators == nil || len(hookNames) > 0 {
 		jobHookDurations, err = j.getHookDuration(ctx, jobNames, hookNames, lastNRuns, percentile)
 		if err != nil {
 			return nil, err
@@ -329,8 +330,9 @@ func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []sched
 	jobDurations := make(map[scheduler.JobName][]*time.Duration)
 	for rows.Next() {
 		var jobName string
+		var hookName string
 		var percentileDurationSeconds float64
-		err := rows.Scan(&jobName, &percentileDurationSeconds)
+		err := rows.Scan(&jobName, &hookName, &percentileDurationSeconds)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return map[scheduler.JobName][]*time.Duration{}, nil

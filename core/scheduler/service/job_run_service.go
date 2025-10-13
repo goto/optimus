@@ -829,11 +829,13 @@ func (s *JobRunService) GetSLADuration(ctx context.Context, jobName, operatorNam
 			}
 		}
 		if p95Duration, ok := durationMap[jobN]; ok {
+			s.l.Debug(fmt.Sprintf("[Auto SLA Threshold] Job:%s, %s:%s Duration:%s", jobName, operatorType, operatorName, p95Duration.String()))
 			return p95Duration, nil
 		}
+		s.l.Error(fmt.Sprintf("[Auto SLA Threshold] Job:%s, %s:%s, could not find job durations in the Duration map", jobName, operatorType, operatorName))
 		return nil, nil //nolint:nilnil
 	}
-
+	s.l.Debug(fmt.Sprintf("[Pre Configured SLA Threshold] Job:%s, %s:%s Duration:%s", jobName, operatorType, operatorName, slaAlertConfig.DurationThreshold.String()))
 	return &slaAlertConfig.DurationThreshold, nil
 }
 
@@ -848,11 +850,11 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 	for _, slaAlertConfig := range slaAlertConfigs {
 		slaDuration, err := s.GetSLADuration(ctx, jobName, operatorName, operatorType.String(), slaAlertConfig)
 		if err != nil {
-			s.l.Error("unable to get sla duration, skipping sla registration for jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s, err: %s", jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag(), err.Error())
+			s.l.Error("[Register SLA] unable to get sla duration, skipping sla registration for job:%s, jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s, err: %s", jobName, jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag(), err.Error())
 			return err
 		}
 		if slaDuration == nil {
-			s.l.Warn("sla duration is nil, skipping sla registration for jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s", jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag())
+			s.l.Warn("[Register SLA] sla duration is nil, skipping sla registration for job:%s, jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s", jobName, jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag())
 			return nil
 		}
 		slaBoundary := operatorStartTime.Add(*slaDuration)
@@ -860,9 +862,11 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 		err = s.slaRepo.RegisterSLA(ctx, eventCtx.Tenant.ProjectName(), jobName, operatorName, operatorType.String(),
 			jobRunID, slaBoundary, slaAlertConfig.Tag(), eventCtx.DagRun.ScheduledAt, eventCtx.OperatorRunInstance.StartTime)
 		if err != nil {
-			errMsg := fmt.Sprintf("error registering sla for operator Run Id: %s, Type: %s, Sla: %s, err: %s", jobRunID, operatorType.String(), slaAlertConfig.Tag(), err.Error())
+			errMsg := fmt.Sprintf("[Register SLA] error registering sla for job:%s, operator Run Id: %s, %s:%s, Sla: %s, err: %s", jobName, jobRunID, operatorType, operatorName, slaAlertConfig.Tag(), err.Error())
 			me.Append(errors.Wrap(scheduler.EntityEvent, errMsg, err))
 			s.l.Error(errMsg)
+		} else {
+			s.l.Debug(fmt.Sprintf("[Register SLA] Job:%s, %s:%s Sla Duration:%s, SlaBoundary:%s, Job Scheduled At:%s", jobName, operatorType, operatorName, slaDuration, slaBoundary, eventCtx.DagRun.ScheduledAt))
 		}
 	}
 	return me.ToErr()

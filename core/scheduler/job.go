@@ -112,6 +112,7 @@ func (j *Job) GetOperatorAlertConfigByName(operatorType OperatorType, operatorNa
 	case OperatorTask:
 		return j.GetTaskAlertConfig()
 	case OperatorHook:
+		operatorName = strings.TrimPrefix(operatorName, "hook_")
 		return j.GetHookAlertConfigByName(operatorName)
 	default:
 		return nil

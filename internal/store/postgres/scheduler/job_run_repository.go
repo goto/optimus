@@ -248,7 +248,7 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	}
 
 	jobTaskDurations := make(map[scheduler.JobName]*time.Duration)
-	jobHookDurations := make(map[scheduler.JobName]*time.Duration)
+	jobHookDurations := make(map[scheduler.JobName][]*time.Duration)
 	var err error
 	if len(taskNames) > 0 {
 		jobTaskDurations, err = j.getTaskDuration(ctx, jobNames, lastNRuns, percentile)
@@ -268,13 +268,19 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	for jobName, duration := range jobTaskDurations {
 		jobDurations[jobName] = duration
 	}
-	for jobName, duration := range jobHookDurations {
+	for jobName, durations := range jobHookDurations {
+		duration := time.Duration(0)
+		for _, d := range durations {
+			if d != nil {
+				duration += *d
+			}
+		}
 		if existingDuration, ok := jobDurations[jobName]; ok {
 			// sum durations if both task and hook exist for the job
-			sum := *existingDuration + *duration
+			sum := *existingDuration + duration
 			jobDurations[jobName] = &sum
 		} else {
-			jobDurations[jobName] = duration
+			jobDurations[jobName] = &duration
 		}
 	}
 
@@ -307,28 +313,35 @@ func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []sched
 	return jobDurations, nil
 }
 
-func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName, hookNames []string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
-	if len(jobNames) == 0 || len(hookNames) == 0 {
-		return map[scheduler.JobName]*time.Duration{}, nil
+func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName, hookNames []string, lastNRuns, percentile int) (map[scheduler.JobName][]*time.Duration, error) {
+	if len(jobNames) == 0 {
+		return map[scheduler.JobName][]*time.Duration{}, nil
 	}
-	query := getQueryHook(lastNRuns, percentile)
-	rows, err := j.db.Query(ctx, query, jobNames, hookNames)
+	query := getQueryHook(lastNRuns, percentile, hookNames)
+	args := []any{jobNames}
+	if len(hookNames) > 0 {
+		args = append(args, hookNames)
+	}
+	rows, err := j.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 	}
-	jobDurations := make(map[scheduler.JobName]*time.Duration)
+	jobDurations := make(map[scheduler.JobName][]*time.Duration)
 	for rows.Next() {
 		var jobName string
 		var percentileDurationSeconds float64
 		err := rows.Scan(&jobName, &percentileDurationSeconds)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return map[scheduler.JobName]*time.Duration{}, nil
+				return map[scheduler.JobName][]*time.Duration{}, nil
 			}
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration on scan", err)
 		}
 		duration := time.Duration(percentileDurationSeconds * float64(time.Second))
-		jobDurations[scheduler.JobName(jobName)] = &duration
+		if _, ok := jobDurations[scheduler.JobName(jobName)]; !ok {
+			jobDurations[scheduler.JobName(jobName)] = []*time.Duration{}
+		}
+		jobDurations[scheduler.JobName(jobName)] = append(jobDurations[scheduler.JobName(jobName)], &duration)
 	}
 	return jobDurations, nil
 }
@@ -363,7 +376,13 @@ func getQueryTask(lastNRuns, percentile int) string {
 	return query
 }
 
-func getQueryHook(lastNRuns, percentile int) string {
+func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
+	hookFilter := ""
+	if len(hookNames) > 0 {
+		// 		AND h.name = ANY($2)
+		hookFilter = " AND h.name = ANY($2) "
+	}
+
 	query := fmt.Sprintf(`
 	WITH last_n_runs AS (
 		SELECT
@@ -379,7 +398,7 @@ func getQueryHook(lastNRuns, percentile int) string {
 		JOIN hook_run h ON h.job_run_id = j.id
 		WHERE h.end_time IS NOT NULL
 		AND j.job_name = ANY($1)
-		AND h.name = ANY($2)
+		%s
 	)
 	SELECT
 		job_name,
@@ -389,7 +408,7 @@ func getQueryHook(lastNRuns, percentile int) string {
 	FROM last_n_runs
 	WHERE rn <= %d
 	GROUP BY job_name;
-	`, percentile, lastNRuns)
+	`, percentile, lastNRuns, hookFilter)
 
 	return query
 }

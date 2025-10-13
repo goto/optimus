@@ -954,7 +954,8 @@ func (_m *DurationEstimator) GetPercentileDurationByJobNamesByTask(ctx context.C
 func NewDurationEstimator(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *DurationEstimator {
+},
+) *DurationEstimator {
 	mock := &DurationEstimator{}
 	mock.Test(t)
 

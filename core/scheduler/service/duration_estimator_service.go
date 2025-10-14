@@ -73,11 +73,19 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByHookName(ctx
 }
 
 func (s *DurationEstimatorService) calculateBufferedDuration(jobDurations map[scheduler.JobName]*time.Duration) map[scheduler.JobName]*time.Duration {
-	for jobName, duration := range jobDurations {
-		if duration != nil && s.bufferPercentage > 0 {
-			bufferedDuration := time.Second * time.Duration(duration.Seconds()*(1+float64(s.bufferPercentage)/100))
-			adjustedBuffer := time.Millisecond * time.Duration(min(max(s.minBufferDuration.Milliseconds(), bufferedDuration.Milliseconds()), s.maxBufferDuration.Milliseconds()))
-			jobDurations[jobName] = &adjustedBuffer
+	for jobName, percentileDuration := range jobDurations {
+		if percentileDuration != nil && s.bufferPercentage > 0 {
+			adjustedDuration := time.Second * time.Duration(
+				percentileDuration.Seconds()+
+					min(
+						max(
+							s.minBufferDuration.Seconds(),                                  // Minimum Buffer that must be added to each job
+							percentileDuration.Seconds()*(float64(s.bufferPercentage)/100), // calculating relative percentage buffer
+						),
+						s.maxBufferDuration.Seconds(), // Maximum Buffer allowed
+					),
+			)
+			jobDurations[jobName] = &adjustedDuration
 		}
 	}
 	return jobDurations

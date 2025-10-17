@@ -168,8 +168,19 @@ type upstreamCandidate struct {
 }
 
 func (r *LineageResolver) pruneLineage(lineage *scheduler.JobLineageSummary, maxUpstreamsPerLevel, depth int) *scheduler.JobLineageSummary {
-	// base case: stop if max depth reached or number of upstreams is already within limit
-	if depth > MaxLineageDepth || len(lineage.Upstreams) <= maxUpstreamsPerLevel {
+	if depth > MaxLineageDepth {
+		return &scheduler.JobLineageSummary{
+			JobName:          lineage.JobName,
+			Tenant:           lineage.Tenant,
+			Window:           lineage.Window,
+			ScheduleInterval: lineage.ScheduleInterval,
+			SLA:              lineage.SLA,
+			JobRuns:          copyJobRuns(lineage.JobRuns),
+			Upstreams:        []*scheduler.JobLineageSummary{},
+		}
+	}
+
+	if len(lineage.Upstreams) <= maxUpstreamsPerLevel {
 		prunedUpstreams := make([]*scheduler.JobLineageSummary, len(lineage.Upstreams))
 		for i, upstream := range lineage.Upstreams {
 			prunedUpstreams[i] = r.pruneLineage(upstream, maxUpstreamsPerLevel, depth+1)

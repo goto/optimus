@@ -444,6 +444,11 @@ type JobUpstream struct {
 	State          string
 }
 
+type ThirdPartyUpstream struct {
+	Type string
+	URN  string
+}
+
 type JobSummary struct {
 	JobName          JobName
 	Tenant           tenant.Tenant

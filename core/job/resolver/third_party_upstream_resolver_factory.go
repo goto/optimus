@@ -10,6 +10,7 @@ import (
 
 type ThirdPartyUpstreamResolver interface {
 	BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error)
+	Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error)
 }
 
 func NewThirdPartyUpstreamResolvers(upstreamResolvers ...config.UpstreamResolver) []ThirdPartyUpstreamResolver {

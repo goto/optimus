@@ -9,8 +9,7 @@ import (
 	"github.com/goto/optimus/internal/writer"
 )
 
-type dexUpstreamResolver struct {
-}
+type dexUpstreamResolver struct{}
 
 func NewDexUpstreamResolver() *dexUpstreamResolver {
 	return &dexUpstreamResolver{}

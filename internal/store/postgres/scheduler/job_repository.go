@@ -28,7 +28,7 @@ const (
 				  task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 	upstreamColumns = `
     job_name, project_name, upstream_job_name, upstream_project_name, upstream_host,
-    upstream_namespace_name, upstream_resource_urn, upstream_task_name, upstream_type, upstream_external, upstream_state`
+    upstream_namespace_name, upstream_resource_urn, upstream_task_name, upstream_type, upstream_external, upstream_state, upstream_third_party_type`
 
 	jobSummaryColumns = `name, version, project_name, namespace_name, schedule, window_spec, alert`
 )
@@ -52,19 +52,20 @@ type Retry struct {
 }
 
 type JobUpstreams struct {
-	JobID                 uuid.UUID
-	JobName               string
-	ProjectName           string
-	UpstreamJobID         uuid.UUID
-	UpstreamJobName       sql.NullString
-	UpstreamResourceUrn   sql.NullString
-	UpstreamProjectName   sql.NullString
-	UpstreamNamespaceName sql.NullString
-	UpstreamTaskName      sql.NullString
-	UpstreamHost          sql.NullString
-	UpstreamType          string
-	UpstreamState         string
-	UpstreamExternal      sql.NullBool
+	JobID                  uuid.UUID
+	JobName                string
+	ProjectName            string
+	UpstreamJobID          uuid.UUID
+	UpstreamJobName        sql.NullString
+	UpstreamResourceUrn    sql.NullString
+	UpstreamProjectName    sql.NullString
+	UpstreamNamespaceName  sql.NullString
+	UpstreamTaskName       sql.NullString
+	UpstreamHost           sql.NullString
+	UpstreamType           string
+	UpstreamThirdPartyType sql.NullString
+	UpstreamState          string
+	UpstreamExternal       sql.NullBool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -95,6 +96,8 @@ func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
 		Type:           j.UpstreamType,
 		External:       j.UpstreamExternal.Bool,
 		State:          j.UpstreamState,
+		ThirdPartyType: j.UpstreamThirdPartyType.String,
+		ResourceURN:    j.UpstreamResourceUrn.String,
 	}, nil
 }
 
@@ -518,7 +521,7 @@ func (j *JobRepository) getJobsUpstreams(ctx context.Context, projectName tenant
 	for rows.Next() {
 		var jwu JobUpstreams
 		err := rows.Scan(&jwu.JobName, &jwu.ProjectName, &jwu.UpstreamJobName, &jwu.UpstreamProjectName, &jwu.UpstreamHost,
-			&jwu.UpstreamNamespaceName, &jwu.UpstreamResourceUrn, &jwu.UpstreamTaskName, &jwu.UpstreamType, &jwu.UpstreamExternal, &jwu.UpstreamState)
+			&jwu.UpstreamNamespaceName, &jwu.UpstreamResourceUrn, &jwu.UpstreamTaskName, &jwu.UpstreamType, &jwu.UpstreamExternal, &jwu.UpstreamState, &jwu.UpstreamThirdPartyType)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, errors.NotFound(scheduler.EntityJobRun, "job upstream not found")

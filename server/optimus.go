@@ -396,7 +396,8 @@ func (s *OptimusServer) setupHandlers() error {
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
-	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
+	jUpstreamResolvers := jResolver.NewThirdPartyUpstreamResolvers(s.conf.UpstreamResolvers...)
+	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver, jUpstreamResolvers...)
 	jJobService := jService.NewJobService(
 		jJobRepo, jJobRepo, jJobRepo,
 		pluginService, jUpstreamResolver, tenantService,

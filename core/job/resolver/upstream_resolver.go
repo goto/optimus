@@ -37,10 +37,6 @@ type InternalUpstreamResolver interface {
 	BulkResolve(context.Context, tenant.ProjectName, []*job.WithUpstream) ([]*job.WithUpstream, error)
 }
 
-type ThirdPartyUpstreamResolver interface {
-	BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error)
-}
-
 type JobRepository interface {
 	ResolveUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []job.Name) (map[job.Name][]*job.Upstream, error)
 

@@ -59,7 +59,7 @@ func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant
 	jobsWithResolvedStaticExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedStaticInternalUpstreams, logWriter)
 	me.Append(err)
 
-	var jobsWithResolvedThirdPartyUpstreams []*job.WithUpstream = jobsWithResolvedStaticExternalUpstreams
+	jobsWithResolvedThirdPartyUpstreams := jobsWithResolvedStaticExternalUpstreams
 	for _, thirdPartyUpstreamResolver := range u.thirdPartyUpstreamResolvers {
 		jobsWithResolvedThirdPartyUpstreams, err = thirdPartyUpstreamResolver.BulkResolve(ctx, jobsWithResolvedThirdPartyUpstreams, logWriter)
 		me.Append(err)
@@ -91,7 +91,7 @@ func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.Pr
 	jobsWithResolvedExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedInternalUpstreams, logWriter)
 	me.Append(err)
 
-	var jobsWithResolvedThirdPartyUpstreams []*job.WithUpstream = jobsWithResolvedExternalUpstreams
+	jobsWithResolvedThirdPartyUpstreams := jobsWithResolvedExternalUpstreams
 	for _, thirdPartyUpstreamResolver := range u.thirdPartyUpstreamResolvers {
 		jobsWithResolvedThirdPartyUpstreams, err = thirdPartyUpstreamResolver.BulkResolve(ctx, jobsWithResolvedThirdPartyUpstreams, logWriter)
 		me.Append(err)
@@ -114,7 +114,7 @@ func (u UpstreamResolver) Resolve(ctx context.Context, subjectJob *job.Job, logW
 	jobWithInternalExternalUpstream, err := u.externalUpstreamResolver.Resolve(ctx, jobWithInternalUpstream, logWriter)
 	me.Append(err)
 
-	var jobWithThirdPartyUpstream *job.WithUpstream = jobWithInternalExternalUpstream
+	jobWithThirdPartyUpstream := jobWithInternalExternalUpstream
 	for _, thirdPartyUpstreamResolver := range u.thirdPartyUpstreamResolvers {
 		jobWithThirdPartyUpstream, err = thirdPartyUpstreamResolver.Resolve(ctx, jobWithThirdPartyUpstream, logWriter)
 		me.Append(err)

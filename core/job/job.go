@@ -518,6 +518,10 @@ func (u *Upstream) Type() UpstreamType {
 	return u._type
 }
 
+func (u *Upstream) ThirdPartyType() UpstreamThirdPartyType {
+	return u._3rd_party_type
+}
+
 func (u *Upstream) State() UpstreamState {
 	return u.state
 }
@@ -545,6 +549,10 @@ func (u *Upstream) FullName() string {
 type UpstreamType string
 
 func (d UpstreamType) String() string {
+	return string(d)
+}
+
+func (d UpstreamThirdPartyType) String() string {
 	return string(d)
 }
 

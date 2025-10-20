@@ -422,8 +422,9 @@ type Upstream struct {
 	projectName   tenant.ProjectName
 	namespaceName tenant.NamespaceName
 
-	_type UpstreamType
-	state UpstreamState
+	_type           UpstreamType
+	_3rd_party_type UpstreamThirdPartyType
+	state           UpstreamState
 
 	external bool
 }
@@ -448,6 +449,22 @@ func NewUpstreamUnresolvedInferred(resource resource.URN) *Upstream {
 
 func NewUpstreamUnresolvedStatic(name Name, projectName tenant.ProjectName) *Upstream {
 	return &Upstream{name: name, projectName: projectName, _type: UpstreamTypeStatic, state: UpstreamStateUnresolved}
+}
+
+func NewUpstreamResolvedThirdParty(upstream *Upstream, thirdPartyType UpstreamThirdPartyType) *Upstream {
+	u := &Upstream{
+		name:            upstream.name,
+		host:            upstream.host,
+		resource:        upstream.resource,
+		projectName:     upstream.projectName,
+		namespaceName:   upstream.namespaceName,
+		_type:           upstream._type,
+		_3rd_party_type: thirdPartyType,
+		state:           UpstreamStateResolved,
+		external:        upstream.external,
+		taskName:        upstream.taskName,
+	}
+	return u
 }
 
 func (u *Upstream) Name() Name {
@@ -506,6 +523,8 @@ func UpstreamTypeFrom(str string) (UpstreamType, error) {
 		return "", errors.InvalidArgument(EntityJob, "unknown type for upstream: "+str)
 	}
 }
+
+type UpstreamThirdPartyType string
 
 type UpstreamState string
 

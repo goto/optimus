@@ -246,6 +246,7 @@ wait_{{ $dependencyName }} = SuperExternalTaskSensor(
 )
 {{ end}}
 
+# http sensor
 {{- range $_, $httpUpstream := $.Upstreams.HTTP}}
 headers_dict_{{$httpUpstream.Name}} = { {{- range $k, $v := $httpUpstream.Headers}} '{{$k}}': '{{$v}}', {{- end}} }
 request_params_dict_{{$httpUpstream.Name}} = { {{- range $key, $value := $httpUpstream.Params}} '{{$key}}': '{{$value}}', {{- end}} }
@@ -263,6 +264,22 @@ wait_{{$httpUpstream.Name}} = ExternalHttpSensor(
 )
 {{- end -}}
 
+# create 3rd party sensors
+{{- range $_, $upstream := .Upstreams.ThirdParty}}
+{{- $dependencyName := printf "%s_%s" $upstream.Type $upstream.URN | DisplayName }}
+wait_{{ $dependencyName }} = SuperExternal3rdPartyTaskSensor(
+    optimus_hostname="{{$.Hostname}}",
+    third_party_type="{{ $upstream.Type }}",
+    resource_urn="{{ $upstream.URN }}",
+    poke_interval=SENSOR_DEFAULT_POKE_INTERVAL_IN_SECS,
+    timeout=SENSOR_DEFAULT_TIMEOUT_IN_SECS,
+    task_id="wait_{{printf "%s_%s" $upstream.Type $upstream.URN}}",
+    depends_on_past=False,
+    dag=dag,
+    pool={{ if eq $.RuntimeConfig.Airflow.Pool "" }}POOL_SENSOR{{- else -}} {{ $.RuntimeConfig.Airflow.Pool | quote}}{{end}}
+)
+{{ end}}
+
 # arrange inter task dependencies
 ####################################
 
@@ -272,6 +289,9 @@ wait_{{ $t.JobName | DisplayName }} >> {{$transformationName}}
 {{- end}}
 {{- range $_, $t := $.Upstreams.HTTP }}
 wait_{{ $t.Name }} >> {{$transformationName}}
+{{- end}}
+{{- range $_, $t := $.Upstreams.ThirdParty }}
+wait_{{ printf "%s_%s" $t.Type $t.URN }} >> {{$transformationName}}
 {{- end}}
 
 # [Dependency/HttpDep/ExternalDep] -> Task -> [Hook]

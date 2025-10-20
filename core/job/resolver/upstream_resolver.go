@@ -17,13 +17,14 @@ const (
 )
 
 type UpstreamResolver struct {
-	jobRepository            JobRepository
-	externalUpstreamResolver ExternalUpstreamResolver
-	internalUpstreamResolver InternalUpstreamResolver
+	jobRepository               JobRepository
+	externalUpstreamResolver    ExternalUpstreamResolver
+	internalUpstreamResolver    InternalUpstreamResolver
+	thirdPartyUpstreamResolvers []ThirdPartyUpstreamResolver
 }
 
-func NewUpstreamResolver(jobRepository JobRepository, externalUpstreamResolver ExternalUpstreamResolver, internalUpstreamResolver InternalUpstreamResolver) *UpstreamResolver {
-	return &UpstreamResolver{jobRepository: jobRepository, externalUpstreamResolver: externalUpstreamResolver, internalUpstreamResolver: internalUpstreamResolver}
+func NewUpstreamResolver(jobRepository JobRepository, externalUpstreamResolver ExternalUpstreamResolver, internalUpstreamResolver InternalUpstreamResolver, thirdPartyUpstreamResolvers ...ThirdPartyUpstreamResolver) *UpstreamResolver {
+	return &UpstreamResolver{jobRepository: jobRepository, externalUpstreamResolver: externalUpstreamResolver, internalUpstreamResolver: internalUpstreamResolver, thirdPartyUpstreamResolvers: thirdPartyUpstreamResolvers}
 }
 
 type ExternalUpstreamResolver interface {
@@ -34,6 +35,10 @@ type ExternalUpstreamResolver interface {
 type InternalUpstreamResolver interface {
 	Resolve(context.Context, *job.WithUpstream) (*job.WithUpstream, error)
 	BulkResolve(context.Context, tenant.ProjectName, []*job.WithUpstream) ([]*job.WithUpstream, error)
+}
+
+type ThirdPartyUpstreamResolver interface {
+	BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error)
 }
 
 type JobRepository interface {
@@ -84,9 +89,15 @@ func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.Pr
 	jobsWithResolvedExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedInternalUpstreams, logWriter)
 	me.Append(err)
 
+	var jobsWithResolvedThirdPartyUpstreams []*job.WithUpstream = jobsWithResolvedExternalUpstreams
+	for _, thirdPartyUpstreamResolver := range u.thirdPartyUpstreamResolvers {
+		jobsWithResolvedThirdPartyUpstreams, err = thirdPartyUpstreamResolver.BulkResolve(ctx, jobsWithResolvedExternalUpstreams, logWriter)
+		me.Append(err)
+	}
+
 	me.Append(u.getUnresolvedUpstreamsErrors(jobsWithResolvedExternalUpstreams, logWriter))
 
-	return jobsWithResolvedExternalUpstreams, me.ToErr()
+	return jobsWithResolvedThirdPartyUpstreams, me.ToErr()
 }
 
 func (u UpstreamResolver) Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error) {

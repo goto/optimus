@@ -19,6 +19,6 @@ func (h *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstreams
 	// 1. get unresolved upstreams
 	// 2. call DEX api to check whether the upstream is managed by DEX
 	// 3. if yes, get the resolved upstream from DEX api response and set it to job's upstreams
-	// 4. mark upstream_sub_type as DEX
+	// 4. mark upstream_3rd_party_type as DEX
 	return jobsWithUpstreams, nil
 }

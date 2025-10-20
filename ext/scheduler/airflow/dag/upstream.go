@@ -6,12 +6,13 @@ import (
 )
 
 type Upstreams struct {
-	HTTP      []*scheduler.HTTPUpstreams
-	Upstreams []Upstream
+	HTTP       []*scheduler.HTTPUpstreams
+	Upstreams  []Upstream
+	ThirdParty []*scheduler.ThirdPartyUpstream
 }
 
 func (u Upstreams) Empty() bool {
-	if len(u.HTTP) == 0 && len(u.Upstreams) == 0 {
+	if len(u.HTTP) == 0 && len(u.Upstreams) == 0 && len(u.ThirdParty) == 0 {
 		return true
 	}
 	return false
@@ -42,7 +43,8 @@ func SetupUpstreams(upstreams scheduler.Upstreams, host string) Upstreams {
 		ups = append(ups, upstream)
 	}
 	return Upstreams{
-		HTTP:      upstreams.HTTP,
-		Upstreams: ups,
+		HTTP:       upstreams.HTTP,
+		Upstreams:  ups,
+		ThirdParty: upstreams.ThirdParty,
 	}
 }

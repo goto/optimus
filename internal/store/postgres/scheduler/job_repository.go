@@ -72,9 +72,13 @@ type JobUpstreams struct {
 }
 
 func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
-	t, err := tenant.NewTenant(j.UpstreamProjectName.String, j.UpstreamNamespaceName.String)
-	if err != nil {
-		return nil, err
+	var t tenant.Tenant
+	if j.UpstreamThirdPartyType.String == "" { // non 3rd party upstream uses job's tenant
+		var err error
+		t, err = tenant.NewTenant(j.UpstreamProjectName.String, j.UpstreamNamespaceName.String)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var destinationURN resource.URN
@@ -97,7 +101,6 @@ func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
 		External:       j.UpstreamExternal.Bool,
 		State:          j.UpstreamState,
 		ThirdPartyType: j.UpstreamThirdPartyType.String,
-		ResourceURN:    j.UpstreamResourceUrn.String,
 	}, nil
 }
 

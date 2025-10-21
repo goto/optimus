@@ -266,11 +266,20 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	result3, c3 := s.FilterRunsV3(ctx, jobWithDetails.Job.Tenant, criteria)
 	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V3").Set(float64(c3))
 
+	if !s.features.EnableV2Sensor {
+		c2 = -1
+	}
+
 	if !s.features.EnableV3Sensor {
 		c3 = -1
 	}
 
 	s.l.Debug("[%s] The count for each v1=%d, v2=%d, v3=%d", jobName, c1, c2, c3)
+
+	s.l.Debug("[%s] Runs between %s - %s in v1={%s} ; v2={%s} ; v3={%s}",
+		jobName, criteria.StartDate, criteria.EndDate,
+		result.String(), result2.String(), result3.String())
+
 	m1 := max1(c1, c2, c3)
 	if m1 == c3 {
 		return result3, msg, nil

@@ -423,3 +423,52 @@ type JobSummary struct {
 	SLA              SLAConfig
 	Window           window.Config
 }
+
+type ChangeDiff string
+
+type Change struct {
+	Property string
+	Diff     ChangeDiff
+}
+
+func (ch Change) OldValue() string {
+	return ch.extractValueByPrefix("- ")
+}
+
+func (ch Change) NewValue() string {
+	return ch.extractValueByPrefix("+ ")
+}
+
+func (ch Change) extractValueByPrefix(prefix string) string {
+	parts := strings.Split(string(ch.Diff), "\n")
+	var lines []string
+	for _, part := range parts {
+		if value, ok := strings.CutPrefix(part, prefix); ok {
+			lines = append(lines, value)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+type Changelog struct {
+	Change    []Change
+	Type      string
+	CreatedAt time.Time
+}
+
+func (c *Changelog) GetAttributeChange(attributeName string) *Change {
+	for _, change := range c.Change {
+		if change.Property == attributeName {
+			return &change
+		}
+	}
+
+	return nil
+}
+
+type ChangelogFilter struct {
+	ProjectName tenant.ProjectName
+	Name        string
+	StartTime   time.Time
+	EndTime     time.Time
+}

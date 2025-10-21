@@ -2364,6 +2364,14 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 	return args.Get(0).([]*scheduler.JobWithDetails), args.Error(1)
 }
 
+func (j *JobRepository) GetChangelogs(ctx context.Context, filter *scheduler.ChangelogFilter) ([]*scheduler.Changelog, error) {
+	args := j.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.Changelog), args.Error(1)
+}
+
 type mockScheduler struct {
 	mock.Mock
 }

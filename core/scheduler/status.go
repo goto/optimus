@@ -169,6 +169,16 @@ func (j JobRunStatusList) GetSortedRunsByScheduledAt() []*JobRunStatus {
 	return result
 }
 
+func (j JobRunStatusList) GetLatestPendingRun() *JobRunStatus {
+	runs := j.GetSortedRunsByScheduledAt()
+	for i := len(runs) - 1; i >= 0; i-- {
+		if runs[i].State == StatePending {
+			return runs[i]
+		}
+	}
+	return nil
+}
+
 func (j JobRunStatusList) MergeWithUpdatedRuns(updatedRunMap map[time.Time]State) []*JobRunStatus {
 	var updatedRuns []*JobRunStatus
 	for _, run := range j {

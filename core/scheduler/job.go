@@ -435,7 +435,6 @@ type JobUpstream struct {
 	Type           string
 	External       bool
 	State          string
-	ResourceURN    string
 	ThirdPartyType string
 }
 

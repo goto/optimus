@@ -262,7 +262,7 @@ wait_{{$httpUpstream.Name}} = ExternalHttpSensor(
     dag=dag,
     pool={{ if eq $.RuntimeConfig.Airflow.Pool "" }}POOL_SENSOR{{- else -}} {{ $.RuntimeConfig.Airflow.Pool | quote}}{{end}}
 )
-{{- end -}}
+{{ end }}
 
 # create 3rd party sensors
 {{- range $_, $upstream := .Upstreams.ThirdParty}}

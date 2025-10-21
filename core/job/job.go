@@ -496,7 +496,7 @@ func NewUpstreamResolvedThirdParty(upstream *Upstream, thirdPartyType UpstreamTh
 		_type:           upstream._type,
 		_3rd_party_type: thirdPartyType,
 		state:           UpstreamStateResolved,
-		external:        upstream.external,
+		external:        true,
 		taskName:        upstream.taskName,
 	}
 	return u

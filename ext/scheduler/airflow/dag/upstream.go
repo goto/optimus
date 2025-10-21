@@ -37,7 +37,7 @@ func SetupUpstreams(upstreams scheduler.Upstreams, host string) Upstreams {
 		if u.ThirdPartyType != "" {
 			thirdUps = append(thirdUps, ThirdPartyUpstream{
 				Type: u.ThirdPartyType,
-				URN:  u.ResourceURN,
+				URN:  u.DestinationURN.GetName(),
 			})
 			continue
 		}

@@ -32,7 +32,7 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	upstreams := []*job.Upstream{}
 	for _, unresolvedUpstream := range jobWithUpstream.GetUnresolvedUpstreams() {
 		if u.isDEXManagedUpstream(ctx, unresolvedUpstream.Resource()) {
-			resolvedUpstream := job.NewUpstreamResolvedThirdParty(unresolvedUpstream, "DEX") // TODO: set resolved third party type as constant
+			resolvedUpstream := job.NewUpstreamResolvedThirdParty(unresolvedUpstream, "dex") // TODO: set resolved third party type as constant
 			upstreams = append(upstreams, resolvedUpstream)
 		} else {
 			upstreams = append(upstreams, unresolvedUpstream)

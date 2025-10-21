@@ -269,6 +269,12 @@ wait_foo__dash__external__dash__optimus__dash__dep__dash__job = SuperExternalTas
     dag=dag,
     pool=POOL_SENSOR
 )
+
+
+# http sensor
+
+# create 3rd party sensors
+
 # arrange inter task dependencies
 ####################################
 

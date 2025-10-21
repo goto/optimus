@@ -270,6 +270,18 @@ func (j JobRunStatusList) GetOnlyDifferedRuns(runsComparator []*JobRunStatus) Jo
 	return differedRuns
 }
 
+func (j JobRunStatusList) String() string {
+	var sb strings.Builder
+	for i, run := range j {
+		sb.WriteString(fmt.Sprintf("%s(%s)", run.ScheduledAt.Format(time.RFC3339), run.State.String()))
+		if i < len(j)-1 {
+			sb.WriteString(", ")
+		}
+	}
+
+	return sb.String()
+}
+
 // JobRunsCriteria represents the filter condition to get run status from scheduler
 type JobRunsCriteria struct {
 	Name        string

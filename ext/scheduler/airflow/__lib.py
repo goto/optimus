@@ -297,18 +297,18 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             self,
             optimus_hostname: str,
             third_party_type: str,
-            resource_urn: str,
+            identifier: str,
             *args,
             **kwargs) -> None:
         kwargs['mode'] = kwargs.get('mode', 'reschedule')
         super().__init__(**kwargs)
         self.third_party_type = third_party_type
-        self.resource_urn = resource_urn
+        self.identifier = identifier
         self._optimus_client = OptimusAPIClient(optimus_hostname)
     
     def poke(self, context):
         # TODO: call to optimus api to check third party upstream status,
-        # given schedule_time, _optimus_client, third_party_type, and resource_urn
+        # given schedule_time, _optimus_client, third_party_type, and identifier
         # start_date and end_date can be derived from schedule_time inside optimus server
         schedule_time = get_scheduled_at(context)
         pass

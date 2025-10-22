@@ -334,12 +334,17 @@ func (j Jobs) Deduplicate() []*Job {
 }
 
 type WithUpstream struct {
-	job       *Job
-	upstreams []*Upstream
+	job                 *Job
+	upstreams           []*Upstream
+	thirdPartyUpstreams []*ThirdPartyUpstream
 }
 
 func NewWithUpstream(job *Job, upstreams []*Upstream) *WithUpstream {
 	return &WithUpstream{job: job, upstreams: upstreams}
+}
+
+func NewWithUpstreamAndThirdPartyUpstreams(job *Job, upstreams []*Upstream, thirdPartyUpstreams []*ThirdPartyUpstream) *WithUpstream { // TODO: refactor to use builder pattern
+	return &WithUpstream{job: job, upstreams: upstreams, thirdPartyUpstreams: thirdPartyUpstreams}
 }
 
 func (w WithUpstream) GetName() string { // to support multiroot DataTree
@@ -352,6 +357,10 @@ func (w WithUpstream) Job() *Job {
 
 func (w WithUpstream) Upstreams() []*Upstream {
 	return w.upstreams
+}
+
+func (w WithUpstream) ThirdPartyUpstreams() []*ThirdPartyUpstream {
+	return w.thirdPartyUpstreams
 }
 
 func (w WithUpstream) Name() Name {
@@ -413,6 +422,32 @@ func (w WithUpstreams) MergeWithResolvedUpstreams(resolvedUpstreamsBySubjectJobM
 	return jobsWithMergedUpstream
 }
 
+type ThirdPartyUpstream struct {
+	_type      string
+	identifier string
+	config     map[string]string
+}
+
+func NewThirdPartyUpstream(upstreamType, identifier string, config map[string]string) *ThirdPartyUpstream {
+	return &ThirdPartyUpstream{
+		_type:      upstreamType,
+		identifier: identifier,
+		config:     config,
+	}
+}
+
+func (t *ThirdPartyUpstream) Type() string {
+	return t._type
+}
+
+func (t *ThirdPartyUpstream) Identifier() string {
+	return t.identifier
+}
+
+func (t *ThirdPartyUpstream) Config() map[string]string {
+	return t.config
+}
+
 type Upstream struct {
 	name     Name
 	host     string
@@ -422,9 +457,8 @@ type Upstream struct {
 	projectName   tenant.ProjectName
 	namespaceName tenant.NamespaceName
 
-	_type           UpstreamType
-	_3rd_party_type UpstreamThirdPartyType
-	state           UpstreamState
+	_type UpstreamType
+	state UpstreamState
 
 	external bool
 }
@@ -451,22 +485,6 @@ func NewUpstreamUnresolvedStatic(name Name, projectName tenant.ProjectName) *Ups
 	return &Upstream{name: name, projectName: projectName, _type: UpstreamTypeStatic, state: UpstreamStateUnresolved}
 }
 
-func NewUpstreamResolvedThirdParty(upstream *Upstream, thirdPartyType UpstreamThirdPartyType) *Upstream {
-	u := &Upstream{
-		name:            upstream.name,
-		host:            upstream.host,
-		resource:        upstream.resource,
-		projectName:     upstream.projectName,
-		namespaceName:   upstream.namespaceName,
-		_type:           upstream._type,
-		_3rd_party_type: thirdPartyType,
-		state:           UpstreamStateResolved,
-		external:        true,
-		taskName:        upstream.taskName,
-	}
-	return u
-}
-
 func (u *Upstream) Name() Name {
 	return u.name
 }
@@ -481,10 +499,6 @@ func (u *Upstream) Resource() resource.URN {
 
 func (u *Upstream) Type() UpstreamType {
 	return u._type
-}
-
-func (u *Upstream) ThirdPartyType() UpstreamThirdPartyType {
-	return u._3rd_party_type
 }
 
 func (u *Upstream) State() UpstreamState {
@@ -517,10 +531,6 @@ func (d UpstreamType) String() string {
 	return string(d)
 }
 
-func (d UpstreamThirdPartyType) String() string {
-	return string(d)
-}
-
 func UpstreamTypeFrom(str string) (UpstreamType, error) {
 	switch str {
 	case UpstreamTypeStatic.String():
@@ -531,8 +541,6 @@ func UpstreamTypeFrom(str string) (UpstreamType, error) {
 		return "", errors.InvalidArgument(EntityJob, "unknown type for upstream: "+str)
 	}
 }
-
-type UpstreamThirdPartyType string
 
 type UpstreamState string
 

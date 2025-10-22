@@ -417,6 +417,7 @@ type ResourceConfig struct {
 type Upstreams struct {
 	HTTP         []*HTTPUpstreams
 	UpstreamJobs []*JobUpstream
+	ThirdParty   []*ThirdPartyUpstream
 }
 
 type HTTPUpstreams struct {
@@ -441,7 +442,6 @@ type JobUpstream struct {
 	Type           string
 	External       bool
 	State          string
-	ThirdPartyType string
 }
 
 type JobSummary struct {

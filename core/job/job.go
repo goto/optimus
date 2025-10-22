@@ -457,9 +457,8 @@ type Upstream struct {
 	projectName   tenant.ProjectName
 	namespaceName tenant.NamespaceName
 
-	_type           UpstreamType
-	_3rd_party_type UpstreamThirdPartyType
-	state           UpstreamState
+	_type UpstreamType
+	state UpstreamState
 
 	external bool
 }
@@ -486,22 +485,6 @@ func NewUpstreamUnresolvedStatic(name Name, projectName tenant.ProjectName) *Ups
 	return &Upstream{name: name, projectName: projectName, _type: UpstreamTypeStatic, state: UpstreamStateUnresolved}
 }
 
-func NewUpstreamResolvedThirdParty(upstream *Upstream, thirdPartyType UpstreamThirdPartyType) *Upstream {
-	u := &Upstream{
-		name:            upstream.name,
-		host:            upstream.host,
-		resource:        upstream.resource,
-		projectName:     upstream.projectName,
-		namespaceName:   upstream.namespaceName,
-		_type:           upstream._type,
-		_3rd_party_type: thirdPartyType,
-		state:           UpstreamStateResolved,
-		external:        true,
-		taskName:        upstream.taskName,
-	}
-	return u
-}
-
 func (u *Upstream) Name() Name {
 	return u.name
 }
@@ -516,10 +499,6 @@ func (u *Upstream) Resource() resource.URN {
 
 func (u *Upstream) Type() UpstreamType {
 	return u._type
-}
-
-func (u *Upstream) ThirdPartyType() UpstreamThirdPartyType {
-	return u._3rd_party_type
 }
 
 func (u *Upstream) State() UpstreamState {
@@ -552,10 +531,6 @@ func (d UpstreamType) String() string {
 	return string(d)
 }
 
-func (d UpstreamThirdPartyType) String() string {
-	return string(d)
-}
-
 func UpstreamTypeFrom(str string) (UpstreamType, error) {
 	switch str {
 	case UpstreamTypeStatic.String():
@@ -566,8 +541,6 @@ func UpstreamTypeFrom(str string) (UpstreamType, error) {
 		return "", errors.InvalidArgument(EntityJob, "unknown type for upstream: "+str)
 	}
 }
-
-type UpstreamThirdPartyType string
 
 type UpstreamState string
 

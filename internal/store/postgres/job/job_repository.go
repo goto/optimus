@@ -737,18 +737,17 @@ func specToJob(spec *Spec) (*job.Job, error) {
 }
 
 type JobWithUpstream struct {
-	JobName                string         `json:"job_name"`
-	ProjectName            string         `json:"project_name"`
-	UpstreamJobName        sql.NullString `json:"upstream_job_name"`
-	UpstreamResourceURN    sql.NullString `json:"upstream_resource_urn"`
-	UpstreamProjectName    sql.NullString `json:"upstream_project_name"`
-	UpstreamNamespaceName  sql.NullString `json:"upstream_namespace_name"`
-	UpstreamTaskName       sql.NullString `json:"upstream_task_name"`
-	UpstreamHost           sql.NullString `json:"upstream_host"`
-	UpstreamType           string         `json:"upstream_type"`
-	UpstreamThirdPartyType sql.NullString `json:"upstream_third_party_type"`
-	UpstreamState          string         `json:"upstream_state"`
-	UpstreamExternal       sql.NullBool   `json:"upstream_external"`
+	JobName               string         `json:"job_name"`
+	ProjectName           string         `json:"project_name"`
+	UpstreamJobName       sql.NullString `json:"upstream_job_name"`
+	UpstreamResourceURN   sql.NullString `json:"upstream_resource_urn"`
+	UpstreamProjectName   sql.NullString `json:"upstream_project_name"`
+	UpstreamNamespaceName sql.NullString `json:"upstream_namespace_name"`
+	UpstreamTaskName      sql.NullString `json:"upstream_task_name"`
+	UpstreamHost          sql.NullString `json:"upstream_host"`
+	UpstreamType          string         `json:"upstream_type"`
+	UpstreamState         string         `json:"upstream_state"`
+	UpstreamExternal      sql.NullBool   `json:"upstream_external"`
 }
 
 func (j *JobWithUpstream) getJobFullName() string {
@@ -839,7 +838,7 @@ INSERT INTO job_upstream (
 	upstream_job_id, upstream_job_name, upstream_resource_urn,
 	upstream_project_name, upstream_namespace_name, upstream_host,
 	upstream_task_name, upstream_external,
-	upstream_type, upstream_state, upstream_third_party_type,
+	upstream_type, upstream_state,
 	created_at
 )
 VALUES (
@@ -847,7 +846,7 @@ VALUES (
 	(select id FROM job WHERE name = $3 and project_name = $5), $3, $4,
 	$5, $6, $7,
 	$8, $9,
-	$10, $11, $12,
+	$10, $11,
 	NOW()
 );`
 
@@ -855,7 +854,7 @@ VALUES (
 INSERT INTO job_upstream (
 	job_id, job_name, project_name,
 	upstream_job_name, upstream_resource_urn, upstream_project_name,
-	upstream_type, upstream_state, upstream_third_party_type,
+	upstream_type, upstream_state,
 	created_at
 )
 VALUES (
@@ -875,12 +874,12 @@ VALUES (
 				upstream.UpstreamJobName, upstream.UpstreamResourceURN,
 				upstream.UpstreamProjectName, upstream.UpstreamNamespaceName, upstream.UpstreamHost,
 				upstream.UpstreamTaskName, upstream.UpstreamExternal,
-				upstream.UpstreamType, upstream.UpstreamState, upstream.UpstreamThirdPartyType)
+				upstream.UpstreamType, upstream.UpstreamState)
 		} else {
 			tag, err = tx.Exec(ctx, insertUnresolvedUpstreamQuery,
 				upstream.JobName, upstream.ProjectName,
 				upstream.UpstreamJobName, upstream.UpstreamResourceURN, upstream.UpstreamProjectName,
-				upstream.UpstreamType, upstream.UpstreamState, upstream.UpstreamThirdPartyType)
+				upstream.UpstreamType, upstream.UpstreamState)
 		}
 
 		if err != nil {
@@ -949,18 +948,17 @@ func toJobUpstream(jobWithUpstream *job.WithUpstream) []*JobWithUpstream {
 			upstreamNamespaceName = upstream.NamespaceName().String()
 		}
 		jobUpstreams = append(jobUpstreams, &JobWithUpstream{
-			JobName:                jobWithUpstream.Name().String(),
-			ProjectName:            jobWithUpstream.Job().ProjectName().String(),
-			UpstreamJobName:        toNullString(upstream.Name().String()),
-			UpstreamResourceURN:    toNullString(upstream.Resource().String()),
-			UpstreamProjectName:    toNullString(upstreamProjectName),
-			UpstreamNamespaceName:  toNullString(upstreamNamespaceName),
-			UpstreamTaskName:       toNullString(upstream.TaskName().String()),
-			UpstreamHost:           toNullString(upstream.Host()),
-			UpstreamType:           upstream.Type().String(),
-			UpstreamThirdPartyType: toNullString(upstream.ThirdPartyType().String()),
-			UpstreamState:          upstream.State().String(),
-			UpstreamExternal:       toNullBool(upstream.External()),
+			JobName:               jobWithUpstream.Name().String(),
+			ProjectName:           jobWithUpstream.Job().ProjectName().String(),
+			UpstreamJobName:       toNullString(upstream.Name().String()),
+			UpstreamResourceURN:   toNullString(upstream.Resource().String()),
+			UpstreamProjectName:   toNullString(upstreamProjectName),
+			UpstreamNamespaceName: toNullString(upstreamNamespaceName),
+			UpstreamTaskName:      toNullString(upstream.TaskName().String()),
+			UpstreamHost:          toNullString(upstream.Host()),
+			UpstreamType:          upstream.Type().String(),
+			UpstreamState:         upstream.State().String(),
+			UpstreamExternal:      toNullBool(upstream.External()),
 		})
 	}
 	return jobUpstreams

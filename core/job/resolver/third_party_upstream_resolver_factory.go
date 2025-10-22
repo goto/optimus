@@ -19,7 +19,7 @@ func NewThirdPartyUpstreamResolvers(upstreamResolvers ...config.UpstreamResolver
 		switch upstreamResolver.Type {
 		case config.DexUpstreamResolver:
 			// config can be accessed via upstreamResolver.Config if needed in the future
-			resolvers = append(resolvers, NewDexUpstreamResolver())
+			resolvers = append(resolvers, NewDexUpstreamResolver(upstreamResolver.Config))
 		}
 	}
 	return resolvers

@@ -8,7 +8,7 @@ import (
 type Upstreams struct {
 	HTTP       []*scheduler.HTTPUpstreams
 	Upstreams  []Upstream
-	ThirdParty []ThirdPartyUpstream
+	ThirdParty []*scheduler.ThirdPartyUpstream
 }
 
 func (u Upstreams) Empty() bool {
@@ -25,22 +25,9 @@ type Upstream struct {
 	TaskName string
 }
 
-type ThirdPartyUpstream struct {
-	Type string
-	URN  string
-}
-
 func SetupUpstreams(upstreams scheduler.Upstreams, host string) Upstreams {
 	var ups []Upstream
-	var thirdUps []ThirdPartyUpstream
 	for _, u := range upstreams.UpstreamJobs {
-		if u.ThirdPartyType != "" {
-			thirdUps = append(thirdUps, ThirdPartyUpstream{
-				Type: u.ThirdPartyType,
-				URN:  u.DestinationURN.GetName(),
-			})
-			continue
-		}
 		var upstreamHost string
 		if !u.External {
 			upstreamHost = host
@@ -58,6 +45,6 @@ func SetupUpstreams(upstreams scheduler.Upstreams, host string) Upstreams {
 	return Upstreams{
 		HTTP:       upstreams.HTTP,
 		Upstreams:  ups,
-		ThirdParty: thirdUps,
+		ThirdParty: upstreams.ThirdParty,
 	}
 }

@@ -737,29 +737,37 @@ func specToJob(spec *Spec) (*job.Job, error) {
 }
 
 type JobWithUpstream struct {
-	JobName                string         `json:"job_name"`
-	ProjectName            string         `json:"project_name"`
-	UpstreamJobName        sql.NullString `json:"upstream_job_name"`
-	UpstreamResourceURN    sql.NullString `json:"upstream_resource_urn"`
-	UpstreamProjectName    sql.NullString `json:"upstream_project_name"`
-	UpstreamNamespaceName  sql.NullString `json:"upstream_namespace_name"`
-	UpstreamTaskName       sql.NullString `json:"upstream_task_name"`
-	UpstreamHost           sql.NullString `json:"upstream_host"`
-	UpstreamType           string         `json:"upstream_type"`
-	UpstreamThirdPartyType sql.NullString `json:"upstream_third_party_type"`
-	UpstreamState          string         `json:"upstream_state"`
-	UpstreamExternal       sql.NullBool   `json:"upstream_external"`
+	JobName               string         `json:"job_name"`
+	ProjectName           string         `json:"project_name"`
+	UpstreamJobName       sql.NullString `json:"upstream_job_name"`
+	UpstreamResourceURN   sql.NullString `json:"upstream_resource_urn"`
+	UpstreamProjectName   sql.NullString `json:"upstream_project_name"`
+	UpstreamNamespaceName sql.NullString `json:"upstream_namespace_name"`
+	UpstreamTaskName      sql.NullString `json:"upstream_task_name"`
+	UpstreamHost          sql.NullString `json:"upstream_host"`
+	UpstreamType          string         `json:"upstream_type"`
+	UpstreamState         string         `json:"upstream_state"`
+	UpstreamExternal      sql.NullBool   `json:"upstream_external"`
 }
 
 func (j *JobWithUpstream) getJobFullName() string {
 	return j.ProjectName + "/" + j.JobName
 }
 
+type JobWithThirdPartyUpstream struct {
+	JobName                      string            `json:"job_name"`
+	ProjectName                  string            `json:"project_name"`
+	UpstreamThirdPartyType       string            `json:"upstream_third_party_type"`
+	UpstreamThirdPartyIdentifier string            `json:"upstream_third_party_identifier"`
+	UpstreamThirdPartyConfig     map[string]string `json:"upstream_third_party_config"`
+}
+
 func (j JobRepository) ReplaceUpstreams(ctx context.Context, jobsWithUpstreams []*job.WithUpstream) error {
 	var jobUpstreams []*JobWithUpstream
+	var thirdPartyUpstreams []*JobWithThirdPartyUpstream
 	for _, jobWithUpstreams := range jobsWithUpstreams {
-		singleJobUpstreams := toJobUpstream(jobWithUpstreams)
-		jobUpstreams = append(jobUpstreams, singleJobUpstreams...)
+		jobUpstreams = append(jobUpstreams, toJobUpstream(jobWithUpstreams)...)
+		thirdPartyUpstreams = append(thirdPartyUpstreams, toJobThirdPartyUpstream(jobWithUpstreams)...)
 	}
 
 	tx, err := j.db.Begin(ctx)
@@ -780,8 +788,46 @@ func (j JobRepository) ReplaceUpstreams(ctx context.Context, jobsWithUpstreams [
 		tx.Rollback(ctx)
 		return err
 	}
+	if err = j.insertThirdPartyUpstreams(ctx, tx, thirdPartyUpstreams); err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
 
 	tx.Commit(ctx)
+	return nil
+}
+
+func (JobRepository) insertThirdPartyUpstreams(ctx context.Context, tx pgx.Tx, storageThirdPartyUpstreams []*JobWithThirdPartyUpstream) error {
+	upsertThirdPartyUpstreamQuery := `
+INSERT INTO job_third_party_upstream (
+	job_id, job_name, project_name,
+	upstream_third_party_type, upstream_third_party_identifier, upstream_third_party_config,
+	created_at
+)
+VALUES (
+	(select id FROM job WHERE name = $1 and project_name = $2), $1, $2,
+	$3, $4, $5,
+	NOW()
+);`
+
+	for _, upstream := range storageThirdPartyUpstreams {
+		tag, err := tx.Exec(ctx, upsertThirdPartyUpstreamQuery,
+			upstream.JobName, upstream.ProjectName,
+			upstream.UpstreamThirdPartyType, upstream.UpstreamThirdPartyIdentifier, upstream.UpstreamThirdPartyConfig)
+		if err != nil {
+			if postgres.ErrorCodeEqual(err, postgres.ErrPgCodeUniqueConstraints) {
+				errMsg := fmt.Sprintf("duplicate constraints found in job_name %s with third party upstream identifier %s", upstream.JobName, upstream.UpstreamThirdPartyIdentifier)
+				wrappedErr := errors.NewError(errors.ErrFailedPrecond, job.EntityJob, errMsg)
+				wrappedErr.WrappedErr = err
+				return wrappedErr
+			}
+			return errors.InternalError(job.EntityJob, "unable to save job third party upstream", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return errors.NewError(errors.ErrInternalError, job.EntityJob, "unable to save job third party upstream, rows affected 0")
+		}
+	}
+
 	return nil
 }
 
@@ -792,7 +838,7 @@ INSERT INTO job_upstream (
 	upstream_job_id, upstream_job_name, upstream_resource_urn,
 	upstream_project_name, upstream_namespace_name, upstream_host,
 	upstream_task_name, upstream_external,
-	upstream_type, upstream_state, upstream_third_party_type,
+	upstream_type, upstream_state,
 	created_at
 )
 VALUES (
@@ -800,7 +846,7 @@ VALUES (
 	(select id FROM job WHERE name = $3 and project_name = $5), $3, $4,
 	$5, $6, $7,
 	$8, $9,
-	$10, $11, $12,
+	$10, $11,
 	NOW()
 );`
 
@@ -808,13 +854,13 @@ VALUES (
 INSERT INTO job_upstream (
 	job_id, job_name, project_name,
 	upstream_job_name, upstream_resource_urn, upstream_project_name,
-	upstream_type, upstream_state, upstream_third_party_type,
+	upstream_type, upstream_state,
 	created_at
 )
 VALUES (
 	(select id FROM job WHERE name = $1 and project_name = $2), $1, $2, 
 	$3, $4, $5,
-	$6, $7, $8,
+	$6, $7,
 	NOW()
 );
 `
@@ -828,12 +874,12 @@ VALUES (
 				upstream.UpstreamJobName, upstream.UpstreamResourceURN,
 				upstream.UpstreamProjectName, upstream.UpstreamNamespaceName, upstream.UpstreamHost,
 				upstream.UpstreamTaskName, upstream.UpstreamExternal,
-				upstream.UpstreamType, upstream.UpstreamState, upstream.UpstreamThirdPartyType)
+				upstream.UpstreamType, upstream.UpstreamState)
 		} else {
 			tag, err = tx.Exec(ctx, insertUnresolvedUpstreamQuery,
 				upstream.JobName, upstream.ProjectName,
 				upstream.UpstreamJobName, upstream.UpstreamResourceURN, upstream.UpstreamProjectName,
-				upstream.UpstreamType, upstream.UpstreamState, upstream.UpstreamThirdPartyType)
+				upstream.UpstreamType, upstream.UpstreamState)
 		}
 
 		if err != nil {
@@ -854,17 +900,40 @@ VALUES (
 	return nil
 }
 
-func (JobRepository) deleteUpstreamsByJobNames(ctx context.Context, tx pgx.Tx, jobUpstreams []string) error {
+func (JobRepository) deleteUpstreamsByJobNames(ctx context.Context, tx pgx.Tx, jobFullNames []string) error {
 	deleteForProjectScope := `DELETE
 FROM job_upstream
 WHERE project_name || '/' || job_name = any ($1);`
 
-	_, err := tx.Exec(ctx, deleteForProjectScope, jobUpstreams)
+	_, err := tx.Exec(ctx, deleteForProjectScope, jobFullNames)
 	if err != nil {
 		return errors.Wrap(job.EntityJob, "error during delete of job upstream", err)
 	}
 
+	deleteThirdPartyUpstreamsForProjectScope := `DELETE
+FROM job_third_party_upstream
+WHERE project_name || '/' || job_name = any ($1);`
+
+	_, err = tx.Exec(ctx, deleteThirdPartyUpstreamsForProjectScope, jobFullNames)
+	if err != nil {
+		return errors.Wrap(job.EntityJob, "error during delete of job third party upstream", err)
+	}
+
 	return nil
+}
+
+func toJobThirdPartyUpstream(jobWithUpstream *job.WithUpstream) []*JobWithThirdPartyUpstream {
+	var jobThirdPartyUpstreams []*JobWithThirdPartyUpstream
+	for _, upstream := range jobWithUpstream.ThirdPartyUpstreams() {
+		jobThirdPartyUpstreams = append(jobThirdPartyUpstreams, &JobWithThirdPartyUpstream{
+			JobName:                      jobWithUpstream.Name().String(),
+			ProjectName:                  jobWithUpstream.Job().ProjectName().String(),
+			UpstreamThirdPartyType:       upstream.Type(),
+			UpstreamThirdPartyIdentifier: upstream.Identifier(),
+			UpstreamThirdPartyConfig:     upstream.Config(),
+		})
+	}
+	return jobThirdPartyUpstreams
 }
 
 func toJobUpstream(jobWithUpstream *job.WithUpstream) []*JobWithUpstream {
@@ -879,18 +948,17 @@ func toJobUpstream(jobWithUpstream *job.WithUpstream) []*JobWithUpstream {
 			upstreamNamespaceName = upstream.NamespaceName().String()
 		}
 		jobUpstreams = append(jobUpstreams, &JobWithUpstream{
-			JobName:                jobWithUpstream.Name().String(),
-			ProjectName:            jobWithUpstream.Job().ProjectName().String(),
-			UpstreamJobName:        toNullString(upstream.Name().String()),
-			UpstreamResourceURN:    toNullString(upstream.Resource().String()),
-			UpstreamProjectName:    toNullString(upstreamProjectName),
-			UpstreamNamespaceName:  toNullString(upstreamNamespaceName),
-			UpstreamTaskName:       toNullString(upstream.TaskName().String()),
-			UpstreamHost:           toNullString(upstream.Host()),
-			UpstreamType:           upstream.Type().String(),
-			UpstreamThirdPartyType: toNullString(upstream.ThirdPartyType().String()),
-			UpstreamState:          upstream.State().String(),
-			UpstreamExternal:       toNullBool(upstream.External()),
+			JobName:               jobWithUpstream.Name().String(),
+			ProjectName:           jobWithUpstream.Job().ProjectName().String(),
+			UpstreamJobName:       toNullString(upstream.Name().String()),
+			UpstreamResourceURN:   toNullString(upstream.Resource().String()),
+			UpstreamProjectName:   toNullString(upstreamProjectName),
+			UpstreamNamespaceName: toNullString(upstreamNamespaceName),
+			UpstreamTaskName:      toNullString(upstream.TaskName().String()),
+			UpstreamHost:          toNullString(upstream.Host()),
+			UpstreamType:          upstream.Type().String(),
+			UpstreamState:         upstream.State().String(),
+			UpstreamExternal:      toNullBool(upstream.External()),
 		})
 	}
 	return jobUpstreams

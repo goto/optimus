@@ -350,6 +350,10 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 		return nil, errors.GRPCErr(err, errorMsg)
 	}
 
+	if errors.IsErrorType(err, errors.ErrNotFound) {
+		return nil, errors.GRPCErr(err, "job specification not found")
+	}
+
 	// TODO: return 404 if job is not found
 	return &pb.GetJobSpecificationResponse{
 		Spec: ToJobProto(jobSpec),

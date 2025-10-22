@@ -18,6 +18,7 @@ import (
 	"github.com/goto/optimus/core/job/handler/v1beta1"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
+	ierror "github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils/filter"
@@ -1634,6 +1635,24 @@ func TestNewJobHandler(t *testing.T) {
 			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
 			resp, err := jobHandler.GetJobSpecification(ctx, &request)
 			assert.Error(t, err)
+			assert.Nil(t, resp)
+		})
+		t.Run("return error not found when job not found", func(t *testing.T) {
+			jobService := new(JobService)
+			changeLogService := new(ChangeLogService)
+			defer jobService.AssertExpectations(t)
+
+			request := pb.GetJobSpecificationRequest{
+				ProjectName:   sampleTenant.ProjectName().String(),
+				NamespaceName: sampleTenant.NamespaceName().String(),
+				JobName:       "job-A",
+			}
+
+			jobService.On("Get", ctx, sampleTenant, job.Name("job-A")).Return(nil, ierror.NotFound("job", "job not found"))
+			jobHandler := v1beta1.NewJobHandler(jobService, changeLogService, log)
+			resp, err := jobHandler.GetJobSpecification(ctx, &request)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "code = NotFound")
 			assert.Nil(t, resp)
 		})
 		t.Run("return success", func(t *testing.T) {

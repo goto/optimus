@@ -28,7 +28,9 @@ const (
 				  task_name, task_config, window_spec, assets, hooks, metadata, destination, sources, project_name, namespace_name, created_at, updated_at`
 	upstreamColumns = `
     job_name, project_name, upstream_job_name, upstream_project_name, upstream_host,
-    upstream_namespace_name, upstream_resource_urn, upstream_task_name, upstream_type, upstream_external, upstream_state, upstream_third_party_type`
+    upstream_namespace_name, upstream_resource_urn, upstream_task_name, upstream_type, upstream_external, upstream_state`
+
+	thirdPartyUpstreamColumns = `job_id, job_name, project_name, upstream_third_party_type, upstream_third_party_identifier, upstream_third_party_config, created_at`
 
 	jobSummaryColumns = `name, version, project_name, namespace_name, schedule, window_spec, alert`
 )
@@ -51,34 +53,39 @@ type Retry struct {
 	ExponentialBackoff bool
 }
 
+type ThirdPartyUpstream struct {
+	JobID                        uuid.UUID
+	JobName                      string
+	ProjectName                  string
+	UpstreamThirdPartyType       string
+	UpstreamThirdPartyIdentifier string
+	UpstreamThirdPartyConfig     map[string]string
+	CreatedAt                    time.Time
+}
+
 type JobUpstreams struct {
-	JobID                  uuid.UUID
-	JobName                string
-	ProjectName            string
-	UpstreamJobID          uuid.UUID
-	UpstreamJobName        sql.NullString
-	UpstreamResourceUrn    sql.NullString
-	UpstreamProjectName    sql.NullString
-	UpstreamNamespaceName  sql.NullString
-	UpstreamTaskName       sql.NullString
-	UpstreamHost           sql.NullString
-	UpstreamType           string
-	UpstreamThirdPartyType sql.NullString
-	UpstreamState          string
-	UpstreamExternal       sql.NullBool
+	JobID                 uuid.UUID
+	JobName               string
+	ProjectName           string
+	UpstreamJobID         uuid.UUID
+	UpstreamJobName       sql.NullString
+	UpstreamResourceUrn   sql.NullString
+	UpstreamProjectName   sql.NullString
+	UpstreamNamespaceName sql.NullString
+	UpstreamTaskName      sql.NullString
+	UpstreamHost          sql.NullString
+	UpstreamType          string
+	UpstreamState         string
+	UpstreamExternal      sql.NullBool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
 func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
-	var t tenant.Tenant
-	if j.UpstreamThirdPartyType.String == "" { // non 3rd party upstream uses job's tenant
-		var err error
-		t, err = tenant.NewTenant(j.UpstreamProjectName.String, j.UpstreamNamespaceName.String)
-		if err != nil {
-			return nil, err
-		}
+	t, err := tenant.NewTenant(j.UpstreamProjectName.String, j.UpstreamNamespaceName.String)
+	if err != nil {
+		return nil, err
 	}
 
 	var destinationURN resource.URN
@@ -100,7 +107,6 @@ func (j *JobUpstreams) toJobUpstreams() (*scheduler.JobUpstream, error) {
 		Type:           j.UpstreamType,
 		External:       j.UpstreamExternal.Bool,
 		State:          j.UpstreamState,
-		ThirdPartyType: j.UpstreamThirdPartyType.String,
 	}, nil
 }
 
@@ -524,7 +530,7 @@ func (j *JobRepository) getJobsUpstreams(ctx context.Context, projectName tenant
 	for rows.Next() {
 		var jwu JobUpstreams
 		err := rows.Scan(&jwu.JobName, &jwu.ProjectName, &jwu.UpstreamJobName, &jwu.UpstreamProjectName, &jwu.UpstreamHost,
-			&jwu.UpstreamNamespaceName, &jwu.UpstreamResourceUrn, &jwu.UpstreamTaskName, &jwu.UpstreamType, &jwu.UpstreamExternal, &jwu.UpstreamState, &jwu.UpstreamThirdPartyType)
+			&jwu.UpstreamNamespaceName, &jwu.UpstreamResourceUrn, &jwu.UpstreamTaskName, &jwu.UpstreamType, &jwu.UpstreamExternal, &jwu.UpstreamState)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, errors.NotFound(scheduler.EntityJobRun, "job upstream not found")
@@ -536,6 +542,38 @@ func (j *JobRepository) getJobsUpstreams(ctx context.Context, projectName tenant
 	}
 
 	return groupUpstreamsByJobName(upstreams)
+}
+
+func (j *JobRepository) getThirdPartyUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []string) (map[string][]*scheduler.ThirdPartyUpstream, error) {
+	getJobUpstreamsByNameAtProject := "SELECT " + thirdPartyUpstreamColumns + " FROM job_third_party_upstream WHERE project_name = $1 and job_name = any ($2)"
+	rows, err := j.db.Query(ctx, getJobUpstreamsByNameAtProject, projectName, jobNames)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "error while getting job with third party upstreams", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string][]*scheduler.ThirdPartyUpstream)
+	for rows.Next() {
+		var jwu ThirdPartyUpstream
+		err := rows.Scan(&jwu.JobID, &jwu.JobName, &jwu.ProjectName, &jwu.UpstreamThirdPartyType, &jwu.UpstreamThirdPartyIdentifier, &jwu.UpstreamThirdPartyConfig, &jwu.CreatedAt)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, errors.NotFound(scheduler.EntityJobRun, "job third party upstream not found")
+			}
+
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error in reading row for resource", err)
+		}
+		if _, ok := result[jwu.JobName]; !ok {
+			result[jwu.JobName] = []*scheduler.ThirdPartyUpstream{}
+		}
+		result[jwu.JobName] = append(result[jwu.JobName], &scheduler.ThirdPartyUpstream{
+			Type:       jwu.UpstreamThirdPartyType,
+			Identifier: jwu.UpstreamThirdPartyIdentifier,
+			Config:     jwu.UpstreamThirdPartyConfig,
+		})
+	}
+
+	return result, nil
 }
 
 func (j *JobRepository) GetAll(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.JobWithDetails, error) {
@@ -571,8 +609,16 @@ func (j *JobRepository) GetAll(ctx context.Context, projectName tenant.ProjectNa
 	jobUpstreamGroupedByName, err := j.getJobsUpstreams(ctx, projectName, jobNameList)
 	multiError.Append(err)
 
-	for jobName, upstreamList := range jobUpstreamGroupedByName {
-		jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
+	thirdPartyUpstreamGroupedByName, err := j.getThirdPartyUpstreams(ctx, projectName, jobNameList)
+	multiError.Append(err)
+
+	for jobName := range jobsMap {
+		if upstreamList, ok := jobUpstreamGroupedByName[jobName]; ok {
+			jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
+		}
+		if thirdPartyList, ok := thirdPartyUpstreamGroupedByName[jobName]; ok {
+			jobsMap[jobName].Upstreams.ThirdParty = thirdPartyList
+		}
 	}
 
 	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), multiError.ToErr()
@@ -613,8 +659,16 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 	jobUpstreamGroupedByName, err := j.getJobsUpstreams(ctx, projectName, jobNameList)
 	multiError.Append(err)
 
-	for jobName, upstreamList := range jobUpstreamGroupedByName {
-		jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
+	thirdPartyUpstreamGroupedByName, err := j.getThirdPartyUpstreams(ctx, projectName, jobNameList)
+	multiError.Append(err)
+
+	for jobName := range jobsMap {
+		if upstreamList, ok := jobUpstreamGroupedByName[jobName]; ok {
+			jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
+		}
+		if thirdPartyList, ok := thirdPartyUpstreamGroupedByName[jobName]; ok {
+			jobsMap[jobName].Upstreams.ThirdParty = thirdPartyList
+		}
 	}
 
 	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
@@ -669,9 +723,15 @@ func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.
 		jobUpstreamGroupedByName, err := j.getJobsUpstreams(ctx, projectName, jobNameList)
 		multiError.Append(err)
 
-		for jobName, upstreamList := range jobUpstreamGroupedByName {
-			if job, ok := jobsMap[jobName]; ok {
-				job.Upstreams.UpstreamJobs = upstreamList
+		thirdPartyUpstreamGroupedByName, err := j.getThirdPartyUpstreams(ctx, projectName, jobNameList)
+		multiError.Append(err)
+
+		for jobName := range jobsMap {
+			if upstreamList, ok := jobUpstreamGroupedByName[jobName]; ok {
+				jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
+			}
+			if thirdPartyList, ok := thirdPartyUpstreamGroupedByName[jobName]; ok {
+				jobsMap[jobName].Upstreams.ThirdParty = thirdPartyList
 			}
 		}
 	}

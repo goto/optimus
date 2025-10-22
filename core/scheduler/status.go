@@ -149,7 +149,7 @@ func (j JobRunStatusList) GetSortedRunsByStates(states []State) []*JobRunStatus 
 		stateMap[state] = true
 	}
 
-	var result []*JobRunStatus
+	result := []*JobRunStatus{}
 	for _, run := range j {
 		if stateMap[run.State] {
 			result = append(result, run)

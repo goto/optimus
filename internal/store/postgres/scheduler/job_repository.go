@@ -744,7 +744,7 @@ func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []schedu
 	return jobsMap, multiError.ToErr()
 }
 
-func (j *JobRepository) GetChangelogs(ctx context.Context, filter *scheduler.ChangelogFilter) ([]*scheduler.Changelog, error) {
+func (j *JobRepository) GetChangelogs(ctx context.Context, filter scheduler.ChangelogFilter) ([]*scheduler.Changelog, error) {
 	me := errors.NewMultiError("get changelog errors")
 
 	query := `
@@ -757,18 +757,18 @@ func (j *JobRepository) GetChangelogs(ctx context.Context, filter *scheduler.Cha
 		project_name = $1 AND name = $2 AND entity_type = $3`
 
 	args := []any{filter.ProjectName, filter.Name, "job"}
-	argIndex := 4
+	argIndex := 3
 
 	if !filter.StartTime.IsZero() {
+		argIndex++
 		query += " AND created_at >= $" + fmt.Sprintf("%d", argIndex)
 		args = append(args, filter.StartTime)
-		argIndex++
 	}
 
 	if !filter.EndTime.IsZero() {
+		argIndex++
 		query += " AND created_at <= $" + fmt.Sprintf("%d", argIndex)
 		args = append(args, filter.EndTime)
-		argIndex++
 	}
 
 	query += " ORDER BY created_at DESC"

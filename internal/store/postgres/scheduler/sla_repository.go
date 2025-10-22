@@ -171,6 +171,16 @@ func (s *SLARepository) RemoveProcessedSLA(ctx context.Context, slaID uuid.UUID)
 	return nil
 }
 
+func (s *SLARepository) StorePredictedSLABreach(ctx context.Context, jobTargetName scheduler.JobName, jobCauseName scheduler.JobName, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error {
+	insertQuery := `INSERT INTO sla_predictor (job_name, job_scheduled_at, job_cause_name, cause, reference_time, config, lineages, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, now())`
+	_, err := s.db.Exec(ctx, insertQuery, jobTargetName, jobScheduledAt, jobCauseName, cause, referenceTime, config, lineages)
+	if err != nil {
+		return errors.Wrap(scheduler.EntityEvent, "error storing predicted SLA breach", err)
+	}
+	return nil
+}
+
 func SLAFromRow(row pgx.Row) (*OperatorsSLA, error) {
 	var sla OperatorsSLA
 	err := row.Scan(&sla.ID, &sla.ProjectName, &sla.JobName, &sla.OperatorName, &sla.OperatorType, &sla.RunID,

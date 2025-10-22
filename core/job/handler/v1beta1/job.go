@@ -344,17 +344,12 @@ func (jh *JobHandler) GetJobSpecification(ctx context.Context, req *pb.GetJobSpe
 	}
 
 	jobSpec, err := jh.jobService.Get(ctx, jobTenant, jobName)
-	if err != nil && !errors.IsErrorType(err, errors.ErrNotFound) {
+	if err != nil {
 		errorMsg := "failed to get job specification"
 		jh.l.Error(fmt.Sprintf("%s: %s", err.Error(), errorMsg))
 		return nil, errors.GRPCErr(err, errorMsg)
 	}
 
-	if errors.IsErrorType(err, errors.ErrNotFound) {
-		return nil, errors.GRPCErr(err, "job specification not found")
-	}
-
-	// TODO: return 404 if job is not found
 	return &pb.GetJobSpecificationResponse{
 		Spec: ToJobProto(jobSpec),
 	}, nil

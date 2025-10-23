@@ -2,15 +2,16 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/writer"
 )
 
-type dexUpstreamResolver struct {
-}
+type dexUpstreamResolver struct{}
 
 func NewDexUpstreamResolver(_ map[string]interface{}) *dexUpstreamResolver {
 	return &dexUpstreamResolver{}
@@ -35,11 +36,14 @@ func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstreams
 }
 
 func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error) {
+	me := errors.NewMultiError(fmt.Sprintf("[%s] dex 3rd upstream resolution errors for job %s", jobWithUpstream.Job().Tenant().NamespaceName().String(), jobWithUpstream.Name().String()))
 	upstreams := []*job.Upstream{}
 	thirdPartyUpstreams := []*job.ThirdPartyUpstream{}
 	for _, unresolvedUpstream := range jobWithUpstream.GetUnresolvedUpstreams() {
 		// segregate DEX managed upstreams and non-DEX managed upstreams
-		if u.isDEXManagedUpstream(ctx, unresolvedUpstream.Resource()) {
+		if isDEXManaged, err := u.isDEXManagedUpstream(ctx, unresolvedUpstream.Resource()); err != nil {
+			me.Append(err)
+		} else if isDEXManaged {
 			config := map[string]string{}
 			config["resource_urn"] = unresolvedUpstream.Resource().String()
 			resolvedUpstream := job.NewThirdPartyUpstream("dex", unresolvedUpstream.Resource().GetName(), config) // TODO: set resolved third party type as constant
@@ -48,10 +52,13 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 			upstreams = append(upstreams, unresolvedUpstream)
 		}
 	}
-	return job.NewWithUpstreamAndThirdPartyUpstreams(jobWithUpstream.Job(), upstreams, thirdPartyUpstreams), nil
+	if len(me.Errors) > 0 {
+		lw.Write(writer.LogLevelError, me.ToErr().Error())
+	}
+	return job.NewWithUpstreamAndThirdPartyUpstreams(jobWithUpstream.Job(), upstreams, thirdPartyUpstreams), me.ToErr()
 }
 
-func (u *dexUpstreamResolver) isDEXManagedUpstream(_ context.Context, resourceURN resource.URN) bool {
+func (*dexUpstreamResolver) isDEXManagedUpstream(_ context.Context, resourceURN resource.URN) (bool, error) {
 	// now, only resolved if resource_urn contains _raw
-	return strings.Contains(string(resourceURN.String()), "_raw")
+	return strings.Contains(resourceURN.String(), "_raw"), nil
 }

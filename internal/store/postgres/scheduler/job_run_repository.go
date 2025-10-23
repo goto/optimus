@@ -365,6 +365,7 @@ func getQueryTask(lastNRuns, percentile int) string {
 		WHERE t.end_time IS NOT NULL
 		AND j.job_name = ANY($1)
 		AND j.updated_at <= $2
+		and t.status = 'success'
 	)
 	SELECT
 		job_name,
@@ -400,6 +401,7 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 		FROM job_run j
 		JOIN hook_run h ON h.job_run_id = j.id
 		WHERE h.end_time IS NOT NULL
+		and h.status = 'success'
 		AND j.job_name = ANY($1)
 		AND j.updated_at <= $2
 		%s

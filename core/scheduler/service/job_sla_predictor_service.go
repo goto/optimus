@@ -340,10 +340,6 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 			continue
 		}
 
-		if job.JobName.String() == "p_mab_id_mart.log_finance.fact_cicil_finance_datamart_disbursement" {
-			s.l.Info("debugging inferred SLA", "job", job.JobName, "inferred_sla", jobSLAStates[job.JobName].InferredSLA, "duration", jobSLAStates[job.JobName].EstimatedDuration, "path", paths)
-		}
-
 		inferredSLA := *jobSLAStates[job.JobName].InferredSLA
 
 		// check if job meets either of the conditions

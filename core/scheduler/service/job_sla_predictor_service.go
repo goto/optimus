@@ -76,7 +76,7 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 	}
 }
 
-func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, referenceTime time.Time, nextScheduleRangeInHours time.Duration, prevScheduledRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
+func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, referenceTime time.Time, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
 	// map of jobName -> map of upstreamJobName -> JobState
 	jobBreaches := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
 
@@ -103,7 +103,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	}
 
 	// get scheduled at
-	jobSchedules := s.getJobSchedules(jobsWithDetails, nextScheduleRangeInHours, prevScheduledRangeInHours, referenceTime)
+	jobSchedules := s.getJobSchedules(jobsWithDetails, nextScheduleRangeInHours, referenceTime)
 	if len(jobSchedules) == 0 {
 		s.l.Warn("no job schedules found for the given jobs in the next schedule range, skipping SLA prediction")
 		return jobBreaches, nil
@@ -234,7 +234,7 @@ func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails
 	return targetedSLAByJobName
 }
 
-func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, nextScheduleRangeInHours, prevScheduledRangeInHours time.Duration, referenceTime time.Time) []*scheduler.JobSchedule {
+func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, nextScheduleRangeInHours time.Duration, referenceTime time.Time) []*scheduler.JobSchedule {
 	jobSchedules := make([]*scheduler.JobSchedule, 0, len(jobs))
 	for _, job := range jobs {
 		if job.Schedule == nil {
@@ -245,7 +245,7 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 			s.l.Warn("failed to get scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
 			continue
 		}
-		if scheduledAt.After(referenceTime.Add(nextScheduleRangeInHours)) || scheduledAt.Before(referenceTime.Add(-prevScheduledRangeInHours)) {
+		if scheduledAt.After(referenceTime.Add(nextScheduleRangeInHours)) {
 			continue
 		}
 		jobSchedules = append(jobSchedules, &scheduler.JobSchedule{

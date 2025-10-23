@@ -19,7 +19,7 @@ import (
 )
 
 type JobSLAPredictorService interface {
-	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, referenceTime time.Time, nextScheduleRangeInHours time.Duration, prevScheduledRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
+	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, referenceTime time.Time, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
 }
 
 type JobRunService interface {
@@ -365,12 +365,11 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 	}
 	// consider jobs with next schedule within next nextScheduleRangeInHours hours
 	nextScheduleRangeInHours := time.Duration(req.GetNextScheduledRangeInHours()) * time.Hour
-	prevScheduledRangeInHours := time.Duration(req.GetPrevScheduledRangeInHours()) * time.Hour
 	referenceTime := time.Now().UTC()
 	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
 		referenceTime = req.GetReferenceTime().AsTime().UTC()
 	}
-	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, referenceTime, nextScheduleRangeInHours, prevScheduledRangeInHours, jobNames, req.GetJobLabels(), req.GetAlertOnBreach(), req.GetSeverity())
+	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, referenceTime, nextScheduleRangeInHours, jobNames, req.GetJobLabels(), req.GetAlertOnBreach(), req.GetSeverity())
 	if err != nil {
 		h.l.Error("error identifying potential SLA breaches: %v", err)
 		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")

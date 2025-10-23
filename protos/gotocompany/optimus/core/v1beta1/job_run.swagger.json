@@ -480,10 +480,6 @@
                 "referenceTime": {
                   "type": "string",
                   "format": "date-time"
-                },
-                "prevScheduledRangeInHours": {
-                  "type": "integer",
-                  "format": "int32"
                 }
               }
             }

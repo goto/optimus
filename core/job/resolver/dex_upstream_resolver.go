@@ -58,7 +58,7 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	return job.NewWithUpstreamAndThirdPartyUpstreams(jobWithUpstream.Job(), upstreams, thirdPartyUpstreams), me.ToErr()
 }
 
-func (*dexUpstreamResolver) isDEXManagedUpstream(_ context.Context, resourceURN resource.URN) (bool, error) {
+func (*dexUpstreamResolver) isDEXManagedUpstream(_ context.Context, resourceURN resource.URN) (bool, error) { //nolint:unparam
 	// now, only resolved if resource_urn contains _raw
 	return strings.Contains(resourceURN.String(), "_raw"), nil
 }

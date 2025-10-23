@@ -14,7 +14,7 @@ import (
 
 const (
 	// MaxLineageDepth is a safeguard to avoid infinite recursion in case of unexpected cycles
-	MaxLineageDepth = 50
+	MaxLineageDepth = 20
 )
 
 type JobUpstreamRepository interface {
@@ -168,47 +168,71 @@ type upstreamCandidate struct {
 }
 
 func (r *LineageResolver) pruneLineage(lineage *scheduler.JobLineageSummary, maxUpstreamsPerLevel, depth int) *scheduler.JobLineageSummary {
-	// base case: stop if max depth reached or number of upstreams is already within limit
-	if depth > MaxLineageDepth || len(lineage.Upstreams) <= maxUpstreamsPerLevel {
-		prunedUpstreams := make([]*scheduler.JobLineageSummary, len(lineage.Upstreams))
-		for i, upstream := range lineage.Upstreams {
-			prunedUpstreams[i] = r.pruneLineage(upstream, maxUpstreamsPerLevel, depth+1)
-		}
-
-		return &scheduler.JobLineageSummary{
-			JobName:          lineage.JobName,
-			Tenant:           lineage.Tenant,
-			Window:           lineage.Window,
-			ScheduleInterval: lineage.ScheduleInterval,
-			SLA:              lineage.SLA,
-			JobRuns:          copyJobRuns(lineage.JobRuns),
-			Upstreams:        prunedUpstreams,
-		}
+	type nodeInfo struct {
+		original *scheduler.JobLineageSummary
+		pruned   *scheduler.JobLineageSummary
+		depth    int
 	}
 
-	candidates := extractUpstreamCandidatesSortedByDuration(lineage)
-
-	topUpstreams := []*scheduler.JobLineageSummary{}
-	for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
-		targetJobName := candidates[i].JobName
-		for _, upstream := range lineage.Upstreams {
-			if upstream.JobName == targetJobName {
-				prunedUpstream := r.pruneLineage(upstream, maxUpstreamsPerLevel, depth+1)
-				topUpstreams = append(topUpstreams, prunedUpstream)
-				break
-			}
-		}
-	}
-
-	return &scheduler.JobLineageSummary{
+	rootPruned := &scheduler.JobLineageSummary{
 		JobName:          lineage.JobName,
 		Tenant:           lineage.Tenant,
 		Window:           lineage.Window,
 		ScheduleInterval: lineage.ScheduleInterval,
 		SLA:              lineage.SLA,
-		JobRuns:          copyJobRuns(lineage.JobRuns),
-		Upstreams:        topUpstreams,
+		JobRuns:          lineage.JobRuns,
 	}
+
+	queue := []*nodeInfo{{
+		original: lineage,
+		pruned:   rootPruned,
+		depth:    0,
+	}}
+
+	processed := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
+	processed[lineage.JobName] = queue[0].pruned
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if current.depth >= MaxLineageDepth {
+			continue
+		}
+
+		upstreams := current.original.Upstreams
+		candidates := extractUpstreamCandidatesSortedByDuration(current.original)
+
+		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
+			targetJobName := candidates[i].JobName
+			for _, upstream := range upstreams {
+				if upstream.JobName == targetJobName {
+					if existingPruned, exists := processed[upstream.JobName]; exists {
+						current.pruned.Upstreams = append(current.pruned.Upstreams, existingPruned)
+					} else {
+						prunedUpstream := &scheduler.JobLineageSummary{
+							JobName:          upstream.JobName,
+							Tenant:           upstream.Tenant,
+							Window:           upstream.Window,
+							ScheduleInterval: upstream.ScheduleInterval,
+							SLA:              upstream.SLA,
+							JobRuns:          upstream.JobRuns,
+						}
+						current.pruned.Upstreams = append(current.pruned.Upstreams, prunedUpstream)
+						processed[upstream.JobName] = prunedUpstream
+						queue = append(queue, &nodeInfo{
+							original: upstream,
+							pruned:   prunedUpstream,
+							depth:    current.depth + 1,
+						})
+					}
+					break
+				}
+			}
+		}
+	}
+
+	return rootPruned
 }
 
 func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageData *LineageData, result map[scheduler.JobName]*scheduler.JobLineageSummary, depth int) *scheduler.JobLineageSummary {
@@ -405,11 +429,11 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 		result[lineage.JobName].JobRuns = map[string]*scheduler.JobRunSummary{}
 		for scheduleKey := range lineage.JobRuns {
 			if jobRun, exists := jobRuns[scheduleKey]; exists {
-				result[lineage.JobName].JobRuns[scheduleKey] = copyJobRun(jobRun)
+				result[lineage.JobName].JobRuns[scheduleKey] = jobRun
 			}
 		}
 	} else {
-		result[lineage.JobName].JobRuns = copyJobRuns(lineage.JobRuns)
+		result[lineage.JobName].JobRuns = lineage.JobRuns
 	}
 
 	for i, upstream := range lineage.Upstreams {

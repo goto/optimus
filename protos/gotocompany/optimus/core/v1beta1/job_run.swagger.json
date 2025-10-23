@@ -476,6 +476,14 @@
                 },
                 "severity": {
                   "type": "string"
+                },
+                "referenceTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "scheduledRangeInHours": {
+                  "type": "integer",
+                  "format": "int32"
                 }
               }
             }

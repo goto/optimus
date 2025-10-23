@@ -232,7 +232,7 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 	return jobRunList, nil
 }
 
-func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
@@ -252,13 +252,13 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	jobHookDurations := make(map[scheduler.JobName][]*time.Duration)
 	var err error
 	if operators == nil || isTask {
-		jobTaskDurations, err = j.getTaskDuration(ctx, jobNames, lastNRuns, percentile)
+		jobTaskDurations, err = j.getTaskDuration(ctx, jobNames, referenceTime, lastNRuns, percentile)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if operators == nil || len(hookNames) > 0 {
-		jobHookDurations, err = j.getHookDuration(ctx, jobNames, hookNames, lastNRuns, percentile)
+		jobHookDurations, err = j.getHookDuration(ctx, jobNames, hookNames, referenceTime, lastNRuns, percentile)
 		if err != nil {
 			return nil, err
 		}
@@ -288,12 +288,12 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	return jobDurations, nil
 }
 
-func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
 	query := getQueryTask(lastNRuns, percentile)
-	rows, err := j.db.Query(ctx, query, jobNames)
+	rows, err := j.db.Query(ctx, query, jobNames, referenceTime)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs duration", err)
 	}
@@ -314,12 +314,12 @@ func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []sched
 	return jobDurations, nil
 }
 
-func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName, hookNames []string, lastNRuns, percentile int) (map[scheduler.JobName][]*time.Duration, error) {
+func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName, hookNames []string, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName][]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName][]*time.Duration{}, nil
 	}
 	query := getQueryHook(lastNRuns, percentile, hookNames)
-	args := []any{jobNames}
+	args := []any{jobNames, referenceTime}
 	if len(hookNames) > 0 {
 		args = append(args, hookNames)
 	}
@@ -364,6 +364,7 @@ func getQueryTask(lastNRuns, percentile int) string {
 		JOIN task_run t ON t.job_run_id = j.id
 		WHERE t.end_time IS NOT NULL
 		AND j.job_name = ANY($1)
+		AND j.updated_at <= $2
 	)
 	SELECT
 		job_name,
@@ -381,7 +382,7 @@ func getQueryTask(lastNRuns, percentile int) string {
 func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 	hookFilter := ""
 	if len(hookNames) > 0 {
-		hookFilter = " AND h.name = ANY($2) "
+		hookFilter = " AND h.name = ANY($3) "
 	}
 
 	query := fmt.Sprintf(`
@@ -400,6 +401,7 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 		JOIN hook_run h ON h.job_run_id = j.id
 		WHERE h.end_time IS NOT NULL
 		AND j.job_name = ANY($1)
+		AND j.updated_at <= $2
 		%s
 	)
 	SELECT

@@ -418,11 +418,11 @@ func (s *OptimusServer) setupHandlers() error {
 
 	// SLA Predictor Service
 	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,
-		s.conf.Alerting.PotentialSLABreachConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.Percentile,
-		s.conf.Alerting.PotentialSLABreachConfig.PaddingPercentage, s.conf.Alerting.PotentialSLABreachConfig.MinPaddingMinutes,
-		s.conf.Alerting.PotentialSLABreachConfig.MaxPaddingMinutes)
+		s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.LastNRuns, s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.Percentile,
+		s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.PaddingPercentage, s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.MinPaddingMinutes,
+		s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.MaxPaddingMinutes)
 
-	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService)
+	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService)
 
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)

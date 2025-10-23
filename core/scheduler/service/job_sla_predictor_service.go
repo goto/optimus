@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/goto/salt/log"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 )
@@ -22,14 +24,18 @@ type PotentialSLANotifier interface {
 }
 
 type DurationEstimator interface {
-	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
-	GetPercentileDurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
-	GetPercentileDurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNames(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNamesByTask(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNamesByHookName(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error)
 }
 
 type JobDetailsGetter interface {
 	GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error)
 	GetJobsByLabels(ctx context.Context, projectName tenant.ProjectName, labels map[string]string) ([]*scheduler.JobWithDetails, error)
+}
+
+type SLAPredictorRepository interface {
+	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
 }
 
 type JobState struct {
@@ -47,6 +53,8 @@ type JobSLAState struct {
 
 type JobSLAPredictorService struct {
 	l                 log.Logger
+	config            config.PotentialSLABreachConfig
+	repo              SLAPredictorRepository
 	jobDetailsGetter  JobDetailsGetter
 	jobLineageFetcher JobLineageFetcher
 	durationEstimator DurationEstimator
@@ -55,9 +63,11 @@ type JobSLAPredictorService struct {
 	potentialSLANotifier PotentialSLANotifier
 }
 
-func NewJobSLAPredictorService(l log.Logger, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
 		l:                    l,
+		config:               config,
+		repo:                 slaPredictorRepo,
 		jobLineageFetcher:    jobLineageFetcher,
 		durationEstimator:    durationEstimator,
 		jobDetailsGetter:     jobDetailsGetter,
@@ -66,7 +76,7 @@ func NewJobSLAPredictorService(l log.Logger, jobLineageFetcher JobLineageFetcher
 	}
 }
 
-func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, nextScheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
+func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, referenceTime time.Time, scheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
 	// map of jobName -> map of upstreamJobName -> JobState
 	jobBreaches := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
 
@@ -74,9 +84,6 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		s.l.Warn("no job names or labels provided, skipping SLA prediction")
 		return jobBreaches, nil
 	}
-
-	// reference time is now in UTC
-	referenceTime := time.Now().UTC()
 
 	// get jobs with details
 	jobsWithDetails, err := s.getJobWithDetails(ctx, projectName, jobNames, labels)
@@ -96,7 +103,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	}
 
 	// get scheduled at
-	jobSchedules := s.getJobSchedules(jobsWithDetails, nextScheduleRangeInHours, referenceTime)
+	jobSchedules := s.getJobSchedules(jobsWithDetails, scheduleRangeInHours, referenceTime)
 	if len(jobSchedules) == 0 {
 		s.l.Warn("no job schedules found for the given jobs in the next schedule range, skipping SLA prediction")
 		return jobBreaches, nil
@@ -112,7 +119,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	uniqueJobNames := collectJobNames(jobsWithLineageMap)
 
 	// get job durations estimation
-	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, uniqueJobNames)
+	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, referenceTime, uniqueJobNames)
 	if err != nil {
 		s.l.Error("failed to get job duration estimation, skipping SLA prediction", "error", err)
 		return nil, err
@@ -128,9 +135,24 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		if !ok || targetedSLA == nil {
 			continue
 		}
-		breachesCauses := s.identifySLABreach(jobWithLineage, jobDurations, targetedSLA, referenceTime)
-		if len(breachesCauses) > 0 {
-			jobBreaches[jobSchedule.JobName] = breachesCauses
+		breachesCausesPaths := s.identifySLABreach(jobWithLineage, jobDurations, targetedSLA, referenceTime)
+		// populate jobBreaches
+		if len(breachesCausesPaths) > 0 {
+			jobBreaches[jobSchedule.JobName] = make(map[scheduler.JobName]*JobState)
+			for _, causes := range breachesCausesPaths {
+				if len(causes) == 0 {
+					continue
+				}
+				cause := causes[len(causes)-1] // root cause is the last element in the path
+				jobBreaches[jobSchedule.JobName][cause.JobName] = cause
+			}
+		}
+
+		// store predicted SLA breach
+		if s.config.EnablePersistentLogging {
+			if err := s.storePredictedSLABreach(ctx, jobWithLineage, breachesCausesPaths, referenceTime); err != nil {
+				s.l.Error("failed to store predicted SLA breaches", "error", err)
+			}
 		}
 	}
 
@@ -142,7 +164,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	return jobBreaches, nil
 }
 
-func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, referenceTime time.Time) map[scheduler.JobName]*JobState {
+func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, referenceTime time.Time) [][]*JobState {
 	// calculate inferred SLAs for each job based on their downstream critical jobs and estimated durations
 	// S(u|j) = S(j) - D(u)
 	jobSLAStatesByJobTarget := s.calculateInferredSLAs(jobTarget, jobDurations, targetedSLA)
@@ -212,7 +234,7 @@ func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails
 	return targetedSLAByJobName
 }
 
-func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, nextScheduleRangeInHours time.Duration, referenceTime time.Time) []*scheduler.JobSchedule {
+func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, scheduleRangeInHours time.Duration, referenceTime time.Time) []*scheduler.JobSchedule {
 	jobSchedules := make([]*scheduler.JobSchedule, 0, len(jobs))
 	for _, job := range jobs {
 		if job.Schedule == nil {
@@ -223,7 +245,7 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 			s.l.Warn("failed to get scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
 			continue
 		}
-		if scheduledAt.After(referenceTime.Add(nextScheduleRangeInHours)) {
+		if scheduledAt.After(referenceTime.Add(scheduleRangeInHours)) || scheduledAt.Before(referenceTime.Add(-scheduleRangeInHours)) {
 			continue
 		}
 		jobSchedules = append(jobSchedules, &scheduler.JobSchedule{
@@ -242,27 +264,37 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 // such that, the inferred SLA for any upstream job in level n un induced by a downstream job j as:
 // S(un|j) = S(un-1|j) - D(un-1)
 // where, S(u0|j) = S(j), D(u0) = D(j)
-func (*JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time) map[scheduler.JobName]*time.Time {
+func (s *JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time) map[scheduler.JobName]*time.Time {
 	jobSLAs := make(map[scheduler.JobName]*time.Time)
+	alpha := s.config.DamperCoeff // damper factor to reduce the impact of upstream jobs in higher levels
 	// inferred SLA for leaf node = targetedSLA S(j)
 	jobSLAs[jobTarget.JobName] = targetedSLA
 	// bottom up calculation of inferred SLA for upstream jobs
-	stack := []*scheduler.JobLineageSummary{jobTarget}
+	type state struct {
+		job    *scheduler.JobLineageSummary
+		damper float64
+	}
+	stack := []*state{{job: jobTarget, damper: alpha}}
 	for len(stack) > 0 {
-		job := stack[len(stack)-1]
+		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
+		job := current.job
+
 		targetedInferredSLA := jobSLAs[job.JobName]
 		if jobDurations[job.JobName] == nil || targetedInferredSLA == nil {
 			continue
 		}
-		inferredSLA := targetedInferredSLA.Add(-*jobDurations[job.JobName])
+		duration := jobDurations[job.JobName].Milliseconds()
+		duration = int64(float64(duration) * current.damper)
+
+		inferredSLA := targetedInferredSLA.Add(-time.Duration(duration) * time.Millisecond)
 		for _, upstreamJob := range job.Upstreams {
 			if _, ok := jobSLAs[upstreamJob.JobName]; ok {
 				// already calculated, skip
 				continue
 			}
 			jobSLAs[upstreamJob.JobName] = &inferredSLA
-			stack = append(stack, upstreamJob)
+			stack = append(stack, &state{job: upstreamJob, damper: current.damper * alpha})
 		}
 	}
 
@@ -274,7 +306,7 @@ func (*JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobLin
 // - Given current time in UTC T(now), T(now)>= S(u|j) (the inferred SLA for u induced by j has passed) and the upstream job u has not completed yet. Or,
 // - Given current time in UTC T(now), T(now)>= S(u|j) - D(u) (the inferred SLA for u induced by j minus the average duration of u has passed) and the upstream job u has not started yet.
 // return the job that might breach its SLA
-func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, referenceTime time.Time) map[scheduler.JobName]*JobState {
+func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, referenceTime time.Time) [][]*JobState {
 	jobStateByName := make(map[scheduler.JobName]*JobState)
 	potentialBreachPaths := make([][]scheduler.JobName, 0)
 	// DFS to traverse all upstream jobs with paths
@@ -288,6 +320,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 	for _, upstreamJob := range jobTarget.Upstreams {
 		stack = append(stack, &state{job: upstreamJob, paths: []scheduler.JobName{jobTarget.JobName}, level: 1})
 	}
+	jobsWithLineageVisitedMap := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
 	visited := make(map[scheduler.JobName]bool)
 	for len(stack) > 0 {
 		jobWithState := stack[len(stack)-1]
@@ -300,6 +333,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		if visited[job.JobName] {
 			continue
 		}
+		jobsWithLineageVisitedMap[job.JobName] = job
 		visited[job.JobName] = true
 
 		if jobSLAStates[job.JobName] == nil || jobSLAStates[job.JobName].InferredSLA == nil || jobSLAStates[job.JobName].EstimatedDuration == nil { // less likely occur, but just in case
@@ -308,11 +342,11 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 
 		inferredSLA := *jobSLAStates[job.JobName].InferredSLA
 
+		// check if job meets either of the conditions
 		isPotentialBreach := false
 		for _, jobRun := range job.JobRuns {
-			// check if job meets either of the conditions
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
-			if referenceTime.After(inferredSLA) && jobRun != nil && (jobRun.JobEndTime == nil || inferredSLA.Before(*jobRun.JobEndTime)) {
+			if (referenceTime.After(inferredSLA) && jobRun.JobEndTime == nil) || (jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 				// found a job that might breach its SLA
 				potentialBreachPaths = append(potentialBreachPaths, paths)
 				// add to jobStateByName
@@ -355,15 +389,20 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 
 	// find root causes from potentialBreachPaths
 	// root causes are the leaf nodes in the potentialBreachPaths
-	rootCauses := make(map[scheduler.JobName]*JobState)
-	leaves := findLeaves(potentialBreachPaths)
-	if len(leaves) > 0 {
-		for _, leaf := range leaves {
-			if jobState, ok := jobStateByName[leaf]; ok {
-				rootCauses[leaf] = jobState
+	rootCauses := make([][]*JobState, 0)
+	compactedPaths := compactingPaths(potentialBreachPaths)
+	if len(compactedPaths) > 0 {
+		for _, path := range compactedPaths {
+			rootCause := make([]*JobState, 0)
+			for _, jobName := range path {
+				if jobState, ok := jobStateByName[jobName]; ok {
+					rootCause = append(rootCause, jobState)
+				}
 			}
+			rootCauses = append(rootCauses, rootCause)
 		}
 	}
+
 	return rootCauses
 }
 
@@ -379,21 +418,45 @@ func (*JobSLAPredictorService) populateJobSLAStates(jobDurations map[scheduler.J
 	return jobSLAStatesByJobName
 }
 
+// storePredictedSLABreach stores the predicted SLA breaches in the repository for further analysis.
+func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, paths [][]*JobState, referenceTime time.Time) error {
+	for _, path := range paths {
+		if len(path) == 0 {
+			continue
+		}
+		scheduledAt := time.Time{}
+		for _, jobRun := range jobTarget.JobRuns {
+			scheduledAt = jobRun.ScheduledAt
+			break
+		}
+		config := map[string]interface{}{}
+		rawConfig, err := json.Marshal(s.config)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(rawConfig, &config); err != nil {
+			return err
+		}
+		cause := path[len(path)-1]
+
+		lineages := []interface{}{}
+		rawLineage, err := json.Marshal(path)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(rawLineage, &lineages); err != nil {
+			return err
+		}
+		err = s.repo.StorePredictedSLABreach(ctx, jobTarget.JobName, cause.JobName, scheduledAt, string(cause.Status), referenceTime, config, lineages)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // sendAlert sends an alert to the potentialSLANotifier with the job breaches information.
 func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[scheduler.JobName]map[scheduler.JobName]*JobState, severity string) {
-	jobToUpstreamsCause := make(map[string][]scheduler.UpstreamAttrs)
-	for jobName, upstreamCauses := range jobBreaches {
-		upstreamAttrs := make([]scheduler.UpstreamAttrs, 0, len(upstreamCauses))
-		for _, cause := range upstreamCauses {
-			upstreamAttrs = append(upstreamAttrs, scheduler.UpstreamAttrs{
-				JobName:       jobName.String(),
-				RelativeLevel: cause.RelativeLevel,
-				Status:        string(cause.Status),
-			})
-		}
-		jobToUpstreamsCause[jobName.String()] = upstreamAttrs
-	}
-
 	jobToUpstreamsCauseByTenant := make(map[tenant.Tenant]map[string][]scheduler.UpstreamAttrs)
 	for jobName, upstreamCauses := range jobBreaches {
 		for _, upstreamCause := range upstreamCauses {
@@ -401,7 +464,7 @@ func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[
 				jobToUpstreamsCauseByTenant[upstreamCause.Tenant] = make(map[string][]scheduler.UpstreamAttrs)
 			}
 			upstreamAttr := scheduler.UpstreamAttrs{
-				JobName:       jobName.String(),
+				JobName:       upstreamCause.JobName.String(),
 				RelativeLevel: upstreamCause.RelativeLevel,
 				Status:        string(upstreamCause.Status),
 			}
@@ -432,7 +495,7 @@ func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[
 	}
 }
 
-// findLeaves finds the leaf nodes from the given paths.
+// compactingPaths compacts the given paths to only include the leaf nodes.
 // For example, given paths:
 // A->B
 // A->B->C
@@ -440,28 +503,30 @@ func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[
 // A->Z->C
 // A->Z->X
 // A->B->Y
-// The leaf nodes are D, Y, X
-func findLeaves(paths [][]scheduler.JobName) []scheduler.JobName {
-	endings := make(map[scheduler.JobName]bool)
+// The result will be:
+// A->B->C->D
+// A->Z->X
+// A->B->Y
+func compactingPaths(paths [][]scheduler.JobName) [][]scheduler.JobName {
 	prefixes := make(map[scheduler.JobName]bool)
 
 	for _, path := range paths {
 		for i, node := range path {
 			if i < len(path)-1 { // prefix
 				prefixes[node] = true
-			} else { // last element
-				endings[node] = true
 			}
 		}
 	}
 
-	// result is equal to endings minus prefixes
-	var result []scheduler.JobName
-	for node := range endings {
-		if !prefixes[node] {
-			result = append(result, node)
+	// result is equal to paths that contains ending nodes that are not prefixes
+	var result [][]scheduler.JobName
+	for _, path := range paths {
+		ending := path[len(path)-1]
+		if _, isPrefix := prefixes[ending]; !isPrefix {
+			result = append(result, path)
 		}
 	}
+
 	return result
 }
 

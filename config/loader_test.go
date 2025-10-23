@@ -300,12 +300,16 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		MinPaddingMinutes: 0,
 		MaxPaddingMinutes: 1000,
 	}
-	s.expectedServerConfig.Alerting.PotentialSLABreachConfig = config.DurationEstimatorConfig{
-		LastNRuns:         7,
-		Percentile:        95,
-		PaddingPercentage: 0,
-		MinPaddingMinutes: 0,
-		MaxPaddingMinutes: 1000,
+	s.expectedServerConfig.Alerting.PotentialSLABreachConfig = config.PotentialSLABreachConfig{
+		DamperCoeff:             1.0,
+		EnablePersistentLogging: false,
+		DurationEstimatorConfig: config.DurationEstimatorConfig{
+			LastNRuns:         7,
+			Percentile:        95,
+			PaddingPercentage: 0,
+			MinPaddingMinutes: 0,
+			MaxPaddingMinutes: 1000,
+		},
 	}
 }
 

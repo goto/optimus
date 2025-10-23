@@ -1839,12 +1839,15 @@ type IdentifyPotentialSLABreachRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	ProjectName               string            `protobuf:"bytes,1,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
-	JobNames                  []string          `protobuf:"bytes,2,rep,name=job_names,json=jobNames,proto3" json:"job_names,omitempty"`
-	JobLabels                 map[string]string `protobuf:"bytes,3,rep,name=job_labels,json=jobLabels,proto3" json:"job_labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	NextScheduledRangeInHours int32             `protobuf:"varint,4,opt,name=next_scheduled_range_in_hours,json=nextScheduledRangeInHours,proto3" json:"next_scheduled_range_in_hours,omitempty"`
-	AlertOnBreach             bool              `protobuf:"varint,5,opt,name=alert_on_breach,json=alertOnBreach,proto3" json:"alert_on_breach,omitempty"`
-	Severity                  string            `protobuf:"bytes,6,opt,name=severity,proto3" json:"severity,omitempty"`
+	ProjectName string            `protobuf:"bytes,1,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
+	JobNames    []string          `protobuf:"bytes,2,rep,name=job_names,json=jobNames,proto3" json:"job_names,omitempty"`
+	JobLabels   map[string]string `protobuf:"bytes,3,rep,name=job_labels,json=jobLabels,proto3" json:"job_labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// Deprecated: Do not use.
+	NextScheduledRangeInHours int32                  `protobuf:"varint,4,opt,name=next_scheduled_range_in_hours,json=nextScheduledRangeInHours,proto3" json:"next_scheduled_range_in_hours,omitempty"` // use scheduled_range_in_hours
+	AlertOnBreach             bool                   `protobuf:"varint,5,opt,name=alert_on_breach,json=alertOnBreach,proto3" json:"alert_on_breach,omitempty"`
+	Severity                  string                 `protobuf:"bytes,6,opt,name=severity,proto3" json:"severity,omitempty"`
+	ReferenceTime             *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=reference_time,json=referenceTime,proto3" json:"reference_time,omitempty"` // RFC3339 format
+	ScheduledRangeInHours     int32                  `protobuf:"varint,8,opt,name=scheduled_range_in_hours,json=scheduledRangeInHours,proto3" json:"scheduled_range_in_hours,omitempty"`
 }
 
 func (x *IdentifyPotentialSLABreachRequest) Reset() {
@@ -1900,6 +1903,7 @@ func (x *IdentifyPotentialSLABreachRequest) GetJobLabels() map[string]string {
 	return nil
 }
 
+// Deprecated: Do not use.
 func (x *IdentifyPotentialSLABreachRequest) GetNextScheduledRangeInHours() int32 {
 	if x != nil {
 		return x.NextScheduledRangeInHours
@@ -1919,6 +1923,20 @@ func (x *IdentifyPotentialSLABreachRequest) GetSeverity() string {
 		return x.Severity
 	}
 	return ""
+}
+
+func (x *IdentifyPotentialSLABreachRequest) GetReferenceTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ReferenceTime
+	}
+	return nil
+}
+
+func (x *IdentifyPotentialSLABreachRequest) GetScheduledRangeInHours() int32 {
+	if x != nil {
+		return x.ScheduledRangeInHours
+	}
+	return 0
 }
 
 type IdentifyPotentialSLABreachResponse struct {
@@ -2432,7 +2450,7 @@ var file_gotocompany_optimus_core_v1beta1_job_run_proto_rawDesc = []byte{
 	0x35, 0x0a, 0x08, 0x64, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x19, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
 	0x62, 0x75, 0x66, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x08, 0x64, 0x75,
-	0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x9a, 0x03, 0x0a, 0x21, 0x49, 0x64, 0x65, 0x6e, 0x74,
+	0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x9a, 0x04, 0x0a, 0x21, 0x49, 0x64, 0x65, 0x6e, 0x74,
 	0x69, 0x66, 0x79, 0x50, 0x6f, 0x74, 0x65, 0x6e, 0x74, 0x69, 0x61, 0x6c, 0x53, 0x4c, 0x41, 0x42,
 	0x72, 0x65, 0x61, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x21, 0x0a, 0x0c,
 	0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01,
@@ -2446,15 +2464,23 @@ var file_gotocompany_optimus_core_v1beta1_job_run_proto_rawDesc = []byte{
 	0x6e, 0x74, 0x69, 0x61, 0x6c, 0x53, 0x4c, 0x41, 0x42, 0x72, 0x65, 0x61, 0x63, 0x68, 0x52, 0x65,
 	0x71, 0x75, 0x65, 0x73, 0x74, 0x2e, 0x4a, 0x6f, 0x62, 0x4c, 0x61, 0x62, 0x65, 0x6c, 0x73, 0x45,
 	0x6e, 0x74, 0x72, 0x79, 0x52, 0x09, 0x6a, 0x6f, 0x62, 0x4c, 0x61, 0x62, 0x65, 0x6c, 0x73, 0x12,
-	0x40, 0x0a, 0x1d, 0x6e, 0x65, 0x78, 0x74, 0x5f, 0x73, 0x63, 0x68, 0x65, 0x64, 0x75, 0x6c, 0x65,
+	0x44, 0x0a, 0x1d, 0x6e, 0x65, 0x78, 0x74, 0x5f, 0x73, 0x63, 0x68, 0x65, 0x64, 0x75, 0x6c, 0x65,
 	0x64, 0x5f, 0x72, 0x61, 0x6e, 0x67, 0x65, 0x5f, 0x69, 0x6e, 0x5f, 0x68, 0x6f, 0x75, 0x72, 0x73,
-	0x18, 0x04, 0x20, 0x01, 0x28, 0x05, 0x52, 0x19, 0x6e, 0x65, 0x78, 0x74, 0x53, 0x63, 0x68, 0x65,
-	0x64, 0x75, 0x6c, 0x65, 0x64, 0x52, 0x61, 0x6e, 0x67, 0x65, 0x49, 0x6e, 0x48, 0x6f, 0x75, 0x72,
-	0x73, 0x12, 0x26, 0x0a, 0x0f, 0x61, 0x6c, 0x65, 0x72, 0x74, 0x5f, 0x6f, 0x6e, 0x5f, 0x62, 0x72,
-	0x65, 0x61, 0x63, 0x68, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0d, 0x61, 0x6c, 0x65, 0x72,
-	0x74, 0x4f, 0x6e, 0x42, 0x72, 0x65, 0x61, 0x63, 0x68, 0x12, 0x1a, 0x0a, 0x08, 0x73, 0x65, 0x76,
-	0x65, 0x72, 0x69, 0x74, 0x79, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x73, 0x65, 0x76,
-	0x65, 0x72, 0x69, 0x74, 0x79, 0x1a, 0x3c, 0x0a, 0x0e, 0x4a, 0x6f, 0x62, 0x4c, 0x61, 0x62, 0x65,
+	0x18, 0x04, 0x20, 0x01, 0x28, 0x05, 0x42, 0x02, 0x18, 0x01, 0x52, 0x19, 0x6e, 0x65, 0x78, 0x74,
+	0x53, 0x63, 0x68, 0x65, 0x64, 0x75, 0x6c, 0x65, 0x64, 0x52, 0x61, 0x6e, 0x67, 0x65, 0x49, 0x6e,
+	0x48, 0x6f, 0x75, 0x72, 0x73, 0x12, 0x26, 0x0a, 0x0f, 0x61, 0x6c, 0x65, 0x72, 0x74, 0x5f, 0x6f,
+	0x6e, 0x5f, 0x62, 0x72, 0x65, 0x61, 0x63, 0x68, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0d,
+	0x61, 0x6c, 0x65, 0x72, 0x74, 0x4f, 0x6e, 0x42, 0x72, 0x65, 0x61, 0x63, 0x68, 0x12, 0x1a, 0x0a,
+	0x08, 0x73, 0x65, 0x76, 0x65, 0x72, 0x69, 0x74, 0x79, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x08, 0x73, 0x65, 0x76, 0x65, 0x72, 0x69, 0x74, 0x79, 0x12, 0x41, 0x0a, 0x0e, 0x72, 0x65, 0x66,
+	0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x07, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70, 0x52, 0x0d, 0x72,
+	0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x12, 0x37, 0x0a, 0x18,
+	0x73, 0x63, 0x68, 0x65, 0x64, 0x75, 0x6c, 0x65, 0x64, 0x5f, 0x72, 0x61, 0x6e, 0x67, 0x65, 0x5f,
+	0x69, 0x6e, 0x5f, 0x68, 0x6f, 0x75, 0x72, 0x73, 0x18, 0x08, 0x20, 0x01, 0x28, 0x05, 0x52, 0x15,
+	0x73, 0x63, 0x68, 0x65, 0x64, 0x75, 0x6c, 0x65, 0x64, 0x52, 0x61, 0x6e, 0x67, 0x65, 0x49, 0x6e,
+	0x48, 0x6f, 0x75, 0x72, 0x73, 0x1a, 0x3c, 0x0a, 0x0e, 0x4a, 0x6f, 0x62, 0x4c, 0x61, 0x62, 0x65,
 	0x6c, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c,
 	0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a,
@@ -2738,35 +2764,36 @@ var file_gotocompany_optimus_core_v1beta1_job_run_proto_depIdxs = []int32{
 	38, // 40: gotocompany.optimus.core.v1beta1.JobRunSummary.hook_end_time:type_name -> google.protobuf.Timestamp
 	41, // 41: gotocompany.optimus.core.v1beta1.SLAConfig.duration:type_name -> google.protobuf.Duration
 	36, // 42: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachRequest.job_labels:type_name -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachRequest.JobLabelsEntry
-	37, // 43: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.jobs:type_name -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.JobsEntry
-	38, // 44: gotocompany.optimus.core.v1beta1.UpstreamJobStatus.inferred_sla_time:type_name -> google.protobuf.Timestamp
-	31, // 45: gotocompany.optimus.core.v1beta1.UpstreamJobsStatus.jobs_status:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobStatus
-	32, // 46: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.JobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobsStatus
-	8,  // 47: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:input_type -> gotocompany.optimus.core.v1beta1.JobRunInputRequest
-	12, // 48: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:input_type -> gotocompany.optimus.core.v1beta1.JobRunRequest
-	14, // 49: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleRequest
-	16, // 50: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleRequest
-	9,  // 51: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunsRequest
-	6,  // 52: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:input_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventRequest
-	4,  // 53: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:input_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerRequest
-	2,  // 54: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:input_type -> gotocompany.optimus.core.v1beta1.GetIntervalRequest
-	22, // 55: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryRequest
-	29, // 56: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:input_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachRequest
-	20, // 57: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:output_type -> gotocompany.optimus.core.v1beta1.JobRunInputResponse
-	13, // 58: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:output_type -> gotocompany.optimus.core.v1beta1.JobRunResponse
-	15, // 59: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleResponse
-	17, // 60: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleResponse
-	11, // 61: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunsResponse
-	7,  // 62: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:output_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventResponse
-	5,  // 63: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:output_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerResponse
-	3,  // 64: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:output_type -> gotocompany.optimus.core.v1beta1.GetIntervalResponse
-	24, // 65: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryResponse
-	30, // 66: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:output_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse
-	57, // [57:67] is the sub-list for method output_type
-	47, // [47:57] is the sub-list for method input_type
-	47, // [47:47] is the sub-list for extension type_name
-	47, // [47:47] is the sub-list for extension extendee
-	0,  // [0:47] is the sub-list for field type_name
+	38, // 43: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachRequest.reference_time:type_name -> google.protobuf.Timestamp
+	37, // 44: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.jobs:type_name -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.JobsEntry
+	38, // 45: gotocompany.optimus.core.v1beta1.UpstreamJobStatus.inferred_sla_time:type_name -> google.protobuf.Timestamp
+	31, // 46: gotocompany.optimus.core.v1beta1.UpstreamJobsStatus.jobs_status:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobStatus
+	32, // 47: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.JobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobsStatus
+	8,  // 48: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:input_type -> gotocompany.optimus.core.v1beta1.JobRunInputRequest
+	12, // 49: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:input_type -> gotocompany.optimus.core.v1beta1.JobRunRequest
+	14, // 50: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleRequest
+	16, // 51: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleRequest
+	9,  // 52: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunsRequest
+	6,  // 53: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:input_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventRequest
+	4,  // 54: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:input_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerRequest
+	2,  // 55: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:input_type -> gotocompany.optimus.core.v1beta1.GetIntervalRequest
+	22, // 56: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryRequest
+	29, // 57: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:input_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachRequest
+	20, // 58: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:output_type -> gotocompany.optimus.core.v1beta1.JobRunInputResponse
+	13, // 59: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:output_type -> gotocompany.optimus.core.v1beta1.JobRunResponse
+	15, // 60: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleResponse
+	17, // 61: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleResponse
+	11, // 62: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunsResponse
+	7,  // 63: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:output_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventResponse
+	5,  // 64: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:output_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerResponse
+	3,  // 65: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:output_type -> gotocompany.optimus.core.v1beta1.GetIntervalResponse
+	24, // 66: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryResponse
+	30, // 67: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:output_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse
+	58, // [58:68] is the sub-list for method output_type
+	48, // [48:58] is the sub-list for method input_type
+	48, // [48:48] is the sub-list for extension type_name
+	48, // [48:48] is the sub-list for extension extendee
+	0,  // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_gotocompany_optimus_core_v1beta1_job_run_proto_init() }

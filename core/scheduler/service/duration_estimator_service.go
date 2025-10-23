@@ -11,7 +11,7 @@ import (
 )
 
 type DurationEstimatorRepo interface {
-	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error)
 }
 
 type DurationEstimatorService struct {
@@ -36,8 +36,8 @@ func NewDurationEstimatorService(logger log.Logger, durationEstimator DurationEs
 	}
 }
 
-func (s *DurationEstimatorService) GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
-	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, nil, s.lastNRuns, s.percentile)
+func (s *DurationEstimatorService) GetPercentileDurationByJobNames(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
+	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, nil, referenceTime, s.lastNRuns, s.percentile)
 	if err != nil {
 		return nil, err
 	}
@@ -48,8 +48,8 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNames(ctx context.C
 	return s.calculateBufferedDuration(jobDurations), nil
 }
 
-func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
-	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, map[string][]string{"task": {}}, s.lastNRuns, s.percentile)
+func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByTask(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error) {
+	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, map[string][]string{"task": {}}, referenceTime, s.lastNRuns, s.percentile)
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +60,8 @@ func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByTask(ctx con
 	return s.calculateBufferedDuration(jobDurations), nil
 }
 
-func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error) {
-	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, map[string][]string{"hook": hookNames}, s.lastNRuns, s.percentile)
+func (s *DurationEstimatorService) GetPercentileDurationByJobNamesByHookName(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error) {
+	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, map[string][]string{"hook": hookNames}, referenceTime, s.lastNRuns, s.percentile)
 	if err != nil {
 		return nil, err
 	}

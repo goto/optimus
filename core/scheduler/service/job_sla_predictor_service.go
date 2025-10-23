@@ -24,9 +24,9 @@ type PotentialSLANotifier interface {
 }
 
 type DurationEstimator interface {
-	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
-	GetPercentileDurationByJobNamesByTask(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
-	GetPercentileDurationByJobNamesByHookName(ctx context.Context, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNames(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNamesByTask(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]*time.Duration, error)
+	GetPercentileDurationByJobNamesByHookName(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error)
 }
 
 type JobDetailsGetter interface {
@@ -35,7 +35,7 @@ type JobDetailsGetter interface {
 }
 
 type SLAPredictorRepository interface {
-	StorePredictedSLABreach(ctx context.Context, jobTargetName scheduler.JobName, jobCauseName scheduler.JobName, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
+	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
 }
 
 type JobState struct {
@@ -119,7 +119,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	uniqueJobNames := collectJobNames(jobsWithLineageMap)
 
 	// get job durations estimation
-	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, uniqueJobNames)
+	jobDurations, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, referenceTime, uniqueJobNames)
 	if err != nil {
 		s.l.Error("failed to get job duration estimation, skipping SLA prediction", "error", err)
 		return nil, err
@@ -284,7 +284,7 @@ func (s *JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobL
 		if jobDurations[job.JobName] == nil || targetedInferredSLA == nil {
 			continue
 		}
-		duration := (*jobDurations[job.JobName]).Milliseconds()
+		duration := jobDurations[job.JobName].Milliseconds()
 		duration = int64(float64(duration) * current.damper)
 
 		inferredSLA := targetedInferredSLA.Add(-time.Duration(duration) * time.Millisecond)

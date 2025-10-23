@@ -2,7 +2,6 @@ package resolver
 
 import (
 	"context"
-	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -10,11 +9,6 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
-)
-
-const (
-	// MaxLineageDepth is a safeguard to avoid infinite recursion in case of unexpected cycles
-	MaxLineageDepth = 20
 )
 
 type JobUpstreamRepository interface {
@@ -156,83 +150,10 @@ func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *s
 	}
 
 	if maxUpstreamsPerLevel > 0 {
-		finalLineage = r.pruneLineage(finalLineage, maxUpstreamsPerLevel, 0)
+		finalLineage = finalLineage.PruneLineage(maxUpstreamsPerLevel)
 	}
 
 	return finalLineage, nil
-}
-
-type upstreamCandidate struct {
-	JobName scheduler.JobName
-	EndTime time.Time
-}
-
-func (r *LineageResolver) pruneLineage(lineage *scheduler.JobLineageSummary, maxUpstreamsPerLevel, depth int) *scheduler.JobLineageSummary {
-	type nodeInfo struct {
-		original *scheduler.JobLineageSummary
-		pruned   *scheduler.JobLineageSummary
-		depth    int
-	}
-
-	rootPruned := &scheduler.JobLineageSummary{
-		JobName:          lineage.JobName,
-		Tenant:           lineage.Tenant,
-		Window:           lineage.Window,
-		ScheduleInterval: lineage.ScheduleInterval,
-		SLA:              lineage.SLA,
-		JobRuns:          lineage.JobRuns,
-	}
-
-	queue := []*nodeInfo{{
-		original: lineage,
-		pruned:   rootPruned,
-		depth:    0,
-	}}
-
-	processed := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
-	processed[lineage.JobName] = queue[0].pruned
-
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-
-		if current.depth >= MaxLineageDepth {
-			continue
-		}
-
-		upstreams := current.original.Upstreams
-		candidates := extractUpstreamCandidatesSortedByDuration(current.original)
-
-		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
-			targetJobName := candidates[i].JobName
-			for _, upstream := range upstreams {
-				if upstream.JobName == targetJobName {
-					if existingPruned, exists := processed[upstream.JobName]; exists {
-						current.pruned.Upstreams = append(current.pruned.Upstreams, existingPruned)
-					} else {
-						prunedUpstream := &scheduler.JobLineageSummary{
-							JobName:          upstream.JobName,
-							Tenant:           upstream.Tenant,
-							Window:           upstream.Window,
-							ScheduleInterval: upstream.ScheduleInterval,
-							SLA:              upstream.SLA,
-							JobRuns:          upstream.JobRuns,
-						}
-						current.pruned.Upstreams = append(current.pruned.Upstreams, prunedUpstream)
-						processed[upstream.JobName] = prunedUpstream
-						queue = append(queue, &nodeInfo{
-							original: upstream,
-							pruned:   prunedUpstream,
-							depth:    current.depth + 1,
-						})
-					}
-					break
-				}
-			}
-		}
-	}
-
-	return rootPruned
 }
 
 func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageData *LineageData, result map[scheduler.JobName]*scheduler.JobLineageSummary, depth int) *scheduler.JobLineageSummary {
@@ -441,47 +362,6 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 	}
 
 	return result[lineage.JobName]
-}
-
-func extractUpstreamCandidatesSortedByDuration(lineage *scheduler.JobLineageSummary) []upstreamCandidate {
-	candidates := []upstreamCandidate{}
-
-	for _, upstream := range lineage.Upstreams {
-		latestFinishTime := getLatestFinishTime(upstream.JobRuns)
-		candidates = append(candidates, upstreamCandidate{
-			JobName: upstream.JobName,
-			EndTime: latestFinishTime,
-		})
-	}
-
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].EndTime.After(candidates[j].EndTime)
-	})
-
-	return candidates
-}
-
-func getLatestFinishTime(jobRuns map[string]*scheduler.JobRunSummary) time.Time {
-	var latestFinishTime time.Time
-
-	for _, jobRun := range jobRuns {
-		if jobRun.JobEndTime != nil && (latestFinishTime.IsZero() || jobRun.JobEndTime.After(latestFinishTime)) {
-			latestFinishTime = *jobRun.JobEndTime
-		}
-	}
-
-	return latestFinishTime
-}
-
-func copyJobRuns(source map[string]*scheduler.JobRunSummary) map[string]*scheduler.JobRunSummary {
-	if source == nil {
-		return make(map[string]*scheduler.JobRunSummary)
-	}
-	result := make(map[string]*scheduler.JobRunSummary, len(source))
-	for key, jobRun := range source {
-		result[key] = copyJobRun(jobRun)
-	}
-	return result
 }
 
 func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {

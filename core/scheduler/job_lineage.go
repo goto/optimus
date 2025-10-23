@@ -1,10 +1,16 @@
 package scheduler
 
 import (
+	"sort"
 	"time"
 
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
+)
+
+const (
+	// MaxLineageDepth is a safeguard to avoid infinite recursion in case of unexpected cycles
+	MaxLineageDepth = 20
 )
 
 type JobSchedule struct {
@@ -23,6 +29,109 @@ type JobLineageSummary struct {
 
 	// JobRuns is a map of job's scheduled time to its run summary
 	JobRuns map[string]*JobRunSummary
+}
+
+type upstreamCandidate struct {
+	JobName JobName
+	EndTime time.Time
+}
+
+func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel int) *JobLineageSummary {
+	type nodeInfo struct {
+		original *JobLineageSummary
+		pruned   *JobLineageSummary
+		depth    int
+	}
+
+	rootPruned := &JobLineageSummary{
+		JobName:          j.JobName,
+		Tenant:           j.Tenant,
+		Window:           j.Window,
+		ScheduleInterval: j.ScheduleInterval,
+		SLA:              j.SLA,
+		JobRuns:          j.JobRuns,
+	}
+
+	queue := []*nodeInfo{{
+		original: j,
+		pruned:   rootPruned,
+		depth:    0,
+	}}
+
+	processed := make(map[JobName]*JobLineageSummary)
+	processed[j.JobName] = queue[0].pruned
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if current.depth >= MaxLineageDepth {
+			continue
+		}
+
+		upstreams := current.original.Upstreams
+		candidates := extractUpstreamCandidatesSortedByDuration(current.original)
+
+		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
+			targetJobName := candidates[i].JobName
+			for _, upstream := range upstreams {
+				if upstream.JobName == targetJobName {
+					if existingPruned, exists := processed[upstream.JobName]; exists {
+						current.pruned.Upstreams = append(current.pruned.Upstreams, existingPruned)
+					} else {
+						prunedUpstream := &JobLineageSummary{
+							JobName:          upstream.JobName,
+							Tenant:           upstream.Tenant,
+							Window:           upstream.Window,
+							ScheduleInterval: upstream.ScheduleInterval,
+							SLA:              upstream.SLA,
+							JobRuns:          upstream.JobRuns,
+						}
+						current.pruned.Upstreams = append(current.pruned.Upstreams, prunedUpstream)
+						processed[upstream.JobName] = prunedUpstream
+						queue = append(queue, &nodeInfo{
+							original: upstream,
+							pruned:   prunedUpstream,
+							depth:    current.depth + 1,
+						})
+					}
+					break
+				}
+			}
+		}
+	}
+
+	return rootPruned
+}
+
+func extractUpstreamCandidatesSortedByDuration(lineage *JobLineageSummary) []upstreamCandidate {
+	candidates := []upstreamCandidate{}
+
+	for _, upstream := range lineage.Upstreams {
+		latestFinishTime := getLatestFinishTime(upstream.JobRuns)
+		candidates = append(candidates, upstreamCandidate{
+			JobName: upstream.JobName,
+			EndTime: latestFinishTime,
+		})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].EndTime.After(candidates[j].EndTime)
+	})
+
+	return candidates
+}
+
+func getLatestFinishTime(jobRuns map[string]*JobRunSummary) time.Time {
+	var latestFinishTime time.Time
+
+	for _, jobRun := range jobRuns {
+		if jobRun.JobEndTime != nil && (latestFinishTime.IsZero() || jobRun.JobEndTime.After(latestFinishTime)) {
+			latestFinishTime = *jobRun.JobEndTime
+		}
+	}
+
+	return latestFinishTime
 }
 
 func (j *JobLineageSummary) Flatten() []*JobExecutionSummary {

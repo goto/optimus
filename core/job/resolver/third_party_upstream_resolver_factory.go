@@ -16,7 +16,7 @@ type ThirdPartyUpstreamResolver interface {
 func NewThirdPartyUpstreamResolvers(upstreamResolvers ...config.UpstreamResolver) []ThirdPartyUpstreamResolver {
 	var resolvers []ThirdPartyUpstreamResolver
 	for _, upstreamResolver := range upstreamResolvers {
-		switch upstreamResolver.Type {
+		switch upstreamResolver.Type { //nolint:revive
 		case config.DexUpstreamResolver:
 			// config can be accessed via upstreamResolver.Config if needed in the future
 			resolvers = append(resolvers, NewDexUpstreamResolver(upstreamResolver.Config))

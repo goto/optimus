@@ -115,6 +115,7 @@ type PublisherKafkaConfig struct {
 }
 
 type FeaturesConfig struct {
-	EnableV2Sensor bool `mapstructure:"enable_v2_sensor"`
-	EnableV3Sensor bool `mapstructure:"enable_v3_sensor"`
+	EnableV2Sensor                    bool `mapstructure:"enable_v2_sensor"`
+	EnableV3Sensor                    bool `mapstructure:"enable_v3_sensor"`
+	EnableIgnoreOldScheduleRunsSensor bool `mapstructure:"enable_ignore_old_schedule_runs_sensor"`
 }

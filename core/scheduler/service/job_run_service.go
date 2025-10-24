@@ -36,6 +36,9 @@ func (m metricType) String() string {
 const (
 	scheduleDelay metricType = "schedule_delay"
 	SensorV1      string     = "USE_DEPRECATED_SENSOR_V1"
+
+	ChangelogAttributeScheduleInterval        = "Schedule.Interval"
+	UseIgnoreScheduleChangeSensor      string = "USE_IGNORE_SCHEDULE_CHANGE_SENSOR"
 )
 
 var jobRunEventsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -58,6 +61,7 @@ type JobRepository interface {
 	GetJobDetails(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.JobWithDetails, error)
 	GetAll(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.JobWithDetails, error)
 	GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error)
+	GetChangelogs(ctx context.Context, filter scheduler.ChangelogFilter) ([]*scheduler.Changelog, error)
 }
 
 type JobRunRepository interface {
@@ -255,7 +259,35 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	result, c1 := filterRunsV1(expectedRuns, actualRuns, criteria)
 	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V1").Set(float64(c1))
 
+	// result should contain the merge of expectedRuns and actualRuns
 	conf := jobWithDetails.Job.Task.Config
+	if s.features.EnableIgnoreOldScheduleRunsSensor || conf[UseIgnoreScheduleChangeSensor] == "true" {
+		expectedRuns, missingRuns := splitExpectedRuns(expectedRuns, actualRuns)
+
+		latestPendingRun := missingRuns.GetLatestPendingRun()
+		if latestPendingRun == nil {
+			s.l.Debug("[%s] No latest pending run found", jobName)
+			return result, msg, nil
+		}
+
+		recentSchedule, err := s.getRecentScheduleChangeValue(ctx, jobWithDetails, latestPendingRun.ScheduledAt)
+		if err != nil {
+			msg += fmt.Sprintf("Error getting recent schedule change: %s\n", err)
+			return result, msg, nil
+		}
+
+		if recentSchedule == "" {
+			s.l.Debug("[%s] No recent schedule change found", jobName)
+			return result, msg, nil
+		}
+
+		msg += fmt.Sprintf("There are %d mismatched runs due to job schedule change (last changed schedule: %s). Affected runs: %s\n",
+			len(missingRuns), recentSchedule, missingRuns.String())
+		s.l.Info("[%s] %s", jobName, msg)
+
+		return expectedRuns, msg, nil
+	}
+
 	if _, ok := conf[SensorV1]; ok {
 		return result, msg, nil
 	}
@@ -288,6 +320,30 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		return result2, msg, nil
 	}
 	return result, msg, nil
+}
+
+func (s *JobRunService) getRecentScheduleChangeValue(ctx context.Context, jobWithDetails *scheduler.JobWithDetails, scheduledAt time.Time) (string, error) {
+	changelogFilter := scheduler.ChangelogFilter{
+		ProjectName: jobWithDetails.Job.Tenant.ProjectName(),
+		Name:        jobWithDetails.Job.Name.String(),
+		StartTime:   scheduledAt,
+	}
+
+	changelogs, err := s.jobRepo.GetChangelogs(ctx, changelogFilter)
+	if err != nil {
+		s.l.Error("error getting changelogs for job [%s] at [%s]: %s", jobWithDetails.Job.Name.String(), scheduledAt, err)
+		return "", err
+	}
+
+	// returned changelogs are already sorted from recent to oldest
+	for _, clog := range changelogs {
+		scheduleChange := clog.GetAttributeChange(ChangelogAttributeScheduleInterval)
+		if scheduleChange != nil {
+			return scheduleChange.OldValue(), nil
+		}
+	}
+
+	return "", nil
 }
 
 func (s *JobRunService) getLastRun(ctx context.Context, tnnt tenant.Tenant, requestCriteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, string, error) {
@@ -581,6 +637,20 @@ func filterRuns(runs []*scheduler.JobRunStatus, filter map[string]struct{}) sche
 		}
 	}
 	return filteredRuns
+}
+
+func splitExpectedRuns(expected, actual []*scheduler.JobRunStatus) (scheduler.JobRunStatusList, scheduler.JobRunStatusList) {
+	matchedRuns := scheduler.JobRunStatusList{}
+	missingRuns := scheduler.JobRunStatusList{}
+	m := actualRunMap(actual)
+	for _, exp := range expected {
+		if act, ok := m[exp.ScheduledAt.UTC().String()]; ok {
+			matchedRuns = append(matchedRuns, &act)
+		} else {
+			missingRuns = append(missingRuns, exp)
+		}
+	}
+	return matchedRuns, missingRuns
 }
 
 func createFilterSet(filter []string) map[string]struct{} {

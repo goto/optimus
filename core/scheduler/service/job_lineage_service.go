@@ -31,7 +31,7 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 
 	var result []*scheduler.JobRunLineage
 	for _, lineage := range downstreamLineages {
-		flattenedLineage := lineage.Flatten()
+		flattenedLineage := lineage.Flatten(scheduler.MaxLineageDepth)
 		result = append(result, &scheduler.JobRunLineage{
 			JobName: lineage.JobName,
 			// index 0 should contain the original job in question
@@ -53,24 +53,6 @@ func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*s
 
 	for _, lineage := range jobLineages {
 		lineageToJobName[lineage.JobName] = lineage
-	}
-
-	stack := []*scheduler.JobLineageSummary{}
-	for _, lineage := range jobLineages {
-		stack = append(stack, lineage)
-	}
-
-	visited := make(map[scheduler.JobName]bool)
-	for len(stack) > 0 {
-		current := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
-		if _, ok := visited[current.JobName]; ok {
-			continue
-		}
-		visited[current.JobName] = true
-
-		stack = append(stack, current.Upstreams...)
 	}
 
 	return lineageToJobName, nil

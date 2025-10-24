@@ -68,7 +68,7 @@ func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel, maxDepth int) *Jo
 		current := queue[0]
 		queue = queue[1:]
 
-		if current.depth >= MaxLineageDepth {
+		if current.depth >= maxDepth {
 			continue
 		}
 

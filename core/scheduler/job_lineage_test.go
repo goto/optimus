@@ -129,7 +129,7 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 		assert.Equal(t, scheduler.JobName("level1"), pruned.Upstreams[0].JobName)
 		assert.Len(t, pruned.Upstreams[0].Upstreams, 1)
 		assert.Equal(t, scheduler.JobName("level2"), pruned.Upstreams[0].Upstreams[0].JobName)
-		assert.Len(t, pruned.Upstreams[0].Upstreams[0].Upstreams, 1)
+		assert.Len(t, pruned.Upstreams[0].Upstreams[0].Upstreams, 0)
 	})
 
 	t.Run("should handle empty upstreams", func(t *testing.T) {

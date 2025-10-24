@@ -190,15 +190,16 @@ func applicationKeyFromString(appKey string) (*[keyLength]byte, error) {
 }
 
 func (s *OptimusServer) setupDB() error {
-	err := postgres.Migrate(s.conf.Serve.DB.DSN)
-	if err != nil {
-		return fmt.Errorf("error initializing migration: %w", err)
-	}
+	// err := postgres.Migrate(s.conf.Serve.DB.DSN)
+	// if err != nil {
+	// 	return fmt.Errorf("error initializing migration: %w", err)
+	// }
 
-	s.dbPool, err = postgres.Open(s.conf.Serve.DB)
+	dbPool, err := postgres.Open(s.conf.Serve.DB)
 	if err != nil {
 		return fmt.Errorf("postgres.Open: %w", err)
 	}
+	s.dbPool = dbPool
 
 	return nil
 }
@@ -395,7 +396,8 @@ func (s *OptimusServer) setupHandlers() error {
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
-	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
+	jUpstreamResolvers := jResolver.NewThirdPartyUpstreamResolvers(s.conf.UpstreamResolvers...)
+	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver, jUpstreamResolvers...)
 	jJobService := jService.NewJobService(
 		jJobRepo, jJobRepo, jJobRepo,
 		pluginService, jUpstreamResolver, tenantService,

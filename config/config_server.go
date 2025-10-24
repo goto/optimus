@@ -1,5 +1,11 @@
 package config
 
+type UpstreamResolverType string
+
+const (
+	DexUpstreamResolver UpstreamResolverType = "dex"
+)
+
 type ServerConfig struct {
 	Version                Version              `mapstructure:"version"`
 	Log                    LogConfig            `mapstructure:"log"`
@@ -8,12 +14,18 @@ type ServerConfig struct {
 	Alerting               AlertingConfig       `mapstructure:"alerting"`
 	SLAConfig              SLAConfig            `mapstructure:"sla"`
 	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
+	UpstreamResolvers      []UpstreamResolver   `mapstructure:"upstream_resolvers"`
 	Replay                 ReplayConfig         `mapstructure:"replay"`
 	Publisher              *Publisher           `mapstructure:"publisher"`
 	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
 	ExternalTables         ExternalTablesConfig `mapstructure:"external_tables"`
 	Features               FeaturesConfig       `mapstructure:"features"`
 	Plugins                Plugins              `mapstructure:"plugins"`
+}
+
+type UpstreamResolver struct {
+	Type   UpstreamResolverType   `mapstructure:"type"`
+	Config map[string]interface{} `mapstructure:"config"`
 }
 
 type Serve struct {

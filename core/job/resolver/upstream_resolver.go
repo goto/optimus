@@ -17,13 +17,14 @@ const (
 )
 
 type UpstreamResolver struct {
-	jobRepository            JobRepository
-	externalUpstreamResolver ExternalUpstreamResolver
-	internalUpstreamResolver InternalUpstreamResolver
+	jobRepository               JobRepository
+	externalUpstreamResolver    ExternalUpstreamResolver
+	internalUpstreamResolver    InternalUpstreamResolver
+	thirdPartyUpstreamResolvers []ThirdPartyUpstreamResolver
 }
 
-func NewUpstreamResolver(jobRepository JobRepository, externalUpstreamResolver ExternalUpstreamResolver, internalUpstreamResolver InternalUpstreamResolver) *UpstreamResolver {
-	return &UpstreamResolver{jobRepository: jobRepository, externalUpstreamResolver: externalUpstreamResolver, internalUpstreamResolver: internalUpstreamResolver}
+func NewUpstreamResolver(jobRepository JobRepository, externalUpstreamResolver ExternalUpstreamResolver, internalUpstreamResolver InternalUpstreamResolver, thirdPartyUpstreamResolvers ...ThirdPartyUpstreamResolver) *UpstreamResolver {
+	return &UpstreamResolver{jobRepository: jobRepository, externalUpstreamResolver: externalUpstreamResolver, internalUpstreamResolver: internalUpstreamResolver, thirdPartyUpstreamResolvers: thirdPartyUpstreamResolvers}
 }
 
 type ExternalUpstreamResolver interface {
@@ -58,6 +59,12 @@ func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant
 	jobsWithResolvedStaticExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedStaticInternalUpstreams, logWriter)
 	me.Append(err)
 
+	jobsWithResolvedThirdPartyUpstreams := jobsWithResolvedStaticExternalUpstreams
+	for _, thirdPartyUpstreamResolver := range u.thirdPartyUpstreamResolvers {
+		jobsWithResolvedThirdPartyUpstreams, err = thirdPartyUpstreamResolver.BulkResolve(ctx, jobsWithResolvedThirdPartyUpstreams, logWriter)
+		me.Append(err)
+	}
+
 	me.Append(checkForUnresolvedStaticUpstreams(tnnt, incomingJobNameMap, jobsWithResolvedStaticExternalUpstreams, logWriter))
 
 	return me.ToErr()
@@ -84,9 +91,15 @@ func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.Pr
 	jobsWithResolvedExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedInternalUpstreams, logWriter)
 	me.Append(err)
 
+	jobsWithResolvedThirdPartyUpstreams := jobsWithResolvedExternalUpstreams
+	for _, thirdPartyUpstreamResolver := range u.thirdPartyUpstreamResolvers {
+		jobsWithResolvedThirdPartyUpstreams, err = thirdPartyUpstreamResolver.BulkResolve(ctx, jobsWithResolvedThirdPartyUpstreams, logWriter)
+		me.Append(err)
+	}
+
 	me.Append(u.getUnresolvedUpstreamsErrors(jobsWithResolvedExternalUpstreams, logWriter))
 
-	return jobsWithResolvedExternalUpstreams, me.ToErr()
+	return jobsWithResolvedThirdPartyUpstreams, me.ToErr()
 }
 
 func (u UpstreamResolver) Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error) {
@@ -100,6 +113,12 @@ func (u UpstreamResolver) Resolve(ctx context.Context, subjectJob *job.Job, logW
 
 	jobWithInternalExternalUpstream, err := u.externalUpstreamResolver.Resolve(ctx, jobWithInternalUpstream, logWriter)
 	me.Append(err)
+
+	jobWithThirdPartyUpstream := jobWithInternalExternalUpstream
+	for _, thirdPartyUpstreamResolver := range u.thirdPartyUpstreamResolvers {
+		jobWithThirdPartyUpstream, err = thirdPartyUpstreamResolver.Resolve(ctx, jobWithThirdPartyUpstream, logWriter)
+		me.Append(err)
+	}
 
 	return jobWithInternalExternalUpstream.Upstreams(), me.ToErr()
 }

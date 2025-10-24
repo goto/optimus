@@ -150,7 +150,7 @@ func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *s
 	}
 
 	if maxUpstreamsPerLevel > 0 {
-		finalLineage = finalLineage.PruneLineage(maxUpstreamsPerLevel)
+		finalLineage = finalLineage.PruneLineage(maxUpstreamsPerLevel, scheduler.MaxLineageDepth)
 	}
 
 	return finalLineage, nil

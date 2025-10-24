@@ -10,6 +10,7 @@ import (
 
 const (
 	// MaxLineageDepth is a safeguard to avoid infinite recursion in case of unexpected cycles
+	// generally we don't expect lineage to be deeper than 20 levels
 	MaxLineageDepth = 20
 )
 
@@ -36,7 +37,9 @@ type upstreamCandidate struct {
 	EndTime time.Time
 }
 
-func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel int) *JobLineageSummary {
+// PruneLineage prunes the upstream lineage to limit the number of upstreams per level
+// by selecting maxUpstreamsPerLevel upstreams based on their latest job run finish time
+func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel, maxDepth int) *JobLineageSummary {
 	type nodeInfo struct {
 		original *JobLineageSummary
 		pruned   *JobLineageSummary
@@ -70,7 +73,7 @@ func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel int) *JobLineageSu
 		}
 
 		upstreams := current.original.Upstreams
-		candidates := extractUpstreamCandidatesSortedByDuration(current.original)
+		candidates := sortUpstreamCandidates(current.original)
 
 		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
 			targetJobName := candidates[i].JobName
@@ -104,7 +107,7 @@ func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel int) *JobLineageSu
 	return rootPruned
 }
 
-func extractUpstreamCandidatesSortedByDuration(lineage *JobLineageSummary) []upstreamCandidate {
+func sortUpstreamCandidates(lineage *JobLineageSummary) []upstreamCandidate {
 	candidates := []upstreamCandidate{}
 
 	for _, upstream := range lineage.Upstreams {
@@ -134,12 +137,12 @@ func getLatestFinishTime(jobRuns map[string]*JobRunSummary) time.Time {
 	return latestFinishTime
 }
 
-func (j *JobLineageSummary) Flatten() []*JobExecutionSummary {
+func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
 	var result []*JobExecutionSummary
 	queue := []*JobLineageSummary{j}
 	level := 0
 
-	for len(queue) > 0 {
+	for len(queue) > 0 && level < maxDepth {
 		levelSize := len(queue)
 
 		for range levelSize {

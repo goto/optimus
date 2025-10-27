@@ -11,6 +11,28 @@ import (
 	"github.com/goto/optimus/internal/lib/window"
 )
 
+func createJobLineage(name string, tnnt tenant.Tenant, windowConfig *window.Config, upstreams []*scheduler.JobLineageSummary, runSummary *scheduler.JobRunSummary) *scheduler.JobLineageSummary {
+	return &scheduler.JobLineageSummary{
+		JobName:          scheduler.JobName(name),
+		Tenant:           tnnt,
+		ScheduleInterval: "0 8 * * *",
+		Window:           windowConfig,
+		SLA:              scheduler.SLAConfig{Duration: time.Hour},
+		Upstreams:        upstreams,
+		JobRuns: map[string]*scheduler.JobRunSummary{
+			runSummary.ScheduledAt.UTC().Format(time.RFC3339): runSummary,
+		},
+	}
+}
+
+func createJobRun(baseTime, startTime, endTime time.Time) *scheduler.JobRunSummary {
+	return &scheduler.JobRunSummary{
+		ScheduledAt:  baseTime,
+		JobStartTime: &startTime,
+		JobEndTime:   &endTime,
+	}
+}
+
 func TestJobLineageSummary_Flatten(t *testing.T) {
 	projName := tenant.ProjectName("proj")
 	namespaceName := tenant.ProjectName("ns1")
@@ -55,28 +77,42 @@ func TestJobLineageSummary_Flatten(t *testing.T) {
 		assert.Equal(t, jobRunSums[0].JobName, scheduler.JobName("root"))
 		assert.Equal(t, jobRunSums[1].JobName, scheduler.JobName("level1"))
 	})
-}
 
-func createJobLineage(name string, tnnt tenant.Tenant, windowConfig *window.Config, upstreams []*scheduler.JobLineageSummary, runSummary *scheduler.JobRunSummary) *scheduler.JobLineageSummary {
-	return &scheduler.JobLineageSummary{
-		JobName:          scheduler.JobName(name),
-		Tenant:           tnnt,
-		ScheduleInterval: "0 8 * * *",
-		Window:           windowConfig,
-		SLA:              scheduler.SLAConfig{Duration: time.Hour},
-		Upstreams:        upstreams,
-		JobRuns: map[string]*scheduler.JobRunSummary{
-			runSummary.ScheduledAt.UTC().Format(time.RFC3339): runSummary,
-		},
-	}
-}
+	// scenario:
+	// 			 root
+	//        /    \
+	//     l1A      l1B
+	//       |   	  /
+	//    	l2		 |
+	//      	\		/
+	//     			l3
+	//      		|
+	//     			l4
+	t.Run("should generate unique paths for each upstream for shared upstreams", func(t *testing.T) {
+		level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute)))
+		level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute)))
+		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute)))
+		level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute)))
+		level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(60*time.Minute)))
 
-func createJobRun(baseTime, startTime, endTime time.Time) *scheduler.JobRunSummary {
-	return &scheduler.JobRunSummary{
-		ScheduledAt:  baseTime,
-		JobStartTime: &startTime,
-		JobEndTime:   &endTime,
-	}
+		maxDepth := 5
+		flattened := root.Flatten(maxDepth)
+
+		assert.Equal(t, 8, len(flattened))
+		jobNames := make(map[scheduler.JobName][]int)
+		for _, summary := range flattened {
+			jobNames[summary.JobName] = append(jobNames[summary.JobName], summary.Level)
+		}
+		assert.ElementsMatch(t, []int{0}, jobNames[scheduler.JobName("root")])
+		assert.ElementsMatch(t, []int{1}, jobNames[scheduler.JobName("level1A")])
+		assert.ElementsMatch(t, []int{1}, jobNames[scheduler.JobName("level1B")])
+		assert.ElementsMatch(t, []int{2}, jobNames[scheduler.JobName("level2")])
+		// upstream level3 should appear in two different paths: level 3 from level1A and level 2 from level1B
+		assert.ElementsMatch(t, []int{2, 3}, jobNames[scheduler.JobName("level3")])
+		// upstream level4 should appear in two different paths: level 4 from level1A and level 3 from level1B
+		assert.ElementsMatch(t, []int{3, 4}, jobNames[scheduler.JobName("level4")])
+	})
 }
 
 func TestJobLineageSummary_PruneLineage(t *testing.T) {
@@ -158,5 +194,94 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 		assert.Equal(t, scheduler.JobName("root"), pruned.JobName)
 		assert.Len(t, pruned.Upstreams, 1)
 		assert.Equal(t, scheduler.JobName("upstream1"), pruned.Upstreams[0].JobName)
+	})
+
+	// scenario:
+	// 			 root
+	//        /    \
+	//     l1A      l1B
+	//       |   	  /
+	//    	l2		 |
+	//      	\		/
+	//     			l3
+	//      		|
+	//     			l4
+	// with maxUpstreamsPerLevel = 1,
+	// case: if l1A is slowest, result should be root -> l1A -> l2 -> l3 -> l4
+	// if l1B is slowest, result should be root -> l1B -> l3 -> l4
+	t.Run("handle occurrence of same upstream from different paths", func(t *testing.T) {
+		t.Run("should pick upstream from slowest path - l1A", func(t *testing.T) {
+			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute)))
+			level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute)))
+			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute)))
+			level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(45*time.Minute)))
+			level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute)))
+			root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute)))
+
+			maxUpstreamsPerLevel := 1
+			maxDepth := 5
+			pruned := root.PruneLineage(maxUpstreamsPerLevel, maxDepth)
+
+			assert.Equal(t, scheduler.JobName("root"), pruned.JobName)
+			assert.Len(t, pruned.Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level1A"), pruned.Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level2"), pruned.Upstreams[0].Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[0].Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level3"), pruned.Upstreams[0].Upstreams[0].Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[0].Upstreams[0].Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level4"), pruned.Upstreams[0].Upstreams[0].Upstreams[0].Upstreams[0].JobName)
+		})
+
+		t.Run("should pick upstream from slowest path - l1B", func(t *testing.T) {
+			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute)))
+			level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute)))
+			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute)))
+			level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute)))
+			level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute)))
+			root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(60*time.Minute)))
+
+			maxUpstreamsPerLevel := 1
+			maxDepth := 5
+			pruned := root.PruneLineage(maxUpstreamsPerLevel, maxDepth)
+
+			assert.Equal(t, scheduler.JobName("root"), pruned.JobName)
+			assert.Len(t, pruned.Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level1B"), pruned.Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level3"), pruned.Upstreams[0].Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[0].Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level4"), pruned.Upstreams[0].Upstreams[0].Upstreams[0].JobName)
+		})
+
+		t.Run("should generate path from all upstreams if there are shared paths", func(t *testing.T) {
+			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute)))
+			level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute)))
+			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute)))
+			level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute)))
+			level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute)))
+			root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRun(baseTime, baseTime.Add(0), baseTime.Add(60*time.Minute)))
+
+			maxUpstreamsPerLevel := 10
+			maxDepth := 5
+			pruned := root.PruneLineage(maxUpstreamsPerLevel, maxDepth)
+
+			assert.Equal(t, scheduler.JobName("root"), pruned.JobName)
+			assert.Len(t, pruned.Upstreams, 2)
+			assert.Equal(t, scheduler.JobName("level1A"), pruned.Upstreams[0].JobName)
+			assert.Equal(t, scheduler.JobName("level1B"), pruned.Upstreams[1].JobName)
+
+			assert.Len(t, pruned.Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level2"), pruned.Upstreams[0].Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[0].Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level3"), pruned.Upstreams[0].Upstreams[0].Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[0].Upstreams[0].Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level4"), pruned.Upstreams[0].Upstreams[0].Upstreams[0].Upstreams[0].JobName)
+
+			assert.Len(t, pruned.Upstreams[1].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level3"), pruned.Upstreams[1].Upstreams[0].JobName)
+			assert.Len(t, pruned.Upstreams[1].Upstreams[0].Upstreams, 1)
+			assert.Equal(t, scheduler.JobName("level4"), pruned.Upstreams[1].Upstreams[0].Upstreams[0].JobName)
+		})
 	})
 }

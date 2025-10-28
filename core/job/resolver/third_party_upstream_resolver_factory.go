@@ -5,6 +5,7 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/ext/dex"
 	"github.com/goto/optimus/internal/writer"
 )
 
@@ -13,14 +14,21 @@ type ThirdPartyUpstreamResolver interface {
 	Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error)
 }
 
-func NewThirdPartyUpstreamResolvers(upstreamResolvers ...config.UpstreamResolver) []ThirdPartyUpstreamResolver {
+func NewThirdPartyUpstreamResolvers(upstreamResolvers ...config.UpstreamResolver) ([]ThirdPartyUpstreamResolver, error) {
 	var resolvers []ThirdPartyUpstreamResolver
 	for _, upstreamResolver := range upstreamResolvers {
 		switch upstreamResolver.Type { //nolint:revive
 		case config.DexUpstreamResolver:
-			// config can be accessed via upstreamResolver.Config if needed in the future
-			resolvers = append(resolvers, NewDexUpstreamResolver(upstreamResolver.Config))
+			clientConfig, err := upstreamResolver.GetDexClientConfig()
+			if err != nil {
+				return nil, err
+			}
+			dexClient, err := dex.NewDexClient(clientConfig)
+			if err != nil {
+				return nil, err
+			}
+			resolvers = append(resolvers, NewDexUpstreamResolver(dexClient))
 		}
 	}
-	return resolvers
+	return resolvers, nil
 }

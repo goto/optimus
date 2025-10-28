@@ -1,5 +1,7 @@
 package config
 
+import "encoding/json"
+
 type UpstreamResolverType string
 
 const (
@@ -26,6 +28,19 @@ type ServerConfig struct {
 type UpstreamResolver struct {
 	Type   UpstreamResolverType   `mapstructure:"type"`
 	Config map[string]interface{} `mapstructure:"config"`
+}
+
+func (u *UpstreamResolver) GetDexClientConfig() (*DexClientConfig, error) {
+	configBytes, err := json.Marshal(u.Config)
+	if err != nil {
+		return nil, err
+	}
+	var dexClientConfig DexClientConfig
+	err = json.Unmarshal(configBytes, &dexClientConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &dexClientConfig, nil
 }
 
 type Serve struct {
@@ -106,6 +121,10 @@ type ResourceManager struct {
 type ResourceManagerConfigOptimus struct {
 	Host    string            `mapstructure:"host"`
 	Headers map[string]string `mapstructure:"headers"`
+}
+
+type DexClientConfig struct {
+	Host string `mapstructure:"host"`
 }
 
 type ReplayConfig struct {

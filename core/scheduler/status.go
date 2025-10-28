@@ -64,6 +64,16 @@ func (j State) String() string {
 	return string(j)
 }
 
+type DataCompletenessStatus struct {
+	IsComplete             bool
+	DataCompletenessByDate []*DataCompletenessByDate
+}
+
+type DataCompletenessByDate struct {
+	Date       time.Time
+	IsComplete bool
+}
+
 type JobRunStatus struct {
 	ScheduledAt time.Time
 	State       State

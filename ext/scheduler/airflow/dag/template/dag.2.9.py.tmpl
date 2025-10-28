@@ -9,7 +9,7 @@ from __lib import job_success_event, job_failure_event
 # import operator level callbacks
 from __lib import operator_start_event, operator_success_event, operator_retry_event, operator_failure_event
 
-from __lib import optimus_sla_miss_notify, SuperKubernetesPodOperator, SuperExternalTaskSensor
+from __lib import optimus_sla_miss_notify, SuperKubernetesPodOperator, SuperExternalTaskSensor, SuperExternal3rdPartyTaskSensor
 
 from airflow.configuration import conf
 from airflow.models import DAG, Variable
@@ -269,8 +269,17 @@ wait_{{$httpUpstream.Name}} = ExternalHttpSensor(
 {{- $dependencyName := printf "%s_%s" $upstream.Type $upstream.Identifier | DisplayName }}
 wait_{{ $dependencyName }} = SuperExternal3rdPartyTaskSensor(
     optimus_hostname="{{$.Hostname}}",
+    project_name="{{ $.Tenant.ProjectName.String }}",
+    job_name="{{ $.JobDetails.Name.String }}",
     third_party_type="{{ $upstream.Type }}",
     identifier="{{ $upstream.Identifier }}",
+    {{- if $upstream.Config }}
+    config = {
+        {{- range $key, $val := $upstream.Config }}
+        "{{ $key }}": "{{ $val }}",
+        {{- end }}
+    },
+    {{- end }}
     poke_interval=SENSOR_DEFAULT_POKE_INTERVAL_IN_SECS,
     timeout=SENSOR_DEFAULT_TIMEOUT_IN_SECS,
     task_id="wait_{{printf "%s_%s" $upstream.Type $upstream.Identifier}}",
@@ -307,7 +316,7 @@ wait_{{ $t.JobName | DisplayName }} >> {{$transformationName}}
 wait_{{ $t.Name }} >> {{$transformationName}}
 {{- end}}
 {{- range $_, $t := $.Upstreams.ThirdParty }}
-wait_{{ printf "%s_%s" $t.Type $t.Identifier }} >> {{$transformationName}}
+wait_{{ printf "%s_%s" $t.Type $t.Identifier | DisplayName }} >> {{$transformationName}}
 {{- end}}
 
 # [Dependency/HttpDep/ExternalDep] -> Task -> [Hook]

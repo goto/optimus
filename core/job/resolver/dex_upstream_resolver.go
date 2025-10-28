@@ -3,7 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"strings"
+	"time"
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
@@ -11,10 +11,18 @@ import (
 	"github.com/goto/optimus/internal/writer"
 )
 
-type dexUpstreamResolver struct{}
+type DexClient interface {
+	IsResourceManagedUntil(ctx context.Context, store, resourceURN string, dataAvailabilityTime time.Time) (bool, error)
+}
 
-func NewDexUpstreamResolver(_ map[string]interface{}) *dexUpstreamResolver {
-	return &dexUpstreamResolver{}
+type dexUpstreamResolver struct {
+	dexClient DexClient
+}
+
+func NewDexUpstreamResolver(client DexClient) *dexUpstreamResolver {
+	return &dexUpstreamResolver{
+		dexClient: client,
+	}
 }
 
 func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error) {
@@ -58,7 +66,6 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	return job.NewWithUpstreamAndThirdPartyUpstreams(jobWithUpstream.Job(), upstreams, thirdPartyUpstreams), me.ToErr()
 }
 
-func (*dexUpstreamResolver) isDEXManagedUpstream(_ context.Context, resourceURN resource.URN) (bool, error) { //nolint:unparam
-	// now, only resolved if resource_urn contains _raw
-	return strings.Contains(resourceURN.String(), "_raw"), nil
+func (u *dexUpstreamResolver) isDEXManagedUpstream(ctx context.Context, resourceURN resource.URN) (bool, error) { //nolint:unparam
+	return u.dexClient.IsResourceManagedUntil(ctx, resourceURN.GetStore(), resourceURN.GetName(), time.Now())
 }

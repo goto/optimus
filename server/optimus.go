@@ -19,6 +19,7 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/event/moderator"
+	job "github.com/goto/optimus/core/job"
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
 	jResolver "github.com/goto/optimus/core/job/resolver"
 	jService "github.com/goto/optimus/core/job/service"
@@ -30,6 +31,7 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
+	"github.com/goto/optimus/ext/dex"
 	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
@@ -272,6 +274,19 @@ func (s *OptimusServer) Shutdown() {
 	s.logger.Info("Server shutdown complete")
 }
 
+func getDexClient(conf *config.ServerConfig) (*dex.Client, error) {
+	for _, upstreamResolver := range conf.UpstreamResolvers {
+		if upstreamResolver.Type == job.ThirdPartyTypeDex {
+			clientConfig, err := upstreamResolver.GetDexClientConfig()
+			if err != nil {
+				return nil, err
+			}
+			return dex.NewDexClient(clientConfig)
+		}
+	}
+	return nil, nil //nolint:nilnil
+}
+
 func (s *OptimusServer) setupHandlers() error {
 	// Tenant Bounded Context Setup
 	tProjectRepo := tenant.NewProjectRepository(s.dbPool)
@@ -395,7 +410,10 @@ func (s *OptimusServer) setupHandlers() error {
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
-	jUpstreamResolvers := jResolver.NewThirdPartyUpstreamResolvers(s.conf.UpstreamResolvers...)
+	jUpstreamResolvers, err := jResolver.NewThirdPartyUpstreamResolvers(s.conf.UpstreamResolvers...)
+	if err != nil {
+		return err
+	}
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver, jUpstreamResolvers...)
 	jJobService := jService.NewJobService(
 		jJobRepo, jJobRepo, jJobRepo,
@@ -466,7 +484,11 @@ func (s *OptimusServer) setupHandlers() error {
 	// Resource Handler
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService))
+	dexClient, err := getDexClient(s.conf)
+	if err != nil {
+		return err
+	}
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, dexClient))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

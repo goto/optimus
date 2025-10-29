@@ -864,9 +864,10 @@ func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules map
 func NewJobLineageFetcher(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *JobLineageFetcher {
+},
+) *JobLineageFetcher {
 	mock := &JobLineageFetcher{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

@@ -73,6 +73,77 @@ func TestJob(t *testing.T) {
 		}
 		assert.Equal(t, "jobName", jobWithDetails.GetName())
 	})
+	t.Run("GetNextSchedule", func(t *testing.T) {
+		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		t.Run("should return next schedule time", func(t *testing.T) {
+			jobSchedule := scheduler.Schedule{
+				Interval:  "0 0 * * *",
+				StartDate: startDate,
+			}
+			referenceTime := time.Date(2024, 1, 2, 10, 0, 0, 0, time.UTC)
+			nextSchedule, err := jobSchedule.GetNextSchedule(referenceTime)
+			assert.Nil(t, err)
+			expectedNextSchedule := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
+			assert.Equal(t, expectedNextSchedule, nextSchedule)
+		})
+		t.Run("should return error for invalid cron expression", func(t *testing.T) {
+			jobSchedule := scheduler.Schedule{
+				Interval:  "invalid cron",
+				StartDate: startDate,
+			}
+			referenceTime := time.Date(2024, 1, 2, 10, 0, 0, 0, time.UTC)
+			nextSchedule, err := jobSchedule.GetNextSchedule(referenceTime)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "failed to parse cron expression")
+			assert.Equal(t, time.Time{}, nextSchedule)
+		})
+		t.Run("should return start date if reference time is before start date", func(t *testing.T) {
+			jobSchedule := scheduler.Schedule{
+				Interval:  "0 0 * * *",
+				StartDate: startDate,
+			}
+			referenceTime := time.Date(2023, 12, 31, 10, 0, 0, 0, time.UTC)
+			nextSchedule, err := jobSchedule.GetNextSchedule(referenceTime)
+			assert.Nil(t, err)
+			assert.Equal(t, startDate, nextSchedule)
+		})
+	})
+	t.Run("GetPreviousSchedule", func(t *testing.T) {
+		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		t.Run("should return previous schedule time", func(t *testing.T) {
+			jobSchedule := scheduler.Schedule{
+				Interval:  "0 0 * * *",
+				StartDate: startDate,
+			}
+			referenceTime := time.Date(2024, 1, 3, 10, 0, 0, 0, time.UTC)
+			prevSchedule, err := jobSchedule.GetPreviousSchedule(referenceTime)
+			assert.Nil(t, err)
+			expectedPrevSchedule := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
+			assert.Equal(t, expectedPrevSchedule, prevSchedule)
+		})
+		t.Run("should return error for invalid cron expression", func(t *testing.T) {
+			jobSchedule := scheduler.Schedule{
+				Interval:  "invalid cron",
+				StartDate: startDate,
+			}
+			referenceTime := time.Date(2024, 1, 2, 10, 0, 0, 0, time.UTC)
+			prevSchedule, err := jobSchedule.GetPreviousSchedule(referenceTime)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "failed to parse cron expression")
+			assert.Equal(t, time.Time{}, prevSchedule)
+		})
+		t.Run("should return error if there is no previous schedule", func(t *testing.T) {
+			jobSchedule := scheduler.Schedule{
+				Interval:  "0 0 * * *",
+				StartDate: startDate,
+			}
+			referenceTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			prevSchedule, err := jobSchedule.GetPreviousSchedule(referenceTime)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "no previous schedule found before reference time")
+			assert.Equal(t, time.Time{}, prevSchedule)
+		})
+	})
 	t.Run("SLADuration", func(t *testing.T) {
 		t.Run("has job breached SLA", func(t *testing.T) {
 			t.Run("duration 1.5 hr", func(t *testing.T) {

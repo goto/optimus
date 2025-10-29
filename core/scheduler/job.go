@@ -317,6 +317,27 @@ func (s *Schedule) GetNextSchedule(after time.Time) (time.Time, error) {
 	return jobCron.Next(after), nil
 }
 
+func (s *Schedule) GetPreviousSchedule(before time.Time) (time.Time, error) {
+	if s.StartDate.IsZero() {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "job schedule startDate not found in job")
+	}
+	interval := s.Interval
+	if interval == "" {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "cannot get job schedule start date, job interval is empty")
+	}
+	jobCron, err := cron.ParseCronSchedule(interval)
+	if err != nil {
+		msg := fmt.Sprintf("unable to parse job cron interval: %s", err)
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, msg)
+	}
+
+	if before.Before(s.StartDate) {
+		return time.Time{}, errors.InvalidArgument(EntityJobRun, "cannot get previous schedule before job start date")
+	}
+
+	return jobCron.Prev(before), nil
+}
+
 func (j *JobWithDetails) GetLabelsAsString() string {
 	labels := ""
 	for k, v := range j.JobMetadata.Labels {

@@ -10,7 +10,7 @@ import (
 
 // Contract that can be used by other callers to fetch job lineage information
 type JobLineageFetcher interface {
-	GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)
+	GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)
 }
 
 type LineageBuilder interface {
@@ -43,9 +43,13 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 	return result, nil
 }
 
-func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
+func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
 	lineageToJobName := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
-	jobLineages, err := j.lineageBuilder.BuildLineage(ctx, jobSchedules, 0)
+	schedules := make([]*scheduler.JobSchedule, 0, len(jobSchedules))
+	for _, schedule := range jobSchedules {
+		schedules = append(schedules, schedule)
+	}
+	jobLineages, err := j.lineageBuilder.BuildLineage(ctx, schedules, 0)
 	if err != nil {
 		j.l.Error("failed to get job lineage", "error", err)
 		return nil, err

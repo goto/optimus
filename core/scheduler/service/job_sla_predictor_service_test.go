@@ -324,8 +324,8 @@ func TestIdentifySLABreaches(t *testing.T) {
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, mock.MatchedBy(func(jobSchedules []*scheduler.JobSchedule) bool {
-			return len(jobSchedules) == 1 && jobSchedules[0].JobName == jobASchedule.JobName && jobSchedules[0].ScheduledAt.Equal(jobASchedule.ScheduledAt)
+		jobLineageFetcher.On("GetJobLineage", ctx, mock.MatchedBy(func(jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) bool {
+			return len(jobSchedules) == 1 && jobSchedules[jobASchedule.JobName].ScheduledAt.Equal(jobASchedule.ScheduledAt)
 		})).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil)
@@ -429,7 +429,9 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobASchedule.JobName: jobASchedule,
+		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -534,7 +536,9 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobASchedule.JobName: jobASchedule,
+		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -646,7 +650,9 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobASchedule.JobName: jobASchedule,
+		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -789,7 +795,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A1", "job-A2"}).Return([]*scheduler.JobWithDetails{jobA1, jobA2}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, []*scheduler.JobSchedule{jobASchedule1, jobASchedule2}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobASchedule1.JobName: jobASchedule1,
+			jobASchedule2.JobName: jobASchedule2,
+		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule1.JobName: jobA1Lineage,
 			jobASchedule2.JobName: jobA2Lineage,
 		}, nil).Once()
@@ -821,7 +830,7 @@ type JobLineageFetcher struct {
 }
 
 // GetJobLineage provides a mock function with given fields: ctx, jobSchedules
-func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
+func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
 	ret := _m.Called(ctx, jobSchedules)
 
 	if len(ret) == 0 {
@@ -830,10 +839,10 @@ func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules []*
 
 	var r0 map[scheduler.JobName]*scheduler.JobLineageSummary
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, []*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)); ok {
 		return rf(ctx, jobSchedules)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, []*scheduler.JobSchedule) map[scheduler.JobName]*scheduler.JobLineageSummary); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule) map[scheduler.JobName]*scheduler.JobLineageSummary); ok {
 		r0 = rf(ctx, jobSchedules)
 	} else {
 		if ret.Get(0) != nil {
@@ -841,7 +850,7 @@ func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules []*
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, []*scheduler.JobSchedule) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule) error); ok {
 		r1 = rf(ctx, jobSchedules)
 	} else {
 		r1 = ret.Error(1)

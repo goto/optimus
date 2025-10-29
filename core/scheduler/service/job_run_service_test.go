@@ -1552,8 +1552,8 @@ func TestJobRunService(t *testing.T) {
 		t.Run("should able to get job runs with ignoring old schedule changes", func(t *testing.T) {
 			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
 			features := config.FeaturesConfig{
-				EnableV2Sensor:                    true,
 				EnableIgnoreOldScheduleRunsSensor: true,
+				EnableV2Sensor:                    false,
 				EnableV3Sensor:                    false,
 			}
 			job := scheduler.Job{
@@ -1600,26 +1600,30 @@ func TestJobRunService(t *testing.T) {
 			}
 
 			type cases struct {
-				name                string
-				runsFromScheduler   []*scheduler.JobRunStatus
-				changelogFilterDate time.Time
-				jobChangelogs       []*scheduler.Changelog
-				expectedMessage     string
-				expectedRuns        []*scheduler.JobRunStatus
-				expectedErr         error
+				name                  string
+				runsFromScheduler     []*scheduler.JobRunStatus
+				prevRunsJobQuery      *scheduler.JobRunsCriteria
+				prevRunsFromScheduler []*scheduler.JobRunStatus
+				prevSchedule          string
+				changelogFilterDate   time.Time
+				jobChangelogs         []*scheduler.Changelog
+				expectedMessage       string
+				expectedRuns          []*scheduler.JobRunStatus
+				expectedErr           error
 			}
 
 			scenarios := []cases{
 				{
 					// 1st scenario: if there are no runs available & no schedule change,
 					// all expected runs are pending (no change in behavior)
-					name:                "return runs if no runs from schedule, no schedule change",
-					runsFromScheduler:   []*scheduler.JobRunStatus{},
-					changelogFilterDate: time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
-					jobChangelogs:       []*scheduler.Changelog{},
-					expectedMessage:     "",
-					expectedRuns:        expectedRuns,
-					expectedErr:         nil,
+					name:                  "return runs if no runs from schedule, no schedule change",
+					runsFromScheduler:     []*scheduler.JobRunStatus{},
+					prevRunsFromScheduler: []*scheduler.JobRunStatus{},
+					changelogFilterDate:   time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
+					jobChangelogs:         []*scheduler.Changelog{},
+					expectedMessage:       "",
+					expectedRuns:          expectedRuns,
+					expectedErr:           nil,
 				},
 				{
 					// 2nd scenario: older runs (0 6 * * *) are successful but schedule changed to (0 12 * * *)
@@ -1629,6 +1633,17 @@ func TestJobRunService(t *testing.T) {
 						runs, _ := mockGetJobRuns(3, jobQuery.StartDate, "0 6 * * *", scheduler.StateSuccess)
 						return runs
 					}(),
+					prevRunsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(4, time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC), "0 6 * * *", scheduler.StateSuccess)
+						return runs
+					}(),
+					prevRunsJobQuery: &scheduler.JobRunsCriteria{
+						Name:      "sample_select",
+						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
+						EndDate:   time.Date(2022, 3, 23, 6, 0, 0, 0, time.UTC),
+						Filter:    []string{},
+					},
+					prevSchedule:        "0 6 * * *",
 					changelogFilterDate: time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
 					jobChangelogs: []*scheduler.Changelog{
 						{
@@ -1637,7 +1652,7 @@ func TestJobRunService(t *testing.T) {
 							},
 						},
 					},
-					expectedMessage: "There are 4 mismatched runs due to job schedule change (last changed schedule: 0 6 * * *). Affected runs: 2022-03-20T12:00:00Z(pending), 2022-03-21T12:00:00Z(pending), 2022-03-22T12:00:00Z(pending), 2022-03-23T12:00:00Z(pending)\n",
+					expectedMessage: "Schedule change has been detected for this job (previous schedule: 0 6 * * *). Found 4 runs from previous schedule with states: 2022-03-20T06:00:00Z(success), 2022-03-21T06:00:00Z(success), 2022-03-22T06:00:00Z(success), 2022-03-23T06:00:00Z(success), filtering only to include the runs from new schedule.\n",
 					expectedRuns:    []*scheduler.JobRunStatus{},
 					expectedErr:     nil,
 				},
@@ -1650,6 +1665,17 @@ func TestJobRunService(t *testing.T) {
 						newRuns, _ := mockGetJobRuns(1, time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC), "0 12 * * *", scheduler.StateSuccess)
 						return append(runs, newRuns...)
 					}(),
+					prevRunsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(3, time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC), "0 6 * * *", scheduler.StateSuccess)
+						return runs
+					}(),
+					prevRunsJobQuery: &scheduler.JobRunsCriteria{
+						Name:      "sample_select",
+						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
+						EndDate:   time.Date(2022, 3, 22, 6, 0, 0, 0, time.UTC),
+						Filter:    []string{},
+					},
+					prevSchedule:        "0 6 * * *",
 					changelogFilterDate: time.Date(2022, 3, 22, 12, 0, 0, 0, time.UTC),
 					jobChangelogs: []*scheduler.Changelog{
 						{
@@ -1658,7 +1684,7 @@ func TestJobRunService(t *testing.T) {
 							},
 						},
 					},
-					expectedMessage: "There are 3 mismatched runs due to job schedule change (last changed schedule: 0 6 * * *). Affected runs: 2022-03-20T12:00:00Z(pending), 2022-03-21T12:00:00Z(pending), 2022-03-22T12:00:00Z(pending)\n",
+					expectedMessage: "Schedule change has been detected for this job (previous schedule: 0 6 * * *). Found 3 runs from previous schedule with states: 2022-03-20T06:00:00Z(success), 2022-03-21T06:00:00Z(success), 2022-03-22T06:00:00Z(success), filtering only to include the runs from new schedule.\n",
 					// this should be the newRuns
 					expectedRuns: []*scheduler.JobRunStatus{
 						{
@@ -1679,6 +1705,17 @@ func TestJobRunService(t *testing.T) {
 						newOngoingRuns, _ := mockGetJobRuns(1, time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC), "0 12 * * *", scheduler.StateRunning)
 						return append(append(runs, newSuccessRuns...), newOngoingRuns...)
 					}(),
+					prevRunsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(2, time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC), "0 6 * * *", scheduler.StateSuccess)
+						return runs
+					}(),
+					prevRunsJobQuery: &scheduler.JobRunsCriteria{
+						Name:      "sample_select",
+						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
+						EndDate:   time.Date(2022, 3, 21, 6, 0, 0, 0, time.UTC),
+						Filter:    []string{},
+					},
+					prevSchedule: "0 6 * * *",
 					jobChangelogs: []*scheduler.Changelog{
 						{
 							Change: []scheduler.Change{
@@ -1686,7 +1723,7 @@ func TestJobRunService(t *testing.T) {
 							},
 						},
 					},
-					expectedMessage: "There are 2 mismatched runs due to job schedule change (last changed schedule: 0 6 * * *). Affected runs: 2022-03-20T12:00:00Z(pending), 2022-03-21T12:00:00Z(pending)\n",
+					expectedMessage: "Schedule change has been detected for this job (previous schedule: 0 6 * * *). Found 2 runs from previous schedule with states: 2022-03-20T06:00:00Z(success), 2022-03-21T06:00:00Z(success), filtering only to include the runs from new schedule.\n",
 					expectedRuns: []*scheduler.JobRunStatus{
 						{
 							State:       scheduler.StateSuccess,
@@ -1707,9 +1744,15 @@ func TestJobRunService(t *testing.T) {
 					defer projectGetter.AssertExpectations(t)
 					projectGetter.On("Get", ctx, projName).Return(project, nil)
 
+					prevScheduleCron, _ := cron.ParseCronSchedule(scenario.prevSchedule)
+
 					sch := new(mockScheduler)
-					sch.On("GetJobRuns", ctx, tnnt, jobQuery, jobCron).Return(scenario.runsFromScheduler, nil)
+					sch.On("GetJobRuns", ctx, tnnt, jobQuery, jobCron).Return(scenario.runsFromScheduler, nil).Once()
+					if scenario.prevSchedule != "" {
+						sch.On("GetJobRuns", ctx, tnnt, scenario.prevRunsJobQuery, prevScheduleCron).Return(scenario.prevRunsFromScheduler, nil).Once()
+					}
 					defer sch.AssertExpectations(t)
+
 					jobRepo := new(JobRepository)
 					jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
 					jobRepo.On("GetChangelogs", ctx, scheduler.ChangelogFilter{

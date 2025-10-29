@@ -24,7 +24,6 @@ type Client struct {
 
 // NewDexClient initializes client for communication with Dex
 func NewDexClient(dexClientConfig *config.DexClientConfig) (*Client, error) {
-
 	if dexClientConfig.Host == "" {
 		return nil, errors.New("dex client host is empty")
 	}
@@ -79,7 +78,6 @@ func (d *Client) constructGetTableStatsRequest(ctx context.Context, store, table
 }
 
 func (d *Client) IsResourceManagedUntil(ctx context.Context, store, resourceURN string, dataAvailabilityTime time.Time) (bool, error) {
-
 	request, err := d.constructGetTableStatsRequest(ctx, store, resourceURN, dataAvailabilityTime.Add(time.Hour*-24), dataAvailabilityTime)
 	if err != nil {
 		return false, fmt.Errorf("error encountered when constructing request: %w", err)

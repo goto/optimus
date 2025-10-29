@@ -202,8 +202,7 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 	}
 
 	thirdPartyType := req.GetThirdPartyType()
-	switch thirdPartyType {
-	case job.ThirdPartyTypeDex:
+	if thirdPartyType == job.ThirdPartyTypeDex {
 		dexSensorReq := req.GetDexSensorRequest()
 		if dexSensorReq == nil {
 			h.l.Error("error getting dex sensor request")

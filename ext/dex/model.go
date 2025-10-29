@@ -6,8 +6,10 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 )
 
-const dexStatusRunning = "RUNNING"
-const dexStatusStopped = "STOPPED"
+const (
+	dexStatusRunning = "RUNNING"
+	dexStatusStopped = "STOPPED"
+)
 
 type dexTableStatsAPIResponse struct {
 	Stats Stats `json:"stats"`

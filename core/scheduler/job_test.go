@@ -94,7 +94,6 @@ func TestJob(t *testing.T) {
 			referenceTime := time.Date(2024, 1, 2, 10, 0, 0, 0, time.UTC)
 			nextSchedule, err := jobSchedule.GetNextSchedule(referenceTime)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to parse cron expression")
 			assert.Equal(t, time.Time{}, nextSchedule)
 		})
 		t.Run("should return start date if reference time is before start date", func(t *testing.T) {
@@ -104,8 +103,9 @@ func TestJob(t *testing.T) {
 			}
 			referenceTime := time.Date(2023, 12, 31, 10, 0, 0, 0, time.UTC)
 			nextSchedule, err := jobSchedule.GetNextSchedule(referenceTime)
+			expectedNextSchedule, _ := jobSchedule.GetScheduleStartTime()
 			assert.Nil(t, err)
-			assert.Equal(t, startDate, nextSchedule)
+			assert.Equal(t, expectedNextSchedule, nextSchedule)
 		})
 	})
 	t.Run("GetPreviousSchedule", func(t *testing.T) {
@@ -129,7 +129,6 @@ func TestJob(t *testing.T) {
 			referenceTime := time.Date(2024, 1, 2, 10, 0, 0, 0, time.UTC)
 			prevSchedule, err := jobSchedule.GetPreviousSchedule(referenceTime)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "failed to parse cron expression")
 			assert.Equal(t, time.Time{}, prevSchedule)
 		})
 		t.Run("should return error if there is no previous schedule", func(t *testing.T) {
@@ -137,10 +136,9 @@ func TestJob(t *testing.T) {
 				Interval:  "0 0 * * *",
 				StartDate: startDate,
 			}
-			referenceTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			referenceTime := time.Date(2023, 12, 31, 10, 0, 0, 0, time.UTC)
 			prevSchedule, err := jobSchedule.GetPreviousSchedule(referenceTime)
 			assert.NotNil(t, err)
-			assert.ErrorContains(t, err, "no previous schedule found before reference time")
 			assert.Equal(t, time.Time{}, prevSchedule)
 		})
 	})

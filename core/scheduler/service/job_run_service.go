@@ -324,7 +324,7 @@ func (s *JobRunService) checkForOldScheduleRuns(ctx context.Context, jobWithDeta
 
 	recentSchedule, err := s.getRecentScheduleChangeValue(ctx, jobWithDetails, latestPendingRun.ScheduledAt)
 	if err != nil {
-		return nil, "", fmt.Errorf("error getting recent schedule change: %s", err)
+		return nil, "", fmt.Errorf("error getting recent schedule change: %w", err)
 	}
 
 	if recentSchedule == "" {
@@ -333,7 +333,7 @@ func (s *JobRunService) checkForOldScheduleRuns(ctx context.Context, jobWithDeta
 
 	actualOldRunsList, err := s.getOldRunsWithRecentSchedule(ctx, jobWithDetails, recentSchedule, requestCriteria, latestPendingRun)
 	if err != nil {
-		return nil, recentSchedule, fmt.Errorf("error getting old runs with recent schedule %s between %s-%s: %s", recentSchedule, requestCriteria.StartDate, requestCriteria.EndDate, err)
+		return nil, recentSchedule, fmt.Errorf("error getting old runs with recent schedule %s between %s-%s: %w", recentSchedule, requestCriteria.StartDate, requestCriteria.EndDate, err)
 	}
 
 	return actualOldRunsList, recentSchedule, nil

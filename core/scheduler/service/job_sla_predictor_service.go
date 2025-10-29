@@ -95,17 +95,17 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		return jobBreaches, nil
 	}
 
-	// get targetedSLA
-	targetedSLA := s.getTargetedSLA(jobsWithDetails, referenceTime)
-	if len(targetedSLA) == 0 {
-		s.l.Warn("no targeted SLA found for the given jobs, skipping SLA prediction")
-		return jobBreaches, nil
-	}
-
 	// get scheduled at
 	jobSchedules := s.getJobSchedules(jobsWithDetails, scheduleRangeInHours, referenceTime)
 	if len(jobSchedules) == 0 {
 		s.l.Warn("no job schedules found for the given jobs in the next schedule range, skipping SLA prediction")
+		return jobBreaches, nil
+	}
+
+	// get targetedSLA
+	targetedSLA := s.getTargetedSLA(jobsWithDetails, jobSchedules)
+	if len(targetedSLA) == 0 {
+		s.l.Warn("no targeted SLA found for the given jobs, skipping SLA prediction")
 		return jobBreaches, nil
 	}
 
@@ -206,7 +206,7 @@ func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectNa
 	return filteredJobSchedules, nil
 }
 
-func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails, referenceTime time.Time) map[scheduler.JobName]*time.Time {
+func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) map[scheduler.JobName]*time.Time {
 	targetedSLAByJobName := make(map[scheduler.JobName]*time.Time)
 	for _, job := range jobs {
 		if job.Schedule == nil {
@@ -222,36 +222,54 @@ func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails
 			s.l.Warn("SLA duration is not set for job, skipping SLA prediction", "job", job.Name)
 			continue
 		}
-		scheduledAt, err := job.Schedule.GetNextSchedule(referenceTime)
-		if err != nil {
-			s.l.Warn("failed to get scheduled at for job", "job", job.Name, "error", err)
+		schedule, ok := jobSchedules[job.Name]
+		if !ok {
+			s.l.Warn("failed to get scheduled at for job", "job", job.Name)
 			continue
 		}
-		sla := scheduledAt.Add(time.Duration(slaDuration) * time.Second)
+		sla := schedule.ScheduledAt.Add(time.Duration(slaDuration) * time.Second)
 		targetedSLAByJobName[job.Name] = &sla
 	}
 
 	return targetedSLAByJobName
 }
 
-func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, scheduleRangeInHours time.Duration, referenceTime time.Time) []*scheduler.JobSchedule {
-	jobSchedules := make([]*scheduler.JobSchedule, 0, len(jobs))
+func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, scheduleRangeInHours time.Duration, referenceTime time.Time) map[scheduler.JobName]*scheduler.JobSchedule {
+	jobSchedules := make(map[scheduler.JobName]*scheduler.JobSchedule)
 	for _, job := range jobs {
 		if job.Schedule == nil {
 			continue
 		}
-		scheduledAt, err := job.Schedule.GetNextSchedule(referenceTime)
+		nextScheduledAt, err := job.Schedule.GetNextSchedule(referenceTime)
 		if err != nil {
 			s.l.Warn("failed to get scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
 			continue
 		}
-		if scheduledAt.After(referenceTime.Add(scheduleRangeInHours)) || scheduledAt.Before(referenceTime.Add(-scheduleRangeInHours)) {
+
+		prevScheduledAt, err := job.Schedule.GetPreviousSchedule(referenceTime)
+		if err != nil {
+			s.l.Warn("failed to get previous scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
 			continue
 		}
-		jobSchedules = append(jobSchedules, &scheduler.JobSchedule{
+
+		var scheduledAt time.Time
+		if nextScheduledAt.Sub(referenceTime).Milliseconds() < scheduleRangeInHours.Milliseconds() {
+			s.l.Debug("using next scheduled at for job within schedule range", "job", job.Name)
+			scheduledAt = nextScheduledAt
+		} else if referenceTime.Sub(prevScheduledAt).Milliseconds() < scheduleRangeInHours.Milliseconds() {
+			s.l.Debug("using previous scheduled at for job within schedule range", "job", job.Name)
+			scheduledAt = prevScheduledAt
+		}
+
+		if scheduledAt.IsZero() {
+			s.l.Warn("no scheduled at found for job in the next schedule range, skipping SLA prediction", "job", job.Name)
+			continue
+		}
+
+		jobSchedules[job.Name] = &scheduler.JobSchedule{
 			JobName:     job.Name,
 			ScheduledAt: scheduledAt,
-		})
+		}
 	}
 	return jobSchedules
 }

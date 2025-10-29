@@ -190,16 +190,15 @@ func applicationKeyFromString(appKey string) (*[keyLength]byte, error) {
 }
 
 func (s *OptimusServer) setupDB() error {
-	// err := postgres.Migrate(s.conf.Serve.DB.DSN)
-	// if err != nil {
-	// 	return fmt.Errorf("error initializing migration: %w", err)
-	// }
+	err := postgres.Migrate(s.conf.Serve.DB.DSN)
+	if err != nil {
+		return fmt.Errorf("error initializing migration: %w", err)
+	}
 
-	dbPool, err := postgres.Open(s.conf.Serve.DB)
+	s.dbPool, err = postgres.Open(s.conf.Serve.DB)
 	if err != nil {
 		return fmt.Errorf("postgres.Open: %w", err)
 	}
-	s.dbPool = dbPool
 
 	return nil
 }

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,6 +89,20 @@ type AlertManager struct {
 type AlertsRepo interface {
 	Insert(ctx context.Context, payload *AlertPayload) (uuid.UUID, error)
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status AlertStatus, message string) error
+}
+
+func (a *AlertManager) preprocess(relay func(alert *AlertPayload)) func(alert *AlertPayload) {
+	return func(alert *AlertPayload) {
+		// if multiple teams are specified in the DefaultChannelLabel, split and send alert to each team separately
+		teams := strings.Split(alert.Labels[DefaultChannelLabel], ",")
+		for _, team := range teams {
+			alertCopy := *alert
+			alertCopy.Labels = make(map[string]string)
+			maps.Copy(alertCopy.Labels, alert.Labels)
+			alertCopy.Labels[DefaultChannelLabel] = strings.TrimSpace(team)
+			relay(&alertCopy)
+		}
+	}
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {

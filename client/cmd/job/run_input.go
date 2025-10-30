@@ -46,6 +46,9 @@ type jobRunInputCommand struct {
 	projectName    string
 	host           string
 
+	retryMax       int
+	retryBackoffMs int64
+
 	keysWithUnsubstitutedValue []string
 }
 
@@ -86,6 +89,10 @@ func (j *jobRunInputCommand) injectFlags(cmd *cobra.Command) {
 	// Mandatory flags if config is not set
 	cmd.Flags().StringVarP(&j.projectName, "project-name", "p", "", "Name of the optimus project")
 	cmd.Flags().StringVar(&j.host, "host", "", "Optimus service endpoint url")
+
+	// Optional flags
+	cmd.Flags().IntVar(&j.retryMax, "retry-max", 3, "Number of times to retry")
+	cmd.Flags().Int64Var(&j.retryBackoffMs, "retry-backoff-ms", 1000, "Backoff in milliseconds between retries")
 }
 
 func (j *jobRunInputCommand) PreRunE(cmd *cobra.Command, _ []string) error {
@@ -123,10 +130,15 @@ func (j *jobRunInputCommand) RunE(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid time format, please use %s: %w", ISOTimeLayout, err)
 	}
 
-	jobResponse, err := j.sendJobRunInputRequest(jobName, jobScheduledTimeProto)
+	var jobResponse *pb.JobRunInputResponse
+	err = utils.Retry(j.logger, j.retryMax, j.retryBackoffMs, func() error {
+		jobResponse, err = j.sendJobRunInputRequest(jobName, jobScheduledTimeProto)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("request failed for job %s: %w", jobName, err)
 	}
+
 	return j.writeInstanceResponse(jobResponse)
 }
 

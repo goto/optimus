@@ -1641,7 +1641,6 @@ func TestJobRunService(t *testing.T) {
 						Name:      "sample_select",
 						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
 						EndDate:   time.Date(2022, 3, 23, 6, 0, 0, 0, time.UTC),
-						Filter:    []string{},
 					},
 					prevSchedule:        "0 6 * * *",
 					changelogFilterDate: time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
@@ -1673,7 +1672,6 @@ func TestJobRunService(t *testing.T) {
 						Name:      "sample_select",
 						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
 						EndDate:   time.Date(2022, 3, 22, 6, 0, 0, 0, time.UTC),
-						Filter:    []string{},
 					},
 					prevSchedule:        "0 6 * * *",
 					changelogFilterDate: time.Date(2022, 3, 22, 12, 0, 0, 0, time.UTC),
@@ -1713,7 +1711,6 @@ func TestJobRunService(t *testing.T) {
 						Name:      "sample_select",
 						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
 						EndDate:   time.Date(2022, 3, 21, 6, 0, 0, 0, time.UTC),
-						Filter:    []string{},
 					},
 					prevSchedule: "0 6 * * *",
 					jobChangelogs: []*scheduler.Changelog{

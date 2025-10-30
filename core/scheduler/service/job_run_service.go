@@ -259,14 +259,26 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	result, c1 := filterRunsV1(expectedRuns, actualRuns, criteria)
 	jobRunStatus.WithLabelValues(string(projectName), jobName.String(), "V1").Set(float64(c1))
 
-	// result should contain the merge of expectedRuns and actualRuns
 	matchedRuns, missingRuns := splitExpectedRuns(expectedRuns, actualRuns)
 	if s.features.EnableIgnoreOldScheduleRunsSensor && len(missingRuns) > 0 {
-		actualOldRunsList, recentSchedule, err := s.checkForOldScheduleRuns(ctx, jobWithDetails, missingRuns, &criteria)
-		if err == nil {
-			msg += fmt.Sprintf("Schedule change has been detected for this job (previous schedule: %s). "+
-				"Found %d runs from previous schedule with states: %s, filtering only to include the runs from new schedule.\n",
-				recentSchedule, len(actualOldRunsList), actualOldRunsList.String())
+		// missingRuns are expected to have at least one pending run
+		// so we don't need to check whether there is no pending run here
+		latestPendingRun := missingRuns.GetLatestPendingRun()
+
+		prevSchedule, err := s.getRecentScheduleChange(ctx, jobWithDetails, latestPendingRun.ScheduledAt)
+		if prevSchedule != "" {
+			// if prevSchedule is found, we need to check whether old runs exist for the prevSchedule
+			// only for logging purpose
+			prevScheduleRunsList, _ := s.getJobRunsWithSchedule(ctx, jobWithDetails.Job, prevSchedule, criteria.StartDate, latestPendingRun.ScheduledAt)
+			if len(prevScheduleRunsList) > 0 {
+				msg += fmt.Sprintf("Schedule change has been detected for this job (previous schedule: %s). "+
+					"Found %d runs from previous schedule with states: %s, filtering only to include the runs from new schedule.\n",
+					prevSchedule, len(prevScheduleRunsList), prevScheduleRunsList.String())
+			} else {
+				msg += fmt.Sprintf("Schedule change has been detected for this job (previous schedule: %s). "+
+					"Cannot find matching expected runs: %s, filtering only to include the runs from new schedule.\n",
+					prevSchedule, missingRuns.String())
+			}
 
 			s.l.Info("[%s] %s", jobName, msg)
 			return matchedRuns, msg, nil
@@ -316,30 +328,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	return result, msg, nil
 }
 
-func (s *JobRunService) checkForOldScheduleRuns(ctx context.Context, jobWithDetails *scheduler.JobWithDetails, missingRuns scheduler.JobRunStatusList, requestCriteria *scheduler.JobRunsCriteria) (scheduler.JobRunStatusList, string, error) {
-	latestPendingRun := missingRuns.GetLatestPendingRun()
-	if latestPendingRun == nil {
-		return nil, "", fmt.Errorf("no pending runs for this runs: %v", missingRuns)
-	}
-
-	recentSchedule, err := s.getRecentScheduleChangeValue(ctx, jobWithDetails, latestPendingRun.ScheduledAt)
-	if err != nil {
-		return nil, "", fmt.Errorf("error getting recent schedule change: %w", err)
-	}
-
-	if recentSchedule == "" {
-		return nil, "", fmt.Errorf("no recent schedule change found after latest run: %s", latestPendingRun.ScheduledAt.Format(time.RFC3339))
-	}
-
-	actualOldRunsList, err := s.getOldRunsWithRecentSchedule(ctx, jobWithDetails, recentSchedule, requestCriteria, latestPendingRun)
-	if err != nil {
-		return nil, recentSchedule, fmt.Errorf("error getting old runs with recent schedule %s between %s-%s: %w", recentSchedule, requestCriteria.StartDate, requestCriteria.EndDate, err)
-	}
-
-	return actualOldRunsList, recentSchedule, nil
-}
-
-func (s *JobRunService) getRecentScheduleChangeValue(ctx context.Context, jobWithDetails *scheduler.JobWithDetails, scheduledAt time.Time) (string, error) {
+func (s *JobRunService) getRecentScheduleChange(ctx context.Context, jobWithDetails *scheduler.JobWithDetails, scheduledAt time.Time) (string, error) {
 	changelogFilter := scheduler.ChangelogFilter{
 		ProjectName: jobWithDetails.Job.Tenant.ProjectName(),
 		Name:        jobWithDetails.Job.Name.String(),
@@ -363,26 +352,25 @@ func (s *JobRunService) getRecentScheduleChangeValue(ctx context.Context, jobWit
 	return "", nil
 }
 
-func (s *JobRunService) getOldRunsWithRecentSchedule(ctx context.Context, jobWithDetails *scheduler.JobWithDetails, recentSchedule string, criteria *scheduler.JobRunsCriteria, latestPendingRun *scheduler.JobRunStatus) (scheduler.JobRunStatusList, error) {
-	oldJobCron, err := cron.ParseCronSchedule(recentSchedule)
+func (s *JobRunService) getJobRunsWithSchedule(ctx context.Context, job *scheduler.Job, schedule string, referenceStartTime, referenceEndTime time.Time) (scheduler.JobRunStatusList, error) {
+	oldJobCron, err := cron.ParseCronSchedule(schedule)
 	if err != nil {
-		s.l.Error("error parsing recent schedule [%s]: %s", recentSchedule, err)
+		s.l.Error("error parsing recent schedule [%s]: %s", schedule, err)
 		return nil, err
 	}
 
 	// calculating time range to fetch old schedule runs
-	oldStartTime := oldJobCron.Prev(criteria.StartDate.Add(-time.Second))
-	oldEndTime := oldJobCron.Prev(latestPendingRun.ScheduledAt)
+	oldStartTime := oldJobCron.Prev(referenceStartTime.Add(-time.Second))
+	oldEndTime := oldJobCron.Prev(referenceEndTime)
 
 	// create a new job query criteria for old schedule runs
 	oldRunCriteria := &scheduler.JobRunsCriteria{
-		Name:      criteria.Name,
+		Name:      job.Name.String(),
 		StartDate: oldStartTime,
 		EndDate:   oldEndTime,
-		Filter:    criteria.Filter,
 	}
 
-	actualOldRuns, err := s.scheduler.GetJobRuns(ctx, jobWithDetails.Job.Tenant, oldRunCriteria, oldJobCron)
+	actualOldRuns, err := s.scheduler.GetJobRuns(ctx, job.Tenant, oldRunCriteria, oldJobCron)
 	if err != nil {
 		s.l.Error("error getting old runs with recent schedule: %s", err)
 		return nil, err

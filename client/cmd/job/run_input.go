@@ -130,14 +130,16 @@ func (j *jobRunInputCommand) RunE(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid time format, please use %s: %w", ISOTimeLayout, err)
 	}
 
-	jobResponse, err := j.sendJobRunInputRequest(jobName, jobScheduledTimeProto)
+	var jobResponse *pb.JobRunInputResponse
+	err = utils.Retry(j.logger, j.retryMax, j.retryBackoffMs, func() error {
+		jobResponse, err = j.sendJobRunInputRequest(jobName, jobScheduledTimeProto)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("request failed for job %s: %w", jobName, err)
 	}
 
-	return utils.Retry(j.logger, j.retryMax, j.retryBackoffMs, func() error {
-		return j.writeInstanceResponse(jobResponse)
-	})
+	return j.writeInstanceResponse(jobResponse)
 }
 
 // writeInstanceResponse fetches a JobRun from the store (eg, postgres)

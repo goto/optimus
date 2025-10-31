@@ -53,11 +53,11 @@ func getSeverity(severity string) string {
 	}
 }
 
-func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType scheduler.JobEventType, alertPayload *AlertPayload) {
-	var severity string
+func getSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType scheduler.JobEventType, alertPayload *AlertPayload) []*AlertPayload {
+	var alertPayloads []*AlertPayload
 	for _, notify := range jobDetails.Alerts {
 		if eventType.IsOfType(notify.On) {
-			severity = getSeverity(notify.Severity)
+			severity := getSeverity(notify.Severity)
 			if len(notify.Team) > 0 {
 				alertPayload.Labels[DefaultChannelLabel] = notify.Team
 			} else {
@@ -67,9 +67,10 @@ func handleSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType sched
 			if severity == CriticalSeverity {
 				alertPayload.Labels[EnvironmentLabel] = "production"
 			}
-			return
+			alertPayloads = append(alertPayloads, alertPayload)
 		}
 	}
+	return alertPayloads
 }
 
 func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs) {
@@ -138,7 +139,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		template = successNotificationTemplate
 		templateContext["state"] = e.JobEvent.Status.String()
 	}
-	alertPayload := &AlertPayload{
+	baseAlertPayload := &AlertPayload{
 		Project:  projectName,
 		LogTag:   e.JobURN,
 		Data:     templateContext,
@@ -149,8 +150,10 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		},
 		Endpoint: utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
 	}
-	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type, alertPayload)
-	a.relay(alertPayload)
+	alertPayloads := getSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type, baseAlertPayload)
+	for _, alertPayload := range alertPayloads {
+		a.relay(alertPayload)
+	}
 }
 
 func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
@@ -178,7 +181,7 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 
 func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) {
 	projectName := attr.Tenant.ProjectName().String()
-	alertPayload := AlertPayload{
+	baseAlertPayload := AlertPayload{
 		Project: projectName,
 		LogTag:  attr.JobURN,
 		Data: map[string]interface{}{
@@ -196,8 +199,10 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 		},
 		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
-	handleSpecBasedAlerts(attr.JobWithDetails, scheduler.ReplayEvent, &alertPayload)
-	a.relay(&alertPayload)
+	alertPayloads := getSpecBasedAlerts(attr.JobWithDetails, scheduler.ReplayEvent, &baseAlertPayload)
+	for _, alertPayload := range alertPayloads {
+		a.relay(alertPayload)
+	}
 }
 
 func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {

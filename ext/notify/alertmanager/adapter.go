@@ -98,7 +98,7 @@ func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttr
 		alertPayload.Labels[EnvironmentLabel] = "production"
 	}
 
-	a.preprocess(a.relay)(alertPayload)
+	a.relay(alertPayload)
 }
 
 func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
@@ -150,13 +150,13 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		Endpoint: utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type, alertPayload)
-	a.preprocess(a.relay)(alertPayload)
+	a.relay(alertPayload)
 }
 
 func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 	projectName := attr.Tenant.ProjectName().String()
 	jobName := attr.Name.String()
-	a.preprocess(a.relay)(&AlertPayload{
+	a.relay(&AlertPayload{
 		Project: projectName,
 		LogTag:  attr.URN,
 		Data: map[string]interface{}{
@@ -197,14 +197,14 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
 	}
 	handleSpecBasedAlerts(attr.JobWithDetails, scheduler.ReplayEvent, &alertPayload)
-	a.preprocess(a.relay)(&alertPayload)
+	a.relay(&alertPayload)
 }
 
 func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 	projectName := attr.Tenant.ProjectName().String()
 	resourceName := attr.Name.String()
 
-	a.preprocess(a.relay)(&AlertPayload{
+	a.relay(&AlertPayload{
 		Project: projectName,
 		LogTag:  attr.URN,
 		Data: map[string]interface{}{
@@ -225,7 +225,7 @@ func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 }
 
 func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
-	a.preprocess(a.relay)(&AlertPayload{
+	a.relay(&AlertPayload{
 		Project: attr.Tenant.ProjectName().String(),
 		LogTag:  attr.EventType + "-" + attr.URN,
 		Data: map[string]interface{}{
@@ -256,7 +256,7 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 		severity = WarningSeverity
 	}
 
-	a.preprocess(a.relay)(&AlertPayload{
+	a.relay(&AlertPayload{
 		Data: map[string]interface{}{
 			"content": content,
 		},

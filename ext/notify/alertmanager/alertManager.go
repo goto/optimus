@@ -91,29 +91,24 @@ type AlertsRepo interface {
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status AlertStatus, message string) error
 }
 
-func (a *AlertManager) preprocess(relay func(alert *AlertPayload)) func(alert *AlertPayload) {
-	return func(alert *AlertPayload) {
-		// if multiple teams are specified in the DefaultChannelLabel, split and send alert to each team separately
-		teams := strings.Split(alert.Labels[DefaultChannelLabel], ",")
-		for _, team := range teams {
-			alertCopy := *alert
-			alertCopy.Labels = make(map[string]string)
-			maps.Copy(alertCopy.Labels, alert.Labels)
-			alertCopy.Labels[DefaultChannelLabel] = strings.TrimSpace(team)
-			relay(&alertCopy)
-		}
-	}
-}
-
 func (a *AlertManager) relay(alert *AlertPayload) {
-	if alert.Endpoint == "" {
-		// Don't alert if alert manager is not configured in server config
-		return
+	// if multiple teams are specified in the DefaultChannelLabel, split and send alert to each team separately
+	teams := strings.Split(alert.Labels[DefaultChannelLabel], ",")
+	for _, team := range teams {
+		alertCopy := *alert
+		alertCopy.Labels = make(map[string]string)
+		maps.Copy(alertCopy.Labels, alert.Labels)
+		alertCopy.Labels[DefaultChannelLabel] = strings.TrimSpace(team)
+		// relay
+		if alert.Endpoint == "" {
+			// Don't alert if alert manager is not configured in server config
+			return
+		}
+		go func() {
+			a.alertChan <- alert
+			eventsReceived.WithLabelValues(alert.Project, alert.LogTag).Inc()
+		}()
 	}
-	go func() {
-		a.alertChan <- alert
-		eventsReceived.WithLabelValues(alert.Project, alert.LogTag).Inc()
-	}()
 }
 
 func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {

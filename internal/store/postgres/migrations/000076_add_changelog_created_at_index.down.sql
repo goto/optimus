@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS changelog_project_name_name_created_at_idx;

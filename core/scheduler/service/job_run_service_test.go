@@ -1549,6 +1549,232 @@ func TestJobRunService(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Equal(t, runs, returnedRuns)
 		})
+		t.Run("should able to get job runs with ignoring old schedule changes", func(t *testing.T) {
+			tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
+			features := config.FeaturesConfig{
+				EnableIgnoreOldScheduleRunsSensor: true,
+				EnableV2Sensor:                    false,
+				EnableV3Sensor:                    false,
+			}
+			job := scheduler.Job{
+				Name:   jobName,
+				Tenant: tnnt,
+				Task:   &task,
+			}
+			jobWithDetails := scheduler.JobWithDetails{
+				Job: &job,
+				JobMetadata: &scheduler.JobMetadata{
+					Version: window.NewWindowVersion,
+				},
+				Schedule: &scheduler.Schedule{
+					StartDate: time.Date(2022, 3, 19, 2, 0, 0, 0, time.UTC),
+					EndDate:   nil,
+					Interval:  "0 12 * * *",
+				},
+			}
+
+			jobQuery := &scheduler.JobRunsCriteria{
+				Name:      "sample_select",
+				StartDate: time.Date(2022, 3, 20, 12, 0, 0, 0, time.UTC),
+				EndDate:   time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
+				Filter:    []string{},
+			}
+
+			expectedRuns := []*scheduler.JobRunStatus{
+				{
+					State:       scheduler.StatePending,
+					ScheduledAt: time.Date(2022, 3, 20, 12, 0, 0, 0, time.UTC),
+				},
+				{
+					State:       scheduler.StatePending,
+					ScheduledAt: time.Date(2022, 3, 21, 12, 0, 0, 0, time.UTC),
+				},
+				{
+					State:       scheduler.StatePending,
+					ScheduledAt: time.Date(2022, 3, 22, 12, 0, 0, 0, time.UTC),
+				},
+				{
+					State:       scheduler.StatePending,
+					ScheduledAt: time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
+				},
+			}
+
+			type cases struct {
+				name                  string
+				runsFromScheduler     []*scheduler.JobRunStatus
+				prevRunsJobQuery      *scheduler.JobRunsCriteria
+				prevRunsFromScheduler []*scheduler.JobRunStatus
+				prevSchedule          string
+				changelogFilterDate   time.Time
+				jobChangelogs         []*scheduler.Changelog
+				expectedMessage       string
+				expectedRuns          []*scheduler.JobRunStatus
+				expectedErr           error
+			}
+
+			scenarios := []cases{
+				{
+					// 1st scenario: if there are no runs available & no schedule change,
+					// all expected runs are pending (no change in behavior)
+					name:                  "return runs if no runs from schedule, no schedule change",
+					runsFromScheduler:     []*scheduler.JobRunStatus{},
+					prevRunsFromScheduler: []*scheduler.JobRunStatus{},
+					changelogFilterDate:   time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
+					jobChangelogs:         []*scheduler.Changelog{},
+					expectedMessage:       "",
+					expectedRuns:          expectedRuns,
+					expectedErr:           nil,
+				},
+				{
+					// 2nd scenario: older runs (0 6 * * *) are successful but schedule changed to (0 12 * * *)
+					// so all expected runs are pending, but with a message indicating 4 mismatched runs due to schedule change
+					name: "return success runs with schedule changes",
+					runsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(3, jobQuery.StartDate, "0 6 * * *", scheduler.StateSuccess)
+						return runs
+					}(),
+					prevRunsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(4, time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC), "0 6 * * *", scheduler.StateSuccess)
+						return runs
+					}(),
+					prevRunsJobQuery: &scheduler.JobRunsCriteria{
+						Name:      "sample_select",
+						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
+						EndDate:   time.Date(2022, 3, 23, 6, 0, 0, 0, time.UTC),
+					},
+					prevSchedule:        "0 6 * * *",
+					changelogFilterDate: time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
+					jobChangelogs: []*scheduler.Changelog{
+						{
+							Change: []scheduler.Change{
+								{Property: "Schedule.Interval", Diff: "- 0 6 * * *\n+ 0 12 * * *"},
+							},
+						},
+					},
+					expectedMessage: "Schedule change has been detected for this job (previous schedule: 0 6 * * *). Found 4 runs from previous schedule with states: 2022-03-20T06:00:00Z(success), 2022-03-21T06:00:00Z(success), 2022-03-22T06:00:00Z(success), 2022-03-23T06:00:00Z(success), filtering only to include the runs from new schedule.\n",
+					expectedRuns:    []*scheduler.JobRunStatus{},
+					expectedErr:     nil,
+				},
+				{
+					// 3rd scenario: there are few runs on older schedule (0 6 * * *) and new runs with the new schedule (0 12 * * *)
+					// so the returned runs are only the new runs, but with the message
+					name: "return only successful run with the new schedule",
+					runsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(3, jobQuery.StartDate, "0 6 * * *", scheduler.StateSuccess)
+						newRuns, _ := mockGetJobRuns(1, time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC), "0 12 * * *", scheduler.StateSuccess)
+						return append(runs, newRuns...)
+					}(),
+					prevRunsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(3, time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC), "0 6 * * *", scheduler.StateSuccess)
+						return runs
+					}(),
+					prevRunsJobQuery: &scheduler.JobRunsCriteria{
+						Name:      "sample_select",
+						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
+						EndDate:   time.Date(2022, 3, 22, 6, 0, 0, 0, time.UTC),
+					},
+					prevSchedule:        "0 6 * * *",
+					changelogFilterDate: time.Date(2022, 3, 22, 12, 0, 0, 0, time.UTC),
+					jobChangelogs: []*scheduler.Changelog{
+						{
+							Change: []scheduler.Change{
+								{Property: "Schedule.Interval", Diff: "- 0 6 * * *\n+ 0 12 * * *"},
+							},
+						},
+					},
+					expectedMessage: "Schedule change has been detected for this job (previous schedule: 0 6 * * *). Found 3 runs from previous schedule with states: 2022-03-20T06:00:00Z(success), 2022-03-21T06:00:00Z(success), 2022-03-22T06:00:00Z(success), filtering only to include the runs from new schedule.\n",
+					// this should be the newRuns
+					expectedRuns: []*scheduler.JobRunStatus{
+						{
+							State:       scheduler.StateSuccess,
+							ScheduledAt: time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
+						},
+					},
+					expectedErr: nil,
+				},
+				{
+					// 4th scenario: depending on multiple runs with old schedule & new schedule
+					// only depend on new runs
+					name:                "return success runs with schedule changes",
+					changelogFilterDate: time.Date(2022, 3, 21, 12, 0, 0, 0, time.UTC),
+					runsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(2, jobQuery.StartDate, "0 6 * * *", scheduler.StateSuccess)
+						newSuccessRuns, _ := mockGetJobRuns(1, time.Date(2022, 3, 22, 12, 0, 0, 0, time.UTC), "0 12 * * *", scheduler.StateSuccess)
+						newOngoingRuns, _ := mockGetJobRuns(1, time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC), "0 12 * * *", scheduler.StateRunning)
+						return append(append(runs, newSuccessRuns...), newOngoingRuns...)
+					}(),
+					prevRunsFromScheduler: func() []*scheduler.JobRunStatus {
+						runs, _ := mockGetJobRuns(2, time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC), "0 6 * * *", scheduler.StateSuccess)
+						return runs
+					}(),
+					prevRunsJobQuery: &scheduler.JobRunsCriteria{
+						Name:      "sample_select",
+						StartDate: time.Date(2022, 3, 20, 6, 0, 0, 0, time.UTC),
+						EndDate:   time.Date(2022, 3, 21, 6, 0, 0, 0, time.UTC),
+					},
+					prevSchedule: "0 6 * * *",
+					jobChangelogs: []*scheduler.Changelog{
+						{
+							Change: []scheduler.Change{
+								{Property: "Schedule.Interval", Diff: "- 0 6 * * *\n+ 0 12 * * *"},
+							},
+						},
+					},
+					expectedMessage: "Schedule change has been detected for this job (previous schedule: 0 6 * * *). Found 2 runs from previous schedule with states: 2022-03-20T06:00:00Z(success), 2022-03-21T06:00:00Z(success), filtering only to include the runs from new schedule.\n",
+					expectedRuns: []*scheduler.JobRunStatus{
+						{
+							State:       scheduler.StateSuccess,
+							ScheduledAt: time.Date(2022, 3, 22, 12, 0, 0, 0, time.UTC),
+						},
+						{
+							State:       scheduler.StateRunning,
+							ScheduledAt: time.Date(2022, 3, 23, 12, 0, 0, 0, time.UTC),
+						},
+					},
+					expectedErr: nil,
+				},
+			}
+
+			for _, scenario := range scenarios {
+				t.Run(scenario.name, func(t *testing.T) {
+					projectGetter := new(mockProjectGetter)
+					defer projectGetter.AssertExpectations(t)
+					projectGetter.On("Get", ctx, projName).Return(project, nil)
+
+					prevScheduleCron, _ := cron.ParseCronSchedule(scenario.prevSchedule)
+
+					sch := new(mockScheduler)
+					sch.On("GetJobRuns", ctx, tnnt, jobQuery, jobCron).Return(scenario.runsFromScheduler, nil).Once()
+					if scenario.prevSchedule != "" {
+						sch.On("GetJobRuns", ctx, tnnt, scenario.prevRunsJobQuery, prevScheduleCron).Return(scenario.prevRunsFromScheduler, nil).Once()
+					}
+					defer sch.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					jobRepo.On("GetJobDetails", ctx, projName, jobName).Return(&jobWithDetails, nil)
+					jobRepo.On("GetChangelogs", ctx, scheduler.ChangelogFilter{
+						ProjectName: projName,
+						Name:        jobName.String(),
+						StartTime:   scenario.changelogFilterDate,
+					}).Return(scenario.jobChangelogs, nil)
+					defer jobRepo.AssertExpectations(t)
+
+					jobRunRepo := new(mockJobRunRepository)
+					defer jobRunRepo.AssertExpectations(t)
+
+					runService := service.NewJobRunService(logger,
+						jobRepo, jobRunRepo, nil, nil, nil, sch, nil, nil, nil, projectGetter, features, nil)
+					returnedRuns, msg, err := runService.GetJobRuns(ctx, projName, jobName, jobQuery)
+					if scenario.expectedErr != nil {
+						assert.Equal(t, scenario.expectedErr, err)
+					} else {
+						assert.Nil(t, err)
+						assert.Equal(t, scenario.expectedRuns, returnedRuns)
+						assert.Equal(t, scenario.expectedMessage, msg)
+					}
+				})
+			}
+		})
 		t.Run("FilterRunsV3", func(t *testing.T) {
 			t.Run("returns -1 when unable to get from db", func(t *testing.T) {
 				criteria := scheduler.JobRunsCriteria{
@@ -2362,6 +2588,14 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*scheduler.JobWithDetails), args.Error(1)
+}
+
+func (j *JobRepository) GetChangelogs(ctx context.Context, filter scheduler.ChangelogFilter) ([]*scheduler.Changelog, error) {
+	args := j.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.Changelog), args.Error(1)
 }
 
 type mockScheduler struct {

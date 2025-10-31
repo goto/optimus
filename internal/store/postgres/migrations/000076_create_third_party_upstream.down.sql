@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS job_third_party_upstream;

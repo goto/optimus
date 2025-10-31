@@ -334,12 +334,17 @@ func (j Jobs) Deduplicate() []*Job {
 }
 
 type WithUpstream struct {
-	job       *Job
-	upstreams []*Upstream
+	job                 *Job
+	upstreams           []*Upstream
+	thirdPartyUpstreams []*ThirdPartyUpstream
 }
 
 func NewWithUpstream(job *Job, upstreams []*Upstream) *WithUpstream {
 	return &WithUpstream{job: job, upstreams: upstreams}
+}
+
+func NewWithUpstreamAndThirdPartyUpstreams(job *Job, upstreams []*Upstream, thirdPartyUpstreams []*ThirdPartyUpstream) *WithUpstream { // TODO: refactor to use builder pattern
+	return &WithUpstream{job: job, upstreams: upstreams, thirdPartyUpstreams: thirdPartyUpstreams}
 }
 
 func (w WithUpstream) GetName() string { // to support multiroot DataTree
@@ -352,6 +357,10 @@ func (w WithUpstream) Job() *Job {
 
 func (w WithUpstream) Upstreams() []*Upstream {
 	return w.upstreams
+}
+
+func (w WithUpstream) ThirdPartyUpstreams() []*ThirdPartyUpstream {
+	return w.thirdPartyUpstreams
 }
 
 func (w WithUpstream) Name() Name {
@@ -411,6 +420,32 @@ func (w WithUpstreams) MergeWithResolvedUpstreams(resolvedUpstreamsBySubjectJobM
 		jobsWithMergedUpstream = append(jobsWithMergedUpstream, NewWithUpstream(jobWithUnresolvedUpstream.Job(), distinctMergedUpstream))
 	}
 	return jobsWithMergedUpstream
+}
+
+type ThirdPartyUpstream struct {
+	_type      string
+	identifier string
+	config     map[string]string
+}
+
+func NewThirdPartyUpstream(upstreamType, identifier string, config map[string]string) *ThirdPartyUpstream {
+	return &ThirdPartyUpstream{
+		_type:      upstreamType,
+		identifier: identifier,
+		config:     config,
+	}
+}
+
+func (t *ThirdPartyUpstream) Type() string {
+	return t._type
+}
+
+func (t *ThirdPartyUpstream) Identifier() string {
+	return t.identifier
+}
+
+func (t *ThirdPartyUpstream) Config() map[string]string {
+	return t.config
 }
 
 type Upstream struct {

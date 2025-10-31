@@ -507,6 +507,55 @@ func (j *JobRepository) getJobsUpstreams(ctx context.Context, projectName tenant
 	return groupUpstreamsByJobName(upstreams)
 }
 
+const (
+	urnSeparator       = "://"
+	urnComponentLength = 2
+)
+
+func GetStore(urn string) (string, error) {
+	splitURN := strings.Split(urn, urnSeparator)
+	if len(splitURN) != urnComponentLength {
+		return "", fmt.Errorf("urn does not follow pattern <store>%s<name>", urnSeparator)
+	}
+
+	store := splitURN[0]
+	name := splitURN[1]
+
+	if store == "" {
+		return "", fmt.Errorf("urn store is not specified")
+	}
+
+	if name == "" {
+		return "", fmt.Errorf("urn name is not specified")
+	}
+
+	if trimmedStore := strings.TrimSpace(store); len(trimmedStore) != len(store) {
+		return "", fmt.Errorf("urn store does not match urn name")
+	}
+
+	if trimmedName := strings.TrimSpace(name); len(trimmedName) != len(name) {
+		return "", fmt.Errorf("urn name contains whitespace")
+	}
+
+	return store, nil
+}
+
+func toSchedulerThirdPartyUpstream(jwu ThirdPartyUpstream) (*scheduler.ThirdPartyUpstream, error) {
+	if jwu.UpstreamThirdPartyType == job.ThirdPartyTypeDex {
+		resourceUrn := jwu.UpstreamThirdPartyConfig["resource_urn"]
+		store, err := GetStore(resourceUrn)
+		if err != nil {
+			return nil, err
+		}
+		jwu.UpstreamThirdPartyConfig["store"] = store
+	}
+	return &scheduler.ThirdPartyUpstream{
+		Type:       jwu.UpstreamThirdPartyType,
+		Identifier: jwu.UpstreamThirdPartyIdentifier,
+		Config:     jwu.UpstreamThirdPartyConfig,
+	}, nil
+}
+
 func (j *JobRepository) getThirdPartyUpstreams(ctx context.Context, projectName tenant.ProjectName, jobNames []string) (map[string][]*scheduler.ThirdPartyUpstream, error) {
 	getJobUpstreamsByNameAtProject := "SELECT " + thirdPartyUpstreamColumns + " FROM job_third_party_upstream WHERE project_name = $1 and job_name = any ($2)"
 	rows, err := j.db.Query(ctx, getJobUpstreamsByNameAtProject, projectName, jobNames)
@@ -529,11 +578,11 @@ func (j *JobRepository) getThirdPartyUpstreams(ctx context.Context, projectName 
 		if _, ok := result[jwu.JobName]; !ok {
 			result[jwu.JobName] = []*scheduler.ThirdPartyUpstream{}
 		}
-		result[jwu.JobName] = append(result[jwu.JobName], &scheduler.ThirdPartyUpstream{
-			Type:       jwu.UpstreamThirdPartyType,
-			Identifier: jwu.UpstreamThirdPartyIdentifier,
-			Config:     jwu.UpstreamThirdPartyConfig,
-		})
+		schedulerThirdPartyUpstream, err := toSchedulerThirdPartyUpstream(jwu)
+		if err != nil {
+			return nil, errors.InternalError(scheduler.EntityJobRun, "job third party upstream could not be parsed", err)
+		}
+		result[jwu.JobName] = append(result[jwu.JobName], schedulerThirdPartyUpstream)
 	}
 
 	return result, nil

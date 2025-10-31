@@ -158,6 +158,21 @@ class OptimusAPIClient:
         self._raise_error_if_request_failed(response)
         return response.json()
 
+    def execute_third_party_sensor(self, project_name: str, job_name: str, start_date: str, end_date: str, store: str, identifier: str, third_party_type: str) -> dict:
+        url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/third-party-sensor'.format(
+            optimus_host=self.host,
+            optimus_project=project_name,
+            optimus_job=job_name
+        )
+        log.info("Executing third party sensor for project:{}, job:{}, identifier:{}, third_party_type:{}, start_date:{}, end_date:{}".
+                  format(project_name, job_name, identifier, third_party_type, start_date, end_date))
+        response = requests.put(url, json={'third_party_type': third_party_type,'dex_sensor_request': {'from': start_date,'to': end_date,'table_name': identifier,'store': store}},
+                                timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        self._raise_error_if_request_failed(response)
+        log.info("Request Body: {}".format(response.request))
+        return response.json()
+
+
     def get_task_window(self, project_name: str, job_name: str, scheduled_at: str) -> dict:
         url = '{optimus_host}/api/v1beta1/project/{project_name}/job/{job_name}/interval?reference_time={reference_time}'.format(
             optimus_host=self.host,
@@ -296,22 +311,92 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
     def __init__(
             self,
             optimus_hostname: str,
+            project_name: str,
+            job_name: str,
             third_party_type: str,
             identifier: str,
+            config: dict,
             *args,
             **kwargs) -> None:
         kwargs['mode'] = kwargs.get('mode', 'reschedule')
         super().__init__(**kwargs)
+        self.project_name = project_name
+        self.job_name = job_name
         self.third_party_type = third_party_type
         self.identifier = identifier
+        self.config = config
         self._optimus_client = OptimusAPIClient(optimus_hostname)
-    
+
     def poke(self, context):
         # TODO: call to optimus api to check third party upstream status,
         # given schedule_time, _optimus_client, third_party_type, and identifier
         # start_date and end_date can be derived from schedule_time inside optimus server
+        self.log.info("Poking for third party upstream '{}' for identifier '{}'".format(self.third_party_type, self.identifier))
         schedule_time = get_scheduled_at(context)
-        pass
+        self.log.info("Current schedule_time: {}".format(schedule_time))
+
+        # last_upstream_schedule_time, _ = self.get_last_upstream_times(schedule_time, upstream_schedule)
+
+        # get schedule window
+        task_window = JobSpecTaskWindow(self._optimus_client, self.project_name, self.job_name)
+        schedule_time_window_start, schedule_time_window_end = task_window.get(
+            schedule_time.strftime(TIMESTAMP_FORMAT))
+
+        self.log.info("waiting for data readiness between: {} - {} schedule times of airflow dag run".format(
+            schedule_time_window_start, schedule_time_window_end))
+
+        if not self.is_upstream_data_available(schedule_time_window_start, schedule_time_window_end):
+            self.log.warning("data not ready for upstream '{}': '{}' in "
+                             "dated between {} and {}(inclusive), rescheduling sensor".
+                             format(self.third_party_type, self.identifier, schedule_time_window_start,
+                                    schedule_time_window_end))
+            return False
+        return True
+
+    def get_last_upstream_times(self, schedule_time_of_current_job, upstream_schedule_interval):
+        second_ahead_of_schedule_time = schedule_time_of_current_job + timedelta(seconds=1)
+        c = croniter(upstream_schedule_interval, second_ahead_of_schedule_time)
+        last_upstream_schedule_time = c.get_prev(datetime)
+        last_upstream_execution_date = c.get_prev(datetime)
+        return last_upstream_schedule_time, last_upstream_execution_date
+
+    def is_upstream_data_available(self, schedule_time_window_start, schedule_time_window_end) -> bool:
+        try:
+            log.info("logging parameters ")
+            log.info("project_name          : {}".format(self.project_name))
+            log.info("job_name              : {}".format(self.job_name))
+            log.info("third_party_type      : {}".format(self.third_party_type))
+            log.info("identifier            : {}".format(self.identifier))
+            log.info("config                : {}".format(self.config))
+            store = ""
+            if self.third_party_type == "dex":
+                store = self.config.get("store", "")
+                log.info("store                 : {}".format(store))
+            else :
+                log.warn("third party type other than 'dex' detected : {}".format(self.third_party_type))
+            api_response = self._optimus_client.execute_third_party_sensor(
+                self.project_name, self.job_name,
+                schedule_time_window_start.strftime(TIMESTAMP_FORMAT), schedule_time_window_end.strftime(TIMESTAMP_FORMAT),
+                store, self.identifier, self.third_party_type)
+            self.log.info("job_run api response :: {}".format(api_response))
+            print("api_response: ",api_response)
+
+            resp = api_response.get('dexSensorResponse', {})
+            if resp['isComplete'] == True:
+                log.info("optimus response :: {}".format(resp))
+                return True
+
+            for dateBreakdown in resp['log']:
+                if dateBreakdown['isComplete'] != True:
+                    self.log.info("failed for date :: {}".format(dateBreakdown))
+                    return False
+
+        except Exception as e:
+            self.log.warning("error while processing sensor :: {}".format(e))
+            raise AirflowException(e)
+        return True
+
+
 
 class SuperExternalTaskSensor(BaseSensorOperator):
 
@@ -378,7 +463,7 @@ class SuperExternalTaskSensor(BaseSensorOperator):
 
         if not self._are_all_job_runs_successful(schedule_time_window_start, schedule_time_window_end):
             self.log.warning("unable to find enough successful executions for upstream '{}' in "
-                             "'{}' dated between {} and {}(inclusive), rescheduling sensor".
+                             "'{}' dates between {} and {}(inclusive), rescheduling sensor".
                              format(self.upstream_optimus_job, self.upstream_optimus_project, schedule_time_window_start,
                                     schedule_time_window_end))
             return False
@@ -459,9 +544,9 @@ def optimus_notify(context, event_meta):
         failure_message = failure_message + ", " + event_meta[SCHEDULER_ERR_MSG]
     if len(failure_message)>0:
         log.info(f'failures: {failure_message}')
-    
+
     task_instance = context.get('task_instance')
-    
+
     if event_meta["event_type"] == "TYPE_FAILURE" :
         dag_run = context['dag_run']
         tis = dag_run.get_task_instances()

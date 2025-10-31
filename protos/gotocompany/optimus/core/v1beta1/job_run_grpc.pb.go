@@ -32,6 +32,7 @@ type JobRunServiceClient interface {
 	CreateSchedulerRole(ctx context.Context, in *CreateSchedulerRoleRequest, opts ...grpc.CallOption) (*CreateSchedulerRoleResponse, error)
 	// JobRunList returns the current and past run status of jobs on a given range
 	GetJobRuns(ctx context.Context, in *GetJobRunsRequest, opts ...grpc.CallOption) (*GetJobRunsResponse, error)
+	GetThirdPartySensorStatus(ctx context.Context, in *GetThirdPartySensorRequest, opts ...grpc.CallOption) (*GetThirdPartySensorResponse, error)
 	// RegisterJobEvent notifies optimus service about an event related to job
 	RegisterJobEvent(ctx context.Context, in *RegisterJobEventRequest, opts ...grpc.CallOption) (*RegisterJobEventResponse, error)
 	// UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler
@@ -97,6 +98,15 @@ func (c *jobRunServiceClient) GetJobRuns(ctx context.Context, in *GetJobRunsRequ
 	return out, nil
 }
 
+func (c *jobRunServiceClient) GetThirdPartySensorStatus(ctx context.Context, in *GetThirdPartySensorRequest, opts ...grpc.CallOption) (*GetThirdPartySensorResponse, error) {
+	out := new(GetThirdPartySensorResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GetThirdPartySensorStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *jobRunServiceClient) RegisterJobEvent(ctx context.Context, in *RegisterJobEventRequest, opts ...grpc.CallOption) (*RegisterJobEventResponse, error) {
 	out := new(RegisterJobEventResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/RegisterJobEvent", in, out, opts...)
@@ -156,6 +166,7 @@ type JobRunServiceServer interface {
 	CreateSchedulerRole(context.Context, *CreateSchedulerRoleRequest) (*CreateSchedulerRoleResponse, error)
 	// JobRunList returns the current and past run status of jobs on a given range
 	GetJobRuns(context.Context, *GetJobRunsRequest) (*GetJobRunsResponse, error)
+	GetThirdPartySensorStatus(context.Context, *GetThirdPartySensorRequest) (*GetThirdPartySensorResponse, error)
 	// RegisterJobEvent notifies optimus service about an event related to job
 	RegisterJobEvent(context.Context, *RegisterJobEventRequest) (*RegisterJobEventResponse, error)
 	// UploadToScheduler comiles jobSpec from database into DAGs and uploads the generated DAGs to scheduler
@@ -187,6 +198,9 @@ func (UnimplementedJobRunServiceServer) CreateSchedulerRole(context.Context, *Cr
 }
 func (UnimplementedJobRunServiceServer) GetJobRuns(context.Context, *GetJobRunsRequest) (*GetJobRunsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobRuns not implemented")
+}
+func (UnimplementedJobRunServiceServer) GetThirdPartySensorStatus(context.Context, *GetThirdPartySensorRequest) (*GetThirdPartySensorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetThirdPartySensorStatus not implemented")
 }
 func (UnimplementedJobRunServiceServer) RegisterJobEvent(context.Context, *RegisterJobEventRequest) (*RegisterJobEventResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterJobEvent not implemented")
@@ -302,6 +316,24 @@ func _JobRunService_GetJobRuns_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(JobRunServiceServer).GetJobRuns(ctx, req.(*GetJobRunsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _JobRunService_GetThirdPartySensorStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetThirdPartySensorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobRunServiceServer).GetThirdPartySensorStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GetThirdPartySensorStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobRunServiceServer).GetThirdPartySensorStatus(ctx, req.(*GetThirdPartySensorRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -422,6 +454,10 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetJobRuns",
 			Handler:    _JobRunService_GetJobRuns_Handler,
+		},
+		{
+			MethodName: "GetThirdPartySensorStatus",
+			Handler:    _JobRunService_GetThirdPartySensorStatus_Handler,
 		},
 		{
 			MethodName: "RegisterJobEvent",

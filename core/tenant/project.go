@@ -17,6 +17,7 @@ const (
 	ProjectDisableJobScheduling = "DISABLE_JOB_SCHEDULING"
 	ProjectAlertManagerEndpoint = "ALERTMANAGER_ENDPOINT"
 	ProjectAlertManagerTeam     = "ALERTMANAGER_TEAM"
+	ProjectDexThirdPartySensor  = "ENABLE_DEX_THIRD_PARTY_SENSOR"
 )
 
 type ProjectName string

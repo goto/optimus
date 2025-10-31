@@ -289,6 +289,58 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/job/{jobName}/third-party-sensor": {
+      "put": {
+        "operationId": "JobRunService_GetThirdPartySensorStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetThirdPartySensorResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "thirdPartyType": {
+                  "type": "string"
+                },
+                "dexSensorRequest": {
+                  "$ref": "#/definitions/v1beta1DexSensorRequest"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/namespace/{namespaceName}/job/{jobName}/event": {
       "post": {
         "summary": "RegisterJobEvent notifies optimus service about an event related to job",
@@ -581,6 +633,51 @@
     "v1beta1CreateSchedulerRoleResponse": {
       "type": "object"
     },
+    "v1beta1DataCompleteness": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "isComplete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1beta1DexSensorRequest": {
+      "type": "object",
+      "properties": {
+        "store": {
+          "type": "string"
+        },
+        "tableName": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1beta1DexSensorResponse": {
+      "type": "object",
+      "properties": {
+        "isComplete": {
+          "type": "boolean"
+        },
+        "log": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1DataCompleteness"
+          }
+        }
+      }
+    },
     "v1beta1GetIntervalResponse": {
       "type": "object",
       "properties": {
@@ -639,6 +736,14 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "v1beta1GetThirdPartySensorResponse": {
+      "type": "object",
+      "properties": {
+        "dexSensorResponse": {
+          "$ref": "#/definitions/v1beta1DexSensorResponse"
         }
       }
     },

@@ -40,7 +40,8 @@ func NewOperatorType(op string) (OperatorType, error) {
 }
 
 const (
-	EntityJobRun = "jobRun"
+	EntityJobRun           = "jobRun"
+	EntityThirdPartySensor = "thirdPartySensor"
 
 	urnContext = "optimus"
 

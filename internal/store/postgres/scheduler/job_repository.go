@@ -757,17 +757,14 @@ func (j *JobRepository) GetChangelogs(ctx context.Context, filter scheduler.Chan
 		project_name = $1 AND name = $2 AND entity_type = $3`
 
 	args := []any{filter.ProjectName, filter.Name, "job"}
-	argIndex := 3
 
 	if !filter.StartTime.IsZero() {
-		argIndex++
-		query += " AND created_at >= $" + fmt.Sprintf("%d", argIndex)
+		query += " AND created_at >= $" + fmt.Sprintf("%d", len(args)+1)
 		args = append(args, filter.StartTime)
 	}
 
 	if !filter.EndTime.IsZero() {
-		argIndex++
-		query += " AND created_at <= $" + fmt.Sprintf("%d", argIndex)
+		query += " AND created_at <= $" + fmt.Sprintf("%d", len(args)+1)
 		args = append(args, filter.EndTime)
 	}
 

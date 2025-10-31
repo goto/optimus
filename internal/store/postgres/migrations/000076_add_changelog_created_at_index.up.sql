@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS changelog_project_name_name_created_at_idx ON changelog USING btree (project_name, name, created_at);

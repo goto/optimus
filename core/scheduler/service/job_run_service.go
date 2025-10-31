@@ -266,25 +266,26 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		latestPendingRun := missingRuns.GetLatestPendingRun()
 
 		prevSchedule, err := s.getRecentScheduleChange(ctx, jobWithDetails, latestPendingRun.ScheduledAt)
-		if prevSchedule != "" {
-			// if prevSchedule is found, we need to check whether old runs exist for the prevSchedule
-			// only for logging purpose
-			prevScheduleRunsList, _ := s.getJobRunsWithSchedule(ctx, jobWithDetails.Job, prevSchedule, criteria.StartDate, latestPendingRun.ScheduledAt)
-			if len(prevScheduleRunsList) > 0 {
-				msg += fmt.Sprintf("Schedule change has been detected for this job (previous schedule: %s). "+
-					"Found %d runs from previous schedule with states: %s, filtering only to include the runs from new schedule.\n",
-					prevSchedule, len(prevScheduleRunsList), prevScheduleRunsList.String())
-			} else {
-				msg += fmt.Sprintf("Schedule change has been detected for this job (previous schedule: %s). "+
-					"Cannot find matching expected runs: %s, filtering only to include the runs from new schedule.\n",
-					prevSchedule, missingRuns.String())
-			}
-
-			s.l.Info("[%s] %s", jobName, msg)
-			return matchedRuns, msg, nil
+		if prevSchedule == "" {
+			s.l.Warn("unable to check for old runs for job [%s] after schedule change: %s", jobName, err)
+			return result, msg, nil
 		}
 
-		s.l.Warn("unable to check for old runs for job [%s] after schedule change: %s", jobName, err)
+		// if prevSchedule is found, we need to check whether old runs exist for the prevSchedule
+		// only for logging purpose
+		prevScheduleRunsList, _ := s.getJobRunsWithSchedule(ctx, jobWithDetails.Job, prevSchedule, criteria.StartDate, latestPendingRun.ScheduledAt)
+		if len(prevScheduleRunsList) > 0 {
+			msg += fmt.Sprintf("Schedule change has been detected for this job (previous schedule: %s). "+
+				"Found %d runs from previous schedule with states: %s, filtering only to include the runs from new schedule.\n",
+				prevSchedule, len(prevScheduleRunsList), prevScheduleRunsList.String())
+		} else {
+			msg += fmt.Sprintf("Schedule change has been detected for this job (previous schedule: %s). "+
+				"Cannot find matching expected runs: %s, filtering only to include the runs from new schedule.\n",
+				prevSchedule, missingRuns.String())
+		}
+
+		s.l.Info("[%s] %s", jobName, msg)
+		return matchedRuns, msg, nil
 	}
 
 	// only go through v2 and v3 sensor logic if either one of the feature flag is enabled

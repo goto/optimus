@@ -266,10 +266,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		latestPendingRun := missingRuns.GetLatestPendingRun()
 
 		prevSchedule, err := s.getRecentScheduleChange(ctx, jobWithDetails, latestPendingRun.ScheduledAt)
-		if prevSchedule == "" {
-			s.l.Warn("unable to check for old runs for job [%s] after schedule change: %s", jobName, err)
-		} else {
-
+		if prevSchedule != "" {
 			// if prevSchedule is found, we need to check whether old runs exist for the prevSchedule
 			// only for logging purpose
 			prevScheduleRunsList, _ := s.getJobRunsWithSchedule(ctx, jobWithDetails.Job, prevSchedule, criteria.StartDate, latestPendingRun.ScheduledAt)
@@ -286,6 +283,8 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 			s.l.Info("[%s] %s", jobName, msg)
 			return matchedRuns, msg, nil
 		}
+
+		s.l.Warn("unable to check for old runs for job [%s] after schedule change: %s", jobName, err)
 	}
 
 	// only go through v2 and v3 sensor logic if either one of the feature flag is enabled

@@ -14,6 +14,7 @@ type ServerConfig struct {
 	ExternalTables         ExternalTablesConfig `mapstructure:"external_tables"`
 	Features               FeaturesConfig       `mapstructure:"features"`
 	Plugins                Plugins              `mapstructure:"plugins"`
+	JobValidationConfig    JobValidationConfig  `mapstructure:"job_validation"`
 }
 
 type Serve struct {
@@ -118,4 +119,12 @@ type FeaturesConfig struct {
 	EnableV2Sensor                    bool `mapstructure:"enable_v2_sensor"`
 	EnableV3Sensor                    bool `mapstructure:"enable_v3_sensor"`
 	EnableIgnoreOldScheduleRunsSensor bool `mapstructure:"enable_ignore_old_schedule_runs_sensor"`
+}
+
+type JobValidationConfig struct {
+	ValidateSchedule ValidateScheduleConfig `mapstructure:"validate_schedule"`
+}
+
+type ValidateScheduleConfig struct {
+	ReferenceTimezone string `mapstructure:"reference_timezone"`
 }

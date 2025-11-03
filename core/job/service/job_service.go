@@ -10,6 +10,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
@@ -19,6 +20,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/cron"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils/filter"
@@ -34,6 +36,12 @@ const (
 	// a project, i.e. registered entities
 	projectConfigPrefix = "GLOBAL__"
 )
+
+type jobValidateConfig struct {
+	ValidateSchedule struct {
+		ReferenceTimezone *time.Location
+	}
+}
 
 type JobService struct {
 	jobRepo        JobRepository
@@ -54,6 +62,8 @@ type JobService struct {
 	jobRunInputCompiler JobRunInputCompiler
 	resourceChecker     ResourceExistenceChecker
 
+	jobValidateConfig jobValidateConfig
+
 	logger log.Logger
 }
 
@@ -67,8 +77,16 @@ func NewJobService(
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
 	jobDeploymentService JobDeploymentService, engine Engine,
 	jobInputCompiler JobRunInputCompiler, resourceChecker ResourceExistenceChecker,
-	alertHandler AlertManager,
+	alertHandler AlertManager, jobValidationConfig config.JobValidationConfig,
 ) *JobService {
+	validateConfig := jobValidateConfig{}
+	refLoc, err := time.LoadLocation(jobValidationConfig.ValidateSchedule.ReferenceTimezone)
+	if err != nil {
+		logger.Warn("invalid reference timezone config for job validation. Use default UTC timezone")
+		refLoc = time.UTC
+	}
+	validateConfig.ValidateSchedule.ReferenceTimezone = refLoc
+
 	return &JobService{
 		jobRepo:              jobRepo,
 		upstreamRepo:         upstreamRepo,
@@ -83,6 +101,7 @@ func NewJobService(
 		jobRunInputCompiler:  jobInputCompiler,
 		resourceChecker:      resourceChecker,
 		alertHandler:         alertHandler,
+		jobValidateConfig:    validateConfig,
 	}
 }
 
@@ -1758,7 +1777,8 @@ func (*JobService) getJobWithUpstreamPerJobName(jobsWithUpstream []*job.WithUpst
 }
 
 func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
-	if _, err := j.upstreamResolver.Resolve(ctx, subjectJob, writer.NewSafeBufferedLogger()); err != nil {
+	jobUpstreams, err := j.upstreamResolver.Resolve(ctx, subjectJob, writer.NewSafeBufferedLogger())
+	if err != nil {
 		registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, false)
 
 		return dto.ValidateResult{
@@ -1768,6 +1788,17 @@ func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) 
 				err.Error(),
 			},
 			Success: false,
+		}
+	}
+
+	isScheduleValid, message := j.validateScheduleWithUpstreams(ctx, subjectJob, jobUpstreams)
+	if !isScheduleValid {
+		registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, false)
+
+		return dto.ValidateResult{
+			Stage:    dto.StageUpstreamValidation,
+			Messages: message,
+			Success:  false,
 		}
 	}
 
@@ -1799,6 +1830,56 @@ func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant
 		Messages: []string{fmt.Sprintf("%s: %s", destination.String(), message)},
 		Success:  success,
 	}
+}
+
+func (j *JobService) validateScheduleWithUpstreams(ctx context.Context, subjectJob *job.Job, upstreams []*job.Upstream) (bool, []string) {
+	subjectCronStr := subjectJob.Spec().Schedule().Interval()
+	if subjectCronStr == "" {
+		return true, []string{"subject job has no schedule to validate"}
+	}
+
+	subjectCron, err := cron.ParseCronSchedule(subjectCronStr)
+	if err != nil {
+		return false, []string{fmt.Sprintf("unable to parse subject job schedule [%s]: %s", subjectCronStr, err.Error())}
+	}
+
+	// this reference time is used as a base time to calculate next schedule time
+	refTimeForSchedule := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0,
+		j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)
+
+	messages := []string{}
+	for _, upstream := range upstreams {
+		if upstream.State() != job.UpstreamStateResolved {
+			continue
+		}
+
+		upstreamJob, err := j.jobRepo.GetByJobName(ctx, upstream.ProjectName(), upstream.Name())
+		if err != nil {
+			messages = append(messages, fmt.Sprintf("unable to fetch upstream job [%s]: %s", upstream.FullName(), err.Error()))
+			continue
+		}
+
+		upstreamCronStr := upstreamJob.Spec().Schedule().Interval()
+		if upstreamCronStr == "" {
+			// no schedule to compare, skip
+			continue
+		}
+
+		upstreamCron, err := cron.ParseCronSchedule(upstreamCronStr)
+		if err != nil {
+			messages = append(messages, fmt.Sprintf("unable to parse upstream job [%s] schedule [%s]: %s", upstream.FullName(), upstreamCronStr, err.Error()))
+			continue
+		}
+
+		nextUpstreamRun := upstreamCron.Next(refTimeForSchedule)
+		nextSubjectRun := subjectCron.Next(refTimeForSchedule)
+
+		if !nextUpstreamRun.Before(nextSubjectRun) {
+			messages = append(messages, fmt.Sprintf("upstream job [%s] is scheduled with [%s] which was before subject job schedule [%s]", upstream.FullName(), upstreamCronStr, subjectCronStr))
+		}
+	}
+
+	return len(messages) == 0, messages
 }
 
 func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {

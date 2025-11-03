@@ -401,6 +401,7 @@ func (s *OptimusServer) setupHandlers() error {
 		pluginService, jUpstreamResolver, tenantService,
 		s.eventHandler, s.logger, newJobRunService, newEngine,
 		jobInputCompiler, secondaryResourceService, alertsHandler,
+		s.conf.JobValidationConfig,
 	)
 
 	jobWorker := jService.NewJobWorker(s.logger, jJobRepo, newJobRunService)

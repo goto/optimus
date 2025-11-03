@@ -243,6 +243,43 @@ func fromStorageWindow(raw []byte, jobVersion int) (window.Config, error) {
 	return window.NewCustomConfig(w), nil
 }
 
+type change struct {
+	Property string `json:"attribute_name"`
+	Diff     string `json:"diff"`
+}
+
+type changelog struct {
+	Change []change
+	Type   string
+	Time   time.Time
+}
+
+func fromStorageChangelog(changelog *changelog) *scheduler.Changelog {
+	jobChangeLog := scheduler.Changelog{
+		Type:      changelog.Type,
+		CreatedAt: changelog.Time,
+	}
+
+	jobChangeLog.Change = make([]scheduler.Change, len(changelog.Change))
+	for i, change := range changelog.Change {
+		jobChangeLog.Change[i].Property = change.Property
+		jobChangeLog.Change[i].Diff = scheduler.ChangeDiff(change.Diff)
+	}
+	return &jobChangeLog
+}
+
+func FromChangelogRow(row pgx.Row) (*changelog, error) {
+	var cl changelog
+	err := row.Scan(&cl.Change, &cl.Type, &cl.Time)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.NotFound(job.EntityJobChangeLog, "changelog not found")
+		}
+		return nil, errors.Wrap(job.EntityJobChangeLog, "error in reading row for changelog", err)
+	}
+	return &cl, nil
+}
+
 type Metadata struct {
 	Resource  *MetadataResource
 	Scheduler map[string]string
@@ -705,6 +742,51 @@ func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []schedu
 	}
 
 	return jobsMap, multiError.ToErr()
+}
+
+func (j *JobRepository) GetChangelogs(ctx context.Context, filter scheduler.ChangelogFilter) ([]*scheduler.Changelog, error) {
+	me := errors.NewMultiError("get changelog errors")
+
+	query := `
+	SELECT
+		changes,
+		change_type,
+		created_at
+	FROM changelog
+	WHERE
+		project_name = $1 AND name = $2 AND entity_type = $3`
+
+	args := []any{filter.ProjectName, filter.Name, "job"}
+
+	if !filter.StartTime.IsZero() {
+		query += " AND created_at >= $" + fmt.Sprintf("%d", len(args)+1)
+		args = append(args, filter.StartTime)
+	}
+
+	if !filter.EndTime.IsZero() {
+		query += " AND created_at <= $" + fmt.Sprintf("%d", len(args)+1)
+		args = append(args, filter.EndTime)
+	}
+
+	query += " ORDER BY created_at DESC"
+
+	rows, err := j.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "error while getting changeLog for job", err)
+	}
+	defer rows.Close()
+
+	var changeLog []*scheduler.Changelog
+	for rows.Next() {
+		log, err := FromChangelogRow(rows)
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+		changeLog = append(changeLog, fromStorageChangelog(log))
+	}
+
+	return changeLog, me.ToErr()
 }
 
 func NewJobProviderRepository(pool *pgxpool.Pool) *JobRepository {

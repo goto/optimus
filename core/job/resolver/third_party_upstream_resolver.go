@@ -5,30 +5,33 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/ext/dex"
+	"github.com/goto/optimus/core/scheduler/service"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/writer"
 	"github.com/goto/salt/log"
 )
+
+type TenantDetailsGetter interface {
+	GetDetails(ctx context.Context, jobTenant tenant.Tenant) (*tenant.WithDetails, error)
+}
 
 type ThirdPartyUpstreamResolver interface {
 	BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error)
 	Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error)
 }
 
-func NewThirdPartyUpstreamResolvers(l log.Logger, upstreamResolvers ...config.UpstreamResolver) ([]ThirdPartyUpstreamResolver, error) {
+func NewThirdPartyUpstreamResolvers(l log.Logger, tenantDetailsGetter TenantDetailsGetter, upstreamResolvers ...config.UpstreamResolver) ([]ThirdPartyUpstreamResolver, error) {
+	sensorClients := service.NewSensorService(l, upstreamResolvers...)
+
 	var resolvers []ThirdPartyUpstreamResolver
 	for _, upstreamResolver := range upstreamResolvers {
 		switch upstreamResolver.Type { //nolint:revive
 		case config.DexUpstreamResolver:
-			clientConfig, err := upstreamResolver.GetDexClientConfig()
+			client, err := sensorClients.GetClient(upstreamResolver.Type)
 			if err != nil {
 				return nil, err
 			}
-			dexClient, err := dex.NewDexClient(l, clientConfig)
-			if err != nil {
-				return nil, err
-			}
-			resolvers = append(resolvers, NewDexUpstreamResolver(dexClient))
+			resolvers = append(resolvers, NewDexUpstreamResolver(l, client, tenantDetailsGetter))
 		}
 	}
 	return resolvers, nil

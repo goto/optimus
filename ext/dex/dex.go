@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/salt/log"
 )
@@ -41,6 +42,21 @@ func NewDexClient(l log.Logger, dexClientConfig *config.DexClientConfig) (*Clien
 		config:     dexClientConfig,
 		httpClient: httpClient,
 	}, nil
+}
+
+func (d *Client) IsManaged(ctx context.Context, resourceURN resource.URN) (bool, error) {
+	return d.isResourceManagedUntil(ctx, resourceURN.GetStore(), resourceURN.GetName(), time.Now())
+}
+
+func (d *Client) IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, error) {
+	stats, err := d.getCompletenessStats(ctx, resourceURN.GetStore(), resourceURN.GetName(), dateFrom, dateTo)
+	if err != nil {
+		return false, err
+	}
+	for _, dateStat := range stats.DataCompletenessByDate {
+		d.l.Info("dex completeness status", "date", dateStat.Date, "is_complete", dateStat.IsComplete)
+	}
+	return stats.IsComplete, nil
 }
 
 func newHTTPClient(host string) (*http.Client, error) {
@@ -87,7 +103,7 @@ func (d *Client) constructGetTableStatsRequest(ctx context.Context, store, table
 	return request, nil
 }
 
-func (d *Client) IsResourceManagedUntil(ctx context.Context, store, resourceURN string, dataAvailabilityTime time.Time) (bool, error) {
+func (d *Client) isResourceManagedUntil(ctx context.Context, store, resourceURN string, dataAvailabilityTime time.Time) (bool, error) {
 	request, err := d.constructGetTableStatsRequest(ctx, store, resourceURN, dataAvailabilityTime.Add(time.Hour*-24), dataAvailabilityTime)
 	if err != nil {
 		return false, fmt.Errorf("error encountered when constructing request: %w", err)
@@ -113,7 +129,7 @@ func (d *Client) IsResourceManagedUntil(ctx context.Context, store, resourceURN 
 	return statsResp.Stats.ProducerType == d.config.ProducerType && statsResp.Stats.IsManagedUntil(dataAvailabilityTime), nil
 }
 
-func (d *Client) GetCompletenessStats(ctx context.Context, store, tableName string, startTime, endTime time.Time) (*scheduler.DataCompletenessStatus, error) {
+func (d *Client) getCompletenessStats(ctx context.Context, store, tableName string, startTime, endTime time.Time) (*scheduler.DataCompletenessStatus, error) {
 	request, err := d.constructGetTableStatsRequest(ctx, store, tableName, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("error encountered when constructing request: %w", err)

@@ -3,26 +3,27 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
-	"github.com/goto/optimus/core/resource"
+	"github.com/goto/optimus/core/scheduler/service"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/writer"
+	"github.com/goto/salt/log"
 )
 
-type DexClient interface {
-	IsResourceManagedUntil(ctx context.Context, store, resourceURN string, dataAvailabilityTime time.Time) (bool, error)
-}
-
 type dexUpstreamResolver struct {
-	dexClient DexClient
+	l                   log.Logger
+	dexClient           service.ThirdPartyClient
+	tenantDetailsGetter TenantDetailsGetter
 }
 
-func NewDexUpstreamResolver(client DexClient) *dexUpstreamResolver {
+func NewDexUpstreamResolver(l log.Logger, client service.ThirdPartyClient, tenantDetailsGetter TenantDetailsGetter) *dexUpstreamResolver {
 	return &dexUpstreamResolver{
-		dexClient: client,
+		l:                   l,
+		dexClient:           client,
+		tenantDetailsGetter: tenantDetailsGetter,
 	}
 }
 
@@ -40,12 +41,23 @@ func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstreams
 }
 
 func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error) {
+	details, err := u.tenantDetailsGetter.GetDetails(ctx, jobWithUpstream.Job().Tenant())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tenant details for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)
+	}
+	if val, err := details.GetConfig(tenant.ProjectDexThirdPartySensor); err != nil {
+		return nil, fmt.Errorf("failed to get dex 3rd party sensor config for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)
+	} else if val != "true" {
+		// skip DEX upstream resolution if dex 3rd party sensor is not enabled for the tenant
+		return jobWithUpstream, nil
+	}
+
 	me := errors.NewMultiError(fmt.Sprintf("[%s] dex 3rd upstream resolution errors for job %s", jobWithUpstream.Job().Tenant().NamespaceName().String(), jobWithUpstream.Name().String()))
 	upstreams := []*job.Upstream{}
 	thirdPartyUpstreams := []*job.ThirdPartyUpstream{}
 	for _, unresolvedUpstream := range jobWithUpstream.GetUnresolvedUpstreams() {
 		// segregate DEX managed upstreams and non-DEX managed upstreams
-		if isDEXManaged, err := u.isDEXManagedUpstream(ctx, unresolvedUpstream.Resource()); err != nil {
+		if isDEXManaged, err := u.dexClient.IsManaged(ctx, unresolvedUpstream.Resource()); err != nil {
 			me.Append(err)
 		} else if isDEXManaged {
 			cfg := map[string]string{}
@@ -60,8 +72,4 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 		lw.Write(writer.LogLevelError, me.ToErr().Error())
 	}
 	return job.NewWithUpstreamAndThirdPartyUpstreams(jobWithUpstream.Job(), upstreams, thirdPartyUpstreams), me.ToErr()
-}
-
-func (u *dexUpstreamResolver) isDEXManagedUpstream(ctx context.Context, resourceURN resource.URN) (bool, error) { //nolint:unparam
-	return u.dexClient.IsResourceManagedUntil(ctx, resourceURN.GetStore(), resourceURN.GetName(), time.Now())
 }

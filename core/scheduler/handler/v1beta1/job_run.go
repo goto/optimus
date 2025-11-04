@@ -9,7 +9,9 @@ import (
 	"github.com/goto/salt/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
@@ -37,7 +39,7 @@ type JobLineageService interface {
 }
 
 type ThirdPartySensorService interface {
-	GetCompletenessStats(ctx context.Context, store, tableName string, startTime, endTime time.Time) (*scheduler.DataCompletenessStatus, error)
+	GetClient(upstreamResolverType config.UpstreamResolverType) (service.ThirdPartyClient, error)
 }
 
 type SchedulerService interface {
@@ -148,6 +150,13 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 	}, nil
 }
 
+// TODO: refactor to use GetThirdPartySensorStatus instead
+// req:
+// - project_name
+// - job_name
+// - scheduled_at
+// - third_party_type
+// - identifier
 func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, dexSensorReq *pb.DexSensorRequest) (*pb.DexSensorResponse, error) {
 	store := dexSensorReq.GetStore()
 	if store != "maxcompute" {
@@ -166,23 +175,29 @@ func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, dexSensorReq *pb.
 		return nil, fmt.Errorf("invalid end time: [%s]", dexSensorReq.GetTo().AsTime().String())
 	}
 
-	completenessStats, err := h.thirdPartySensorService.GetCompletenessStats(ctx, store, tableName, startTime, endTime)
+	client, err := h.thirdPartySensorService.GetClient(config.DexUpstreamResolver)
 	if err != nil {
-		h.l.Error("error getting third party sensor stats: %s", err)
-		return nil, errors.GRPCErr(err, "unable to get third party sensor stats")
+		h.l.Error("error getting third party sensor client: %s", err)
+		return nil, errors.GRPCErr(err, "unable to get third party sensor client")
 	}
 
-	dataCompleteness := make([]*pb.DataCompleteness, len(completenessStats.DataCompletenessByDate))
-
-	for i, v := range completenessStats.DataCompletenessByDate {
-		dataCompleteness[i] = &pb.DataCompleteness{
-			Date:       timestamppb.New(v.Date),
-			IsComplete: v.IsComplete,
-		}
+	resourceURN, err := resource.NewURN(store, tableName)
+	if err != nil {
+		h.l.Error("error creating resource URN: %s", err)
+		return nil, errors.GRPCErr(err, "unable to create resource URN")
 	}
+
+	ok, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
+	if err != nil {
+		h.l.Error("error checking data completeness from third party sensor: %s", err)
+		return nil, errors.GRPCErr(err, "unable to check data completeness from third party sensor")
+	}
+
+	// TODO: remove this as it's abstracted away by third party sensor service
+	dataCompleteness := make([]*pb.DataCompleteness, 0)
 
 	return &pb.DexSensorResponse{
-		IsComplete: completenessStats.IsComplete,
+		IsComplete: ok,
 		Log:        dataCompleteness,
 	}, nil
 }

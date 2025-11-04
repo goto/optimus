@@ -100,13 +100,13 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 		maps.Copy(alertCopy.Labels, alert.Labels)
 		alertCopy.Labels[DefaultChannelLabel] = strings.TrimSpace(team)
 		// relay
-		if alert.Endpoint == "" {
+		if alertCopy.Endpoint == "" {
 			// Don't alert if alert manager is not configured in server config
 			return
 		}
 		go func() {
-			a.alertChan <- alert
-			eventsReceived.WithLabelValues(alert.Project, alert.LogTag).Inc()
+			a.alertChan <- &alertCopy
+			eventsReceived.WithLabelValues(alertCopy.Project, alertCopy.LogTag).Inc()
 		}()
 	}
 }

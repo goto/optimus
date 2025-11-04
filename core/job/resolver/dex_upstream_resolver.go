@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/internal/errors"
@@ -26,11 +27,6 @@ func NewDexUpstreamResolver(client DexClient) *dexUpstreamResolver {
 }
 
 func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error) {
-	// TODO: implement DEX upstream resolver by calling DEX api
-	// 1. get unresolved upstreams
-	// 2. call DEX api to check whether the upstream is managed by DEX
-	// 3. if yes, get the resolved upstream from DEX api response and set it to job's upstreams
-	// 4. mark upstream_3rd_party_type as DEX
 	jobsWithUpstreamsResolved := []*job.WithUpstream{}
 	for _, jobWithUpstream := range jobsWithUpstreams {
 		jobWithUpstreamsResolved, err := u.Resolve(ctx, jobWithUpstream, lw)
@@ -52,9 +48,9 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 		if isDEXManaged, err := u.isDEXManagedUpstream(ctx, unresolvedUpstream.Resource()); err != nil {
 			me.Append(err)
 		} else if isDEXManaged {
-			config := map[string]string{}
-			config["resource_urn"] = unresolvedUpstream.Resource().String()
-			resolvedUpstream := job.NewThirdPartyUpstream("dex", unresolvedUpstream.Resource().GetName(), config) // TODO: set resolved third party type as constant
+			cfg := map[string]string{}
+			cfg["resource_urn"] = unresolvedUpstream.Resource().String()
+			resolvedUpstream := job.NewThirdPartyUpstream(config.DexUpstreamResolver.String(), unresolvedUpstream.Resource().GetName(), cfg)
 			thirdPartyUpstreams = append(thirdPartyUpstreams, resolvedUpstream)
 		} else {
 			upstreams = append(upstreams, unresolvedUpstream)

@@ -30,6 +30,10 @@ type UpstreamResolver struct {
 	Config map[string]interface{} `mapstructure:"config"`
 }
 
+func (u UpstreamResolverType) String() string {
+	return string(u)
+}
+
 func (u *UpstreamResolver) GetDexClientConfig() (*DexClientConfig, error) {
 	configBytes, err := json.Marshal(u.Config)
 	if err != nil {
@@ -124,7 +128,8 @@ type ResourceManagerConfigOptimus struct {
 }
 
 type DexClientConfig struct {
-	Host string `mapstructure:"host"`
+	Host         string `mapstructure:"host"`
+	ProducerType string `mapstructure:"producer_type"`
 }
 
 type ReplayConfig struct {

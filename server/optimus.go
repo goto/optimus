@@ -410,7 +410,7 @@ func (s *OptimusServer) setupHandlers() error {
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
-	jUpstreamResolvers, err := jResolver.NewThirdPartyUpstreamResolvers(s.conf.UpstreamResolvers...)
+	jUpstreamResolvers, err := jResolver.NewThirdPartyUpstreamResolvers(s.logger, s.conf.UpstreamResolvers...)
 	if err != nil {
 		return err
 	}

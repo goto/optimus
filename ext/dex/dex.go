@@ -8,22 +8,25 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/salt/log"
 )
 
 const tableStatsEndpoint = "/dex/tables/%s/%s/stats"
 
 type Client struct {
+	l          log.Logger
 	config     *config.DexClientConfig
 	httpClient *http.Client
 }
 
 // NewDexClient initializes client for communication with Dex
-func NewDexClient(dexClientConfig *config.DexClientConfig) (*Client, error) {
+func NewDexClient(l log.Logger, dexClientConfig *config.DexClientConfig) (*Client, error) {
 	if dexClientConfig.Host == "" {
 		return nil, errors.New("dex client host is empty")
 	}
@@ -34,6 +37,7 @@ func NewDexClient(dexClientConfig *config.DexClientConfig) (*Client, error) {
 	}
 
 	return &Client{
+		l:          l,
 		config:     dexClientConfig,
 		httpClient: httpClient,
 	}, nil
@@ -60,15 +64,21 @@ func newHTTPClient(host string) (*http.Client, error) {
 }
 
 func (d *Client) constructGetTableStatsRequest(ctx context.Context, store, tableName string, startTime, endTime time.Time) (*http.Request, error) {
-	var filters []string
-	filters = append(filters, "with_date_breakdown=true")
-	filters = append(filters, fmt.Sprintf("from=%s", startTime.Format("2006-01-02")))
-	filters = append(filters, fmt.Sprintf("to=%s", endTime.Format("2006-01-02")))
+	path := fmt.Sprintf(tableStatsEndpoint, store, tableName)
 
-	endpoint := fmt.Sprintf(tableStatsEndpoint, store, tableName)
-	url := d.config.Host + endpoint + "?" + strings.Join(filters, "&")
+	values := url.Values{}
+	values.Add("with_date_breakdown", "true")
+	values.Add("from", startTime.Format(time.RFC3339)) // ISO8601
+	values.Add("to", endTime.Format(time.RFC3339))     // ISO8601
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	u, err := url.Parse(d.config.Host)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing dex host url: %w", err)
+	}
+	u.Path = path
+	u.RawQuery = values.Encode()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +100,7 @@ func (d *Client) IsResourceManagedUntil(ctx context.Context, store, resourceURN 
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
+		d.l.Error("unexpected status response", "status", response.Status, "body", response.Body)
 		return false, fmt.Errorf("unexpected status response: %s", response.Status)
 	}
 
@@ -99,7 +110,7 @@ func (d *Client) IsResourceManagedUntil(ctx context.Context, store, resourceURN 
 		return false, fmt.Errorf("error decoding response: %w", err)
 	}
 
-	return statsResp.Stats.IsManagedUntil(dataAvailabilityTime), nil
+	return statsResp.Stats.ProducerType == d.config.ProducerType && statsResp.Stats.IsManagedUntil(dataAvailabilityTime), nil
 }
 
 func (d *Client) GetCompletenessStats(ctx context.Context, store, tableName string, startTime, endTime time.Time) (*scheduler.DataCompletenessStatus, error) {
@@ -115,6 +126,7 @@ func (d *Client) GetCompletenessStats(ctx context.Context, store, tableName stri
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
+		d.l.Error("unexpected status response", "status", response.Status, "body", response.Body)
 		return nil, fmt.Errorf("unexpected status response: %s", response.Status)
 	}
 

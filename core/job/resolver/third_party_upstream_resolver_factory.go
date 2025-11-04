@@ -7,6 +7,7 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/ext/dex"
 	"github.com/goto/optimus/internal/writer"
+	"github.com/goto/salt/log"
 )
 
 type ThirdPartyUpstreamResolver interface {
@@ -14,7 +15,7 @@ type ThirdPartyUpstreamResolver interface {
 	Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error)
 }
 
-func NewThirdPartyUpstreamResolvers(upstreamResolvers ...config.UpstreamResolver) ([]ThirdPartyUpstreamResolver, error) {
+func NewThirdPartyUpstreamResolvers(l log.Logger, upstreamResolvers ...config.UpstreamResolver) ([]ThirdPartyUpstreamResolver, error) {
 	var resolvers []ThirdPartyUpstreamResolver
 	for _, upstreamResolver := range upstreamResolvers {
 		switch upstreamResolver.Type { //nolint:revive
@@ -23,7 +24,7 @@ func NewThirdPartyUpstreamResolvers(upstreamResolvers ...config.UpstreamResolver
 			if err != nil {
 				return nil, err
 			}
-			dexClient, err := dex.NewDexClient(clientConfig)
+			dexClient, err := dex.NewDexClient(l, clientConfig)
 			if err != nil {
 				return nil, err
 			}

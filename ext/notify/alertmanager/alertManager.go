@@ -104,10 +104,10 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 			// Don't alert if alert manager is not configured in server config
 			return
 		}
-		go func() {
-			a.alertChan <- &alertCopy
-			eventsReceived.WithLabelValues(alertCopy.Project, alertCopy.LogTag).Inc()
-		}()
+		go func(al *AlertPayload) {
+			a.alertChan <- al
+			eventsReceived.WithLabelValues(al.Project, al.LogTag).Inc()
+		}(&alertCopy)
 	}
 }
 

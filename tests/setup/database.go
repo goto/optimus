@@ -113,6 +113,8 @@ func dropTables(db *pgxpool.Pool) error {
 		"project_old",
 		"preset",
 		"migration_steps",
+		"sla_predictor",
+		"job_third_party_upstream",
 	}
 	var errMsgs []string
 	for _, table := range tablesToDelete {

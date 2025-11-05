@@ -40,6 +40,8 @@ const (
 	DeployStateSuccess DeployState = "success"
 	DeployStateSkipped DeployState = "skipped"
 	DeployStateFailed  DeployState = "failed"
+
+	ThirdPartyTypeDex = "dex"
 )
 
 var EventMetric = promauto.NewCounterVec(prometheus.CounterOpts{

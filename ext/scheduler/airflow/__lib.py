@@ -365,8 +365,8 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
                 print("api_response: ", api_response)
 
                 # dex specific response parsing
-                resp = api_response.get('dexSensorResponse', {})
-                if resp['isComplete']:
+                resp = api_response.get('dex_sensor_response', {})
+                if resp['is_complete']:
                     log.info("optimus response :: {}".format(resp))
                     return True
                 return False

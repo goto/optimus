@@ -16,7 +16,7 @@ type ThirdPartyClient interface {
 	// IsManaged checks if the given identifier is managed by the third-party service.
 	IsManaged(ctx context.Context, resourceURN resource.URN) (bool, error)
 	// IsComplete checks if the data for the given identifier between dateFrom and dateTo is complete.
-	IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, error)
+	IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, interface{}, error)
 }
 
 type clients struct {

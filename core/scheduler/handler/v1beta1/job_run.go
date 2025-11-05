@@ -150,13 +150,6 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 	}, nil
 }
 
-// TODO: refactor to use GetThirdPartySensorStatus instead
-// req:
-// - project_name
-// - job_name
-// - scheduled_at
-// - third_party_type
-// - identifier
 func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, dexSensorReq *pb.DexSensorRequest) (*pb.DexSensorResponse, error) {
 	store := dexSensorReq.GetStore()
 	if store != "maxcompute" {
@@ -187,14 +180,24 @@ func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, dexSensorReq *pb.
 		return nil, errors.GRPCErr(err, "unable to create resource URN")
 	}
 
-	ok, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
+	ok, response, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
 	if err != nil {
 		h.l.Error("error checking data completeness from third party sensor: %s", err)
 		return nil, errors.GRPCErr(err, "unable to check data completeness from third party sensor")
 	}
 
-	// TODO: remove this as it's abstracted away by third party sensor service
-	dataCompleteness := make([]*pb.DataCompleteness, 0)
+	stats, ok := response.(*scheduler.DataCompletenessStatus)
+	if !ok {
+		h.l.Warn("error asserting response type: %s", err)
+	}
+
+	dataCompleteness := make([]*pb.DataCompleteness, len(stats.DataCompletenessByDate))
+	for i, dateStat := range stats.DataCompletenessByDate {
+		dataCompleteness[i] = &pb.DataCompleteness{
+			Date:       timestamppb.New(dateStat.Date),
+			IsComplete: dateStat.IsComplete,
+		}
+	}
 
 	return &pb.DexSensorResponse{
 		IsComplete: ok,

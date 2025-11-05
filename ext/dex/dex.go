@@ -48,15 +48,15 @@ func (d *Client) IsManaged(ctx context.Context, resourceURN resource.URN) (bool,
 	return d.isResourceManagedUntil(ctx, resourceURN.GetStore(), resourceURN.GetName(), time.Now())
 }
 
-func (d *Client) IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, error) {
+func (d *Client) IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, interface{}, error) {
 	stats, err := d.getCompletenessStats(ctx, resourceURN.GetStore(), resourceURN.GetName(), dateFrom, dateTo)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	for _, dateStat := range stats.DataCompletenessByDate {
 		d.l.Info("dex completeness status", "date", dateStat.Date, "is_complete", dateStat.IsComplete)
 	}
-	return stats.IsComplete, nil
+	return stats.IsComplete, stats, nil
 }
 
 func newHTTPClient(host string) (*http.Client, error) {

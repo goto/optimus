@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/ext/dex"
-	"github.com/goto/salt/log"
 )
 
 // ThirdPartyClient defines the interface that any third-party service client must implement

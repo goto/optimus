@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
-	"github.com/goto/salt/log"
 )
 
 const tableStatsEndpoint = "/dex/tables/%s/%s/stats"

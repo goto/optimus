@@ -3,12 +3,13 @@ package resolver
 import (
 	"context"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/writer"
-	"github.com/goto/salt/log"
 )
 
 type TenantDetailsGetter interface {

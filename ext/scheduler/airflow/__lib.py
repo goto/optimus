@@ -335,8 +335,6 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
         schedule_time = get_scheduled_at(context)
         self.log.info("Current schedule_time: {}".format(schedule_time))
 
-        # last_upstream_schedule_time, _ = self.get_last_upstream_times(schedule_time, upstream_schedule)
-
         # get schedule window
         task_window = JobSpecTaskWindow(self._optimus_client, self.project_name, self.job_name)
         schedule_time_window_start, schedule_time_window_end = task_window.get(
@@ -352,13 +350,6 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
                                     schedule_time_window_end))
             return False
         return True
-
-    def get_last_upstream_times(self, schedule_time_of_current_job, upstream_schedule_interval):
-        second_ahead_of_schedule_time = schedule_time_of_current_job + timedelta(seconds=1)
-        c = croniter(upstream_schedule_interval, second_ahead_of_schedule_time)
-        last_upstream_schedule_time = c.get_prev(datetime)
-        last_upstream_execution_date = c.get_prev(datetime)
-        return last_upstream_schedule_time, last_upstream_execution_date
 
     def is_upstream_data_available(self, schedule_time_window_start, schedule_time_window_end) -> bool:
         try:

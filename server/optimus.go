@@ -19,7 +19,6 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/event/moderator"
-	job "github.com/goto/optimus/core/job"
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
 	jResolver "github.com/goto/optimus/core/job/resolver"
 	jService "github.com/goto/optimus/core/job/service"
@@ -32,7 +31,6 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
-	"github.com/goto/optimus/ext/dex"
 	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
@@ -273,19 +271,6 @@ func (s *OptimusServer) Shutdown() {
 	}
 
 	s.logger.Info("Server shutdown complete")
-}
-
-func getDexClient(conf *config.ServerConfig) (*dex.Client, error) {
-	for _, upstreamResolver := range conf.UpstreamResolvers {
-		if upstreamResolver.Type == job.ThirdPartyTypeDex {
-			clientConfig, err := upstreamResolver.GetDexClientConfig()
-			if err != nil {
-				return nil, err
-			}
-			return dex.NewDexClient(clientConfig)
-		}
-	}
-	return nil, nil //nolint:nilnil
 }
 
 func (s *OptimusServer) setupHandlers() error {

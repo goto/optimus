@@ -19,7 +19,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib/cron"
 	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils/filter"
@@ -1855,21 +1854,6 @@ func (j *JobService) validateSingleUpstreamSchedule(ctx context.Context, subject
 		return true, "upstream is not resolved"
 	}
 
-	subjectCronStr := subjectJob.Spec().Schedule().Interval()
-	if subjectCronStr == "" {
-		return true, "subject job has no schedule to validate"
-	}
-
-	subjectCron, err := cron.ParseCronSchedule(subjectCronStr)
-	if err != nil {
-		return false, fmt.Sprintf("unable to parse subject job schedule [%s]: %s", subjectCronStr, err.Error())
-	}
-
-	if subjectCron.IsSubDaily() {
-		// skip validation for sub-daily schedules
-		return true, "subject job has sub-daily schedule"
-	}
-
 	var upstreamJob *job.Job
 	// if there are any jobs included in the validation request, prefer those over fetching from repo
 	// to use the latest spec
@@ -1883,25 +1867,9 @@ func (j *JobService) validateSingleUpstreamSchedule(ctx context.Context, subject
 		}
 	}
 
-	upstreamCronStr := upstreamJob.Spec().Schedule().Interval()
-	if upstreamCronStr == "" {
-		return true, "upstream job has no schedule, skipping schedule validation"
-	}
-
-	upstreamCron, err := cron.ParseCronSchedule(upstreamCronStr)
-	if err != nil {
-		return false, fmt.Sprintf("unable to parse upstream job [%s] schedule [%s]: %s", upstream.FullName(), upstreamCronStr, err.Error())
-	}
-
-	if upstreamCron.IsSubDaily() {
-		return true, "upstream job has sub-daily schedule, skipping schedule validation"
-	}
-
-	nextUpstreamRun := upstreamCron.Next(referenceTime)
-	nextSubjectRun := subjectCron.Next(referenceTime)
-
-	if !nextUpstreamRun.Before(nextSubjectRun) {
-		return false, fmt.Sprintf("upstream job [%s] is scheduled with [%s] which was before subject job schedule [%s]", upstream.FullName(), upstreamCronStr, subjectCronStr)
+	isSubjectScheduleValid, message := subjectJob.IsScheduledAfter(upstreamJob, referenceTime)
+	if !isSubjectScheduleValid {
+		return false, fmt.Sprintf("failed schedule validation with upstream [%s]: %s", upstreamJob.FullName(), message)
 	}
 
 	return true, "no issue"

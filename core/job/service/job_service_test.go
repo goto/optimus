@@ -4907,7 +4907,7 @@ func TestJobService(t *testing.T) {
 			})
 
 			t.Run("validate job & upstream schedules", func(t *testing.T) {
-				t.Run("returns unsuccessful result and nil if upstream job is after subject job", func(t *testing.T) {
+				t.Run("returns unsuccessful result if subject job is before upstream job", func(t *testing.T) {
 					tenantDetailsGetter := new(TenantDetailsGetter)
 					defer tenantDetailsGetter.AssertExpectations(t)
 
@@ -4938,8 +4938,10 @@ func TestJobService(t *testing.T) {
 					jobASchedule, _ := job.NewScheduleBuilder(startDate).WithInterval("0 2 * * *").Build()
 					jobBSchedule, _ := job.NewScheduleBuilder(startDate).WithInterval("0 3 * * *").Build()
 
+					// job A is provided as a new job in the request
 					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobASchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 					assert.NoError(t, err)
+					// job B is only in the DB as upstream of job A
 					jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobBSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 					assert.NoError(t, err)
 
@@ -4949,7 +4951,7 @@ func TestJobService(t *testing.T) {
 					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
 					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
 
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA}, nil)
+					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobB}, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -5019,7 +5021,7 @@ func TestJobService(t *testing.T) {
 							{
 								Stage: "upstream validation",
 								Messages: []string{
-									"upstream job [test-proj/jobB] is scheduled with [0 3 * * *] which was before subject job schedule [0 2 * * *]",
+									"failed schedule validation with upstream [test-proj/jobB]: current job [0 2 * * *] is scheduled before job test-proj/jobB [0 3 * * *]",
 								},
 								Success: false,
 							},
@@ -5031,6 +5033,305 @@ func TestJobService(t *testing.T) {
 					assert.EqualValues(t, expectedResult["jobA"], actualResult["jobA"])
 					assert.NoError(t, actualError)
 				})
+
+				t.Run("returns successful result if subject job is after upstream job", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					pluginService := NewPluginService(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+						pluginService, upstreamResolver, tenantDetailsGetter, nil,
+						log, nil, compiler.NewEngine(),
+						jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{
+							ValidateSchedule: service.ValidateScheduleConfig{
+								ReferenceTimezone: time.UTC,
+							},
+						},
+					)
+
+					jobASchedule, _ := job.NewScheduleBuilder(startDate).WithInterval("0 4 * * *").Build()
+					jobBSchedule, _ := job.NewScheduleBuilder(startDate).WithInterval("0 3 * * *").Build()
+
+					// job A is provided as a new job in the request
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobASchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+					// job B is only in the DB as upstream of job A
+					jobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobBSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNB}, false)
+					jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, []resource.URN{resourceURNC}, false)
+
+					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+
+					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobB}, nil)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC}
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
+
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
+
+					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
+					assert.NoError(t, err)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return([]*job.Upstream{upstreamB}, nil)
+					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobB")).Return(jobB, nil)
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     []*job.Spec{jobSpecA},
+						JobNames:     nil,
+						DeletionMode: false,
+					}
+
+					expectedResult := map[job.Name][]dto.ValidateResult{
+						"jobA": {
+							{
+								Stage:    "destination validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage: "source validation",
+								Messages: []string{
+									"bigquery://project:dataset.tableA: no issue",
+									"bigquery://project:dataset.tableB: no issue",
+									"bigquery://project:dataset.tableC: no issue",
+								},
+								Success: true,
+							},
+							{
+								Stage:    "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "plugin validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "compile validation for run",
+								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "upstream validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+						},
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.EqualValues(t, expectedResult["jobA"], actualResult["jobA"])
+					assert.NoError(t, actualError)
+				})
+
+				t.Run("returns unsuccessful result if new jobA & updated jobB schedules are updated in invalid order", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					pluginService := NewPluginService(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+						pluginService, upstreamResolver, tenantDetailsGetter, nil,
+						log, nil, compiler.NewEngine(),
+						jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{
+							ValidateSchedule: service.ValidateScheduleConfig{
+								ReferenceTimezone: time.UTC,
+							},
+						},
+					)
+
+					jobASchedule, _ := job.NewScheduleBuilder(startDate).WithInterval("0 2 * * *").Build()
+
+					jobBPrevSchedule, _ := job.NewScheduleBuilder(startDate).WithInterval("0 1 * * *").Build()
+					jobBNewSchedule, _ := job.NewScheduleBuilder(startDate).WithInterval("0 4 * * *").Build()
+
+					// job A is provided as a new job in the request
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobASchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+					// job B is only in the DB as upstream of job A
+					prevJobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobBPrevSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+					// job B update spec
+					newJobSpecB, err := job.NewSpecBuilder(1, "jobB", "optimus@goto", jobBNewSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNB}, false)
+					jobB := job.NewJob(sampleTenant, prevJobSpecB, resourceURNB, []resource.URN{resourceURNC}, false)
+
+					upstreamB := job.NewUpstreamResolved(prevJobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+					jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
+
+					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobB}, nil)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC}
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
+
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
+
+					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
+					assert.NoError(t, err)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, sampleTenant.ProjectName(), mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
+
+					upstreamResolver.On("Resolve", ctx, mock.MatchedBy(func(j *job.Job) bool {
+						return j.Spec().Name() == jobSpecA.Name()
+					}), mock.Anything).Return([]*job.Upstream{upstreamB}, nil)
+					upstreamResolver.On("Resolve", ctx, mock.MatchedBy(func(j *job.Job) bool {
+						return j.Spec().Name() == prevJobSpecB.Name()
+					}), mock.Anything).Return([]*job.Upstream{}, nil)
+					// jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobB")).Return(jobB, nil)
+
+					request := dto.ValidateRequest{
+						Tenant:       sampleTenant,
+						JobSpecs:     []*job.Spec{jobSpecA, newJobSpecB},
+						JobNames:     nil,
+						DeletionMode: false,
+					}
+
+					expectedResult := map[job.Name][]dto.ValidateResult{
+						"jobA": {
+							{
+								Stage:    "destination validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage: "source validation",
+								Messages: []string{
+									"bigquery://project:dataset.tableA: no issue",
+									"bigquery://project:dataset.tableB: no issue",
+									"bigquery://project:dataset.tableC: no issue",
+								},
+								Success: true,
+							},
+							{
+								Stage:    "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "plugin validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "compile validation for run",
+								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "upstream validation",
+								Messages: []string{"failed schedule validation with upstream [test-proj/jobB]: current job [0 2 * * *] is scheduled before job test-proj/jobB [0 4 * * *]"},
+								Success:  false,
+							},
+						},
+						"jobB": {
+							{
+								Stage:    "destination validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage: "source validation",
+								Messages: []string{
+									"bigquery://project:dataset.tableA: no issue",
+									"bigquery://project:dataset.tableB: no issue",
+									"bigquery://project:dataset.tableC: no issue",
+								},
+								Success: true,
+							},
+							{
+								Stage:    "window validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "plugin validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "compile validation for run",
+								Messages: []string{"compiling [bq2bq] with type [task] contains no issue"},
+								Success:  true,
+							},
+							{
+								Stage:    "upstream validation",
+								Messages: []string{"no issue"},
+								Success:  true,
+							},
+						},
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.EqualValues(t, expectedResult["jobA"], actualResult["jobA"])
+					assert.EqualValues(t, expectedResult["jobB"], actualResult["jobB"])
+					assert.NoError(t, actualError)
+				})
+
 			})
 		})
 	})

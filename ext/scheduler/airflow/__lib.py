@@ -364,7 +364,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             schedule_time = get_scheduled_at(context)
             self.log.info("Current schedule_time: {}".format(schedule_time))
 
-            is_available = self.is_upstream_data_available(schedule_time)
+            is_available = self.is_upstream_data_available(schedule_time.strftime(TIMESTAMP_FORMAT))
 
             if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
                 self.log.info("Third party sensor is in SOFT mode, bypassing the failure for now.")

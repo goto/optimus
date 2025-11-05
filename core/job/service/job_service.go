@@ -10,7 +10,6 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/kushsharma/parallel"
 
-	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/event"
 	"github.com/goto/optimus/core/event/moderator"
 	"github.com/goto/optimus/core/job"
@@ -37,10 +36,12 @@ const (
 	projectConfigPrefix = "GLOBAL__"
 )
 
-type jobValidateConfig struct {
-	ValidateSchedule struct {
-		ReferenceTimezone *time.Location
-	}
+type JobValidateConfig struct {
+	ValidateSchedule ValidateScheduleConfig
+}
+
+type ValidateScheduleConfig struct {
+	ReferenceTimezone *time.Location
 }
 
 type JobService struct {
@@ -62,7 +63,7 @@ type JobService struct {
 	jobRunInputCompiler JobRunInputCompiler
 	resourceChecker     ResourceExistenceChecker
 
-	jobValidateConfig jobValidateConfig
+	jobValidateConfig JobValidateConfig
 
 	logger log.Logger
 }
@@ -77,16 +78,8 @@ func NewJobService(
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
 	jobDeploymentService JobDeploymentService, engine Engine,
 	jobInputCompiler JobRunInputCompiler, resourceChecker ResourceExistenceChecker,
-	alertHandler AlertManager, jobValidationConfig config.JobValidationConfig,
+	alertHandler AlertManager, validateConfig JobValidateConfig,
 ) *JobService {
-	validateConfig := jobValidateConfig{}
-	refLoc, err := time.LoadLocation(jobValidationConfig.ValidateSchedule.ReferenceTimezone)
-	if err != nil {
-		logger.Warn("invalid reference timezone config for job validation. Use default UTC timezone")
-		refLoc = time.UTC
-	}
-	validateConfig.ValidateSchedule.ReferenceTimezone = refLoc
-
 	return &JobService{
 		jobRepo:              jobRepo,
 		upstreamRepo:         upstreamRepo,
@@ -1838,6 +1831,10 @@ func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant
 }
 
 func (j *JobService) validateScheduleWithUpstreams(ctx context.Context, subjectJob *job.Job, upstreams []*job.Upstream, jobsToValidateMap map[job.Name]*job.Job) (bool, []string) {
+	if j.jobValidateConfig.ValidateSchedule.ReferenceTimezone == nil {
+		return true, []string{"schedule validation is disabled"}
+	}
+
 	// this reference time is used as a base time to calculate next schedule time
 	refTimeForSchedule := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0,
 		j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)

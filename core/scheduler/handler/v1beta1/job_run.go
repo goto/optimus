@@ -150,34 +150,11 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 	}, nil
 }
 
-func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, dexSensorReq *pb.DexSensorRequest) (*pb.DexSensorResponse, error) {
-	store := dexSensorReq.GetStore()
-	if store != "maxcompute" {
-		return nil, fmt.Errorf("unsupported store: [%s]", store)
-	}
-	tableName := dexSensorReq.GetTableName()
-	if len(tableName) == 0 {
-		return nil, fmt.Errorf("invalid table name: [%s]", dexSensorReq.GetTableName())
-	}
-	startTime := dexSensorReq.GetFrom().AsTime()
-	if startTime.IsZero() {
-		return nil, fmt.Errorf("invalid start time: [%s]", dexSensorReq.GetFrom().AsTime().String())
-	}
-	endTime := dexSensorReq.GetTo().AsTime()
-	if endTime.IsZero() {
-		return nil, fmt.Errorf("invalid end time: [%s]", dexSensorReq.GetTo().AsTime().String())
-	}
-
+func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, resourceURN resource.URN, startTime, endTime time.Time) (*pb.DexSensorResponse, error) {
 	client, err := h.thirdPartySensorService.GetClient(config.DexUpstreamResolver)
 	if err != nil {
 		h.l.Error("error getting third party sensor client: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get third party sensor client")
-	}
-
-	resourceURN, err := resource.NewURN(store, tableName)
-	if err != nil {
-		h.l.Error("error creating resource URN: %s", err)
-		return nil, errors.GRPCErr(err, "unable to create resource URN")
 	}
 
 	ok, response, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
@@ -219,6 +196,23 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 		return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
 	}
 
+	// calculate startTime and endTime from request scheduledAt
+	intervalResp, err := h.GetInterval(ctx, &pb.GetIntervalRequest{
+		ProjectName:   req.GetProjectName(),
+		JobName:       req.GetJobName(),
+		ReferenceTime: req.GetScheduledAt(),
+	})
+	if err != nil {
+		h.l.Error("error getting interval for job [%s:%s]: %s", projectName, jobName, err)
+		return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+	}
+
+	startTime := intervalResp.GetStartTime().AsTime().UTC()
+	endTime := intervalResp.GetEndTime().AsTime().UTC()
+	if endTime.After(time.Now().UTC()) {
+		endTime = time.Now().UTC()
+	}
+
 	thirdPartyType := req.GetThirdPartyType()
 	if thirdPartyType == job.ThirdPartyTypeDex {
 		dexSensorReq := req.GetDexSensorRequest()
@@ -226,7 +220,12 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 			h.l.Error("error getting dex sensor request")
 			return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
 		}
-		resp, err := h.GetDexSensorStatus(ctx, dexSensorReq)
+		resourceURN, err := resource.ParseURN(dexSensorReq.GetResourceUrn())
+		if err != nil {
+			h.l.Error("error parsing resource urn [%s]: %s", dexSensorReq.GetResourceUrn(), err)
+			return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+		}
+		resp, err := h.GetDexSensorStatus(ctx, resourceURN, startTime, endTime)
 		if err != nil {
 			h.l.Error("error getting third party sensor status: %s", err)
 			return nil, err

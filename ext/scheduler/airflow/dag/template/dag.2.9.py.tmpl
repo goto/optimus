@@ -289,22 +289,6 @@ wait_{{ $dependencyName }} = SuperExternal3rdPartyTaskSensor(
 )
 {{ end}}
 
-# create 3rd party sensors
-{{- range $_, $upstream := .Upstreams.ThirdParty}}
-{{- $dependencyName := printf "%s_%s" $upstream.Type $upstream.URN | DisplayName }}
-wait_{{ $dependencyName }} = SuperExternal3rdPartyTaskSensor(
-    optimus_hostname="{{$.Hostname}}",
-    third_party_type="{{ $upstream.Type }}",
-    identifier="{{ $upstream.Identifier }}",
-    poke_interval=SENSOR_DEFAULT_POKE_INTERVAL_IN_SECS,
-    timeout=SENSOR_DEFAULT_TIMEOUT_IN_SECS,
-    task_id="wait_{{printf "%s_%s" $upstream.Type $upstream.Identifier}}",
-    depends_on_past=False,
-    dag=dag,
-    pool={{ if eq $.RuntimeConfig.Airflow.Pool "" }}POOL_SENSOR{{- else -}} {{ $.RuntimeConfig.Airflow.Pool | quote}}{{end}}
-)
-{{ end}}
-
 # arrange inter task dependencies
 ####################################
 

@@ -8,7 +8,7 @@ from __lib import job_success_event, job_failure_event
 # import operator level callbacks
 from __lib import operator_start_event, operator_success_event, operator_retry_event, operator_failure_event
 
-from __lib import optimus_sla_miss_notify, SuperKubernetesPodOperator, SuperExternalTaskSensor
+from __lib import optimus_sla_miss_notify, SuperKubernetesPodOperator, SuperExternalTaskSensor, SuperExternal3rdPartyTaskSensor
 
 from airflow.configuration import conf
 from airflow.models import DAG, Variable

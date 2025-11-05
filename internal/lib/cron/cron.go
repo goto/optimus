@@ -63,3 +63,18 @@ func (s *ScheduleSpec) getEarliestTimeToStartCron(currTime time.Time) time.Time 
 	}
 	return startTime
 }
+
+// IsSubDaily checks if the cron schedule runs more than once a day.
+// For example, these crons are considered as sub-daily:
+//   - "0 * * * *" (every hour)
+//   - "*/30 * * * *" (every 30 minutes)
+//   - "0 */6 * * *" (every 6 hours)
+//   - "0 0-23/2 * * *" (every 2 hours)
+func (s *ScheduleSpec) IsSubDaily() bool {
+	now := time.Now()
+	next1 := s.Next(now)
+	next2 := s.Next(next1)
+
+	interval := next2.Sub(next1)
+	return interval < 24*time.Hour
+}

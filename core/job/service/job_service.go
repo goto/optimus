@@ -1648,15 +1648,20 @@ func (*JobService) validateTenantOnEachJob(rootTnnt tenant.Tenant, jobsToValidat
 }
 
 func (j *JobService) validateJobs(ctx context.Context, tenantDetails *tenant.WithDetails, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	jobsToValidateMap := make(map[job.Name]*job.Job)
+	for _, job := range jobsToValidate {
+		jobsToValidateMap[job.Spec().Name()] = job
+	}
+
 	output := make(map[job.Name][]dto.ValidateResult)
 	for _, subjectJob := range jobsToValidate {
-		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob)
+		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob, jobsToValidateMap)
 	}
 
 	return output, nil
 }
 
-func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job) []dto.ValidateResult {
+func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) []dto.ValidateResult {
 	destination, err := j.generateDestinationURN(ctx, tenantDetails, subjectJob.Spec())
 	if err != nil {
 		result := dto.ValidateResult{
@@ -1690,7 +1695,7 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	result = j.validateRun(ctx, subjectJob, destination)
 	output = append(output, result)
 
-	result = j.validateUpstream(ctx, subjectJob)
+	result = j.validateUpstream(ctx, subjectJob, jobsToValidateMap)
 	output = append(output, result)
 
 	return output
@@ -1776,7 +1781,7 @@ func (*JobService) getJobWithUpstreamPerJobName(jobsWithUpstream []*job.WithUpst
 	return jobsToValidateMap
 }
 
-func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
+func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) dto.ValidateResult {
 	jobUpstreams, err := j.upstreamResolver.Resolve(ctx, subjectJob, writer.NewSafeBufferedLogger())
 	if err != nil {
 		registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, false)
@@ -1791,7 +1796,7 @@ func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) 
 		}
 	}
 
-	isScheduleValid, message := j.validateScheduleWithUpstreams(ctx, subjectJob, jobUpstreams)
+	isScheduleValid, message := j.validateScheduleWithUpstreams(ctx, subjectJob, jobUpstreams, jobsToValidateMap)
 	if !isScheduleValid {
 		registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, false)
 
@@ -1832,54 +1837,77 @@ func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant
 	}
 }
 
-func (j *JobService) validateScheduleWithUpstreams(ctx context.Context, subjectJob *job.Job, upstreams []*job.Upstream) (bool, []string) {
-	subjectCronStr := subjectJob.Spec().Schedule().Interval()
-	if subjectCronStr == "" {
-		return true, []string{"subject job has no schedule to validate"}
-	}
-
-	subjectCron, err := cron.ParseCronSchedule(subjectCronStr)
-	if err != nil {
-		return false, []string{fmt.Sprintf("unable to parse subject job schedule [%s]: %s", subjectCronStr, err.Error())}
-	}
-
+func (j *JobService) validateScheduleWithUpstreams(ctx context.Context, subjectJob *job.Job, upstreams []*job.Upstream, jobsToValidateMap map[job.Name]*job.Job) (bool, []string) {
 	// this reference time is used as a base time to calculate next schedule time
 	refTimeForSchedule := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0,
 		j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)
 
 	messages := []string{}
 	for _, upstream := range upstreams {
-		if upstream.State() != job.UpstreamStateResolved {
-			continue
-		}
-
-		upstreamJob, err := j.jobRepo.GetByJobName(ctx, upstream.ProjectName(), upstream.Name())
-		if err != nil {
-			messages = append(messages, fmt.Sprintf("unable to fetch upstream job [%s]: %s", upstream.FullName(), err.Error()))
-			continue
-		}
-
-		upstreamCronStr := upstreamJob.Spec().Schedule().Interval()
-		if upstreamCronStr == "" {
-			// no schedule to compare, skip
-			continue
-		}
-
-		upstreamCron, err := cron.ParseCronSchedule(upstreamCronStr)
-		if err != nil {
-			messages = append(messages, fmt.Sprintf("unable to parse upstream job [%s] schedule [%s]: %s", upstream.FullName(), upstreamCronStr, err.Error()))
-			continue
-		}
-
-		nextUpstreamRun := upstreamCron.Next(refTimeForSchedule)
-		nextSubjectRun := subjectCron.Next(refTimeForSchedule)
-
-		if !nextUpstreamRun.Before(nextSubjectRun) {
-			messages = append(messages, fmt.Sprintf("upstream job [%s] is scheduled with [%s] which was before subject job schedule [%s]", upstream.FullName(), upstreamCronStr, subjectCronStr))
+		isValid, message := j.validateSingleUpstreamSchedule(ctx, subjectJob, upstream, refTimeForSchedule, jobsToValidateMap)
+		if !isValid {
+			messages = append(messages, message)
 		}
 	}
 
 	return len(messages) == 0, messages
+}
+
+func (j *JobService) validateSingleUpstreamSchedule(ctx context.Context, subjectJob *job.Job, upstream *job.Upstream, referenceTime time.Time, jobsToValidateMap map[job.Name]*job.Job) (bool, string) {
+	if upstream.State() != job.UpstreamStateResolved {
+		return true, "upstream is not resolved"
+	}
+
+	subjectCronStr := subjectJob.Spec().Schedule().Interval()
+	if subjectCronStr == "" {
+		return true, "subject job has no schedule to validate"
+	}
+
+	subjectCron, err := cron.ParseCronSchedule(subjectCronStr)
+	if err != nil {
+		return false, fmt.Sprintf("unable to parse subject job schedule [%s]: %s", subjectCronStr, err.Error())
+	}
+
+	if subjectCron.IsSubDaily() {
+		// skip validation for sub-daily schedules
+		return true, "subject job has sub-daily schedule"
+	}
+
+	var upstreamJob *job.Job
+	// if there are any jobs included in the validation request, prefer those over fetching from repo
+	// to use the latest spec
+	if existingJob, ok := jobsToValidateMap[upstream.Name()]; ok {
+		upstreamJob = existingJob
+	} else {
+		var err error
+		upstreamJob, err = j.jobRepo.GetByJobName(ctx, upstream.ProjectName(), upstream.Name())
+		if err != nil {
+			return false, fmt.Sprintf("unable to fetch upstream job [%s]: %s", upstream.FullName(), err.Error())
+		}
+	}
+
+	upstreamCronStr := upstreamJob.Spec().Schedule().Interval()
+	if upstreamCronStr == "" {
+		return true, "upstream job has no schedule, skipping schedule validation"
+	}
+
+	upstreamCron, err := cron.ParseCronSchedule(upstreamCronStr)
+	if err != nil {
+		return false, fmt.Sprintf("unable to parse upstream job [%s] schedule [%s]: %s", upstream.FullName(), upstreamCronStr, err.Error())
+	}
+
+	if upstreamCron.IsSubDaily() {
+		return true, "upstream job has sub-daily schedule, skipping schedule validation"
+	}
+
+	nextUpstreamRun := upstreamCron.Next(referenceTime)
+	nextSubjectRun := subjectCron.Next(referenceTime)
+
+	if !nextUpstreamRun.Before(nextSubjectRun) {
+		return false, fmt.Sprintf("upstream job [%s] is scheduled with [%s] which was before subject job schedule [%s]", upstream.FullName(), upstreamCronStr, subjectCronStr)
+	}
+
+	return true, "no issue"
 }
 
 func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {

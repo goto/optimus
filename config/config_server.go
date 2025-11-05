@@ -129,6 +129,7 @@ type ResourceManagerConfigOptimus struct {
 
 type DexClientConfig struct {
 	Host         string `mapstructure:"host"`
+	AuthEmail    string `mapstructure:"auth_email"`
 	ProducerType string `mapstructure:"producer_type"`
 }
 

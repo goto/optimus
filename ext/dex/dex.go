@@ -33,6 +33,10 @@ func NewDexClient(l log.Logger, dexClientConfig *config.DexClientConfig) (*Clien
 		return nil, errors.New("dex client host is empty")
 	}
 
+	if dexClientConfig.AuthEmail == "" {
+		return nil, errors.New("dex auth email is empty")
+	}
+
 	httpClient, err := newHTTPClient(dexClientConfig.Host)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing http client: %w", err)
@@ -100,6 +104,7 @@ func (d *Client) constructGetTableStatsRequest(ctx context.Context, store, table
 		return nil, err
 	}
 	request.Header.Set("Accept", "application/json")
+	request.Header.Set("X-Auth-Email", d.config.AuthEmail)
 
 	return request, nil
 }

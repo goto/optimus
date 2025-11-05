@@ -128,9 +128,9 @@ type ResourceManagerConfigOptimus struct {
 }
 
 type DexClientConfig struct {
-	Host         string `mapstructure:"host"`
-	AuthEmail    string `mapstructure:"auth_email"`
-	ProducerType string `mapstructure:"producer_type"`
+	Host         string `mapstructure:"host" json:"host"`
+	AuthEmail    string `mapstructure:"auth_email" json:"auth_email"`
+	ProducerType string `mapstructure:"producer_type" json:"producer_type"`
 }
 
 type ReplayConfig struct {

@@ -12,6 +12,24 @@ type ClientConfigTestSuite struct {
 	suite.Suite
 }
 
+func (c *ClientConfigTestSuite) TestParsing() {
+	c.Run("should parse client config without error", func() {
+		resolver := config.UpstreamResolver{
+			Type: config.DexUpstreamResolver,
+			Config: map[string]interface{}{
+				"host":          "http://g-godata-systems-dex.golabs.io",
+				"auth_email":    "de-optimus@gojek.com",
+				"producer_type": "firehose",
+			},
+		}
+		conf, err := resolver.GetDexClientConfig()
+		c.NoError(err)
+		c.Equal("http://g-godata-systems-dex.golabs.io", conf.Host)
+		c.Equal("de-optimus@gojek.com", conf.AuthEmail)
+		c.Equal("firehose", conf.ProducerType)
+	})
+}
+
 func (c *ClientConfigTestSuite) TestGetNamespaceByName() {
 	c.Run("should return nil and error if name is not found", func() {
 		namespaceName := "namespace1"

@@ -52,6 +52,14 @@ JOB_FAIL_EVENT      = "job_fail"
 JOB_SLA_MISS_EVENT  = "job_sla_miss"
 # ---------------------------------------------------
 
+THIRD_PARTY_SENSOR_TOGGLE = "THIRD_PARTY_SENSOR_TOGGLE"
+THIRD_PARTY_BLACKLISTEDJOBS = "THIRD_PARTY_BLACKLISTEDJOBS"
+
+THIRD_PARTY_SENSOR_TOGGLE_OFF = "OFF"
+THIRD_PARTY_SENSOR_TOGGLE_SOFT = "SOFT"
+THIRD_PARTY_SENSOR_TOGGLE_ON = "ON"
+
+
 def lookup_non_standard_cron_expression(expr: str) -> str:
     expr_mapping = {
         '@yearly': '0 0 1 1 *',
@@ -336,18 +344,34 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
         self._third_party_types_supported = ["dex"]
 
     def poke(self, context):
-        self.log.info("Poking for third party upstream '{}' for identifier '{}'".format(self.third_party_type, self.identifier))
-        schedule_time = get_scheduled_at(context)
-        self.log.info("Current schedule_time: {}".format(schedule_time))
-
-        if self.third_party_type not in self._third_party_types_supported:
-            self.log.warning("third party type '{}' not supported, skipping sensor check".format(self.third_party_type))
+        sensor_toggle_val = Variable.get(THIRD_PARTY_SENSOR_TOGGLE, default_var="")
+        
+        if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_OFF:
+            self.log.info("Third party sensor is turned OFF globally, skipping the sensor check.")
+            return True
+        
+        blacklisted_jobs = Variable.get(THIRD_PARTY_BLACKLISTEDJOBS, default_var="").split(",")
+        if self.job_name in THIRD_PARTY_BLACKLISTEDJOBS:
+            self.log.info("Third party sensor is skipped for blacklisted job: '{}'".format(self.job_name))
             return True
 
-        if not self.is_upstream_data_available(schedule_time):
-            self.log.warning("upstream data not yet available for third party '{}' for identifier '{}' at schedule_time '{}', rescheduling sensor".
-                             format(self.third_party_type, self.identifier, schedule_time))
-            return False
+        if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_ON or sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
+            self.log.info("Poking for third party upstream '{}' for identifier '{}'".format(self.third_party_type, self.identifier))
+            schedule_time = get_scheduled_at(context)
+            self.log.info("Current schedule_time: {}".format(schedule_time))
+
+            if self.third_party_type not in self._third_party_types_supported:
+                self.log.warning("third party type '{}' not supported, skipping sensor check".format(self.third_party_type))
+                return True
+
+            if not self.is_upstream_data_available(schedule_time):
+                self.log.warning("upstream data not yet available for third party '{}' for identifier '{}' at schedule_time '{}', rescheduling sensor".
+                                format(self.third_party_type, self.identifier, schedule_time))
+                if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
+                    self.log.info("Third party sensor is in SOFT mode, bypassing the failure for now.")
+                    return True
+                return False
+
         return True
 
     def is_upstream_data_available(self, schedule_time) -> bool:
@@ -358,7 +382,6 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             log.info("schedule_time         : {}".format(schedule_time))
             log.info("third_party_type      : {}".format(self.third_party_type))
             log.info("identifier            : {}".format(self.identifier))
-
             if self.third_party_type == "dex":
                 api_response = self._optimus_client.execute_third_party_sensor(self.project_name, self.job_name, self.third_party_type, schedule_time, self.identifier, self.config)
                 self.log.info("job_run api response :: {}".format(api_response))

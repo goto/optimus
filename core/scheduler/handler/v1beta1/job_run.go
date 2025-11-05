@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/config"
@@ -20,6 +22,10 @@ import (
 	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
+
+var dexAPIResponse = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "dex_api_response",
+}, []string{"project", "job", "resource_urn", "status"})
 
 type JobSLAPredictorService interface {
 	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, referenceTime time.Time, scheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
@@ -157,7 +163,7 @@ func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, resourceURN resou
 		return nil, errors.GRPCErr(err, "unable to get third party sensor client")
 	}
 
-	ok, response, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
+	_, response, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
 	if err != nil {
 		h.l.Error("error checking data completeness from third party sensor: %s", err)
 		return nil, errors.GRPCErr(err, "unable to check data completeness from third party sensor")
@@ -227,9 +233,17 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 		}
 		resp, err := h.GetDexSensorStatus(ctx, resourceURN, startTime, endTime)
 		if err != nil {
-			h.l.Error("error getting third party sensor status: %s", err)
+			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, err: %s", string(projectName), string(jobName), resourceURN.String(), err.Error()))
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), "error").Inc()
 			return nil, err
 		}
+		if !resp.IsComplete {
+			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, log: %v", string(projectName), string(jobName), resourceURN.String(), resp.Log))
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), "incomplete").Inc()
+		} else {
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), "success").Inc()
+		}
+
 		return &pb.GetThirdPartySensorResponse{
 			Payload: &pb.GetThirdPartySensorResponse_DexSensorResponse{
 				DexSensorResponse: resp,

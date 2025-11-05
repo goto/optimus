@@ -387,21 +387,20 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             if self.third_party_type == "dex":
                 api_response = self._optimus_client.execute_third_party_sensor(self.project_name, self.job_name, self.third_party_type, schedule_time, self.config)
                 self.log.info("job_run api response :: {}".format(api_response))
-                print("api_response: ", api_response)
 
                 # dex specific response parsing
-                resp = api_response.get('dex_sensor_response', {})
-                if resp['is_complete']:
-                    log.info("optimus response :: {}".format(resp))
+                resp = api_response.get('dexSensorResponse', {})
+                if resp['isComplete']:
                     return True
                 return False
             else :
-                log.warn("third party type other than 'dex' detected : {}".format(self.third_party_type))
+                self.log.warn("third party type other than 'dex' detected : {}".format(self.third_party_type))
                 return False
 
         except Exception as e:
             self.log.warning("error while processing sensor :: {}".format(e))
-            raise AirflowException(e)
+            self.log.warning("bypassing sensor check due to error in processing third party sensor")
+            return True
 
 
 

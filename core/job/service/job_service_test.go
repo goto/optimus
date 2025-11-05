@@ -5331,7 +5331,6 @@ func TestJobService(t *testing.T) {
 					assert.EqualValues(t, expectedResult["jobB"], actualResult["jobB"])
 					assert.NoError(t, actualError)
 				})
-
 			})
 		})
 	})

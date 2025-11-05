@@ -582,7 +582,7 @@ func TestEntityJob(t *testing.T) {
 	})
 }
 
-func createJobWithSchedule(tnnt tenant.Tenant, name string, scheduleStr string) *job.Job {
+func createJobWithSchedule(tnnt tenant.Tenant, name, scheduleStr string) *job.Job {
 	startDate, _ := job.ScheduleDateFrom("2022-10-01")
 	jobASchedule, _ := job.NewScheduleBuilder(startDate).WithInterval(scheduleStr).Build()
 

@@ -52,6 +52,14 @@ JOB_FAIL_EVENT      = "job_fail"
 JOB_SLA_MISS_EVENT  = "job_sla_miss"
 # ---------------------------------------------------
 
+THIRD_PARTY_SENSOR_TOGGLE = "THIRD_PARTY_SENSOR_TOGGLE"
+THIRD_PARTY_BLACKLISTEDJOBS = "THIRD_PARTY_BLACKLISTEDJOBS"
+
+THIRD_PARTY_SENSOR_TOGGLE_OFF = "OFF"
+THIRD_PARTY_SENSOR_TOGGLE_SOFT = "SOFT"
+THIRD_PARTY_SENSOR_TOGGLE_ON = "ON"
+
+
 def lookup_non_standard_cron_expression(expr: str) -> str:
     expr_mapping = {
         '@yearly': '0 0 1 1 *',
@@ -158,15 +166,22 @@ class OptimusAPIClient:
         self._raise_error_if_request_failed(response)
         return response.json()
 
-    def execute_third_party_sensor(self, project_name: str, job_name: str, start_date: str, end_date: str, store: str, identifier: str, third_party_type: str) -> dict:
+    def execute_third_party_sensor(self, project_name: str, job_name: str, third_party_type: str, scheduled_at: str, config: dict) -> dict:
         url = '{optimus_host}/api/v1beta1/project/{optimus_project}/job/{optimus_job}/third-party-sensor'.format(
             optimus_host=self.host,
             optimus_project=project_name,
             optimus_job=job_name
         )
-        log.info("Executing third party sensor for project:{}, job:{}, identifier:{}, third_party_type:{}, start_date:{}, end_date:{}".
-                  format(project_name, job_name, identifier, third_party_type, start_date, end_date))
-        response = requests.put(url, json={'third_party_type': third_party_type,'dex_sensor_request': {'from': start_date,'to': end_date,'table_name': identifier,'store': store}},
+        log.info("Executing third party sensor for project_name: {}, job_name: {}, third_party_type: {}, scheduled_at: {}".format(project_name, job_name, third_party_type, scheduled_at))
+        payload = {'scheduled_at': scheduled_at, 'third_party_type': third_party_type}
+
+        if third_party_type == 'dex':
+            resource_urn = config.get('resource_urn', "")
+            payload['dex_sensor_request'] = {
+                'resource_urn': resource_urn,
+            }
+
+        response = requests.put(url, json=payload,
                                 timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
         log.info("Request Body: {}".format(response.request))
@@ -326,75 +341,67 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
         self.identifier = identifier
         self.config = config
         self._optimus_client = OptimusAPIClient(optimus_hostname)
+        self._third_party_types_supported = ["dex"]
 
     def poke(self, context):
-        # TODO: call to optimus api to check third party upstream status,
-        # given schedule_time, _optimus_client, third_party_type, and identifier
-        # start_date and end_date can be derived from schedule_time inside optimus server
-        self.log.info("Poking for third party upstream '{}' for identifier '{}'".format(self.third_party_type, self.identifier))
-        schedule_time = get_scheduled_at(context)
-        self.log.info("Current schedule_time: {}".format(schedule_time))
+        sensor_toggle_val = Variable.get(THIRD_PARTY_SENSOR_TOGGLE, default_var="")
 
-        # last_upstream_schedule_time, _ = self.get_last_upstream_times(schedule_time, upstream_schedule)
+        if self.third_party_type not in self._third_party_types_supported:
+            self.log.warning("third party type '{}' not supported, skipping sensor check".format(self.third_party_type))
+            return True
+        
+        if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_OFF:
+            self.log.info("Third party sensor is turned OFF globally, skipping the sensor check.")
+            return True
+        
+        blacklisted_jobs = Variable.get(THIRD_PARTY_BLACKLISTEDJOBS, default_var="").split(",")
+        if self.job_name in blacklisted_jobs:
+            self.log.info("Third party sensor is skipped for blacklisted job: '{}'".format(self.job_name))
+            return True
 
-        # get schedule window
-        task_window = JobSpecTaskWindow(self._optimus_client, self.project_name, self.job_name)
-        schedule_time_window_start, schedule_time_window_end = task_window.get(
-            schedule_time.strftime(TIMESTAMP_FORMAT))
+        if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_ON or sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
+            self.log.info("Poking for third party upstream '{}'".format(self.third_party_type))
+            schedule_time = get_scheduled_at(context)
+            self.log.info("Current schedule_time: {}".format(schedule_time))
 
-        self.log.info("waiting for data readiness between: {} - {} schedule times of airflow dag run".format(
-            schedule_time_window_start, schedule_time_window_end))
+            is_available = self.is_upstream_data_available(schedule_time)
 
-        if not self.is_upstream_data_available(schedule_time_window_start, schedule_time_window_end):
-            self.log.warning("data not ready for upstream '{}': '{}' in "
-                             "dated between {} and {}(inclusive), rescheduling sensor".
-                             format(self.third_party_type, self.identifier, schedule_time_window_start,
-                                    schedule_time_window_end))
-            return False
+            if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
+                self.log.info("Third party sensor is in SOFT mode, bypassing the failure for now.")
+                return True
+
+            if not is_available:
+                self.log.warning("upstream data not yet available for third party '{}' at schedule_time '{}', rescheduling sensor".
+                                format(self.third_party_type, schedule_time))
+                return False
+
         return True
 
-    def get_last_upstream_times(self, schedule_time_of_current_job, upstream_schedule_interval):
-        second_ahead_of_schedule_time = schedule_time_of_current_job + timedelta(seconds=1)
-        c = croniter(upstream_schedule_interval, second_ahead_of_schedule_time)
-        last_upstream_schedule_time = c.get_prev(datetime)
-        last_upstream_execution_date = c.get_prev(datetime)
-        return last_upstream_schedule_time, last_upstream_execution_date
-
-    def is_upstream_data_available(self, schedule_time_window_start, schedule_time_window_end) -> bool:
+    def is_upstream_data_available(self, schedule_time) -> bool:
         try:
             log.info("logging parameters ")
             log.info("project_name          : {}".format(self.project_name))
             log.info("job_name              : {}".format(self.job_name))
+            log.info("schedule_time         : {}".format(schedule_time))
             log.info("third_party_type      : {}".format(self.third_party_type))
-            log.info("identifier            : {}".format(self.identifier))
-            log.info("config                : {}".format(self.config))
-            store = ""
             if self.third_party_type == "dex":
-                store = self.config.get("store", "")
-                log.info("store                 : {}".format(store))
+                api_response = self._optimus_client.execute_third_party_sensor(self.project_name, self.job_name, self.third_party_type, schedule_time, self.config)
+                self.log.info("job_run api response :: {}".format(api_response))
+                print("api_response: ", api_response)
+
+                # dex specific response parsing
+                resp = api_response.get('dex_sensor_response', {})
+                if resp['is_complete']:
+                    log.info("optimus response :: {}".format(resp))
+                    return True
+                return False
             else :
                 log.warn("third party type other than 'dex' detected : {}".format(self.third_party_type))
-            api_response = self._optimus_client.execute_third_party_sensor(
-                self.project_name, self.job_name,
-                schedule_time_window_start.strftime(TIMESTAMP_FORMAT), schedule_time_window_end.strftime(TIMESTAMP_FORMAT),
-                store, self.identifier, self.third_party_type)
-            self.log.info("job_run api response :: {}".format(api_response))
-            print("api_response: ",api_response)
-
-            resp = api_response.get('dexSensorResponse', {})
-            if resp['isComplete'] == True:
-                log.info("optimus response :: {}".format(resp))
-                return True
-
-            for dateBreakdown in resp['log']:
-                if dateBreakdown['isComplete'] != True:
-                    self.log.info("failed for date :: {}".format(dateBreakdown))
-                    return False
+                return False
 
         except Exception as e:
             self.log.warning("error while processing sensor :: {}".format(e))
             raise AirflowException(e)
-        return True
 
 
 

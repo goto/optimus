@@ -329,6 +329,10 @@
                 "thirdPartyType": {
                   "type": "string"
                 },
+                "scheduledAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
                 "dexSensorRequest": {
                   "$ref": "#/definitions/v1beta1DexSensorRequest"
                 }
@@ -648,19 +652,8 @@
     "v1beta1DexSensorRequest": {
       "type": "object",
       "properties": {
-        "store": {
+        "resourceUrn": {
           "type": "string"
-        },
-        "tableName": {
-          "type": "string"
-        },
-        "from": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "to": {
-          "type": "string",
-          "format": "date-time"
         }
       }
     },

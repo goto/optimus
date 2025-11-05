@@ -1835,8 +1835,7 @@ func (j *JobService) validateScheduleWithUpstreams(ctx context.Context, subjectJ
 	}
 
 	// this reference time is used as a base time to calculate next schedule time
-	refTimeForSchedule := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0,
-		j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)
+	refTimeForSchedule := time.Now().In(j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)
 
 	messages := []string{}
 	for _, upstream := range upstreams {

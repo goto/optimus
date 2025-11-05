@@ -194,10 +194,12 @@ func (j *Job) IsScheduledAfter(otherJob *Job, referenceTime time.Time) (bool, st
 	otherNextSchedule := otherJobCron.Next(referenceTime)
 
 	if subjectNextSchedule.Before(otherNextSchedule) {
-		return false, fmt.Sprintf("current job [%s] is scheduled before job %s [%s]", subjectCronStr, otherJob.FullName(), otherCronStr)
+		return false, fmt.Sprintf("current job [%s] is scheduled before job %s [%s]",
+			subjectCronStr, otherJob.FullName(), otherCronStr)
 	}
 
-	return true, fmt.Sprintf("current job [%s] is scheduled equal or after job %s [%s]", subjectCronStr, otherJob.FullName(), otherCronStr)
+	return true, fmt.Sprintf("current job [%s] is scheduled equal or after job %s [%s]",
+		subjectCronStr, otherJob.FullName(), otherCronStr)
 }
 
 type ChangeType string

@@ -5021,7 +5021,7 @@ func TestJobService(t *testing.T) {
 							{
 								Stage: "upstream validation",
 								Messages: []string{
-									"failed schedule validation with upstream [test-proj/jobB]: current job [0 2 * * *] is scheduled before job test-proj/jobB [0 3 * * *]",
+									"failed schedule validation with upstream [test-proj/jobB, reference timezone UTC]: current job [0 2 * * *] is scheduled before job test-proj/jobB [0 3 * * *]",
 								},
 								Success: false,
 							},
@@ -5283,7 +5283,7 @@ func TestJobService(t *testing.T) {
 							},
 							{
 								Stage:    "upstream validation",
-								Messages: []string{"failed schedule validation with upstream [test-proj/jobB]: current job [0 2 * * *] is scheduled before job test-proj/jobB [0 4 * * *]"},
+								Messages: []string{"failed schedule validation with upstream [test-proj/jobB, reference timezone UTC]: current job [0 2 * * *] is scheduled before job test-proj/jobB [0 4 * * *]"},
 								Success:  false,
 							},
 						},

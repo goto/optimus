@@ -1868,7 +1868,8 @@ func (j *JobService) validateSingleUpstreamSchedule(ctx context.Context, subject
 
 	isSubjectScheduleValid, message := subjectJob.IsScheduledAfter(upstreamJob, referenceTime)
 	if !isSubjectScheduleValid {
-		return false, fmt.Sprintf("failed schedule validation with upstream [%s]: %s", upstreamJob.FullName(), message)
+		return false, fmt.Sprintf("failed schedule validation with upstream [%s, reference timezone %s]: %s",
+			upstreamJob.FullName(), referenceTime.Location().String(), message)
 	}
 
 	return true, "no issue"

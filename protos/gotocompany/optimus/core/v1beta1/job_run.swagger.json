@@ -333,9 +333,6 @@
                   "type": "string",
                   "format": "date-time"
                 },
-                "identifier": {
-                  "type": "string"
-                },
                 "dexSensorRequest": {
                   "$ref": "#/definitions/v1beta1DexSensorRequest"
                 }

@@ -163,7 +163,7 @@ func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, resourceURN resou
 		return nil, errors.GRPCErr(err, "unable to get third party sensor client")
 	}
 
-	_, response, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
+	isComplete, response, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
 	if err != nil {
 		h.l.Error("error checking data completeness from third party sensor: %s", err)
 		return nil, errors.GRPCErr(err, "unable to check data completeness from third party sensor")
@@ -183,7 +183,7 @@ func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, resourceURN resou
 	}
 
 	return &pb.DexSensorResponse{
-		IsComplete: ok,
+		IsComplete: isComplete,
 		Log:        dataCompleteness,
 	}, nil
 }

@@ -71,17 +71,17 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	thirdPartyUpstreams := []*job.ThirdPartyUpstream{}
 	for _, unresolvedUpstream := range jobWithUpstream.GetUnresolvedUpstreams() {
 		// segregate DEX managed upstreams and non-DEX managed upstreams
-		if isDEXManaged, err := u.dexClient.IsManaged(ctx, unresolvedUpstream.Resource()); err != nil {
-			err = fmt.Errorf("failed to check dex management for resource urn %s: %w", unresolvedUpstream.Resource().String(), err)
-			me.Append(err)
-		} else if isDEXManaged {
+		if isDEXManaged, err := u.dexClient.IsManaged(ctx, unresolvedUpstream.Resource()); err == nil && isDEXManaged {
 			cfg := map[string]string{}
 			cfg["resource_urn"] = unresolvedUpstream.Resource().String()
 			resolvedUpstream := job.NewThirdPartyUpstream(config.DexUpstreamResolver.String(), unresolvedUpstream.Resource().GetName(), cfg)
 			thirdPartyUpstreams = append(thirdPartyUpstreams, resolvedUpstream)
-		} else {
-			unresolvedUpstreams = append(unresolvedUpstreams, unresolvedUpstream)
+			continue
+		} else if err != nil {
+			err = fmt.Errorf("failed to check dex management for resource urn %s: %w", unresolvedUpstream.Resource().String(), err)
+			me.Append(err)
 		}
+		unresolvedUpstreams = append(unresolvedUpstreams, unresolvedUpstream)
 	}
 
 	upstreams := []*job.Upstream{}

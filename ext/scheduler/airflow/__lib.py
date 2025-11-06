@@ -368,6 +368,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
 
             if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
                 self.log.info("Third party sensor is in SOFT mode, bypassing the failure for now.")
+                self.log.info("sensor status if sensor was not in SOFT mode. [Success: {}]".format(is_available))
                 return True
 
             if not is_available:

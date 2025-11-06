@@ -11,6 +11,7 @@ import (
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils"
 	"github.com/goto/optimus/internal/writer"
 )
 
@@ -48,7 +49,7 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	}
 	if val, err := details.GetConfig(tenant.ProjectDexThirdPartySensor); err != nil {
 		return nil, fmt.Errorf("failed to get dex 3rd party sensor config for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)
-	} else if val != "true" {
+	} else if !utils.ConvertToBoolean(val) {
 		// skip DEX upstream resolution if dex 3rd party sensor is not enabled for the tenant
 		return jobWithUpstream, nil
 	}

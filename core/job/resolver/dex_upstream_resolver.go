@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/goto/salt/log"
+	"github.com/kushsharma/parallel"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
@@ -29,18 +30,28 @@ func NewDexUpstreamResolver(l log.Logger, client service.ThirdPartyClient, tenan
 	}
 }
 
-func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error) {
+func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstream []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error) {
 	me := errors.NewMultiError("dex 3rd party upstream bulk resolution errors")
-	jobsWithUpstreamsResolved := []*job.WithUpstream{}
-	for _, jobWithUpstream := range jobsWithUpstreams {
-		jobWithUpstreamsResolved, err := u.Resolve(ctx, jobWithUpstream, lw)
-		if err != nil {
-			me.Append(err)
-		}
-		jobsWithUpstreamsResolved = append(jobsWithUpstreamsResolved, jobWithUpstreamsResolved)
+
+	var jobsWithAllUpstream []*job.WithUpstream
+	runner := parallel.NewRunner(parallel.WithTicket(ConcurrentTicketPerSec), parallel.WithLimit(ConcurrentLimit))
+	for _, jobWithUpstream := range jobsWithUpstream {
+		runner.Add(func(currentJobWithUpstream *job.WithUpstream, lw writer.LogWriter) func() (interface{}, error) {
+			return func() (interface{}, error) {
+				return u.Resolve(ctx, currentJobWithUpstream, lw)
+			}
+		}(jobWithUpstream, lw))
 	}
 
-	return jobsWithUpstreamsResolved, me.ToErr()
+	for _, result := range runner.Run() {
+		if result.Val != nil {
+			specVal := result.Val.(*job.WithUpstream)
+			jobsWithAllUpstream = append(jobsWithAllUpstream, specVal)
+		}
+		me.Append(result.Err)
+	}
+
+	return jobsWithAllUpstream, me.ToErr()
 }
 
 func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error) {

@@ -30,55 +30,55 @@ func NewDexUpstreamResolver(l log.Logger, client service.ThirdPartyClient, tenan
 }
 
 func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstreams []*job.WithUpstream, lw writer.LogWriter) ([]*job.WithUpstream, error) {
+	me := errors.NewMultiError("dex 3rd party upstream bulk resolution errors")
 	jobsWithUpstreamsResolved := []*job.WithUpstream{}
 	for _, jobWithUpstream := range jobsWithUpstreams {
 		jobWithUpstreamsResolved, err := u.Resolve(ctx, jobWithUpstream, lw)
 		if err != nil {
-			return nil, err
+			me.Append(err)
 		}
 		jobsWithUpstreamsResolved = append(jobsWithUpstreamsResolved, jobWithUpstreamsResolved)
 	}
 
-	return jobsWithUpstreamsResolved, nil
+	return jobsWithUpstreamsResolved, me.ToErr()
 }
 
 func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error) {
 	details, err := u.tenantDetailsGetter.GetDetails(ctx, jobWithUpstream.Job().Tenant())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get tenant details for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)
+		return jobWithUpstream, fmt.Errorf("failed to get tenant details for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)
 	}
 	if val, err := details.GetConfig(tenant.ProjectDexThirdPartySensor); err != nil {
-		return nil, fmt.Errorf("failed to get dex 3rd party sensor config for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)
+		return jobWithUpstream, fmt.Errorf("failed to get dex 3rd party sensor config for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)
 	} else if !utils.ConvertToBoolean(val) {
 		// skip DEX upstream resolution if dex 3rd party sensor is not enabled for the tenant
 		return jobWithUpstream, nil
 	}
 
 	me := errors.NewMultiError(fmt.Sprintf("[%s] dex 3rd upstream resolution errors for job %s", jobWithUpstream.Job().Tenant().NamespaceName().String(), jobWithUpstream.Name().String()))
-	upstreams := []*job.Upstream{}
+	unresolvedUpstreams := []*job.Upstream{}
 	thirdPartyUpstreams := []*job.ThirdPartyUpstream{}
-	for _, upstream := range jobWithUpstream.Upstreams() {
-		// only resolve unresolved upstreams
-		if upstream.IsState(job.UpstreamStateUnresolved) {
-			// segregate DEX managed upstreams and non-DEX managed upstreams
-			if isDEXManaged, err := u.dexClient.IsManaged(ctx, upstream.Resource()); err != nil {
-				me.Append(errors.InternalError("dex_upstream_resolver", fmt.Sprintf("failed to check if resource %s is DEX managed", upstream.Resource().String()), err))
-			} else if isDEXManaged {
-				cfg := map[string]string{}
-				cfg["resource_urn"] = upstream.Resource().String()
-				resolvedUpstream := job.NewThirdPartyUpstream(config.DexUpstreamResolver.String(), upstream.Resource().GetName(), cfg)
-				thirdPartyUpstreams = append(thirdPartyUpstreams, resolvedUpstream)
-			}
-			continue
+	for _, unresolvedUpstream := range jobWithUpstream.GetUnresolvedUpstreams() {
+		// segregate DEX managed upstreams and non-DEX managed upstreams
+		if isDEXManaged, err := u.dexClient.IsManaged(ctx, unresolvedUpstream.Resource()); err != nil {
+			me.Append(err)
+		} else if isDEXManaged {
+			cfg := map[string]string{}
+			cfg["resource_urn"] = unresolvedUpstream.Resource().String()
+			resolvedUpstream := job.NewThirdPartyUpstream(config.DexUpstreamResolver.String(), unresolvedUpstream.Resource().GetName(), cfg)
+			thirdPartyUpstreams = append(thirdPartyUpstreams, resolvedUpstream)
+		} else {
+			unresolvedUpstreams = append(unresolvedUpstreams, unresolvedUpstream)
 		}
-		upstreams = append(upstreams, upstream)
 	}
+
+	upstreams := []*job.Upstream{}
+	upstreams = append(upstreams, jobWithUpstream.GetResolvedUpstreams()...)
+	upstreams = append(upstreams, unresolvedUpstreams...)
 
 	if len(me.Errors) > 0 {
 		lw.Write(writer.LogLevelError, me.ToErr().Error())
-		u.l.Error(me.ToErr().Error())
-		return jobWithUpstream, nil
 	}
 
-	return job.NewWithUpstreamAndThirdPartyUpstreams(jobWithUpstream.Job(), upstreams, thirdPartyUpstreams), nil
+	return job.NewWithUpstreamAndThirdPartyUpstreams(jobWithUpstream.Job(), upstreams, thirdPartyUpstreams), me.ToErr()
 }

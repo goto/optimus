@@ -72,6 +72,7 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	for _, unresolvedUpstream := range jobWithUpstream.GetUnresolvedUpstreams() {
 		// segregate DEX managed upstreams and non-DEX managed upstreams
 		if isDEXManaged, err := u.dexClient.IsManaged(ctx, unresolvedUpstream.Resource()); err != nil {
+			err = fmt.Errorf("failed to check dex management for resource urn %s: %w", unresolvedUpstream.Resource().String(), err)
 			me.Append(err)
 		} else if isDEXManaged {
 			cfg := map[string]string{}

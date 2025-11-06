@@ -41,7 +41,7 @@ type SLAPredictorRepository interface {
 type JobState struct {
 	JobSLAState
 	JobName       scheduler.JobName
-	ScheduledAt   time.Time
+	JobRun        scheduler.JobRunSummary
 	Tenant        tenant.Tenant
 	RelativeLevel int
 	Status        SLABreachCause
@@ -359,14 +359,14 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 		isPotentialBreach := false
 		for _, jobRun := range job.JobRuns {
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
-			if (referenceTime.After(inferredSLA) && jobRun.JobEndTime == nil) || (jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
+			if (referenceTime.After(inferredSLA) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 				// found a job that might breach its SLA
 				potentialBreachPaths = append(potentialBreachPaths, paths)
 				// add to jobStateByName
 				jobStateByName[job.JobName] = &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],
 					JobName:       job.JobName,
-					ScheduledAt:   jobRun.ScheduledAt,
+					JobRun:        *jobRun,
 					Tenant:        job.Tenant,
 					RelativeLevel: jobWithState.level,
 					Status:        SLABreachCauseRunningLate,
@@ -376,14 +376,14 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 			}
 
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
-			if referenceTime.After(inferredSLA.Add(-estimatedDuration)) && (jobRun == nil || jobRun.TaskStartTime == nil) {
+			if referenceTime.After(inferredSLA.Add(-estimatedDuration)) && (jobRun != nil && jobRun.TaskStartTime == nil) {
 				// found a job that might breach its SLA
 				potentialBreachPaths = append(potentialBreachPaths, paths)
 				// add to jobStateByName
 				jobStateByName[job.JobName] = &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],
 					JobName:       job.JobName,
-					ScheduledAt:   jobRun.ScheduledAt,
+					JobRun:        *jobRun,
 					Tenant:        job.Tenant,
 					RelativeLevel: jobWithState.level,
 					Status:        SLABreachCauseNotStarted,

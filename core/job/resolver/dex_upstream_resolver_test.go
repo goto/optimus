@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goto/salt/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/job/resolver"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/models"
-
-	"github.com/goto/salt/log"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 func TestDexUpstreamResolver_Resolve(t *testing.T) {
@@ -108,7 +108,6 @@ func TestDexUpstreamResolver_Resolve(t *testing.T) {
 	})
 
 	t.Run("returns original job if dex sensor is disabled", func(t *testing.T) {
-
 		logger := log.NewNoop()
 
 		unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred(resourceURNC)
@@ -145,11 +144,9 @@ func TestDexUpstreamResolver_Resolve(t *testing.T) {
 		assert.Len(t, result.Upstreams(), 2)
 		assert.Len(t, result.GetResolvedUpstreams(), 1)
 		assert.Len(t, result.GetUnresolvedUpstreams(), 1)
-
 	})
 
 	t.Run("adds third party upstream if dex manages the resource", func(t *testing.T) {
-
 		logger := log.NewNoop()
 
 		unresolvedUpstreamC := job.NewUpstreamUnresolvedInferred(resourceURNC)
@@ -265,7 +262,6 @@ func TestDexUpstreamResolver_Resolve(t *testing.T) {
 		assert.Len(t, result.GetResolvedUpstreams(), 1)
 		assert.Len(t, result.GetUnresolvedUpstreams(), 1)
 	})
-
 }
 
 type mockThirdPartyClient struct {
@@ -279,7 +275,7 @@ func (m *mockThirdPartyClient) IsManaged(ctx context.Context, resourceURN resour
 
 func (m *mockThirdPartyClient) IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, interface{}, error) {
 	args := m.Called(ctx, resourceURN, dateFrom, dateTo)
-	return args.Bool(0), args.Get(1).(any), args.Error(2)
+	return args.Bool(0), args.Get(1), args.Error(2)
 }
 
 type mockTenantDetailsGetter struct {
@@ -292,13 +288,4 @@ func (m *mockTenantDetailsGetter) GetDetails(ctx context.Context, t tenant.Tenan
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*tenant.WithDetails), args.Error(1)
-}
-
-type mockTenantDetails struct {
-	mock.Mock
-}
-
-func (m *mockTenantDetails) GetConfig(key string) (string, error) {
-	args := m.Called(key)
-	return args.String(0), args.Error(1)
 }

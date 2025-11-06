@@ -11,6 +11,7 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/cron"
 )
 
 const (
@@ -160,6 +161,45 @@ func (j *Job) GetStaticUpstreamsToResolve() ([]*Upstream, error) {
 		unresolvedStaticUpstreams = append(unresolvedStaticUpstreams, NewUpstreamUnresolvedStatic(jobUpstreamName, projectUpstreamName))
 	}
 	return unresolvedStaticUpstreams, me.ToErr()
+}
+
+func (j *Job) IsScheduledAfter(otherJob *Job, referenceTime time.Time) (bool, string) {
+	subjectCronStr := j.spec.Schedule().Interval()
+	otherCronStr := otherJob.spec.Schedule().Interval()
+
+	if subjectCronStr == "" {
+		return true, "current job interval is empty"
+	}
+	if otherCronStr == "" {
+		return true, "other job interval is empty"
+	}
+
+	subjectJobCron, err := cron.ParseCronSchedule(subjectCronStr)
+	if err != nil {
+		return false, fmt.Sprintf("failed to parse current job schedule %s: %v", subjectCronStr, err)
+	}
+	if subjectJobCron.IsSubDaily() {
+		return true, fmt.Sprintf("current job has sub-daily schedule [%s]", subjectCronStr)
+	}
+
+	otherJobCron, err := cron.ParseCronSchedule(otherCronStr)
+	if err != nil {
+		return false, fmt.Sprintf("failed to parse other job schedule %s: %v", otherCronStr, err)
+	}
+	if otherJobCron.IsSubDaily() {
+		return true, fmt.Sprintf("other job has sub-daily schedule [%s]", otherCronStr)
+	}
+
+	subjectNextSchedule := subjectJobCron.Next(referenceTime)
+	otherNextSchedule := otherJobCron.Next(referenceTime)
+
+	if subjectNextSchedule.Before(otherNextSchedule) {
+		return false, fmt.Sprintf("current job [%s] is scheduled before job %s [%s]",
+			subjectCronStr, otherJob.FullName(), otherCronStr)
+	}
+
+	return true, fmt.Sprintf("current job [%s] is scheduled equal or after job %s [%s]",
+		subjectCronStr, otherJob.FullName(), otherCronStr)
 }
 
 type ChangeType string

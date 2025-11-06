@@ -396,11 +396,23 @@ func (s *OptimusServer) setupHandlers() error {
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
+
+	// parse config for validations
+	validateConfig := jService.JobValidateConfig{}
+	if s.conf.JobValidationConfig.ValidateSchedule.ReferenceTimezone != "" {
+		refTimezone, err := time.LoadLocation(s.conf.JobValidationConfig.ValidateSchedule.ReferenceTimezone)
+		if err != nil {
+			return err
+		}
+		validateConfig.ValidateSchedule.ReferenceTimezone = refTimezone
+	}
+
 	jJobService := jService.NewJobService(
 		jJobRepo, jJobRepo, jJobRepo,
 		pluginService, jUpstreamResolver, tenantService,
 		s.eventHandler, s.logger, newJobRunService, newEngine,
 		jobInputCompiler, secondaryResourceService, alertsHandler,
+		validateConfig,
 	)
 
 	jobWorker := jService.NewJobWorker(s.logger, jJobRepo, newJobRunService)

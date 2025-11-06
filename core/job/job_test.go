@@ -2,6 +2,7 @@ package job_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -508,4 +509,102 @@ func TestEntityJob(t *testing.T) {
 			assert.ElementsMatch(t, deduplicated, []*job.Job{jobA, jobB})
 		})
 	})
+
+	t.Run("IsScheduledAfter", func(t *testing.T) {
+		type testCase struct {
+			name            string
+			scheduleSubject string
+			scheduleOther   string
+			referenceTime   time.Time
+			expectedIsAfter bool
+			expectedMessage string
+		}
+		testCases := []testCase{
+			{
+				name:            "scheduleSubject is after scheduleOther",
+				scheduleSubject: "0 2 * * *",
+				scheduleOther:   "0 1 * * *",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "current job [0 2 * * *] is scheduled equal or after job test-proj/other_job [0 1 * * *]",
+			},
+			{
+				name:            "scheduleSubject is before scheduleOther",
+				scheduleSubject: "0 1 * * *",
+				scheduleOther:   "0 2 * * *",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: false,
+				expectedMessage: "current job [0 1 * * *] is scheduled before job test-proj/other_job [0 2 * * *]",
+			},
+			{
+				name:            "scheduleSubject is equal to scheduleOther",
+				scheduleSubject: "0 1 * * *",
+				scheduleOther:   "0 1 * * *",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "current job [0 1 * * *] is scheduled equal or after job test-proj/other_job [0 1 * * *]",
+			},
+			{
+				name:            "scheduleSubject does not have any schedule",
+				scheduleSubject: "",
+				scheduleOther:   "0 1 * * *",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "current job interval is empty",
+			},
+			{
+				name:            "scheduleOther does not have any schedule",
+				scheduleSubject: "0 1 * * *",
+				scheduleOther:   "",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "other job interval is empty",
+			},
+			{
+				name:            "scheduleSubject is scheduled hourly",
+				scheduleSubject: "0 * * * *",
+				scheduleOther:   "0 12 * * *",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "current job has sub-daily schedule [0 * * * *]",
+			},
+		}
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				jobA := createJobWithSchedule(sampleTenant, "subject_job", tc.scheduleSubject)
+				jobB := createJobWithSchedule(sampleTenant, "other_job", tc.scheduleOther)
+
+				isAfter, message := jobA.IsScheduledAfter(jobB, tc.referenceTime)
+				assert.Equal(t, tc.expectedIsAfter, isAfter)
+				assert.Equal(t, tc.expectedMessage, message)
+			})
+		}
+	})
+}
+
+func createJobWithSchedule(tnnt tenant.Tenant, name, scheduleStr string) *job.Job {
+	startDate, _ := job.ScheduleDateFrom("2022-10-01")
+	jobASchedule, _ := job.NewScheduleBuilder(startDate).WithInterval(scheduleStr).Build()
+
+	jobVersion := 1
+	w, _ := models.NewWindow(jobVersion, "d", "24h", "24h")
+	taskName, _ := job.TaskNameFrom("bq2bq")
+	jobWindow := window.NewCustomConfig(w)
+	jobTaskConfig, _ := job.ConfigFrom(map[string]string{
+		"sample_task_key":    "sample_value",
+		"BQ_SERVICE_ACCOUNT": "service_account",
+	})
+	jobTask := job.NewTask(taskName, jobTaskConfig, "", nil)
+	jobAsset := job.Asset(map[string]string{
+		"query.sql": "select * from `project.dataset.sample`",
+	})
+
+	jobSpec, _ := job.NewSpecBuilder(1, job.Name(name), "optimus@goto", jobASchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+
+	resourceURNA, _ := resource.ParseURN("bigquery://project:dataset.tableA")
+	resourceURNB, _ := resource.ParseURN("bigquery://project:dataset.tableB")
+
+	j := job.NewJob(tnnt, jobSpec, resourceURNA, []resource.URN{resourceURNB}, false)
+
+	return j
 }

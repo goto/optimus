@@ -1,16 +1,17 @@
 package dto
 
 const (
-	StageCyclicValidation      ValidateStage = "cyclic validation"
-	StageDeletionValidation    ValidateStage = "validation for deletion"
-	StageDestinationValidation ValidateStage = "destination validation"
-	StagePreparation           ValidateStage = "validation preparation"
-	StageRunCompileValidation  ValidateStage = "compile validation for run"
-	StageSourceValidation      ValidateStage = "source validation"
-	StageTenantValidation      ValidateStage = "tenant validation"
-	StageUpstreamValidation    ValidateStage = "upstream validation"
-	StageWindowValidation      ValidateStage = "window validation"
-	StagePluginValidation      ValidateStage = "plugin validation"
+	StageCyclicValidation           ValidateStage = "cyclic validation"
+	StageDeletionValidation         ValidateStage = "validation for deletion"
+	StageDestinationValidation      ValidateStage = "destination validation"
+	StagePreparation                ValidateStage = "validation preparation"
+	StageRunCompileValidation       ValidateStage = "compile validation for run"
+	StageSourceValidation           ValidateStage = "source validation"
+	StageTenantValidation           ValidateStage = "tenant validation"
+	StageUpstreamValidation         ValidateStage = "upstream validation"
+	StageWindowValidation           ValidateStage = "window validation"
+	StagePluginValidation           ValidateStage = "plugin validation"
+	StageUpstreamScheduleValidation ValidateStage = "upstream schedule validation"
 )
 
 type ValidateStage string

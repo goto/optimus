@@ -385,6 +385,7 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 			upstreamStatus = append(upstreamStatus, &pb.UpstreamJobStatus{
 				ProjectName:     upstreamJobState.Tenant.ProjectName().String(),
 				JobName:         upstreamJobName.String(),
+				ScheduledAt:     timestamppb.New(upstreamJobState.ScheduledAt),
 				InferredSlaTime: timestamppb.New(*upstreamJobState.InferredSLA),
 				RelativeLevel:   int32(upstreamJobState.RelativeLevel),
 				Status:          string(upstreamJobState.Status),

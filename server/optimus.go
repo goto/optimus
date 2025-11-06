@@ -395,16 +395,30 @@ func (s *OptimusServer) setupHandlers() error {
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
+
 	jUpstreamResolvers, err := jResolver.NewThirdPartyUpstreamResolvers(s.logger, tenantService, s.conf.UpstreamResolvers...)
 	if err != nil {
 		return err
 	}
+
 	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver, jUpstreamResolvers...)
+
+	// parse config for validations
+	validateConfig := jService.JobValidateConfig{}
+	if s.conf.JobValidationConfig.ValidateSchedule.ReferenceTimezone != "" {
+		refTimezone, err := time.LoadLocation(s.conf.JobValidationConfig.ValidateSchedule.ReferenceTimezone)
+		if err != nil {
+			return err
+		}
+		validateConfig.ValidateSchedule.ReferenceTimezone = refTimezone
+	}
+
 	jJobService := jService.NewJobService(
 		jJobRepo, jJobRepo, jJobRepo,
 		pluginService, jUpstreamResolver, tenantService,
 		s.eventHandler, s.logger, newJobRunService, newEngine,
 		jobInputCompiler, secondaryResourceService, alertsHandler,
+		validateConfig,
 	)
 
 	jobWorker := jService.NewJobWorker(s.logger, jJobRepo, newJobRunService)

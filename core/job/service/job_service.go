@@ -35,6 +35,14 @@ const (
 	projectConfigPrefix = "GLOBAL__"
 )
 
+type JobValidateConfig struct {
+	ValidateSchedule ValidateScheduleConfig
+}
+
+type ValidateScheduleConfig struct {
+	ReferenceTimezone *time.Location
+}
+
 type JobService struct {
 	jobRepo        JobRepository
 	upstreamRepo   UpstreamRepository
@@ -54,6 +62,8 @@ type JobService struct {
 	jobRunInputCompiler JobRunInputCompiler
 	resourceChecker     ResourceExistenceChecker
 
+	jobValidateConfig JobValidateConfig
+
 	logger log.Logger
 }
 
@@ -67,7 +77,7 @@ func NewJobService(
 	tenantDetailsGetter TenantDetailsGetter, eventHandler EventHandler, logger log.Logger,
 	jobDeploymentService JobDeploymentService, engine Engine,
 	jobInputCompiler JobRunInputCompiler, resourceChecker ResourceExistenceChecker,
-	alertHandler AlertManager,
+	alertHandler AlertManager, validateConfig JobValidateConfig,
 ) *JobService {
 	return &JobService{
 		jobRepo:              jobRepo,
@@ -83,6 +93,7 @@ func NewJobService(
 		jobRunInputCompiler:  jobInputCompiler,
 		resourceChecker:      resourceChecker,
 		alertHandler:         alertHandler,
+		jobValidateConfig:    validateConfig,
 	}
 }
 
@@ -1629,15 +1640,20 @@ func (*JobService) validateTenantOnEachJob(rootTnnt tenant.Tenant, jobsToValidat
 }
 
 func (j *JobService) validateJobs(ctx context.Context, tenantDetails *tenant.WithDetails, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+	jobsToValidateMap := make(map[job.Name]*job.Job)
+	for _, job := range jobsToValidate {
+		jobsToValidateMap[job.Spec().Name()] = job
+	}
+
 	output := make(map[job.Name][]dto.ValidateResult)
 	for _, subjectJob := range jobsToValidate {
-		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob)
+		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob, jobsToValidateMap)
 	}
 
 	return output, nil
 }
 
-func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job) []dto.ValidateResult {
+func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) []dto.ValidateResult {
 	destination, err := j.generateDestinationURN(ctx, tenantDetails, subjectJob.Spec())
 	if err != nil {
 		result := dto.ValidateResult{
@@ -1671,7 +1687,7 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	result = j.validateRun(ctx, subjectJob, destination)
 	output = append(output, result)
 
-	result = j.validateUpstream(ctx, subjectJob)
+	result = j.validateUpstream(ctx, subjectJob, jobsToValidateMap)
 	output = append(output, result)
 
 	return output
@@ -1757,8 +1773,9 @@ func (*JobService) getJobWithUpstreamPerJobName(jobsWithUpstream []*job.WithUpst
 	return jobsToValidateMap
 }
 
-func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) dto.ValidateResult {
-	if _, err := j.upstreamResolver.Resolve(ctx, subjectJob, writer.NewSafeBufferedLogger()); err != nil {
+func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) dto.ValidateResult {
+	jobUpstreams, err := j.upstreamResolver.Resolve(ctx, subjectJob, writer.NewSafeBufferedLogger())
+	if err != nil {
 		registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, false)
 
 		return dto.ValidateResult{
@@ -1768,6 +1785,17 @@ func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job) 
 				err.Error(),
 			},
 			Success: false,
+		}
+	}
+
+	isScheduleValid, message := j.validateScheduleWithUpstreams(ctx, subjectJob, jobUpstreams, jobsToValidateMap)
+	if !isScheduleValid {
+		registerJobValidationMetric(subjectJob.Tenant(), dto.StageUpstreamValidation, false)
+
+		return dto.ValidateResult{
+			Stage:    dto.StageUpstreamValidation,
+			Messages: message,
+			Success:  false,
 		}
 	}
 
@@ -1799,6 +1827,52 @@ func (j *JobService) validateDestination(ctx context.Context, tnnt tenant.Tenant
 		Messages: []string{fmt.Sprintf("%s: %s", destination.String(), message)},
 		Success:  success,
 	}
+}
+
+func (j *JobService) validateScheduleWithUpstreams(ctx context.Context, subjectJob *job.Job, upstreams []*job.Upstream, jobsToValidateMap map[job.Name]*job.Job) (bool, []string) {
+	if j.jobValidateConfig.ValidateSchedule.ReferenceTimezone == nil {
+		return true, []string{"schedule validation is disabled"}
+	}
+
+	// this reference time is used as a base time to calculate next schedule time
+	refTimeForSchedule := time.Now().In(j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)
+
+	messages := []string{}
+	for _, upstream := range upstreams {
+		isValid, message := j.validateSingleUpstreamSchedule(ctx, subjectJob, upstream, refTimeForSchedule, jobsToValidateMap)
+		if !isValid {
+			messages = append(messages, message)
+		}
+	}
+
+	return len(messages) == 0, messages
+}
+
+func (j *JobService) validateSingleUpstreamSchedule(ctx context.Context, subjectJob *job.Job, upstream *job.Upstream, referenceTime time.Time, jobsToValidateMap map[job.Name]*job.Job) (bool, string) {
+	if upstream.State() != job.UpstreamStateResolved {
+		return true, "upstream is not resolved"
+	}
+
+	var upstreamJob *job.Job
+	// if there are any jobs included in the validation request, prefer those over fetching from repo
+	// to use the latest spec
+	if existingJob, ok := jobsToValidateMap[upstream.Name()]; ok {
+		upstreamJob = existingJob
+	} else {
+		var err error
+		upstreamJob, err = j.jobRepo.GetByJobName(ctx, upstream.ProjectName(), upstream.Name())
+		if err != nil {
+			return false, fmt.Sprintf("unable to fetch upstream job [%s]: %s", upstream.FullName(), err.Error())
+		}
+	}
+
+	isSubjectScheduleValid, message := subjectJob.IsScheduledAfter(upstreamJob, referenceTime)
+	if !isSubjectScheduleValid {
+		return false, fmt.Sprintf("failed schedule validation with upstream [%s, reference timezone %s]: %s",
+			upstreamJob.FullName(), referenceTime.Location().String(), message)
+	}
+
+	return true, "no issue"
 }
 
 func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {

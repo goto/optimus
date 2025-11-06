@@ -68,4 +68,51 @@ func TestScheduleSpec(t *testing.T) {
 			assert.Equal(t, prevScheduleTime, expectedTime)
 		})
 	})
+	t.Run("IsSubDaily", func(t *testing.T) {
+		t.Run("should return true for sub-daily schedules", func(t *testing.T) {
+			testCases := []struct {
+				name     string
+				cronExpr string
+			}{
+				{"every hour", "0 * * * *"},
+				{"every 30 minutes", "*/30 * * * *"},
+				{"every 6 hours", "0 */6 * * *"},
+				{"every 2 hours", "0 0-23/2 * * *"},
+				{"every 15 minutes", "*/15 * * * *"},
+				{"every 3 hours", "0 */3 * * *"},
+			}
+
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					scheduleSpec, err := cron.ParseCronSchedule(tc.cronExpr)
+					assert.Nil(t, err)
+					assert.True(t, scheduleSpec.IsSubDaily())
+				})
+			}
+		})
+		t.Run("should return false for daily or longer schedules", func(t *testing.T) {
+			testCases := []struct {
+				name     string
+				cronExpr string
+			}{
+				{"daily at 2 AM", "0 2 * * *"},
+				{"daily at 12 AM", "0 0 * * *"},
+				{"2 days a week", "0 0 * * 1,3"},
+				{"15th day every month", "0 0 15 * *"},
+				// nonstandard descriptors
+				{"daily at midnight", "@daily"},
+				{"weekly", "@weekly"},
+				{"monthly", "@monthly"},
+				{"yearly", "@yearly"},
+			}
+
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					scheduleSpec, err := cron.ParseCronSchedule(tc.cronExpr)
+					assert.Nil(t, err)
+					assert.False(t, scheduleSpec.IsSubDaily())
+				})
+			}
+		})
+	})
 }

@@ -173,6 +173,7 @@ class OptimusAPIClient:
             optimus_job=job_name
         )
         log.info("Executing third party sensor for project_name: {}, job_name: {}, third_party_type: {}, scheduled_at: {}".format(project_name, job_name, third_party_type, scheduled_at))
+        
         payload = {'scheduled_at': scheduled_at, 'third_party_type': third_party_type}
 
         if third_party_type == 'dex':
@@ -184,7 +185,6 @@ class OptimusAPIClient:
         response = requests.put(url, json=payload,
                                 timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         self._raise_error_if_request_failed(response)
-        log.info("Request Body: {}".format(response.request))
         return response.json()
 
 
@@ -359,23 +359,22 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             self.log.info("Third party sensor is skipped for blacklisted job: '{}'".format(self.job_name))
             return True
 
-        if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_ON or sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
+        if sensor_toggle_val in [THIRD_PARTY_SENSOR_TOGGLE_ON ,THIRD_PARTY_SENSOR_TOGGLE_SOFT]:
             self.log.info("Poking for third party upstream '{}'".format(self.third_party_type))
             schedule_time = get_scheduled_at(context)
             self.log.info("Current schedule_time: {}".format(schedule_time))
 
             is_available = self.is_upstream_data_available(schedule_time.strftime(TIMESTAMP_FORMAT))
+            self.log.info("Third party sensor data availability status: {}".format(is_available))
 
             if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
-                self.log.info("Third party sensor is in SOFT mode, bypassing the failure for now.")
-                self.log.info("sensor status if sensor was not in SOFT mode. [Success: {}]".format(is_available))
+                self.log.info("Third party sensor is in SOFT mode, Always yielding true for now.")
                 return True
 
             if not is_available:
                 self.log.warning("upstream data not yet available for third party '{}' at schedule_time '{}', rescheduling sensor".
                                 format(self.third_party_type, schedule_time))
                 return False
-
         return True
 
     def is_upstream_data_available(self, schedule_time) -> bool:

@@ -1,5 +1,13 @@
 package config
 
+import "encoding/json"
+
+type UpstreamResolverType string
+
+const (
+	DexUpstreamResolver UpstreamResolverType = "dex"
+)
+
 type ServerConfig struct {
 	Version                Version              `mapstructure:"version"`
 	Log                    LogConfig            `mapstructure:"log"`
@@ -8,6 +16,7 @@ type ServerConfig struct {
 	Alerting               AlertingConfig       `mapstructure:"alerting"`
 	SLAConfig              SLAConfig            `mapstructure:"sla"`
 	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
+	UpstreamResolvers      []UpstreamResolver   `mapstructure:"upstream_resolvers"`
 	Replay                 ReplayConfig         `mapstructure:"replay"`
 	Publisher              *Publisher           `mapstructure:"publisher"`
 	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
@@ -15,6 +24,28 @@ type ServerConfig struct {
 	Features               FeaturesConfig       `mapstructure:"features"`
 	Plugins                Plugins              `mapstructure:"plugins"`
 	JobValidationConfig    JobValidationConfig  `mapstructure:"job_validation"`
+}
+
+type UpstreamResolver struct {
+	Type   UpstreamResolverType   `mapstructure:"type"`
+	Config map[string]interface{} `mapstructure:"config"`
+}
+
+func (u UpstreamResolverType) String() string {
+	return string(u)
+}
+
+func (u *UpstreamResolver) GetDexClientConfig() (*DexClientConfig, error) {
+	configBytes, err := json.Marshal(u.Config)
+	if err != nil {
+		return nil, err
+	}
+	var dexClientConfig DexClientConfig
+	err = json.Unmarshal(configBytes, &dexClientConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &dexClientConfig, nil
 }
 
 type Serve struct {
@@ -95,6 +126,12 @@ type ResourceManager struct {
 type ResourceManagerConfigOptimus struct {
 	Host    string            `mapstructure:"host"`
 	Headers map[string]string `mapstructure:"headers"`
+}
+
+type DexClientConfig struct {
+	Host         string `mapstructure:"host" json:"host"`
+	AuthEmail    string `mapstructure:"auth_email" json:"auth_email"`
+	ProducerType string `mapstructure:"producer_type" json:"producer_type"`
 }
 
 type ReplayConfig struct {

@@ -7,8 +7,13 @@ import (
 	"time"
 
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
@@ -16,6 +21,16 @@ import (
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
+)
+
+var dexAPIResponse = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "dex_api_response",
+}, []string{"project", "job", "resource_urn", "status"})
+
+const (
+	sensorStatusErr        = "error"
+	sensorStatusIncomplete = "incomplete"
+	sensorStatusComplete   = "complete"
 )
 
 type JobSLAPredictorService interface {
@@ -35,6 +50,10 @@ type JobLineageService interface {
 	GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error)
 }
 
+type ThirdPartySensorService interface {
+	GetClient(upstreamResolverType config.UpstreamResolverType) (service.ThirdPartyClient, error)
+}
+
 type SchedulerService interface {
 	CreateSchedulerRole(ctx context.Context, t tenant.Tenant, roleName string) error
 	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
@@ -47,12 +66,13 @@ type Notifier interface {
 }
 
 type JobRunHandler struct {
-	l                      log.Logger
-	service                JobRunService
-	schedulerService       SchedulerService
-	notifier               Notifier
-	jobLineageService      JobLineageService
-	jobSLAPredictorService JobSLAPredictorService
+	l                       log.Logger
+	service                 JobRunService
+	schedulerService        SchedulerService
+	notifier                Notifier
+	jobLineageService       JobLineageService
+	jobSLAPredictorService  JobSLAPredictorService
+	thirdPartySensorService ThirdPartySensorService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -140,6 +160,107 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 		Files:   input.Files,
 		Secrets: input.Secrets,
 	}, nil
+}
+
+func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, resourceURN resource.URN, startTime, endTime time.Time) (*pb.DexSensorResponse, error) {
+	client, err := h.thirdPartySensorService.GetClient(config.DexUpstreamResolver)
+	if err != nil {
+		h.l.Error("error getting third party sensor client: %s", err)
+		return nil, errors.GRPCErr(err, "unable to get third party sensor client")
+	}
+
+	isComplete, response, err := client.IsComplete(ctx, resourceURN, startTime, endTime)
+	if err != nil {
+		h.l.Error("error checking data completeness from third party sensor: %s", err)
+		return nil, errors.GRPCErr(err, "unable to check data completeness from third party sensor")
+	}
+
+	stats, ok := response.(*scheduler.DataCompletenessStatus)
+	if !ok {
+		h.l.Warn("error asserting response type: %s", err)
+	}
+
+	dataCompleteness := make([]*pb.DataCompleteness, len(stats.DataCompletenessByDate))
+	for i, dateStat := range stats.DataCompletenessByDate {
+		dataCompleteness[i] = &pb.DataCompleteness{
+			Date:       timestamppb.New(dateStat.Date),
+			IsComplete: dateStat.IsComplete,
+		}
+	}
+
+	return &pb.DexSensorResponse{
+		IsComplete: isComplete,
+		Log:        dataCompleteness,
+	}, nil
+}
+
+// GetThirdPartySensorStatus gets third party sensor status
+func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.GetThirdPartySensorRequest) (*pb.GetThirdPartySensorResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+	}
+
+	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+	}
+
+	// calculate startTime and endTime from request scheduledAt
+	intervalResp, err := h.GetInterval(ctx, &pb.GetIntervalRequest{
+		ProjectName:   req.GetProjectName(),
+		JobName:       req.GetJobName(),
+		ReferenceTime: req.GetScheduledAt(),
+	})
+	if err != nil {
+		h.l.Error("error getting interval for job [%s:%s]: %s", projectName, jobName, err)
+		return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+	}
+
+	startTime := intervalResp.GetStartTime().AsTime().UTC()
+	endTime := intervalResp.GetEndTime().AsTime().UTC()
+	if endTime.After(time.Now().UTC()) {
+		endTime = time.Now().UTC()
+	}
+
+	thirdPartyType := req.GetThirdPartyType()
+	if thirdPartyType == job.ThirdPartyTypeDex {
+		dexSensorReq := req.GetDexSensorRequest()
+		if dexSensorReq == nil {
+			h.l.Error("error getting dex sensor request")
+			return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+		}
+		resourceURN, err := resource.ParseURN(dexSensorReq.GetResourceUrn())
+		if err != nil {
+			h.l.Error("error parsing resource urn [%s]: %s", dexSensorReq.GetResourceUrn(), err)
+			return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+		}
+		resp, err := h.GetDexSensorStatus(ctx, resourceURN, startTime, endTime)
+		if err != nil {
+			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, err: %s", string(projectName), string(jobName), resourceURN.String(), err.Error()))
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusErr).Inc()
+			return nil, err
+		}
+		if !resp.IsComplete {
+			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, log: %v", string(projectName), string(jobName), resourceURN.String(), resp.Log))
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusIncomplete).Inc()
+		} else {
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusComplete).Inc()
+		}
+
+		return &pb.GetThirdPartySensorResponse{
+			Payload: &pb.GetThirdPartySensorResponse_DexSensorResponse{
+				DexSensorResponse: resp,
+			},
+		}, nil
+	}
+	err = errors.NewError(
+		errors.ErrInvalidArgument,
+		scheduler.EntityThirdPartySensor,
+		fmt.Sprintf("invalid third party type: %s,for job [%s:%s]", thirdPartyType, projectName, jobName))
+	return nil, errors.GRPCErr(err, "unable to process third party sensor ")
 }
 
 // GetJobRuns gets job runs from optimus DB based on the criteria
@@ -427,13 +548,15 @@ func NewJobRunHandler(
 	schedulerService SchedulerService,
 	jobLineageService JobLineageService,
 	jobSLAPredictorService JobSLAPredictorService,
+	thirdPartySensorService ThirdPartySensorService,
 ) *JobRunHandler {
 	return &JobRunHandler{
-		l:                      l,
-		service:                service,
-		notifier:               notifier,
-		schedulerService:       schedulerService,
-		jobLineageService:      jobLineageService,
-		jobSLAPredictorService: jobSLAPredictorService,
+		l:                       l,
+		service:                 service,
+		notifier:                notifier,
+		schedulerService:        schedulerService,
+		jobLineageService:       jobLineageService,
+		jobSLAPredictorService:  jobSLAPredictorService,
+		thirdPartySensorService: thirdPartySensorService,
 	}
 }

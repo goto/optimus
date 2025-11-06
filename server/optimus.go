@@ -395,7 +395,13 @@ func (s *OptimusServer) setupHandlers() error {
 	jJobRepo := jRepo.NewJobRepository(s.dbPool)
 	jExternalUpstreamResolver, _ := jResolver.NewExternalUpstreamResolver(s.conf.ResourceManagers)
 	jInternalUpstreamResolver := jResolver.NewInternalUpstreamResolver(jJobRepo)
-	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver)
+
+	jUpstreamResolvers, err := jResolver.NewThirdPartyUpstreamResolvers(s.logger, tenantService, s.conf.UpstreamResolvers...)
+	if err != nil {
+		return err
+	}
+
+	jUpstreamResolver := jResolver.NewUpstreamResolver(jJobRepo, jExternalUpstreamResolver, jInternalUpstreamResolver, jUpstreamResolvers...)
 
 	// parse config for validations
 	validateConfig := jService.JobValidateConfig{}
@@ -477,7 +483,8 @@ func (s *OptimusServer) setupHandlers() error {
 	// Resource Handler
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService))
+	sensorService := schedulerService.NewSensorService(s.logger, s.conf.UpstreamResolvers...)
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

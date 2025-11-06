@@ -8,7 +8,7 @@ from __lib import job_success_event, job_failure_event
 # import operator level callbacks
 from __lib import operator_start_event, operator_success_event, operator_retry_event, operator_failure_event
 
-from __lib import optimus_sla_miss_notify, SuperKubernetesPodOperator, SuperExternalTaskSensor
+from __lib import optimus_sla_miss_notify, SuperKubernetesPodOperator, SuperExternalTaskSensor, SuperExternal3rdPartyTaskSensor
 
 from airflow.configuration import conf
 from airflow.models import DAG, Variable
@@ -18,6 +18,7 @@ from kubernetes.client import models as k8s
 
 SENSOR_DEFAULT_POKE_INTERVAL_IN_SECS = int(Variable.get("sensor_poke_interval_in_secs", default_var=15 * 60))
 SENSOR_DEFAULT_TIMEOUT_IN_SECS = int(Variable.get("sensor_timeout_in_secs", default_var=15 * 60 * 60))
+THIRD_PARTY_SENSOR_DEFAULT_TIMEOUT_IN_SECS = int(Variable.get("third_party_sensor_timeout_in_secs", default_var= 60 * 60))
 DAG_RETRIES = int(Variable.get("dag_retries", default_var=3))
 DAG_RETRY_DELAY = int(Variable.get("dag_retry_delay_in_secs", default_var=5 * 60))
 DAGRUN_TIMEOUT_IN_SECS = int(Variable.get("dagrun_timeout_in_secs", default_var=3 * 24 * 60 * 60))
@@ -269,6 +270,12 @@ wait_foo__dash__external__dash__optimus__dash__dep__dash__job = SuperExternalTas
     dag=dag,
     pool=POOL_SENSOR
 )
+
+
+# http sensor
+
+# create 3rd party sensors
+
 # arrange inter task dependencies
 ####################################
 

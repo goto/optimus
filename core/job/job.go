@@ -567,6 +567,10 @@ func (u *Upstream) FullName() string {
 	return u.projectName.String() + "/" + u.name.String()
 }
 
+func (u *Upstream) IsState(state UpstreamState) bool {
+	return u.state == state
+}
+
 type UpstreamType string
 
 func (d UpstreamType) String() string {

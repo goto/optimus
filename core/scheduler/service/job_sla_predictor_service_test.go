@@ -925,6 +925,138 @@ func TestIdentifySLABreaches(t *testing.T) {
 		assert.Equal(t, 2, jobBreachRootCause["job-A1"]["job-C"].RelativeLevel)
 		assert.Equal(t, service.SLABreachCauseRunningLate, jobBreachRootCause["job-A1"]["job-C"].Status)
 	})
+
+	t.Run("given targeted job that is running late, return that targeted job", func(t *testing.T) {
+		// job-C -> job-B -> job-A
+		// job-A is the target job
+		// upstream jobs are on time, breach happening at target job itself
+
+		// | job | estimated duration |
+		// |-----|--------------------|
+		// | A   | 20 mins            | -> targeted SLA 30 mins from now
+		// | B   | 15 mins            | inferredSLA: now+10 mins, must start: now-5 mins
+		// | C   | 10 mins            | inferredSLA: now-5 mins, must start: now-15 mins
+
+		// reference time = now + 35 mins and job-A is still running
+
+		// given
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil)
+
+		projectName := tenant.ProjectName("project-a")
+		nextScheduledRangeInHours := 10 * time.Hour
+		now := time.Now().UTC()
+		referenceTime := now.Add(35 * time.Minute)
+		jobNames := []scheduler.JobName{scheduler.JobName("job-A")}
+		labels := map[string]string{}
+
+		reqConfig := service.JobSLAPredictorRequestConfig{
+			ReferenceTime:        referenceTime,
+			ScheduleRangeInHours: nextScheduledRangeInHours,
+			EnableAlert:          false,
+			DamperCoeff:          conf.DamperCoeff,
+			Severity:             "",
+		}
+
+		tenant, _ := tenant.NewTenant("project-a", "team-a")
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
+		// get hour from now for simulation purpose, we set scheduledAt to be now
+		scheduledAt := now.Add(1 * time.Minute).Truncate(time.Minute)
+		interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
+		jobA := &scheduler.JobWithDetails{
+			Name: "job-A",
+			Job: &scheduler.Job{
+				Tenant: tenant,
+				Name:   "job-A",
+			},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+			Alerts: []scheduler.Alert{
+				{
+					On:     scheduler.EventCategorySLAMiss,
+					Config: map[string]string{"duration": "30m"},
+				},
+			},
+		}
+
+		jobASchedule := &scheduler.JobSchedule{
+			JobName:     "job-A",
+			ScheduledAt: scheduledAt,
+		}
+		jobATaskStartTime := scheduledAt.Add(5 * time.Minute)
+		jobALineage := &scheduler.JobLineageSummary{
+			JobName:          "job-A",
+			ScheduleInterval: interval,
+			JobRuns: map[string]*scheduler.JobRunSummary{
+				scheduledAt.String(): {
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &jobATaskStartTime,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobBTaskStartTime := scheduledAt.Add(-10 * time.Minute)
+		jobBTaskEndTime := scheduledAt.Add(5 * time.Minute)
+		jobBLineage := &scheduler.JobLineageSummary{
+			JobName:          "job-B",
+			ScheduleInterval: interval,
+			JobRuns: map[string]*scheduler.JobRunSummary{
+				scheduledAt.Add(-15 * time.Minute).String(): {
+					ScheduledAt:   scheduledAt.Add(-15 * time.Minute),
+					TaskStartTime: &jobBTaskStartTime,
+					TaskEndTime:   &jobBTaskEndTime,
+					JobEndTime:    &jobBTaskEndTime,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
+		jobCTaskEndTime := scheduledAt.Add(-10 * time.Minute)
+		jobCLineage := &scheduler.JobLineageSummary{
+			JobName:          "job-C",
+			ScheduleInterval: interval,
+			JobRuns: map[string]*scheduler.JobRunSummary{
+				scheduledAt.Add(-25 * time.Minute).String(): {
+					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+					TaskStartTime: &jobCTaskStartTime,
+					TaskEndTime:   &jobCTaskEndTime,
+					JobEndTime:    &jobCTaskEndTime,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
+		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobASchedule.JobName: jobASchedule,
+		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+			jobASchedule.JobName: jobALineage,
+		}, nil).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
+			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)
+		})).Return(map[scheduler.JobName]*time.Duration{
+			"job-A": func() *time.Duration { d := 20 * time.Minute; return &d }(),
+			"job-B": func() *time.Duration { d := 15 * time.Minute; return &d }(),
+			"job-C": func() *time.Duration { d := 10 * time.Minute; return &d }(),
+		}, nil).Once()
+
+		// when
+		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, labels, reqConfig)
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, jobBreachRootCause, 1)
+		assert.Len(t, jobBreachRootCause["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-A"), jobBreachRootCause["job-A"]["job-A"].JobName)
+		assert.Equal(t, 0, jobBreachRootCause["job-A"]["job-A"].RelativeLevel)
+		assert.Equal(t, service.SLABreachCauseRunningLate, jobBreachRootCause["job-A"]["job-A"].Status)
+	})
 }
 
 // JobLineageFetcher is an autogenerated mock type for the JobLineageFetcher type

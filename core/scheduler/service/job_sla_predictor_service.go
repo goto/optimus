@@ -386,10 +386,9 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 		level int
 	}
 	stack := []*state{}
-	// start from immediate upstream jobs
-	for _, upstreamJob := range jobTarget.Upstreams {
-		stack = append(stack, &state{job: upstreamJob, paths: []scheduler.JobName{jobTarget.JobName}, level: 1})
-	}
+	// start from targeted job
+	stack = append(stack, &state{job: jobTarget, paths: []scheduler.JobName{}, level: 0})
+
 	jobsWithLineageVisitedMap := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
 	visited := make(map[scheduler.JobName]bool)
 	for len(stack) > 0 {

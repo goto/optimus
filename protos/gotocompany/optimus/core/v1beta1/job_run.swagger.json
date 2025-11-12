@@ -540,6 +540,13 @@
                 "scheduledRangeInHours": {
                   "type": "integer",
                   "format": "int32"
+                },
+                "enableDeduplication": {
+                  "type": "boolean"
+                },
+                "damperCoeff": {
+                  "type": "number",
+                  "format": "float"
                 }
               }
             }

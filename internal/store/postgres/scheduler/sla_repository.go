@@ -181,6 +181,29 @@ func (s *SLARepository) StorePredictedSLABreach(ctx context.Context, jobTargetNa
 	return nil
 }
 
+func (s *SLARepository) GetPredictedSLAJobNamesWithinTimeRange(ctx context.Context, from, to time.Time) ([]scheduler.JobName, error) {
+	query := `SELECT DISTINCT job_name FROM sla_predictor WHERE reference_time >= $1 AND reference_time <= $2`
+	rows, err := s.db.Query(ctx, query, from, to)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityEvent, "error querying predicted SLA job names", err)
+	}
+	defer rows.Close()
+
+	var jobNames []scheduler.JobName
+	for rows.Next() {
+		var jobName string
+		if err := rows.Scan(&jobName); err != nil {
+			return nil, errors.Wrap(scheduler.EntityEvent, "error scanning predicted SLA job name", err)
+		}
+		parsedJobName, err := scheduler.JobNameFrom(jobName)
+		if err != nil {
+			return nil, errors.Wrap(scheduler.EntityEvent, "error parsing predicted SLA job name", err)
+		}
+		jobNames = append(jobNames, parsedJobName)
+	}
+	return jobNames, nil
+}
+
 func SLAFromRow(row pgx.Row) (*OperatorsSLA, error) {
 	var sla OperatorsSLA
 	err := row.Scan(&sla.ID, &sla.ProjectName, &sla.JobName, &sla.OperatorName, &sla.OperatorType, &sla.RunID,

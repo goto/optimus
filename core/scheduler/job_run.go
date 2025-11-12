@@ -136,6 +136,7 @@ type UpstreamAttrs struct {
 }
 
 type PotentialSLABreachAttrs struct {
+	ProjectName         string
 	TeamName            string
 	JobToUpstreamsCause map[string][]UpstreamAttrs
 	Severity            string

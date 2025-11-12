@@ -262,6 +262,7 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 	}
 
 	a.relay(&AlertPayload{
+		Project: attr.ProjectName,
 		Data: map[string]interface{}{
 			"content": content,
 		},

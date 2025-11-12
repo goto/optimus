@@ -494,6 +494,7 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		ReferenceTime:        referenceTime,
 		ScheduleRangeInHours: scheduleRangeInHours,
 		EnableAlert:          req.GetAlertOnBreach(),
+		EnableDeduplication:  req.GetEnableDeduplication(),
 		Severity:             req.GetSeverity(),
 		DamperCoeff:          float64(req.GetDamperCoeff()),
 	}

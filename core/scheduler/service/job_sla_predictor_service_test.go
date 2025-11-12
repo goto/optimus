@@ -928,7 +928,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 
 	t.Run("given targeted job that is running late, return that targeted job", func(t *testing.T) {
 		// job-C -> job-B -> job-A
-		// job-A is the target job
+		// is the target job
 		// upstream jobs are on time, breach happening at target job itself
 
 		// | job | estimated duration |

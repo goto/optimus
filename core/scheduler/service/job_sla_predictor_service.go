@@ -175,7 +175,8 @@ func (s *JobSLAPredictorService) identifySLABreach(ctx context.Context, jobTarge
 }
 
 func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
-	filteredJobSchedules := []*scheduler.JobWithDetails{}
+	filteredJobsByName := map[scheduler.JobName]*scheduler.JobWithDetails{}
+	filteredJobByLabel := map[scheduler.JobName]*scheduler.JobWithDetails{}
 
 	if len(jobNames) > 0 {
 		jobNameStr := []string{}
@@ -186,7 +187,11 @@ func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectNa
 		if err != nil {
 			return nil, err
 		}
-		filteredJobSchedules = append(filteredJobSchedules, jobsWithDetails...)
+		for _, job := range jobsWithDetails {
+			filteredJobsByName[job.Name] = job
+		}
+		s.l.Info("fetched jobs by names", "count", len(filteredJobsByName))
+		s.l.Info("jobs fetched by names", "jobs", filteredJobsByName)
 	}
 
 	if len(labels) > 0 {
@@ -194,14 +199,31 @@ func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectNa
 		if err != nil {
 			return nil, err
 		}
-		filteredJobSchedules = append(filteredJobSchedules, jobsWithDetails...)
+		for _, job := range jobsWithDetails {
+			filteredJobByLabel[job.Name] = job
+		}
+		s.l.Info("fetched jobs by labels", "count", len(filteredJobByLabel))
+		s.l.Info("jobs fetched by labels", "jobs", filteredJobByLabel)
 	}
+
+	// merge both filteredJobsByName and filteredJobByLabel
+	filteredJobSchedules := []*scheduler.JobWithDetails{}
+	for jobName, job := range filteredJobsByName {
+		filteredJobSchedules = append(filteredJobSchedules, job)
+		delete(filteredJobByLabel, jobName) // remove from label map to avoid duplicates
+	}
+	for _, job := range filteredJobByLabel {
+		filteredJobSchedules = append(filteredJobSchedules, job)
+	}
+
+	s.l.Info("total jobs fetched after merging by names and labels", "count", len(filteredJobSchedules))
 
 	return filteredJobSchedules, nil
 }
 
 func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) map[scheduler.JobName]*time.Time {
 	targetedSLAByJobName := make(map[scheduler.JobName]*time.Time)
+	s.l.Info("getting targeted SLAs for jobs", "count", len(jobs))
 	for _, job := range jobs {
 		if job.Schedule == nil {
 			s.l.Warn("job does not have schedule, skipping SLA prediction", "job", job.Name)
@@ -224,12 +246,24 @@ func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails
 		sla := schedule.ScheduledAt.Add(time.Duration(slaDuration) * time.Second)
 		targetedSLAByJobName[job.Name] = &sla
 	}
+	s.l.Info("total targeted SLAs found", "count", len(targetedSLAByJobName))
+	// jobs not having targeted SLA will be skipped
+	jobsSkipped := []string{}
+	for _, job := range jobs {
+		if _, ok := targetedSLAByJobName[job.Name]; !ok {
+			jobsSkipped = append(jobsSkipped, job.Name.String())
+		}
+	}
+	if len(jobsSkipped) > 0 {
+		s.l.Info("jobs skipped due to no targeted SLA found", "jobs", jobsSkipped)
+	}
 
 	return targetedSLAByJobName
 }
 
 func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, scheduleRangeInHours time.Duration, referenceTime time.Time) map[scheduler.JobName]*scheduler.JobSchedule {
 	jobSchedules := make(map[scheduler.JobName]*scheduler.JobSchedule)
+	s.l.Info("jobs to get schedules for", "count", len(jobs))
 	for _, job := range jobs {
 		if job.Schedule == nil {
 			continue
@@ -264,6 +298,17 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 			JobName:     job.Name,
 			ScheduledAt: scheduledAt,
 		}
+	}
+	s.l.Info("total job schedules found", "count", len(jobSchedules))
+	// jobs not having schedule within the range will be skipped
+	jobsSkipped := []string{}
+	for _, job := range jobs {
+		if _, ok := jobSchedules[job.Name]; !ok {
+			jobsSkipped = append(jobsSkipped, job.Name.String())
+		}
+	}
+	if len(jobsSkipped) > 0 {
+		s.l.Info("jobs skipped due to no schedule within the range", "jobs", jobsSkipped)
 	}
 	return jobSchedules
 }

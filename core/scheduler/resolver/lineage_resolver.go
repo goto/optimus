@@ -212,20 +212,14 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 }
 
 func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, lineageData *LineageData, allJobRunsMap map[scheduler.JobIdentifier]map[string]*scheduler.JobRunSummary, visited map[scheduler.JobIdentifier]bool) error {
-	jobID := scheduler.JobIdentifier{
-		JobName:     lineage.JobName,
-		ProjectName: lineage.Tenant.ProjectName(),
-	}
+	jobID := lineage.JobIdentifier()
 	if _, ok := visited[jobID]; ok {
 		return nil
 	}
 
 	visited[jobID] = true
 
-	currentJob := lineageData.JobsByName[scheduler.JobIdentifier{
-		JobName:     lineage.JobName,
-		ProjectName: lineage.Tenant.ProjectName(),
-	}]
+	currentJob := lineageData.JobsByName[jobID]
 	if currentJob == nil {
 		return nil
 	}
@@ -238,10 +232,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 	}
 
 	for _, upstream := range lineage.Upstreams {
-		upstreamID := scheduler.JobIdentifier{
-			JobName:     upstream.JobName,
-			ProjectName: upstream.Tenant.ProjectName(),
-		}
+		upstreamID := upstream.JobIdentifier()
 		upstreamJob := lineageData.JobsByName[upstreamID]
 		if upstreamJob == nil {
 			continue
@@ -369,10 +360,7 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 		Upstreams:        make([]*scheduler.JobLineageSummary, len(lineage.Upstreams)),
 	}
 
-	jobID := scheduler.JobIdentifier{
-		JobName:     lineage.JobName,
-		ProjectName: lineage.Tenant.ProjectName(),
-	}
+	jobID := lineage.JobIdentifier()
 	if jobRuns, exists := jobRunDetails[jobID]; exists {
 		// only fetch job runs that are necessary in the lineage
 		result[lineage.JobName].JobRuns = map[string]*scheduler.JobRunSummary{}

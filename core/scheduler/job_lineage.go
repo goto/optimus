@@ -33,6 +33,13 @@ type JobLineageSummary struct {
 	JobRuns map[string]*JobRunSummary
 }
 
+func (j *JobLineageSummary) JobIdentifier() JobIdentifier {
+	return JobIdentifier{
+		JobName:     j.JobName,
+		ProjectName: j.Tenant.ProjectName(),
+	}
+}
+
 type upstreamCandidate struct {
 	JobName JobName
 	EndTime time.Time

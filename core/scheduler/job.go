@@ -501,3 +501,12 @@ type ChangelogFilter struct {
 	StartTime   time.Time
 	EndTime     time.Time
 }
+
+type JobIdentifier struct {
+	JobName     JobName
+	ProjectName tenant.ProjectName
+}
+
+func (j *JobIdentifier) String() string {
+	return fmt.Sprintf("%s/%s", j.ProjectName, j.JobName)
+}

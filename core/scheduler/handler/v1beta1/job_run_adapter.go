@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -25,6 +26,7 @@ func fromJobRunLineageSummaryRequest(req *pb.GetJobRunLineageSummaryRequest) ([]
 		targetJobSchedules = append(targetJobSchedules, &scheduler.JobSchedule{
 			JobName:     scheduler.JobName(jobReq.GetJobName()),
 			ScheduledAt: jobReq.GetScheduledAt().AsTime(),
+			ProjectName: tenant.ProjectName(jobReq.GetProjectName()),
 		})
 	}
 
@@ -82,7 +84,8 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 			}
 
 			pbJobRuns = append(pbJobRuns, &pb.JobExecutionSummary{
-				JobName: run.JobName.String(),
+				JobName:     run.JobName.String(),
+				ProjectName: run.ProjectName.String(),
 				Sla: &pb.SLAConfig{
 					Duration: durationpb.New(run.SLA.Duration),
 				},
@@ -104,6 +107,7 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 
 		pbJobRunLineages = append(pbJobRunLineages, &pb.JobRunLineageSummary{
 			JobName:     lineage.JobName.String(),
+			ProjectName: lineage.ProjectName.String(),
 			ScheduledAt: timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
 			JobRuns:     pbJobRuns,
 		})

@@ -275,7 +275,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		projectGetter := new(MockProjectGetter)
 
 		jobSchedules := []*scheduler.JobSchedule{
-			{JobName: jobNameA, ScheduledAt: scheduledTime},
+			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},
 		}
 
 		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
@@ -494,24 +494,24 @@ type MockJobUpstreamRepository struct {
 	mock.Mock
 }
 
-func (m *MockJobUpstreamRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {
+func (m *MockJobUpstreamRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobIdentifier][]scheduler.JobIdentifier, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(map[scheduler.JobName][]scheduler.JobName), args.Error(1)
+	return args.Get(0).(map[scheduler.JobIdentifier][]scheduler.JobIdentifier), args.Error(1)
 }
 
 type MockJobRepository struct {
 	mock.Mock
 }
 
-func (m *MockJobRepository) GetSummaryByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobSummary, error) {
-	args := m.Called(ctx, jobNames)
+func (m *MockJobRepository) GetSummaryByNames(ctx context.Context, jobIDs []scheduler.JobIdentifier) (map[scheduler.JobIdentifier]*scheduler.JobSummary, error) {
+	args := m.Called(ctx, jobIDs)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(map[scheduler.JobName]*scheduler.JobSummary), args.Error(1)
+	return args.Get(0).(map[scheduler.JobIdentifier]*scheduler.JobSummary), args.Error(1)
 }
 
 type MockJobRunService struct {

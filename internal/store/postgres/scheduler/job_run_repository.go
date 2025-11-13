@@ -479,17 +479,18 @@ func (j *JobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, ident
 	argIndex := 1
 
 	for _, identifier := range identifiers {
-		condition := fmt.Sprintf("(jr.job_name = $%d AND jr.scheduled_at = $%d)",
-			argIndex, argIndex+1)
+		condition := fmt.Sprintf("(jr.job_name = $%d AND jr.project_name = $%d AND jr.scheduled_at = $%d)",
+			argIndex, argIndex+1, argIndex+2)
 		conditions = append(conditions, condition)
-		args = append(args, identifier.JobName, identifier.ScheduledAt.UTC().Format(dbTimeFormat))
-		argIndex += 2
+		args = append(args, identifier.JobName, identifier.ProjectName, identifier.ScheduledAt.UTC().Format(dbTimeFormat))
+		argIndex += 3
 	}
 
 	query := fmt.Sprintf(`
 WITH operations AS (
 	SELECT 
 		jr.job_name,
+		jr.project_name,
 		jr.scheduled_at,
 		jr.start_time AS job_start_time,
 		jr.end_time AS job_end_time,
@@ -510,6 +511,7 @@ WITH operations AS (
 )
 SELECT 
 	job_name,
+	project_name,
 	scheduled_at,
 	job_start_time,
 	job_end_time,
@@ -535,6 +537,7 @@ ORDER BY scheduled_at DESC
 	for rows.Next() {
 		var (
 			jobName         string
+			projectName     string
 			scheduledAt     time.Time
 			jobStartTime    *time.Time
 			jobEndTime      *time.Time
@@ -546,7 +549,8 @@ ORDER BY scheduled_at DESC
 			hookEndTime     *time.Time
 		)
 
-		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime,
+		err = rows.Scan(&jobName, &projectName,
+			&scheduledAt, &jobStartTime, &jobEndTime,
 			&sensorStartTime, &sensorEndTime,
 			&taskStartTime, &taskEndTime,
 			&hookStartTime, &hookEndTime)
@@ -556,6 +560,7 @@ ORDER BY scheduled_at DESC
 
 		summary := &scheduler.JobRunSummary{
 			JobName:       scheduler.JobName(jobName),
+			ProjectName:   tenant.ProjectName(projectName),
 			ScheduledAt:   scheduledAt,
 			JobStartTime:  jobStartTime,
 			JobEndTime:    jobEndTime,

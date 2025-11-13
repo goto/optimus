@@ -788,8 +788,8 @@ func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.
 	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
 }
 
-func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {
-	query := `SELECT job_name, upstream_job_name 
+func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobIdentifier][]scheduler.JobIdentifier, error) {
+	query := `SELECT job_name, project_name, upstream_job_name, upstream_project_name
 				FROM job_upstream 
 				WHERE upstream_state = 'resolved'`
 
@@ -799,17 +799,18 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 	}
 	defer rows.Close()
 
-	upstreamMap := make(map[scheduler.JobName][]scheduler.JobName)
-
+	upstreamMap := make(map[scheduler.JobIdentifier][]scheduler.JobIdentifier)
 	for rows.Next() {
-		var jobName, upstreamJobName string
-		err := rows.Scan(&jobName, &upstreamJobName)
+		var (
+			jobName, projectName, upstreamJobName, upstreamProjectName string
+		)
+		err := rows.Scan(&jobName, &projectName, &upstreamJobName, &upstreamProjectName)
 		if err != nil {
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning upstream row", err)
 		}
 
-		jobKey := scheduler.JobName(jobName)
-		upstreamJob := scheduler.JobName(upstreamJobName)
+		jobKey := scheduler.JobIdentifier{ProjectName: tenant.ProjectName(projectName), JobName: scheduler.JobName(jobName)}
+		upstreamJob := scheduler.JobIdentifier{ProjectName: tenant.ProjectName(upstreamProjectName), JobName: scheduler.JobName(upstreamJobName)}
 		upstreamMap[jobKey] = append(upstreamMap[jobKey], upstreamJob)
 	}
 
@@ -820,24 +821,41 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 	return upstreamMap, nil
 }
 
-func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobSummary, error) {
-	if len(jobNames) == 0 {
-		return make(map[scheduler.JobName]*scheduler.JobSummary), nil
+func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobIDs []scheduler.JobIdentifier) (map[scheduler.JobIdentifier]*scheduler.JobSummary, error) {
+	if len(jobIDs) == 0 {
+		return make(map[scheduler.JobIdentifier]*scheduler.JobSummary), nil
 	}
 
-	jobNameStrings := make([]string, len(jobNames))
-	for i, jobName := range jobNames {
-		jobNameStrings[i] = string(jobName)
+	type nameProject struct {
+		name        string
+		projectName string
 	}
 
-	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL AND state = 'enabled' AND project_name NOT LIKE '%-preprod'`
-	rows, err := j.db.Query(ctx, query, jobNameStrings)
+	nameProjects := make([]nameProject, len(jobIDs))
+	for i, jobID := range jobIDs {
+		nameProjects[i] = nameProject{
+			name:        string(jobID.JobName),
+			projectName: string(jobID.ProjectName),
+		}
+	}
+
+	placeholders := make([]string, len(nameProjects))
+	args := make([]interface{}, len(nameProjects)*2)
+
+	for i, np := range nameProjects {
+		placeholders[i] = fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2)
+		args[i*2] = np.name
+		args[i*2+1] = np.projectName
+	}
+
+	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE (name, project_name) IN (` + strings.Join(placeholders, ",") + `) AND deleted_at IS NULL AND state = 'enabled'`
+	rows, err := j.db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, errors.Wrap(scheduler.EntityJobRun, "error while finding jobs by names", err)
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while finding jobs by names and projects", err)
 	}
 	defer rows.Close()
 
-	jobsMap := make(map[scheduler.JobName]*scheduler.JobSummary)
+	jobsMap := make(map[scheduler.JobIdentifier]*scheduler.JobSummary)
 	multiError := errors.NewMultiError("errorInFindByNames")
 
 	for rows.Next() {
@@ -853,7 +871,10 @@ func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []schedu
 			continue
 		}
 
-		jobsMap[jobSummary.JobName] = jobSummary
+		jobsMap[scheduler.JobIdentifier{
+			ProjectName: tenant.ProjectName(spec.ProjectName),
+			JobName:     scheduler.JobName(spec.JobName),
+		}] = jobSummary
 	}
 
 	return jobsMap, multiError.ToErr()

@@ -162,9 +162,13 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		}
 		breachesCauses, fullBreachesCauses := s.identifySLABreach(jobWithLineage, jobDurations, targetedSLA, skipJobNames, damperCoeff, reqConfig.ReferenceTime)
 		// populate jobBreachCauses
-		jobBreachCauses[jobSchedule.JobName] = breachesCauses
+		if len(breachesCauses) > 0 {
+			jobBreachCauses[jobSchedule.JobName] = breachesCauses
+		}
 		// populate jobFullBreachCauses for logging and storage purpose
-		jobFullBreachCauses[jobSchedule.JobName] = fullBreachesCauses
+		if len(fullBreachesCauses) == 0 {
+			jobFullBreachCauses[jobSchedule.JobName] = fullBreachesCauses
+		}
 	}
 
 	// send alert if enabled

@@ -496,15 +496,21 @@ WITH operations AS (
 		jr.end_time AS job_end_time,
 		opr.operation_type,
 		opr.start_time,
+		opr.status,
 		COALESCE(opr.end_time, CASE WHEN jr.status IN ('failed', 'success') THEN jr.end_time ELSE NOW() END) AS end_time,
-		ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY EXTRACT(EPOCH FROM (COALESCE(opr.end_time, jr.end_time) - opr.start_time)) DESC) as rn
+		CASE 
+			WHEN opr.operation_type = 'sensor' THEN 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, COALESCE(opr.end_time, CASE WHEN jr.status IN ('failed', 'success') THEN jr.end_time ELSE NOW() END) DESC)
+			ELSE 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.start_time ASC)
+		END as rn
 	FROM job_run jr
 	JOIN (
-		SELECT job_run_id, start_time, end_time, 'sensor' AS operation_type FROM sensor_run 
+		SELECT job_run_id, start_time, end_time, status, 'sensor' AS operation_type FROM sensor_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, 'task' AS operation_type FROM task_run 
+		SELECT job_run_id, start_time, end_time, status, 'task' AS operation_type FROM task_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, 'hook' AS operation_type FROM hook_run 
+		SELECT job_run_id, start_time, end_time, status, 'hook' AS operation_type FROM hook_run 
 	) opr ON opr.job_run_id = jr.id
 	WHERE %s
 	AND opr.start_time IS NOT NULL
@@ -523,7 +529,7 @@ SELECT
 	MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN end_time END) as hook_end_time
 FROM operations
 WHERE rn = 1
-GROUP BY job_name, scheduled_at, job_start_time, job_end_time
+GROUP BY job_name, project_name, scheduled_at, job_start_time, job_end_time
 ORDER BY scheduled_at DESC
 	`, strings.Join(conditions, " OR "))
 

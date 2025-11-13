@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"maps"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -90,7 +89,9 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 
 func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
 	// map of jobName -> map of upstreamJobName -> JobState
-	jobBreaches := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
+	jobBreachCauses := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
+	jobFullBreachCauses := make(map[scheduler.JobName]map[scheduler.JobName][]*JobState)
+
 	// damper coefficient to use default if not provided
 	damperCoeff := reqConfig.DamperCoeff
 	if damperCoeff <= 0 {
@@ -99,7 +100,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 
 	if len(jobNames) == 0 && len(labels) == 0 {
 		s.l.Warn("no job names or labels provided, skipping SLA prediction")
-		return jobBreaches, nil
+		return jobBreachCauses, nil
 	}
 
 	// get jobs with details
@@ -109,21 +110,21 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		return nil, err
 	}
 	if len(jobsWithDetails) == 0 {
-		return jobBreaches, nil
+		return jobBreachCauses, nil
 	}
 
 	// get scheduled at
 	jobSchedules := s.getJobSchedules(jobsWithDetails, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime)
 	if len(jobSchedules) == 0 {
 		s.l.Warn("no job schedules found for the given jobs in the next schedule range, skipping SLA prediction")
-		return jobBreaches, nil
+		return jobBreachCauses, nil
 	}
 
 	// get targetedSLA
 	targetedSLA := s.getTargetedSLA(jobsWithDetails, jobSchedules)
 	if len(targetedSLA) == 0 {
 		s.l.Warn("no targeted SLA found for the given jobs, skipping SLA prediction")
-		return jobBreaches, nil
+		return jobBreachCauses, nil
 	}
 
 	// get lineage
@@ -142,7 +143,6 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		return nil, err
 	}
 
-	fullBreachesCausesPathsByJobNameTarget := make(map[scheduler.JobName][][]*JobState)
 	for _, jobSchedule := range jobSchedules {
 		// identify potential breach
 		jobWithLineage, ok := jobsWithLineageMap[jobSchedule.JobName]
@@ -153,46 +153,30 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		if !ok || targetedSLA == nil {
 			continue
 		}
-		breachesCausesPaths, fullBreachesCausesPaths := s.identifySLABreach(jobWithLineage, jobDurations, targetedSLA, reqConfig.ReferenceTime, damperCoeff)
-		// populate jobBreaches
-		if len(breachesCausesPaths) > 0 {
-			jobBreaches[jobSchedule.JobName] = make(map[scheduler.JobName]*JobState)
-			for _, causes := range breachesCausesPaths {
-				if len(causes) == 0 {
-					continue
-				}
-				cause := causes[len(causes)-1] // root cause is the last element in the path
-				jobBreaches[jobSchedule.JobName][cause.JobName] = cause
-			}
-		}
-		// populate fullBreachesCausesPathsByJobNameTarget for logging and storage purpose
-		fullBreachesCausesPathsByJobNameTarget[jobSchedule.JobName] = fullBreachesCausesPaths
+		breachesCauses, fullBreachesCauses := s.identifySLABreach(jobWithLineage, jobDurations, targetedSLA, reqConfig.ReferenceTime, damperCoeff)
+		// populate jobBreachCauses
+		jobBreachCauses[jobSchedule.JobName] = breachesCauses
+		// populate jobFullBreachCauses for logging and storage purpose
+		jobFullBreachCauses[jobSchedule.JobName] = fullBreachesCauses
 	}
 
 	// send alert if enabled
-	if reqConfig.EnableAlert && len(jobBreaches) > 0 {
-		s.l.Info("potential SLA breaches found", "count", len(jobBreaches))
-		jobBreachesForAlert := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
-		for jobName, breaches := range jobBreaches {
-			maps.Copy(jobBreachesForAlert[jobName], breaches)
-		}
+	if reqConfig.EnableAlert && len(jobBreachCauses) > 0 {
+		s.l.Info("potential SLA breaches found", "count", len(jobBreachCauses))
+		jobBreachCausesForAlert := jobBreachCauses
 		// deduplicate based on jobName if enabled
 		if reqConfig.EnableDeduplication {
-			if s.config.EnablePersistentLogging {
-				jobBreachesForAlert, err = s.deduplicateJobBreaches(ctx, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime, jobBreachesForAlert)
-				if err != nil {
-					s.l.Error("failed to deduplicate job breaches, sending alerts without deduplication", "error", err)
-				}
-			} else {
-				s.l.Warn("deduplication is enabled but persistent logging is disabled, enabling persistent logging for deduplication to work properly, skipping deduplication")
+			jobBreachCausesForAlert, err = s.deduplicateJobBreaches(ctx, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime, jobBreachCauses)
+			if err != nil {
+				s.l.Error("failed to deduplicate job breaches, sending alerts without deduplication", "error", err)
 			}
 		}
-		s.sendAlert(ctx, jobBreachesForAlert, reqConfig.Severity)
+		s.sendAlert(ctx, jobBreachCausesForAlert, reqConfig.Severity)
 	}
 
 	// store predicted SLA breach
 	if s.config.EnablePersistentLogging {
-		for jobName, fullBreachesCausesPaths := range fullBreachesCausesPathsByJobNameTarget {
+		for jobName, fullBreachesCausesPaths := range jobFullBreachCauses {
 			jobTarget := jobsWithLineageMap[jobName]
 			if err := s.storePredictedSLABreach(ctx, jobTarget, fullBreachesCausesPaths, reqConfig.ReferenceTime); err != nil {
 				s.l.Error("failed to store predicted SLA breaches", "error", err)
@@ -200,10 +184,10 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		}
 	}
 
-	return jobBreaches, nil
+	return jobBreachCauses, nil
 }
 
-func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, referenceTime time.Time, damperCoeff float64) ([][]*JobState, [][]*JobState) {
+func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, referenceTime time.Time, damperCoeff float64) (map[scheduler.JobName]*JobState, map[scheduler.JobName][]*JobState) {
 	// calculate inferred SLAs for each job based on their downstream critical jobs and estimated durations
 	// S(u|j) = S(j) - D(u)
 	jobSLAStatesByJobTarget := s.calculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperCoeff)
@@ -216,7 +200,27 @@ func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLinea
 	// T(now)>= S(u|j) - D(u) and the job u has not started yet
 	rootCauses, fullRootCauses := s.identifySLABreachRootCauses(jobTarget, jobSLAStates, referenceTime)
 
-	return rootCauses, fullRootCauses
+	// populate breachesCauses
+	breachesCauses := make(map[scheduler.JobName]*JobState)
+	for _, causes := range rootCauses {
+		if len(causes) == 0 {
+			continue
+		}
+		cause := causes[len(causes)-1] // root cause is the last element in the path
+		breachesCauses[cause.JobName] = cause
+	}
+
+	// populate fullBreachesCauses
+	fullBreachesCauses := make(map[scheduler.JobName][]*JobState)
+	for _, causes := range fullRootCauses {
+		if len(causes) == 0 {
+			continue
+		}
+		cause := causes[len(causes)-1] // root cause is the last element in the path (as a unique identifier)
+		fullBreachesCauses[cause.JobName] = causes
+	}
+
+	return breachesCauses, fullBreachesCauses
 }
 
 func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
@@ -540,7 +544,7 @@ func (*JobSLAPredictorService) populateJobSLAStates(jobDurations map[scheduler.J
 }
 
 // storePredictedSLABreach stores the predicted SLA breaches in the repository for further analysis.
-func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, paths [][]*JobState, referenceTime time.Time) error {
+func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, paths map[scheduler.JobName][]*JobState, referenceTime time.Time) error {
 	for _, path := range paths {
 		if len(path) == 0 {
 			continue
@@ -678,6 +682,12 @@ func collectJobNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineage
 // deduplicateJobBreaches deduplicates the job breaches based on the targeted job names.
 // if job target already exists in DB and it's as part of job breaches don't include it again.
 func (s *JobSLAPredictorService) deduplicateJobBreaches(ctx context.Context, scheduleRangeInHours time.Duration, referenceTime time.Time, jobBreaches map[scheduler.JobName]map[scheduler.JobName]*JobState) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
+	if !s.config.EnablePersistentLogging {
+		s.l.Warn("persistent logging is disabled, cannot perform deduplication")
+		return jobBreaches, nil
+	}
+
+	// define time range to check existing job names
 	from := referenceTime.Add(-scheduleRangeInHours)
 	to := referenceTime.Add(scheduleRangeInHours)
 

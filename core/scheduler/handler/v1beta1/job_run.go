@@ -34,7 +34,7 @@ const (
 )
 
 type JobSLAPredictorService interface {
-	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, referenceTime time.Time, scheduleRangeInHours time.Duration, jobNames []scheduler.JobName, labels map[string]string, enableAlert bool, severity string) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
+	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig service.JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
 }
 
 type JobRunService interface {
@@ -490,7 +490,16 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
 		referenceTime = req.GetReferenceTime().AsTime().UTC()
 	}
-	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, referenceTime, scheduleRangeInHours, jobNames, req.GetJobLabels(), req.GetAlertOnBreach(), req.GetSeverity())
+	reqConfig := service.JobSLAPredictorRequestConfig{
+		ReferenceTime:        referenceTime,
+		ScheduleRangeInHours: scheduleRangeInHours,
+		SkipJobNames:         req.GetSkipJobNames(),
+		EnableAlert:          req.GetAlertOnBreach(),
+		EnableDeduplication:  req.GetEnableDeduplication(),
+		Severity:             req.GetSeverity(),
+		DamperCoeff:          float64(req.GetDamperCoeff()),
+	}
+	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, req.GetJobLabels(), reqConfig)
 	if err != nil {
 		h.l.Error("error identifying potential SLA breaches: %v", err)
 		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")

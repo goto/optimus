@@ -830,7 +830,7 @@ func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []schedu
 		jobNameStrings[i] = string(jobName)
 	}
 
-	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL AND state = 'enabled'`
+	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL AND state = 'enabled' AND project_name NOT LIKE '%-preprod'`
 	rows, err := j.db.Query(ctx, query, jobNameStrings)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while finding jobs by names", err)

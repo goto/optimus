@@ -22,6 +22,7 @@ const (
 type JobSLAPredictorRequestConfig struct {
 	ReferenceTime        time.Time
 	ScheduleRangeInHours time.Duration
+	SkipJobNames         []string
 	EnableAlert          bool
 	EnableDeduplication  bool
 	DamperCoeff          float64
@@ -98,6 +99,12 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		damperCoeff = s.config.DamperCoeff
 	}
 
+	// job names to be skipped for checking
+	skipJobNames := map[scheduler.JobName]bool{}
+	for _, skipJobName := range reqConfig.SkipJobNames {
+		skipJobNames[scheduler.JobName(skipJobName)] = true
+	}
+
 	if len(jobNames) == 0 && len(labels) == 0 {
 		s.l.Warn("no job names or labels provided, skipping SLA prediction")
 		return jobBreachCauses, nil
@@ -153,7 +160,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		if !ok || targetedSLA == nil {
 			continue
 		}
-		breachesCauses, fullBreachesCauses := s.identifySLABreach(jobWithLineage, jobDurations, targetedSLA, reqConfig.ReferenceTime, damperCoeff)
+		breachesCauses, fullBreachesCauses := s.identifySLABreach(jobWithLineage, jobDurations, targetedSLA, skipJobNames, damperCoeff, reqConfig.ReferenceTime)
 		// populate jobBreachCauses
 		jobBreachCauses[jobSchedule.JobName] = breachesCauses
 		// populate jobFullBreachCauses for logging and storage purpose
@@ -187,7 +194,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	return jobBreachCauses, nil
 }
 
-func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, referenceTime time.Time, damperCoeff float64) (map[scheduler.JobName]*JobState, map[scheduler.JobName][]*JobState) {
+func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperCoeff float64, referenceTime time.Time) (map[scheduler.JobName]*JobState, map[scheduler.JobName][]*JobState) {
 	// calculate inferred SLAs for each job based on their downstream critical jobs and estimated durations
 	// S(u|j) = S(j) - D(u)
 	jobSLAStatesByJobTarget := s.calculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperCoeff)
@@ -198,7 +205,7 @@ func (s *JobSLAPredictorService) identifySLABreach(jobTarget *scheduler.JobLinea
 	// identify jobs that might breach their SLAs based on current time and inferred SLAs
 	// T(now)>= S(u|j) and the job u has not completed yet
 	// T(now)>= S(u|j) - D(u) and the job u has not started yet
-	rootCauses, fullRootCauses := s.identifySLABreachRootCauses(jobTarget, jobSLAStates, referenceTime)
+	rootCauses, fullRootCauses := s.identifySLABreachRootCauses(jobTarget, jobSLAStates, skipJobNames, referenceTime)
 
 	// populate breachesCauses
 	breachesCauses := make(map[scheduler.JobName]*JobState)
@@ -417,7 +424,7 @@ func (s *JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobL
 // - Given current time in UTC T(now), T(now)>= S(u|j) (the inferred SLA for u induced by j has passed) and the upstream job u has not completed yet. Or,
 // - Given current time in UTC T(now), T(now)>= S(u|j) - D(u) (the inferred SLA for u induced by j minus the average duration of u has passed) and the upstream job u has not started yet.
 // return the job that might breach its SLA
-func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, referenceTime time.Time) ([][]*JobState, [][]*JobState) {
+func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, skipJobNames map[scheduler.JobName]bool, referenceTime time.Time) ([][]*JobState, [][]*JobState) {
 	jobStateByName := make(map[scheduler.JobName]*JobState)
 	potentialBreachPaths := make([][]scheduler.JobName, 0)
 	// DFS to traverse all upstream jobs with paths
@@ -456,6 +463,11 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		// check if job meets either of the conditions
 		isPotentialBreach := false
 		for _, jobRun := range job.JobRuns {
+			// skip detection for jobs in skip list
+			if skipJobNames[job.JobName] {
+				s.l.Info("skipping job for SLA breach check as it's in the skip list", "job", job.JobName)
+				break
+			}
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
 			if (referenceTime.After(inferredSLA) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 				// found a job that might breach its SLA

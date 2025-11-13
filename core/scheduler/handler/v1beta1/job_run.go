@@ -493,6 +493,7 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 	reqConfig := service.JobSLAPredictorRequestConfig{
 		ReferenceTime:        referenceTime,
 		ScheduleRangeInHours: scheduleRangeInHours,
+		SkipJobNames:         req.GetSkipJobNames(),
 		EnableAlert:          req.GetAlertOnBreach(),
 		EnableDeduplication:  req.GetEnableDeduplication(),
 		Severity:             req.GetSeverity(),

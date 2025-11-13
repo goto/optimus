@@ -547,6 +547,12 @@
                 "damperCoeff": {
                   "type": "number",
                   "format": "float"
+                },
+                "skipJobNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               }
             }

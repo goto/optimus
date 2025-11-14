@@ -93,9 +93,22 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		ScheduleInterval: "0 7 * * *",
 	}
 
-	jobUpstreams := map[scheduler.JobName][]scheduler.JobName{
-		jobNameA: {jobNameB},
-		jobNameB: {jobNameC},
+	jobAID := scheduler.JobIdentifier{
+		JobName:     jobNameA,
+		ProjectName: project.Name(),
+	}
+	jobBID := scheduler.JobIdentifier{
+		JobName:     jobNameB,
+		ProjectName: project.Name(),
+	}
+	jobCID := scheduler.JobIdentifier{
+		JobName:     jobNameC,
+		ProjectName: project.Name(),
+	}
+
+	jobUpstreams := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{
+		jobAID: {jobBID},
+		jobBID: {jobCID},
 	}
 
 	scheduledTime := time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC)
@@ -106,13 +119,26 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		jobRunService := new(MockJobRunService)
 		projectGetter := new(MockProjectGetter)
 
-		jobSchedules := []*scheduler.JobSchedule{
-			{JobName: jobNameA, ScheduledAt: scheduledTime},
+		jobAID := scheduler.JobIdentifier{
+			JobName:     jobNameA,
+			ProjectName: project.Name(),
 		}
-		jobMap := map[scheduler.JobName]*scheduler.JobSummary{
-			jobNameA: jobAWithDetails,
-			jobNameB: jobBWithDetails,
-			jobNameC: jobCWithDetails,
+		jobBID := scheduler.JobIdentifier{
+			JobName:     jobNameB,
+			ProjectName: project.Name(),
+		}
+		jobCID := scheduler.JobIdentifier{
+			JobName:     jobNameC,
+			ProjectName: project.Name(),
+		}
+
+		jobSchedules := []*scheduler.JobSchedule{
+			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},
+		}
+		jobMap := map[scheduler.JobIdentifier]*scheduler.JobSummary{
+			jobAID: jobAWithDetails,
+			jobBID: jobBWithDetails,
+			jobCID: jobCWithDetails,
 		}
 
 		// expected job runs to be fetched
@@ -135,14 +161,15 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		// although there are multiple expected schedules for jobC, only fetch the latest one
 		jobRunsToFetch := []scheduler.JobRunIdentifier{
-			{JobName: jobNameA, ScheduledAt: time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC)},
-			{JobName: jobNameB, ScheduledAt: time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)},
-			{JobName: jobNameC, ScheduledAt: time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC)},
+			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC)},
+			{JobName: jobNameB, ProjectName: project.Name(), ScheduledAt: time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)},
+			{JobName: jobNameC, ProjectName: project.Name(), ScheduledAt: time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC)},
 		}
 
 		fetchedJobRunSummaries := []*scheduler.JobRunSummary{
 			{
 				JobName:       jobNameA,
+				ProjectName:   project.Name(),
 				ScheduledAt:   time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC),
 				JobStartTime:  timePtr(time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC)),
 				JobEndTime:    timePtr(time.Date(2023, 1, 1, 19, 30, 0, 0, time.UTC)),
@@ -155,6 +182,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 			},
 			{
 				JobName:       jobNameB,
+				ProjectName:   project.Name(),
 				ScheduledAt:   time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC),
 				JobStartTime:  timePtr(time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)),
 				JobEndTime:    timePtr(time.Date(2023, 1, 1, 13, 20, 0, 0, time.UTC)),
@@ -167,6 +195,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 			},
 			{
 				JobName:       jobNameC,
+				ProjectName:   project.Name(),
 				ScheduledAt:   time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC),
 				JobStartTime:  timePtr(time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC)),
 				JobEndTime:    timePtr(time.Date(2023, 1, 1, 7, 10, 0, 0, time.UTC)),
@@ -182,9 +211,9 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(jobUpstreams, nil)
 		jobRepo.On("GetSummaryByNames",
 			ctx,
-			matchValues([]scheduler.JobName{jobNameA, jobNameB, jobNameC},
-				func(name scheduler.JobName) string {
-					return name.String()
+			matchValues([]scheduler.JobIdentifier{jobAID, jobBID, jobCID},
+				func(id scheduler.JobIdentifier) string {
+					return id.String()
 				}),
 		).Return(jobMap, nil)
 		projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
@@ -278,15 +307,15 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},
 		}
 
-		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
-			jobNameA: {jobNameB},
+		upstreamsMap := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{
+			jobAID: {jobBID},
 		}
 
 		expectedErr := errors.New("job repository error")
 
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
-		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobName{jobNameA, jobNameB}, func(jobName scheduler.JobName) string {
-			return string(jobName)
+		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobIdentifier{jobAID, jobBID}, func(jobID scheduler.JobIdentifier) string {
+			return jobID.String()
 		})).Return(nil, expectedErr)
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
@@ -308,20 +337,20 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		projectGetter := new(MockProjectGetter)
 
 		jobSchedules := []*scheduler.JobSchedule{
-			{JobName: jobNameA, ScheduledAt: scheduledTime},
+			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},
 		}
 
-		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
-			jobNameA: {jobNameB},
+		upstreamsMap := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{
+			jobAID: {jobBID},
 		}
-		jobsByName := map[scheduler.JobName]*scheduler.JobSummary{
-			jobNameB: jobBWithDetails,
+		jobsByName := map[scheduler.JobIdentifier]*scheduler.JobSummary{
+			jobBID: jobBWithDetails,
 		}
 		expectedErr := errors.New("project getter error")
 
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
-		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobName{jobNameA, jobNameB}, func(jobName scheduler.JobName) string {
-			return string(jobName)
+		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobIdentifier{jobAID, jobBID}, func(jobID scheduler.JobIdentifier) string {
+			return jobID.String()
 		})).Return(jobsByName, nil)
 		projectGetter.On("Get", ctx, project.Name()).Return(nil, expectedErr)
 
@@ -345,23 +374,23 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		projectGetter := new(MockProjectGetter)
 
 		jobSchedules := []*scheduler.JobSchedule{
-			{JobName: jobNameA, ScheduledAt: scheduledTime},
+			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},
 		}
 
-		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
-			jobNameA: {jobNameB},
+		upstreamsMap := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{
+			jobAID: {jobBID},
 		}
 
-		jobsByName := map[scheduler.JobName]*scheduler.JobSummary{
-			jobNameB: jobBWithDetails,
-			jobNameA: jobAWithDetails,
+		jobsByName := map[scheduler.JobIdentifier]*scheduler.JobSummary{
+			jobBID: jobBWithDetails,
+			jobAID: jobAWithDetails,
 		}
 
 		expectedErr := errors.New("job run service error")
 
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
-		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobName{jobNameA, jobNameB}, func(jobName scheduler.JobName) string {
-			return string(jobName)
+		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobIdentifier{jobAID, jobBID}, func(jobID scheduler.JobIdentifier) string {
+			return jobID.String()
 		})).Return(jobsByName, nil)
 		projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
 		jobRunService.On("GetExpectedRunSchedules", ctx, project, jobAWithDetails.ScheduleInterval, jobAWithDetails.Window, jobBWithDetails.ScheduleInterval, scheduledTime).Return(nil, expectedErr)
@@ -387,24 +416,24 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		projectGetter := new(MockProjectGetter)
 
 		jobSchedules := []*scheduler.JobSchedule{
-			{JobName: jobNameA, ScheduledAt: scheduledTime},
+			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},
 		}
 
-		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
-			jobNameA: {jobNameB},
+		upstreamsMap := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{
+			jobAID: {jobBID},
 		}
 
-		jobsByName := map[scheduler.JobName]*scheduler.JobSummary{
-			jobNameB: jobBWithDetails,
-			jobNameA: jobAWithDetails,
+		jobsByName := map[scheduler.JobIdentifier]*scheduler.JobSummary{
+			jobBID: jobBWithDetails,
+			jobAID: jobAWithDetails,
 		}
 
 		expectedSchedules := []time.Time{scheduledTime.Add(-time.Hour)}
 		expectedErr := errors.New("job run service error")
 
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
-		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobName{jobNameA, jobNameB}, func(jobName scheduler.JobName) string {
-			return string(jobName)
+		jobRepo.On("GetSummaryByNames", ctx, matchValues([]scheduler.JobIdentifier{jobAID, jobBID}, func(jobID scheduler.JobIdentifier) string {
+			return jobID.String()
 		})).Return(jobsByName, nil)
 		projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
 		jobRunService.On("GetExpectedRunSchedules", ctx, project, jobAWithDetails.ScheduleInterval, jobAWithDetails.Window, jobBWithDetails.ScheduleInterval, scheduledTime).Return(expectedSchedules, nil)
@@ -430,10 +459,10 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		jobRunService := new(MockJobRunService)
 		projectGetter := new(MockProjectGetter)
 
-		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{}
+		upstreamsMap := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{}
 
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
-		jobRepo.On("GetSummaryByNames", ctx, []scheduler.JobName{}).Return(map[scheduler.JobName]*scheduler.JobSummary{}, nil)
+		jobRepo.On("GetSummaryByNames", ctx, []scheduler.JobIdentifier{}).Return(map[scheduler.JobIdentifier]*scheduler.JobSummary{}, nil)
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
@@ -453,11 +482,11 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		projectGetter := new(MockProjectGetter)
 
 		jobSchedules := []*scheduler.JobSchedule{
-			{JobName: jobNameA, ScheduledAt: scheduledTime},
+			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},
 		}
 
-		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
-			jobNameA: {},
+		upstreamsMap := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{
+			jobAID: {},
 		}
 
 		expectedJobRunSummaries := []*scheduler.JobRunSummary{
@@ -468,7 +497,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		}
 
 		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
-		jobRepo.On("GetSummaryByNames", ctx, []scheduler.JobName{jobNameA}).Return(map[scheduler.JobName]*scheduler.JobSummary{}, nil)
+		jobRepo.On("GetSummaryByNames", ctx, []scheduler.JobIdentifier{jobAID}).Return(map[scheduler.JobIdentifier]*scheduler.JobSummary{}, nil)
 		projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
 		jobRunService.On("GetJobRunsByIdentifiers", ctx, []scheduler.JobRunIdentifier{
 			{JobName: jobNameA, ScheduledAt: scheduledTime},

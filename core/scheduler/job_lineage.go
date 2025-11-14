@@ -16,6 +16,7 @@ const (
 
 type JobSchedule struct {
 	JobName     JobName
+	ProjectName tenant.ProjectName
 	ScheduledAt time.Time
 }
 
@@ -30,6 +31,13 @@ type JobLineageSummary struct {
 
 	// JobRuns is a map of job's scheduled time to its run summary
 	JobRuns map[string]*JobRunSummary
+}
+
+func (j *JobLineageSummary) JobIdentifier() JobIdentifier {
+	return JobIdentifier{
+		JobName:     j.JobName,
+		ProjectName: j.Tenant.ProjectName(),
+	}
 }
 
 type upstreamCandidate struct {
@@ -162,6 +170,7 @@ func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
 			if latestJobRun != nil {
 				result = append(result, &JobExecutionSummary{
 					JobName:       current.JobName,
+					ProjectName:   current.Tenant.ProjectName(),
 					SLA:           current.SLA,
 					Level:         level,
 					JobRunSummary: latestJobRun,
@@ -179,14 +188,16 @@ func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
 
 type JobRunLineage struct {
 	JobName     JobName
+	ProjectName tenant.ProjectName
 	ScheduledAt time.Time
 	JobRuns     []*JobExecutionSummary
 }
 
 // JobExecutionSummary is a flattened version of JobLineageSummary
 type JobExecutionSummary struct {
-	JobName JobName
-	SLA     SLAConfig
+	JobName     JobName
+	ProjectName tenant.ProjectName
+	SLA         SLAConfig
 	// Level marks the distance from the original job in question
 	Level         int
 	JobRunSummary *JobRunSummary
@@ -198,6 +209,8 @@ type SLAConfig struct {
 
 type JobRunSummary struct {
 	JobName     JobName
+	ProjectName tenant.ProjectName
+
 	ScheduledAt time.Time
 	SLATime     *time.Time
 

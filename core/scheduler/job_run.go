@@ -157,5 +157,6 @@ type AlertManagerConfig struct {
 
 type JobRunIdentifier struct {
 	JobName     JobName
+	ProjectName tenant.ProjectName
 	ScheduledAt time.Time
 }

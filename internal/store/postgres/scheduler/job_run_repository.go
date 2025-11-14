@@ -479,37 +479,45 @@ func (j *JobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, ident
 	argIndex := 1
 
 	for _, identifier := range identifiers {
-		condition := fmt.Sprintf("(jr.job_name = $%d AND jr.scheduled_at = $%d)",
-			argIndex, argIndex+1)
+		condition := fmt.Sprintf("(jr.job_name = $%d AND jr.project_name = $%d AND jr.scheduled_at = $%d)",
+			argIndex, argIndex+1, argIndex+2)
 		conditions = append(conditions, condition)
-		args = append(args, identifier.JobName, identifier.ScheduledAt.UTC().Format(dbTimeFormat))
-		argIndex += 2
+		args = append(args, identifier.JobName, identifier.ProjectName, identifier.ScheduledAt.UTC().Format(dbTimeFormat))
+		argIndex += 3
 	}
 
 	query := fmt.Sprintf(`
 WITH operations AS (
 	SELECT 
 		jr.job_name,
+		jr.project_name,
 		jr.scheduled_at,
 		jr.start_time AS job_start_time,
 		jr.end_time AS job_end_time,
 		opr.operation_type,
 		opr.start_time,
+		opr.status,
 		COALESCE(opr.end_time, CASE WHEN jr.status IN ('failed', 'success') THEN jr.end_time ELSE NOW() END) AS end_time,
-		ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY EXTRACT(EPOCH FROM (COALESCE(opr.end_time, jr.end_time) - opr.start_time)) DESC) as rn
+		CASE 
+			WHEN opr.operation_type = 'sensor' THEN 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, COALESCE(opr.end_time, CASE WHEN jr.status IN ('failed', 'success') THEN jr.end_time ELSE NOW() END) DESC)
+			ELSE 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.start_time ASC)
+		END as rn
 	FROM job_run jr
 	JOIN (
-		SELECT job_run_id, start_time, end_time, 'sensor' AS operation_type FROM sensor_run 
+		SELECT job_run_id, start_time, end_time, status, 'sensor' AS operation_type FROM sensor_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, 'task' AS operation_type FROM task_run 
+		SELECT job_run_id, start_time, end_time, status, 'task' AS operation_type FROM task_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, 'hook' AS operation_type FROM hook_run 
+		SELECT job_run_id, start_time, end_time, status, 'hook' AS operation_type FROM hook_run 
 	) opr ON opr.job_run_id = jr.id
 	WHERE %s
 	AND opr.start_time IS NOT NULL
 )
 SELECT 
 	job_name,
+	project_name,
 	scheduled_at,
 	job_start_time,
 	job_end_time,
@@ -521,7 +529,7 @@ SELECT
 	MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN end_time END) as hook_end_time
 FROM operations
 WHERE rn = 1
-GROUP BY job_name, scheduled_at, job_start_time, job_end_time
+GROUP BY job_name, project_name, scheduled_at, job_start_time, job_end_time
 ORDER BY scheduled_at DESC
 	`, strings.Join(conditions, " OR "))
 
@@ -535,6 +543,7 @@ ORDER BY scheduled_at DESC
 	for rows.Next() {
 		var (
 			jobName         string
+			projectName     string
 			scheduledAt     time.Time
 			jobStartTime    *time.Time
 			jobEndTime      *time.Time
@@ -546,7 +555,8 @@ ORDER BY scheduled_at DESC
 			hookEndTime     *time.Time
 		)
 
-		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime,
+		err = rows.Scan(&jobName, &projectName,
+			&scheduledAt, &jobStartTime, &jobEndTime,
 			&sensorStartTime, &sensorEndTime,
 			&taskStartTime, &taskEndTime,
 			&hookStartTime, &hookEndTime)
@@ -556,6 +566,7 @@ ORDER BY scheduled_at DESC
 
 		summary := &scheduler.JobRunSummary{
 			JobName:       scheduler.JobName(jobName),
+			ProjectName:   tenant.ProjectName(projectName),
 			ScheduledAt:   scheduledAt,
 			JobStartTime:  jobStartTime,
 			JobEndTime:    jobEndTime,

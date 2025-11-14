@@ -801,9 +801,7 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 
 	upstreamMap := make(map[scheduler.JobIdentifier][]scheduler.JobIdentifier)
 	for rows.Next() {
-		var (
-			jobName, projectName, upstreamJobName, upstreamProjectName string
-		)
+		var jobName, projectName, upstreamJobName, upstreamProjectName string
 		err := rows.Scan(&jobName, &projectName, &upstreamJobName, &upstreamProjectName)
 		if err != nil {
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning upstream row", err)

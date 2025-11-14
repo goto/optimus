@@ -122,10 +122,7 @@ func (r *LineageResolver) collectAllRequiredJobs(jobSchedules []*scheduler.JobSc
 	allJobIdentifiers := []scheduler.JobIdentifier{}
 
 	for _, schedule := range jobSchedules {
-		jobID := scheduler.JobIdentifier{
-			JobName:     schedule.JobName,
-			ProjectName: schedule.ProjectName,
-		}
+		jobID := scheduler.NewJobIdentifier(schedule.JobName, schedule.ProjectName)
 		r.collectJobs(jobID, upstreamsByJob, visited, &allJobIdentifiers, 0)
 	}
 
@@ -146,10 +143,7 @@ func (r *LineageResolver) collectJobs(jobID scheduler.JobIdentifier, upstreamsBy
 }
 
 func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *scheduler.JobSchedule, lineageData *LineageData, maxUpstreamsPerLevel int) (*scheduler.JobLineageSummary, error) {
-	jobIdentifer := scheduler.JobIdentifier{
-		JobName:     schedule.JobName,
-		ProjectName: schedule.ProjectName,
-	}
+	jobIdentifer := scheduler.NewJobIdentifier(schedule.JobName, schedule.ProjectName)
 	lineage := r.buildLineageTree(jobIdentifer, lineageData, map[scheduler.JobIdentifier]*scheduler.JobLineageSummary{}, 0)
 
 	finalLineage, err := r.getAllUpstreamRuns(ctx, lineage, schedule.ScheduledAt, lineageData)
@@ -324,10 +318,7 @@ func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap 
 
 	for _, detail := range jobRunDetails {
 		scheduleKey := detail.ScheduledAt.UTC().Format(time.RFC3339)
-		jobID := scheduler.JobIdentifier{
-			JobName:     detail.JobName,
-			ProjectName: detail.ProjectName,
-		}
+		jobID := scheduler.NewJobIdentifier(detail.JobName, detail.ProjectName)
 		if jobRuns, exists := result[jobID]; exists {
 			if jobRun, exists := jobRuns[scheduleKey]; exists {
 				jobRun.JobName = detail.JobName

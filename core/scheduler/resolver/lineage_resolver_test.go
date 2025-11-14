@@ -93,18 +93,9 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		ScheduleInterval: "0 7 * * *",
 	}
 
-	jobAID := scheduler.JobIdentifier{
-		JobName:     jobNameA,
-		ProjectName: project.Name(),
-	}
-	jobBID := scheduler.JobIdentifier{
-		JobName:     jobNameB,
-		ProjectName: project.Name(),
-	}
-	jobCID := scheduler.JobIdentifier{
-		JobName:     jobNameC,
-		ProjectName: project.Name(),
-	}
+	jobAID := scheduler.NewJobIdentifier(jobNameA, project.Name())
+	jobBID := scheduler.NewJobIdentifier(jobNameB, project.Name())
+	jobCID := scheduler.NewJobIdentifier(jobNameC, project.Name())
 
 	jobUpstreams := map[scheduler.JobIdentifier][]scheduler.JobIdentifier{
 		jobAID: {jobBID},
@@ -118,19 +109,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		jobRepo := new(MockJobRepository)
 		jobRunService := new(MockJobRunService)
 		projectGetter := new(MockProjectGetter)
-
-		jobAID := scheduler.JobIdentifier{
-			JobName:     jobNameA,
-			ProjectName: project.Name(),
-		}
-		jobBID := scheduler.JobIdentifier{
-			JobName:     jobNameB,
-			ProjectName: project.Name(),
-		}
-		jobCID := scheduler.JobIdentifier{
-			JobName:     jobNameC,
-			ProjectName: project.Name(),
-		}
 
 		jobSchedules := []*scheduler.JobSchedule{
 			{JobName: jobNameA, ProjectName: project.Name(), ScheduledAt: scheduledTime},

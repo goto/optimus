@@ -807,8 +807,8 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning upstream row", err)
 		}
 
-		jobKey := scheduler.JobIdentifier{ProjectName: tenant.ProjectName(projectName), JobName: scheduler.JobName(jobName)}
-		upstreamJob := scheduler.JobIdentifier{ProjectName: tenant.ProjectName(upstreamProjectName), JobName: scheduler.JobName(upstreamJobName)}
+		jobKey := scheduler.NewJobIdentifier(scheduler.JobName(jobName), tenant.ProjectName(projectName))
+		upstreamJob := scheduler.NewJobIdentifier(scheduler.JobName(upstreamJobName), tenant.ProjectName(upstreamProjectName))
 		upstreamMap[jobKey] = append(upstreamMap[jobKey], upstreamJob)
 	}
 
@@ -869,10 +869,8 @@ func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobIDs []schedule
 			continue
 		}
 
-		jobsMap[scheduler.JobIdentifier{
-			ProjectName: tenant.ProjectName(spec.ProjectName),
-			JobName:     scheduler.JobName(spec.JobName),
-		}] = jobSummary
+		jobID := scheduler.NewJobIdentifier(scheduler.JobName(spec.JobName), tenant.ProjectName(spec.ProjectName))
+		jobsMap[jobID] = jobSummary
 	}
 
 	return jobsMap, multiError.ToErr()

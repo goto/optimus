@@ -166,7 +166,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 			jobBreachCauses[jobSchedule.JobName] = breachesCauses
 		}
 		// populate jobFullBreachCauses for logging and storage purpose
-		if len(fullBreachesCauses) == 0 {
+		if len(fullBreachesCauses) > 0 {
 			jobFullBreachCauses[jobSchedule.JobName] = fullBreachesCauses
 		}
 	}

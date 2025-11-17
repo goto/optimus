@@ -33,7 +33,8 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 	for _, lineage := range downstreamLineages {
 		flattenedLineage := lineage.Flatten(scheduler.MaxLineageDepth)
 		result = append(result, &scheduler.JobRunLineage{
-			JobName: lineage.JobName,
+			JobName:     lineage.JobName,
+			ProjectName: lineage.Tenant.ProjectName(),
 			// index 0 should contain the original job in question
 			ScheduledAt: flattenedLineage[0].JobRunSummary.ScheduledAt,
 			JobRuns:     flattenedLineage,

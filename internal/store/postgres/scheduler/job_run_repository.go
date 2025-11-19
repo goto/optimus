@@ -534,7 +534,7 @@ SELECT
 	MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN end_time END) as hook_end_time
 FROM operations
 WHERE rn = 1
-GROUP BY job_name, project_name, scheduled_at, job_start_time, job_end_time
+GROUP BY job_name, scheduled_at, job_start_time, job_end_time
 ORDER BY scheduled_at DESC
 	`, strings.Join(conditions, " OR "))
 

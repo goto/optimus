@@ -506,9 +506,9 @@ WITH operations AS (
 		END AS end_time,
 		CASE 
 			WHEN opr.operation_type = 'sensor' THEN 
-				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time DESC)
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time DESC)
 			ELSE 
-				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.start_time ASC)
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.start_time ASC)
 		END as rn
 	FROM job_run jr
 	JOIN (

@@ -490,23 +490,36 @@ func (j *JobRunRepository) GetRunSummaryByIdentifiers(ctx context.Context, ident
 WITH operations AS (
 	SELECT 
 		jr.job_name,
+		jr.project_name,
 		jr.scheduled_at,
 		jr.start_time AS job_start_time,
-		jr.end_time AS job_end_time,
+		CASE
+			WHEN jr.status = 'success' THEN jr.end_time
+			ELSE NULL
+		END AS job_end_time,
 		opr.operation_type,
 		opr.start_time,
-		COALESCE(opr.end_time, CASE WHEN jr.status IN ('failed', 'success') THEN jr.end_time ELSE NOW() END) AS end_time,
-		ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.scheduled_at, opr.operation_type ORDER BY EXTRACT(EPOCH FROM (COALESCE(opr.end_time, jr.end_time) - opr.start_time)) DESC) as rn
+		opr.status,
+		CASE
+			WHEN opr.status = 'success' THEN opr.end_time
+			ELSE NULL
+		END AS end_time,
+		CASE 
+			WHEN opr.operation_type = 'sensor' THEN 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time DESC)
+			ELSE 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.start_time ASC)
+		END as rn
 	FROM job_run jr
 	JOIN (
-		SELECT job_run_id, start_time, end_time, 'sensor' AS operation_type FROM sensor_run 
+		SELECT job_run_id, start_time, end_time, status, 'sensor' AS operation_type FROM sensor_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, 'task' AS operation_type FROM task_run 
+		SELECT job_run_id, start_time, end_time, status, 'task' AS operation_type FROM task_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, 'hook' AS operation_type FROM hook_run 
+		SELECT job_run_id, start_time, end_time, status, 'hook' AS operation_type FROM hook_run 
 	) opr ON opr.job_run_id = jr.id
-	WHERE %s
-	AND opr.start_time IS NOT NULL
+	WHERE (%s)
+	AND jr.project_name NOT LIKE '%%-preprod'
 )
 SELECT 
 	job_name,

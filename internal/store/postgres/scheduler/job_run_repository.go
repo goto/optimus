@@ -518,9 +518,8 @@ WITH operations AS (
 		UNION ALL 
 		SELECT job_run_id, start_time, end_time, status, 'hook' AS operation_type FROM hook_run 
 	) opr ON opr.job_run_id = jr.id
-	WHERE %s
+	WHERE (%s)
 	AND jr.project_name NOT LIKE '%%-preprod'
-	AND opr.start_time IS NOT NULL
 )
 SELECT 
 	job_name,

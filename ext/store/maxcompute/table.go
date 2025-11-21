@@ -169,10 +169,7 @@ func generateUpdateQuery(incoming, existing tableschema.TableSchema, schemaName 
 		}
 	}
 
-	_, incomingFlattenSchema := flattenSchema(incoming, false)
-	existingFlattenSchema, _ := flattenSchema(existing, true)
-
-	if err := getNormalColumnDifferences(existing.TableName, schemaName, incomingFlattenSchema, existingFlattenSchema, &sqlTasks); err != nil {
+	if err := getNormalColumnDifferences(existing.TableName, schemaName, incoming, existing, &sqlTasks); err != nil {
 		return []string{}, err
 	}
 
@@ -249,10 +246,19 @@ func specifyColumnStructure(parent, columnName string, isArrayStruct bool) strin
 	return fmt.Sprintf("%s.`%s`", parent, columnName)
 }
 
-func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnRecord, existing map[string]tableschema.Column, sqlTasks *[]string) error {
+func getNormalColumnDifferences(tableName, schemaName string, incoming, existing tableschema.TableSchema, sqlTasks *[]string) error {
+	_, incomingFlattenSchema := flattenSchema(incoming, false)
+	existingFlattenSchema, _ := flattenSchema(existing, true)
+
+	// keep track of partition columns for exclusion during column altering, because maxcompute does not allow altering partition columns
+	autoPartitionColumnsMap := make(map[string]struct{})
+	for _, partitionColumn := range existing.PartitionColumns {
+		autoPartitionColumnsMap[partitionColumn.Name] = struct{}{}
+	}
+
 	var columnAddition []string
-	for _, incomingColumnRecord := range incoming {
-		columnFound, ok := existing[incomingColumnRecord.columnStructure]
+	for _, incomingColumnRecord := range incomingFlattenSchema {
+		columnFound, ok := existingFlattenSchema[incomingColumnRecord.columnStructure]
 		if !ok {
 			if incomingColumnRecord.columnValue.NotNull {
 				return fmt.Errorf("unable to add new required column")
@@ -272,18 +278,21 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 		}
 
 		if columnFound.Type.ID() != incomingColumnRecord.columnValue.Type.ID() {
-			return fmt.Errorf("unable to modify column data type")
+			return fmt.Errorf("unable to modify column %s data type from %s to %s", columnFound.Name, columnFound.Type.Name(), incomingColumnRecord.columnValue.Type.Name())
 		}
 
-		if incomingColumnRecord.columnValue.Comment != columnFound.Comment {
+		// Skip altering comment for partition columns as maxcompute does not allow it
+		// can remove this logic if maxcompute supports it in future
+		_, isPartitionColumn := autoPartitionColumnsMap[columnFound.Name]
+		if incomingColumnRecord.columnValue.Comment != columnFound.Comment && !isPartitionColumn {
 			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment %s;",
 				schemaName, tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, common.QuoteString(incomingColumnRecord.columnValue.Comment)))
 		}
-		delete(existing, incomingColumnRecord.columnStructure)
+		delete(existingFlattenSchema, incomingColumnRecord.columnStructure)
 	}
 
-	if len(existing) != 0 {
-		for column := range existing {
+	if len(existingFlattenSchema) != 0 {
+		for column := range existingFlattenSchema {
 			return fmt.Errorf("field %s is missing in new schema", column)
 		}
 	}

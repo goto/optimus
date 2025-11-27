@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -55,12 +56,13 @@ var (
 )
 
 type AlertPayload struct {
-	Project  string                 `json:"-"`
-	LogTag   string                 `json:"-"`
-	Data     map[string]interface{} `json:"data"`
-	Template string                 `json:"template"`
-	Labels   map[string]string      `json:"labels"`
-	Endpoint string                 `json:"-"`
+	Project        string                    `json:"-"`
+	JobWithDetails *scheduler.JobWithDetails `json:"-"` // for internal use only
+	LogTag         string                    `json:"-"`
+	Data           map[string]interface{}    `json:"data"`
+	Template       string                    `json:"template"`
+	Labels         map[string]string         `json:"labels"`
+	Endpoint       string                    `json:"-"`
 }
 
 func (a *AlertPayload) HasDefaultChannelLabel() bool {
@@ -78,12 +80,18 @@ type AlertManager struct {
 	workerErrChan chan error
 	logger        log.Logger
 
-	endpoint    string
-	dashboard   string
-	dataConsole string
-	alertsRepo  AlertsRepo
+	endpoint        string
+	dashboard       string
+	dataConsole     string
+	alertsRepo      AlertsRepo
+	disabledOptions DisabledOptions
 
 	eventBatchInterval time.Duration
+}
+
+type DisabledOptions struct {
+	templateNames              []string
+	afterScheduledRangeInHours int
 }
 
 type AlertsRepo interface {
@@ -92,6 +100,24 @@ type AlertsRepo interface {
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {
+	// if options to disable alert are set, check and skip alerting
+	referenceTime := time.Now()
+	for _, disabledTemplate := range a.disabledOptions.templateNames {
+		if alert.Template != disabledTemplate {
+			continue
+		}
+		prev, err := alert.JobWithDetails.Schedule.GetPreviousSchedule(referenceTime)
+		if err != nil {
+			a.logger.Error(fmt.Sprintf("alert-manager: error getting previous schedule for job %s: %v", alert.JobWithDetails.Name, err))
+			continue
+		}
+		// skip alert if current time is after the allowed range from scheduled time
+		if prev.Add(time.Duration(a.disabledOptions.afterScheduledRangeInHours) * time.Hour).Before(referenceTime) {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.disabledOptions.afterScheduledRangeInHours))
+			return
+		}
+	}
+
 	// if multiple teams are specified in the DefaultChannelLabel, split and send alert to each team separately
 	teams := strings.Split(alert.Labels[DefaultChannelLabel], ",")
 	for _, team := range teams {
@@ -211,6 +237,10 @@ func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, data
 		dashboard:          dashboard,
 		dataConsole:        dataConsole,
 		alertsRepo:         alertsRepo,
+		disabledOptions: DisabledOptions{
+			templateNames:              []string{operatorSLAMissTemplate}, // for now only disable task level alerts
+			afterScheduledRangeInHours: 12,                                // disable alert if alert is after 12 hours of scheduled time
+		},
 	}
 
 	this.wg.Add(1)

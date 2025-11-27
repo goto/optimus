@@ -67,6 +67,7 @@ func getSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType schedule
 			if severity == CriticalSeverity {
 				alertPayload.Labels[EnvironmentLabel] = "production"
 			}
+			alertPayload.JobWithDetails = jobDetails
 			alertPayloads = append(alertPayloads, alertPayload)
 		}
 	}
@@ -151,6 +152,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		Endpoint: utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
 	}
 	alertPayloads := getSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type, baseAlertPayload)
+
 	for _, alertPayload := range alertPayloads {
 		a.relay(alertPayload)
 	}

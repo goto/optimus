@@ -435,11 +435,14 @@ func (s *JobSLAPredictorService) calculateInferredSLAs(jobTarget *scheduler.JobL
 func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, skipJobNames map[scheduler.JobName]bool, referenceTime time.Time) ([][]*JobState, [][]*JobState) {
 	jobStateByName := make(map[scheduler.JobName]*JobState)
 	potentialBreachPaths := make([][]scheduler.JobName, 0)
+	fullRootCauses := make([][]*JobState, 0)
+
 	// DFS to traverse all upstream jobs with paths
 	type state struct {
-		job   *scheduler.JobLineageSummary
-		paths []scheduler.JobName
-		level int
+		job    *scheduler.JobLineageSummary
+		paths  []scheduler.JobName
+		states []*JobState
+		level  int
 	}
 	stack := []*state{}
 	// start from targeted job
@@ -452,7 +455,9 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		stack = stack[:len(stack)-1]
 		job := jobWithState.job
 		paths := make([]scheduler.JobName, len(jobWithState.paths))
+		states := make([]*JobState, len(jobWithState.states))
 		copy(paths, jobWithState.paths)
+		copy(states, jobWithState.states)
 		paths = append(paths, job.JobName) //nolint:makezero
 
 		if visited[job.JobName] {
@@ -486,8 +491,8 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 			if (referenceTime.After(inferredSLA) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 				// found a job that might breach its SLA
 				potentialBreachPaths = append(potentialBreachPaths, paths)
-				// add to jobStateByName
-				jobStateByName[job.JobName] = &JobState{
+				// add to jobStatePaths
+				state := &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],
 					JobName:       job.JobName,
 					JobRun:        *jobRun,
@@ -495,6 +500,10 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 					RelativeLevel: jobWithState.level,
 					Status:        SLABreachCauseRunningLate,
 				}
+				states = append(states, state)
+				fullRootCauses = append(fullRootCauses, states)
+				// add to jobStateByName
+				jobStateByName[job.JobName] = state
 
 				isPotentialBreach = true
 			}
@@ -503,8 +512,8 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 			if referenceTime.After(inferredSLA.Add(-estimatedDuration)) && (jobRun != nil && jobRun.TaskStartTime == nil) {
 				// found a job that might breach its SLA
 				potentialBreachPaths = append(potentialBreachPaths, paths)
-				// add to jobStateByName
-				jobStateByName[job.JobName] = &JobState{
+				// add to jobStatePaths
+				state := &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],
 					JobName:       job.JobName,
 					JobRun:        *jobRun,
@@ -512,6 +521,10 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 					RelativeLevel: jobWithState.level,
 					Status:        SLABreachCauseNotStarted,
 				}
+				states = append(states, state)
+				fullRootCauses = append(fullRootCauses, states)
+				// add to jobStateByName
+				jobStateByName[job.JobName] = state
 
 				isPotentialBreach = true
 			}
@@ -519,23 +532,19 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 
 		if isPotentialBreach {
 			s.l.Info("potential SLA breach found", "job", job.JobName, "inferred_sla", inferredSLA, "duration", jobSLAStates[job.JobName].EstimatedDuration, "path", paths)
+		} else {
+			// no potential breach, continue to traverse upstream jobs and add current job state
+			states = append(states, &JobState{
+				JobSLAState:   *jobSLAStates[job.JobName],
+				JobName:       job.JobName,
+				Tenant:        job.Tenant,
+				RelativeLevel: jobWithState.level,
+			})
 		}
 
 		for _, upstreamJob := range job.Upstreams {
-			stack = append(stack, &state{job: upstreamJob, paths: paths, level: jobWithState.level + 1})
+			stack = append(stack, &state{job: upstreamJob, paths: paths, states: states, level: jobWithState.level + 1})
 		}
-	}
-
-	// full root causes
-	fullRootCauses := make([][]*JobState, len(potentialBreachPaths))
-	for i, path := range potentialBreachPaths {
-		jobStatesPath := make([]*JobState, 0)
-		for _, jobName := range path {
-			if jobState, ok := jobStateByName[jobName]; ok {
-				jobStatesPath = append(jobStatesPath, jobState)
-			}
-		}
-		fullRootCauses[i] = jobStatesPath
 	}
 
 	// find root causes from potentialBreachPaths

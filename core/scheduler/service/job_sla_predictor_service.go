@@ -45,7 +45,7 @@ type JobDetailsGetter interface {
 }
 
 type SLAPredictorRepository interface {
-	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
+	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, targetedSLA time.Time, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
 	GetPredictedSLAJobNamesWithinTimeRange(ctx context.Context, from, to time.Time) ([]scheduler.JobName, error)
 }
 
@@ -189,7 +189,11 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	if s.config.EnablePersistentLogging {
 		for jobName, fullBreachesCausesPaths := range jobFullBreachCauses {
 			jobTarget := jobsWithLineageMap[jobName]
-			if err := s.storePredictedSLABreach(ctx, jobTarget, fullBreachesCausesPaths, reqConfig.ReferenceTime); err != nil {
+			slaTarget := time.Time{}
+			if sla, ok := targetedSLA[jobName]; ok && sla != nil {
+				slaTarget = *sla
+			}
+			if err := s.storePredictedSLABreach(ctx, jobTarget, slaTarget.UTC(), fullBreachesCausesPaths, reqConfig); err != nil {
 				s.l.Error("failed to store predicted SLA breaches", "error", err)
 			}
 		}
@@ -566,7 +570,7 @@ func (*JobSLAPredictorService) populateJobSLAStates(jobDurations map[scheduler.J
 }
 
 // storePredictedSLABreach stores the predicted SLA breaches in the repository for further analysis.
-func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, paths map[scheduler.JobName][]*JobState, referenceTime time.Time) error {
+func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, slaTarget time.Time, paths map[scheduler.JobName][]*JobState, reqConfig JobSLAPredictorRequestConfig) error {
 	for _, path := range paths {
 		if len(path) == 0 {
 			continue
@@ -577,6 +581,8 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 			break
 		}
 		config := map[string]interface{}{}
+		config["server_config"] = s.config
+		config["request_config"] = reqConfig
 		rawConfig, err := json.Marshal(s.config)
 		if err != nil {
 			return err
@@ -594,7 +600,7 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 		if err := json.Unmarshal(rawLineage, &lineages); err != nil {
 			return err
 		}
-		err = s.repo.StorePredictedSLABreach(ctx, jobTarget.JobName, cause.JobName, scheduledAt, string(cause.Status), referenceTime, config, lineages)
+		err = s.repo.StorePredictedSLABreach(ctx, jobTarget.JobName, cause.JobName, slaTarget, scheduledAt, string(cause.Status), reqConfig.ReferenceTime, config, lineages)
 		if err != nil {
 			return err
 		}

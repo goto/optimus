@@ -333,6 +333,10 @@ func (s *OptimusServer) setupHandlers() error {
 			s.conf.Alerting.Dashboard,
 			s.conf.Alerting.DataConsole,
 			alertsLogRepo,
+			alertmanager.AlertRules{
+				TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusOperatorSLAMissTemplate}, // for now only disable task level alerts
+				BackfillLookBackPeriodInHours:  12,                                                    // disable alert if alert is after 12 hours of scheduled time
+			},
 		)
 	}
 

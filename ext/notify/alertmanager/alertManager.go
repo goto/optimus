@@ -106,6 +106,10 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 		if alert.Template != disabledTemplate {
 			continue
 		}
+		if alert.JobWithDetails == nil {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as job details are not provided", disabledTemplate))
+			continue
+		}
 		prev, err := alert.JobWithDetails.Schedule.GetPreviousSchedule(referenceTime)
 		if err != nil {
 			a.logger.Error(fmt.Sprintf("alert-manager: error getting previous schedule for job %s: %v", alert.JobWithDetails.Name, err))

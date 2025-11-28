@@ -80,18 +80,18 @@ type AlertManager struct {
 	workerErrChan chan error
 	logger        log.Logger
 
-	endpoint        string
-	dashboard       string
-	dataConsole     string
-	alertsRepo      AlertsRepo
-	disabledOptions DisabledOptions
+	endpoint    string
+	dashboard   string
+	dataConsole string
+	alertsRepo  AlertsRepo
+	alertRules  AlertRules
 
 	eventBatchInterval time.Duration
 }
 
-type DisabledOptions struct {
-	templateNames              []string
-	afterScheduledRangeInHours int
+type AlertRules struct {
+	TemplatesToSkipDuringBackfills []string
+	BackfillLookBackPeriodInHours  int
 }
 
 type AlertsRepo interface {
@@ -102,7 +102,7 @@ type AlertsRepo interface {
 func (a *AlertManager) relay(alert *AlertPayload) {
 	// if options to disable alert are set, check and skip alerting
 	referenceTime := time.Now()
-	for _, disabledTemplate := range a.disabledOptions.templateNames {
+	for _, disabledTemplate := range a.alertRules.TemplatesToSkipDuringBackfills {
 		if alert.Template != disabledTemplate {
 			continue
 		}
@@ -116,8 +116,8 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 			continue
 		}
 		// skip alert if current time is after the allowed range from scheduled time
-		if prev.Add(time.Duration(a.disabledOptions.afterScheduledRangeInHours) * time.Hour).Before(referenceTime) {
-			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.disabledOptions.afterScheduledRangeInHours))
+		if prev.Add(time.Duration(a.alertRules.BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.alertRules.BackfillLookBackPeriodInHours))
 			return
 		}
 	}
@@ -225,7 +225,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 	return nil
 }
 
-func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo) *AlertManager {
+func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo, alertRules AlertRules) *AlertManager {
 	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
 		logger.Info("alert-manager: host name not found in server config, Optimus can still send events to Alert manager using tenant config.")
@@ -241,10 +241,7 @@ func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, data
 		dashboard:          dashboard,
 		dataConsole:        dataConsole,
 		alertsRepo:         alertsRepo,
-		disabledOptions: DisabledOptions{
-			templateNames:              []string{operatorSLAMissTemplate}, // for now only disable task level alerts
-			afterScheduledRangeInHours: 12,                                // disable alert if alert is after 12 hours of scheduled time
-		},
+		alertRules:         alertRules,
 	}
 
 	this.wg.Add(1)

@@ -43,7 +43,7 @@ func TestAlertManager(t *testing.T) {
 		mockServer := httptest.NewServer(httpHandler)
 		defer mockServer.Close()
 		ctx := context.Background()
-		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", nil)
+		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", nil, alertmanager.AlertRules{})
 		err := am.PrepareAndSendEvent(&alertmanager.AlertPayload{
 			Project: projectName,
 			LogTag:  jobName.String(),
@@ -53,7 +53,7 @@ func TestAlertManager(t *testing.T) {
 				"job_name":  jobName.String(),
 				"owner":     "some-owner",
 			},
-			Template: "optimus-change",
+			Template: alertmanager.OptimusChangeTemplate,
 			Labels: map[string]string{
 				"JobURN": "urn:optimus:project:job:project.namespace.job_name",
 			},

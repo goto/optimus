@@ -15,14 +15,14 @@ import (
 const (
 	radarTimeFormat = "2006/01/02 15:04:05"
 
-	replayTemplate              = "optimus-job-replay"
-	optimusChangeTemplate       = "optimus-change"
-	externalTables              = "external-tables"
-	failureAlertTemplate        = "optimus-job-failure"
-	slaAlertTemplate            = "optimus-job-sla-miss"
-	successNotificationTemplate = "optimus-job-success"
-	operatorSLAMissTemplate     = "optimus-operator-sla-miss"
-	potentialSLABreachTemplate  = "optimus-potential-sla-breach"
+	OptimusReplayTemplate              = "optimus-job-replay"
+	OptimusChangeTemplate              = "optimus-change"
+	OptimusExternalTablesTemplate      = "external-tables"
+	OptimusFailureAlertTemplate        = "optimus-job-failure"
+	OptimusSLAAlertTemplate            = "optimus-job-sla-miss"
+	OptimusSuccessNotificationTemplate = "optimus-job-success"
+	OptimusOperatorSLAMissTemplate     = "optimus-operator-sla-miss"
+	OptimusPotentialSLABreachTemplate  = "optimus-potential-sla-breach"
 
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"
@@ -89,7 +89,7 @@ func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttr
 			"operator_started_at": attr.StartTime.String(),
 			"state":               attr.CurrentState.String(),
 		},
-		Template: operatorSLAMissTemplate,
+		Template: OptimusOperatorSLAMissTemplate,
 		Labels: map[string]string{
 			DefaultChannelLabel: attr.Team,
 			SeverityLabel:       attr.Severity,
@@ -131,13 +131,13 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 	var template string
 	switch e.JobEvent.Type {
 	case scheduler.JobFailureEvent:
-		template = failureAlertTemplate
+		template = OptimusFailureAlertTemplate
 		templateContext["task_id"] = e.JobEvent.OperatorName
 	case scheduler.SLAMissEvent:
-		template = slaAlertTemplate
+		template = OptimusSLAAlertTemplate
 		templateContext["state"] = e.JobEvent.Status.String()
 	case scheduler.JobSuccessEvent:
-		template = successNotificationTemplate
+		template = OptimusSuccessNotificationTemplate
 		templateContext["state"] = e.JobEvent.Status.String()
 	}
 	baseAlertPayload := &AlertPayload{
@@ -172,7 +172,7 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 			"change_type":  attr.ChangeType.String(),
 			"console_link": a.getJobConsoleLink(projectName, jobName),
 		},
-		Template: optimusChangeTemplate,
+		Template: OptimusChangeTemplate,
 		Labels: map[string]string{
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.ChangeType.String()),
@@ -194,7 +194,7 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 			"replay_id":    attr.ReplayID,
 			"console_link": a.getJobConsoleLink(projectName, attr.JobName),
 		},
-		Template: replayTemplate,
+		Template: OptimusReplayTemplate,
 		Labels: map[string]string{
 			"identifier": attr.JobURN,
 			"event_type": strings.ToLower(scheduler.ReplayEvent.String()),
@@ -222,7 +222,7 @@ func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 			"change_type":  attr.EventType.String(),
 			"console_link": a.getJobConsoleLink(projectName, resourceName),
 		},
-		Template: optimusChangeTemplate,
+		Template: OptimusChangeTemplate,
 		Labels: map[string]string{
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.EventType.String()),
@@ -240,7 +240,7 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 			"event_type": attr.EventType,
 			"message":    attr.Message,
 		},
-		Template: externalTables,
+		Template: OptimusExternalTablesTemplate,
 		Labels: map[string]string{
 			DefaultChannelLabel: attr.Tenant.NamespaceName().String(),
 			SeverityLabel:       WarningSeverity,
@@ -268,7 +268,7 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 		Data: map[string]interface{}{
 			"content": content,
 		},
-		Template: potentialSLABreachTemplate,
+		Template: OptimusPotentialSLABreachTemplate,
 		Labels: map[string]string{
 			DefaultChannelLabel: attr.TeamName,
 			SeverityLabel:       severity,

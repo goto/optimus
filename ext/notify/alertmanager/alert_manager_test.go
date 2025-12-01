@@ -3,9 +3,11 @@ package alertmanager_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
@@ -62,5 +64,77 @@ func TestAlertManager(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, reqRecorder.Code, http.StatusOK)
+	})
+
+	t.Run("should skip alert for backfill job", func(t *testing.T) {
+		ar := alertmanager.AlertRules{
+			TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusSLAAlertTemplate},
+			BackfillLookBackPeriodInHours:  2,
+		}
+		am := alertmanager.New(context.Background(), log.NewNoop(), "http://alertmanager", alertManagerEndPoint, "dashboard_url", "data_console_url", nil, ar)
+
+		tc := []struct {
+			name         string
+			alertPayload alertmanager.AlertPayload
+			expectSkip   bool
+		}{
+			{
+				name: "should not detected as backfill for non targeted template",
+				alertPayload: alertmanager.AlertPayload{
+					Template: alertmanager.OptimusFailureAlertTemplate,
+				},
+				expectSkip: false,
+			},
+			{
+				name: "should not detected as backfil when job schedule details not found as it's invalid to check backfill",
+				alertPayload: alertmanager.AlertPayload{
+					Template:       alertmanager.OptimusSLAAlertTemplate,
+					JobWithDetails: nil,
+				},
+				expectSkip: false,
+			},
+			{
+				name: "should not detected as backfill when job schedule is nil as it's invalid to check backfill",
+				alertPayload: alertmanager.AlertPayload{
+					Template: alertmanager.OptimusSLAAlertTemplate,
+					JobWithDetails: &scheduler.JobWithDetails{
+						Schedule: nil,
+					},
+				},
+				expectSkip: false,
+			},
+			{
+				name: "should not detected as backfill when scheduled time within lookback period",
+				alertPayload: alertmanager.AlertPayload{
+					Template: alertmanager.OptimusSLAAlertTemplate,
+					JobWithDetails: &scheduler.JobWithDetails{
+						Schedule: &scheduler.Schedule{
+							Interval: fmt.Sprintf("0 %d * * *", time.Now().Add(-1*time.Hour).Hour()),
+						},
+					},
+				},
+				expectSkip: false,
+			},
+			{
+				name: "should detected as backfill when scheduled time outside lookback period and using targeted template",
+				alertPayload: alertmanager.AlertPayload{
+					Template: alertmanager.OptimusSLAAlertTemplate,
+					JobWithDetails: &scheduler.JobWithDetails{
+						Schedule: &scheduler.Schedule{
+							StartDate: time.Now().Add(-24 * time.Hour),
+							Interval:  fmt.Sprintf("0 %d * * *", time.Now().Add(-5*time.Hour).Hour()),
+						},
+					},
+				},
+				expectSkip: true,
+			},
+		}
+
+		for _, tc := range tc {
+			t.Run(tc.name, func(t *testing.T) {
+				skip := am.IsBackFill(&tc.alertPayload)
+				assert.Equal(t, tc.expectSkip, skip)
+			})
+		}
 	})
 }

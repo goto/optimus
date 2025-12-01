@@ -101,26 +101,9 @@ type AlertsRepo interface {
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {
-	// if options to disable alert are set, check and skip alerting
-	referenceTime := time.Now()
-	for _, disabledTemplate := range a.alertRules.TemplatesToSkipDuringBackfills {
-		if alert.Template != disabledTemplate {
-			continue
-		}
-		if alert.JobWithDetails == nil {
-			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as job details are not provided", disabledTemplate))
-			continue
-		}
-		prev, err := alert.JobWithDetails.Schedule.GetPreviousSchedule(referenceTime)
-		if err != nil {
-			a.logger.Error(fmt.Sprintf("alert-manager: error getting previous schedule for job %s: %v", alert.JobWithDetails.Name, err))
-			continue
-		}
-		// skip alert if current time is after the allowed range from scheduled time
-		if prev.Add(time.Duration(a.alertRules.BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
-			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.alertRules.BackfillLookBackPeriodInHours))
-			return
-		}
+	if a.IsBackFill(alert) {
+		a.logger.Info("alert-manager: skipping alert for backfill job " + alert.LogTag)
+		return
 	}
 
 	// if multiple teams are specified in the DefaultChannelLabel, split and send alert to each team separately
@@ -140,6 +123,31 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 			eventsReceived.WithLabelValues(al.Project, al.LogTag).Inc()
 		}(&alertCopy)
 	}
+}
+
+func (a *AlertManager) IsBackFill(alert *AlertPayload) bool {
+	// if options to disable alert are set, check and skip alerting
+	referenceTime := time.Now()
+	for _, disabledTemplate := range a.alertRules.TemplatesToSkipDuringBackfills {
+		if alert.Template != disabledTemplate {
+			continue
+		}
+		if alert.JobWithDetails == nil || alert.JobWithDetails.Schedule == nil {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as job schedule details not found", disabledTemplate))
+			continue
+		}
+		prev, err := alert.JobWithDetails.Schedule.GetPreviousSchedule(referenceTime)
+		if err != nil {
+			a.logger.Error(fmt.Sprintf("alert-manager: error getting previous schedule for job %s: %v", alert.JobWithDetails.Name, err))
+			continue
+		}
+		// skip alert if current time is after the allowed range from scheduled time
+		if prev.Add(time.Duration(a.alertRules.BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.alertRules.BackfillLookBackPeriodInHours))
+			return true
+		}
+	}
+	return false
 }
 
 func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {

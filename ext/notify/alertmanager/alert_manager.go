@@ -16,6 +16,8 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/goto/optimus/core/scheduler"
 )
 
 type AlertStatus string
@@ -55,12 +57,13 @@ var (
 )
 
 type AlertPayload struct {
-	Project  string                 `json:"-"`
-	LogTag   string                 `json:"-"`
-	Data     map[string]interface{} `json:"data"`
-	Template string                 `json:"template"`
-	Labels   map[string]string      `json:"labels"`
-	Endpoint string                 `json:"-"`
+	Project        string                    `json:"-"`
+	JobWithDetails *scheduler.JobWithDetails `json:"-"` // for internal use only
+	LogTag         string                    `json:"-"`
+	Data           map[string]interface{}    `json:"data"`
+	Template       string                    `json:"template"`
+	Labels         map[string]string         `json:"labels"`
+	Endpoint       string                    `json:"-"`
 }
 
 func (a *AlertPayload) HasDefaultChannelLabel() bool {
@@ -82,8 +85,14 @@ type AlertManager struct {
 	dashboard   string
 	dataConsole string
 	alertsRepo  AlertsRepo
+	alertRules  AlertRules
 
 	eventBatchInterval time.Duration
+}
+
+type AlertRules struct {
+	TemplatesToSkipDuringBackfills []string
+	BackfillLookBackPeriodInHours  int
 }
 
 type AlertsRepo interface {
@@ -92,6 +101,11 @@ type AlertsRepo interface {
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {
+	if a.IsBackFill(alert) {
+		a.logger.Info("alert-manager: skipping alert for backfill job " + alert.LogTag)
+		return
+	}
+
 	// if multiple teams are specified in the DefaultChannelLabel, split and send alert to each team separately
 	teams := strings.Split(alert.Labels[DefaultChannelLabel], ",")
 	for _, team := range teams {
@@ -109,6 +123,31 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 			eventsReceived.WithLabelValues(al.Project, al.LogTag).Inc()
 		}(&alertCopy)
 	}
+}
+
+func (a *AlertManager) IsBackFill(alert *AlertPayload) bool {
+	// if options to disable alert are set, check and skip alerting
+	referenceTime := time.Now()
+	for _, disabledTemplate := range a.alertRules.TemplatesToSkipDuringBackfills {
+		if alert.Template != disabledTemplate {
+			continue
+		}
+		if alert.JobWithDetails == nil || alert.JobWithDetails.Schedule == nil {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as job schedule details not found", disabledTemplate))
+			continue
+		}
+		prev, err := alert.JobWithDetails.Schedule.GetPreviousSchedule(referenceTime)
+		if err != nil {
+			a.logger.Error(fmt.Sprintf("alert-manager: error getting previous schedule for job %s: %v", alert.JobWithDetails.Name, err))
+			continue
+		}
+		// skip alert if current time is after the allowed range from scheduled time
+		if prev.Add(time.Duration(a.alertRules.BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.alertRules.BackfillLookBackPeriodInHours))
+			return true
+		}
+	}
+	return false
 }
 
 func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
@@ -195,7 +234,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 	return nil
 }
 
-func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo) *AlertManager {
+func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo, alertRules AlertRules) *AlertManager {
 	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
 		logger.Info("alert-manager: host name not found in server config, Optimus can still send events to Alert manager using tenant config.")
@@ -211,6 +250,7 @@ func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, data
 		dashboard:          dashboard,
 		dataConsole:        dataConsole,
 		alertsRepo:         alertsRepo,
+		alertRules:         alertRules,
 	}
 
 	this.wg.Add(1)

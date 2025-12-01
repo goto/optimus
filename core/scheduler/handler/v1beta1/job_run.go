@@ -194,6 +194,17 @@ func (h JobRunHandler) GetDexSensorStatus(ctx context.Context, resourceURN resou
 	}, nil
 }
 
+func getJakartaTimeZone() *time.Location {
+	jakartaLoc, _ := time.LoadLocation("Asia/Jakarta")
+	return jakartaLoc
+}
+
+func getJakartaMidnightTime() time.Time {
+	jakartaLoc := getJakartaTimeZone()
+	now := time.Now().In(jakartaLoc)
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jakartaLoc)
+}
+
 // GetThirdPartySensorStatus gets third party sensor status
 func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.GetThirdPartySensorRequest) (*pb.GetThirdPartySensorResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
@@ -219,10 +230,13 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 		return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
 	}
 
-	startTime := intervalResp.GetStartTime().AsTime().UTC()
+	startTime := intervalResp.GetStartTime().AsTime().In(getJakartaTimeZone())
 	endTime := intervalResp.GetEndTime().AsTime().UTC()
-	if endTime.After(time.Now().UTC()) {
-		endTime = time.Now().UTC()
+	logicalEndTime := getJakartaMidnightTime().Add(-1 * time.Minute)
+	if endTime.After(logicalEndTime) {
+		h.l.Info(fmt.Sprintf("resetting the third party sensor window end time to "+
+			"logical jakarta based end time: %s, job: %s", logicalEndTime.Format(time.RFC3339), jobName))
+		endTime = logicalEndTime
 	}
 
 	thirdPartyType := req.GetThirdPartyType()
@@ -230,7 +244,7 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 		dexSensorReq := req.GetDexSensorRequest()
 		if dexSensorReq == nil {
 			h.l.Error("error getting dex sensor request")
-			return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
+			return nil, errors.GRPCErr(errors.InvalidArgument("thirdPartySensor", "unable to get third party sensor status"), " job:  "+req.GetJobName())
 		}
 		resourceURN, err := resource.ParseURN(dexSensorReq.GetResourceUrn())
 		if err != nil {
@@ -243,8 +257,16 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusErr).Inc()
 			return nil, err
 		}
-		if !resp.IsComplete {
-			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, log: %v", string(projectName), string(jobName), resourceURN.String(), resp.Log))
+		if resp != nil && !resp.IsComplete {
+			completenessLog := fmt.Sprintf("request interval start: %s, end, %s, ",
+				startTime.In(getJakartaTimeZone()).Format(time.RFC3339),
+				endTime.In(getJakartaTimeZone()).Format(time.RFC3339))
+
+			for _, completeness := range resp.Log {
+				completenessLog += fmt.Sprintf("[ date: %s, isComplete: %t ],",
+					completeness.Date.AsTime().In(getJakartaTimeZone()).Format(time.RFC3339), completeness.IsComplete)
+			}
+			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, log: %v", string(projectName), string(jobName), resourceURN.String(), completenessLog))
 			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusIncomplete).Inc()
 		} else {
 			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusComplete).Inc()

@@ -386,7 +386,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             log.info("third_party_type      : {}".format(self.third_party_type))
             if self.third_party_type == "dex":
                 api_response = self._optimus_client.execute_third_party_sensor(self.project_name, self.job_name, self.third_party_type, schedule_time, self.config)
-                self.log.info("job_run api response :: {}".format(api_response))
+                self.log.info("DEX api response :: {}".format(api_response))
 
                 # dex specific response parsing
                 resp = api_response.get('dexSensorResponse', {})

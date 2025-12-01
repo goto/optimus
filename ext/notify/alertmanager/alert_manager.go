@@ -16,8 +16,6 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-
-	"github.com/goto/optimus/core/scheduler"
 )
 
 type AlertStatus string
@@ -57,13 +55,13 @@ var (
 )
 
 type AlertPayload struct {
-	Project        string                    `json:"-"`
-	JobWithDetails *scheduler.JobWithDetails `json:"-"` // for internal use only
-	LogTag         string                    `json:"-"`
-	Data           map[string]interface{}    `json:"data"`
-	Template       string                    `json:"template"`
-	Labels         map[string]string         `json:"labels"`
-	Endpoint       string                    `json:"-"`
+	Project           string                 `json:"-"`
+	JobRunScheduledAt time.Time              `json:"-"` // for internal use only
+	LogTag            string                 `json:"-"`
+	Data              map[string]interface{} `json:"data"`
+	Template          string                 `json:"template"`
+	Labels            map[string]string      `json:"labels"`
+	Endpoint          string                 `json:"-"`
 }
 
 func (a *AlertPayload) HasDefaultChannelLabel() bool {
@@ -132,17 +130,12 @@ func (a *AlertManager) IsBackFill(alert *AlertPayload) bool {
 		if alert.Template != disabledTemplate {
 			continue
 		}
-		if alert.JobWithDetails == nil || alert.JobWithDetails.Schedule == nil {
-			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as job schedule details not found", disabledTemplate))
-			continue
-		}
-		prev, err := alert.JobWithDetails.Schedule.GetPreviousSchedule(referenceTime)
-		if err != nil {
-			a.logger.Error(fmt.Sprintf("alert-manager: error getting previous schedule for job %s: %v", alert.JobWithDetails.Name, err))
+		if alert.JobRunScheduledAt.IsZero() {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as scheduled time is not set", disabledTemplate))
 			continue
 		}
 		// skip alert if current time is after the allowed range from scheduled time
-		if prev.Add(time.Duration(a.alertRules.BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
+		if alert.JobRunScheduledAt.Add(time.Duration(a.alertRules.BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
 			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.alertRules.BackfillLookBackPeriodInHours))
 			return true
 		}

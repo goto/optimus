@@ -28,8 +28,8 @@ type JobLineageSummary struct {
 	SLA              SLAConfig
 	Window           *window.Config
 
-	// JobRuns is a map of job's scheduled time to its run summary
-	JobRuns map[string]*JobRunSummary
+	// JobRuns contain the mapping of downstream's job name to their respective job run summaries
+	JobRuns map[JobName]*JobRunSummary
 }
 
 type upstreamCandidate struct {
@@ -72,12 +72,11 @@ func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel, maxDepth int) *Jo
 			continue
 		}
 
-		upstreams := current.original.Upstreams
-		candidates := sortUpstreamCandidates(current.original)
+		candidates := current.original.sortUpstreamCandidates()
 
 		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
 			targetJobName := candidates[i].JobName
-			for _, upstream := range upstreams {
+			for _, upstream := range current.original.Upstreams {
 				if upstream.JobName == targetJobName {
 					if existingPruned, exists := processed[upstream.JobName]; exists {
 						current.pruned.Upstreams = append(current.pruned.Upstreams, existingPruned)
@@ -107,14 +106,18 @@ func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel, maxDepth int) *Jo
 	return rootPruned
 }
 
-func sortUpstreamCandidates(lineage *JobLineageSummary) []upstreamCandidate {
+func (j *JobLineageSummary) sortUpstreamCandidates() []upstreamCandidate {
 	candidates := []upstreamCandidate{}
 
-	for _, upstream := range lineage.Upstreams {
-		latestFinishTime := getLatestFinishTime(upstream.JobRuns)
+	for _, upstream := range j.Upstreams {
+		latestFinishTime := getLatestFinishTime(j.JobName, upstream.JobRuns)
+		if latestFinishTime == nil {
+			continue
+		}
+
 		candidates = append(candidates, upstreamCandidate{
 			JobName: upstream.JobName,
-			EndTime: latestFinishTime,
+			EndTime: *latestFinishTime,
 		})
 	}
 
@@ -125,21 +128,40 @@ func sortUpstreamCandidates(lineage *JobLineageSummary) []upstreamCandidate {
 	return candidates
 }
 
-func getLatestFinishTime(jobRuns map[string]*JobRunSummary) time.Time {
-	var latestFinishTime time.Time
-
-	for _, jobRun := range jobRuns {
-		if jobRun.JobEndTime != nil && (latestFinishTime.IsZero() || jobRun.JobEndTime.After(latestFinishTime)) {
-			latestFinishTime = *jobRun.JobEndTime
-		}
+func getLatestFinishTime(currentJobName JobName, jobRuns map[JobName]*JobRunSummary) *time.Time {
+	jobRun := getRunForJob(currentJobName, jobRuns)
+	if jobRun == nil {
+		return nil
 	}
 
-	return latestFinishTime
+	latestTaskEndTime := jobRun.HookEndTime
+	if latestTaskEndTime == nil {
+		latestTaskEndTime = jobRun.TaskEndTime
+	}
+
+	return latestTaskEndTime
+}
+
+func (j *JobLineageSummary) GetRunForJob(jobName JobName) *JobRunSummary {
+	return getRunForJob(jobName, j.JobRuns)
+}
+
+func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSummary {
+	if run, exists := jobRuns[jobName]; exists {
+		return run
+	}
+
+	return nil
 }
 
 func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
+	type queueItem struct {
+		lineage        *JobLineageSummary
+		subjectJobName JobName
+	}
+
 	var result []*JobExecutionSummary
-	queue := []*JobLineageSummary{j}
+	queue := []queueItem{{lineage: j, subjectJobName: j.JobName}}
 	level := 0
 
 	for len(queue) > 0 && level < maxDepth {
@@ -149,26 +171,19 @@ func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
 			current := queue[0]
 			queue = queue[1:]
 
-			var latestJobRun *JobRunSummary
-			var latestScheduledAt time.Time
-
-			for _, jobRun := range current.JobRuns {
-				if jobRun.ScheduledAt.After(latestScheduledAt) {
-					latestScheduledAt = jobRun.ScheduledAt
-					latestJobRun = jobRun
-				}
-			}
-
+			latestJobRun := current.lineage.GetRunForJob(current.subjectJobName)
 			if latestJobRun != nil {
 				result = append(result, &JobExecutionSummary{
-					JobName:       current.JobName,
-					SLA:           current.SLA,
+					JobName:       current.lineage.JobName,
+					SLA:           current.lineage.SLA,
 					Level:         level,
 					JobRunSummary: latestJobRun,
 				})
 			}
 
-			queue = append(queue, current.Upstreams...)
+			for _, upstream := range current.lineage.Upstreams {
+				queue = append(queue, queueItem{lineage: upstream, subjectJobName: current.lineage.JobName})
+			}
 		}
 
 		level++

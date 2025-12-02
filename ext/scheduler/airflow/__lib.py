@@ -55,6 +55,8 @@ JOB_SLA_MISS_EVENT  = "job_sla_miss"
 THIRD_PARTY_SENSOR_TOGGLE = "THIRD_PARTY_SENSOR_TOGGLE"
 THIRD_PARTY_BLACKLISTEDJOBS = "THIRD_PARTY_BLACKLISTEDJOBS"
 
+THIRD_PARTY_SENSOR_MAX_TIME = "THIRD_PARTY_SENSOR_MAX_TIME_MINUTES"
+
 THIRD_PARTY_SENSOR_TOGGLE_OFF = "OFF"
 THIRD_PARTY_SENSOR_TOGGLE_SOFT = "SOFT"
 THIRD_PARTY_SENSOR_TOGGLE_ON = "ON"
@@ -368,7 +370,26 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             self.log.info("Third party sensor data availability status: {}".format(is_available))
 
             if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
-                self.log.info("Third party sensor is in SOFT mode, Always yielding true for now.")
+                self.log.info("Third party sensor is in SOFT mode, checking for max wait time configuration.")
+                max_sensor_time = Variable.get(THIRD_PARTY_SENSOR_MAX_TIME, default_var="")
+                if max_sensor_time.isdigit() :
+                    max_sensor_time = int(max_sensor_time)
+                    self.log.info("Found max sensor time limit of {} minutes for third party sensor in SOFT mode.".format(max_sensor_time))
+                    dag_run = context["dag_run"]
+                    job_start_time = dag_run.start_date
+                    time_delta = datetime.now(timezone.utc) - job_start_time.replace(tzinfo=timezone.utc)
+                    if time_delta > timedelta(minutes=max_sensor_time) :
+                        self.log.info("Skipping third party sensor as sensor in SOFT mode and current wait time is greater than max limit of {} minutes, time elapsed: {} minutes".format(max_sensor_time, time_delta.total_seconds() // 60))
+                        return True
+                    else :
+                        self.log.info("Third party sensor in SOFT mode within max time limit of {} minutes, time left for sensor processing : {} minutes".format(max_sensor_time, time_delta.total_seconds() // 60))
+                        if not is_available:
+                            self.log.warning("upstream data not yet available for third party '{}' at schedule_time '{}', rescheduling sensor".
+                                            format(self.third_party_type, schedule_time))
+                            return False
+                        return True
+
+                self.log.info("Third party sensor is in SOFT mode, without the flag 'THIRD_PARTY_SENSOR_MAX_TIME', Always yielding true for now.")
                 return True
 
             if not is_available:
@@ -399,8 +420,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
 
         except Exception as e:
             self.log.warning("error while processing sensor :: {}".format(e))
-            self.log.warning("bypassing sensor check due to error in processing third party sensor")
-            return True
+            return False
 
 
 

@@ -67,7 +67,6 @@ func getSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType schedule
 			if severity == CriticalSeverity {
 				alertPayload.Labels[EnvironmentLabel] = "production"
 			}
-			alertPayload.JobWithDetails = jobDetails
 			alertPayloads = append(alertPayloads, alertPayload)
 		}
 	}
@@ -76,8 +75,9 @@ func getSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType schedule
 
 func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs) {
 	alertPayload := &AlertPayload{
-		Project: attr.Project,
-		LogTag:  attr.OperatorType,
+		Project:           attr.Project,
+		JobRunScheduledAt: attr.ScheduledAt,
+		LogTag:            attr.OperatorType,
 		Data: map[string]interface{}{
 			"operator_name":       attr.OperatorName,
 			"operator_type":       attr.OperatorType,

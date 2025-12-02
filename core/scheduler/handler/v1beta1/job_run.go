@@ -231,7 +231,7 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 	}
 
 	startTime := intervalResp.GetStartTime().AsTime().In(getJakartaTimeZone())
-	endTime := intervalResp.GetEndTime().AsTime().UTC()
+	endTime := intervalResp.GetEndTime().AsTime().In(getJakartaTimeZone())
 	logicalEndTime := getJakartaMidnightTime().Add(-1 * time.Minute)
 	if endTime.After(logicalEndTime) {
 		h.l.Info(fmt.Sprintf("resetting the third party sensor window end time to "+

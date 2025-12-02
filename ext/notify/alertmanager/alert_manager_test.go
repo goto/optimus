@@ -3,7 +3,6 @@ package alertmanager_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -86,45 +85,26 @@ func TestAlertManager(t *testing.T) {
 				expectSkip: false,
 			},
 			{
-				name: "should not detected as backfil when job schedule details not found as it's invalid to check backfill",
+				name: "should not detected as backfil when job run scheduled at is zero value",
 				alertPayload: alertmanager.AlertPayload{
-					Template:       alertmanager.OptimusSLAAlertTemplate,
-					JobWithDetails: nil,
-				},
-				expectSkip: false,
-			},
-			{
-				name: "should not detected as backfill when job schedule is nil as it's invalid to check backfill",
-				alertPayload: alertmanager.AlertPayload{
-					Template: alertmanager.OptimusSLAAlertTemplate,
-					JobWithDetails: &scheduler.JobWithDetails{
-						Schedule: nil,
-					},
+					Template:          alertmanager.OptimusSLAAlertTemplate,
+					JobRunScheduledAt: time.Time{},
 				},
 				expectSkip: false,
 			},
 			{
 				name: "should not detected as backfill when scheduled time within lookback period",
 				alertPayload: alertmanager.AlertPayload{
-					Template: alertmanager.OptimusSLAAlertTemplate,
-					JobWithDetails: &scheduler.JobWithDetails{
-						Schedule: &scheduler.Schedule{
-							Interval: fmt.Sprintf("0 %d * * *", time.Now().Add(-1*time.Hour).Hour()),
-						},
-					},
+					Template:          alertmanager.OptimusSLAAlertTemplate,
+					JobRunScheduledAt: time.Now().Add(-1 * time.Hour),
 				},
 				expectSkip: false,
 			},
 			{
 				name: "should detected as backfill when scheduled time outside lookback period and using targeted template",
 				alertPayload: alertmanager.AlertPayload{
-					Template: alertmanager.OptimusSLAAlertTemplate,
-					JobWithDetails: &scheduler.JobWithDetails{
-						Schedule: &scheduler.Schedule{
-							StartDate: time.Now().Add(-24 * time.Hour),
-							Interval:  fmt.Sprintf("0 %d * * *", time.Now().Add(-5*time.Hour).Hour()),
-						},
-					},
+					Template:          alertmanager.OptimusSLAAlertTemplate,
+					JobRunScheduledAt: time.Now().Add(-3 * time.Hour),
 				},
 				expectSkip: true,
 			},

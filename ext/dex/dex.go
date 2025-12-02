@@ -59,7 +59,8 @@ func (d *Client) IsComplete(ctx context.Context, resourceURN resource.URN, dateF
 		return false, nil, err
 	}
 	for _, dateStat := range stats.DataCompletenessByDate {
-		d.l.Info("dex completeness status", "date", dateStat.Date, "is_complete", dateStat.IsComplete)
+		d.l.Info(fmt.Sprintf("dex completeness status [ date: %s, isComplete: %t ],",
+			dateStat.Date.Format(time.RFC3339), dateStat.IsComplete))
 	}
 	return stats.IsComplete, stats, nil
 }

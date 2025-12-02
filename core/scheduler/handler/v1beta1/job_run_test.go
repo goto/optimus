@@ -13,8 +13,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/handler/v1beta1"
+	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
@@ -275,6 +278,142 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Equal(t, "b", input.Envs["a"])
 			assert.Equal(t, "secret_value", input.Secrets["name"])
+		})
+	})
+	t.Run("GetThirdPartySensorStatus", func(t *testing.T) {
+		jakartaLoc, err := time.LoadLocation("Asia/Jakarta")
+		if err != nil {
+			t.Errorf("unable to get timezone location %v", err)
+		}
+
+		t.Run("should return all date based logs of resources underlying dex", func(t *testing.T) {
+			jobScheduleTime := time.Date(2025, time.April, 25, 8, 0, 0, 0, time.UTC)
+
+			resourceURN, err := resource.NewURN("maxcompute", "project.dataset.table_name")
+			assert.Nil(t, err)
+
+			dexResp := &scheduler.DataCompletenessStatus{
+				IsComplete: true,
+				DataCompletenessByDate: []*scheduler.DataCompletenessByDate{
+					{
+						Date:       time.Date(2025, time.April, 24, 7, 0, 0, 0, time.UTC),
+						IsComplete: true,
+					},
+					{
+						Date:       time.Date(2025, time.April, 25, 7, 0, 0, 0, time.UTC),
+						IsComplete: true,
+					},
+				},
+			}
+
+			dexIntervalStart := time.Date(2025, time.April, 23, 15, 0, 0, 0, jakartaLoc)
+			dexIntervalEnd := time.Date(2025, time.April, 25, 15, 0, 0, 0, jakartaLoc)
+
+			thirdPartyClient := new(mockThirdPartyClient)
+			thirdPartyClient.On("IsComplete", ctx, resourceURN, dexIntervalStart, dexIntervalEnd).Return(dexResp.IsComplete, dexResp, nil)
+			defer thirdPartyClient.AssertExpectations(t)
+
+			upstreamResolverType := config.DexUpstreamResolver
+
+			thirdPartySensorService := new(mockThirdPartySensorService)
+			thirdPartySensorService.On("GetClient", upstreamResolverType).Return(thirdPartyClient, nil)
+			defer thirdPartySensorService.AssertExpectations(t)
+
+			jobRunService := new(mockJobRunService)
+			jobIntervalStart := time.Date(2025, time.April, 23, 8, 0, 0, 0, time.UTC)
+			jobIntervalEnd := time.Date(2025, time.April, 25, 8, 0, 0, 0, time.UTC)
+			dataInterval := interval.NewInterval(jobIntervalStart, jobIntervalEnd)
+
+			jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(dataInterval, nil)
+			defer jobRunService.AssertExpectations(t)
+
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, thirdPartySensorService)
+
+			req := &pb.GetThirdPartySensorRequest{
+				ThirdPartyType: upstreamResolverType.String(),
+				ProjectName:    projectName,
+				JobName:        jobName,
+				ScheduledAt:    timestamppb.New(jobScheduleTime),
+				Payload: &pb.GetThirdPartySensorRequest_DexSensorRequest{
+					DexSensorRequest: &pb.DexSensorRequest{
+						ResourceUrn: resourceURN.String(),
+					},
+				},
+			}
+
+			resp, err := jobRunHandler.GetThirdPartySensorStatus(ctx, req)
+			assert.Nil(t, err)
+			assert.Equal(t, dexResp.IsComplete, resp.GetDexSensorResponse().IsComplete)
+			for _, completeness := range resp.GetDexSensorResponse().Log {
+				assert.Equal(t, true, completeness.IsComplete)
+			}
+		})
+		t.Run("should return all date based logs of resources underlying dex, except dates Greater than current date", func(t *testing.T) {
+			jobScheduleTime := time.Now().UTC()
+
+			resourceURN, err := resource.NewURN("maxcompute", "project.dataset.table_name")
+			assert.Nil(t, err)
+
+			todayInJakarta := jobScheduleTime.In(jakartaLoc)
+
+			dexResp := &scheduler.DataCompletenessStatus{
+				IsComplete: true,
+				DataCompletenessByDate: []*scheduler.DataCompletenessByDate{
+					{
+						Date:       time.Date(todayInJakarta.Year(), todayInJakarta.Month(), todayInJakarta.Day()-2, 0, 0, 0, 0, jakartaLoc),
+						IsComplete: true,
+					},
+					{
+						Date:       time.Date(todayInJakarta.Year(), todayInJakarta.Month(), todayInJakarta.Day()-1, 0, 0, 0, 0, jakartaLoc),
+						IsComplete: true,
+					},
+				},
+			}
+			dexIntervalStart := jobScheduleTime.Add(-2 * 24 * time.Hour).In(jakartaLoc)
+
+			jakMidnight := time.Date(todayInJakarta.Year(), todayInJakarta.Month(), todayInJakarta.Day(), 0, 0, 0, 0, jakartaLoc)
+			dexIntervalEnd := jakMidnight.Add(-1 * time.Minute)
+
+			thirdPartyClient := new(mockThirdPartyClient)
+			thirdPartyClient.On("IsComplete", ctx, resourceURN, dexIntervalStart, dexIntervalEnd).Return(dexResp.IsComplete, dexResp, nil)
+			defer thirdPartyClient.AssertExpectations(t)
+
+			upstreamResolverType := config.DexUpstreamResolver
+
+			thirdPartySensorService := new(mockThirdPartySensorService)
+			thirdPartySensorService.On("GetClient", upstreamResolverType).Return(thirdPartyClient, nil)
+			defer thirdPartySensorService.AssertExpectations(t)
+
+			jobRunService := new(mockJobRunService)
+			// 2 days window
+			jobIntervalStart := jobScheduleTime.Add(-2 * 24 * time.Hour)
+			jobIntervalEnd := jobScheduleTime
+			dataInterval := interval.NewInterval(jobIntervalStart, jobIntervalEnd)
+
+			jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(dataInterval, nil)
+			defer jobRunService.AssertExpectations(t)
+
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, thirdPartySensorService)
+
+			req := &pb.GetThirdPartySensorRequest{
+				ThirdPartyType: upstreamResolverType.String(),
+				ProjectName:    projectName,
+				JobName:        jobName,
+				ScheduledAt:    timestamppb.New(jobScheduleTime),
+				Payload: &pb.GetThirdPartySensorRequest_DexSensorRequest{
+					DexSensorRequest: &pb.DexSensorRequest{
+						ResourceUrn: resourceURN.String(),
+					},
+				},
+			}
+
+			resp, err := jobRunHandler.GetThirdPartySensorStatus(ctx, req)
+			assert.Nil(t, err)
+			assert.NotNil(t, resp)
+			assert.Equal(t, dexResp.IsComplete, resp.GetDexSensorResponse().IsComplete)
+			for _, completeness := range resp.GetDexSensorResponse().Log {
+				assert.Equal(t, true, completeness.IsComplete)
+			}
 		})
 	})
 	t.Run("JobRun", func(t *testing.T) {
@@ -904,6 +1043,38 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Equal(t, len(mockLineages), len(resp.Jobs))
 		})
 	})
+}
+
+type mockThirdPartyClient struct {
+	mock.Mock
+}
+
+func (m *mockThirdPartyClient) IsManaged(ctx context.Context, resourceURN resource.URN) (bool, error) {
+	args := m.Called(ctx, resourceURN)
+	if args.Get(0) == nil {
+		return false, args.Error(1)
+	}
+	return args.Get(0).(bool), args.Error(1)
+}
+
+func (m *mockThirdPartyClient) IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, interface{}, error) {
+	args := m.Called(ctx, resourceURN, dateFrom, dateTo)
+	if args.Get(0) == nil {
+		return false, args.Get(1), args.Error(2)
+	}
+	return args.Get(0).(bool), args.Get(1), args.Error(2)
+}
+
+type mockThirdPartySensorService struct {
+	mock.Mock
+}
+
+func (m *mockThirdPartySensorService) GetClient(upstreamResolverType config.UpstreamResolverType) (service.ThirdPartyClient, error) {
+	args := m.Called(upstreamResolverType)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(service.ThirdPartyClient), args.Error(1)
 }
 
 type mockJobLineageService struct {

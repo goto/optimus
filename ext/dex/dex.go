@@ -90,8 +90,8 @@ func (d *Client) constructGetTableStatsRequest(ctx context.Context, store, table
 
 	values := url.Values{}
 	values.Add("with_date_breakdown", "true")
-	values.Add("from", startTime.Format(time.RFC3339)) // ISO8601
-	values.Add("to", endTime.Format(time.RFC3339))     // ISO8601
+	values.Add("from", startTime.UTC().Format(time.RFC3339)) // ISO8601
+	values.Add("to", endTime.UTC().Format(time.RFC3339))     // ISO8601
 
 	u, err := url.Parse(d.config.Host)
 	if err != nil {
@@ -99,6 +99,8 @@ func (d *Client) constructGetTableStatsRequest(ctx context.Context, store, table
 	}
 	u.Path = path
 	u.RawQuery = values.Encode()
+
+	d.l.Debug(fmt.Sprintf("DEX constructing get table stats request: %s", u.String()))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
 	if err != nil {

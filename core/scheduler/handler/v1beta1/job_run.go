@@ -238,6 +238,9 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 			"logical jakarta based end time: %s, job: %s", logicalEndTime.Format(time.RFC3339), jobName))
 		endTime = logicalEndTime
 	}
+	if startTime.After(endTime.Add(-24 * time.Hour)) {
+		startTime = endTime.Add(-24 * time.Hour)
+	}
 
 	thirdPartyType := req.GetThirdPartyType()
 	if thirdPartyType == job.ThirdPartyTypeDex {

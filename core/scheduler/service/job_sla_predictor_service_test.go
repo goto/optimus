@@ -1063,6 +1063,137 @@ func TestIdentifySLABreaches(t *testing.T) {
 	})
 }
 
+func TestIdentifySLABreachRootCauses(t *testing.T) {
+	l := log.NewNoop()
+	conf := config.PotentialSLABreachConfig{
+		DamperCoeff:             1.0,
+		EnablePersistentLogging: false,
+	}
+
+	slaPredictorService := service.NewJobSLAPredictorService(l, conf, nil, nil, nil, nil, nil, nil)
+
+	t.Run("given empty job lineage, return no breach causes", func(t *testing.T) {
+		jobLineage := &scheduler.JobLineageSummary{
+			JobName:          "job-A",
+			ScheduleInterval: "*/5 * * * *",
+			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{},
+			Upstreams:        []*scheduler.JobLineageSummary{},
+		}
+
+		jobSLAStates := map[scheduler.JobName]*service.JobSLAState{}
+		skipJobNames := map[scheduler.JobName]bool{}
+		referenceTime := time.Now()
+
+		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreachRootCauses(jobLineage, jobSLAStates, skipJobNames, referenceTime)
+
+		assert.Len(t, breachCauses, 0)
+		assert.Len(t, allUpstreamStates, 0)
+	})
+
+	t.Run("given job lineage with 1 upstreams running late, return breach causes with full upstreams", func(t *testing.T) {
+		// job-C -> job-B -> job-A
+		// is the target job
+		// job-C is running late, so job-A might breach its SLA
+
+		// | job | estimated duration |
+		// |-----|--------------------|
+		// | A   | 20 mins            | -> targeted SLA 30 mins from now
+		// | B   | 15 mins            | inferredSLA: now+10 mins, must start: now-5 mins
+		// | C   | 10 mins            | inferredSLA: now-5 mins, must start: now-15 mins
+
+		referenceTime := time.Now().UTC()
+		// get hour from now for simulation purpose, we set scheduledAt to be now
+		scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
+		interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
+
+		jobNameA := scheduler.JobName("job-A")
+		jobALineage := &scheduler.JobLineageSummary{
+			JobName:          "job-A",
+			ScheduleInterval: interval,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobNameA: {
+					ScheduledAt: scheduledAt,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobBLineage := &scheduler.JobLineageSummary{
+			JobName:          "job-B",
+			ScheduleInterval: interval,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobNameA: {
+					ScheduledAt: scheduledAt.Add(-15 * time.Minute),
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
+		jobCLineage := &scheduler.JobLineageSummary{
+			JobName:          "job-C",
+			ScheduleInterval: interval,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobNameA: {
+					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+					TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
+		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+
+		estimatedDurationA := time.Duration(20 * time.Minute)
+		estimatedDurationB := time.Duration(15 * time.Minute)
+		estimatedDurationC := time.Duration(10 * time.Minute)
+
+		inferredSLAA := referenceTime.Add(30 * time.Minute)
+		inferredSLAB := referenceTime.Add(10 * time.Minute)
+		inferredSLAC := referenceTime.Add(-5 * time.Minute)
+
+		jobSLAStates := map[scheduler.JobName]*service.JobSLAState{
+			"job-A": {
+				EstimatedDuration: &estimatedDurationA,
+				InferredSLA:       &inferredSLAA,
+			},
+			"job-B": {
+				EstimatedDuration: &estimatedDurationB,
+				InferredSLA:       &inferredSLAB,
+			},
+			"job-C": {
+				EstimatedDuration: &estimatedDurationC,
+				InferredSLA:       &inferredSLAC,
+			},
+		}
+		skipJobNames := map[scheduler.JobName]bool{}
+
+		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreachRootCauses(jobALineage, jobSLAStates, skipJobNames, referenceTime)
+
+		assert.Len(t, breachCauses, 1)         // 1 lineage compacted
+		assert.Len(t, breachCauses[0], 2)      // 2 upstream jobs caused NOT_STARTED and RUNNING_LATE
+		assert.Len(t, allUpstreamStates, 1)    // 1 lineages compacted different causes
+		assert.Len(t, allUpstreamStates[0], 3) // 3 upstream jobs in the lineage
+		// assert.ElementsMatch(t, []*service.JobState{
+		// 	{
+		// 		JobSLAState: service.JobSLAState{
+		// 			EstimatedDuration: &estimatedDurationB,
+		// 			InferredSLA:       &inferredSLAB,
+		// 		},
+		// 		JobName:       "job-B",
+		// 		RelativeLevel: 1,
+		// 	},
+		// 	{
+		// 		JobSLAState: service.JobSLAState{
+		// 			EstimatedDuration: &estimatedDurationC,
+		// 			InferredSLA:       &inferredSLAC,
+		// 		},
+		// 		JobName:       "job-C",
+		// 		Status:        service.SLABreachCauseRunningLate,
+		// 		RelativeLevel: 2,
+		// 	},
+		// }, allUpstreamStates[0])
+	})
+}
+
 // JobLineageFetcher is an autogenerated mock type for the JobLineageFetcher type
 type JobLineageFetcher struct {
 	mock.Mock

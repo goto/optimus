@@ -466,12 +466,18 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 
 		// check if job meets either of the conditions
 		isPotentialBreach := false
-		for _, jobRun := range job.JobRuns {
-			// skip detection for jobs in skip list
-			if skipJobNames[job.JobName] {
-				s.l.Info("skipping job for SLA breach check as it's in the skip list", "job", job.JobName)
-				break
-			}
+
+		if _, ok := job.JobRuns[jobTarget.JobName]; !ok {
+			s.l.Info("skipping job for SLA breach check as it has no job run for the targeted job", "job", job.JobName, "targeted_job", jobTarget.JobName)
+			continue
+		}
+
+		jobRun := job.JobRuns[jobTarget.JobName]
+
+		// skip detection for jobs in skip list
+		if skipJobNames[job.JobName] {
+			s.l.Info("skipping job for SLA breach check as it's in the skip list", "job", job.JobName)
+		} else {
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
 			if (referenceTime.After(inferredSLA) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 				// found a job that might breach its SLA

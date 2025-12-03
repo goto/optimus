@@ -531,12 +531,12 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 			s.l.Info("potential SLA breach found", "job", job.JobName, "inferred_sla", inferredSLA, "duration", jobSLAStates[job.JobName].EstimatedDuration, "path", paths)
 		} else {
 			// no potential breach, continue to traverse upstream jobs and add current job state
-			states = append(states, &JobState{
+			states = append(states, &JobState{ //nolint:makezero
 				JobSLAState:   *jobSLAStates[job.JobName],
 				JobName:       job.JobName,
 				Tenant:        job.Tenant,
 				RelativeLevel: jobWithState.level,
-			}) //nolint:makezero
+			})
 		}
 
 		for _, upstreamJob := range job.Upstreams {

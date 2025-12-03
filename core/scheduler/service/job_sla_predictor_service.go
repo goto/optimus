@@ -585,7 +585,7 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 		config := map[string]interface{}{}
 		config["server_config"] = s.config
 		config["request_config"] = reqConfig
-		rawConfig, err := json.Marshal(s.config)
+		rawConfig, err := json.Marshal(config)
 		if err != nil {
 			return err
 		}

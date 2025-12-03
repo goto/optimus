@@ -482,10 +482,6 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 
 		jobRun := job.JobRuns[jobTarget.JobName]
 
-		if job.JobName.String() == "job-18" {
-			s.l.Info("debugging job-18", "inferred_sla", inferredSLA, "estimated_duration", estimatedDuration, "reference_time", referenceTime, "job_run", jobRun)
-		}
-
 		// skip detection for jobs in skip list
 		if skipJobNames[job.JobName] {
 			s.l.Info("skipping job for SLA breach check as it's in the skip list", "job", job.JobName)

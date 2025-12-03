@@ -518,7 +518,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 			}
 
 			if state != nil {
-				states = append(states, state)
+				states = append(states, state) //nolint:makezero
 				allUpstreamStates = append(allUpstreamStates, states)
 				// add to jobStateByName
 				jobBreachStates[job.JobName] = state
@@ -536,7 +536,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 				JobName:       job.JobName,
 				Tenant:        job.Tenant,
 				RelativeLevel: jobWithState.level,
-			})
+			}) //nolint:makezero
 		}
 
 		for _, upstreamJob := range job.Upstreams {
@@ -653,41 +653,6 @@ func (s *JobSLAPredictorService) sendAlert(ctx context.Context, jobBreaches map[
 			Severity:            severity,
 		})
 	}
-}
-
-// compactingPaths compacts the given paths to only include the leaf nodes.
-// For example, given paths:
-// A->B
-// A->B->C
-// A->B->C->D
-// A->Z->C
-// A->Z->X
-// A->B->Y
-// The result will be:
-// A->B->C->D
-// A->Z->X
-// A->B->Y
-func compactingPaths(paths [][]scheduler.JobName) [][]scheduler.JobName {
-	prefixes := make(map[scheduler.JobName]bool)
-
-	for _, path := range paths {
-		for i, node := range path {
-			if i < len(path)-1 { // prefix
-				prefixes[node] = true
-			}
-		}
-	}
-
-	// result is equal to paths that contains ending nodes that are not prefixes
-	var result [][]scheduler.JobName
-	for _, path := range paths {
-		ending := path[len(path)-1]
-		if _, isPrefix := prefixes[ending]; !isPrefix {
-			result = append(result, path)
-		}
-	}
-
-	return result
 }
 
 // compactingPaths compacts the given paths to only include the leaf nodes.

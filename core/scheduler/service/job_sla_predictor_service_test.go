@@ -1219,7 +1219,7 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 
 	for _, jobName := range jobNamePath {
 		currentJobLineage := &scheduler.JobLineageSummary{
-			JobName:          scheduler.JobName(jobName),
+			JobName:          jobName,
 			ScheduleInterval: interval,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobNameTarget: {
@@ -1229,7 +1229,7 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 
-		jobTargetLineageMap[scheduler.JobName(jobName)] = currentJobLineage
+		jobTargetLineageMap[jobName] = currentJobLineage
 	}
 
 	for i := len(jobNamePath) - 2; i >= 0; i-- {

@@ -21,6 +21,7 @@ type JobSchedule struct {
 
 type JobLineageSummary struct {
 	JobName   JobName
+	IsEnabled bool
 	Upstreams []*JobLineageSummary
 
 	Tenant           tenant.Tenant

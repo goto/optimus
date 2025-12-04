@@ -465,6 +465,11 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		jobsWithLineageVisitedMap[job.JobName] = job
 		visited[job.JobName] = true
 
+		if !job.IsEnabled {
+			s.l.Info("skipping job for SLA breach check as it's disabled", "job", job.JobName)
+			continue
+		}
+
 		if jobSLAStates[job.JobName] == nil || jobSLAStates[job.JobName].InferredSLA == nil || jobSLAStates[job.JobName].EstimatedDuration == nil { // less likely occur, but just in case
 			continue
 		}

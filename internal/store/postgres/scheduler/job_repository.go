@@ -32,7 +32,7 @@ const (
 
 	thirdPartyUpstreamColumns = `job_id, job_name, project_name, upstream_third_party_type, upstream_third_party_identifier, upstream_third_party_config, created_at`
 
-	jobSummaryColumns = `name, version, project_name, namespace_name, schedule, window_spec, alert`
+	jobSummaryColumns = `name, version, project_name, namespace_name, schedule, window_spec, alert, state`
 )
 
 type JobRepository struct {
@@ -159,6 +159,7 @@ type Window struct {
 type jobSummary struct {
 	Version       int
 	JobName       string
+	State         string
 	ProjectName   string
 	NamespaceName string
 	Schedule      json.RawMessage
@@ -169,7 +170,7 @@ type jobSummary struct {
 func fromJobSummaryRow(row pgx.Row) (*jobSummary, error) {
 	var js jobSummary
 
-	err := row.Scan(&js.JobName, &js.Version, &js.ProjectName, &js.NamespaceName, &js.Schedule, &js.WindowSpec, &js.Alert)
+	err := row.Scan(&js.JobName, &js.Version, &js.ProjectName, &js.NamespaceName, &js.Schedule, &js.WindowSpec, &js.Alert, &js.State)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +209,7 @@ func (j *jobSummary) toJobSummary() (*scheduler.JobSummary, error) {
 
 	jobSummary := &scheduler.JobSummary{
 		JobName:          scheduler.JobName(j.JobName),
+		IsEnabled:        strings.ToLower(j.State) == "enabled",
 		Tenant:           tnnt,
 		ScheduleInterval: schedule.Interval,
 		Window:           windowConfig,
@@ -830,7 +832,7 @@ func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []schedu
 		jobNameStrings[i] = string(jobName)
 	}
 
-	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL AND state = 'enabled' AND project_name NOT LIKE '%-preprod'`
+	query := `SELECT ` + jobSummaryColumns + ` FROM job WHERE name = any($1) AND deleted_at IS NULL AND project_name NOT LIKE '%-preprod'`
 	rows, err := j.db.Query(ctx, query, jobNameStrings)
 	if err != nil {
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while finding jobs by names", err)

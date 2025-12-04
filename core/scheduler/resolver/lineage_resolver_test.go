@@ -71,6 +71,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 	jobAWithDetails := &scheduler.JobSummary{
 		JobName:          jobNameA,
+		IsEnabled:        true,
 		Tenant:           jobTenant,
 		Window:           yestWindowCfg,
 		SLA:              scheduler.SLAConfig{},
@@ -79,6 +80,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 	jobBWithDetails := &scheduler.JobSummary{
 		JobName:          jobNameB,
+		IsEnabled:        true,
 		Tenant:           jobTenant,
 		Window:           multidayWindowCfg,
 		SLA:              scheduler.SLAConfig{},
@@ -87,6 +89,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 	jobCWithDetails := &scheduler.JobSummary{
 		JobName:          jobNameC,
+		IsEnabled:        true,
 		Tenant:           jobTenant,
 		Window:           yestWindowCfg,
 		SLA:              scheduler.SLAConfig{},

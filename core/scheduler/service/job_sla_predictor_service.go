@@ -476,8 +476,6 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 
 		inferredSLA := *jobSLAStates[job.JobName].InferredSLA
 		estimatedDuration := *jobSLAStates[job.JobName].EstimatedDuration
-		buffer := int(float64(s.config.DurationEstimatorConfig.PaddingPercentage) * float64(estimatedDuration.Milliseconds()) / 100)
-		inferredSLAWithBuffer := inferredSLA.Add(time.Duration(buffer) * time.Millisecond)
 
 		// check if job meets either of the conditions
 		isPotentialBreach := false
@@ -495,7 +493,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		} else {
 			var state *JobState
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
-			if (referenceTime.After(inferredSLAWithBuffer) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLAWithBuffer)) {
+			if (referenceTime.After(inferredSLA) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 				// add to jobStatePaths
 				state = &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],
@@ -508,7 +506,7 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 			}
 
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
-			if referenceTime.After(inferredSLAWithBuffer.Add(-estimatedDuration)) && (jobRun != nil && jobRun.TaskStartTime == nil) {
+			if referenceTime.After(inferredSLA.Add(-estimatedDuration)) && (jobRun != nil && jobRun.TaskStartTime == nil) {
 				// add to jobStatePaths
 				state = &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],

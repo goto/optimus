@@ -447,6 +447,7 @@ type JobUpstream struct {
 
 type JobSummary struct {
 	JobName          JobName
+	IsEnabled        bool
 	Tenant           tenant.Tenant
 	ScheduleInterval string
 	SLA              SLAConfig

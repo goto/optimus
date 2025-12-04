@@ -590,6 +590,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobASchedule.JobName: {
 					ScheduledAt: scheduledAt,
@@ -600,6 +601,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt: scheduledAt.Add(-15 * time.Minute),
@@ -611,6 +613,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
@@ -709,6 +712,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobASchedule.JobName: {
 					ScheduledAt: scheduledAt,
@@ -719,6 +723,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt: scheduledAt.Add(-15 * time.Minute), // job-B is not started yet, it should have started 5 mins ago
@@ -731,6 +736,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
@@ -854,6 +860,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobA1Lineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A1",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobASchedule1.JobName: {
 					ScheduledAt: scheduledAt,
@@ -864,6 +871,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobA2Lineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A2",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobASchedule2.JobName: {
 					ScheduledAt: scheduledAt,
@@ -874,6 +882,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobA1Lineage.JobName: {
 					ScheduledAt: scheduledAt.Add(-15 * time.Minute),
@@ -885,6 +894,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobA2Lineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
@@ -995,6 +1005,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobASchedule.JobName: {
 					ScheduledAt:   scheduledAt,
@@ -1008,6 +1019,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-15 * time.Minute),
@@ -1023,6 +1035,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
@@ -1221,6 +1234,7 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 		currentJobLineage := &scheduler.JobLineageSummary{
 			JobName:          jobName,
 			ScheduleInterval: interval,
+			IsEnabled:        true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobNameTarget: {
 					ScheduledAt: scheduledAt,

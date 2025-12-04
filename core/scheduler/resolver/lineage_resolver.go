@@ -166,8 +166,9 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 		JobRuns: make(map[scheduler.JobName]*scheduler.JobRunSummary),
 	}
 
-	if job, exists := lineageData.JobsByName[jobName]; exists {
+	if job, exists := lineageData.JobsByName[jobName]; exists && job.IsEnabled {
 		result[jobName].Tenant = job.Tenant
+		result[jobName].IsEnabled = job.IsEnabled
 		result[jobName].Window = &job.Window
 		result[jobName].ScheduleInterval = job.ScheduleInterval
 		result[jobName].SLA = job.SLA
@@ -216,7 +217,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 	}
 
 	currentJob := lineageData.JobsByName[lineage.JobName]
-	if currentJob == nil {
+	if currentJob == nil || !currentJob.IsEnabled {
 		return nil
 	}
 
@@ -238,7 +239,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 
 		for _, upstream := range lineage.Upstreams {
 			upstreamJob := lineageData.JobsByName[upstream.JobName]
-			if upstreamJob == nil {
+			if upstreamJob == nil || !upstreamJob.IsEnabled {
 				continue
 			}
 

@@ -351,6 +351,7 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 	result[lineage.JobName] = &scheduler.JobLineageSummary{
 		JobName:          lineage.JobName,
 		Tenant:           lineage.Tenant,
+		IsEnabled:        lineage.IsEnabled,
 		Window:           lineage.Window,
 		ScheduleInterval: lineage.ScheduleInterval,
 		SLA:              lineage.SLA,

@@ -493,22 +493,18 @@ WITH operations AS (
 		jr.project_name,
 		jr.scheduled_at,
 		jr.start_time AS job_start_time,
-		CASE
-			WHEN jr.status = 'success' THEN jr.end_time
-			ELSE NULL
-		END AS job_end_time,
+		jr.end_time AS job_end_time,
 		opr.operation_type,
 		opr.start_time,
 		opr.status,
-		CASE
-			WHEN opr.status = 'success' THEN opr.end_time
-			ELSE NULL
-		END AS end_time,
+		opr.end_time,
 		CASE 
 			WHEN opr.operation_type = 'sensor' THEN 
+				-- for sensor, use latest end_time as it indicates when the job starts running
 				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time DESC)
 			ELSE 
-				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.start_time ASC)
+				-- for task and hook, use first successful attempt first, else use latest attempt
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, CASE WHEN opr.status = 'success' THEN opr.start_time ELSE opr.end_time END ASC)
 		END as rn
 	FROM job_run jr
 	JOIN (

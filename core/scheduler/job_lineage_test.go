@@ -60,11 +60,11 @@ func TestJobLineageSummary_Flatten(t *testing.T) {
 	windowConfig, _ := window.NewPresetConfig("yesterday")
 
 	t.Run("should handle nested upstream lineage", func(t *testing.T) {
-		upstreamLevel2A := createJobLineage("upstream_level2_a", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "upstream1"))
-		upstreamLevel2B := createJobLineage("upstream_level2_b", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(8*time.Minute), "upstream2"))
-		upstream1 := createJobLineage("upstream1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstreamLevel2A}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(15*time.Minute), "job1"))
-		upstream2 := createJobLineage("upstream2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstreamLevel2B}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "job1"))
-		jobLineage := createJobLineage("job1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream1, upstream2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "job1"))
+		upstreamLevel2A := createJobLineage("upstream_level2_a", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"))
+		upstreamLevel2B := createJobLineage("upstream_level2_b", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(8*time.Minute), "root"))
+		upstream1 := createJobLineage("upstream1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstreamLevel2A}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(15*time.Minute), "root"))
+		upstream2 := createJobLineage("upstream2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstreamLevel2B}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "root"))
+		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream1, upstream2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "root"))
 		maxDepth := 5
 		jobRunSums := jobLineage.Flatten(maxDepth)
 		assert.Len(t, jobRunSums, 5)
@@ -77,13 +77,13 @@ func TestJobLineageSummary_Flatten(t *testing.T) {
 		assert.True(t, jobNames[scheduler.JobName("upstream_level2_b")])
 		assert.True(t, jobNames[scheduler.JobName("upstream1")])
 		assert.True(t, jobNames[scheduler.JobName("upstream2")])
-		assert.True(t, jobNames[scheduler.JobName("job1")])
+		assert.True(t, jobNames[scheduler.JobName("root")])
 	})
 
 	t.Run("should handle flatten limited to max depth", func(t *testing.T) {
-		level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "level3"))
-		level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level2"))
-		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "level1"))
+		level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"))
+		level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "root"))
+		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "root"))
 		level1 := createJobLineage("level1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute), "root"))
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute), "root"))
 		maxDepth := 2
@@ -105,13 +105,12 @@ func TestJobLineageSummary_Flatten(t *testing.T) {
 	//      		|
 	//     			l4
 	t.Run("should generate unique paths for each upstream for shared upstreams", func(t *testing.T) {
-		level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "level3"))
+		level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"))
 		// both level3 runs point to the same scheduled at
 		level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4},
-			createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level2"),
-			createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level1B"),
+			createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "root"),
 		)
-		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "level1A"))
+		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "root"))
 		level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute), "root"))
 		level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute), "root"))
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(60*time.Minute), "root"))
@@ -144,9 +143,9 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 	windowConfig, _ := window.NewPresetConfig("yesterday")
 
 	t.Run("should handle nested lineage with pruning", func(t *testing.T) {
-		level3A := createJobLineage("level3a", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(5*time.Minute), "level2a"))
-		level3B := createJobLineage("level3b", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(15*time.Minute), "level2a"))
-		level3C := createJobLineage("level3c", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "level2b"))
+		level3A := createJobLineage("level3a", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(5*time.Minute), "root"))
+		level3B := createJobLineage("level3b", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(15*time.Minute), "root"))
+		level3C := createJobLineage("level3c", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "root"))
 
 		level2A := createJobLineage("level2a", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3A, level3B}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute), "root"))
 		level2B := createJobLineage("level2b", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3C}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(45*time.Minute), "root"))
@@ -170,9 +169,9 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 	})
 
 	t.Run("should handle pruned lineage by depth", func(t *testing.T) {
-		level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "level3"))
-		level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level2"))
-		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "level1"))
+		level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"))
+		level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "root"))
+		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "root"))
 		level1 := createJobLineage("level1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute), "root"))
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute), "root"))
 		maxUpstreamsPerLevel := 5
@@ -203,7 +202,7 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 			createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"),
 			createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "upstream2"),
 		)
-		upstream2 := createJobLineage("upstream2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream1}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "upstream1"))
+		upstream2 := createJobLineage("upstream2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream1}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "root"))
 
 		upstream1.Upstreams = []*scheduler.JobLineageSummary{upstream2}
 
@@ -233,12 +232,11 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 	// if l1B is slowest, result should be root -> l1B -> l3 -> l4
 	t.Run("handle occurrence of same upstream from different paths", func(t *testing.T) {
 		t.Run("should pick upstream from slowest path - l1A", func(t *testing.T) {
-			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "level3"))
+			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"))
 			level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4},
-				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level2"),
-				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level1B"),
+				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "root"),
 			)
-			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "level1A"))
+			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "root"))
 			level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(45*time.Minute), "root"))
 			level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute), "root"))
 			root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute), "root"))
@@ -259,12 +257,11 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 		})
 
 		t.Run("should pick upstream from slowest path - l1B", func(t *testing.T) {
-			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "level3"))
+			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"))
 			level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4},
-				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level2"),
-				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level1B"),
+				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "root"),
 			)
-			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "level1A"))
+			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "root"))
 			level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(30*time.Minute), "root"))
 			level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute), "root"))
 			root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(60*time.Minute), "root"))
@@ -283,12 +280,11 @@ func TestJobLineageSummary_PruneLineage(t *testing.T) {
 		})
 
 		t.Run("should generate path from all upstreams if there are shared paths", func(t *testing.T) {
-			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "level3"))
+			level4 := createJobLineage("level4", tnnt, &windowConfig, nil, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(10*time.Minute), "root"))
 			level3 := createJobLineage("level3", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level4},
-				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level2"),
-				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "level1B"),
+				createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(20*time.Minute), "root"),
 			)
-			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "level1A"))
+			level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(25*time.Minute), "root"))
 			level1A := createJobLineage("level1A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(50*time.Minute), "root"))
 			level1B := createJobLineage("level1B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(40*time.Minute), "root"))
 			root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1A, level1B}, createJobRunPair(baseTime, baseTime.Add(0), baseTime.Add(60*time.Minute), "root"))

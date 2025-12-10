@@ -236,8 +236,8 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.EqualValues(t, upstreamC.Window, &yestWindowCfg)
 		assert.Len(t, upstreamC.JobRuns, 1)
 		expectedCSchedule := selectedCSchedule
-		assert.Equal(t, expectedCSchedule, upstreamC.JobRuns[jobNameB].ScheduledAt)
-		assert.Equal(t, jobNameC, upstreamC.JobRuns[jobNameB].JobName)
+		assert.Equal(t, expectedCSchedule, upstreamC.JobRuns[jobNameA].ScheduledAt)
+		assert.Equal(t, jobNameC, upstreamC.JobRuns[jobNameA].JobName)
 
 		assert.Empty(t, upstreamC.Upstreams)
 

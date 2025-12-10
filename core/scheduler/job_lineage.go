@@ -34,8 +34,9 @@ type JobLineageSummary struct {
 }
 
 type upstreamCandidate struct {
-	JobName JobName
-	EndTime time.Time
+	JobName     JobName
+	ScheduledAt time.Time
+	EndTime     time.Time
 }
 
 // PruneLineage prunes the upstream lineage to limit the number of upstreams per level
@@ -73,7 +74,7 @@ func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel, maxDepth int) *Jo
 			continue
 		}
 
-		candidates := current.original.sortUpstreamCandidates()
+		candidates := current.original.sortUpstreamCandidates(j.JobName)
 
 		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
 			targetJobName := candidates[i].JobName
@@ -107,32 +108,44 @@ func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel, maxDepth int) *Jo
 	return rootPruned
 }
 
-func (j *JobLineageSummary) sortUpstreamCandidates() []upstreamCandidate {
+func (j *JobLineageSummary) sortUpstreamCandidates(jobName JobName) []upstreamCandidate {
 	candidates := []upstreamCandidate{}
 
+	currentJobRun := j.GetRunForJob(jobName)
+
 	for _, upstream := range j.Upstreams {
-		latestFinishTime := getLatestFinishTime(j.JobName, upstream.JobRuns)
+		latestFinishTime, latestScheduledAt := getLatestFinishTime(jobName, upstream.JobRuns)
 		if latestFinishTime == nil {
 			continue
 		}
 
 		candidates = append(candidates, upstreamCandidate{
-			JobName: upstream.JobName,
-			EndTime: *latestFinishTime,
+			JobName:     upstream.JobName,
+			ScheduledAt: latestScheduledAt,
+			EndTime:     *latestFinishTime,
 		})
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
+		iAfterCurrent := candidates[i].ScheduledAt.After(currentJobRun.ScheduledAt)
+		jAfterCurrent := candidates[j].ScheduledAt.After(currentJobRun.ScheduledAt)
+		if iAfterCurrent && !jAfterCurrent {
+			return false
+		}
+		if !iAfterCurrent && jAfterCurrent {
+			return true
+		}
+
 		return candidates[i].EndTime.After(candidates[j].EndTime)
 	})
 
 	return candidates
 }
 
-func getLatestFinishTime(currentJobName JobName, jobRuns map[JobName]*JobRunSummary) *time.Time {
+func getLatestFinishTime(currentJobName JobName, jobRuns map[JobName]*JobRunSummary) (*time.Time, time.Time) {
 	jobRun := getRunForJob(currentJobName, jobRuns)
 	if jobRun == nil {
-		return nil
+		return nil, time.Time{}
 	}
 
 	latestTaskEndTime := jobRun.HookEndTime
@@ -140,7 +153,7 @@ func getLatestFinishTime(currentJobName JobName, jobRuns map[JobName]*JobRunSumm
 		latestTaskEndTime = jobRun.TaskEndTime
 	}
 
-	return latestTaskEndTime
+	return latestTaskEndTime, jobRun.ScheduledAt
 }
 
 func (j *JobLineageSummary) GetRunForJob(jobName JobName) *JobRunSummary {
@@ -156,13 +169,8 @@ func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSu
 }
 
 func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
-	type queueItem struct {
-		lineage        *JobLineageSummary
-		subjectJobName JobName
-	}
-
 	var result []*JobExecutionSummary
-	queue := []queueItem{{lineage: j, subjectJobName: j.JobName}}
+	queue := []*JobLineageSummary{j}
 	level := 0
 
 	for len(queue) > 0 && level < maxDepth {
@@ -172,19 +180,17 @@ func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
 			current := queue[0]
 			queue = queue[1:]
 
-			latestJobRun := current.lineage.GetRunForJob(current.subjectJobName)
+			latestJobRun := current.GetRunForJob(j.JobName)
 			if latestJobRun != nil {
 				result = append(result, &JobExecutionSummary{
-					JobName:       current.lineage.JobName,
-					SLA:           current.lineage.SLA,
+					JobName:       current.JobName,
+					SLA:           current.SLA,
 					Level:         level,
 					JobRunSummary: latestJobRun,
 				})
 			}
 
-			for _, upstream := range current.lineage.Upstreams {
-				queue = append(queue, queueItem{lineage: upstream, subjectJobName: current.lineage.JobName})
-			}
+			queue = append(queue, current.Upstreams...)
 		}
 
 		level++
@@ -219,6 +225,7 @@ type JobRunSummary struct {
 
 	JobStartTime  *time.Time
 	JobEndTime    *time.Time
+	JobStatus     string
 	WaitStartTime *time.Time
 	WaitEndTime   *time.Time
 	TaskStartTime *time.Time

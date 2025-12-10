@@ -793,7 +793,7 @@ func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.
 func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {
 	query := `SELECT job_name, upstream_job_name 
 				FROM job_upstream 
-				WHERE upstream_state = 'resolved'`
+				WHERE upstream_state = 'resolved' AND project_name NOT LIKE '%%-preprod'`
 
 	rows, err := j.db.Query(ctx, query)
 	if err != nil {

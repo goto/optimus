@@ -169,7 +169,6 @@ func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSu
 }
 
 func (j *JobLineageSummary) Flatten(maxDepth int) []*JobExecutionSummary {
-
 	var result []*JobExecutionSummary
 	queue := []*JobLineageSummary{j}
 	level := 0

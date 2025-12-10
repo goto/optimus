@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/goto/salt/log"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -25,6 +26,7 @@ const (
 
 type JobRunRepository struct {
 	db *pgxpool.Pool
+	l  log.Logger
 }
 
 type jobRun struct {
@@ -227,6 +229,10 @@ func (j *JobRunRepository) GetByScheduledTimes(ctx context.Context, t tenant.Ten
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job runs", err)
 		}
 		jobRunList = append(jobRunList, jobRun)
+	}
+	if len(jobRunList) == 0 {
+		logQuery := fmt.Sprintf("query '%s', project:'%s', namespace:'%s', jobName:'%s' ", getJobRunByScheduledTimesTemp, t.ProjectName(), t.NamespaceName(), jobName.String())
+		j.l.Debug("[GetByScheduledTimes] found empty job run list, query for debug ", logQuery)
 	}
 
 	return jobRunList, nil
@@ -589,8 +595,9 @@ ORDER BY scheduled_at DESC
 	return summaries, nil
 }
 
-func NewJobRunRepository(pool *pgxpool.Pool) *JobRunRepository {
+func NewJobRunRepository(pool *pgxpool.Pool, l log.Logger) *JobRunRepository {
 	return &JobRunRepository{
 		db: pool,
+		l:  l,
 	}
 }

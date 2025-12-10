@@ -66,7 +66,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 	b.Run("Create", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)
 		storedJobs, err := jobRepo.Add(ctx, []*serviceJob.Job{job})
@@ -89,7 +89,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 	b.Run("GetByScheduledAt", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)
 		storedJobs, err := jobRepo.Add(ctx, []*serviceJob.Job{job})
@@ -125,7 +125,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 	b.Run("GetByID", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)
 		storedJobs, err := jobRepo.Add(ctx, []*serviceJob.Job{job})
@@ -163,7 +163,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 	b.Run("Update", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)
 		storedJobs, err := jobRepo.Add(ctx, []*serviceJob.Job{job})
@@ -193,7 +193,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 	b.Run("UpdateSLA", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)
 		storedJobs, err := jobRepo.Add(ctx, []*serviceJob.Job{job})

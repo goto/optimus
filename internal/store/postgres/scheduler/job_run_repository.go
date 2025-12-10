@@ -494,6 +494,7 @@ WITH operations AS (
 		jr.scheduled_at,
 		jr.start_time AS job_start_time,
 		jr.end_time AS job_end_time,
+		jr.status AS job_status,
 		opr.operation_type,
 		opr.start_time,
 		opr.status,
@@ -516,21 +517,37 @@ WITH operations AS (
 	) opr ON opr.job_run_id = jr.id
 	WHERE (%s)
 	AND jr.project_name NOT LIKE '%%-preprod'
+),
+summary_operations AS (
+	SELECT 
+		job_name,
+		scheduled_at,
+		job_start_time,
+		job_end_time,
+		job_status,
+		MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN start_time END) as sensor_start_time,
+		MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN end_time END) as sensor_end_time,
+		MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN start_time END) as task_start_time,
+		MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN end_time END) as task_end_time,
+		MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN start_time END) as hook_start_time,
+		MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN end_time END) as hook_end_time
+	FROM operations
+	WHERE rn = 1
+	GROUP BY job_name, scheduled_at, job_start_time, job_end_time, job_status
 )
-SELECT 
+SELECT
 	job_name,
 	scheduled_at,
 	job_start_time,
-	job_end_time,
-	MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN start_time END) as sensor_start_time,
-	MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN end_time END) as sensor_end_time,
-	MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN start_time END) as task_start_time,
-	MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN end_time END) as task_end_time,
-	MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN start_time END) as hook_start_time,
-	MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN end_time END) as hook_end_time
-FROM operations
-WHERE rn = 1
-GROUP BY job_name, scheduled_at, job_start_time, job_end_time
+	COALESCE(hook_end_time, task_end_time) AS job_end_time,
+	job_status,
+	sensor_start_time,
+	sensor_end_time,
+	task_start_time,
+	task_end_time,
+	hook_start_time,
+	hook_end_time
+FROM summary_operations
 ORDER BY scheduled_at DESC
 	`, strings.Join(conditions, " OR "))
 
@@ -547,6 +564,7 @@ ORDER BY scheduled_at DESC
 			scheduledAt     time.Time
 			jobStartTime    *time.Time
 			jobEndTime      *time.Time
+			jobStatus       string
 			sensorStartTime *time.Time
 			sensorEndTime   *time.Time
 			taskStartTime   *time.Time
@@ -555,7 +573,7 @@ ORDER BY scheduled_at DESC
 			hookEndTime     *time.Time
 		)
 
-		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime,
+		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime, &jobStatus,
 			&sensorStartTime, &sensorEndTime,
 			&taskStartTime, &taskEndTime,
 			&hookStartTime, &hookEndTime)
@@ -568,6 +586,7 @@ ORDER BY scheduled_at DESC
 			ScheduledAt:   scheduledAt,
 			JobStartTime:  jobStartTime,
 			JobEndTime:    jobEndTime,
+			JobStatus:     jobStatus,
 			WaitStartTime: sensorStartTime,
 			WaitEndTime:   sensorEndTime,
 			TaskStartTime: taskStartTime,

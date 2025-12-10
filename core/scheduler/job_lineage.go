@@ -225,6 +225,7 @@ type JobRunSummary struct {
 
 	JobStartTime  *time.Time
 	JobEndTime    *time.Time
+	JobStatus     string
 	WaitStartTime *time.Time
 	WaitEndTime   *time.Time
 	TaskStartTime *time.Time

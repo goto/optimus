@@ -330,6 +330,7 @@ func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap 
 				jobRuns[scheduleKey].JobName = detail.JobName
 				jobRuns[scheduleKey].JobStartTime = detail.JobStartTime
 				jobRuns[scheduleKey].JobEndTime = detail.JobEndTime
+				jobRuns[scheduleKey].JobStatus = detail.JobStatus
 				jobRuns[scheduleKey].WaitStartTime = detail.WaitStartTime
 				jobRuns[scheduleKey].WaitEndTime = detail.WaitEndTime
 				jobRuns[scheduleKey].TaskStartTime = detail.TaskStartTime
@@ -386,6 +387,7 @@ func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {
 		SLATime:       source.SLATime,
 		JobStartTime:  source.JobStartTime,
 		JobEndTime:    source.JobEndTime,
+		JobStatus:     source.JobStatus,
 		WaitStartTime: source.WaitStartTime,
 		WaitEndTime:   source.WaitEndTime,
 		TaskStartTime: source.TaskStartTime,

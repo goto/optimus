@@ -285,7 +285,7 @@ func (s *OptimusServer) setupHandlers() error {
 	tenantService := tService.NewTenantService(tProjectService, tNamespaceService, tSecretService, s.logger)
 
 	// Scheduler bounded context
-	jobRunRepo := schedulerRepo.NewJobRunRepository(s.dbPool)
+	jobRunRepo := schedulerRepo.NewJobRunRepository(s.dbPool, s.logger)
 	operatorRunRepository := schedulerRepo.NewOperatorRunRepository(s.dbPool)
 	slaRepository := schedulerRepo.NewSLARepository(s.dbPool)
 	jobProviderRepo := schedulerRepo.NewJobProviderRepository(s.dbPool)

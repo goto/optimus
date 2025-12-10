@@ -32,7 +32,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 		t.Run("creates a operator run", func(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
-			jobRunRepo := postgres.NewJobRunRepository(db)
+			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 
@@ -52,7 +52,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 		t.Run("should return not found error", func(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
-			jobRunRepo := postgres.NewJobRunRepository(db)
+			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 
@@ -67,7 +67,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 		t.Run("should return InvalidArgument error when wrong operator name", func(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
-			jobRunRepo := postgres.NewJobRunRepository(db)
+			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 
@@ -85,7 +85,7 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 		t.Run("updates a specific operator run by job id", func(t *testing.T) {
 			db := dbSetup()
 			_ = addJobs(ctx, t, db)
-			jobRunRepo := postgres.NewJobRunRepository(db)
+			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
 			assert.Nil(t, err)
 

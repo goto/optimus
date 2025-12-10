@@ -66,7 +66,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 	b.Run("CreateOperatorRun", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 		schedulerOperatorRunRepo := repoScheduler.NewOperatorRunRepository(db)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)
@@ -98,7 +98,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 	b.Run("GetOperatorRun", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 		schedulerOperatorRunRepo := repoScheduler.NewOperatorRunRepository(db)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)
@@ -142,7 +142,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 	b.Run("UpdateOperatorRun", func(b *testing.B) {
 		db := dbSetup(b)
 		jobRepo := repoJob.NewJobRepository(db)
-		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db)
+		schedulerJobRunRepo := repoScheduler.NewJobRunRepository(db, nil)
 		schedulerOperatorRunRepo := repoScheduler.NewOperatorRunRepository(db)
 
 		job := setup.NewDummyJobBuilder().Build(tnnt)

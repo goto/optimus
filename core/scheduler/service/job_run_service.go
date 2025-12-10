@@ -967,8 +967,8 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 			s.l.Error("[Register SLA] unable to get sla duration, skipping sla registration for job:%s, jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s, err: %s", jobName, jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag(), err.Error())
 			return err
 		}
-		if slaDuration == nil {
-			s.l.Warn("[Register SLA] sla duration is nil, skipping sla registration for job:%s, jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s", jobName, jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag())
+		if slaDuration == nil || *slaDuration == 0 {
+			s.l.Warn("[Register SLA] sla duration is nil/0, skipping sla registration for job:%s, jobRunID: %s, operatorName: %s, operatorType: %s, sla: %s", jobName, jobRunID, operatorName, operatorType.String(), slaAlertConfig.Tag())
 			return nil
 		}
 		slaBoundary := operatorStartTime.Add(*slaDuration)

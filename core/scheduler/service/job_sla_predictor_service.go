@@ -493,7 +493,8 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		} else {
 			var state *JobState
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
-			if (referenceTime.After(inferredSLA) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
+			if (referenceTime.After(inferredSLA) && ((jobRun != nil && jobRun.JobEndTime == nil) || jobRun.JobStatus != scheduler.StateSuccess.String())) ||
+				(jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 				// add to jobStatePaths
 				state = &JobState{
 					JobSLAState:   *jobSLAStates[job.JobName],

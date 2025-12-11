@@ -740,6 +740,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+					JobStatus:     scheduler.StateSuccess.String(),
 					TaskStartTime: &jobCTaskStartTime,
 					TaskEndTime:   &jobCTaskEndTime,
 					JobEndTime:    &jobCTaskEndTime,
@@ -1023,6 +1024,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-15 * time.Minute),
+					JobStatus:     scheduler.StateSuccess.String(),
 					TaskStartTime: &jobBTaskStartTime,
 					TaskEndTime:   &jobBTaskEndTime,
 					JobEndTime:    &jobBTaskEndTime,
@@ -1039,6 +1041,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobALineage.JobName: {
 					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+					JobStatus:     scheduler.StateSuccess.String(),
 					TaskStartTime: &jobCTaskStartTime,
 					TaskEndTime:   &jobCTaskEndTime,
 					JobEndTime:    &jobCTaskEndTime,
@@ -1170,10 +1173,12 @@ func TestIdentifySLABreach(t *testing.T) {
 			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskStartTime = nil
 			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskEndTime = nil
 			jobTargetLineageMap[jobName].JobRuns["job-1"].JobEndTime = nil
+			jobTargetLineageMap[jobName].JobRuns["job-1"].JobStatus = ""
 		}
 		// job-18 is running late
 		jobTargetLineageMap["job-18"].JobRuns["job-1"].TaskEndTime = nil
 		jobTargetLineageMap["job-18"].JobRuns["job-1"].JobEndTime = nil
+		jobTargetLineageMap["job-18"].JobRuns["job-1"].JobStatus = ""
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
@@ -1208,10 +1213,12 @@ func TestIdentifySLABreach(t *testing.T) {
 			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskStartTime = nil
 			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskEndTime = nil
 			jobTargetLineageMap[jobName].JobRuns["job-1"].JobEndTime = nil
+			jobTargetLineageMap[jobName].JobRuns["job-1"].JobStatus = ""
 		}
 		// job-18 is running late
 		jobTargetLineageMap["job-18"].JobRuns["job-1"].TaskEndTime = nil
 		jobTargetLineageMap["job-18"].JobRuns["job-1"].JobEndTime = nil
+		jobTargetLineageMap["job-18"].JobRuns["job-1"].JobStatus = ""
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
@@ -1270,6 +1277,7 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 		jobRunSummary.TaskStartTime = &taskStartTime
 		jobRunSummary.TaskEndTime = &taskEndTime
 		jobRunSummary.JobEndTime = &taskEndTime
+		jobRunSummary.JobStatus = scheduler.StateSuccess.String()
 	}
 
 	return jobTargetLineageMap

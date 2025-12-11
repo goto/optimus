@@ -183,6 +183,8 @@ type Event struct {
 	SLAObjectList  []*SLAObject
 
 	EventContext *EventContext
+
+	SkipAlerting bool
 }
 
 func (e Event) String() string {
@@ -269,7 +271,7 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 		type slaInput struct {
 			Slas []struct {
 				DagID       string `mapstructure:"dag_id"`
-				ScheduledAt string `mapstructure:"scheduled_at"`
+				ScheduledAt string `mapstructure:"execution_date"`
 			} `mapstructure:"slas"`
 		}
 		var slaInputPayload slaInput
@@ -278,6 +280,7 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 			return nil, errors.InvalidArgument(EntityEvent, "bad sla payload")
 		}
 		var slaObjectList []*SLAObject
+		slaObjectDedupMap := make(map[string]*SLAObject)
 		for _, slaObject := range slaInputPayload.Slas {
 			schedulerJobName, err := JobNameFrom(slaObject.DagID)
 			if err != nil {
@@ -287,11 +290,16 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 			if err != nil {
 				return nil, errors.InvalidArgument(EntityEvent, "property 'scheduled_at' in slas list is not in appropriate format")
 			}
-			slaObjectList = append(slaObjectList, &SLAObject{
+			slaObjectDedupMap[fmt.Sprintf("%s:%s", schedulerJobName, scheduledAt)] = &SLAObject{
 				JobName:        schedulerJobName,
 				JobScheduledAt: scheduledAt,
-			})
+			}
 		}
+
+		for _, sObj := range slaObjectDedupMap {
+			slaObjectList = append(slaObjectList, sObj)
+		}
+
 		if len(slaObjectList) == 0 {
 			return nil, errors.InvalidArgument(EntityEvent, "could not parse sla list or received an empty sla list nothing to process")
 		}

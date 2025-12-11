@@ -125,12 +125,12 @@ func TestFromStringToEventType(t *testing.T) {
 		t.Run("Should parse events of type slaMiss", func(t *testing.T) {
 			sla := []map[string]string{
 				{
-					"dag_id":       "sample_select",
-					"scheduled_at": "2006-01-02T15:04:05Z",
+					"dag_id":         "sample_select",
+					"execution_date": "2006-01-02T15:04:05Z",
 				},
 				{
-					"dag_id":       "sample_select1",
-					"scheduled_at": "2006-01-02T15:04:05Z",
+					"dag_id":         "sample_select",
+					"execution_date": "2006-01-03T15:04:05Z",
 				},
 			}
 			eventValues := map[string]any{
@@ -146,7 +146,8 @@ func TestFromStringToEventType(t *testing.T) {
 
 			assert.Nil(t, err)
 
-			scheduledAt, _ := time.Parse(scheduler.ISODateFormat, "2006-01-02T15:04:05Z")
+			scheduledAt1, _ := time.Parse(scheduler.ISODateFormat, "2006-01-02T15:04:05Z")
+			scheduledAt2, _ := time.Parse(scheduler.ISODateFormat, "2006-01-03T15:04:05Z")
 
 			assert.Equal(t, eventObj, &scheduler.Event{
 				Tenant: tnnt,
@@ -155,11 +156,11 @@ func TestFromStringToEventType(t *testing.T) {
 				SLAObjectList: []*scheduler.SLAObject{
 					{
 						JobName:        "sample_select",
-						JobScheduledAt: scheduledAt,
+						JobScheduledAt: scheduledAt1,
 					},
 					{
-						JobName:        "sample_select1",
-						JobScheduledAt: scheduledAt,
+						JobName:        "sample_select",
+						JobScheduledAt: scheduledAt2,
 					},
 				},
 			})

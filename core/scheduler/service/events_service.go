@@ -52,6 +52,9 @@ type EventsService struct {
 }
 
 func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error {
+	if event.SkipAlerting {
+		return nil
+	}
 	jobDetails, err := e.jobRepo.GetJobDetails(ctx, event.Tenant.ProjectName(), event.JobName)
 	if err != nil {
 		e.l.Error("error getting detail for job [%s]: %s", event.JobName, err)
@@ -136,6 +139,10 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 
 func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {
 	if !event.Type.IsOfType(scheduler.EventCategoryJobFailure) && !event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
+		return nil
+	}
+
+	if event.SkipAlerting {
 		return nil
 	}
 

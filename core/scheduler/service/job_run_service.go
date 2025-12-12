@@ -824,7 +824,7 @@ func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.E
 		return unfilteredSLAObj, slaBreachedJobRunScheduleTimes
 	}
 	if len(jobRuns) == 0 {
-		s.l.Error("no job runs found for given schedule time, skipping the filter (perhaps the sla is due to schedule delay, in such cases the job wont be persisted in optimus DB). jobName: %s, scheduleTimes: %v",
+		s.l.Error("[unexpected]  no job runs found for given schedule time, skipping the filter (perhaps the sla is due to schedule delay, in such cases the job wont be persisted in optimus DB). jobName: %s, scheduleTimes: %v",
 			event.JobName, scheduleTimesList)
 		event.Status = scheduler.StateNotScheduled
 		event.JobScheduledAt = event.SLAObjectList[0].JobScheduledAt // pick the first reported sla
@@ -835,8 +835,14 @@ func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.E
 	var latestScheduleTime time.Time
 	var latestJobRun *scheduler.JobRun
 	for _, jobRun := range jobRuns {
+		if jobRun.SLAAlert {
+			// sla callback has already been received from the scheduler
+			s.l.Info("received sla miss callback for job run where SLA breach has already been recorded, jobName: %s, scheduled_at: %s, start_time: %s, end_time: %s, SLA definition: %s",
+				jobRun.JobName, jobRun.ScheduledAt.String(), jobRun.StartTime, jobRun.EndTime, time.Second*time.Duration(jobRun.SLADefinition))
+			continue
+		}
 		if !jobRun.HasSLABreached() {
-			s.l.Error("received sla miss callback for job run that has not breached SLA, jobName: %s, scheduled_at: %s, start_time: %s, end_time: %s, SLA definition: %s",
+			s.l.Error("[unexpected] received sla miss callback for job run that has not breached SLA, jobName: %s, scheduled_at: %s, start_time: %s, end_time: %s, SLA definition: %s",
 				jobRun.JobName, jobRun.ScheduledAt.String(), jobRun.StartTime, jobRun.EndTime, time.Second*time.Duration(jobRun.SLADefinition))
 			continue
 		}
@@ -850,9 +856,20 @@ func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.E
 		}
 		slaBreachedJobRunScheduleTimes = append(slaBreachedJobRunScheduleTimes, jobRun.ScheduledAt)
 	}
+
 	if latestJobRun != nil {
 		event.Status = latestJobRun.State
 		event.JobScheduledAt = latestJobRun.ScheduledAt
+	}
+
+	if len(filteredSLAObject) == 0 {
+		var stringScheduleTimesList string
+		for _, t := range scheduleTimesList {
+			stringScheduleTimesList += t.Format(time.RFC3339) + ", "
+		}
+		s.l.Info(fmt.Sprintf("skipping SLA miss alerting for job run jobName: %s, scheduled Time List : %s",
+			event.JobName, stringScheduleTimesList))
+		event.SkipAlerting = true
 	}
 
 	return filteredSLAObject, slaBreachedJobRunScheduleTimes

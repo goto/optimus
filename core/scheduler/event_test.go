@@ -125,12 +125,12 @@ func TestFromStringToEventType(t *testing.T) {
 		t.Run("Should parse events of type slaMiss", func(t *testing.T) {
 			sla := []map[string]string{
 				{
-					"dag_id":         "sample_select",
-					"execution_date": "2006-01-02T15:04:05Z",
+					"dag_id":       "sample_select",
+					"scheduled_at": "2006-01-02T15:04:05Z",
 				},
 				{
-					"dag_id":         "sample_select",
-					"execution_date": "2006-01-03T15:04:05Z",
+					"dag_id":       "sample_select",
+					"scheduled_at": "2006-01-03T15:04:05Z",
 				},
 			}
 			eventValues := map[string]any{

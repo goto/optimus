@@ -271,7 +271,7 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 		type slaInput struct {
 			Slas []struct {
 				DagID       string `mapstructure:"dag_id"`
-				ScheduledAt string `mapstructure:"execution_date"`
+				ScheduledAt string `mapstructure:"scheduled_at"`
 			} `mapstructure:"slas"`
 		}
 		var slaInputPayload slaInput

@@ -265,7 +265,7 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 		// so we don't need to check whether there is no pending run here
 		latestPendingRun := missingRuns.GetLatestPendingRun()
 
-		prevSchedule, err := s.getRecentScheduleChange(ctx, jobWithDetails, latestPendingRun.ScheduledAt)
+		prevSchedule, err := s.GetRecentScheduleChange(ctx, jobWithDetails.Name, jobWithDetails.Job.Tenant, latestPendingRun.ScheduledAt)
 		if prevSchedule == "" {
 			s.l.Warn("unable to check for old runs for job [%s] after schedule change: %s", jobName, err)
 			return result, msg, nil
@@ -329,16 +329,16 @@ func (s *JobRunService) GetJobRuns(ctx context.Context, projectName tenant.Proje
 	return result, msg, nil
 }
 
-func (s *JobRunService) getRecentScheduleChange(ctx context.Context, jobWithDetails *scheduler.JobWithDetails, scheduledAt time.Time) (string, error) {
+func (s *JobRunService) GetRecentScheduleChange(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, startTime time.Time) (string, error) {
 	changelogFilter := scheduler.ChangelogFilter{
-		ProjectName: jobWithDetails.Job.Tenant.ProjectName(),
-		Name:        jobWithDetails.Job.Name.String(),
-		StartTime:   scheduledAt,
+		ProjectName: tnnt.ProjectName(),
+		Name:        jobName.String(),
+		StartTime:   startTime,
 	}
 
 	changelogs, err := s.jobRepo.GetChangelogs(ctx, changelogFilter)
 	if err != nil {
-		s.l.Error("error getting changelogs for job [%s] at [%s]: %s", jobWithDetails.Job.Name.String(), scheduledAt, err)
+		s.l.Error("error getting changelogs for job [%s] at [%s]: %s", jobName.String(), startTime, err)
 		return "", err
 	}
 

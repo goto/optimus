@@ -49,6 +49,10 @@ type SLAPredictorRepository interface {
 	GetPredictedSLAJobNamesWithinTimeRange(ctx context.Context, from, to time.Time) ([]scheduler.JobName, error)
 }
 
+type ScheduledChangeGetter interface {
+	GetRecentScheduleChange(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, startTime time.Time) (string, error)
+}
+
 type JobState struct {
 	JobSLAState
 	JobName       scheduler.JobName
@@ -64,27 +68,29 @@ type JobSLAState struct {
 }
 
 type JobSLAPredictorService struct {
-	l                 log.Logger
-	config            config.PotentialSLABreachConfig
-	repo              SLAPredictorRepository
-	jobDetailsGetter  JobDetailsGetter
-	jobLineageFetcher JobLineageFetcher
-	durationEstimator DurationEstimator
-	tenantGetter      TenantGetter
+	l                     log.Logger
+	config                config.PotentialSLABreachConfig
+	repo                  SLAPredictorRepository
+	jobDetailsGetter      JobDetailsGetter
+	jobLineageFetcher     JobLineageFetcher
+	durationEstimator     DurationEstimator
+	tenantGetter          TenantGetter
+	scheduledChangeGetter ScheduledChangeGetter
 	// alerting purpose
 	potentialSLANotifier PotentialSLANotifier
 }
 
-func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
-		l:                    l,
-		config:               config,
-		repo:                 slaPredictorRepo,
-		jobLineageFetcher:    jobLineageFetcher,
-		durationEstimator:    durationEstimator,
-		jobDetailsGetter:     jobDetailsGetter,
-		tenantGetter:         tenantGetter,
-		potentialSLANotifier: potentialSLANotifier,
+		l:                     l,
+		config:                config,
+		repo:                  slaPredictorRepo,
+		jobLineageFetcher:     jobLineageFetcher,
+		durationEstimator:     durationEstimator,
+		jobDetailsGetter:      jobDetailsGetter,
+		tenantGetter:          tenantGetter,
+		scheduledChangeGetter: scheduledChangeGetter,
+		potentialSLANotifier:  potentialSLANotifier,
 	}
 }
 
@@ -160,7 +166,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		if !ok || targetedSLA == nil {
 			continue
 		}
-		breachesCauses, fullBreachesCauses := s.IdentifySLABreach(jobWithLineage, jobDurations, targetedSLA, skipJobNames, damperCoeff, reqConfig.ReferenceTime)
+		breachesCauses, fullBreachesCauses := s.IdentifySLABreach(ctx, jobWithLineage, jobDurations, targetedSLA, skipJobNames, damperCoeff, reqConfig.ReferenceTime)
 		// populate jobBreachCauses
 		if len(breachesCauses) > 0 {
 			jobBreachCauses[jobSchedule.JobName] = breachesCauses
@@ -202,7 +208,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	return jobBreachCauses, nil
 }
 
-func (s *JobSLAPredictorService) IdentifySLABreach(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperCoeff float64, referenceTime time.Time) (map[scheduler.JobName]*JobState, map[scheduler.JobName][]*JobState) {
+func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperCoeff float64, referenceTime time.Time) (map[scheduler.JobName]*JobState, map[scheduler.JobName][]*JobState) {
 	// calculate inferred SLAs for each job based on their downstream critical jobs and estimated durations
 	// S(u|j) = S(j) - D(u)
 	jobSLAStatesByJobTarget := s.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperCoeff)
@@ -213,7 +219,7 @@ func (s *JobSLAPredictorService) IdentifySLABreach(jobTarget *scheduler.JobLinea
 	// identify jobs that might breach their SLAs based on current time and inferred SLAs
 	// T(now)>= S(u|j) and the job u has not completed yet
 	// T(now)>= S(u|j) - D(u) and the job u has not started yet
-	rootCauses, allUpstreamStates := s.identifySLABreachRootCauses(jobTarget, jobSLAStates, skipJobNames, referenceTime)
+	rootCauses, allUpstreamStates := s.identifySLABreachRootCauses(ctx, jobTarget, jobSLAStates, skipJobNames, referenceTime)
 
 	// populate breachesCauses
 	breachesCauses := make(map[scheduler.JobName]*JobState)
@@ -432,7 +438,7 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 // - Given current time in UTC T(now), T(now)>= S(u|j) (the inferred SLA for u induced by j has passed) and the upstream job u has not completed yet. Or,
 // - Given current time in UTC T(now), T(now)>= S(u|j) - D(u) (the inferred SLA for u induced by j minus the average duration of u has passed) and the upstream job u has not started yet.
 // return the job that might breach its SLA
-func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, skipJobNames map[scheduler.JobName]bool, referenceTime time.Time) ([][]*JobState, [][]*JobState) {
+func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, skipJobNames map[scheduler.JobName]bool, referenceTime time.Time) ([][]*JobState, [][]*JobState) {
 	jobBreachStates := make(map[scheduler.JobName]*JobState)
 	allUpstreamStates := make([][]*JobState, 0)
 
@@ -491,6 +497,12 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(jobTarget *schedule
 		if skipJobNames[job.JobName] {
 			s.l.Info("skipping job for SLA breach check as it's in the skip list", "job", job.JobName)
 		} else {
+			if oldScheduled, err := s.scheduledChangeGetter.GetRecentScheduleChange(ctx, job.JobName, job.Tenant, jobRun.ScheduledAt); err != nil {
+				s.l.Error("failed to get recent schedule change for job, check the breach anyway", "job", job.JobName, "error", err)
+			} else if oldScheduled != "" {
+				s.l.Info("skipping job for SLA breach check as it has recent schedule change", "job", job.JobName, "old_scheduled_at", oldScheduled, "new_scheduled_at", jobRun.ScheduledAt)
+				continue
+			}
 			var state *JobState
 			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
 			if (referenceTime.After(inferredSLA) && jobRun != nil && jobRun.JobEndTime == nil) || (jobRun != nil && jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {

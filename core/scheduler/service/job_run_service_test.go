@@ -1562,7 +1562,8 @@ func TestJobRunService(t *testing.T) {
 				Task:   &task,
 			}
 			jobWithDetails := scheduler.JobWithDetails{
-				Job: &job,
+				Job:  &job,
+				Name: jobName,
 				JobMetadata: &scheduler.JobMetadata{
 					Version: window.NewWindowVersion,
 				},

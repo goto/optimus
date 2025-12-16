@@ -57,9 +57,9 @@ type JobRunMeta struct {
 
 func (j *JobRun) HasSLABreached() bool {
 	if j.EndTime != nil {
-		return j.EndTime.After(j.StartTime.Add(time.Second * time.Duration(j.SLADefinition)))
+		return j.EndTime.After(j.ScheduledAt.Add(time.Second * time.Duration(j.SLADefinition)))
 	}
-	return time.Now().After(j.StartTime.Add(time.Second * time.Duration(j.SLADefinition)))
+	return time.Now().After(j.ScheduledAt.Add(time.Second * time.Duration(j.SLADefinition)))
 }
 
 type OperatorRun struct {

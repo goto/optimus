@@ -142,7 +142,7 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
 	referenceTime := time.Now()
 	if event.JobScheduledAt.IsZero() {
-		e.l.Info(fmt.Sprintf("alert-manager: skipping alert check for direct integration alerts as scheduled time is not set"))
+		e.l.Info("alert-manager: skipping alert check for direct integration alerts as scheduled time is not set")
 		return false
 	}
 	// skip alert if current time is after the allowed range from scheduled time

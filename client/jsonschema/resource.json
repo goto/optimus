@@ -472,7 +472,21 @@
         "type"
       ],
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": ["decimal", "DECIMAL"]
+              }
+            }
+          },
+          "then": {
+            "required": ["decimal"]
+          }
+        }
+      ]
     },
     "Cluster": {
       "properties": {

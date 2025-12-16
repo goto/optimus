@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,8 +18,9 @@ import (
 )
 
 const (
-	NotificationSchemeSlack     = "slack"
-	NotificationSchemePagerDuty = "pagerduty"
+	NotificationSchemeSlack       = "slack"
+	NotificationSchemePagerDuty   = "pagerduty"
+	BackfillLookBackPeriodInHours = 12
 )
 
 var jobrunAlertsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -137,12 +139,32 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 	return multierror.ToErr()
 }
 
+func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
+	referenceTime := time.Now()
+	if event.JobScheduledAt.IsZero() {
+		e.l.Info(fmt.Sprintf("alert-manager: skipping alert check for direct integration alerts as scheduled time is not set"))
+		return false
+	}
+	// skip alert if current time is after the allowed range from scheduled time
+	if event.JobScheduledAt.Add(time.Duration(BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
+		e.l.Info(fmt.Sprintf("alert-manager: skipping alert for as it is after %d hours of scheduled time", BackfillLookBackPeriodInHours))
+		return true
+	}
+	return false
+}
+
 func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {
 	if !event.Type.IsOfType(scheduler.EventCategoryJobFailure) && !event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
 		return nil
 	}
 
 	if event.SkipAlerting {
+		return nil
+	}
+
+	if e.IsBackFill(event) {
+		e.l.Info(fmt.Sprintf("alert-manager: skipping alert for backfill job [%s]: %s %s",
+			event.JobName, event.JobScheduledAt, event.Type.String()))
 		return nil
 	}
 

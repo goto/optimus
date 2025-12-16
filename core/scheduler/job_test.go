@@ -151,7 +151,7 @@ func TestJob(t *testing.T) {
 					JobName:       "",
 					Tenant:        tenant.Tenant{},
 					State:         "",
-					ScheduledAt:   time.Time{},
+					ScheduledAt:   time.Now().Add(-3 * time.Hour),
 					SLAAlert:      false,
 					StartTime:     time.Now().Add(-3 * time.Hour),
 					EndTime:       &jobEndTime,
@@ -167,7 +167,7 @@ func TestJob(t *testing.T) {
 					JobName:       "",
 					Tenant:        tenant.Tenant{},
 					State:         "",
-					ScheduledAt:   time.Time{},
+					ScheduledAt:   time.Now().Add(-3 * time.Hour),
 					SLAAlert:      false,
 					StartTime:     time.Now().Add(-3 * time.Hour),
 					EndTime:       &jobEndTime,
@@ -181,9 +181,9 @@ func TestJob(t *testing.T) {
 					JobName:       "",
 					Tenant:        tenant.Tenant{},
 					State:         "",
-					ScheduledAt:   time.Time{},
+					ScheduledAt:   time.Now().Add(-3 * time.Hour),
 					SLAAlert:      false,
-					StartTime:     time.Now().Add(-3 * time.Hour),
+					StartTime:     time.Now().Add(-29 * time.Minute),
 					EndTime:       nil,
 					SLADefinition: 3600,
 				}
@@ -195,9 +195,9 @@ func TestJob(t *testing.T) {
 					JobName:       "",
 					Tenant:        tenant.Tenant{},
 					State:         "",
-					ScheduledAt:   time.Time{},
+					ScheduledAt:   time.Now().Add(-50 * time.Minute),
 					SLAAlert:      false,
-					StartTime:     time.Now().Add(-30 * time.Minute), //  job started 30 min ago
+					StartTime:     time.Now().Add(-15 * time.Minute), //  job started 15 min ago
 					EndTime:       nil,
 					SLADefinition: 3600,
 				}

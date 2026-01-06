@@ -508,9 +508,22 @@ func NewResourceMetadata(request, limit *MetadataResourceConfig) *MetadataResour
 	return &MetadataResource{request: request, limit: limit}
 }
 
+type MetadataKubernetes struct {
+	serviceAccount string
+}
+
+func (m MetadataKubernetes) ServiceAccount() string {
+	return m.serviceAccount
+}
+
+func NewMetadataKubernetes(serviceAccount string) *MetadataKubernetes {
+	return &MetadataKubernetes{serviceAccount: serviceAccount}
+}
+
 type Metadata struct {
-	resource  *MetadataResource
-	scheduler map[string]string
+	resource   *MetadataResource
+	scheduler  map[string]string
+	kubernetes *MetadataKubernetes
 }
 
 func (m Metadata) Resource() *MetadataResource {
@@ -519,6 +532,10 @@ func (m Metadata) Resource() *MetadataResource {
 
 func (m Metadata) Scheduler() map[string]string {
 	return m.scheduler
+}
+
+func (m Metadata) Kubernetes() *MetadataKubernetes {
+	return m.kubernetes
 }
 
 func (m Metadata) validate() error {
@@ -549,6 +566,11 @@ func (m *MetadataBuilder) WithResource(resource *MetadataResource) *MetadataBuil
 
 func (m *MetadataBuilder) WithScheduler(scheduler map[string]string) *MetadataBuilder {
 	m.metadata.scheduler = scheduler
+	return m
+}
+
+func (m *MetadataBuilder) WithKubernetes(kubernetes *MetadataKubernetes) *MetadataBuilder {
+	m.metadata.kubernetes = kubernetes
 	return m
 }
 

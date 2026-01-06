@@ -142,8 +142,9 @@ type Hook struct {
 }
 
 type Metadata struct {
-	Resource  *MetadataResource
-	Scheduler map[string]string
+	Resource   *MetadataResource
+	Scheduler  map[string]string
+	Kubernetes *MetadataKubernetes
 }
 
 type MetadataResource struct {
@@ -154,6 +155,10 @@ type MetadataResource struct {
 type MetadataResourceConfig struct {
 	CPU    string
 	Memory string
+}
+
+type MetadataKubernetes struct {
+	ServiceAccount string
 }
 
 type Config struct {
@@ -443,9 +448,17 @@ func toStorageMetadata(metadataSpec *job.Metadata) ([]byte, error) {
 		}
 	}
 
+	var metadataKubernetes *MetadataKubernetes
+	if metadataSpec.Kubernetes() != nil {
+		metadataKubernetes = &MetadataKubernetes{
+			ServiceAccount: metadataSpec.Kubernetes().ServiceAccount(),
+		}
+	}
+
 	metadata := Metadata{
-		Resource:  metadataResource,
-		Scheduler: metadataSpec.Scheduler(),
+		Resource:   metadataResource,
+		Scheduler:  metadataSpec.Scheduler(),
+		Kubernetes: metadataKubernetes,
 	}
 	return json.Marshal(metadata)
 }
@@ -575,6 +588,10 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 		}
 		if storeMetadata.Scheduler != nil {
 			metadataBuilder = metadataBuilder.WithScheduler(storeMetadata.Scheduler)
+		}
+		if storeMetadata.Kubernetes != nil {
+			kubernetesMetadata := job.NewMetadataKubernetes(storeMetadata.Kubernetes.ServiceAccount)
+			metadataBuilder = metadataBuilder.WithKubernetes(kubernetesMetadata)
 		}
 		metadata, err := metadataBuilder.Build()
 		if err != nil {

@@ -505,6 +505,10 @@ func toMetadata(jobMetadata *pb.JobMetadata) (*job.Metadata, error) {
 		}
 		metadataBuilder = metadataBuilder.WithScheduler(schedulerMetadata)
 	}
+	if jobMetadata.Kubernetes != nil {
+		metadataKubernetes := job.NewMetadataKubernetes(jobMetadata.Kubernetes.ServiceAccount)
+		metadataBuilder = metadataBuilder.WithKubernetes(metadataKubernetes)
+	}
 	metadata, err := metadataBuilder.Build()
 	if err != nil {
 		return nil, err
@@ -543,9 +547,16 @@ func fromMetadata(metadata *job.Metadata) *pb.JobMetadata {
 			metadataSchedulerProto.Queue = metadata.Scheduler()["queue"]
 		}
 	}
+
+	metadataKubernetesProto := &pb.JobSpecMetadataKubernetes{}
+	if metadata.Kubernetes() != nil {
+		metadataKubernetesProto.ServiceAccount = metadata.Kubernetes().ServiceAccount()
+	}
+
 	return &pb.JobMetadata{
-		Resource: metadataResourceProto,
-		Airflow:  metadataSchedulerProto,
+		Resource:   metadataResourceProto,
+		Airflow:    metadataSchedulerProto,
+		Kubernetes: metadataKubernetesProto,
 	}
 }
 

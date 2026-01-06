@@ -171,6 +171,9 @@ func (*JobSpecTestSuite) getCompleteJobSpec() model.JobSpec {
 				Pool:  "poolA",
 				Queue: "queueA",
 			},
+			Kubernetes: &model.JobSpecMetadataKubernetes{
+				ServiceAccount: "serviceAccountA",
+			},
 		},
 	}
 }
@@ -272,6 +275,9 @@ func (*JobSpecTestSuite) getCompleteJobSpecProto() *pb.JobSpecification {
 			Airflow: &pb.JobSpecMetadataAirflow{
 				Pool:  "poolA",
 				Queue: "queueA",
+			},
+			Kubernetes: &pb.JobSpecMetadataKubernetes{
+				ServiceAccount: "serviceAccountA",
 			},
 		},
 	}

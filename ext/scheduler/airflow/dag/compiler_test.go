@@ -196,6 +196,9 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 				Memory: "2G",
 			},
 		},
+		Kubernetes: &scheduler.Kubernetes{
+			ServiceAccount: "sample-service-account",
+		},
 	}
 
 	tnnt1, _ := tenant.NewTenant("project", "namespace")

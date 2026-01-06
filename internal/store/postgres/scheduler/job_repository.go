@@ -295,8 +295,9 @@ func FromChangelogRow(row pgx.Row) (*changelog, error) {
 }
 
 type Metadata struct {
-	Resource  *MetadataResource
-	Scheduler map[string]string
+	Resource   *MetadataResource
+	Scheduler  map[string]string
+	Kubernetes *MetadataKubernetes
 }
 
 type MetadataResource struct {
@@ -307,6 +308,10 @@ type MetadataResource struct {
 type MetadataResourceConfig struct {
 	CPU    string
 	Memory string
+}
+
+type MetadataKubernetes struct {
+	ServiceAccount string
 }
 
 func fromStorageMetadata(metadata json.RawMessage) (scheduler.RuntimeConfig, error) {
@@ -340,6 +345,11 @@ func fromStorageMetadata(metadata json.RawMessage) (scheduler.RuntimeConfig, err
 	}
 	if storeMetadata.Scheduler != nil {
 		runtimeConfig.Scheduler = storeMetadata.Scheduler
+	}
+	if storeMetadata.Kubernetes != nil {
+		runtimeConfig.Kubernetes = &scheduler.Kubernetes{
+			ServiceAccount: storeMetadata.Kubernetes.ServiceAccount,
+		}
 	}
 	return runtimeConfig, nil
 }

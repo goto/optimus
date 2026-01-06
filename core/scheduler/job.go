@@ -401,8 +401,9 @@ type Webhook struct {
 }
 
 type RuntimeConfig struct {
-	Resource  *Resource
-	Scheduler map[string]string
+	Resource   *Resource
+	Scheduler  map[string]string
+	Kubernetes *Kubernetes
 }
 
 type Resource struct {
@@ -413,6 +414,10 @@ type Resource struct {
 type ResourceConfig struct {
 	CPU    string
 	Memory string
+}
+
+type Kubernetes struct {
+	ServiceAccount string
 }
 
 type Upstreams struct {

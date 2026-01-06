@@ -33,6 +33,7 @@ default_args = {
         "job_name": "infra.billing.weekly-status-reports",
         "optimus_hostname": "http://optimus.example.com"
     },
+    "service_account_name": "sample-service-account",
     "owner": "infra-team@example.com",
     "depends_on_past": True,
     "retries": 2,

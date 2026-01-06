@@ -34,6 +34,9 @@ default_args = {
         "job_name": {{.JobDetails.Name.String | quote}},
         "optimus_hostname": {{.Hostname | quote}}
     },
+    {{- if .RuntimeConfig.Kubernetes }}
+    "service_account_name": "{{ .RuntimeConfig.Kubernetes.ServiceAccount }}",
+    {{- end }}
     {{- if ne .RuntimeConfig.Airflow.Queue "" }}
     "queue": "{{ .RuntimeConfig.Airflow.Queue }}",
     {{- end }}

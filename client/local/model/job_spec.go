@@ -268,9 +268,16 @@ func (j *JobSpec) getProtoJobMetadata() *pb.JobMetadata {
 			Queue: j.Metadata.Airflow.Queue,
 		}
 	}
+	var kubernetes *pb.JobSpecMetadataKubernetes
+	if j.Metadata.Kubernetes != nil {
+		kubernetes = &pb.JobSpecMetadataKubernetes{
+			ServiceAccount: j.Metadata.Kubernetes.ServiceAccount,
+		}
+	}
 	return &pb.JobMetadata{
-		Resource: resource,
-		Airflow:  airflow,
+		Resource:   resource,
+		Airflow:    airflow,
+		Kubernetes: kubernetes,
 	}
 }
 

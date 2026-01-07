@@ -135,7 +135,7 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 		resourceRequestConfig: job.NewMetadataResourceConfig("128m", "128Mi"),
 		resourceLimitConfig:   job.NewMetadataResourceConfig("128m", "128Mi"),
 		scheduler:             map[string]string{"scheduler_config_key": "value"},
-		kubernetes:            job.NewMetadataKubernetes("sample_service_account"),
+		kubernetes:            job.NewKubernetesMetadata("sample_service_account"),
 		name:                  name,
 		destinationURN:        dummyDestination,
 		sourceURNs:            []resource.URN{dummySource},

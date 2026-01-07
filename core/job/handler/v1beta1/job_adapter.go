@@ -506,7 +506,7 @@ func toMetadata(jobMetadata *pb.JobMetadata) (*job.Metadata, error) {
 		metadataBuilder = metadataBuilder.WithScheduler(schedulerMetadata)
 	}
 	if jobMetadata.Kubernetes != nil {
-		metadataKubernetes := job.NewMetadataKubernetes(jobMetadata.Kubernetes.ServiceAccount)
+		metadataKubernetes := job.NewKubernetesMetadata(jobMetadata.Kubernetes.ServiceAccount)
 		metadataBuilder = metadataBuilder.WithKubernetes(metadataKubernetes)
 	}
 	metadata, err := metadataBuilder.Build()

@@ -590,7 +590,7 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 			metadataBuilder = metadataBuilder.WithScheduler(storeMetadata.Scheduler)
 		}
 		if storeMetadata.Kubernetes != nil {
-			kubernetesMetadata := job.NewMetadataKubernetes(storeMetadata.Kubernetes.ServiceAccount)
+			kubernetesMetadata := job.NewKubernetesMetadata(storeMetadata.Kubernetes.ServiceAccount)
 			metadataBuilder = metadataBuilder.WithKubernetes(kubernetesMetadata)
 		}
 		metadata, err := metadataBuilder.Build()

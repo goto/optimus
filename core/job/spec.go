@@ -516,7 +516,7 @@ func (m MetadataKubernetes) ServiceAccount() string {
 	return m.serviceAccount
 }
 
-func NewMetadataKubernetes(serviceAccount string) *MetadataKubernetes {
+func NewKubernetesMetadata(serviceAccount string) *MetadataKubernetes {
 	return &MetadataKubernetes{serviceAccount: serviceAccount}
 }
 

@@ -65,15 +65,18 @@ func TestNewJobHandler(t *testing.T) {
 			Request: &pb.JobSpecMetadataResourceConfig{Cpu: "1", Memory: "8"},
 			Limit:   &pb.JobSpecMetadataResourceConfig{Cpu: ".5", Memory: "4"},
 		},
-		Airflow: &pb.JobSpecMetadataAirflow{Pool: "100", Queue: "50"},
+		Airflow:    &pb.JobSpecMetadataAirflow{Pool: "100", Queue: "50"},
+		Kubernetes: &pb.JobSpecMetadataKubernetes{ServiceAccount: "sample-service-account"},
 	}
 
 	resourceRequestConfig := job.NewMetadataResourceConfig("1", "8")
 	resourceLimitConfig := job.NewMetadataResourceConfig(".5", "4")
 	resourceMetadata := job.NewResourceMetadata(resourceRequestConfig, resourceLimitConfig)
+	kubernetesMetadata := job.NewKubernetesMetadata("sample-service-account")
 	metadataSpec, _ := job.NewMetadataBuilder().
 		WithResource(resourceMetadata).
 		WithScheduler(map[string]string{"pool": "100", "queue": "50"}).
+		WithKubernetes(kubernetesMetadata).
 		Build()
 
 	log := log.NewNoop()

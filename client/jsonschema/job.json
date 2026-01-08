@@ -211,6 +211,18 @@
         },
         "airflow": {
           "$ref": "#/$defs/JobSpecMetadataAirflow"
+        },
+        "kubernetes": {
+          "$ref": "#/$defs/JobSpecMetadataKubernetes"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobSpecMetadataKubernetes": {
+      "properties": {
+        "service_account": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

@@ -179,8 +179,9 @@ type JobSpecDependencyHTTP struct {
 }
 
 type JobSpecMetadata struct {
-	Resource *JobSpecMetadataResource `yaml:"resource,omitempty"`
-	Airflow  *JobSpecMetadataAirflow  `yaml:"airflow,omitempty"`
+	Resource   *JobSpecMetadataResource   `yaml:"resource,omitempty"`
+	Airflow    *JobSpecMetadataAirflow    `yaml:"airflow,omitempty"`
+	Kubernetes *JobSpecMetadataKubernetes `yaml:"kubernetes,omitempty"`
 }
 
 type JobSpecMetadataResource struct {
@@ -196,6 +197,10 @@ type JobSpecMetadataResourceConfig struct {
 type JobSpecMetadataAirflow struct {
 	Pool  string `yaml:"pool" json:"pool"`
 	Queue string `yaml:"queue" json:"queue"`
+}
+
+type JobSpecMetadataKubernetes struct {
+	ServiceAccount string `yaml:"service_account,omitempty"`
 }
 
 func (j *JobSpec) ToProto() *pb.JobSpecification {
@@ -263,9 +268,16 @@ func (j *JobSpec) getProtoJobMetadata() *pb.JobMetadata {
 			Queue: j.Metadata.Airflow.Queue,
 		}
 	}
+	var kubernetes *pb.JobSpecMetadataKubernetes
+	if j.Metadata.Kubernetes != nil {
+		kubernetes = &pb.JobSpecMetadataKubernetes{
+			ServiceAccount: j.Metadata.Kubernetes.ServiceAccount,
+		}
+	}
 	return &pb.JobMetadata{
-		Resource: resource,
-		Airflow:  airflow,
+		Resource:   resource,
+		Airflow:    airflow,
+		Kubernetes: kubernetes,
 	}
 }
 
@@ -635,9 +647,20 @@ func toJobSpecMetadata(protoMetadata *pb.JobMetadata) *JobSpecMetadata {
 				Queue: protoMetadata.Airflow.Queue,
 			}
 		}
+
+		var metadataKubernetesSpec *JobSpecMetadataKubernetes
+		if protoMetadata.Kubernetes != nil {
+			if protoMetadata.Kubernetes.ServiceAccount != "" {
+				metadataKubernetesSpec = &JobSpecMetadataKubernetes{
+					ServiceAccount: protoMetadata.Kubernetes.ServiceAccount,
+				}
+			}
+		}
+
 		metadataSpec = &JobSpecMetadata{
-			Resource: metadataResourceSpec,
-			Airflow:  metadataAirflowSpec,
+			Resource:   metadataResourceSpec,
+			Airflow:    metadataAirflowSpec,
+			Kubernetes: metadataKubernetesSpec,
 		}
 	}
 	return metadataSpec

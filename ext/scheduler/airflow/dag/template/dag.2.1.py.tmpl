@@ -173,6 +173,9 @@ init_container = k8s.V1Container(
     {{- if .RuntimeConfig.Resource }}
     resources=resources,
     {{- end }}
+    {{- if $.RuntimeConfig.Kubernetes }}
+    service_account_name="{{ $.RuntimeConfig.Kubernetes.ServiceAccount }}",
+    {{- end }}
     reattach_on_restart=True,
     volume_mounts=asset_volume_mounts,
     volumes=[volume],
@@ -216,6 +219,9 @@ hook_{{$hookName}} = SuperKubernetesPodOperator(
     {{- end }}
     {{- if $.RuntimeConfig.Resource }}
     resources=resources,
+    {{- end }}
+    {{- if $.RuntimeConfig.Kubernetes }}
+    service_account_name="{{ $.RuntimeConfig.Kubernetes.ServiceAccount }}",
     {{- end }}
     reattach_on_restart=True,
     volume_mounts=asset_volume_mounts,

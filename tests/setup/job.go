@@ -35,6 +35,7 @@ type DummyJobBuilder struct {
 	resourceRequestConfig *job.MetadataResourceConfig
 	resourceLimitConfig   *job.MetadataResourceConfig
 	scheduler             map[string]string
+	kubernetes            *job.MetadataKubernetes
 
 	name job.Name
 
@@ -134,6 +135,7 @@ func NewDummyJobBuilder() *DummyJobBuilder {
 		resourceRequestConfig: job.NewMetadataResourceConfig("128m", "128Mi"),
 		resourceLimitConfig:   job.NewMetadataResourceConfig("128m", "128Mi"),
 		scheduler:             map[string]string{"scheduler_config_key": "value"},
+		kubernetes:            job.NewKubernetesMetadata("sample_service_account"),
 		name:                  name,
 		destinationURN:        dummyDestination,
 		sourceURNs:            []resource.URN{dummySource},
@@ -303,6 +305,7 @@ func (d *DummyJobBuilder) Build(tnnt tenant.Tenant) *job.Job {
 	metadata, err := job.NewMetadataBuilder().
 		WithResource(resourceMetadata).
 		WithScheduler(d.scheduler).
+		WithKubernetes(d.kubernetes).
 		Build()
 	if err != nil {
 		panic(err)

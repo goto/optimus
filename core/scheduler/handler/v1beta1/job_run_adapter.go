@@ -98,7 +98,12 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					TaskStartTime: taskStartTime,
 					TaskEndTime:   taskEndTime,
 				},
-				Level: int32(run.Level),
+				Level:              int32(run.Level),
+				DownstreamPathName: run.DownstreamPathName,
+				DelaySummary: &pb.JobRunDelaySummary{
+					ScheduledWayTooLateSeconds:   int32(run.DelaySummary.ScheduledWayTooLateSeconds),
+					SystemSchedulingDelaySeconds: int32(run.DelaySummary.SystemSchedulingDelaySeconds),
+				},
 			})
 		}
 
@@ -106,6 +111,27 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 			JobName:     lineage.JobName.String(),
 			ScheduledAt: timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
 			JobRuns:     pbJobRuns,
+			ExecutionSummary: &pb.LineageExecutionSummary{
+				TotalScheduledWayTooLateSeconds:     int32(lineage.ExecutionSummary.TotalScheduledWayTooLateSeconds),
+				TotalSystemSchedulingDelaySeconds:   int32(lineage.ExecutionSummary.TotalSystemSchedulingDelaySeconds),
+				AverageSystemSchedulingDelaySeconds: int32(lineage.ExecutionSummary.AverageSystemSchedulingDelaySeconds),
+				TotalLineageDelaySeconds:            int32(lineage.ExecutionSummary.TotalLineageDelaySeconds),
+				TotalLineageDurationSeconds:         int32(lineage.ExecutionSummary.TotalLineageDurationSeconds),
+				LargestScheduledWayTooLateJob: &pb.LineageDelaySummary{
+					JobName:             lineage.ExecutionSummary.LargestScheduledWayTooLateJob.JobName.String(),
+					DelayDuration:       int32(lineage.ExecutionSummary.LargestScheduledWayTooLateJob.DelayDuration),
+					ScheduledAt:         timestamppb.New(lineage.ExecutionSummary.LargestScheduledWayTooLateJob.ScheduledAt),
+					UpstreamJobName:     lineage.ExecutionSummary.LargestScheduledWayTooLateJob.UpstreamJobName.String(),
+					UpstreamScheduledAt: timestamppb.New(lineage.ExecutionSummary.LargestScheduledWayTooLateJob.UpstreamScheduledAt),
+				},
+				LargestSystemSchedulingDelayJob: &pb.LineageDelaySummary{
+					JobName:             lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.JobName.String(),
+					DelayDuration:       int32(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.DelayDuration),
+					ScheduledAt:         timestamppb.New(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.ScheduledAt),
+					UpstreamJobName:     lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamJobName.String(),
+					UpstreamScheduledAt: timestamppb.New(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamScheduledAt),
+				},
+			},
 		})
 	}
 

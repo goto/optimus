@@ -180,12 +180,38 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 	var largestWayTooLateUpstream, largestSystemSchedulingUpstream *JobRunSummary
 	wayTooLateCount := 0
 
-	for i := len(executionSummaries) - 1; i >= 0; i-- {
+	var largestTaskDurationJob, largestHookDurationJob *JobRunSummary
+
+	for i := 0; i < len(executionSummaries); i++ {
 		currentExec := executionSummaries[i]
 		currentRun := currentExec.JobRunSummary
 
 		if currentRun.GetActualEndTime() == nil {
 			continue
+		}
+
+		if largestTaskDurationJob == nil {
+			largestTaskDurationJob = currentRun
+		} else if currentRun.TaskEndTime != nil && currentRun.TaskStartTime != nil {
+			currentTaskDuration := currentRun.GetTaskDuration()
+			if largestTaskDurationJob.TaskEndTime != nil && largestTaskDurationJob.TaskStartTime != nil {
+				largestTaskDuration := largestTaskDurationJob.GetTaskDuration()
+				if currentTaskDuration > largestTaskDuration {
+					largestTaskDurationJob = currentRun
+				}
+			}
+		}
+
+		if largestHookDurationJob == nil {
+			largestHookDurationJob = currentRun
+		} else if currentRun.HookEndTime != nil && currentRun.HookStartTime != nil {
+			currentHookDuration := currentRun.GetHookDuration()
+			if largestHookDurationJob.HookEndTime != nil && largestHookDurationJob.HookStartTime != nil {
+				largestHookDuration := largestHookDurationJob.GetHookDuration()
+				if currentHookDuration > largestHookDuration {
+					largestHookDurationJob = currentRun
+				}
+			}
 		}
 
 		scheduledToTaskStartDuration := currentRun.TaskStartTime.Sub(currentRun.ScheduledAt)
@@ -231,6 +257,16 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 
 	lineageSummary.TotalLineageDelaySeconds = lineageSummary.TotalScheduledWayTooLateSeconds + lineageSummary.TotalSystemSchedulingDelaySeconds
 	lineageSummary.TotalLineageDurationSeconds = int64(executionSummaries[0].JobRunSummary.GetActualEndTime().Sub(*executionSummaries[len(executionSummaries)-1].JobRunSummary.TaskStartTime).Seconds())
+	lineageSummary.JobWithLongestHookDuration = JobWithTaskDuration{
+		JobName:      largestHookDurationJob.JobName,
+		ScheduledAt:  largestHookDurationJob.ScheduledAt,
+		TaskDuration: largestHookDurationJob.GetHookDuration(),
+	}
+	lineageSummary.JobWithLongestTaskDuration = JobWithTaskDuration{
+		JobName:      largestTaskDurationJob.JobName,
+		ScheduledAt:  largestTaskDurationJob.ScheduledAt,
+		TaskDuration: largestTaskDurationJob.GetTaskDuration(),
+	}
 
 	if largestScheduledWayTooLate != nil {
 		lineageSummary.LargestScheduledWayTooLateJob = LineageDelaySummary{
@@ -313,6 +349,15 @@ type LineageExecutionSummary struct {
 
 	LargestScheduledWayTooLateJob   LineageDelaySummary
 	LargestSystemSchedulingDelayJob LineageDelaySummary
+
+	JobWithLongestTaskDuration JobWithTaskDuration
+	JobWithLongestHookDuration JobWithTaskDuration
+}
+
+type JobWithTaskDuration struct {
+	JobName      JobName
+	ScheduledAt  time.Time
+	TaskDuration time.Duration
 }
 
 type LineageDelaySummary struct {
@@ -359,6 +404,22 @@ func (j *JobRunSummary) GetActualEndTime() *time.Time {
 		return j.HookEndTime
 	}
 	return j.TaskEndTime
+}
+
+func (j *JobRunSummary) GetTaskDuration() time.Duration {
+	if j.TaskStartTime == nil || j.TaskEndTime == nil {
+		return 0
+	}
+
+	return j.TaskEndTime.Sub(*j.TaskStartTime)
+}
+
+func (j *JobRunSummary) GetHookDuration() time.Duration {
+	if j.HookStartTime == nil || j.HookEndTime == nil {
+		return 0
+	}
+
+	return j.HookEndTime.Sub(*j.HookStartTime)
 }
 
 type JobRunDelaySummary struct {

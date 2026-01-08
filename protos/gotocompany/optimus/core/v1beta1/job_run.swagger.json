@@ -822,6 +822,12 @@
         },
         "jobRunSummary": {
           "$ref": "#/definitions/v1beta1JobRunSummary"
+        },
+        "downstreamPathName": {
+          "type": "string"
+        },
+        "delaySummary": {
+          "$ref": "#/definitions/v1beta1JobRunDelaySummary"
         }
       }
     },
@@ -834,6 +840,19 @@
         "scheduledAt": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1beta1JobRunDelaySummary": {
+      "type": "object",
+      "properties": {
+        "scheduledWayTooLateSeconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "systemSchedulingDelaySeconds": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },
@@ -875,6 +894,9 @@
           "items": {
             "$ref": "#/definitions/v1beta1JobExecutionSummary"
           }
+        },
+        "executionSummary": {
+          "$ref": "#/definitions/v1beta1LineageExecutionSummary"
         }
       }
     },
@@ -954,6 +976,81 @@
         "endTime": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1beta1JobWithTaskDuration": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1beta1LineageDelaySummary": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "upstreamJobName": {
+          "type": "string"
+        },
+        "upstreamScheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "delayDuration": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1beta1LineageExecutionSummary": {
+      "type": "object",
+      "properties": {
+        "totalScheduledWayTooLateSeconds": {
+          "type": "integer",
+          "format": "int32",
+          "title": "summary on scheduling delay"
+        },
+        "totalSystemSchedulingDelaySeconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "averageSystemSchedulingDelaySeconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalLineageDelaySeconds": {
+          "type": "integer",
+          "format": "int32",
+          "title": "summary on lineage execution"
+        },
+        "totalLineageDurationSeconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "largestScheduledWayTooLateJob": {
+          "$ref": "#/definitions/v1beta1LineageDelaySummary",
+          "title": "outline jobs with the longest duration"
+        },
+        "largestSystemSchedulingDelayJob": {
+          "$ref": "#/definitions/v1beta1LineageDelaySummary"
+        },
+        "jobWithLongestTaskDuration": {
+          "$ref": "#/definitions/v1beta1JobWithTaskDuration"
+        },
+        "jobWithLongestHookDuration": {
+          "$ref": "#/definitions/v1beta1JobWithTaskDuration"
         }
       }
     },

@@ -131,6 +131,14 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					UpstreamJobName:     lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamJobName.String(),
 					UpstreamScheduledAt: timestamppb.New(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamScheduledAt),
 				},
+				JobWithLongestTaskDuration: &pb.JobWithTaskDuration{
+					JobName:         lineage.ExecutionSummary.JobWithLongestTaskDuration.JobName.String(),
+					DurationSeconds: int32(lineage.ExecutionSummary.JobWithLongestTaskDuration.TaskDuration.Seconds()),
+				},
+				JobWithLongestHookDuration: &pb.JobWithTaskDuration{
+					JobName:         lineage.ExecutionSummary.JobWithLongestHookDuration.JobName.String(),
+					DurationSeconds: int32(lineage.ExecutionSummary.JobWithLongestHookDuration.TaskDuration.Seconds()),
+				},
 			},
 		})
 	}

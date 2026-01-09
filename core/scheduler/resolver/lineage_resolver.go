@@ -248,7 +248,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 				return err
 			}
 
-			if upstreamSchedule.IsZero() || upstreamSchedule.Before(referenceTime) {
+			if upstreamSchedule.IsZero() || !upstreamSchedule.After(referenceTime) {
 				continue
 			}
 

@@ -263,7 +263,7 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 		severity = WarningSeverity
 	}
 
-	a.relay(&AlertPayload{
+	alertPayload := &AlertPayload{
 		Project: attr.ProjectName,
 		Data: map[string]interface{}{
 			"content": content,
@@ -274,5 +274,11 @@ func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreach
 			SeverityLabel:       severity,
 		},
 		Endpoint: a.endpoint,
-	})
+	}
+
+	if severity == CriticalSeverity {
+		alertPayload.Labels[EnvironmentLabel] = "production"
+	}
+
+	a.relay(alertPayload)
 }

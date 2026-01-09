@@ -11,7 +11,7 @@ import (
 const (
 	// MaxLineageDepth is a safeguard to avoid infinite recursion in case of unexpected cycles
 	// generally we don't expect lineage to be deeper than 20 levels
-	MaxLineageDepth = 20
+	MaxLineageDepth = 25
 )
 
 type JobSchedule struct {
@@ -199,6 +199,8 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 				if currentTaskDuration > largestTaskDuration {
 					largestTaskDurationJob = currentRun
 				}
+			} else {
+				largestTaskDurationJob = currentRun
 			}
 		}
 
@@ -211,6 +213,8 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 				if currentHookDuration > largestHookDuration {
 					largestHookDurationJob = currentRun
 				}
+			} else {
+				largestHookDurationJob = currentRun
 			}
 		}
 
@@ -270,21 +274,25 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 
 	if largestScheduledWayTooLate != nil {
 		lineageSummary.LargestScheduledWayTooLateJob = LineageDelaySummary{
-			JobName:             largestScheduledWayTooLate.JobName,
-			ScheduledAt:         largestScheduledWayTooLate.JobRunSummary.ScheduledAt,
-			DelayDuration:       largestScheduledWayTooLate.DelaySummary.ScheduledWayTooLateSeconds,
-			UpstreamJobName:     largestWayTooLateUpstream.JobName,
-			UpstreamScheduledAt: largestWayTooLateUpstream.ScheduledAt,
+			JobName:       largestScheduledWayTooLate.JobName,
+			ScheduledAt:   largestScheduledWayTooLate.JobRunSummary.ScheduledAt,
+			DelayDuration: largestScheduledWayTooLate.DelaySummary.ScheduledWayTooLateSeconds,
+		}
+		if largestWayTooLateUpstream != nil {
+			lineageSummary.LargestScheduledWayTooLateJob.UpstreamJobName = largestWayTooLateUpstream.JobName
+			lineageSummary.LargestScheduledWayTooLateJob.UpstreamScheduledAt = largestWayTooLateUpstream.ScheduledAt
 		}
 	}
 
 	if largestSystemSchedulingDelay != nil {
 		lineageSummary.LargestSystemSchedulingDelayJob = LineageDelaySummary{
-			JobName:             largestSystemSchedulingDelay.JobName,
-			ScheduledAt:         largestSystemSchedulingDelay.JobRunSummary.ScheduledAt,
-			DelayDuration:       largestSystemSchedulingDelay.DelaySummary.SystemSchedulingDelaySeconds,
-			UpstreamJobName:     largestSystemSchedulingUpstream.JobName,
-			UpstreamScheduledAt: largestSystemSchedulingUpstream.ScheduledAt,
+			JobName:       largestSystemSchedulingDelay.JobName,
+			ScheduledAt:   largestSystemSchedulingDelay.JobRunSummary.ScheduledAt,
+			DelayDuration: largestSystemSchedulingDelay.DelaySummary.SystemSchedulingDelaySeconds,
+		}
+		if largestSystemSchedulingUpstream != nil {
+			lineageSummary.LargestSystemSchedulingDelayJob.UpstreamJobName = largestSystemSchedulingUpstream.JobName
+			lineageSummary.LargestSystemSchedulingDelayJob.UpstreamScheduledAt = largestSystemSchedulingUpstream.ScheduledAt
 		}
 	}
 

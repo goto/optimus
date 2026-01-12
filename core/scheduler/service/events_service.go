@@ -7,12 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
 )
@@ -43,6 +45,11 @@ type AlertManager interface {
 	SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs)
 }
 
+type AlertsRepo interface {
+	Insert(ctx context.Context, payload *alertmanager.AlertPayload) (uuid.UUID, error)
+	UpdateStatus(ctx context.Context, recordID uuid.UUID, status alertmanager.AlertStatus, message string) error
+}
+
 type EventsService struct {
 	notifyChannels map[string]Notifier
 	webhookChannel Webhook
@@ -50,6 +57,7 @@ type EventsService struct {
 	compiler       TemplateCompiler
 	jobRepo        JobRepository
 	tenantService  TenantService
+	alertRepo      AlertsRepo
 	l              log.Logger
 }
 
@@ -153,6 +161,26 @@ func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
 	return false
 }
 
+func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jobDetails *scheduler.JobWithDetails, scheme string) (uuid.UUID, error) {
+	scheduledAt := event.JobScheduledAt
+	if event.Type.IsOfType(scheduler.EventCategorySLAMiss) && len(event.SLAObjectList) > 0 {
+		scheduledAt = event.SLAObjectList[0].JobScheduledAt
+	}
+	return e.alertRepo.Insert(ctx, &alertmanager.AlertPayload{
+		Project:           event.Tenant.ProjectName().String(),
+		JobRunScheduledAt: scheduledAt,
+		Data: map[string]interface{}{
+			"job_name":     event.JobName,
+			"owner":        jobDetails.JobMetadata.Owner,
+			"project":      jobDetails.Job.Tenant.ProjectName().String(),
+			"namespace":    jobDetails.Job.Tenant.NamespaceName().String(),
+			"scheduled_at": scheduledAt,
+			"event_type":   event.Type.String(),
+		},
+		Template: scheme,
+	})
+}
+
 func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {
 	if !event.Type.IsOfType(scheduler.EventCategoryJobFailure) && !event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
 		return nil
@@ -214,6 +242,10 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 				}
 
 				if notifyChannel, ok := e.notifyChannels[scheme]; ok {
+					uuid, err := e.logAlert(ctx, event, jobDetails, scheme)
+					if err != nil {
+						e.l.Error("error logging alert for job [%s]: %s", event.JobName, err.Error())
+					}
 					if currErr := notifyChannel.Notify(ctx, scheduler.NotifyAttrs{
 						Owner:    jobDetails.JobMetadata.Owner,
 						JobEvent: event,
@@ -222,6 +254,11 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 					}); currErr != nil {
 						e.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
+						if err == nil {
+							e.alertRepo.UpdateStatus(ctx, uuid, alertmanager.StatusFailed, currErr.Error())
+						}
+					} else if err == nil {
+						e.alertRepo.UpdateStatus(ctx, uuid, alertmanager.StatusSent, "")
 					}
 				}
 			}
@@ -256,7 +293,10 @@ func getAlertManagerProjectConfig(tenantWithDetails *tenant.WithDetails) schedul
 	}
 }
 
-func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantService, notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler, alertsHandler AlertManager) *EventsService {
+func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantService,
+	notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler,
+	alertsHandler AlertManager, alertRepo AlertsRepo,
+) *EventsService {
 	return &EventsService{
 		l:              l,
 		jobRepo:        jobRepo,
@@ -265,5 +305,6 @@ func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantS
 		webhookChannel: webhookNotifier,
 		compiler:       compiler,
 		alertManager:   alertsHandler,
+		alertRepo:      alertRepo,
 	}
 }

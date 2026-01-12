@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -15,6 +16,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/notify/alertmanager"
 )
 
 func TestNotificationService(t *testing.T) {
@@ -34,7 +36,7 @@ func TestNotificationService(t *testing.T) {
 			jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(nil, fmt.Errorf("some error"))
 			defer jobRepo.AssertExpectations(t)
 
-			notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, nil)
+			notifyService := service.NewEventsService(logger, jobRepo, nil, nil, nil, nil, nil, nil)
 
 			event := &scheduler.Event{
 				JobName: jobName,
@@ -54,6 +56,7 @@ func TestNotificationService(t *testing.T) {
 					Name: "bq2bq",
 				},
 			}
+			scheduledAt := time.Now().Add(-2 * time.Hour)
 			jobWithDetails := scheduler.JobWithDetails{
 				Job: &job,
 				JobMetadata: &scheduler.JobMetadata{
@@ -87,10 +90,18 @@ func TestNotificationService(t *testing.T) {
 				},
 			}
 			event := &scheduler.Event{
-				JobName: jobName,
-				Tenant:  tnnt,
-				Type:    scheduler.SLAMissEvent,
-				Values:  map[string]any{},
+				JobName:        jobName,
+				Tenant:         tnnt,
+				Type:           scheduler.SLAMissEvent,
+				EventTime:      time.Now(),
+				JobScheduledAt: scheduledAt,
+				Values:         map[string]any{},
+				SLAObjectList: []*scheduler.SLAObject{
+					{
+						JobName:        jobName,
+						JobScheduledAt: scheduledAt,
+					},
+				},
 			}
 
 			t.Run("should send  webhook notification", func(t *testing.T) {
@@ -123,7 +134,7 @@ func TestNotificationService(t *testing.T) {
 				templateCompiler.On("Compile", mock.Anything, secretContext).Return(map[string]string{"header": "headerValue"}, nil)
 				defer templateCompiler.AssertExpectations(t)
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, webhookChannel, templateCompiler, nil)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, webhookChannel, templateCompiler, nil, nil)
 
 				err := notifyService.Webhook(ctx, event)
 				assert.Nil(t, err)
@@ -151,7 +162,7 @@ func TestNotificationService(t *testing.T) {
 				tenantService.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
 				defer tenantService.AssertExpectations(t)
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager, nil)
 
 				err := notifyService.Relay(ctx, event)
 				assert.Nil(t, err)
@@ -192,7 +203,7 @@ func TestNotificationService(t *testing.T) {
 					AlertManager:   alertMangerConfig,
 				})
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager)
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, nil, nil, nil, alertManager, nil)
 
 				err := notifyService.Relay(ctx, event)
 				assert.Nil(t, err)
@@ -225,7 +236,26 @@ func TestNotificationService(t *testing.T) {
 					"pagerduty": notifyChanelPager,
 				}
 
-				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+				testUUID := uuid.New()
+				alertPayload := &alertmanager.AlertPayload{
+					Project:           event.Tenant.ProjectName().String(),
+					JobRunScheduledAt: scheduledAt,
+					Data: map[string]interface{}{
+						"job_name":     event.JobName,
+						"owner":        "jobOwnerName",
+						"project":      tnnt.ProjectName().String(),
+						"namespace":    tnnt.NamespaceName().String(),
+						"scheduled_at": scheduledAt,
+						"event_type":   event.Type.String(),
+					},
+					Template: "slack",
+				}
+				alertRepo := new(mockAlertRepo)
+				alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, nil)
+				alertRepo.On("UpdateStatus", ctx, testUUID, alertmanager.StatusSent, "").Return(nil)
+				defer alertRepo.AssertExpectations(t)
+
+				notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, alertRepo)
 
 				err := notifyService.Push(ctx, event)
 				assert.Nil(t, err)
@@ -236,6 +266,7 @@ func TestNotificationService(t *testing.T) {
 				Name:   jobName,
 				Tenant: tnnt,
 			}
+			scheduledAt := time.Now().Add(-2 * time.Hour)
 			jobWithDetails := scheduler.JobWithDetails{
 				Job: &job,
 				JobMetadata: &scheduler.JobMetadata{
@@ -256,10 +287,11 @@ func TestNotificationService(t *testing.T) {
 				},
 			}
 			event := &scheduler.Event{
-				JobName: jobName,
-				Tenant:  tnnt,
-				Type:    scheduler.JobFailureEvent,
-				Values:  map[string]any{},
+				JobName:        jobName,
+				JobScheduledAt: scheduledAt,
+				Tenant:         tnnt,
+				Type:           scheduler.JobFailureEvent,
+				Values:         map[string]any{},
 			}
 
 			jobRepo := new(JobRepository)
@@ -288,7 +320,26 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+			testUUID := uuid.New()
+			alertPayload := &alertmanager.AlertPayload{
+				Project:           event.Tenant.ProjectName().String(),
+				JobRunScheduledAt: scheduledAt,
+				Data: map[string]interface{}{
+					"job_name":     event.JobName,
+					"owner":        "jobOwnerName",
+					"project":      tnnt.ProjectName().String(),
+					"namespace":    tnnt.NamespaceName().String(),
+					"scheduled_at": scheduledAt,
+					"event_type":   event.Type.String(),
+				},
+				Template: "pagerduty",
+			}
+			alertRepo := new(mockAlertRepo)
+			alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, nil)
+			alertRepo.On("UpdateStatus", ctx, testUUID, alertmanager.StatusSent, "").Return(nil)
+			defer alertRepo.AssertExpectations(t)
+
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, alertRepo)
 
 			err := notifyService.Push(ctx, event)
 			assert.Nil(t, err)
@@ -298,6 +349,7 @@ func TestNotificationService(t *testing.T) {
 				Name:   jobName,
 				Tenant: tnnt,
 			}
+			scheduledAt := time.Now().Add(-2 * time.Hour)
 			jobWithDetails := scheduler.JobWithDetails{
 				Job: &job,
 				JobMetadata: &scheduler.JobMetadata{
@@ -318,10 +370,11 @@ func TestNotificationService(t *testing.T) {
 				},
 			}
 			event := &scheduler.Event{
-				JobName: jobName,
-				Tenant:  tnnt,
-				Type:    scheduler.JobFailureEvent,
-				Values:  map[string]any{},
+				JobName:        jobName,
+				Tenant:         tnnt,
+				JobScheduledAt: scheduledAt,
+				Type:           scheduler.JobFailureEvent,
+				Values:         map[string]any{},
 			}
 
 			jobRepo := new(JobRepository)
@@ -350,7 +403,26 @@ func TestNotificationService(t *testing.T) {
 				"pagerduty": notifyChanelPager,
 			}
 
-			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil)
+			testUUID := uuid.New()
+			alertPayload := &alertmanager.AlertPayload{
+				Project:           event.Tenant.ProjectName().String(),
+				JobRunScheduledAt: scheduledAt,
+				Data: map[string]interface{}{
+					"job_name":     event.JobName,
+					"owner":        "jobOwnerName",
+					"project":      tnnt.ProjectName().String(),
+					"namespace":    tnnt.NamespaceName().String(),
+					"scheduled_at": scheduledAt,
+					"event_type":   event.Type.String(),
+				},
+				Template: "pagerduty",
+			}
+			alertRepo := new(mockAlertRepo)
+			alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, nil)
+			alertRepo.On("UpdateStatus", ctx, testUUID, alertmanager.StatusFailed, "error in pagerduty push").Return(nil)
+			defer alertRepo.AssertExpectations(t)
+
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, alertRepo)
 
 			err := notifyService.Push(ctx, event)
 
@@ -358,6 +430,21 @@ func TestNotificationService(t *testing.T) {
 			assert.EqualError(t, err, "ErrorsInNotifyPush:\n notifyChannel.Notify: pagerduty://#chanel-name: error in pagerduty push")
 		})
 	})
+}
+
+type mockAlertRepo struct {
+	io.Closer
+	mock.Mock
+}
+
+func (m *mockAlertRepo) Insert(ctx context.Context, payload *alertmanager.AlertPayload) (uuid.UUID, error) {
+	args := m.Called(ctx, payload)
+	return args.Get(0).(uuid.UUID), args.Error(1)
+}
+
+func (m *mockAlertRepo) UpdateStatus(ctx context.Context, recordID uuid.UUID, status alertmanager.AlertStatus, message string) error {
+	args := m.Called(ctx, recordID, status, message)
+	return args.Error(0)
 }
 
 type mockNotificationChanel struct {

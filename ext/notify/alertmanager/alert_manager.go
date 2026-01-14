@@ -23,7 +23,7 @@ type AlertStatus string
 const (
 	httpChannelBufferSize = 100
 	eventBatchInterval    = time.Second * 10
-	httpTimeout           = time.Second * 10
+	httpTimeout           = time.Second * 20
 
 	StatusPending AlertStatus = "PENDING"
 	StatusSent    AlertStatus = "SENT"

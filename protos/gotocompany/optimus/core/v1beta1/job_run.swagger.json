@@ -988,6 +988,10 @@
         "durationSeconds": {
           "type": "integer",
           "format": "int32"
+        },
+        "level": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },
@@ -1046,11 +1050,17 @@
         "largestSystemSchedulingDelayJob": {
           "$ref": "#/definitions/v1beta1LineageDelaySummary"
         },
-        "jobWithLongestTaskDuration": {
-          "$ref": "#/definitions/v1beta1JobWithTaskDuration"
+        "topLongestTaskDurationJobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobWithTaskDuration"
+          }
         },
-        "jobWithLongestHookDuration": {
-          "$ref": "#/definitions/v1beta1JobWithTaskDuration"
+        "topLongestHookDurationJobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobWithTaskDuration"
+          }
         }
       }
     },

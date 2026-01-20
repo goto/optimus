@@ -107,6 +107,24 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 			})
 		}
 
+		topLongestTaskDurationJobs := make([]*pb.JobWithTaskDuration, 0, len(lineage.ExecutionSummary.TopLongestTaskDurationJobs))
+		for _, jobWithDuration := range lineage.ExecutionSummary.TopLongestTaskDurationJobs {
+			topLongestTaskDurationJobs = append(topLongestTaskDurationJobs, &pb.JobWithTaskDuration{
+				JobName:         jobWithDuration.JobName.String(),
+				DurationSeconds: int32(jobWithDuration.TaskDuration.Seconds()),
+				Level:           int32(jobWithDuration.Level),
+			})
+		}
+
+		topLongestHookDurationJobs := make([]*pb.JobWithTaskDuration, 0, len(lineage.ExecutionSummary.TopLongestHookDurationJobs))
+		for _, jobWithDuration := range lineage.ExecutionSummary.TopLongestHookDurationJobs {
+			topLongestHookDurationJobs = append(topLongestHookDurationJobs, &pb.JobWithTaskDuration{
+				JobName:         jobWithDuration.JobName.String(),
+				DurationSeconds: int32(jobWithDuration.TaskDuration.Seconds()),
+				Level:           int32(jobWithDuration.Level),
+			})
+		}
+
 		pbJobRunLineages = append(pbJobRunLineages, &pb.JobRunLineageSummary{
 			JobName:     lineage.JobName.String(),
 			ScheduledAt: timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
@@ -131,14 +149,8 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					UpstreamJobName:     lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamJobName.String(),
 					UpstreamScheduledAt: timestamppb.New(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamScheduledAt),
 				},
-				JobWithLongestTaskDuration: &pb.JobWithTaskDuration{
-					JobName:         lineage.ExecutionSummary.JobWithLongestTaskDuration.JobName.String(),
-					DurationSeconds: int32(lineage.ExecutionSummary.JobWithLongestTaskDuration.TaskDuration.Seconds()),
-				},
-				JobWithLongestHookDuration: &pb.JobWithTaskDuration{
-					JobName:         lineage.ExecutionSummary.JobWithLongestHookDuration.JobName.String(),
-					DurationSeconds: int32(lineage.ExecutionSummary.JobWithLongestHookDuration.TaskDuration.Seconds()),
-				},
+				TopLongestTaskDurationJobs: topLongestTaskDurationJobs,
+				TopLongestHookDurationJobs: topLongestHookDurationJobs,
 			},
 		})
 	}

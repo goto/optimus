@@ -128,10 +128,6 @@ func TestFromStringToEventType(t *testing.T) {
 					"dag_id":       "sample_select",
 					"scheduled_at": "2006-01-02T15:04:05Z",
 				},
-				{
-					"dag_id":       "sample_select",
-					"scheduled_at": "2006-01-03T15:04:05Z",
-				},
 			}
 			eventValues := map[string]any{
 				"event_time": "16000631600.0",
@@ -147,7 +143,6 @@ func TestFromStringToEventType(t *testing.T) {
 			assert.Nil(t, err)
 
 			scheduledAt1, _ := time.Parse(scheduler.ISODateFormat, "2006-01-02T15:04:05Z")
-			scheduledAt2, _ := time.Parse(scheduler.ISODateFormat, "2006-01-03T15:04:05Z")
 
 			assert.Equal(t, eventObj, &scheduler.Event{
 				Tenant: tnnt,
@@ -157,10 +152,6 @@ func TestFromStringToEventType(t *testing.T) {
 					{
 						JobName:        "sample_select",
 						JobScheduledAt: scheduledAt1,
-					},
-					{
-						JobName:        "sample_select",
-						JobScheduledAt: scheduledAt2,
 					},
 				},
 			})

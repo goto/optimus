@@ -345,7 +345,7 @@ func (s *OptimusServer) setupHandlers() error {
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
-	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler)
+	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler, alertsLogRepo)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginStore, tProjectService, tSecretService)
 	if err != nil {
 		return err

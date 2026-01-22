@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
@@ -68,6 +70,10 @@ type ClientAirflow struct {
 	client *http.Client
 }
 
+var airflowAPIMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "airflow_api",
+}, []string{"api_name", "status"})
+
 func NewAirflowClient() *ClientAirflow {
 	return &ClientAirflow{client: &http.Client{}}
 }
@@ -88,9 +94,11 @@ func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth Sched
 		return resp, fmt.Errorf("failed to call airflow %s due to %w", endpoint, respErr)
 	}
 	if httpResp.StatusCode != http.StatusOK {
+		airflowAPIMetrics.WithLabelValues(r.path, httpResp.Status).Inc()
 		httpResp.Body.Close()
 		return resp, fmt.Errorf("status code received %d on calling %s", httpResp.StatusCode, endpoint)
 	}
+	airflowAPIMetrics.WithLabelValues(r.path, "ok").Inc()
 	return parseResponse(httpResp)
 }
 

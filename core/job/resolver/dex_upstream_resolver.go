@@ -55,6 +55,11 @@ func (u *dexUpstreamResolver) BulkResolve(ctx context.Context, jobsWithUpstream 
 }
 
 func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.WithUpstream, lw writer.LogWriter) (*job.WithUpstream, error) {
+	if !jobWithUpstream.Job().Spec().IsDexSensorEnabled() {
+		// skip DEX upstream resolution if dex sensor is not enabled for the job
+		return jobWithUpstream, nil
+	}
+
 	details, err := u.tenantDetailsGetter.GetDetails(ctx, jobWithUpstream.Job().Tenant())
 	if err != nil {
 		return jobWithUpstream, fmt.Errorf("failed to get tenant details for tenant %s: %w", jobWithUpstream.Job().Tenant().String(), err)

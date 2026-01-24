@@ -1,0 +1,1 @@
+alter table job drop COLUMN if EXISTS dex_sensor;

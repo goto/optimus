@@ -25,14 +25,19 @@ type Spec struct {
 	windowConfig window.Config
 	task         Task
 
-	description  string
-	labels       labels.Labels
-	metadata     *Metadata
-	hooks        []*Hook
-	asset        Asset
-	alertSpecs   []*AlertSpec
-	webhook      []*WebhookSpec
-	upstreamSpec *UpstreamSpec
+	description     string
+	labels          labels.Labels
+	metadata        *Metadata
+	hooks           []*Hook
+	asset           Asset
+	alertSpecs      []*AlertSpec
+	webhook         []*WebhookSpec
+	upstreamSpec    *UpstreamSpec
+	enableDexSensor bool
+}
+
+func (s *Spec) IsDexSensorEnabled() bool {
+	return s.enableDexSensor
 }
 
 func (s *Spec) Version() int {
@@ -175,6 +180,11 @@ func (s *SpecBuilder) WithMetadata(metadata *Metadata) *SpecBuilder {
 
 func (s *SpecBuilder) WithLabels(labels labels.Labels) *SpecBuilder {
 	s.spec.labels = labels
+	return s
+}
+
+func (s *SpecBuilder) WithDexSensor() *SpecBuilder {
+	s.spec.enableDexSensor = true
 	return s
 }
 

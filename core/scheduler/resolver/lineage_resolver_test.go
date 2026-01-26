@@ -203,7 +203,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		resultMap, err := resolver.BuildLineage(ctx, jobSchedules, 0, 24)
+		resultMap, err := resolver.BuildLineage(ctx, jobSchedules, 24)
 
 		assert.NoError(t, err)
 		assert.Len(t, resultMap, 1)
@@ -262,7 +262,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules, 0, 24)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 24)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -294,7 +294,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules, 0, 24)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 24)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -330,7 +330,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules, 0, 24)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 24)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -371,7 +371,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, nil)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules, 0, 24)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 24)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -415,7 +415,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, jobSchedules, 0, 24)
+		result, err := resolver.BuildLineage(ctx, jobSchedules, 24)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -440,7 +440,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		result, err := resolver.BuildLineage(ctx, []*scheduler.JobSchedule{}, 0, 24)
+		result, err := resolver.BuildLineage(ctx, []*scheduler.JobSchedule{}, 24)
 
 		assert.NoError(t, err)
 		assert.Empty(t, result)
@@ -479,7 +479,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 
 		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
 
-		resultMap, err := resolver.BuildLineage(ctx, jobSchedules, 0, 24)
+		resultMap, err := resolver.BuildLineage(ctx, jobSchedules, 24)
 
 		assert.NoError(t, err)
 		assert.Len(t, resultMap, 1)

@@ -81,7 +81,7 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				slaTime = timestamppb.New(*run.JobRunSummary.SLATime)
 			}
 
-			pbJobRuns = append(pbJobRuns, &pb.JobExecutionSummary{
+			pbJobRun := &pb.JobExecutionSummary{
 				JobName: run.JobName.String(),
 				Sla: &pb.SLAConfig{
 					Duration: durationpb.New(run.SLA.Duration),
@@ -100,11 +100,15 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				},
 				Level:              int32(run.Level),
 				DownstreamPathName: run.DownstreamPathName,
-				DelaySummary: &pb.JobRunDelaySummary{
+			}
+			if run.DelaySummary != nil {
+				pbJobRun.DelaySummary = &pb.JobRunDelaySummary{
 					ScheduledWayTooLateSeconds:   int32(run.DelaySummary.ScheduledWayTooLateSeconds),
 					SystemSchedulingDelaySeconds: int32(run.DelaySummary.SystemSchedulingDelaySeconds),
-				},
-			})
+				}
+			}
+
+			pbJobRuns = append(pbJobRuns, pbJobRun)
 		}
 
 		topLongestTaskDurationJobs := make([]*pb.JobWithTaskDuration, 0, len(lineage.ExecutionSummary.TopLongestTaskDurationJobs))

@@ -58,7 +58,7 @@ type LineageData struct {
 	ProjectsByName map[tenant.ProjectName]*tenant.Project
 }
 
-func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule, maxUpstreamsPerLevel, validLineageIntervalInHours int) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error) {
+func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*scheduler.JobSchedule, validLineageIntervalInHours int) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error) {
 	lineageData, err := r.prepareAllLineageData(ctx, jobSchedules)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (r *LineageResolver) BuildLineage(ctx context.Context, jobSchedules []*sche
 
 	results := make(map[*scheduler.JobSchedule]*scheduler.JobLineageSummary)
 	for _, schedule := range jobSchedules {
-		lineage, err := r.buildSingleJobLineage(ctx, schedule, lineageData, maxUpstreamsPerLevel, validLineageIntervalInHours)
+		lineage, err := r.buildSingleJobLineage(ctx, schedule, lineageData, validLineageIntervalInHours)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +141,7 @@ func (r *LineageResolver) collectJobs(jobName scheduler.JobName, upstreamsByJob 
 	}
 }
 
-func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *scheduler.JobSchedule, lineageData *LineageData, maxUpstreamsPerLevel, validLineageIntervalInHours int) (*scheduler.JobLineageSummary, error) {
+func (r *LineageResolver) buildSingleJobLineage(ctx context.Context, schedule *scheduler.JobSchedule, lineageData *LineageData, validLineageIntervalInHours int) (*scheduler.JobLineageSummary, error) {
 	lineage := r.buildLineageTree(schedule.JobName, lineageData, map[scheduler.JobName]*scheduler.JobLineageSummary{}, 0)
 
 	finalLineage, err := r.getAllUpstreamRuns(ctx, lineage, schedule.ScheduledAt, lineageData, validLineageIntervalInHours)

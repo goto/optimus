@@ -35,6 +35,7 @@ func createJobLineage(name string, tnnt tenant.Tenant, windowConfig *window.Conf
 	return summary
 }
 
+// nolint:unparam
 func createJobRunPair(downstreamJobName, jobName string, baseTime, startTime, endTime time.Time) downstreamJobNameAndRunPair {
 	return downstreamJobNameAndRunPair{
 		JobName:   scheduler.JobName(downstreamJobName),

@@ -1027,10 +1027,12 @@ func TestJobRunHandler(t *testing.T) {
 						{
 							JobName: "test-job",
 							JobRunSummary: &scheduler.JobRunSummary{
+								JobName:     "test-job",
 								ScheduledAt: scheduledAt.AsTime(),
 							},
 						},
 					},
+					ExecutionSummary: &scheduler.LineageExecutionSummary{},
 				},
 			}
 

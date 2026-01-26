@@ -39,75 +39,6 @@ type upstreamCandidate struct {
 	EndTime     time.Time
 }
 
-// PruneLineage prunes the upstream lineage to limit the number of upstreams per level
-// by selecting maxUpstreamsPerLevel upstreams based on their latest job run finish time
-func (j *JobLineageSummary) PruneLineage(maxUpstreamsPerLevel, maxDepth int) *JobLineageSummary {
-	type nodeInfo struct {
-		original *JobLineageSummary
-		pruned   *JobLineageSummary
-		depth    int
-	}
-
-	rootPruned := &JobLineageSummary{
-		JobName:          j.JobName,
-		Tenant:           j.Tenant,
-		Window:           j.Window,
-		ScheduleInterval: j.ScheduleInterval,
-		SLA:              j.SLA,
-		JobRuns:          j.JobRuns,
-	}
-
-	queue := []*nodeInfo{{
-		original: j,
-		pruned:   rootPruned,
-		depth:    0,
-	}}
-
-	processed := make(map[JobName]*JobLineageSummary)
-	processed[j.JobName] = queue[0].pruned
-
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-
-		if current.depth >= maxDepth {
-			continue
-		}
-
-		candidates := current.original.sortUpstreamCandidates(j.JobName)
-
-		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
-			targetJobName := candidates[i].JobName
-			for _, upstream := range current.original.Upstreams {
-				if upstream.JobName == targetJobName {
-					if existingPruned, exists := processed[upstream.JobName]; exists {
-						current.pruned.Upstreams = append(current.pruned.Upstreams, existingPruned)
-					} else {
-						prunedUpstream := &JobLineageSummary{
-							JobName:          upstream.JobName,
-							Tenant:           upstream.Tenant,
-							Window:           upstream.Window,
-							ScheduleInterval: upstream.ScheduleInterval,
-							SLA:              upstream.SLA,
-							JobRuns:          upstream.JobRuns,
-						}
-						current.pruned.Upstreams = append(current.pruned.Upstreams, prunedUpstream)
-						processed[upstream.JobName] = prunedUpstream
-						queue = append(queue, &nodeInfo{
-							original: upstream,
-							pruned:   prunedUpstream,
-							depth:    current.depth + 1,
-						})
-					}
-					break
-				}
-			}
-		}
-	}
-
-	return rootPruned
-}
-
 func (j *JobLineageSummary) sortUpstreamCandidates(jobName JobName) []upstreamCandidate {
 	candidates := []upstreamCandidate{}
 
@@ -168,12 +99,12 @@ func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSu
 	return nil
 }
 
-func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRunLineage {
+func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxUpstreamsPerLevel, maxDepth int) *JobRunLineage {
 	if j == nil {
 		return nil
 	}
 
-	executionSummaries := j.flatten(maxDepth)
+	executionSummaries := j.GetFlattenedSummaries(maxUpstreamsPerLevel, maxDepth)
 	lineageSummary := &LineageExecutionSummary{}
 	var largestScheduledWayTooLate, largestSystemSchedulingDelay *JobExecutionSummary
 	var largestWayTooLateUpstream, largestSystemSchedulingUpstream *JobRunSummary
@@ -181,9 +112,40 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 
 	var taskDurationJobs, hookDurationJobs []JobWithTaskDuration
 
-	for i := 0; i < len(executionSummaries); i++ {
-		currentExec := executionSummaries[i]
-		currentRun := currentExec.JobRunSummary
+	levelGroups := make(map[int][]*JobExecutionSummary)
+	for _, exec := range executionSummaries {
+		levelGroups[exec.Level] = append(levelGroups[exec.Level], exec)
+	}
+
+	var sortedLevels []int
+	for level := range levelGroups {
+		sortedLevels = append(sortedLevels, level)
+	}
+	sort.Ints(sortedLevels)
+
+	var latestEndTimeByLevel []*JobExecutionSummary
+	for _, level := range sortedLevels {
+		jobs := levelGroups[level]
+		var latestJob *JobExecutionSummary
+		var latestEndTime *time.Time
+
+		for _, job := range jobs {
+			if job.JobRunSummary.GetActualEndTime() == nil {
+				continue
+			}
+			if latestEndTime == nil || job.JobRunSummary.GetActualEndTime().After(*latestEndTime) {
+				latestJob = job
+				latestEndTime = job.JobRunSummary.GetActualEndTime()
+			}
+		}
+
+		if latestJob != nil {
+			latestEndTimeByLevel = append(latestEndTimeByLevel, latestJob)
+		}
+	}
+
+	for _, exec := range executionSummaries {
+		currentRun := exec.JobRunSummary
 
 		if currentRun.GetActualEndTime() == nil {
 			continue
@@ -194,7 +156,7 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 				JobName:      currentRun.JobName,
 				ScheduledAt:  currentRun.ScheduledAt,
 				TaskDuration: currentRun.GetTaskDuration(),
-				Level:        currentExec.Level,
+				Level:        exec.Level,
 			})
 		}
 
@@ -203,25 +165,34 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 				JobName:      currentRun.JobName,
 				ScheduledAt:  currentRun.ScheduledAt,
 				TaskDuration: currentRun.GetHookDuration(),
-				Level:        currentExec.Level,
+				Level:        exec.Level,
 			})
+		}
+	}
+
+	for i := range latestEndTimeByLevel {
+		currentExec := latestEndTimeByLevel[i]
+		currentRun := currentExec.JobRunSummary
+
+		if currentRun.TaskStartTime == nil {
+			continue
 		}
 
 		scheduledToTaskStartDuration := currentRun.TaskStartTime.Sub(currentRun.ScheduledAt)
 
 		var upstreamLastTaskEndToCurrentTaskStartDuration time.Duration
 		var upstreamRun *JobRunSummary
-		if i < len(executionSummaries)-1 {
-			for j := i + 1; j < len(executionSummaries); j++ {
-				upstreamRun = executionSummaries[j].JobRunSummary
-				if upstreamRun.GetActualEndTime() != nil {
-					upstreamLastTaskEndToCurrentTaskStartDuration = currentRun.TaskStartTime.Sub(*upstreamRun.GetActualEndTime())
-					break
-				}
+		hasUpstream := i < len(latestEndTimeByLevel)-1
+
+		if hasUpstream {
+			upstreamExec := latestEndTimeByLevel[i+1]
+			upstreamRun = upstreamExec.JobRunSummary
+			if upstreamRun.GetActualEndTime() != nil {
+				upstreamLastTaskEndToCurrentTaskStartDuration = currentRun.TaskStartTime.Sub(*upstreamRun.GetActualEndTime())
 			}
 		}
 
-		if upstreamLastTaskEndToCurrentTaskStartDuration > scheduledToTaskStartDuration {
+		if hasUpstream && upstreamLastTaskEndToCurrentTaskStartDuration > scheduledToTaskStartDuration {
 			currentScheduledWayTooLate := upstreamLastTaskEndToCurrentTaskStartDuration - scheduledToTaskStartDuration
 			currentExec.DelaySummary.ScheduledWayTooLateSeconds = int64(currentScheduledWayTooLate.Seconds())
 			lineageSummary.TotalScheduledWayTooLateSeconds += currentExec.DelaySummary.ScheduledWayTooLateSeconds
@@ -233,8 +204,10 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 			}
 
 			currentExec.DelaySummary.SystemSchedulingDelaySeconds = int64(scheduledToTaskStartDuration.Seconds())
-		} else {
+		} else if hasUpstream {
 			currentExec.DelaySummary.SystemSchedulingDelaySeconds = int64(upstreamLastTaskEndToCurrentTaskStartDuration.Seconds())
+		} else {
+			currentExec.DelaySummary.SystemSchedulingDelaySeconds = int64(scheduledToTaskStartDuration.Seconds())
 		}
 
 		lineageSummary.TotalSystemSchedulingDelaySeconds += currentExec.DelaySummary.SystemSchedulingDelaySeconds
@@ -260,12 +233,18 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 	}
 	lineageSummary.TopLongestHookDurationJobs = hookDurationJobs
 
-	if len(executionSummaries) > 0 {
-		lineageSummary.AverageSystemSchedulingDelaySeconds = lineageSummary.TotalSystemSchedulingDelaySeconds / int64(len(executionSummaries))
+	if len(latestEndTimeByLevel) > 0 {
+		lineageSummary.AverageSystemSchedulingDelaySeconds = lineageSummary.TotalSystemSchedulingDelaySeconds / int64(len(latestEndTimeByLevel))
 	}
 
 	lineageSummary.TotalLineageDelaySeconds = lineageSummary.TotalScheduledWayTooLateSeconds + lineageSummary.TotalSystemSchedulingDelaySeconds
-	lineageSummary.TotalLineageDurationSeconds = int64(executionSummaries[0].JobRunSummary.GetActualEndTime().Sub(*executionSummaries[len(executionSummaries)-1].JobRunSummary.TaskStartTime).Seconds())
+	if len(latestEndTimeByLevel) > 0 {
+		firstJob := latestEndTimeByLevel[0].JobRunSummary
+		lastJob := latestEndTimeByLevel[len(latestEndTimeByLevel)-1].JobRunSummary
+		if firstJob.GetActualEndTime() != nil && lastJob.TaskStartTime != nil {
+			lineageSummary.TotalLineageDurationSeconds = int64(firstJob.GetActualEndTime().Sub(*lastJob.TaskStartTime).Seconds())
+		}
+	}
 
 	if largestScheduledWayTooLate != nil {
 		lineageSummary.LargestScheduledWayTooLateJob = LineageDelaySummary{
@@ -299,37 +278,74 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxDepth int) *JobRu
 	}
 }
 
-func (j *JobLineageSummary) flatten(maxDepth int) []*JobExecutionSummary {
+func (j *JobLineageSummary) GetFlattenedSummaries(maxUpstreamsPerLevel, maxDepth int) []*JobExecutionSummary {
+	if maxUpstreamsPerLevel <= 0 {
+		maxUpstreamsPerLevel = 20
+	}
+
 	var result []*JobExecutionSummary
-	queue := []*JobLineageSummary{j}
-	level := 0
+	result = append(result, &JobExecutionSummary{
+		JobName:            j.JobName,
+		SLA:                j.SLA,
+		Level:              0,
+		JobRunSummary:      j.GetRunForJob(j.JobName),
+		DownstreamPathName: j.JobName.String(),
+		DelaySummary: &JobRunDelaySummary{
+			ScheduledWayTooLateSeconds:   0,
+			SystemSchedulingDelaySeconds: 0,
+		},
+	})
 
-	for len(queue) > 0 && level < maxDepth {
-		levelSize := len(queue)
+	type nodeInfo struct {
+		original *JobLineageSummary
+		depth    int
+	}
+	queue := []*nodeInfo{{
+		original: j,
+		depth:    0,
+	}}
 
-		for range levelSize {
-			current := queue[0]
-			queue = queue[1:]
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
 
-			latestJobRun := current.GetRunForJob(j.JobName)
-			if latestJobRun != nil {
-				result = append(result, &JobExecutionSummary{
-					JobName:            current.JobName,
-					SLA:                current.SLA,
-					Level:              level,
-					JobRunSummary:      latestJobRun,
-					DownstreamPathName: j.JobName.String(),
-					DelaySummary: &JobRunDelaySummary{
-						ScheduledWayTooLateSeconds:   0,
-						SystemSchedulingDelaySeconds: 0,
-					},
-				})
-			}
-
-			queue = append(queue, current.Upstreams...)
+		if current.depth >= maxDepth {
+			continue
 		}
 
-		level++
+		candidates := current.original.sortUpstreamCandidates(j.JobName)
+		upstreamLevel := current.depth + 1
+
+		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
+			targetJobName := candidates[i].JobName
+			for _, upstream := range current.original.Upstreams {
+				if upstream.JobName != targetJobName {
+					continue
+				}
+
+				latestJobRun := upstream.GetRunForJob(j.JobName)
+				if latestJobRun != nil {
+					result = append(result, &JobExecutionSummary{
+						JobName:            upstream.JobName,
+						SLA:                upstream.SLA,
+						Level:              upstreamLevel,
+						JobRunSummary:      latestJobRun,
+						DownstreamPathName: current.original.JobName.String(),
+						DelaySummary: &JobRunDelaySummary{
+							ScheduledWayTooLateSeconds:   0,
+							SystemSchedulingDelaySeconds: 0,
+						},
+					})
+
+					if i == 0 {
+						queue = append(queue, &nodeInfo{
+							original: upstream,
+							depth:    upstreamLevel,
+						})
+					}
+				}
+			}
+		}
 	}
 
 	return result

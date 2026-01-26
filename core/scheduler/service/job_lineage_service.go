@@ -32,10 +32,7 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 	var result []*scheduler.JobRunLineage
 	for _, lineage := range downstreamLineages {
 		newDownstreamLineage := lineage
-		if numberOfUpstreamPerLevel > 0 {
-			newDownstreamLineage = newDownstreamLineage.PruneLineage(numberOfUpstreamPerLevel, scheduler.MaxLineageDepth)
-		}
-		result = append(result, newDownstreamLineage.GenerateLineageExecutionSummary(scheduler.MaxLineageDepth))
+		result = append(result, newDownstreamLineage.GenerateLineageExecutionSummary(numberOfUpstreamPerLevel, scheduler.MaxLineageDepth))
 	}
 
 	return result, nil

@@ -37,7 +37,12 @@ const (
 )
 
 var (
-	notifierType   = "event"
+	notifierType = "event"
+
+	alertManagerMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "alert_manager_api",
+	}, []string{"template", "status", "error"})
+
 	eventsReceived = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name:        MetricNotificationQueue,
 		ConstLabels: map[string]string{"type": notifierType},
@@ -164,8 +169,10 @@ func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
+		alertManagerMetrics.WithLabelValues(alertPayload.Template, "error", err.Error()).Inc()
 		return fmt.Errorf("[alert manager] %s unable to send request to Alert Manager err: %w", eventID, err)
 	}
+	alertManagerMetrics.WithLabelValues(alertPayload.Template, res.Status, "").Inc()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -176,7 +183,6 @@ func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("[alert manager] %s non 200 status code received status: %s", eventID, res.Status)
 	}
-
 	return res.Body.Close()
 }
 

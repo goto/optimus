@@ -72,7 +72,7 @@ type ClientAirflow struct {
 
 var airflowAPIMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "airflow_api",
-}, []string{"api_name", "status"})
+}, []string{"api_name", "status", "error"})
 
 func NewAirflowClient() *ClientAirflow {
 	return &ClientAirflow{client: &http.Client{}}
@@ -91,14 +91,14 @@ func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth Sched
 
 	httpResp, respErr := ac.client.Do(request)
 	if respErr != nil {
+		airflowAPIMetrics.WithLabelValues(r.path, "error", respErr.Error()).Inc()
 		return resp, fmt.Errorf("failed to call airflow %s due to %w", endpoint, respErr)
 	}
+	airflowAPIMetrics.WithLabelValues(r.path, httpResp.Status, "").Inc()
 	if httpResp.StatusCode != http.StatusOK {
-		airflowAPIMetrics.WithLabelValues(r.path, httpResp.Status).Inc()
 		httpResp.Body.Close()
 		return resp, fmt.Errorf("status code received %d on calling %s", httpResp.StatusCode, endpoint)
 	}
-	airflowAPIMetrics.WithLabelValues(r.path, "ok").Inc()
 	return parseResponse(httpResp)
 }
 

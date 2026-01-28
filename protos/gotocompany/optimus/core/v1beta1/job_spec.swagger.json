@@ -1702,6 +1702,9 @@
         "task": {
           "$ref": "#/definitions/v1beta1JobSpecTask"
         },
+        "enableDexSensor": {
+          "type": "boolean"
+        },
         "windowSize": {
           "type": "string"
         },

@@ -54,6 +54,8 @@ type Spec struct {
 	UpdatedAt time.Time
 	DeletedAt sql.NullTime
 
+	EnableDexSensor bool
+
 	IsDirty bool
 }
 
@@ -257,6 +259,8 @@ func toStorageSpec(jobEntity *job.Job) (*Spec, error) {
 
 		ProjectName:   jobEntity.Tenant().ProjectName().String(),
 		NamespaceName: jobEntity.Tenant().NamespaceName().String(),
+
+		EnableDexSensor: jobEntity.Spec().IsDexSensorEnabled(),
 	}, nil
 }
 
@@ -832,7 +836,7 @@ func FromRow(row pgx.Row) (*Spec, error) {
 	err := row.Scan(&js.ID, &js.State, &js.Name, &js.Version, &js.Owner, &js.Description,
 		&js.Labels, &js.Schedule, &js.Alert, &js.Webhook, &js.StaticUpstreams, &js.HTTPUpstreams,
 		&js.TaskName, &js.TaskConfig, &js.WindowSpec, &js.Assets, &js.Hooks, &js.Metadata, &js.Destination, &js.Sources,
-		&js.ProjectName, &js.NamespaceName, &js.CreatedAt, &js.UpdatedAt, &js.DeletedAt, &js.IsDirty)
+		&js.ProjectName, &js.NamespaceName, &js.EnableDexSensor, &js.CreatedAt, &js.UpdatedAt, &js.DeletedAt, &js.IsDirty)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(job.EntityJob, "job not found")

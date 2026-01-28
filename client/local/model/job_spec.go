@@ -24,7 +24,9 @@ type JobSpec struct {
 	Hooks        []JobSpecHook       `yaml:"hooks"`
 	Dependencies []JobSpecDependency `yaml:"dependencies"`
 	Metadata     *JobSpecMetadata    `yaml:"metadata,omitempty"`
-	Path         string              `yaml:"-"`
+
+	EnableDexSensor bool   `yaml:"enable_dex_sensor,omitempty"`
+	Path            string `yaml:"-"`
 }
 
 type JobSpecSchedule struct {
@@ -222,13 +224,14 @@ func (j *JobSpec) ToProto() *pb.JobSpecification {
 			Config:  taskConfig,
 			Alert:   j.Task.Alerts.GetOperatorAlertProto(),
 		},
-		Dependencies: j.getProtoJobDependencies(),
-		Assets:       j.Asset,
-		Hooks:        j.getProtoJobSpecHooks(),
-		Description:  j.Description,
-		Labels:       j.Labels,
-		Behavior:     j.getProtoJobSpecBehavior(),
-		Metadata:     j.getProtoJobMetadata(),
+		Dependencies:    j.getProtoJobDependencies(),
+		Assets:          j.Asset,
+		Hooks:           j.getProtoJobSpecHooks(),
+		Description:     j.Description,
+		Labels:          j.Labels,
+		Behavior:        j.getProtoJobSpecBehavior(),
+		Metadata:        j.getProtoJobMetadata(),
+		EnableDexSensor: j.EnableDexSensor,
 	}
 
 	if js.Version < NewWindowVersion {
@@ -612,6 +615,8 @@ func ToJobSpec(protoSpec *pb.JobSpecification) *JobSpec {
 		Hooks:        toJobSpecHooks(protoSpec.Hooks),
 		Dependencies: toJobSpecDependencies(protoSpec.Dependencies),
 		Metadata:     toJobSpecMetadata(protoSpec.Metadata),
+
+		EnableDexSensor: protoSpec.EnableDexSensor,
 	}
 }
 

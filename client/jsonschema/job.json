@@ -40,6 +40,9 @@
           },
           "type": "array"
         },
+        "enable_dex_sensor": {
+          "type": "boolean"
+        },
         "dependencies": {
           "items": {
             "$ref": "#/$defs/JobSpecDependency"

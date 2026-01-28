@@ -35,15 +35,16 @@ func ToJobProto(jobEntity *job.Job) *pb.JobSpecification {
 			Version: spec.Task().Version(),
 			Config:  fromConfig(spec.Task().Config()),
 		},
-		Dependencies: fromSpecUpstreams(spec.UpstreamSpec()),
-		Assets:       fromAsset(spec.Asset()),
-		Hooks:        fromHooks(spec.Hooks()),
-		Description:  spec.Description(),
-		Labels:       spec.Labels(),
-		Behavior:     fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
-		Metadata:     fromMetadata(spec.Metadata()),
-		Destination:  jobEntity.Destination().String(),
-		Sources:      fromResourceURNs(jobEntity.Sources()),
+		Dependencies:    fromSpecUpstreams(spec.UpstreamSpec()),
+		Assets:          fromAsset(spec.Asset()),
+		Hooks:           fromHooks(spec.Hooks()),
+		Description:     spec.Description(),
+		Labels:          spec.Labels(),
+		Behavior:        fromRetryAndAlerts(spec.Schedule().Retry(), spec.AlertSpecs()),
+		Metadata:        fromMetadata(spec.Metadata()),
+		Destination:     jobEntity.Destination().String(),
+		Sources:         fromResourceURNs(jobEntity.Sources()),
+		EnableDexSensor: jobEntity.Spec().IsDexSensorEnabled(),
 	}
 
 	if spec.Version() == window.NewWindowVersion {
@@ -150,6 +151,10 @@ func fromJobProto(js *pb.JobSpecification) (*job.Spec, error) {
 	}
 
 	jobSpecBuilder := job.NewSpecBuilder(version, name, owner, schedule, window, task).WithDescription(js.Description)
+
+	if js.EnableDexSensor {
+		jobSpecBuilder = jobSpecBuilder.WithDexSensor()
+	}
 
 	if js.Labels != nil {
 		labels := labels.FromMap(js.Labels)

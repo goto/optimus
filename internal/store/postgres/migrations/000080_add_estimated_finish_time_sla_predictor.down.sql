@@ -1,0 +1,2 @@
+ALTER TABLE sla_predictor
+DROP COLUMN estimated_finish_time;

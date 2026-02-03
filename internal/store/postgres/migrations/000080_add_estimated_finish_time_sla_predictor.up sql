@@ -1,0 +1,2 @@
+ALTER TABLE sla_predictor
+ADD COLUMN estimated_finish_time timestamptz;

@@ -45,7 +45,7 @@ type JobDetailsGetter interface {
 }
 
 type SLAPredictorRepository interface {
-	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, targetedSLA, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
+	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, targetedSLA, estimatedFinishTime, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
 	GetPredictedSLAJobNamesWithinTimeRange(ctx context.Context, from, to time.Time) ([]scheduler.JobName, error)
 }
 
@@ -55,11 +55,12 @@ type ScheduledChangeGetter interface {
 
 type JobState struct {
 	JobSLAState
-	JobName       scheduler.JobName
-	JobRun        scheduler.JobRunSummary
-	Tenant        tenant.Tenant
-	RelativeLevel int
-	Status        SLABreachCause
+	JobName             scheduler.JobName
+	JobRun              scheduler.JobRunSummary
+	Tenant              tenant.Tenant
+	RelativeLevel       int
+	Status              SLABreachCause
+	EstimatedFinishTime *time.Time
 }
 
 type JobSLAState struct {
@@ -441,6 +442,7 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*JobSLAState, skipJobNames map[scheduler.JobName]bool, referenceTime time.Time) ([][]*JobState, [][]*JobState) {
 	jobBreachStates := make(map[scheduler.JobName]*JobState)
 	allUpstreamStates := make([][]*JobState, 0)
+	bufferEstimationFinishTime := 5 * time.Minute // should it be configurable?
 
 	// DFS to traverse all upstream jobs with paths
 	type state struct {
@@ -515,6 +517,9 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 					RelativeLevel: jobWithState.level,
 					Status:        SLABreachCauseRunningLate,
 				}
+				// add estimated time finished, T(now)+buffer
+				estimatedFinishTime := referenceTime.Add(bufferEstimationFinishTime)
+				state.EstimatedFinishTime = &estimatedFinishTime
 			}
 
 			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
@@ -528,6 +533,9 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 					RelativeLevel: jobWithState.level,
 					Status:        SLABreachCauseNotStarted,
 				}
+				// add estimated time finished, T(now)+buffer+estimated duration
+				estimatedFinishTime := referenceTime.Add(bufferEstimationFinishTime).Add(estimatedDuration)
+				state.EstimatedFinishTime = &estimatedFinishTime
 			}
 
 			if state != nil {
@@ -573,7 +581,26 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 		}
 	}
 
-	return rootCauses, compactedAllUpstreamStates
+	// compactedAllUpstreamStates with estimated finish time
+	compactedAllUpstreamStatesWithFinishTime := make([][]*JobState, 0)
+	for _, upstreamStates := range compactedAllUpstreamStates {
+		upstreamStatesWithFinishTime := make([]*JobState, len(upstreamStates))
+		currentEstimatedFinishTime := time.Time{}
+		for i := len(upstreamStates) - 1; i >= 0; i-- {
+			state := upstreamStates[i]
+			if state.EstimatedFinishTime != nil {
+				currentEstimatedFinishTime = *state.EstimatedFinishTime
+			} else if state.EstimatedFinishTime == nil && !currentEstimatedFinishTime.IsZero() {
+				estimatedFinishTime := currentEstimatedFinishTime.Add(*state.EstimatedDuration)
+				state.EstimatedFinishTime = &estimatedFinishTime
+				currentEstimatedFinishTime = estimatedFinishTime
+			}
+			upstreamStatesWithFinishTime[i] = state
+		}
+		compactedAllUpstreamStatesWithFinishTime = append(compactedAllUpstreamStatesWithFinishTime, upstreamStatesWithFinishTime)
+	}
+
+	return rootCauses, compactedAllUpstreamStatesWithFinishTime
 }
 
 // populateJobSLAStates populates the jobSLAStatesByJobName map with the estimated durations and inferred SLAs for each job.
@@ -619,7 +646,11 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 		if err := json.Unmarshal(rawLineage, &lineages); err != nil {
 			return err
 		}
-		err = s.repo.StorePredictedSLABreach(ctx, jobTarget.JobName, cause.JobName, slaTarget, scheduledAt, string(cause.Status), reqConfig.ReferenceTime, config, lineages)
+		estimatedFinishTime := time.Time{}
+		if len(path) > 0 && path[len(path)-1].EstimatedFinishTime != nil {
+			estimatedFinishTime = *path[len(path)-1].EstimatedFinishTime
+		}
+		err = s.repo.StorePredictedSLABreach(ctx, jobTarget.JobName, cause.JobName, slaTarget, estimatedFinishTime, scheduledAt, string(cause.Status), reqConfig.ReferenceTime, config, lineages)
 		if err != nil {
 			return err
 		}

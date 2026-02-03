@@ -507,12 +507,16 @@ WITH operations AS (
 		opr.end_time,
 		CASE 
 			WHEN opr.operation_type = 'sensor' THEN 
-				-- for sensor, use latest end_time as it indicates when the job starts running
 				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time DESC)
 			ELSE 
-				-- for task and hook, use first successful attempt first, else use latest attempt
-				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, CASE WHEN opr.status = 'success' THEN opr.start_time ELSE opr.end_time END ASC)
-		END as rn
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY opr.start_time ASC)
+		END as rn_start,
+		CASE 
+			WHEN opr.operation_type = 'sensor' THEN 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time DESC)
+			ELSE 
+				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time ASC)
+		END as rn_end
 	FROM job_run jr
 	JOIN (
 		SELECT job_run_id, start_time, end_time, status, 'sensor' AS operation_type FROM sensor_run 
@@ -531,14 +535,14 @@ summary_operations AS (
 		job_start_time,
 		job_end_time,
 		job_status,
-		MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN start_time END) as sensor_start_time,
-		MAX(CASE WHEN operation_type = 'sensor' AND rn = 1 THEN end_time END) as sensor_end_time,
-		MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN start_time END) as task_start_time,
-		MAX(CASE WHEN operation_type = 'task' AND rn = 1 THEN end_time END) as task_end_time,
-		MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN start_time END) as hook_start_time,
-		MAX(CASE WHEN operation_type = 'hook' AND rn = 1 THEN end_time END) as hook_end_time
+		MAX(CASE WHEN operation_type = 'sensor' AND rn_start = 1 THEN start_time END) as sensor_start_time,
+		MAX(CASE WHEN operation_type = 'sensor' AND rn_end = 1 THEN end_time END) as sensor_end_time,
+		MAX(CASE WHEN operation_type = 'task' AND rn_start = 1 THEN start_time END) as task_start_time,
+		MAX(CASE WHEN operation_type = 'task' AND rn_end = 1 THEN end_time END) as task_end_time,
+		MAX(CASE WHEN operation_type = 'hook' AND rn_start = 1 THEN start_time END) as hook_start_time,
+		MAX(CASE WHEN operation_type = 'hook' AND rn_end = 1 THEN end_time END) as hook_end_time
 	FROM operations
-	WHERE rn = 1
+	WHERE rn_start = 1 OR rn_end = 1
 	GROUP BY job_name, scheduled_at, job_start_time, job_end_time, job_status
 )
 SELECT

@@ -81,7 +81,7 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				slaTime = timestamppb.New(*run.JobRunSummary.SLATime)
 			}
 
-			pbJobRuns = append(pbJobRuns, &pb.JobExecutionSummary{
+			pbJobRun := &pb.JobExecutionSummary{
 				JobName: run.JobName.String(),
 				Sla: &pb.SLAConfig{
 					Duration: durationpb.New(run.SLA.Duration),
@@ -98,7 +98,34 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					TaskStartTime: taskStartTime,
 					TaskEndTime:   taskEndTime,
 				},
-				Level: int32(run.Level),
+				Level:              int32(run.Level),
+				DownstreamPathName: run.DownstreamPathName,
+			}
+			if run.DelaySummary != nil {
+				pbJobRun.DelaySummary = &pb.JobRunDelaySummary{
+					ScheduledWayTooLateSeconds:   int32(run.DelaySummary.ScheduledWayTooLateSeconds),
+					SystemSchedulingDelaySeconds: int32(run.DelaySummary.SystemSchedulingDelaySeconds),
+				}
+			}
+
+			pbJobRuns = append(pbJobRuns, pbJobRun)
+		}
+
+		topLongestTaskDurationJobs := make([]*pb.JobWithTaskDuration, 0, len(lineage.ExecutionSummary.TopLongestTaskDurationJobs))
+		for _, jobWithDuration := range lineage.ExecutionSummary.TopLongestTaskDurationJobs {
+			topLongestTaskDurationJobs = append(topLongestTaskDurationJobs, &pb.JobWithTaskDuration{
+				JobName:         jobWithDuration.JobName.String(),
+				DurationSeconds: int32(jobWithDuration.TaskDuration.Seconds()),
+				Level:           int32(jobWithDuration.Level),
+			})
+		}
+
+		topLongestHookDurationJobs := make([]*pb.JobWithTaskDuration, 0, len(lineage.ExecutionSummary.TopLongestHookDurationJobs))
+		for _, jobWithDuration := range lineage.ExecutionSummary.TopLongestHookDurationJobs {
+			topLongestHookDurationJobs = append(topLongestHookDurationJobs, &pb.JobWithTaskDuration{
+				JobName:         jobWithDuration.JobName.String(),
+				DurationSeconds: int32(jobWithDuration.TaskDuration.Seconds()),
+				Level:           int32(jobWithDuration.Level),
 			})
 		}
 
@@ -106,6 +133,29 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 			JobName:     lineage.JobName.String(),
 			ScheduledAt: timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
 			JobRuns:     pbJobRuns,
+			ExecutionSummary: &pb.LineageExecutionSummary{
+				TotalScheduledWayTooLateSeconds:     int32(lineage.ExecutionSummary.TotalScheduledWayTooLateSeconds),
+				TotalSystemSchedulingDelaySeconds:   int32(lineage.ExecutionSummary.TotalSystemSchedulingDelaySeconds),
+				AverageSystemSchedulingDelaySeconds: int32(lineage.ExecutionSummary.AverageSystemSchedulingDelaySeconds),
+				TotalLineageDelaySeconds:            int32(lineage.ExecutionSummary.TotalLineageDelaySeconds),
+				TotalLineageDurationSeconds:         int32(lineage.ExecutionSummary.TotalLineageDurationSeconds),
+				LargestScheduledWayTooLateJob: &pb.LineageDelaySummary{
+					JobName:             lineage.ExecutionSummary.LargestScheduledWayTooLateJob.JobName.String(),
+					DelayDuration:       int32(lineage.ExecutionSummary.LargestScheduledWayTooLateJob.DelayDuration),
+					ScheduledAt:         timestamppb.New(lineage.ExecutionSummary.LargestScheduledWayTooLateJob.ScheduledAt),
+					UpstreamJobName:     lineage.ExecutionSummary.LargestScheduledWayTooLateJob.UpstreamJobName.String(),
+					UpstreamScheduledAt: timestamppb.New(lineage.ExecutionSummary.LargestScheduledWayTooLateJob.UpstreamScheduledAt),
+				},
+				LargestSystemSchedulingDelayJob: &pb.LineageDelaySummary{
+					JobName:             lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.JobName.String(),
+					DelayDuration:       int32(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.DelayDuration),
+					ScheduledAt:         timestamppb.New(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.ScheduledAt),
+					UpstreamJobName:     lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamJobName.String(),
+					UpstreamScheduledAt: timestamppb.New(lineage.ExecutionSummary.LargestSystemSchedulingDelayJob.UpstreamScheduledAt),
+				},
+				TopLongestTaskDurationJobs: topLongestTaskDurationJobs,
+				TopLongestHookDurationJobs: topLongestHookDurationJobs,
+			},
 		})
 	}
 

@@ -496,6 +496,10 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 		// skip detection for jobs in skip list
 		if skipJobNames[job.JobName] {
 			s.l.Info("skipping job for SLA breach check as it's in the skip list", "job", job.JobName)
+			if job.JobName == jobTarget.JobName {
+				// if the targeted job is in the skip list, we stop traversing upstream jobs
+				continue
+			}
 		} else {
 			if oldScheduled, err := s.scheduledChangeGetter.GetRecentScheduleChange(ctx, job.JobName, job.Tenant, jobRun.ScheduledAt); err != nil {
 				s.l.Error("failed to get recent schedule change for job, check the breach anyway", "job", job.JobName, "error", err)

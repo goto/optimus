@@ -627,6 +627,7 @@ func NewJobRunHandler(
 	jobLineageService JobLineageService,
 	jobSLAPredictorService JobSLAPredictorService,
 	thirdPartySensorService ThirdPartySensorService,
+	jobEstimatorService JobEstimatorService,
 ) *JobRunHandler {
 	return &JobRunHandler{
 		l:                       l,
@@ -636,5 +637,6 @@ func NewJobRunHandler(
 		jobLineageService:       jobLineageService,
 		jobSLAPredictorService:  jobSLAPredictorService,
 		thirdPartySensorService: thirdPartySensorService,
+		jobEstimatorService:     jobEstimatorService,
 	}
 }

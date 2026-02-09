@@ -25,7 +25,7 @@ func NewJobEstimatorService(
 ) *JobEstimatorService {
 	return &JobEstimatorService{
 		l:                 logger,
-		bufferTime:        10 * time.Minute,
+		bufferTime:        10 * time.Minute, // TODO: make this configurable
 		jobDetailsGetter:  jobDetailsGetter,
 		jobLineageFetcher: jobLineageFetcher,
 		durationEstimator: durationEstimator,
@@ -41,7 +41,7 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 	}
 
 	// fetch job details
-	jobsWithDetails, err := s.getJobWithDetails(ctx, projectName, jobNames, labels)
+	jobsWithDetails, err := getJobWithDetails(ctx, s.l, s.jobDetailsGetter, projectName, jobNames, labels)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 	}
 
 	// get scheduled at
-	jobSchedules := s.getJobSchedules(jobsWithDetails, scheduleRangeInHours, referenceTime)
+	jobSchedules := getJobSchedules(s.l, jobsWithDetails, scheduleRangeInHours, referenceTime)
 	if len(jobSchedules) == 0 {
 		s.l.Warn("no job schedules found for the given jobs in the next schedule range, skipping estimated finish time generation")
 		return jobRunEstimatedFinishTimes, nil
@@ -140,15 +140,4 @@ func maxTime(t1, t2 time.Time) time.Time {
 		return t1
 	}
 	return t2
-}
-
-// TODO: refactor this to a common place since it's also used in SLA service
-func (s *JobEstimatorService) getJobWithDetails(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
-	// TODO: same as in sla_service.go, refactor to common place
-	return []*scheduler.JobWithDetails{}, nil
-}
-
-// TODO: refactor this to a common place since it's also used in SLA service
-func (s *JobEstimatorService) getJobSchedules(jobs []*scheduler.JobWithDetails, scheduleRangeInHours time.Duration, referenceTime time.Time) map[scheduler.JobName]*scheduler.JobSchedule {
-	return map[scheduler.JobName]*scheduler.JobSchedule{}
 }

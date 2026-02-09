@@ -614,7 +614,7 @@ ORDER BY scheduled_at DESC
 	return summaries, nil
 }
 
-func (j *JobRunRepository) UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time, estimatedFinishTime time.Time) error {
+func (j *JobRunRepository) UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt, estimatedFinishTime time.Time) error {
 	upsertQuery := `
 		INSERT INTO job_run_estimated_finish_time (project_name, job_name, scheduled_at, estimated_finish_time, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())

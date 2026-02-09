@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/goto/salt/log"
+
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/goto/salt/log"
 )
 
 type JobRunDetailsRepository interface {
-	UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time, estimatedFinishTime time.Time) error
+	UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt, estimatedFinishTime time.Time) error
 }
 
 type JobEstimatorService struct {

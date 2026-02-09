@@ -54,6 +54,67 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/estimate_job_finish_time": {
+      "post": {
+        "summary": "GenerateEstimatedFinishTime generates and stores the estimated finish time for a given job(s)",
+        "operationId": "JobRunService_GenerateEstimatedFinishTime",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GenerateEstimatedFinishTimeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "jobNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "jobLabels": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "scheduledRangeInHours": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "referenceTime": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/job/{jobName}/interval": {
       "get": {
         "summary": "GetInterval gets interval on specific job given reference time.",
@@ -627,7 +688,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -680,6 +741,18 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/v1beta1DataCompleteness"
+          }
+        }
+      }
+    },
+    "v1beta1GenerateEstimatedFinishTimeResponse": {
+      "type": "object",
+      "properties": {
+        "jobs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

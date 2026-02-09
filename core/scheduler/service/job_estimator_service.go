@@ -109,7 +109,19 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 		}
 	}
 
-	return jobRunEstimatedFinishTimes, nil
+	// estimated finish time generated for target jobs
+	finalJobRunEstimatedFinishTimes := make(map[scheduler.JobSchedule]time.Time)
+	for _, jobSchedule := range jobSchedules {
+		key := *jobSchedule
+		estimatedFinishTime, ok := jobRunEstimatedFinishTimes[key]
+		if !ok {
+			s.l.Warn("estimated finish time not found for job schedule", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt)
+			continue
+		}
+		finalJobRunEstimatedFinishTimes[key] = estimatedFinishTime
+	}
+
+	return finalJobRunEstimatedFinishTimes, nil
 }
 
 func (s *JobEstimatorService) populateEstimatedFinishTime(ctx context.Context, jobTarget, jobSchedule *scheduler.JobSchedule, jobRunEstimatedFinishTimes map[scheduler.JobSchedule]time.Time, jobsWithLineageMap map[scheduler.JobName]*scheduler.JobLineageSummary, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {

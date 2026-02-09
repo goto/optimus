@@ -9,9 +9,14 @@ import (
 	"github.com/goto/salt/log"
 )
 
+type JobRunDetailsRepository interface {
+	UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time, estimatedFinishTime time.Time) error
+}
+
 type JobEstimatorService struct {
 	l                 log.Logger
 	bufferTime        time.Duration
+	jobRunDetailsRepo JobRunDetailsRepository
 	jobDetailsGetter  JobDetailsGetter
 	jobLineageFetcher JobLineageFetcher
 	durationEstimator DurationEstimator
@@ -19,6 +24,7 @@ type JobEstimatorService struct {
 
 func NewJobEstimatorService(
 	logger log.Logger,
+	jobRunDetailsRepo JobRunDetailsRepository,
 	jobDetailsGetter JobDetailsGetter,
 	jobLineageFetcher JobLineageFetcher,
 	durationEstimator DurationEstimator,
@@ -26,6 +32,7 @@ func NewJobEstimatorService(
 	return &JobEstimatorService{
 		l:                 logger,
 		bufferTime:        10 * time.Minute, // TODO: make this configurable
+		jobRunDetailsRepo: jobRunDetailsRepo,
 		jobDetailsGetter:  jobDetailsGetter,
 		jobLineageFetcher: jobLineageFetcher,
 		durationEstimator: durationEstimator,
@@ -81,6 +88,22 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 		err := s.populateEstimatedFinishTime(ctx, jobSchedule, jobSchedule, jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			s.l.Error("failed to populate estimated finish time for job", "job", jobSchedule.JobName, "error", err)
+			return nil, err
+		}
+	}
+
+	// save to db
+	for _, jobSchedule := range jobSchedules {
+		key := *jobSchedule
+		estimatedFinishTime, ok := jobRunEstimatedFinishTimes[key]
+		if !ok {
+			s.l.Warn("estimated finish time not found for job schedule", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt)
+			continue
+		}
+		s.l.Info("estimated finish time calculated", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt, "estimated_finish_time", estimatedFinishTime)
+		err := s.jobRunDetailsRepo.UpsertEstimatedFinishTime(ctx, projectName, jobSchedule.JobName, jobSchedule.ScheduledAt, estimatedFinishTime)
+		if err != nil {
+			s.l.Error("failed to upsert estimated finish time for job schedule", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt, "error", err)
 			return nil, err
 		}
 	}

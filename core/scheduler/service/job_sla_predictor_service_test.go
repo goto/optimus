@@ -106,7 +106,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			Severity:             "",
 		}
 
-		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels, false, "").Return([]*scheduler.JobWithDetails{}, nil).Once()
+		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return([]*scheduler.JobWithDetails{}, nil).Once()
 
 		// when
 		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, labels, reqConfig)

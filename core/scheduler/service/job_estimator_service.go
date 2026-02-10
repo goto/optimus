@@ -82,11 +82,20 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 
 	// calculate estimated finish time for each job
 	for _, jobSchedule := range jobSchedules {
+		if jobSchedule == nil { // safety check
+			s.l.Warn("nil job schedule provided, cannot calculate estimated finish time")
+			continue
+		}
 		key := *jobSchedule
 		if _, ok := jobRunEstimatedFinishTimes[key]; ok { // already calculated
 			continue
 		}
-		err := s.populateEstimatedFinishTime(ctx, jobSchedule, jobSchedule, jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
+		if _, ok := jobsWithLineageMap[jobSchedule.JobName]; !ok { // safety check
+			s.l.Warn("no lineage found for job, cannot calculate estimated finish time", "job", jobSchedule.JobName)
+			continue
+		}
+		s.l.Debug("calculating estimated finish time for job", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt)
+		err := s.populateEstimatedFinishTime(ctx, jobSchedule, jobsWithLineageMap[jobSchedule.JobName], jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			s.l.Error("failed to populate estimated finish time for job", "job", jobSchedule.JobName, "error", err)
 			return nil, err
@@ -124,49 +133,67 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 	return finalJobRunEstimatedFinishTimes, nil
 }
 
-func (s *JobEstimatorService) populateEstimatedFinishTime(ctx context.Context, jobTarget, jobSchedule *scheduler.JobSchedule, jobRunEstimatedFinishTimes map[scheduler.JobSchedule]time.Time, jobsWithLineageMap map[scheduler.JobName]*scheduler.JobLineageSummary, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
-	key := *jobSchedule
-	estimatedDuration, ok := jobDurationsEstimation[jobSchedule.JobName]
-	if !ok {
+func (s *JobEstimatorService) populateEstimatedFinishTime(ctx context.Context, jobTarget *scheduler.JobSchedule, currentJobWithLineage *scheduler.JobLineageSummary, jobRunEstimatedFinishTimes map[scheduler.JobSchedule]time.Time, jobsWithLineageMap map[scheduler.JobName]*scheduler.JobLineageSummary, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
+	if currentJobWithLineage == nil || currentJobWithLineage.JobRuns[jobTarget.JobName] == nil {
+		s.l.Warn("no job run found for job, skipping estimated finish time calculation", "job", currentJobWithLineage.JobName)
+		return nil
+	}
+	currentJobRun := currentJobWithLineage.JobRuns[jobTarget.JobName]
+	currentJobScheduleKey := scheduler.JobSchedule{
+		JobName:     currentJobWithLineage.JobName,
+		ScheduledAt: currentJobRun.ScheduledAt,
+	}
+	estimatedDuration, ok := jobDurationsEstimation[currentJobWithLineage.JobName]
+	if !ok || estimatedDuration == nil {
 		// if no estimation found, we cannot proceed
-		s.l.Warn("no duration estimation found for job, cannot calculate estimated finish time", "job", jobSchedule.JobName)
+		s.l.Warn("no duration estimation found for job, cannot calculate estimated finish time", "job", currentJobWithLineage.JobName)
 		return nil
 	}
 
 	// termination condition
 	// 1. cache if already calculated
-	if _, ok := jobRunEstimatedFinishTimes[key]; ok {
+	if _, ok := jobRunEstimatedFinishTimes[currentJobScheduleKey]; ok {
+		s.l.Debug("estimated finish time already calculated for job, skipping", "job", currentJobWithLineage.JobName, "scheduled_at", currentJobRun.ScheduledAt)
 		return nil
 	}
 	// 2. if end_time is nil and scheduled_time+duration<ref_time+buffer_time
-	jobEndTime := jobsWithLineageMap[jobSchedule.JobName].JobRuns[jobTarget.JobName].JobEndTime
-	if jobEndTime == nil && jobSchedule.ScheduledAt.Add(*estimatedDuration).Before(referenceTime.Add(s.bufferTime)) {
+	jobEndTime := currentJobRun.JobEndTime
+	if jobEndTime == nil && currentJobRun.ScheduledAt.Add(*estimatedDuration).Before(referenceTime.Add(s.bufferTime)) {
 		// running late
-		jobRunEstimatedFinishTimes[key] = referenceTime.Add(s.bufferTime)
+		s.l.Debug("job is running late, setting estimated finish time to reference time + buffer time", "job", currentJobWithLineage.JobName, "scheduled_at", currentJobRun.ScheduledAt)
+		jobRunEstimatedFinishTimes[currentJobScheduleKey] = referenceTime.Add(s.bufferTime)
 		return nil
 	}
 	// 3. if end_time is not nil
 	if jobEndTime != nil {
-		jobRunEstimatedFinishTimes[key] = *jobEndTime
+		s.l.Debug("job has already ended, setting estimated finish time to job end time", "job", currentJobWithLineage.JobName, "scheduled_at", currentJobRun.ScheduledAt)
+		jobRunEstimatedFinishTimes[currentJobScheduleKey] = *jobEndTime
 		return nil
 	}
 
 	// calculate max upstream estimated finish time
-	maxUpstreamEstimatedFinishTime := jobSchedule.ScheduledAt
-	for _, upstream := range jobsWithLineageMap[jobSchedule.JobName].Upstreams {
-		upstreamSchedule := scheduler.JobSchedule{
-			JobName:     upstream.JobName,
-			ScheduledAt: upstream.JobRuns[jobTarget.JobName].ScheduledAt,
+	maxUpstreamEstimatedFinishTime := currentJobRun.ScheduledAt
+	// avoid cyclic loop by temporarily setting the current job's estimated finish time
+	jobRunEstimatedFinishTimes[currentJobScheduleKey] = maxUpstreamEstimatedFinishTime.Add(*estimatedDuration)
+	for _, upstream := range jobsWithLineageMap[currentJobWithLineage.JobName].Upstreams {
+		if upstream.JobRuns[jobTarget.JobName] == nil {
+			s.l.Debug("no upstream job run found for job, skipping upstream in estimated finish time calculation", "job", currentJobWithLineage.JobName, "upstream_job", upstream.JobName)
+			continue
 		}
-		err := s.populateEstimatedFinishTime(ctx, jobTarget, &upstreamSchedule, jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
+		err := s.populateEstimatedFinishTime(ctx, jobTarget, upstream, jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			return err
 		}
-		upstreamEstimatedFinishTime := jobRunEstimatedFinishTimes[upstreamSchedule]
+
+		upstreamScheduleKey := scheduler.JobSchedule{
+			JobName:     upstream.JobName,
+			ScheduledAt: upstream.JobRuns[jobTarget.JobName].ScheduledAt,
+		}
+		upstreamEstimatedFinishTime := jobRunEstimatedFinishTimes[upstreamScheduleKey]
 		maxUpstreamEstimatedFinishTime = maxTime(maxUpstreamEstimatedFinishTime, upstreamEstimatedFinishTime)
 	}
 
-	jobRunEstimatedFinishTimes[key] = maxUpstreamEstimatedFinishTime.Add(*estimatedDuration)
+	jobRunEstimatedFinishTimes[currentJobScheduleKey] = maxUpstreamEstimatedFinishTime.Add(*estimatedDuration)
 
 	return nil
 }

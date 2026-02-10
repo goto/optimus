@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goto/optimus/core/scheduler"
-	"github.com/goto/optimus/core/scheduler/service"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/service"
+	"github.com/goto/optimus/core/tenant"
 )
 
 func TestGenerateEstimatedFinishTimes(t *testing.T) {
@@ -318,7 +319,6 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 }
 
 func TestPopulateEstimatedFinishTime(t *testing.T) {
-	ctx := context.Background()
 	l := log.NewNoop()
 	referenceTime := time.Now()
 	scheduleRangeInHours := 10 * time.Hour
@@ -357,7 +357,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -401,7 +401,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		// no duration estimation added
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -447,7 +447,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobRunEstimatedFinishTime[*jobTarget] = scheduledAt.Add(25 * time.Minute)
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 		// then
 		assert.NoError(t, err)
 		// should not be updated
@@ -492,7 +492,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -539,7 +539,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -583,7 +583,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -642,7 +642,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobUpstreamWithLineage.JobName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -701,7 +701,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobUpstreamWithLineage.JobName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(ctx, jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -716,7 +716,7 @@ type JobRunDetailsRepository struct {
 }
 
 // UpsertEstimatedFinishTime provides a mock function with given fields: ctx, projectName, jobName, scheduledAt, estimatedFinishTime
-func (_m *JobRunDetailsRepository) UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time, estimatedFinishTime time.Time) error {
+func (_m *JobRunDetailsRepository) UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt, estimatedFinishTime time.Time) error {
 	ret := _m.Called(ctx, projectName, jobName, scheduledAt, estimatedFinishTime)
 
 	if len(ret) == 0 {
@@ -738,9 +738,10 @@ func (_m *JobRunDetailsRepository) UpsertEstimatedFinishTime(ctx context.Context
 func NewJobRunDetailsRepository(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *JobRunDetailsRepository {
+},
+) *JobRunDetailsRepository {
 	mock := &JobRunDetailsRepository{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

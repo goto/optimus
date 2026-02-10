@@ -1245,9 +1245,10 @@ func (_m *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context,
 func NewJobEstimatorService(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *JobEstimatorService {
+},
+) *JobEstimatorService {
 	mock := &JobEstimatorService{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

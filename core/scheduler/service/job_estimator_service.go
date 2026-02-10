@@ -95,7 +95,7 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 			continue
 		}
 		s.l.Debug("calculating estimated finish time for job", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt)
-		err := s.PopulateEstimatedFinishTime(ctx, jobSchedule, jobsWithLineageMap[jobSchedule.JobName], jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
+		err := s.PopulateEstimatedFinishTime(jobSchedule, jobsWithLineageMap[jobSchedule.JobName], jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			s.l.Error("failed to populate estimated finish time for job", "job", jobSchedule.JobName, "error", err)
 			return nil, err
@@ -133,7 +133,7 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 	return finalJobRunEstimatedFinishTimes, nil
 }
 
-func (s *JobEstimatorService) PopulateEstimatedFinishTime(ctx context.Context, jobTarget *scheduler.JobSchedule, currentJobWithLineage *scheduler.JobLineageSummary, jobRunEstimatedFinishTimes map[scheduler.JobSchedule]time.Time, jobsWithLineageMap map[scheduler.JobName]*scheduler.JobLineageSummary, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
+func (s *JobEstimatorService) PopulateEstimatedFinishTime(jobTarget *scheduler.JobSchedule, currentJobWithLineage *scheduler.JobLineageSummary, jobRunEstimatedFinishTimes map[scheduler.JobSchedule]time.Time, jobsWithLineageMap map[scheduler.JobName]*scheduler.JobLineageSummary, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
 	if currentJobWithLineage == nil || currentJobWithLineage.JobRuns[jobTarget.JobName] == nil {
 		s.l.Warn("no job run found for job, skipping estimated finish time calculation", "job", currentJobWithLineage.JobName)
 		return nil
@@ -180,7 +180,7 @@ func (s *JobEstimatorService) PopulateEstimatedFinishTime(ctx context.Context, j
 			s.l.Debug("no upstream job run found for job, skipping upstream in estimated finish time calculation", "job", currentJobWithLineage.JobName, "upstream_job", upstream.JobName)
 			continue
 		}
-		err := s.PopulateEstimatedFinishTime(ctx, jobTarget, upstream, jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
+		err := s.PopulateEstimatedFinishTime(jobTarget, upstream, jobRunEstimatedFinishTimes, jobsWithLineageMap, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			return err
 		}

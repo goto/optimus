@@ -1227,20 +1227,32 @@ func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails
 	return compiledConfigs
 }
 
-func (j *JobService) compileAssets(assets job.Asset, compiledConfigs map[string]string, tenantDetails *tenant.WithDetails) (job.Asset, error) {
-	// Prepare template context and compile task config
-	// only need project variables and task configs for asset compilation
-	taskContext := compiler.PrepareContext(
-		compiler.From(tenantDetails.GetVariables()).WithName(contextProject).WithKeyPrefix(projectConfigPrefix),
-		compiler.From(compiledConfigs).WithName(contextTask).WithKeyPrefix(taskConfigPrefix),
-	)
-
-	compiledAssets, err := j.engine.Compile(assets, taskContext)
+func (j *JobService) compileAssets(ctx context.Context, subjectJob job.Job, destination resource.URN) (job.Asset, error) {
+	// reference time for job run config generation and executor input compilation
+	// it uses current time as jobs assets are not time dependent for upstream generation
+	referenceTime := time.Now()
+	runConfigs, err := j.getRunConfigs(referenceTime, subjectJob.Spec())
 	if err != nil {
-		j.logger.Error("error compiling assets: %s", err)
+		j.logger.Error("error getting run configs for job [%s]: %s", subjectJob.GetName(), err)
 		return nil, err
 	}
-	return compiledAssets, nil
+	if len(runConfigs) == 0 {
+		j.logger.Error("no run configs generated for job [%s]", subjectJob.GetName())
+		return nil, errors.NewError(errors.ErrInternalError, job.EntityJob, "no run configs generated")
+	}
+	runConfig := runConfigs[0] // only need one for asset compilation
+
+	jobWithDetails := j.getSchedulerJobWithDetail(&subjectJob, destination)
+
+	// compile executor input
+	executorInput, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, runConfig, referenceTime)
+	if err != nil {
+		j.logger.Error("error compiling executor input for job [%s]: %s", subjectJob.GetName(), err)
+		return nil, err
+	}
+
+	// extract assets from executor input
+	return job.AssetFrom(executorInput.Files)
 }
 
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
@@ -1255,7 +1267,8 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	if err != nil {
 		return nil, err
 	}
-	sources, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, spec)
+	currentSubjectJob := job.NewJob(tenantWithDetails.ToTenant(), spec, destination, nil, false)
+	sources, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, *currentSubjectJob)
 	if err != nil {
 		return nil, err
 	}
@@ -1450,11 +1463,11 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	).Add(float64(metricValue))
 }
 
-func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]resource.URN, error) {
-	taskName := spec.Task().Name().String()
-	taskConfig := spec.Task().Config()
+func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, job job.Job) ([]resource.URN, error) {
+	taskName := job.Spec().Task().Name().String()
+	taskConfig := job.Spec().Task().Config()
 	compiledConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
-	compiledAssets, err := j.compileAssets(spec.Asset(), compiledConfigs, tenantWithDetails)
+	compiledAssets, err := j.compileAssets(ctx, job, job.Destination())
 	if err != nil {
 		return nil, err
 	}
@@ -1701,7 +1714,7 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	result := j.validateDestination(ctx, tenantDetails.ToTenant(), destination)
 	output = append(output, result)
 
-	result = j.validateSource(ctx, tenantDetails, subjectJob.Spec())
+	result = j.validateSource(ctx, tenantDetails, *subjectJob)
 	output = append(output, result)
 
 	result = j.validateWindow(tenantDetails, subjectJob.Spec().WindowConfig())
@@ -1901,8 +1914,8 @@ func (j *JobService) validateSingleUpstreamSchedule(ctx context.Context, subject
 	return true, "no issue"
 }
 
-func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) dto.ValidateResult {
-	sourceURNs, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, spec)
+func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tenant.WithDetails, job job.Job) dto.ValidateResult {
+	sourceURNs, err := j.identifyUpstreamURNs(ctx, tenantWithDetails, job)
 	if err != nil {
 		registerJobValidationMetric(tenantWithDetails.ToTenant(), dto.StageSourceValidation, false)
 

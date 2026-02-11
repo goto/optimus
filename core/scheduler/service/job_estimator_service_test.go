@@ -244,6 +244,7 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 
 		jobLineageSummary := &scheduler.JobLineageSummary{
 			JobName:   jobAName,
+			IsEnabled: true,
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 
@@ -293,7 +294,8 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		}
 
 		jobLineageSummary := &scheduler.JobLineageSummary{
-			JobName: jobAName,
+			JobName:   jobAName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobAName: {
 					JobName:     jobAName,
@@ -350,6 +352,7 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{}, // no current job run
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
@@ -388,7 +391,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName: jobTarget.JobName,
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     jobTarget.JobName,
@@ -432,7 +436,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName: jobTarget.JobName,
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     jobTarget.JobName,
@@ -478,7 +483,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName: jobTarget.JobName,
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     jobTarget.JobName,
@@ -525,7 +531,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName: jobTarget.JobName,
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     jobTarget.JobName,
@@ -570,7 +577,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName: jobTarget.JobName,
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     jobTarget.JobName,
@@ -616,7 +624,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName: jobTarget.JobName,
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     jobTarget.JobName,
@@ -626,7 +635,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		jobUpstreamWithLineage := &scheduler.JobLineageSummary{
-			JobName: scheduler.JobName("job-B"),
+			JobName:   scheduler.JobName("job-B"),
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     scheduler.JobName("job-B"),
@@ -675,7 +685,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName: jobTarget.JobName,
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     jobTarget.JobName,
@@ -685,7 +696,8 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		jobUpstreamWithLineage := &scheduler.JobLineageSummary{
-			JobName: scheduler.JobName("job-B"),
+			JobName:   scheduler.JobName("job-B"),
+			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
 					JobName:     scheduler.JobName("job-B"),

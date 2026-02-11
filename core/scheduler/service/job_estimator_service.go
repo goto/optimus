@@ -134,10 +134,16 @@ func (s *JobEstimatorService) GenerateEstimatedFinishTimes(ctx context.Context, 
 }
 
 func (s *JobEstimatorService) PopulateEstimatedFinishTime(jobTarget *scheduler.JobSchedule, currentJobWithLineage *scheduler.JobLineageSummary, jobRunEstimatedFinishTimes map[scheduler.JobSchedule]time.Time, jobsWithLineageMap map[scheduler.JobName]*scheduler.JobLineageSummary, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
+	// pre condition check
 	if currentJobWithLineage == nil || currentJobWithLineage.JobRuns[jobTarget.JobName] == nil {
 		s.l.Warn("no job run found for job, skipping estimated finish time calculation", "job", currentJobWithLineage.JobName)
 		return nil
 	}
+	if !currentJobWithLineage.IsEnabled {
+		s.l.Debug("job is disabled, skipping estimated finish time calculation", "job", currentJobWithLineage.JobName)
+		return nil
+	}
+
 	currentJobRun := currentJobWithLineage.JobRuns[jobTarget.JobName]
 	currentJobScheduleKey := scheduler.JobSchedule{
 		JobName:     currentJobWithLineage.JobName,
@@ -189,7 +195,11 @@ func (s *JobEstimatorService) PopulateEstimatedFinishTime(jobTarget *scheduler.J
 			JobName:     upstream.JobName,
 			ScheduledAt: upstream.JobRuns[jobTarget.JobName].ScheduledAt,
 		}
-		upstreamEstimatedFinishTime := jobRunEstimatedFinishTimes[upstreamScheduleKey]
+		upstreamEstimatedFinishTime, ok := jobRunEstimatedFinishTimes[upstreamScheduleKey]
+		if !ok {
+			s.l.Warn("estimated finish time not found for upstream job, skipping in estimated finish time calculation", "job", currentJobWithLineage.JobName, "upstream_job", upstream.JobName)
+			continue
+		}
 		maxUpstreamEstimatedFinishTime = maxTime(maxUpstreamEstimatedFinishTime, upstreamEstimatedFinishTime)
 	}
 

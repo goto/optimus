@@ -30,9 +30,16 @@ const (
 	ConcurrentTicketPerSec = 50
 	ConcurrentLimit        = 100
 
+	// taskConfigPrefix will be used to prefix all the config variables of
+	// transformation instance, i.e. task
+	taskConfigPrefix = "TASK__"
+
 	// projectConfigPrefix will be used to prefix all the config variables of
 	// a project, i.e. registered entities
 	projectConfigPrefix = "GLOBAL__"
+
+	contextProject = "proj"
+	contextTask    = "task"
 )
 
 type JobValidateConfig struct {
@@ -104,7 +111,7 @@ type Engine interface {
 
 type PluginService interface {
 	Info(ctx context.Context, taskName string) (*plugin.Spec, error)
-	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) (resourceURNs []resource.URN, err error)
+	IdentifyUpstreams(ctx context.Context, taskName string, compiledConfigs, compiledAssets map[string]string) (resourceURNs []resource.URN, err error)
 	ConstructDestinationURN(ctx context.Context, taskName string, compiledConfig map[string]string) (destinationURN resource.URN, err error)
 }
 
@@ -1220,6 +1227,22 @@ func (j *JobService) compileConfigs(configs job.Config, tnnt *tenant.WithDetails
 	return compiledConfigs
 }
 
+func (j *JobService) compileAssets(assets job.Asset, compiledConfigs map[string]string, tenantDetails *tenant.WithDetails) (job.Asset, error) {
+	// Prepare template context and compile task config
+	// only need project variables and task configs for asset compilation
+	taskContext := compiler.PrepareContext(
+		compiler.From(tenantDetails.GetVariables()).WithName(contextProject).WithKeyPrefix(projectConfigPrefix),
+		compiler.From(compiledConfigs).WithName(contextTask).WithKeyPrefix(taskConfigPrefix),
+	)
+
+	compiledAssets, err := j.engine.Compile(assets, taskContext)
+	if err != nil {
+		j.logger.Error("error compiling assets: %s", err)
+		return nil, err
+	}
+	return compiledAssets, nil
+}
+
 func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (*job.Job, error) {
 	if windowConfig := spec.WindowConfig(); windowConfig.Type() == window.Preset {
 		if _, err := tenantWithDetails.Project().GetPreset(windowConfig.Preset); err != nil {
@@ -1430,10 +1453,13 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) ([]resource.URN, error) {
 	taskName := spec.Task().Name().String()
 	taskConfig := spec.Task().Config()
-	compileConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
-	assets := spec.Asset()
+	compiledConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
+	compiledAssets, err := j.compileAssets(spec.Asset(), compiledConfigs, tenantWithDetails)
+	if err != nil {
+		return nil, err
+	}
 
-	return j.pluginService.IdentifyUpstreams(ctx, taskName, compileConfigs, assets)
+	return j.pluginService.IdentifyUpstreams(ctx, taskName, compiledConfigs, compiledAssets)
 }
 
 func (j *JobService) generateDestinationURN(ctx context.Context, tenantWithDetails *tenant.WithDetails, spec *job.Spec) (resource.URN, error) {

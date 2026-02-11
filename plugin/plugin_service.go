@@ -81,7 +81,7 @@ func (s PluginService) Info(_ context.Context, taskName string) (*Spec, error) {
 	return taskPlugin, nil
 }
 
-func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, assets map[string]string) ([]resource.URN, error) {
+func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, compiledConfig, compiledAssets map[string]string) ([]resource.URN, error) {
 	taskPlugin, err := s.pluginGetter.GetByName(taskName)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	var resourceURNs []resource.URN
 	me := errors.NewMultiError("identify upstream errors")
 	for _, upstreamIdentifier := range upstreamIdentifiers {
-		currentResourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, assets, compiledConfig)
+		currentResourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, compiledAssets, compiledConfig)
 		if err != nil {
 			s.l.Error("error when identify upstream")
 			me.Append(err)

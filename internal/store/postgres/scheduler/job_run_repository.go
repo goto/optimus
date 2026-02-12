@@ -614,6 +614,17 @@ ORDER BY scheduled_at DESC
 	return summaries, nil
 }
 
+func (j *JobRunRepository) UpsertExpectedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt, expectedFinishTime time.Time) error {
+	upsertQuery := `
+		INSERT INTO job_run_expected_finish_time (project_name, job_name, scheduled_at, expected_finish_time, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		ON CONFLICT (project_name, job_name, scheduled_at)
+		DO UPDATE SET expected_finish_time = EXCLUDED.expected_finish_time, updated_at = NOW()
+	`
+	_, err := j.db.Exec(ctx, upsertQuery, projectName, jobName, scheduledAt, expectedFinishTime)
+	return errors.WrapIfErr(scheduler.EntityJobRun, "unable to upsert expected finish time", err)
+}
+
 func NewJobRunRepository(pool *pgxpool.Pool, l log.Logger) *JobRunRepository {
 	return &JobRunRepository{
 		db: pool,

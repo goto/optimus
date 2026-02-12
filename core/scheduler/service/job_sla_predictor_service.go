@@ -117,7 +117,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	}
 
 	// get jobs with details
-	jobsWithDetails, err := s.getJobWithDetails(ctx, projectName, jobNames, labels)
+	jobsWithDetails, err := getJobWithDetails(ctx, s.l, s.jobDetailsGetter, projectName, jobNames, labels)
 	if err != nil {
 		s.l.Error("failed to get jobs with details, skipping SLA prediction", "error", err)
 		return nil, err
@@ -127,7 +127,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 	}
 
 	// get scheduled at
-	jobSchedules := s.getJobSchedules(jobsWithDetails, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime)
+	jobSchedules := getJobSchedules(s.l, jobsWithDetails, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime)
 	if len(jobSchedules) == 0 {
 		s.l.Warn("no job schedules found for the given jobs in the next schedule range, skipping SLA prediction")
 		return jobBreachCauses, nil
@@ -244,7 +244,7 @@ func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarge
 	return breachesCauses, fullBreachesCauses
 }
 
-func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
+func getJobWithDetails(ctx context.Context, l log.Logger, jobDetailsGetter JobDetailsGetter, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
 	filteredJobsByName := map[scheduler.JobName]*scheduler.JobWithDetails{}
 	filteredJobByLabel := map[scheduler.JobName]*scheduler.JobWithDetails{}
 	filteredJobMerged := map[scheduler.JobName]*scheduler.JobWithDetails{}
@@ -254,7 +254,7 @@ func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectNa
 		for _, jn := range jobNames {
 			jobNameStr = append(jobNameStr, string(jn))
 		}
-		jobsWithDetails, err := s.jobDetailsGetter.GetJobs(ctx, projectName, jobNameStr)
+		jobsWithDetails, err := jobDetailsGetter.GetJobs(ctx, projectName, jobNameStr)
 		if err != nil {
 			return nil, err
 		}
@@ -262,12 +262,12 @@ func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectNa
 			filteredJobsByName[job.Name] = job
 			filteredJobMerged[job.Name] = job
 		}
-		s.l.Info("fetched jobs by names", "count", len(filteredJobsByName))
-		s.l.Info("jobs fetched by names", "jobs", filteredJobsByName)
+		l.Info("fetched jobs by names", "count", len(filteredJobsByName))
+		l.Info("jobs fetched by names", "jobs", filteredJobsByName)
 	}
 
 	if len(labels) > 0 {
-		jobsWithDetails, err := s.jobDetailsGetter.GetJobsByLabels(ctx, projectName, labels)
+		jobsWithDetails, err := jobDetailsGetter.GetJobsByLabels(ctx, projectName, labels)
 		if err != nil {
 			return nil, err
 		}
@@ -275,15 +275,15 @@ func (s JobSLAPredictorService) getJobWithDetails(ctx context.Context, projectNa
 			filteredJobByLabel[job.Name] = job
 			filteredJobMerged[job.Name] = job
 		}
-		s.l.Info("fetched jobs by labels", "count", len(filteredJobByLabel))
-		s.l.Info("jobs fetched by labels", "jobs", filteredJobByLabel)
+		l.Info("fetched jobs by labels", "count", len(filteredJobByLabel))
+		l.Info("jobs fetched by labels", "jobs", filteredJobByLabel)
 	}
 
 	filteredJobSchedules := []*scheduler.JobWithDetails{}
 	for _, job := range filteredJobMerged {
 		filteredJobSchedules = append(filteredJobSchedules, job)
 	}
-	s.l.Info("total jobs fetched after merging by names and labels", "count", len(filteredJobSchedules))
+	l.Info("total jobs fetched after merging by names and labels", "count", len(filteredJobSchedules))
 
 	return filteredJobSchedules, nil
 }
@@ -328,36 +328,36 @@ func (s *JobSLAPredictorService) getTargetedSLA(jobs []*scheduler.JobWithDetails
 	return targetedSLAByJobName
 }
 
-func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetails, scheduleRangeInHours time.Duration, referenceTime time.Time) map[scheduler.JobName]*scheduler.JobSchedule {
+func getJobSchedules(l log.Logger, jobs []*scheduler.JobWithDetails, scheduleRangeInHours time.Duration, referenceTime time.Time) map[scheduler.JobName]*scheduler.JobSchedule {
 	jobSchedules := make(map[scheduler.JobName]*scheduler.JobSchedule)
-	s.l.Info("jobs to get schedules for", "count", len(jobs))
+	l.Info("jobs to get schedules for", "count", len(jobs))
 	for _, job := range jobs {
 		if job.Schedule == nil {
 			continue
 		}
 		nextScheduledAt, err := job.Schedule.GetNextSchedule(referenceTime)
 		if err != nil {
-			s.l.Warn("failed to get scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
+			l.Warn("failed to get scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
 			continue
 		}
 
 		prevScheduledAt, err := job.Schedule.GetPreviousSchedule(referenceTime)
 		if err != nil {
-			s.l.Warn("failed to get previous scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
+			l.Warn("failed to get previous scheduled at for job, skipping SLA prediction", "job", job.Name, "error", err)
 			continue
 		}
 
 		var scheduledAt time.Time
 		if nextScheduledAt.Sub(referenceTime).Milliseconds() < scheduleRangeInHours.Milliseconds() {
-			s.l.Debug("using next scheduled at for job within schedule range", "job", job.Name)
+			l.Debug("using next scheduled at for job within schedule range", "job", job.Name)
 			scheduledAt = nextScheduledAt
 		} else if referenceTime.Sub(prevScheduledAt).Milliseconds() < scheduleRangeInHours.Milliseconds() {
-			s.l.Debug("using previous scheduled at for job within schedule range", "job", job.Name)
+			l.Debug("using previous scheduled at for job within schedule range", "job", job.Name)
 			scheduledAt = prevScheduledAt
 		}
 
 		if scheduledAt.IsZero() {
-			s.l.Warn("no scheduled at found for job in the next schedule range, skipping SLA prediction", "job", job.Name)
+			l.Warn("no scheduled at found for job in the next schedule range, skipping SLA prediction", "job", job.Name)
 			continue
 		}
 
@@ -366,7 +366,7 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 			ScheduledAt: scheduledAt,
 		}
 	}
-	s.l.Info("total job schedules found", "count", len(jobSchedules))
+	l.Info("total job schedules found", "count", len(jobSchedules))
 	// jobs not having schedule within the range will be skipped
 	jobsSkipped := []string{}
 	for _, job := range jobs {
@@ -375,7 +375,7 @@ func (s *JobSLAPredictorService) getJobSchedules(jobs []*scheduler.JobWithDetail
 		}
 	}
 	if len(jobsSkipped) > 0 {
-		s.l.Info("jobs skipped due to no schedule within the range", "jobs", jobsSkipped)
+		l.Info("jobs skipped due to no schedule within the range", "jobs", jobsSkipped)
 	}
 	return jobSchedules
 }

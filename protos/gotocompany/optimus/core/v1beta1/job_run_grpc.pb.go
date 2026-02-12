@@ -43,6 +43,8 @@ type JobRunServiceClient interface {
 	GetJobRunLineageSummary(ctx context.Context, in *GetJobRunLineageSummaryRequest, opts ...grpc.CallOption) (*GetJobRunLineageSummaryResponse, error)
 	// IdentifyPotentialSLABreach notifies optimus service about potential SLA breach for given job(s)
 	IdentifyPotentialSLABreach(ctx context.Context, in *IdentifyPotentialSLABreachRequest, opts ...grpc.CallOption) (*IdentifyPotentialSLABreachResponse, error)
+	// GenerateExpectedFinishTime generates and stores the expected finish time for a given job(s)
+	GenerateExpectedFinishTime(ctx context.Context, in *GenerateExpectedFinishTimeRequest, opts ...grpc.CallOption) (*GenerateExpectedFinishTimeResponse, error)
 }
 
 type jobRunServiceClient struct {
@@ -152,6 +154,15 @@ func (c *jobRunServiceClient) IdentifyPotentialSLABreach(ctx context.Context, in
 	return out, nil
 }
 
+func (c *jobRunServiceClient) GenerateExpectedFinishTime(ctx context.Context, in *GenerateExpectedFinishTimeRequest, opts ...grpc.CallOption) (*GenerateExpectedFinishTimeResponse, error) {
+	out := new(GenerateExpectedFinishTimeResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GenerateExpectedFinishTime", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobRunServiceServer is the server API for JobRunService service.
 // All implementations must embed UnimplementedJobRunServiceServer
 // for forward compatibility
@@ -177,6 +188,8 @@ type JobRunServiceServer interface {
 	GetJobRunLineageSummary(context.Context, *GetJobRunLineageSummaryRequest) (*GetJobRunLineageSummaryResponse, error)
 	// IdentifyPotentialSLABreach notifies optimus service about potential SLA breach for given job(s)
 	IdentifyPotentialSLABreach(context.Context, *IdentifyPotentialSLABreachRequest) (*IdentifyPotentialSLABreachResponse, error)
+	// GenerateExpectedFinishTime generates and stores the expected finish time for a given job(s)
+	GenerateExpectedFinishTime(context.Context, *GenerateExpectedFinishTimeRequest) (*GenerateExpectedFinishTimeResponse, error)
 	mustEmbedUnimplementedJobRunServiceServer()
 }
 
@@ -216,6 +229,9 @@ func (UnimplementedJobRunServiceServer) GetJobRunLineageSummary(context.Context,
 }
 func (UnimplementedJobRunServiceServer) IdentifyPotentialSLABreach(context.Context, *IdentifyPotentialSLABreachRequest) (*IdentifyPotentialSLABreachResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IdentifyPotentialSLABreach not implemented")
+}
+func (UnimplementedJobRunServiceServer) GenerateExpectedFinishTime(context.Context, *GenerateExpectedFinishTimeRequest) (*GenerateExpectedFinishTimeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateExpectedFinishTime not implemented")
 }
 func (UnimplementedJobRunServiceServer) mustEmbedUnimplementedJobRunServiceServer() {}
 
@@ -428,6 +444,24 @@ func _JobRunService_IdentifyPotentialSLABreach_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobRunService_GenerateExpectedFinishTime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateExpectedFinishTimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobRunServiceServer).GenerateExpectedFinishTime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GenerateExpectedFinishTime",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobRunServiceServer).GenerateExpectedFinishTime(ctx, req.(*GenerateExpectedFinishTimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobRunService_ServiceDesc is the grpc.ServiceDesc for JobRunService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -478,6 +512,10 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IdentifyPotentialSLABreach",
 			Handler:    _JobRunService_IdentifyPotentialSLABreach_Handler,
+		},
+		{
+			MethodName: "GenerateExpectedFinishTime",
+			Handler:    _JobRunService_GenerateExpectedFinishTime_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

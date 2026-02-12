@@ -37,6 +37,10 @@ type JobSLAPredictorService interface {
 	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig service.JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
 }
 
+type JobExpectatorService interface {
+	GenerateExpectedFinishTimes(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, referenceTime time.Time, scheduleRangeInHours time.Duration) (map[scheduler.JobSchedule]service.FinishTimeDetail, error)
+}
+
 type JobRunService interface {
 	JobRunInput(context.Context, tenant.ProjectName, scheduler.JobName, scheduler.RunConfig) (*scheduler.ExecutorInput, error)
 	UpdateJobState(context.Context, *scheduler.Event) error
@@ -73,6 +77,7 @@ type JobRunHandler struct {
 	jobLineageService       JobLineageService
 	jobSLAPredictorService  JobSLAPredictorService
 	thirdPartySensorService ThirdPartySensorService
+	jobExpectatorService    JobExpectatorService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -574,6 +579,57 @@ func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJ
 	return toJobRunLineageSummaryResponse(jobRunLineages), nil
 }
 
+// GenerateExpectedFinishTime generates expected finish time for jobs based on their schedule in the given range
+func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.GenerateExpectedFinishTimeRequest) (*pb.GenerateExpectedFinishTimeResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to adapt project name")
+	}
+
+	jobNames := []scheduler.JobName{}
+	for _, jn := range req.GetJobNames() {
+		jobName, err := scheduler.JobNameFrom(jn)
+		if err != nil {
+			h.l.Error("error adapting job name [%s]: %s", jn, err)
+			return nil, errors.GRPCErr(err, "unable to adapt job name")
+		}
+		jobNames = append(jobNames, jobName)
+	}
+
+	referenceTime := time.Now().UTC()
+	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
+		referenceTime = req.GetReferenceTime().AsTime().UTC()
+	}
+	scheduleRangeInHours := time.Duration(req.GetScheduledRangeInHours()) * time.Hour
+
+	jobsWithFinishTime, err := h.jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, jobNames, req.GetJobLabels(), referenceTime, scheduleRangeInHours)
+	if err != nil {
+		h.l.Error("error generating expected finish times: %s", err)
+		return nil, errors.GRPCErr(err, "unable to generate expected finish times")
+	}
+
+	response := &pb.GenerateExpectedFinishTimeResponse{
+		InprogressJobs: make(map[string]*pb.FinishTimeDetailResponse),
+		FinishedJobs:   make(map[string]*pb.FinishTimeDetailResponse),
+	}
+	for jobSchedule, jobWithFinishTime := range jobsWithFinishTime {
+		finishTimeDetail := &pb.FinishTimeDetailResponse{
+			ScheduledAt:        timestamppb.New(jobSchedule.ScheduledAt),
+			ExpectedFinishTime: timestamppb.New(jobWithFinishTime.FinishTime),
+		}
+
+		switch jobWithFinishTime.Status {
+		case service.FinishTimeStatusFinished:
+			response.FinishedJobs[jobSchedule.JobName.String()] = finishTimeDetail
+		case service.FinishTimeStatusInprogress:
+			response.InprogressJobs[jobSchedule.JobName.String()] = finishTimeDetail
+		}
+	}
+
+	return response, nil
+}
+
 func NewJobRunHandler(
 	l log.Logger,
 	service JobRunService,
@@ -582,6 +638,7 @@ func NewJobRunHandler(
 	jobLineageService JobLineageService,
 	jobSLAPredictorService JobSLAPredictorService,
 	thirdPartySensorService ThirdPartySensorService,
+	jobExpectatorService JobExpectatorService,
 ) *JobRunHandler {
 	return &JobRunHandler{
 		l:                       l,
@@ -591,5 +648,6 @@ func NewJobRunHandler(
 		jobLineageService:       jobLineageService,
 		jobSLAPredictorService:  jobSLAPredictorService,
 		thirdPartySensorService: thirdPartySensorService,
+		jobExpectatorService:    jobExpectatorService,
 	}
 }

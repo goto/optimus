@@ -106,7 +106,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 			Severity:             "",
 		}
 
-		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels, false, "").Return([]*scheduler.JobWithDetails{}, nil).Once()
+		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return([]*scheduler.JobWithDetails{}, nil).Once()
 
 		// when
 		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, labels, reqConfig)
@@ -1479,7 +1479,7 @@ func (_m *JobDetailsGetter) GetJobs(ctx context.Context, projectName tenant.Proj
 
 // GetJobsByLabels provides a mock function with given fields: ctx, projectName, labels
 func (_m *JobDetailsGetter) GetJobsByLabels(ctx context.Context, projectName tenant.ProjectName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
-	ret := _m.Called(ctx, projectName, labels, false, "")
+	ret := _m.Called(ctx, projectName, labels)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetJobsByLabels")

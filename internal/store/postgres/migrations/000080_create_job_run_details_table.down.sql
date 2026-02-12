@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS job_run_details;

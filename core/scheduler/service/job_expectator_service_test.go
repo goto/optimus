@@ -16,7 +16,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 )
 
-func TestGenerateEstimatedFinishTimes(t *testing.T) {
+func TestGenerateExpectedFinishTimes(t *testing.T) {
 	ctx := context.Background()
 	projectName := tenant.ProjectName("project-a")
 	referenceTime := time.Now()
@@ -25,37 +25,37 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 
 	t.Run("given no jobs, should return empty map", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{}, map[string]string{}, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{}, map[string]string{}, referenceTime, scheduleRangeInHours)
 
 		// then
 		assert.NoError(t, err)
-		assert.Empty(t, estimatedFinishTimes)
+		assert.Empty(t, expectedFinishTimes)
 	})
 
 	t.Run("given jobs, when get job detail error, return error", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
@@ -66,23 +66,23 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{}, errors.New("some error"))
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
 
 		// then
-		assert.Nil(t, estimatedFinishTimes)
+		assert.Nil(t, expectedFinishTimes)
 		assert.EqualError(t, err, "some error")
 	})
 
 	t.Run("given job label, when get job detail error, return error", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
@@ -93,23 +93,23 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return([]*scheduler.JobWithDetails{}, errors.New("some error"))
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{}, labels, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{}, labels, referenceTime, scheduleRangeInHours)
 
 		// then
-		assert.Nil(t, estimatedFinishTimes)
+		assert.Nil(t, expectedFinishTimes)
 		assert.EqualError(t, err, "some error")
 	})
 
 	t.Run("given jobs, with no job details, should return empty map", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
@@ -120,23 +120,23 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{}, nil)
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
 
 		// then
 		assert.NoError(t, err)
-		assert.Empty(t, estimatedFinishTimes)
+		assert.Empty(t, expectedFinishTimes)
 	})
 
 	t.Run("given job, with no job schedules, should return empty map", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
@@ -157,23 +157,23 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil)
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
 
 		// then
 		assert.NoError(t, err)
-		assert.Empty(t, estimatedFinishTimes)
+		assert.Empty(t, expectedFinishTimes)
 	})
 
 	t.Run("given job, with job schedules, when get lineage error, return error", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
@@ -202,23 +202,23 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}).Return(nil, errors.New("some error"))
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
 
 		// then
-		assert.Nil(t, estimatedFinishTimes)
+		assert.Nil(t, expectedFinishTimes)
 		assert.EqualError(t, err, "some error")
 	})
 
 	t.Run("given job, with job schedules and lineage, when estimate duration error, return error", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
@@ -253,23 +253,23 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).Return(nil, errors.New("some error"))
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
 
 		// then
-		assert.Nil(t, estimatedFinishTimes)
+		assert.Nil(t, expectedFinishTimes)
 		assert.EqualError(t, err, "some error")
 	})
 
-	t.Run("given job, with job schedules, lineage and duration estimation, should return estimated finish time", func(t *testing.T) {
+	t.Run("given job, with job schedules, lineage and duration estimation, should return expected finish time", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
@@ -308,19 +308,19 @@ func TestGenerateEstimatedFinishTimes(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil)
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: jobLineageSummary}, nil)
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
-		jobRunDetailsRepo.On("UpsertEstimatedFinishTime", ctx, projectName, jobAName, scheduledAt, scheduledAt.Add(30*time.Minute)).Return(nil)
+		jobRunExpectationDetailsRepo.On("UpsertExpectedFinishTime", ctx, projectName, jobAName, scheduledAt, scheduledAt.Add(30*time.Minute)).Return(nil)
 
 		// when
-		estimatedFinishTimes, err := jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
 
 		// then
 		assert.NoError(t, err)
-		expectedEstimatedFinishTime := scheduledAt.Add(30 * time.Minute)
-		assert.Equal(t, map[scheduler.JobSchedule]time.Time{{JobName: jobAName, ScheduledAt: scheduledAt}: expectedEstimatedFinishTime}, estimatedFinishTimes)
+		expectedExpectedFinishTime := scheduledAt.Add(30 * time.Minute)
+		assert.Equal(t, map[scheduler.JobSchedule]service.FinishTimeDetail{{JobName: jobAName, ScheduledAt: scheduledAt}: {FinishTime: expectedExpectedFinishTime, Status: service.FinishTimeStatusInprogress}}, expectedFinishTimes)
 	})
 }
 
-func TestPopulateEstimatedFinishTime(t *testing.T) {
+func TestPopulateExpectedFinishTime(t *testing.T) {
 	l := log.NewNoop()
 	referenceTime := time.Now()
 	scheduleRangeInHours := 10 * time.Hour
@@ -328,20 +328,20 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 
 	t.Run("when no current job run exists, should skip", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
 
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -360,28 +360,28 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
-		assert.Empty(t, jobRunEstimatedFinishTime)
+		assert.Empty(t, jobRunExpectedFinishTime)
 	})
 
 	t.Run("when duration estimation not found, should skip", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -405,28 +405,28 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		// no duration estimation added
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
-		assert.Empty(t, jobRunEstimatedFinishTime)
+		assert.Empty(t, jobRunExpectedFinishTime)
 	})
 
-	t.Run("when estimated finish time already calculated, should skip", func(t *testing.T) {
+	t.Run("when expected finish time already calculated, should skip", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -449,31 +449,34 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobWithLineageMap[jobTarget.JobName] = currentJobWithLineage
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 		// already calculated
-		jobRunEstimatedFinishTime[*jobTarget] = scheduledAt.Add(25 * time.Minute)
+		jobRunExpectedFinishTime[*jobTarget] = service.FinishTimeDetail{
+			FinishTime: scheduledAt.Add(25 * time.Minute),
+			Status:     service.FinishTimeStatusInprogress,
+		}
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 		// then
 		assert.NoError(t, err)
 		// should not be updated
-		assert.Equal(t, scheduledAt.Add(25*time.Minute), jobRunEstimatedFinishTime[*jobTarget])
+		assert.Equal(t, scheduledAt.Add(25*time.Minute), jobRunExpectedFinishTime[*jobTarget])
 	})
 
-	t.Run("when end_time is nil and running late, should set estimated finish time to reference time + buffer", func(t *testing.T) {
+	t.Run("when end_time is nil and running late, should set expected finish time to reference time + buffer", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -498,29 +501,29 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
-		expectedEstimatedFinishTime := referenceTime.Add(bufferTime)
-		assert.Equal(t, expectedEstimatedFinishTime, jobRunEstimatedFinishTime[*jobTarget])
+		expectedExpectedFinishTime := referenceTime.Add(bufferTime)
+		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget])
 	})
 
-	t.Run("when end_time is not nil, should set estimated finish time to job end time", func(t *testing.T) {
+	t.Run("when end_time is not nil, should set expected finish time to job end time", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -546,28 +549,28 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
-		assert.Equal(t, jobEndTime, jobRunEstimatedFinishTime[*jobTarget])
+		assert.Equal(t, jobEndTime, jobRunExpectedFinishTime[*jobTarget])
 	})
 
-	t.Run("when targeted job will run in the future, should set estimated finish time to scheduled at + estimated duration", func(t *testing.T) {
+	t.Run("when targeted job will run in the future, should set expected finish time to scheduled at + expected duration", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -591,29 +594,29 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
-		expectedEstimatedFinishTime := scheduledAt.Add(30 * time.Minute)
-		assert.Equal(t, expectedEstimatedFinishTime, jobRunEstimatedFinishTime[*jobTarget])
+		expectedExpectedFinishTime := scheduledAt.Add(30 * time.Minute)
+		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget])
 	})
 
-	t.Run("when targeted job will run in the future, and there's an upstream job running late, should set estimated finish time to max(upstream estimated finish time, scheduled_at) + estimated duration", func(t *testing.T) {
+	t.Run("when targeted job will run in the future, and there's an upstream job running late, should set expected finish time to max(upstream expected finish time, scheduled_at) + expected duration", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -652,29 +655,29 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobUpstreamWithLineage.JobName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
-		expectedEstimatedFinishTime := scheduledAt.Add(30 * time.Minute)
-		assert.Equal(t, expectedEstimatedFinishTime, jobRunEstimatedFinishTime[*jobTarget])
+		expectedExpectedFinishTime := scheduledAt.Add(30 * time.Minute)
+		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget])
 	})
 
-	t.Run("when targeted job will run in the future, and there's an upstream job running late, and estimated finish time for upstream is greater than scheduled_at, should set estimated finish time to max(upstream estimated finish time, scheduled_at) + estimated duration", func(t *testing.T) {
+	t.Run("when targeted job will run in the future, and there's an upstream job running late, and expected finish time for upstream is greater than scheduled_at, should set expected finish time to max(upstream expected finish time, scheduled_at) + expected duration", func(t *testing.T) {
 		// given
-		jobRunDetailsRepo := NewJobRunDetailsRepository(t)
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 
-		jobEstimatorService := service.NewJobEstimatorService(
+		jobExpectatorService := service.NewJobExpectatorService(
 			l,
-			jobRunDetailsRepo,
+			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
 			durationEstimator,
 		)
-		jobRunEstimatedFinishTime := map[scheduler.JobSchedule]time.Time{}
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
@@ -713,31 +716,31 @@ func TestPopulateEstimatedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobUpstreamWithLineage.JobName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
 
 		// when
-		err := jobEstimatorService.PopulateEstimatedFinishTime(jobTarget, currentJobWithLineage, jobRunEstimatedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobWithLineageMap, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
-		expectedEstimatedFinishTime := referenceTime.Add(10 * time.Minute).Add(30 * time.Minute)
-		assert.Equal(t, expectedEstimatedFinishTime, jobRunEstimatedFinishTime[*jobTarget])
+		expectedExpectedFinishTime := referenceTime.Add(10 * time.Minute).Add(30 * time.Minute)
+		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget])
 	})
 }
 
-// JobRunDetailsRepository is an autogenerated mock type for the JobRunDetailsRepository type
-type JobRunDetailsRepository struct {
+// jobRunExpectationDetailsRepository is an autogenerated mock type for the jobRunExpectationDetailsRepository type
+type JobRunExpectationDetailsRepository struct {
 	mock.Mock
 }
 
-// UpsertEstimatedFinishTime provides a mock function with given fields: ctx, projectName, jobName, scheduledAt, estimatedFinishTime
-func (_m *JobRunDetailsRepository) UpsertEstimatedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt, estimatedFinishTime time.Time) error {
-	ret := _m.Called(ctx, projectName, jobName, scheduledAt, estimatedFinishTime)
+// UpsertExpectedFinishTime provides a mock function with given fields: ctx, projectName, jobName, scheduledAt, expectedFinishTime
+func (_m *JobRunExpectationDetailsRepository) UpsertExpectedFinishTime(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt, expectedFinishTime time.Time) error {
+	ret := _m.Called(ctx, projectName, jobName, scheduledAt, expectedFinishTime)
 
 	if len(ret) == 0 {
-		panic("no return value specified for UpsertEstimatedFinishTime")
+		panic("no return value specified for UpsertExpectedFinishTime")
 	}
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, scheduler.JobName, time.Time, time.Time) error); ok {
-		r0 = rf(ctx, projectName, jobName, scheduledAt, estimatedFinishTime)
+		r0 = rf(ctx, projectName, jobName, scheduledAt, expectedFinishTime)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -745,14 +748,14 @@ func (_m *JobRunDetailsRepository) UpsertEstimatedFinishTime(ctx context.Context
 	return r0
 }
 
-// NewJobRunDetailsRepository creates a new instance of JobRunDetailsRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// NewJobRunExpectationDetailsRepository creates a new instance of jobRunExpectationDetailsRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
-func NewJobRunDetailsRepository(t interface {
+func NewJobRunExpectationDetailsRepository(t interface {
 	mock.TestingT
 	Cleanup(func())
 },
-) *JobRunDetailsRepository {
-	mock := &JobRunDetailsRepository{}
+) *JobRunExpectationDetailsRepository {
+	mock := &JobRunExpectationDetailsRepository{}
 	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })

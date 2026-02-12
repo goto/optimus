@@ -446,7 +446,7 @@ func (s *OptimusServer) setupHandlers() error {
 	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService)
 
 	// Job Estimator Service
-	jobEstimatorService := schedulerService.NewJobEstimatorService(s.logger, jobRunRepo, jobProviderRepo, jobLineageService, newDurationEstimatorService)
+	jobExpectatorService := schedulerService.NewJobExpectatorService(s.logger, jobRunRepo, jobProviderRepo, jobLineageService, newDurationEstimatorService)
 
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)
@@ -490,7 +490,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
 	sensorService := schedulerService.NewSensorService(s.logger, s.conf.UpstreamResolvers...)
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobEstimatorService))
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

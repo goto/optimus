@@ -37,8 +37,8 @@ type JobSLAPredictorService interface {
 	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig service.JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
 }
 
-type JobEstimatorService interface {
-	GenerateEstimatedFinishTimes(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, referenceTime time.Time, scheduleRangeInHours time.Duration) (map[scheduler.JobSchedule]time.Time, error)
+type JobExpectatorService interface {
+	GenerateExpectedFinishTimes(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, referenceTime time.Time, scheduleRangeInHours time.Duration) (map[scheduler.JobSchedule]service.FinishTimeDetail, error)
 }
 
 type JobRunService interface {
@@ -77,7 +77,7 @@ type JobRunHandler struct {
 	jobLineageService       JobLineageService
 	jobSLAPredictorService  JobSLAPredictorService
 	thirdPartySensorService ThirdPartySensorService
-	jobEstimatorService     JobEstimatorService
+	jobExpectatorService    JobExpectatorService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -579,8 +579,8 @@ func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJ
 	return toJobRunLineageSummaryResponse(jobRunLineages), nil
 }
 
-// GenerateEstimatedFinishTime generates estimated finish time for jobs based on their schedule in the given range
-func (h JobRunHandler) GenerateEstimatedFinishTime(ctx context.Context, req *pb.GenerateEstimatedFinishTimeRequest) (*pb.GenerateEstimatedFinishTimeResponse, error) {
+// GenerateExpectedFinishTime generates expected finish time for jobs based on their schedule in the given range
+func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.GenerateExpectedFinishTimeRequest) (*pb.GenerateExpectedFinishTimeResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
@@ -603,17 +603,28 @@ func (h JobRunHandler) GenerateEstimatedFinishTime(ctx context.Context, req *pb.
 	}
 	scheduleRangeInHours := time.Duration(req.GetScheduledRangeInHours()) * time.Hour
 
-	estimatedFinishTimes, err := h.jobEstimatorService.GenerateEstimatedFinishTimes(ctx, projectName, jobNames, req.GetJobLabels(), referenceTime, scheduleRangeInHours)
+	jobsWithFinishTime, err := h.jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, jobNames, req.GetJobLabels(), referenceTime, scheduleRangeInHours)
 	if err != nil {
-		h.l.Error("error generating estimated finish times: %s", err)
-		return nil, errors.GRPCErr(err, "unable to generate estimated finish times")
+		h.l.Error("error generating expected finish times: %s", err)
+		return nil, errors.GRPCErr(err, "unable to generate expected finish times")
 	}
 
-	response := &pb.GenerateEstimatedFinishTimeResponse{
-		Jobs: make(map[string]*timestamppb.Timestamp),
+	response := &pb.GenerateExpectedFinishTimeResponse{
+		InprogressJobs: make(map[string]*pb.FinishTimeDetailResponse),
+		FinishedJobs:   make(map[string]*pb.FinishTimeDetailResponse),
 	}
-	for jobSchedule, estimatedFinishTime := range estimatedFinishTimes {
-		response.Jobs[jobSchedule.JobName.String()] = timestamppb.New(estimatedFinishTime)
+	for jobSchedule, jobWithFinishTime := range jobsWithFinishTime {
+		finishTimeDetail := &pb.FinishTimeDetailResponse{
+			ScheduledAt:        timestamppb.New(jobSchedule.ScheduledAt),
+			ExpectedFinishTime: timestamppb.New(jobWithFinishTime.FinishTime),
+		}
+
+		switch jobWithFinishTime.Status {
+		case service.FinishTimeStatusFinished:
+			response.FinishedJobs[jobSchedule.JobName.String()] = finishTimeDetail
+		case service.FinishTimeStatusInprogress:
+			response.InprogressJobs[jobSchedule.JobName.String()] = finishTimeDetail
+		}
 	}
 
 	return response, nil
@@ -627,7 +638,7 @@ func NewJobRunHandler(
 	jobLineageService JobLineageService,
 	jobSLAPredictorService JobSLAPredictorService,
 	thirdPartySensorService ThirdPartySensorService,
-	jobEstimatorService JobEstimatorService,
+	jobExpectatorService JobExpectatorService,
 ) *JobRunHandler {
 	return &JobRunHandler{
 		l:                       l,
@@ -637,6 +648,6 @@ func NewJobRunHandler(
 		jobLineageService:       jobLineageService,
 		jobSLAPredictorService:  jobSLAPredictorService,
 		thirdPartySensorService: thirdPartySensorService,
-		jobEstimatorService:     jobEstimatorService,
+		jobExpectatorService:    jobExpectatorService,
 	}
 }

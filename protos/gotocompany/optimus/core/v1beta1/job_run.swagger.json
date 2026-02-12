@@ -54,15 +54,15 @@
         ]
       }
     },
-    "/v1beta1/project/{projectName}/estimate_job_finish_time": {
+    "/v1beta1/project/{projectName}/expected_job_finish_time": {
       "post": {
-        "summary": "GenerateEstimatedFinishTime generates and stores the estimated finish time for a given job(s)",
-        "operationId": "JobRunService_GenerateEstimatedFinishTime",
+        "summary": "GenerateExpectedFinishTime generates and stores the expected finish time for a given job(s)",
+        "operationId": "JobRunService_GenerateExpectedFinishTime",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1beta1GenerateEstimatedFinishTimeResponse"
+              "$ref": "#/definitions/v1beta1GenerateExpectedFinishTimeResponse"
             }
           },
           "default": {
@@ -745,14 +745,32 @@
         }
       }
     },
-    "v1beta1GenerateEstimatedFinishTimeResponse": {
+    "v1beta1FinishTimeDetailResponse": {
       "type": "object",
       "properties": {
-        "jobs": {
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expectedFinishTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1beta1GenerateExpectedFinishTimeResponse": {
+      "type": "object",
+      "properties": {
+        "inprogressJobs": {
           "type": "object",
           "additionalProperties": {
-            "type": "string",
-            "format": "date-time"
+            "$ref": "#/definitions/v1beta1FinishTimeDetailResponse"
+          }
+        },
+        "finishedJobs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1beta1FinishTimeDetailResponse"
           }
         }
       }

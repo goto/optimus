@@ -1240,7 +1240,7 @@ func (j *JobService) compileAssets(ctx context.Context, subjectJob job.Job, dest
 	// compile executor input
 	executorInput, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, runConfig, referenceTime)
 	if err != nil {
-		j.logger.Error("error compiling executor input for job [%s]: %s", subjectJob.GetName(), err)
+		j.logger.Error("error compiling assets: %s", err)
 		return nil, err
 	}
 

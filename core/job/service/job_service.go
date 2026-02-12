@@ -30,16 +30,9 @@ const (
 	ConcurrentTicketPerSec = 50
 	ConcurrentLimit        = 100
 
-	// taskConfigPrefix will be used to prefix all the config variables of
-	// transformation instance, i.e. task
-	taskConfigPrefix = "TASK__"
-
 	// projectConfigPrefix will be used to prefix all the config variables of
 	// a project, i.e. registered entities
 	projectConfigPrefix = "GLOBAL__"
-
-	contextProject = "proj"
-	contextTask    = "task"
 )
 
 type JobValidateConfig struct {

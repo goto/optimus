@@ -1,4 +1,4 @@
-CREATE TABLE job_run_expectation_details (
+CREATE TABLE IF NOT EXISTS job_run_expectation_details (
     project_name TEXT NOT NULL,
     job_name TEXT NOT NULL,
     scheduled_at TIMESTAMPTZ NOT NULL,

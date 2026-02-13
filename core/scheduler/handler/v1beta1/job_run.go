@@ -583,7 +583,7 @@ func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJ
 func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.GenerateExpectedFinishTimeRequest) (*pb.GenerateExpectedFinishTimeResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
-		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		h.l.Error(fmt.Sprintf("error adapting project name [%s]: %s", req.GetProjectName(), err.Error()))
 		return nil, errors.GRPCErr(err, "unable to adapt project name")
 	}
 
@@ -591,7 +591,7 @@ func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.G
 	for _, jn := range req.GetJobNames() {
 		jobName, err := scheduler.JobNameFrom(jn)
 		if err != nil {
-			h.l.Error("error adapting job name [%s]: %s", jn, err)
+			h.l.Error(fmt.Sprintf("error adapting job name [%s]: %s", jn, err.Error()))
 			return nil, errors.GRPCErr(err, "unable to adapt job name")
 		}
 		jobNames = append(jobNames, jobName)
@@ -605,7 +605,7 @@ func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.G
 
 	jobsWithFinishTime, err := h.jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, jobNames, req.GetJobLabels(), referenceTime, scheduleRangeInHours)
 	if err != nil {
-		h.l.Error("error generating expected finish times: %s", err)
+		h.l.Error(fmt.Sprintf("error generating expected finish times: %s", err.Error()))
 		return nil, errors.GRPCErr(err, "unable to generate expected finish times")
 	}
 

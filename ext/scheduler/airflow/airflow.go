@@ -118,10 +118,15 @@ type TaskInstance struct {
 	Note            string   `json:"note"`
 }
 
-func parseTaskInstance(data []byte) (*TaskInstance, error) {
-	var ti TaskInstance
+type ClearTaskInstancesResponse struct {
+	TaskInstances []TaskInstance `json:"task_instances"`
+	TotalEntries  int            `json:"total_entries"`
+}
+
+func unmarshalAs[T any](data []byte) (*T, error) {
+	var ti T
 	if err := json.Unmarshal(data, &ti); err != nil {
-		return nil, fmt.Errorf("failed to parse task instance: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal err: %w", err)
 	}
 	return &ti, nil
 }
@@ -476,6 +481,24 @@ func (s *Scheduler) GetJobRuns(ctx context.Context, tnnt tenant.Tenant, jobQuery
 	return getJobRuns(dagRunList, jobCron)
 }
 
+func (s *Scheduler) GetJobRunsForReplay(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+	spanCtx, span := startChildSpan(ctx, "GetJobRuns")
+	defer span.End()
+
+	resp, err := s.fetchJobRunBatch(spanCtx, tnnt, jobQuery, jobCron)
+	if err != nil {
+		return nil, errors.Wrap(EntityAirflow, "failure while fetching airflow dag runs", err)
+	}
+
+	// var dagRunList DagRunListResponse
+	dagRunList, err := unmarshalAs[DagRunListResponse](resp)
+	if err != nil {
+		return nil, errors.Wrap(EntityAirflow, fmt.Sprintf("json error on parsing airflow dag runs: %s", string(resp)), err)
+	}
+
+	return getJobRunsForReplay(dagRunList, jobCron)
+}
+
 func (s *Scheduler) fetchJobs(ctx context.Context, schdAuth SchedulerAuth, offset int) (*DAGs, error) {
 	params := url.Values{}
 	params.Add("limit", "100") // Default and max is 100
@@ -700,10 +723,19 @@ func (s *Scheduler) ClearBatch(ctx context.Context, tnnt tenant.Tenant, jobName 
 	if err != nil {
 		return err
 	}
-	_, err = s.client.Invoke(spanCtx, req, schdAuth)
+	respBytes, err := s.client.Invoke(spanCtx, req, schdAuth)
 	if err != nil {
 		return errors.Wrap(EntityAirflow, "failure while clearing airflow dag runs", err)
 	}
+
+	resp, err := unmarshalAs[ClearTaskInstancesResponse](respBytes)
+	if err != nil {
+		return errors.Wrap(EntityAirflow, "failure while un-marshaling createTaskInstance API response", err)
+	}
+	if resp != nil && resp.TotalEntries == 0 {
+		return fmt.Errorf("unbale to clear job:%s with execution date range [%s -> %s]", jobName, startExecutionTime, endExecutionTime)
+	}
+
 	return nil
 }
 
@@ -767,7 +799,7 @@ func (s *Scheduler) GetOperatorInstance(ctx context.Context, tnnt tenant.Tenant,
 	if err != nil {
 		return nil, err
 	}
-	taskInstance, err := parseTaskInstance(resp)
+	taskInstance, err := unmarshalAs[TaskInstance](resp)
 	if err != nil {
 		return nil, errors.Wrap(EntityAirflow, "failure while creating airflow dag run", err)
 	}

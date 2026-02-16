@@ -137,7 +137,7 @@ func getJobRuns(res DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.J
 	return jobRunList, nil
 }
 
-func GetJobRunsForReplay(res DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+func getJobRunsForReplay(res *DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
 	var jobRunList []*scheduler.JobRunStatus
 	if res.TotalEntries > pageLimit {
 		return jobRunList, errors.InternalError(EntityAirflow, "total number of entries exceed page limit", nil)

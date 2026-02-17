@@ -490,7 +490,6 @@ func (s *Scheduler) GetJobRunsForReplay(ctx context.Context, tnnt tenant.Tenant,
 		return nil, errors.Wrap(EntityAirflow, "failure while fetching airflow dag runs", err)
 	}
 
-	// var dagRunList DagRunListResponse
 	dagRunList, err := unmarshalAs[DagRunListResponse](resp)
 	if err != nil {
 		return nil, errors.Wrap(EntityAirflow, fmt.Sprintf("json error on parsing airflow dag runs: %s", string(resp)), err)

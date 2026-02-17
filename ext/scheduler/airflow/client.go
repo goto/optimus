@@ -147,7 +147,6 @@ func getJobRunsForReplay(res *DagRunListResponse, spec *cron.ScheduleSpec) ([]*s
 		if spec.Prev(scheduledAt) != dag.ExecutionDate {
 			// previous execution date created with some other cron interval
 			continue
-
 		}
 		jobRunStatus, _ := scheduler.JobRunStatusFrom(scheduledAt, dag.State)
 		// use multi error to collect errors and proceed

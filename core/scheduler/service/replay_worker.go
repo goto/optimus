@@ -338,7 +338,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 		startLogicalTime := pendingRuns[0].GetLogicalTime(jobCron)
 		endLogicalTime := pendingRuns[l-1].GetLogicalTime(jobCron)
 		w.logger.Info("[ReplayID: %s] clearing runs with startLogicalTime: %s, endLogicalTime: %s", replayReq.ID(), startLogicalTime, endLogicalTime)
-		// todo: instead of clearBatch, clear specific job run for more controll and clarity
+		// todo: instead of clearBatch, clear specific job run for more control and clarity
 		if err := w.scheduler.ClearBatch(ctx, replayReq.Tenant(), replayReq.JobName(), startLogicalTime, endLogicalTime); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to clear job run: %s", replayReq.ID(), err)
 			return err

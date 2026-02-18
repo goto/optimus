@@ -169,7 +169,11 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 	if !ok || estimatedDuration == nil {
 		// if no estimation found, we cannot proceed
 		s.l.Warn(fmt.Sprintf("no duration estimation found for job [%s], cannot calculate expected finish time", currentJobWithLineage.JobName))
-		return nil
+		// rest of the logic can still work with 0 duration, which means expected finish time will be the same as max upstream expected finish time.
+		// this is a better approach than skipping expected finish time calculation entirely, as we can still provide some expected finish time estimation based on upstream jobs,
+		// rather than having no estimation at all.
+		zeroDuration := time.Duration(0)
+		estimatedDuration = &zeroDuration
 	}
 
 	// termination condition

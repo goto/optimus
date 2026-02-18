@@ -152,7 +152,8 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.JobSchedule, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
 	// pre condition check
 	if currentJobWithLineage == nil || currentJobWithLineage.JobRuns[jobTarget.JobName] == nil {
-		s.l.Warn(fmt.Sprintf("no job run found for job [%s], skipping expected finish time calculation", currentJobWithLineage.JobName))
+		// TODO: add metric to track how many times this happens
+		s.l.Error(fmt.Sprintf("[critical] no job run found for job [%s], skipping expected finish time calculation", currentJobWithLineage.JobName))
 		return nil
 	}
 	if !currentJobWithLineage.IsEnabled {
@@ -162,15 +163,16 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 
 	currentJobRun := currentJobWithLineage.JobRuns[jobTarget.JobName]
 	currentJobScheduleKey := scheduler.JobSchedule{
+		// TODO: add project name as well, PR: https://github.com/goto/optimus/pull/501
 		JobName:     currentJobWithLineage.JobName,
 		ScheduledAt: currentJobRun.ScheduledAt,
 	}
 
-	jobStartTime := currentJobRun.JobStartTime
+	taskStartTime := currentJobRun.TaskStartTime
 	jobEndTime := currentJobRun.JobEndTime
 
-	// termination condition: 1. if start_time is not nil and end_time is not nil
-	if jobStartTime != nil && jobEndTime != nil {
+	// termination condition: 1. if end_time is not nil
+	if jobEndTime != nil {
 		// if job has already ended, we can set the expected finish time to job end time
 		s.l.Debug(fmt.Sprintf("job has already ended, setting expected finish time to job end time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
 		jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
@@ -182,15 +184,15 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 
 	// get estimated duration, once we know the job is not finished yet
 	// this information is needed to calculate expected finish time
+	// estimationDuration already has buffer time included, so we don't need to add extra buffer time in the expected finish time calculation
 	estimatedDuration, ok := jobDurationsEstimation[currentJobWithLineage.JobName]
 	if !ok || estimatedDuration == nil {
 		// if no estimation found, we cannot proceed
 		s.l.Warn(fmt.Sprintf("no duration estimation found for job [%s], cannot calculate expected finish time", currentJobWithLineage.JobName))
-		// rest of the logic can still work with 0 duration, which means expected finish time will be the same as max upstream expected finish time.
+		// rest of the logic can still work with buffer duration, which means expected finish time will be the same as max upstream expected finish time.
 		// this is a better approach than skipping expected finish time calculation entirely, as we can still provide some expected finish time estimation based on upstream jobs,
 		// rather than having no estimation at all.
-		zeroDuration := time.Duration(0)
-		estimatedDuration = &zeroDuration
+		estimatedDuration = &s.bufferTime // use buffer time as default duration
 	}
 
 	// termination condition: 2. cache if already calculated
@@ -198,13 +200,24 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		s.l.Debug(fmt.Sprintf("expected finish time already calculated for job [%s], skipping", currentJobWithLineage.JobName))
 		return nil
 	}
-	// termination condition: 3. if start_time is not nil, end_time is nil, and scheduled_time+duration<ref_time
-	if jobStartTime != nil && jobEndTime == nil && currentJobRun.ScheduledAt.Add(*estimatedDuration).Before(referenceTime) {
-		// running late
-		s.l.Debug(fmt.Sprintf("job is running late, setting expected finish time to reference time + buffer time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
+
+	if taskStartTime != nil {
+		// termination condition: 3. if start_time is not nil, end_time is nil, and scheduled_time+duration<ref_time
+		if taskStartTime.Add(*estimatedDuration).Before(referenceTime) {
+			// running late
+			s.l.Debug(fmt.Sprintf("job is running late, setting expected finish time to reference time + buffer time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
+			jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
+				Status:     FinishTimeStatusInprogress,
+				FinishTime: referenceTime.Add(s.bufferTime),
+			}
+			return nil
+		}
+		// termination condition: 4. if start_time is not nil
+		// job already started but not running late
+		s.l.Debug(fmt.Sprintf("job already started but not running late, setting expected finish time to task start time + estimated duration + buffer time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
 		jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
 			Status:     FinishTimeStatusInprogress,
-			FinishTime: referenceTime.Add(s.bufferTime),
+			FinishTime: taskStartTime.Add(*estimatedDuration),
 		}
 		return nil
 	}
@@ -217,15 +230,14 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		FinishTime: maxUpstreamExpectedFinishTime.Add(*estimatedDuration),
 	}
 	for _, upstream := range currentJobWithLineage.Upstreams {
-		if upstream.JobRuns[jobTarget.JobName] == nil {
-			s.l.Debug(fmt.Sprintf("no upstream job run found for job, skipping upstream in expected finish time calculation [job: %s, upstream_job: %s]", currentJobWithLineage.JobName, upstream.JobName))
-			continue
-		}
 		err := s.PopulateExpectedFinishTime(jobTarget, upstream, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			return err
 		}
-
+		if upstream.JobRuns[jobTarget.JobName] == nil {
+			s.l.Debug(fmt.Sprintf("no upstream job run found for job, skipping upstream in expected finish time calculation [job: %s, upstream_job: %s]", currentJobWithLineage.JobName, upstream.JobName))
+			continue
+		}
 		upstreamScheduleKey := scheduler.JobSchedule{
 			JobName:     upstream.JobName,
 			ScheduledAt: upstream.JobRuns[jobTarget.JobName].ScheduledAt,
@@ -239,13 +251,6 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 	}
 
 	expectedFinishedTime := maxUpstreamExpectedFinishTime.Add(*estimatedDuration)
-	// if start_time is nil and scheduled_time+duration<ref_time
-	if jobStartTime == nil && currentJobRun.ScheduledAt.Add(*estimatedDuration).Before(referenceTime) {
-		// job is not started yet
-		s.l.Debug(fmt.Sprintf("job is not started yet but expected to have finished, setting expected finish time to reference time + buffer time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
-		expectedFinishedTime = referenceTime.Add(s.bufferTime) // need to add buffer time to give some room for the job to start
-	}
-
 	jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
 		Status:     FinishTimeStatusInprogress,
 		FinishTime: expectedFinishedTime,

@@ -367,7 +367,54 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		assert.Empty(t, jobRunExpectedFinishTime)
 	})
 
-	t.Run("when duration estimation not found, should skip", func(t *testing.T) {
+	t.Run("when end_time is not nil, should set expected finish time to job end time", func(t *testing.T) {
+		// given
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+
+		jobExpectatorService := service.NewJobExpectatorService(
+			l,
+			jobRunExpectationDetailsRepo,
+			jobDetailsGetter,
+			jobLineageFetcher,
+			durationEstimator,
+		)
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
+		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
+		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
+
+		scheduledAt := referenceTime.Add(-1 * time.Hour) // scheduled in the past
+		jobEndTime := referenceTime.Add(-30 * time.Minute)
+		jobTarget := &scheduler.JobSchedule{
+			JobName:     scheduler.JobName("job-A"),
+			ScheduledAt: scheduledAt,
+		}
+		currentJobWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobTarget.JobName: {
+					JobName:     jobTarget.JobName,
+					ScheduledAt: scheduledAt,
+					JobEndTime:  &jobEndTime,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobWithLineageMap[jobTarget.JobName] = currentJobWithLineage
+		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
+
+		// when
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, jobEndTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
+	})
+
+	t.Run("when duration estimation not found, use buffer duration", func(t *testing.T) {
 		// given
 		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
@@ -409,7 +456,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.Empty(t, jobRunExpectedFinishTime)
+		assert.NotEmpty(t, jobRunExpectedFinishTime)
+		assert.Equal(t, scheduledAt.Add(bufferTime), jobRunExpectedFinishTime[*jobTarget].FinishTime)
 	})
 
 	t.Run("when expected finish time already calculated, should skip", func(t *testing.T) {
@@ -490,9 +538,10 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
-					JobName:     jobTarget.JobName,
-					ScheduledAt: scheduledAt,
-					JobEndTime:  nil, // still running
+					JobName:       jobTarget.JobName,
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &scheduledAt, // started on time
+					JobEndTime:    nil,          // still running
 				},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
@@ -509,7 +558,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
 	})
 
-	t.Run("when end_time is not nil, should set expected finish time to job end time", func(t *testing.T) {
+	t.Run("when end_time is nil and job still running, should set expected finish time to task start time + estimated duration", func(t *testing.T) {
 		// given
 		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
@@ -527,8 +576,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
 		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
 
-		scheduledAt := referenceTime.Add(-1 * time.Hour) // scheduled in the past
-		jobEndTime := referenceTime.Add(-30 * time.Minute)
+		scheduledAt := referenceTime.Add(-5 * time.Minute) // scheduled in the past, but not running late yet
 		jobTarget := &scheduler.JobSchedule{
 			JobName:     scheduler.JobName("job-A"),
 			ScheduledAt: scheduledAt,
@@ -538,9 +586,10 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 			IsEnabled: true,
 			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
 				jobTarget.JobName: {
-					JobName:     jobTarget.JobName,
-					ScheduledAt: scheduledAt,
-					JobEndTime:  &jobEndTime,
+					JobName:       jobTarget.JobName,
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &scheduledAt, // started on time
+					JobEndTime:    nil,          // still running
 				},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
@@ -553,7 +602,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.Equal(t, jobEndTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
+		expectedExpectedFinishTime := scheduledAt.Add(30 * time.Minute)
+		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
 	})
 
 	t.Run("when targeted job will run in the future, should set expected finish time to scheduled at + expected duration", func(t *testing.T) {
@@ -705,6 +755,11 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 				jobTarget.JobName: {
 					JobName:     scheduler.JobName("job-B"),
 					ScheduledAt: upstreamScheduledAt,
+					TaskStartTime: func() *time.Time {
+						t := upstreamScheduledAt.Add(25 * time.Minute) // started late
+						return &t
+					}(),
+					JobEndTime: nil, // still running
 				},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},

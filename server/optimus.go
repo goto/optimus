@@ -446,7 +446,12 @@ func (s *OptimusServer) setupHandlers() error {
 	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService)
 
 	// Job Estimator Service
-	jobExpectatorService := schedulerService.NewJobExpectatorService(s.logger, jobRunRepo, jobProviderRepo, jobLineageService, newDurationEstimatorService)
+	newJobExpectatorDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,
+		s.conf.JobExpectatorConfig.DurationEstimatorConfig.LastNRuns, s.conf.JobExpectatorConfig.DurationEstimatorConfig.Percentile,
+		s.conf.JobExpectatorConfig.DurationEstimatorConfig.PaddingPercentage, s.conf.JobExpectatorConfig.DurationEstimatorConfig.MinPaddingMinutes,
+		s.conf.JobExpectatorConfig.DurationEstimatorConfig.MaxPaddingMinutes,
+	)
+	jobExpectatorService := schedulerService.NewJobExpectatorService(s.logger, jobRunRepo, jobProviderRepo, jobLineageService, newJobExpectatorDurationEstimatorService)
 
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)

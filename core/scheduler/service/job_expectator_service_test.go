@@ -32,6 +32,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -55,6 +56,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -82,6 +84,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -109,6 +112,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -136,6 +140,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -173,6 +178,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -218,6 +224,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -269,6 +276,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -335,6 +343,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -376,6 +385,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -423,6 +433,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -469,6 +480,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -519,6 +531,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -567,6 +580,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -615,6 +629,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -661,6 +676,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,
@@ -722,6 +738,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 
 		jobExpectatorService := service.NewJobExpectatorService(
 			l,
+			10,
 			jobRunExpectationDetailsRepo,
 			jobDetailsGetter,
 			jobLineageFetcher,

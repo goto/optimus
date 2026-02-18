@@ -29,7 +29,7 @@ type JobRunExpectationDetailsRepository interface {
 
 type JobExpectatorService struct {
 	l                            log.Logger
-	bufferTime                   time.Duration
+	bufferDuration               time.Duration
 	jobRunExpectationDetailsRepo JobRunExpectationDetailsRepository
 	jobDetailsGetter             JobDetailsGetter
 	jobLineageFetcher            JobLineageFetcher
@@ -38,6 +38,7 @@ type JobExpectatorService struct {
 
 func NewJobExpectatorService(
 	logger log.Logger,
+	bufferDurationInMinutes int,
 	jobRunExpectationDetailsRepo JobRunExpectationDetailsRepository,
 	jobDetailsGetter JobDetailsGetter,
 	jobLineageFetcher JobLineageFetcher,
@@ -45,7 +46,7 @@ func NewJobExpectatorService(
 ) *JobExpectatorService {
 	return &JobExpectatorService{
 		l:                            logger,
-		bufferTime:                   10 * time.Minute, // TODO: make this configurable
+		bufferDuration:               time.Duration(bufferDurationInMinutes) * time.Minute,
 		jobRunExpectationDetailsRepo: jobRunExpectationDetailsRepo,
 		jobDetailsGetter:             jobDetailsGetter,
 		jobLineageFetcher:            jobLineageFetcher,
@@ -192,7 +193,7 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		// rest of the logic can still work with buffer duration, which means expected finish time will be the same as max upstream expected finish time.
 		// this is a better approach than skipping expected finish time calculation entirely, as we can still provide some expected finish time estimation based on upstream jobs,
 		// rather than having no estimation at all.
-		estimatedDuration = &s.bufferTime // use buffer time as default duration
+		estimatedDuration = &s.bufferDuration // use buffer time as default duration
 	}
 
 	// termination condition: 2. cache if already calculated
@@ -208,7 +209,7 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 			s.l.Debug(fmt.Sprintf("job is running late, setting expected finish time to reference time + buffer time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
 			jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
 				Status:     FinishTimeStatusInprogress,
-				FinishTime: referenceTime.Add(s.bufferTime),
+				FinishTime: referenceTime.Add(s.bufferDuration),
 			}
 			return nil
 		}

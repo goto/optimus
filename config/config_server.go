@@ -168,6 +168,6 @@ type ValidateScheduleConfig struct {
 }
 
 type JobExpectatorConfig struct {
-	BufferDuration          int                     `mapstructure:"buffer_duration_minutes" default:"10"`
+	BufferDurationInMinutes int                     `mapstructure:"buffer_duration_in_minutes" default:"10"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
 }

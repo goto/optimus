@@ -156,7 +156,7 @@ func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackersPerColumn []maskingP
 			).Inc()
 
 			err = parseMaskingPolicyError(err)
-			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
+			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, schemaName, tableName, task.ColumnName, err.Error())
 			me.Append(fmt.Errorf("failed to %s masking policy %s for column %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
 			continue
 		}
@@ -172,7 +172,7 @@ func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackersPerColumn []maskingP
 			).Inc()
 
 			err = parseMaskingPolicyError(err)
-			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName, err.Error())
+			h.logger.Error("[masking-policy: error] action %s for masking policy %s to table %s.%s column %s failed: %s", task.Action, task.MaskingPolicy, schemaName, tableName, task.ColumnName, err.Error())
 			me.Append(fmt.Errorf("failed to %s masking policy %s to column %s: %s", task.Action, task.MaskingPolicy, task.ColumnName, err.Error()))
 			continue
 		}
@@ -185,7 +185,7 @@ func (h MaskingPolicyHandle) applyMaskPolicyChanges(trackersPerColumn []maskingP
 			maskingPolicyActionStatusSuccess,
 		).Inc()
 
-		h.logger.Info("[masking-policy: success] action %s for masking policy %s to table %s.%s column %s succeeded", task.Action, task.MaskingPolicy, task.ColumnName, schemaName, tableName)
+		h.logger.Info("[masking-policy: success] action %s for masking policy %s to table %s.%s column %s succeeded", task.Action, task.MaskingPolicy, schemaName, tableName, task.ColumnName)
 	}
 
 	return me.ToErr()

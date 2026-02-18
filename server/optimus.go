@@ -199,7 +199,6 @@ func (s *OptimusServer) setupDB() error {
 	if err != nil {
 		return fmt.Errorf("postgres.Open: %w", err)
 	}
-
 	return nil
 }
 
@@ -446,6 +445,14 @@ func (s *OptimusServer) setupHandlers() error {
 
 	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService)
 
+	// Job Estimator Service
+	newJobExpectatorDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,
+		s.conf.JobExpectatorConfig.DurationEstimatorConfig.LastNRuns, s.conf.JobExpectatorConfig.DurationEstimatorConfig.Percentile,
+		s.conf.JobExpectatorConfig.DurationEstimatorConfig.PaddingPercentage, s.conf.JobExpectatorConfig.DurationEstimatorConfig.MinPaddingMinutes,
+		s.conf.JobExpectatorConfig.DurationEstimatorConfig.MaxPaddingMinutes,
+	)
+	jobExpectatorService := schedulerService.NewJobExpectatorService(s.logger, s.conf.JobExpectatorConfig.BufferDurationInMinutes, jobRunRepo, jobProviderRepo, jobLineageService, newJobExpectatorDurationEstimatorService)
+
 	// Resource Bounded Context
 	primaryResourceService := rService.NewResourceService(s.logger, resourceRepository, jJobService, resourceManager, s.eventHandler, jJobService, alertsHandler, tenantService, newEngine, syncer, syncStatusRepository)
 	backupService := rService.NewBackupService(backupRepository, resourceRepository, resourceManager, s.logger)
@@ -488,7 +495,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
 	sensorService := schedulerService.NewSensorService(s.logger, s.conf.UpstreamResolvers...)
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService))
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

@@ -24,6 +24,7 @@ type ServerConfig struct {
 	Features               FeaturesConfig       `mapstructure:"features"`
 	Plugins                Plugins              `mapstructure:"plugins"`
 	JobValidationConfig    JobValidationConfig  `mapstructure:"job_validation"`
+	JobExpectatorConfig    JobExpectatorConfig  `mapstructure:"job_expectator"`
 }
 
 type UpstreamResolver struct {
@@ -164,4 +165,9 @@ type JobValidationConfig struct {
 
 type ValidateScheduleConfig struct {
 	ReferenceTimezone string `mapstructure:"reference_timezone"`
+}
+
+type JobExpectatorConfig struct {
+	BufferDurationInMinutes int                     `mapstructure:"buffer_duration_in_minutes" default:"10"`
+	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
 }

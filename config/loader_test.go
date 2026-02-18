@@ -311,6 +311,16 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			MaxPaddingMinutes: 1000,
 		},
 	}
+	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{
+		BufferDurationInMinutes: 10,
+		DurationEstimatorConfig: config.DurationEstimatorConfig{
+			LastNRuns:         7,
+			Percentile:        95,
+			PaddingPercentage: 0,
+			MinPaddingMinutes: 0,
+			MaxPaddingMinutes: 1000,
+		},
+	}
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

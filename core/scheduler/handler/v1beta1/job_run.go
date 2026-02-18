@@ -615,14 +615,15 @@ func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.G
 	}
 	for jobSchedule, jobWithFinishTime := range jobsWithFinishTime {
 		finishTimeDetail := &pb.FinishTimeDetailResponse{
-			ScheduledAt:        timestamppb.New(jobSchedule.ScheduledAt),
-			ExpectedFinishTime: timestamppb.New(jobWithFinishTime.FinishTime),
+			ScheduledAt: timestamppb.New(jobSchedule.ScheduledAt),
 		}
 
 		switch jobWithFinishTime.Status {
 		case service.FinishTimeStatusFinished:
+			finishTimeDetail.FinishTime = &pb.FinishTimeDetailResponse_ActualFinishTime{ActualFinishTime: timestamppb.New(jobWithFinishTime.FinishTime)}
 			response.FinishedJobs[jobSchedule.JobName.String()] = finishTimeDetail
 		case service.FinishTimeStatusInprogress:
+			finishTimeDetail.FinishTime = &pb.FinishTimeDetailResponse_ExpectedFinishTime{ExpectedFinishTime: timestamppb.New(jobWithFinishTime.FinishTime)}
 			response.InprogressJobs[jobSchedule.JobName.String()] = finishTimeDetail
 		}
 	}

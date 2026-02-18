@@ -755,6 +755,10 @@
         "expectedFinishTime": {
           "type": "string",
           "format": "date-time"
+        },
+        "actualFinishTime": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },

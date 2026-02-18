@@ -165,6 +165,23 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		JobName:     currentJobWithLineage.JobName,
 		ScheduledAt: currentJobRun.ScheduledAt,
 	}
+
+	jobStartTime := currentJobRun.JobStartTime
+	jobEndTime := currentJobRun.JobEndTime
+
+	// termination condition: 1. if start_time is not nil and end_time is not nil
+	if jobStartTime != nil && jobEndTime != nil {
+		// if job has already ended, we can set the expected finish time to job end time
+		s.l.Debug(fmt.Sprintf("job has already ended, setting expected finish time to job end time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
+		jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
+			Status:     FinishTimeStatusFinished,
+			FinishTime: *jobEndTime,
+		}
+		return nil
+	}
+
+	// get estimated duration, once we know the job is not finished yet
+	// this information is needed to calculate expected finish time
 	estimatedDuration, ok := jobDurationsEstimation[currentJobWithLineage.JobName]
 	if !ok || estimatedDuration == nil {
 		// if no estimation found, we cannot proceed
@@ -176,31 +193,18 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		estimatedDuration = &zeroDuration
 	}
 
-	// termination condition
-	// 1. cache if already calculated
+	// termination condition: 2. cache if already calculated
 	if _, ok := jobRunExpectedFinishTimes[currentJobScheduleKey]; ok {
 		s.l.Debug(fmt.Sprintf("expected finish time already calculated for job [%s], skipping", currentJobWithLineage.JobName))
 		return nil
 	}
-	// 2. if start_time is not nil, end_time is nil, and scheduled_time+duration<ref_time
-	jobStartTime := currentJobRun.JobStartTime
-	jobEndTime := currentJobRun.JobEndTime
+	// termination condition: 3. if start_time is not nil, end_time is nil, and scheduled_time+duration<ref_time
 	if jobStartTime != nil && jobEndTime == nil && currentJobRun.ScheduledAt.Add(*estimatedDuration).Before(referenceTime) {
 		// running late
 		s.l.Debug(fmt.Sprintf("job is running late, setting expected finish time to reference time + buffer time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
 		jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
 			Status:     FinishTimeStatusInprogress,
 			FinishTime: referenceTime.Add(s.bufferTime),
-		}
-		return nil
-	}
-	// 3. if start_time is not nil and end_time is not nil
-	if jobStartTime != nil && jobEndTime != nil {
-		// if job has already ended, we can set the expected finish time to job end time
-		s.l.Debug(fmt.Sprintf("job has already ended, setting expected finish time to job end time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
-		jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
-			Status:     FinishTimeStatusFinished,
-			FinishTime: *jobEndTime,
 		}
 		return nil
 	}

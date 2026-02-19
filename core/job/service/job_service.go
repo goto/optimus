@@ -1456,11 +1456,14 @@ func raiseJobEventMetric(jobTenant tenant.Tenant, state string, metricValue int)
 	).Add(float64(metricValue))
 }
 
-func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, job job.Job) ([]resource.URN, error) {
-	taskName := job.Spec().Task().Name().String()
-	taskConfig := job.Spec().Task().Config()
+func (j *JobService) identifyUpstreamURNs(ctx context.Context, tenantWithDetails *tenant.WithDetails, subjectJob job.Job) ([]resource.URN, error) {
+	taskName := subjectJob.Spec().Task().Name().String()
+	taskConfig := subjectJob.Spec().Task().Config()
 	compiledConfigs := j.compileConfigs(taskConfig, tenantWithDetails)
-	compiledAssets, err := j.compileAssets(ctx, job, job.Destination())
+
+	spec := *subjectJob.Spec()
+	currentJob := job.NewJob(subjectJob.Tenant(), &spec, subjectJob.Destination(), nil, false)
+	compiledAssets, err := j.compileAssets(ctx, *currentJob, currentJob.Destination())
 	if err != nil {
 		return nil, err
 	}

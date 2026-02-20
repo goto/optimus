@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -34,7 +35,8 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *sched
 		bq2bq = "bq2bq"
 		mc2mc = "mc2mc"
 	)
-	inputFiles := job.Assets
+	inputFiles := map[string]string{}
+	maps.Copy(inputFiles, job.Assets)
 	method, ok1 := job.Task.Config["LOAD_METHOD"]
 	query, ok2 := job.Assets["query.sql"]
 	disableMultiQuery := strings.ToLower(job.Task.Config["DISABLE_MULTI_QUERY_GENERATION"])

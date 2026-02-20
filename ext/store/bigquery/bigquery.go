@@ -62,6 +62,11 @@ type Store struct {
 	clientProvider ClientProvider
 }
 
+func (s Store) Delete(_ context.Context, _ *resource.Resource) error {
+	// Optimus does not suppoer deleting BQ resources
+	return nil
+}
+
 func (s Store) Create(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "bigquery/CreateResource")
 	defer span.End()

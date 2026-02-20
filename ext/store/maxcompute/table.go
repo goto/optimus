@@ -76,6 +76,10 @@ func (t TableHandle) Create(res *resource.Resource) error {
 	return nil
 }
 
+func (t TableHandle) Delete(res *resource.Resource) error {
+	return nil
+}
+
 func (t TableHandle) Update(res *resource.Resource) error {
 	table, err := ConvertSpecTo[Table](res)
 	if err != nil {

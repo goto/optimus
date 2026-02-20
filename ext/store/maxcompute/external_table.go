@@ -43,6 +43,16 @@ func addQuoteSerde(serdeProperties map[string]string) map[string]string {
 	return serdeProperties
 }
 
+func (e ExternalTableHandle) Delete(res *resource.Resource) error {
+	et, err := ConvertSpecTo[ExternalTable](res)
+	if err != nil {
+		return err
+	}
+
+	e.mcSQLExecutor.SetCurrentSchemaName(et.Database)
+	return e.mcExternalTable.Delete(et.Name, true)
+}
+
 func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	et, err := ConvertSpecTo[ExternalTable](res)
 	if err != nil {

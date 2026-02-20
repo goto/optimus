@@ -15,6 +15,10 @@ func (s Store) String() string {
 	return string(s)
 }
 
+func (s Store) Is(target Store) bool {
+	return s.String() == target.String()
+}
+
 func FromStringToStore(name string) (Store, error) {
 	switch name {
 	case string(Bigquery):

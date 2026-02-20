@@ -137,6 +137,24 @@ func getJobRuns(res DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.J
 	return jobRunList, nil
 }
 
+func getJobRunsForReplay(res *DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
+	var jobRunList []*scheduler.JobRunStatus
+	if res.TotalEntries > pageLimit {
+		return jobRunList, errors.InternalError(EntityAirflow, "total number of entries exceed page limit", nil)
+	}
+	for _, dag := range res.DagRuns {
+		scheduledAt := spec.Next(dag.ExecutionDate)
+		if spec.Prev(scheduledAt) != dag.ExecutionDate {
+			// previous execution date created with some other cron interval
+			continue
+		}
+		jobRunStatus, _ := scheduler.JobRunStatusFrom(scheduledAt, dag.State)
+		// use multi error to collect errors and proceed
+		jobRunList = append(jobRunList, &jobRunStatus)
+	}
+	return jobRunList, nil
+}
+
 func getJobRunsWithDetails(res DagRunListResponse, spec *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error) {
 	var jobRunList []*scheduler.JobRunWithDetails
 	if res.TotalEntries > pageLimit {

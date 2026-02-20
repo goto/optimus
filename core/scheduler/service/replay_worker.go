@@ -50,6 +50,7 @@ type ReplayScheduler interface {
 	CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, dagRunID string) error
 	CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
+	GetJobRunsForReplay(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 	GetJobRunsWithDetails(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error)
 }
 
@@ -308,7 +309,7 @@ func (w *ReplayWorker) fetchRuns(ctx context.Context, replayReq *scheduler.Repla
 		StartDate: replayReq.Replay.Config().StartTime.UTC(),
 		EndDate:   replayReq.Replay.Config().EndTime.UTC(),
 	}
-	return w.scheduler.GetJobRuns(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
+	return w.scheduler.GetJobRunsForReplay(ctx, replayReq.Replay.Tenant(), jobRunCriteria, jobCron)
 }
 
 func (w *ReplayWorker) CancelReplayRunsOnScheduler(ctx context.Context, replay *scheduler.Replay, jobCron *cron.ScheduleSpec, runs []*scheduler.JobRunWithDetails) []*scheduler.JobRunStatus {
@@ -337,6 +338,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 		startLogicalTime := pendingRuns[0].GetLogicalTime(jobCron)
 		endLogicalTime := pendingRuns[l-1].GetLogicalTime(jobCron)
 		w.logger.Info("[ReplayID: %s] clearing runs with startLogicalTime: %s, endLogicalTime: %s", replayReq.ID(), startLogicalTime, endLogicalTime)
+		// todo: instead of clearBatch, clear specific job run for more control and clarity
 		if err := w.scheduler.ClearBatch(ctx, replayReq.Tenant(), replayReq.JobName(), startLogicalTime, endLogicalTime); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to clear job run: %s", replayReq.ID(), err)
 			return err

@@ -36,7 +36,7 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *sched
 		mc2mc = "mc2mc"
 	)
 	inputFiles := map[string]string{}
-	maps.Copy(inputFiles, job.Assets)
+	maps.Copy(inputFiles, job.Assets) // copy the map to avoid mutating the original asset map in job
 	method, ok1 := job.Task.Config["LOAD_METHOD"]
 	query, ok2 := job.Assets["query.sql"]
 	disableMultiQuery := strings.ToLower(job.Task.Config["DISABLE_MULTI_QUERY_GENERATION"])

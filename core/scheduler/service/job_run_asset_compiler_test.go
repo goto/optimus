@@ -9,6 +9,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
@@ -67,12 +68,12 @@ func TestJobAssetsCompiler(t *testing.T) {
 			jobRunAssetsCompiler := service.NewJobAssetsCompiler(compiler.NewEngine(), logger)
 
 			contextForTask := map[string]any{}
-			jobNonBq2bq := job
+			jobNonBq2bq := *job
 			jobNonBq2bq.Task = &scheduler.Task{
 				Name:   "python",
 				Config: map[string]string{},
 			}
-			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, jobNonBq2bq, systemEnvVars, interval, contextForTask)
+			assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, &jobNonBq2bq, systemEnvVars, interval, contextForTask)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, assets)
@@ -109,6 +110,35 @@ func TestJobAssetsCompiler(t *testing.T) {
 
 				assert.Nil(t, err)
 				assert.Equal(t, expectedFileMap, assets)
+			})
+			t.Run("return compiled assets on REPLACE load method with interval more than 1 day", func(t *testing.T) {
+				c, err := window.NewConfig("4d", "1d", "UTC", "d")
+				require.NoError(t, err)
+
+				w, err := window.FromCustomConfig(c.GetSimpleConfig())
+				require.NoError(t, err)
+
+				interval2, err := w.GetInterval(scheduleTime)
+				require.NoError(t, err)
+
+				expectedFileMap := map[string]string{
+					"assetName": "assetValue",
+					"query.sql": "select 1;\n--*--optimus-break-marker--*--\nselect 1;\n--*--optimus-break-marker--*--\nselect 1;\n--*--optimus-break-marker--*--\nselect 1;",
+				}
+
+				filesCompiler := new(mockFilesCompiler)
+				filesCompiler.On("Compile", map[string]string{"query": "select 1;"}, mock.Anything).
+					Return(map[string]string{"query": "select 1;"}, nil)
+				filesCompiler.On("Compile", expectedFileMap, contextForTask).
+					Return(expectedFileMap, nil)
+				defer filesCompiler.AssertExpectations(t)
+
+				jobRunAssetsCompiler := service.NewJobAssetsCompiler(filesCompiler, logger)
+				assets, err := jobRunAssetsCompiler.CompileJobRunAssets(ctx, job, systemEnvVars, interval2, contextForTask)
+
+				assert.Nil(t, err)
+				assert.Equal(t, expectedFileMap, assets)
+				assert.NotEqual(t, assets["query.sql"], job.Assets["query.sql"])
 			})
 		})
 	})

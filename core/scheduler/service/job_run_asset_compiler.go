@@ -11,6 +11,7 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/internal/lib/interval"
+	"github.com/goto/optimus/internal/utils"
 )
 
 type FilesCompiler interface {
@@ -51,7 +52,7 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *sched
 	// compile assets exclusive only for bq2bq and mc2mc plugin with replace load method and contains query.sql in asset
 	if ok1 && ok2 && method == "REPLACE" && (job.Task.Name == bq2bq || (job.Task.Name == mc2mc && disableMultiQuery != "true")) {
 		// check if task needs to override the compilation behaviour
-		compiledQuery, err := c.CompileQuery(interval.Start(), interval.End(), query, systemEnvVars)
+		compiledQuery, err := c.CompileQuery(interval.Start(), interval.End(), query, systemEnvVars, contextForTask)
 		if err != nil {
 			c.logger.Error("error compiling assets: %s", err.Error())
 			return nil, err
@@ -67,7 +68,7 @@ func (c *JobRunAssetsCompiler) CompileJobRunAssets(_ context.Context, job *sched
 	return fileMap, nil
 }
 
-func (c *JobRunAssetsCompiler) CompileQuery(startTime, endTime time.Time, query string, envs map[string]string) (string, error) {
+func (c *JobRunAssetsCompiler) CompileQuery(startTime, endTime time.Time, query string, envs map[string]string, contextForTask map[string]interface{}) (string, error) {
 	// partition window in range
 	instanceEnvMap := map[string]interface{}{}
 	for name, value := range envs {
@@ -106,7 +107,8 @@ func (c *JobRunAssetsCompiler) CompileQuery(startTime, endTime time.Time, query 
 	for _, part := range destinationsPartitions {
 		instanceEnvMap["DSTART"] = part.start.Format(time.RFC3339)
 		instanceEnvMap["DEND"] = part.end.Format(time.RFC3339)
-		compiledQueryMap, err := c.compiler.Compile(queryMap, instanceEnvMap)
+		mergedContext := utils.MergeAnyMaps(contextForTask, instanceEnvMap)
+		compiledQueryMap, err := c.compiler.Compile(queryMap, mergedContext)
 		if err != nil {
 			return "", err
 		}

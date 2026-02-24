@@ -722,17 +722,10 @@ func (s *Scheduler) ClearBatch(ctx context.Context, tnnt tenant.Tenant, jobName 
 	if err != nil {
 		return err
 	}
-	respBytes, err := s.client.Invoke(spanCtx, req, schdAuth)
+
+	_, err = s.client.Invoke(spanCtx, req, schdAuth)
 	if err != nil {
 		return errors.Wrap(EntityAirflow, "failure while clearing airflow dag runs", err)
-	}
-
-	resp, err := unmarshalAs[ClearTaskInstancesResponse](respBytes)
-	if err != nil {
-		return errors.Wrap(EntityAirflow, "failure while un-marshaling createTaskInstance API response", err)
-	}
-	if resp != nil && resp.TotalEntries == 0 {
-		return fmt.Errorf("unbale to clear job:%s with execution date range [%s -> %s]", jobName, startExecutionTime, endExecutionTime)
 	}
 
 	return nil

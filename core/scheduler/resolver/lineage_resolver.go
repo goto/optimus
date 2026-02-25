@@ -231,7 +231,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 		}
 
 		visited[visitedKey] = true
-		allJobRunsMap[lineage.JobName][jobRun.ScheduledAt] = copyJobRun(jobRun)
+		allJobRunsMap[lineage.JobName][jobRun.ScheduledAt.UTC()] = copyJobRun(jobRun)
 
 		for _, upstream := range lineage.Upstreams {
 			upstreamJob := lineageData.JobsByName[upstream.JobName]
@@ -252,9 +252,9 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 				allJobRunsMap[upstream.JobName] = make(map[time.Time]*scheduler.JobRunSummary)
 			}
 
-			if _, exists := allJobRunsMap[upstream.JobName][upstreamSchedule]; !exists {
+			if _, exists := allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]; !exists {
 				baseSLATime := upstreamSchedule.Add(upstream.SLA.Duration)
-				allJobRunsMap[upstream.JobName][upstreamSchedule] = &scheduler.JobRunSummary{
+				allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()] = &scheduler.JobRunSummary{
 					ScheduledAt: upstreamSchedule,
 					SLATime:     &baseSLATime,
 				}
@@ -263,7 +263,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 			if upstream.JobRuns == nil {
 				upstream.JobRuns = make(map[scheduler.JobName]*scheduler.JobRunSummary)
 			}
-			upstream.JobRuns[targetJob] = allJobRunsMap[upstream.JobName][upstreamSchedule]
+			upstream.JobRuns[targetJob] = allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]
 
 			err = r.calculateAllUpstreamRuns(ctx, upstream, targetJob, lineageData, allJobRunsMap, visited, referenceTime)
 			if err != nil {
@@ -315,7 +315,7 @@ func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap 
 	for jobName, jobRuns := range allJobRunsMap {
 		result[jobName] = make(map[time.Time]*scheduler.JobRunSummary)
 		for scheduleKey, jobRun := range jobRuns {
-			result[jobName][scheduleKey] = copyJobRun(jobRun)
+			result[jobName][scheduleKey.UTC()] = copyJobRun(jobRun)
 		}
 	}
 
@@ -359,7 +359,7 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 		// only fetch job runs that are necessary in the lineage
 		result[lineage.JobName].JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{}
 		for targetJobName, jobRun := range lineage.JobRuns {
-			if jobRun, exists := jobRuns[jobRun.ScheduledAt]; exists {
+			if jobRun, exists := jobRuns[jobRun.ScheduledAt.UTC()]; exists {
 				result[lineage.JobName].JobRuns[targetJobName] = jobRun
 			}
 		}

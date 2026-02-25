@@ -315,7 +315,7 @@ func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap 
 	for jobName, jobRuns := range allJobRunsMap {
 		result[jobName] = make(map[time.Time]*scheduler.JobRunSummary)
 		for scheduleKey, jobRun := range jobRuns {
-			result[jobName][scheduleKey] = copyJobRun(jobRun)
+			result[jobName][scheduleKey.UTC()] = copyJobRun(jobRun)
 		}
 	}
 

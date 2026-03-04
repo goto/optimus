@@ -1192,7 +1192,7 @@ func (s *JobRunService) GetExpectedRunSchedules(_ context.Context, sourceProject
 	}
 
 	// now, based on this interval, we need to get all the schedule times that fall within this interval
-	expectedRuns := getExpectedRuns(upstreamCronSpec, upstreamCronSpec.Next(interval.Start()), interval.End())
+	expectedRuns := getExpectedRuns(upstreamCronSpec, upstreamCronSpec.Next(interval.Start().UTC()), interval.End().UTC())
 	scheduleTimes := make([]time.Time, len(expectedRuns))
 	for i, run := range expectedRuns {
 		scheduleTimes[i] = run.ScheduledAt

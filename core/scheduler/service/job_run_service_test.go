@@ -2188,13 +2188,28 @@ func TestJobRunService(t *testing.T) {
 
 		yesterdayPreset, _ := tenant.NewPreset("YESTERDAY", "preset for test", "1d", "0d", "", "d")
 		multiDayPreset, _ := tenant.NewPreset("DAILY_LAST_6_DAYS", "preset for test", "6d", "0d", "", "d")
+		yesterdayJakartaPreset, _ := tenant.NewPreset("YESTERDAY_JAKARTA", "preset for test", "1d", "0d", "Asia/Jakarta", "d")
 		presets := map[string]tenant.Preset{
 			"yesterday":         yesterdayPreset,
 			"daily_last_6_days": multiDayPreset,
+			"yesterday_jakarta": yesterdayJakartaPreset,
 		}
 		project.SetPresets(presets)
 		yestWindowCfg, _ := window.NewPresetConfig("yesterday")
 		multidayWindowCfg, _ := window.NewPresetConfig("daily_last_6_days")
+		yesterdayJakartaWindowCfg, _ := window.NewPresetConfig("yesterday_jakarta")
+
+		sourceJobWithNonUTCConfig := &scheduler.JobWithDetails{
+			Name: sourceJobName,
+			Job: &scheduler.Job{
+				Name:         sourceJobName,
+				Tenant:       tnnt,
+				WindowConfig: yesterdayJakartaWindowCfg,
+			},
+			Schedule: &scheduler.Schedule{
+				Interval: "0 8 * * *",
+			},
+		}
 
 		sourceJobWithYesterdayConfig := &scheduler.JobWithDetails{
 			Name: sourceJobName,
@@ -2391,6 +2406,36 @@ func TestJobRunService(t *testing.T) {
 
 			expectedUpstreamRuns := []time.Time{
 				time.Date(2023, 12, 1, 0, 0, 0, 0, time.UTC),
+			}
+			assert.Equal(t, expectedUpstreamRuns, schedules)
+		})
+
+		t.Run("should normalize fetched runs to UTC if given non-UTC window", func(t *testing.T) {
+			dailyUpstreamJob := &scheduler.JobWithDetails{
+				Name: upstreamJobName,
+				Job: &scheduler.Job{
+					Name:   upstreamJobName,
+					Tenant: tnnt,
+				},
+				Schedule: &scheduler.Schedule{
+					Interval: "0 0 * * *",
+				},
+			}
+
+			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
+
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil)
+
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithNonUTCConfig.Schedule.Interval, sourceJobWithNonUTCConfig.Job.WindowConfig,
+				dailyUpstreamJob.Schedule.Interval, referenceTime)
+
+			assert.NoError(t, err)
+			assert.NotNil(t, schedules)
+			assert.Equal(t, 1, len(schedules))
+
+			expectedUpstreamRuns := []time.Time{
+				time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC),
 			}
 			assert.Equal(t, expectedUpstreamRuns, schedules)
 		})

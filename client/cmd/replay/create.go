@@ -25,9 +25,22 @@ const (
 	pollIntervalInSecond = 30
 )
 
+type ReplayCategory string
+
 var (
 	supportedISOTimeLayouts = [...]string{time.RFC3339, "2006-01-02"}
 	terminalStatuses        = map[string]bool{"success": true, "failed": true, "invalid": true}
+
+	// replay categories
+	DQ_FIX   ReplayCategory = "DQ_FIX"
+	BACKFILL ReplayCategory = "BACKFILL"
+	OTHERS   ReplayCategory = "OTHERS"
+
+	allowedReplayCategories = map[string]bool{
+		string(DQ_FIX):   true,
+		string(BACKFILL): true,
+		string(OTHERS):   true,
+	}
 )
 
 type createCommand struct {
@@ -40,6 +53,7 @@ type createCommand struct {
 	dryRun      bool
 	description string
 	jobConfig   string
+	category    string
 
 	projectName   string
 	namespaceName string
@@ -85,10 +99,14 @@ func (r *createCommand) injectFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&r.description, "description", "d", "", "Description of why backfill is needed")
 	cmd.Flags().StringVarP(&r.jobConfig, "job-config", "", "", "additional job configurations")
 	cmd.Flags().BoolVarP(&r.dryRun, "dry-run", "", false, "inspect replayed runs without taking effect on scheduler")
+	cmd.Flags().StringVarP(&r.category, "category", "", "", "Category for replay: DQ_FIX, BACKFILL, OTHERS")
 
 	// Mandatory flags if config is not set
 	cmd.Flags().StringVarP(&r.projectName, "project-name", "p", "", "Name of the optimus project")
 	cmd.Flags().StringVar(&r.host, "host", "", "Optimus service endpoint url")
+
+	cmd.MarkFlagRequired("category")
+	cmd.MarkFlagRequired("description")
 }
 
 func (r *createCommand) PreRunE(cmd *cobra.Command, _ []string) error {
@@ -121,6 +139,10 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 		endTime = args[2]
 	}
 
+	if !allowedReplayCategories[r.category] {
+		return fmt.Errorf("invalid category: %s, allowed categories are: DQ_FIX, BACKFILL, OTHERS", r.category)
+	}
+
 	replayReq, err := r.createReplayRequest(jobName, startTime, endTime, r.jobConfig)
 	if err != nil {
 		return err
@@ -148,6 +170,7 @@ func convertReplayToReplayDryRunRequest(replayReq *pb.ReplayRequest) *pb.ReplayD
 		Parallel:      replayReq.GetParallel(),
 		Description:   replayReq.GetDescription(),
 		JobConfig:     replayReq.GetJobConfig(),
+		Category:      replayReq.GetCategory(),
 	}
 }
 
@@ -255,6 +278,7 @@ func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, j
 		Parallel:      r.parallel,
 		Description:   r.description,
 		JobConfig:     jobConfig,
+		Category:      r.category,
 	}
 
 	return replayReq, nil

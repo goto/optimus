@@ -32,14 +32,14 @@ var (
 	terminalStatuses        = map[string]bool{"success": true, "failed": true, "invalid": true}
 
 	// replay categories
-	DQ_FIX   ReplayCategory = "DQ_FIX"
-	BACKFILL ReplayCategory = "BACKFILL"
-	OTHERS   ReplayCategory = "OTHERS"
+	DQFix    ReplayCategory = "DQ_FIX"
+	Backfill ReplayCategory = "BACKFILL"
+	Others   ReplayCategory = "OTHERS"
 
 	allowedReplayCategories = map[string]bool{
-		string(DQ_FIX):   true,
-		string(BACKFILL): true,
-		string(OTHERS):   true,
+		string(DQFix):    true,
+		string(Backfill): true,
+		string(Others):   true,
 	}
 )
 

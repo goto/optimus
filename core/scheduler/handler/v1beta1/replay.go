@@ -34,6 +34,7 @@ type replayRequest interface {
 	GetJobConfig() string
 	GetParallel() bool
 	GetDescription() string
+	GetCategory() string
 }
 
 type ReplayHandler struct {
@@ -220,7 +221,7 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		}
 	}
 
-	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription())
+	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription(), req.GetCategory())
 	if err != nil {
 		l.Error("error parsing job config: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse replay job config for "+req.GetJobName())
@@ -241,6 +242,7 @@ func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {
 			Parallel:    replay.Config().Parallel,
 			JobConfig:   replay.Config().JobConfig,
 			Description: replay.Config().Description,
+			Category:    replay.Config().Category,
 		},
 	}
 }

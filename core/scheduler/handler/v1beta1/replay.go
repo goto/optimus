@@ -16,6 +16,21 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+type ReplayCategory string
+
+var (
+	// replay categories
+	DQFix    ReplayCategory = "DQ_FIX"
+	Backfill ReplayCategory = "BACKFILL"
+	Others   ReplayCategory = "OTHERS"
+
+	allowedReplayCategories = map[string]bool{
+		string(DQFix):    true,
+		string(Backfill): true,
+		string(Others):   true,
+	}
+)
+
 type ReplayService interface {
 	CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error)
 	GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error)
@@ -219,6 +234,12 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if !allowedReplayCategories[req.GetCategory()] {
+		err = fmt.Errorf("invalid category: %s, allowed categories are: DQ_FIX, BACKFILL, OTHERS", req.GetCategory())
+		l.Error(err.Error())
+		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
 	}
 
 	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription(), req.GetCategory())

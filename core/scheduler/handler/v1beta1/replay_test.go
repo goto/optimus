@@ -25,6 +25,7 @@ func TestReplayHandler(t *testing.T) {
 	ctx := context.Background()
 	projectName := "a-data-proj"
 	namespaceName := "a-namespace"
+	category := "BACKFILL"
 	jobTenant, _ := tenant.NewTenant(projectName, namespaceName)
 	jobName, _ := scheduler.JobNameFrom("a-job-name")
 	startTime := timestamppb.New(time.Date(2023, 0o1, 0o1, 13, 0, 0, 0, time.UTC))
@@ -49,6 +50,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 
 			result, err := replayHandler.ReplayDryRun(ctx, req)
@@ -67,6 +69,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 
 			result, err := replayHandler.ReplayDryRun(ctx, req)
@@ -85,6 +88,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 
 			result, err := replayHandler.ReplayDryRun(ctx, req)
@@ -105,6 +109,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 
 			result, err := replayHandler.ReplayDryRun(ctx, req)
@@ -125,6 +130,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, jobConfig, description, "")
 
@@ -148,6 +154,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, jobConfig, description, "")
 			runs := []*scheduler.JobRunStatus{
@@ -179,6 +186,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, jobConfig, description, "")
 
@@ -200,6 +208,7 @@ func TestReplayHandler(t *testing.T) {
 				EndTime:       endTime,
 				Parallel:      false,
 				Description:   description,
+				Category:      category,
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, map[string]string{}, description, "")
 
@@ -221,6 +230,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 
 			result, err := replayHandler.Replay(ctx, req)
@@ -239,6 +249,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 
 			result, err := replayHandler.Replay(ctx, req)
@@ -257,6 +268,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 
 			result, err := replayHandler.Replay(ctx, req)
@@ -275,6 +287,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, jobConfig, description, "")
 
@@ -297,6 +310,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, jobConfig, description, "")
 
@@ -319,6 +333,7 @@ func TestReplayHandler(t *testing.T) {
 				Parallel:      false,
 				JobConfig:     jobConfigStr,
 				Description:   description,
+				Category:      category,
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, jobConfig, description, "")
 

@@ -71,8 +71,8 @@ func TestReplayWorker(t *testing.T) {
 
 	replayJobConfig := map[string]string{"EXECUTION_PROJECT": "example_project"}
 	replayDescription := "sample backfill"
-	replayConfig := scheduler.NewReplayConfig(startTime, endTime, false, replayJobConfig, replayDescription)
-	replayConfigParallel := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, replayDescription)
+	replayConfig := scheduler.NewReplayConfig(startTime, endTime, false, replayJobConfig, replayDescription, "")
+	replayConfigParallel := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, replayDescription, "")
 
 	t.Run("Execute", func(t *testing.T) {
 		t.Run("should able to process sequential replay request with single run", func(t *testing.T) {

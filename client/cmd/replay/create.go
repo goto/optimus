@@ -16,6 +16,8 @@ import (
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/utils"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
@@ -25,22 +27,9 @@ const (
 	pollIntervalInSecond = 30
 )
 
-type ReplayCategory string
-
 var (
 	supportedISOTimeLayouts = [...]string{time.RFC3339, "2006-01-02"}
 	terminalStatuses        = map[string]bool{"success": true, "failed": true, "invalid": true}
-
-	// replay categories
-	DQFix    ReplayCategory = "DQ_FIX"
-	Backfill ReplayCategory = "BACKFILL"
-	Others   ReplayCategory = "OTHERS"
-
-	allowedReplayCategories = map[string]bool{
-		string(DQFix):    true,
-		string(Backfill): true,
-		string(Others):   true,
-	}
 )
 
 type createCommand struct {
@@ -139,7 +128,9 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 		endTime = args[2]
 	}
 
-	if !allowedReplayCategories[r.category] {
+	allowedReplayCategories := utils.ListToMap(models.ReplayCategories)
+
+	if !utils.Contains(allowedReplayCategories, r.category) {
 		return fmt.Errorf("invalid category: %s, allowed categories are: DQ_FIX, BACKFILL, OTHERS", r.category)
 	}
 

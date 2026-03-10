@@ -12,23 +12,10 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/utils"
 	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-)
-
-type ReplayCategory string
-
-var (
-	// replay categories
-	DQFix    ReplayCategory = "DQ_FIX"
-	Backfill ReplayCategory = "BACKFILL"
-	Others   ReplayCategory = "OTHERS"
-
-	allowedReplayCategories = map[string]bool{
-		string(DQFix):    true,
-		string(Backfill): true,
-		string(Others):   true,
-	}
 )
 
 type ReplayService interface {
@@ -236,7 +223,9 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		}
 	}
 
-	if !allowedReplayCategories[req.GetCategory()] {
+	allowedReplayCategories := utils.ListToMap(models.ReplayCategories)
+
+	if !utils.Contains(allowedReplayCategories, req.GetCategory()) {
 		err = fmt.Errorf("invalid category: %s, allowed categories are: DQ_FIX, BACKFILL, OTHERS", req.GetCategory())
 		l.Error(err.Error())
 		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())

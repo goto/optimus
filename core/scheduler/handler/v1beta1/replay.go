@@ -242,6 +242,12 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
 	}
 
+	if strings.TrimSpace(req.GetDescription()) == "" {
+		err = fmt.Errorf("description cannot be empty")
+		l.Error(err.Error())
+		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
+	}
+
 	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription(), req.GetCategory())
 	if err != nil {
 		l.Error("error parsing job config: %s", err)

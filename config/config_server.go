@@ -157,6 +157,7 @@ type FeaturesConfig struct {
 	EnableV2Sensor                    bool `mapstructure:"enable_v2_sensor"`
 	EnableV3Sensor                    bool `mapstructure:"enable_v3_sensor"`
 	EnableIgnoreOldScheduleRunsSensor bool `mapstructure:"enable_ignore_old_schedule_runs_sensor"`
+	EnableTableCommentWithMetadata    bool `mapstructure:"enable_table_comment_with_metadata"`
 }
 
 type JobValidationConfig struct {

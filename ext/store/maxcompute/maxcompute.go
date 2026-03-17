@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -34,9 +35,9 @@ type TableResourceHandle interface {
 }
 
 type Client interface {
-	TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
-	ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle
-	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle
+	TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle, tableCommentWithMetadata bool) TableResourceHandle
+	ViewHandleFrom(projectSchema ProjectSchema, tableCommentWithMetadata bool) TableResourceHandle
+	ExternalTableHandleFrom(schema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle, tableCommentWithMetadata bool) TableResourceHandle
 	TableMaskingPolicyHandleFrom(projectSchema ProjectSchema, logger log.Logger) TableMaskingPolicyHandle
 	SchemaHandleFrom(projectSchema ProjectSchema) TableResourceHandle
 	FunctionHandleFrom(projectSchema ProjectSchema) TableResourceHandle
@@ -69,6 +70,7 @@ type MaxCompute struct {
 	maxFileSizeSupported      int
 	driveFileCleanupSizeLimit int
 	maxSyncDelayTolerance     time.Duration
+	features                  config.FeaturesConfig
 }
 
 func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
@@ -92,11 +94,11 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 			maskingPolicyClient = odpsClient
 		}
 
-		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger))
+		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger), m.features.EnableTableCommentWithMetadata)
 		return handle.Create(res)
 
 	case KindView:
-		handle := odpsClient.ViewHandleFrom(projectSchema)
+		handle := odpsClient.ViewHandleFrom(projectSchema, m.features.EnableTableCommentWithMetadata)
 		return handle.Create(res)
 
 	case KindExternalTable:
@@ -112,7 +114,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 		}
 		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
-		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle, m.features.EnableTableCommentWithMetadata)
 		return handle.Create(res)
 	case KindSchema:
 		handle := odpsClient.SchemaHandleFrom(projectSchema)
@@ -152,11 +154,11 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 			maskingPolicyClient = odpsClient
 		}
 
-		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger))
+		handle := odpsClient.TableHandleFrom(projectSchema, maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger), m.features.EnableTableCommentWithMetadata)
 		return handle.Update(res)
 
 	case KindView:
-		handle := odpsClient.ViewHandleFrom(projectSchema)
+		handle := odpsClient.ViewHandleFrom(projectSchema, m.features.EnableTableCommentWithMetadata)
 		return handle.Update(res)
 
 	case KindExternalTable:
@@ -166,7 +168,7 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 		}
 		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
-		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle, m.features.EnableTableCommentWithMetadata)
 		return handle.Update(res)
 	case KindSchema:
 		handle := odpsClient.SchemaHandleFrom(projectSchema)
@@ -257,9 +259,11 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			}
 			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
-			return client.TableHandleFrom(projectSchema, maskingPolicyHandle)
+			return client.TableHandleFrom(projectSchema, maskingPolicyHandle, m.features.EnableTableCommentWithMetadata)
 		},
-		KindView: client.ViewHandleFrom,
+		KindView: func(projectSchema ProjectSchema) TableResourceHandle {
+			return client.ViewHandleFrom(projectSchema, m.features.EnableTableCommentWithMetadata)
+		},
 		KindExternalTable: func(projectSchema ProjectSchema) TableResourceHandle {
 			maskingPolicyClient, err := m.initializeClient(spanCtx, tnnt, accountMaskPolicyKey)
 			if err != nil {
@@ -267,7 +271,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 			}
 			maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema, m.logger)
 
-			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
+			return client.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle, m.features.EnableTableCommentWithMetadata)
 		},
 		KindFunction: client.FunctionHandleFrom,
 	}
@@ -292,7 +296,7 @@ func startChildSpan(ctx context.Context, name string) (context.Context, trace.Sp
 	return tracer.Start(ctx, name)
 }
 
-func NewMaxComputeDataStore(logger log.Logger, secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter, syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int, maxSyncDelayTolerance time.Duration) *MaxCompute {
+func NewMaxComputeDataStore(logger log.Logger, secretProvider SecretProvider, clientProvider ClientProvider, tenantProvider TenantDetailsGetter, syncRepo SyncRepo, maxFileSizeSupported, driveFileCleanupSizeLimit int, maxSyncDelayTolerance time.Duration, features config.FeaturesConfig) *MaxCompute {
 	return &MaxCompute{
 		logger:                    logger,
 		secretProvider:            secretProvider,
@@ -302,5 +306,6 @@ func NewMaxComputeDataStore(logger log.Logger, secretProvider SecretProvider, cl
 		maxFileSizeSupported:      maxFileSizeSupported,
 		driveFileCleanupSizeLimit: driveFileCleanupSizeLimit,
 		maxSyncDelayTolerance:     maxSyncDelayTolerance,
+		features:                  features,
 	}
 }

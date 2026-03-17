@@ -465,7 +465,7 @@ func (s *OptimusServer) setupHandlers() error {
 
 	mcClientProvider := mcStore.NewClientProvider()
 	maxComputeStore := mcStore.NewMaxComputeDataStore(s.logger, tenantService, mcClientProvider, tenantService,
-		syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported, s.conf.ExternalTables.DriveFileCleanupSizeLimit, maxSyncDelayTolerance)
+		syncStatusRepository, s.conf.ExternalTables.MaxFileSizeSupported, s.conf.ExternalTables.DriveFileCleanupSizeLimit, maxSyncDelayTolerance, s.conf.Features)
 	resourceManager.RegisterDatastore(rModel.MaxCompute, maxComputeStore)
 
 	slaWorkerCtx, closeSLAWorker := context.WithCancel(context.Background())

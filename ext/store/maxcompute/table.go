@@ -1,7 +1,9 @@
 package maxcompute
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
@@ -39,10 +41,11 @@ type TableMaskingPolicyHandle interface {
 }
 
 type TableHandle struct {
-	mcSQLExecutor       McSQLExecutor
-	mcSchema            McSchema
-	mcTable             McTable
-	maskingPolicyHandle TableMaskingPolicyHandle
+	mcSQLExecutor            McSQLExecutor
+	mcSchema                 McSchema
+	mcTable                  McTable
+	maskingPolicyHandle      TableMaskingPolicyHandle
+	tableCommentWithMetadata bool
 }
 
 func (t TableHandle) Create(res *resource.Resource) error {
@@ -55,7 +58,7 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
 
-	tableSchema, err := buildTableSchema(table)
+	tableSchema, err := buildTableSchema(table, res, t.tableCommentWithMetadata)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+table.FullName())
 	}
@@ -93,7 +96,7 @@ func (t TableHandle) Update(res *resource.Resource) error {
 	}
 	table.Hints["odps.sql.schema.evolution.json.enable"] = "true"
 
-	tableSchema, err := buildTableSchema(table)
+	tableSchema, err := buildTableSchema(table, res, t.tableCommentWithMetadata)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to update for "+table.FullName())
 	}
@@ -127,11 +130,31 @@ func (t TableHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
+func getTableComment(t *Table, res *resource.Resource, withMetadata bool) string {
+	if !withMetadata {
+		return t.Description
+	}
+
+	comment := map[string]string{
+		"description": t.Description,
+	}
+	maps.Copy(comment, res.Metadata().Labels)
+
+	commentBytes, err := json.Marshal(comment)
+	if err != nil {
+		return t.Description
+	}
+
+	return string(commentBytes)
+}
+
+func buildTableSchema(t *Table, res *resource.Resource, tableCommentWithMetadata bool) (tableschema.TableSchema, error) {
+	comment := getTableComment(t, res, tableCommentWithMetadata)
+
 	builder := tableschema.NewSchemaBuilder()
 	builder.
 		Name(t.Name).
-		Comment(t.Description).
+		Comment(comment).
 		Lifecycle(t.Lifecycle).
 		TblProperties(t.TableProperties)
 
@@ -298,6 +321,6 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 	return nil
 }
 
-func NewTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcTable McTable, maskingPolicyHandle TableMaskingPolicyHandle) *TableHandle {
-	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcTable: mcTable, maskingPolicyHandle: maskingPolicyHandle}
+func NewTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcTable McTable, maskingPolicyHandle TableMaskingPolicyHandle, tableCommentWithMetadata bool) *TableHandle {
+	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcTable: mcTable, maskingPolicyHandle: maskingPolicyHandle, tableCommentWithMetadata: tableCommentWithMetadata}
 }

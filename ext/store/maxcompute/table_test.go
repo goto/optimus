@@ -101,7 +101,7 @@ func TestTableHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{"description": []string{"test create"}}
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
@@ -121,7 +121,7 @@ func TestTableHandle(t *testing.T) {
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -151,7 +151,7 @@ func TestTableHandle(t *testing.T) {
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -187,7 +187,7 @@ func TestTableHandle(t *testing.T) {
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -222,7 +222,7 @@ func TestTableHandle(t *testing.T) {
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -263,7 +263,7 @@ func TestTableHandle(t *testing.T) {
 			tableMaskingPolicyHandle.On("Process", tableName, mock.Anything).Return(nil)
 			defer tableMaskingPolicyHandle.AssertExpectations(t)
 
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -312,7 +312,7 @@ func TestTableHandle(t *testing.T) {
 			tableMaskingPolicyHandle.On("Process", tableName, mock.Anything).Return(nil)
 			defer tableMaskingPolicyHandle.AssertExpectations(t)
 
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -344,6 +344,46 @@ func TestTableHandle(t *testing.T) {
 			err = tableHandle.Create(res)
 			assert.Nil(t, err)
 		})
+
+		t.Run("return success when create table with metadata in comment", func(t *testing.T) {
+			table := new(mockMaxComputeTable)
+			table.On("Create", mock.MatchedBy(func(schema tableschema.TableSchema) bool {
+				return schema.Comment == fmt.Sprintf(`{"description":"%s","owner":"%s"}`, metadata.Description, metadata.Labels["owner"])
+			}), false, emptyStringMap, emptyStringMap).Return(nil)
+			defer table.AssertExpectations(t)
+
+			schema := new(mockMaxComputeSchema)
+			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
+			defer schema.AssertExpectations(t)
+
+			odpsIns := new(mockOdpsIns)
+			odpsIns.On("CurrentSchemaName").Return(schemaName)
+			defer odpsIns.AssertExpectations(t)
+
+			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
+			tableMaskingPolicyHandle.On("Process", tableName, mock.Anything).Return(nil)
+			defer tableMaskingPolicyHandle.AssertExpectations(t)
+
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, true)
+
+			spec := map[string]any{
+				"name":        tableName,
+				"database":    schemaName,
+				"project":     projectName,
+				"description": metadata.Description,
+				"schema": []map[string]any{
+					{
+						"name": "customer_id",
+						"type": "STRING",
+					},
+				},
+			}
+			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = tableHandle.Create(res)
+			assert.Nil(t, err)
+		})
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -351,7 +391,7 @@ func TestTableHandle(t *testing.T) {
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, nil, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, nil, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{"description": []string{"test update"}}
 			res, err := resource.NewResource(fullName, maxcompute.KindTable, mcStore, tnnt, &metadata, spec)
@@ -368,7 +408,7 @@ func TestTableHandle(t *testing.T) {
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -396,7 +436,7 @@ func TestTableHandle(t *testing.T) {
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":        tableName,
@@ -453,7 +493,7 @@ func TestTableHandle(t *testing.T) {
 			odpsIns.On("ExecSQlWithHints", mock.Anything, mock.Anything).Return(odpsInstance, fmt.Errorf("sql task is invalid"))
 			defer odpsIns.AssertExpectations(t)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":     tableName,
@@ -475,7 +515,7 @@ func TestTableHandle(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "failed to create sql task to update for "+fullName)
 		})
-		t.Run("returns error when view creation returns error", func(t *testing.T) {
+		t.Run("returns error when table creation returns error", func(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
 			defer table.AssertExpectations(t)
@@ -484,7 +524,7 @@ func TestTableHandle(t *testing.T) {
 			odpsIns.On("ExecSQlWithHints", mock.Anything, mock.Anything).Return(odpsInstance, nil)
 			defer odpsIns.AssertExpectations(t)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			spec := map[string]any{
 				"name":     tableName,
@@ -514,7 +554,7 @@ func TestTableHandle(t *testing.T) {
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			exists := tableHandle.Exists(tableName)
 			assert.False(t, exists)
@@ -526,7 +566,7 @@ func TestTableHandle(t *testing.T) {
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
 			tableMaskingPolicyHandle := new(mockTableMaskingPolicyHandle)
-			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle)
+			tableHandle := maxcompute.NewTableHandle(odpsIns, schema, table, tableMaskingPolicyHandle, false)
 
 			exists := tableHandle.Exists(tableName)
 			assert.True(t, exists)

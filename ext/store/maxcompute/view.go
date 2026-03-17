@@ -1,6 +1,8 @@
 package maxcompute
 
 import (
+	"encoding/json"
+	"maps"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
@@ -24,9 +26,10 @@ type ViewTable interface {
 }
 
 type ViewHandle struct {
-	viewSQLExecutor ViewSQLExecutor
-	viewSchema      ViewSchema
-	viewTable       ViewTable
+	viewSQLExecutor          ViewSQLExecutor
+	viewSchema               ViewSchema
+	viewTable                ViewTable
+	tableCommentWithMetadata bool
 }
 
 func (v ViewHandle) Create(res *resource.Resource) error {
@@ -39,7 +42,7 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
 
-	viewSchema := buildViewSchema(view)
+	viewSchema := buildViewSchema(view, res, v.tableCommentWithMetadata)
 	if err := v.viewTable.CreateViewWithHints(viewSchema, false, false, false, view.Hints); err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityView, "view already exists on maxcompute: "+view.FullName())
@@ -61,7 +64,7 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 		return errors.InternalError(EntityView, "error while get view on maxcompute", err)
 	}
 
-	viewSchema := buildViewSchema(view)
+	viewSchema := buildViewSchema(view, res, v.tableCommentWithMetadata)
 	if err := v.viewTable.CreateViewWithHints(viewSchema, true, false, false, view.Hints); err != nil {
 		return errors.InternalError(EntityView, "failed to update view "+res.FullName(), err)
 	}
@@ -74,10 +77,30 @@ func (v ViewHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func buildViewSchema(v *View) tableschema.TableSchema {
+func getViewComment(v *View, res *resource.Resource, withMetadata bool) string {
+	if !withMetadata {
+		return v.Description
+	}
+
+	comment := map[string]string{
+		"description": v.Description,
+	}
+	maps.Copy(comment, res.Metadata().Labels)
+
+	commentBytes, err := json.Marshal(comment)
+	if err != nil {
+		return v.Description
+	}
+
+	return string(commentBytes)
+}
+
+func buildViewSchema(v *View, res *resource.Resource, withMetadata bool) tableschema.TableSchema {
+	comment := getViewComment(v, res, withMetadata)
+
 	builder := tableschema.NewSchemaBuilder()
 	builder.Name(v.Name).
-		Comment(v.Description).
+		Comment(comment).
 		Lifecycle(v.Lifecycle).
 		IsVirtualView(true).
 		ViewText(v.ViewQuery)
@@ -85,6 +108,6 @@ func buildViewSchema(v *View) tableschema.TableSchema {
 	return builder.Build()
 }
 
-func NewViewHandle(viewSQLExecutor ViewSQLExecutor, viewSchema ViewSchema, viewTable ViewTable) *ViewHandle {
-	return &ViewHandle{viewSQLExecutor: viewSQLExecutor, viewSchema: viewSchema, viewTable: viewTable}
+func NewViewHandle(viewSQLExecutor ViewSQLExecutor, viewSchema ViewSchema, viewTable ViewTable, tableCommentWithMetadata bool) *ViewHandle {
+	return &ViewHandle{viewSQLExecutor: viewSQLExecutor, viewSchema: viewSchema, viewTable: viewTable, tableCommentWithMetadata: tableCommentWithMetadata}
 }

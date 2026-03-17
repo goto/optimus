@@ -45,28 +45,28 @@ func NewClient(svcAccount string) (*MaxComputeClient, error) {
 	return &MaxComputeClient{odpsIns}, nil
 }
 
-func (c *MaxComputeClient) TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle {
+func (c *MaxComputeClient) TableHandleFrom(projectSchema ProjectSchema, maskingPolicyHandle TableMaskingPolicyHandle, tableCommentWithMetadata bool) TableResourceHandle {
 	c.SetDefaultProjectName(projectSchema.Project)
 	c.SetCurrentSchemaName(projectSchema.Schema)
 	s := c.Schemas()
 	t := c.Tables()
-	return NewTableHandle(c, s, t, maskingPolicyHandle)
+	return NewTableHandle(c, s, t, maskingPolicyHandle, tableCommentWithMetadata)
 }
 
-func (c *MaxComputeClient) ExternalTableHandleFrom(projectSchema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle) TableResourceHandle {
+func (c *MaxComputeClient) ExternalTableHandleFrom(projectSchema ProjectSchema, getter TenantDetailsGetter, maskingPolicyHandle TableMaskingPolicyHandle, tableCommentWithMetadata bool) TableResourceHandle {
 	c.SetDefaultProjectName(projectSchema.Project)
 	c.SetCurrentSchemaName(projectSchema.Schema)
 	s := c.Schemas()
 	t := c.Tables()
-	return NewExternalTableHandle(c, s, t, getter, maskingPolicyHandle)
+	return NewExternalTableHandle(c, s, t, getter, maskingPolicyHandle, tableCommentWithMetadata)
 }
 
-func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema) TableResourceHandle {
+func (c *MaxComputeClient) ViewHandleFrom(projectSchema ProjectSchema, tableCommentWithMetadata bool) TableResourceHandle {
 	c.SetDefaultProjectName(projectSchema.Project)
 	c.SetCurrentSchemaName(projectSchema.Schema)
 	s := c.Schemas()
 	t := c.Tables()
-	return NewViewHandle(c, s, t)
+	return NewViewHandle(c, s, t, tableCommentWithMetadata)
 }
 
 func (c *MaxComputeClient) TableMaskingPolicyHandleFrom(projectSchema ProjectSchema, logger log.Logger) TableMaskingPolicyHandle {

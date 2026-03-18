@@ -1,8 +1,6 @@
 package maxcompute
 
 import (
-	"encoding/json"
-	"maps"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
@@ -41,8 +39,8 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 	if err := v.viewSchema.Create(v.viewSQLExecutor.CurrentSchemaName(), true, ""); err != nil {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
-
-	viewSchema := buildViewSchema(view, res, v.tableCommentWithMetadata)
+	comment := getResourceComment(view.Description, res, v.tableCommentWithMetadata)
+	viewSchema := buildViewSchema(view, comment)
 	if err := v.viewTable.CreateViewWithHints(viewSchema, false, false, false, view.Hints); err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityView, "view already exists on maxcompute: "+view.FullName())
@@ -63,8 +61,8 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 	if err != nil {
 		return errors.InternalError(EntityView, "error while get view on maxcompute", err)
 	}
-
-	viewSchema := buildViewSchema(view, res, v.tableCommentWithMetadata)
+	comment := getResourceComment(view.Description, res, v.tableCommentWithMetadata)
+	viewSchema := buildViewSchema(view, comment)
 	if err := v.viewTable.CreateViewWithHints(viewSchema, true, false, false, view.Hints); err != nil {
 		return errors.InternalError(EntityView, "failed to update view "+res.FullName(), err)
 	}
@@ -77,27 +75,7 @@ func (v ViewHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func getViewComment(v *View, res *resource.Resource, withMetadata bool) string {
-	if !withMetadata {
-		return v.Description
-	}
-
-	comment := map[string]string{
-		"description": v.Description,
-	}
-	maps.Copy(comment, res.Metadata().Labels)
-
-	commentBytes, err := json.Marshal(comment)
-	if err != nil {
-		return v.Description
-	}
-
-	return string(commentBytes)
-}
-
-func buildViewSchema(v *View, res *resource.Resource, withMetadata bool) tableschema.TableSchema {
-	comment := getViewComment(v, res, withMetadata)
-
+func buildViewSchema(v *View, comment string) tableschema.TableSchema {
 	builder := tableschema.NewSchemaBuilder()
 	builder.Name(v.Name).
 		Comment(comment).

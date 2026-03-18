@@ -1,7 +1,9 @@
 package maxcompute
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"strings"
 
@@ -325,6 +327,24 @@ func (f *Field) validateColumnMaskingPolicy() error {
 	}
 
 	return mu.ToErr()
+}
+
+func getResourceComment(description string, res *resource.Resource, withMetadata bool) string {
+	if !withMetadata {
+		return description
+	}
+
+	comment := map[string]string{
+		"description": description,
+	}
+	maps.Copy(comment, res.Metadata().Labels)
+
+	commentBytes, err := json.Marshal(comment)
+	if err != nil {
+		return description
+	}
+
+	return string(commentBytes)
 }
 
 func ConvertSpecTo[T any](res *resource.Resource) (*T, error) {

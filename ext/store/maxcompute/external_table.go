@@ -2,9 +2,7 @@ package maxcompute
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"maps"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
@@ -56,7 +54,8 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to get source location for "+et.FullName())
 	}
-	tSchema, err := buildExternalTableSchema(et, location, res, e.tableCommentWithMetadata)
+	comment := getResourceComment(et.Description, res, e.tableCommentWithMetadata)
+	tSchema, err := buildExternalTableSchema(et, location, comment)
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build external table schema to create for "+et.FullName())
 	}
@@ -190,27 +189,8 @@ func (e ExternalTableHandle) getLocation(ctx context.Context, et *ExternalTable,
 	}
 }
 
-func getExternalTableComment(t *ExternalTable, res *resource.Resource, withMetadata bool) string {
-	if !withMetadata {
-		return t.Description
-	}
-
-	comment := map[string]string{
-		"description": t.Description,
-	}
-	maps.Copy(comment, res.Metadata().Labels)
-
-	commentBytes, err := json.Marshal(comment)
-	if err != nil {
-		return t.Description
-	}
-
-	return string(commentBytes)
-}
-
-func buildExternalTableSchema(t *ExternalTable, location string, res *resource.Resource, withMetadata bool) (tableschema.TableSchema, error) {
+func buildExternalTableSchema(t *ExternalTable, location, comment string) (tableschema.TableSchema, error) {
 	handler := handlerForFormat(t.Source.ContentType)
-	comment := getExternalTableComment(t, res, withMetadata)
 
 	builder := tableschema.NewSchemaBuilder()
 	builder.

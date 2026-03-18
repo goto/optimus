@@ -1,9 +1,7 @@
 package maxcompute
 
 import (
-	"encoding/json"
 	"fmt"
-	"maps"
 	"strings"
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
@@ -58,7 +56,8 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
 
-	tableSchema, err := buildTableSchema(table, res, t.tableCommentWithMetadata)
+	comment := getResourceComment(table.Description, res, t.tableCommentWithMetadata)
+	tableSchema, err := buildTableSchema(table, comment)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+table.FullName())
 	}
@@ -95,8 +94,8 @@ func (t TableHandle) Update(res *resource.Resource) error {
 		table.Hints = make(map[string]string)
 	}
 	table.Hints["odps.sql.schema.evolution.json.enable"] = "true"
-
-	tableSchema, err := buildTableSchema(table, res, t.tableCommentWithMetadata)
+	comment := getResourceComment(table.Description, res, t.tableCommentWithMetadata)
+	tableSchema, err := buildTableSchema(table, comment)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to update for "+table.FullName())
 	}
@@ -130,27 +129,7 @@ func (t TableHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func getTableComment(t *Table, res *resource.Resource, withMetadata bool) string {
-	if !withMetadata {
-		return t.Description
-	}
-
-	comment := map[string]string{
-		"description": t.Description,
-	}
-	maps.Copy(comment, res.Metadata().Labels)
-
-	commentBytes, err := json.Marshal(comment)
-	if err != nil {
-		return t.Description
-	}
-
-	return string(commentBytes)
-}
-
-func buildTableSchema(t *Table, res *resource.Resource, tableCommentWithMetadata bool) (tableschema.TableSchema, error) {
-	comment := getTableComment(t, res, tableCommentWithMetadata)
-
+func buildTableSchema(t *Table, comment string) (tableschema.TableSchema, error) {
 	builder := tableschema.NewSchemaBuilder()
 	builder.
 		Name(t.Name).

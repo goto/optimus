@@ -41,7 +41,7 @@ func TestMaxComputeClient(t *testing.T) {
 			maskingPolicyHandle := client.TableMaskingPolicyHandleFrom(projectSchema, nil)
 			assert.Nil(t, err)
 
-			tableHandle := client.TableHandleFrom(projectSchema, maskingPolicyHandle)
+			tableHandle := client.TableHandleFrom(projectSchema, maskingPolicyHandle, false)
 			assert.NotNil(t, tableHandle)
 		})
 	})
@@ -53,7 +53,7 @@ func TestMaxComputeClient(t *testing.T) {
 			projectSchema, err := maxcompute.ProjectSchemaFrom("proj", "schema")
 			assert.Nil(t, err)
 
-			viewHandle := client.ViewHandleFrom(projectSchema)
+			viewHandle := client.ViewHandleFrom(projectSchema, false)
 			assert.NotNil(t, viewHandle)
 		})
 	})

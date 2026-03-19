@@ -7,6 +7,7 @@ import (
 
 	"github.com/aliyun/aliyun-odps-go-sdk/odps"
 	"github.com/aliyun/aliyun-odps-go-sdk/odps/account"
+	"github.com/aliyun/aliyun-odps-go-sdk/odps/tableschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -38,7 +39,7 @@ func TestViewHandle(t *testing.T) {
 			table := new(mockMaxComputeTable)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{"description": []string{"test create"}}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
@@ -57,7 +58,7 @@ func TestViewHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{
 				"name":        "test_view",
@@ -83,7 +84,7 @@ func TestViewHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{
 				"name":        "test_view",
@@ -109,7 +110,7 @@ func TestViewHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{
 				"name":        "test_view",
@@ -135,13 +136,40 @@ func TestViewHandle(t *testing.T) {
 			odpsIns := new(mockOdpsIns)
 			odpsIns.On("CurrentSchemaName").Return(schemaName)
 			defer odpsIns.AssertExpectations(t)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{
 				"name":        "test_view",
 				"database":    "schema",
 				"project":     "proj",
 				"description": "test create",
+				"view_query":  "select * from test_customer;",
+			}
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = viewHandle.Create(res)
+			assert.Nil(t, err)
+		})
+		t.Run("returns success when create view table with metadata in comment", func(t *testing.T) {
+			table := new(mockMaxComputeTable)
+			table.On("CreateViewWithHints", mock.MatchedBy(func(schema tableschema.TableSchema) bool {
+				return schema.Comment == fmt.Sprintf(`{"description":"%s","owner":"%s"}`, metadata.Description, metadata.Labels["owner"])
+			}), false, false, false, nilHints).Return(nil)
+			defer table.AssertExpectations(t)
+			schema := new(mockMaxComputeSchema)
+			schema.On("Create", schemaName, true, mock.Anything).Return(nil)
+			defer schema.AssertExpectations(t)
+			odpsIns := new(mockOdpsIns)
+			odpsIns.On("CurrentSchemaName").Return(schemaName)
+			defer odpsIns.AssertExpectations(t)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, true)
+
+			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
+				"description": metadata.Description,
 				"view_query":  "select * from test_customer;",
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
@@ -159,7 +187,7 @@ func TestViewHandle(t *testing.T) {
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{"description": "test update"}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
@@ -172,7 +200,7 @@ func TestViewHandle(t *testing.T) {
 		t.Run("returns error when cannot convert spec", func(t *testing.T) {
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, nil)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, nil, false)
 
 			spec := map[string]any{"description": []string{"test update"}}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
@@ -189,7 +217,7 @@ func TestViewHandle(t *testing.T) {
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{
 				"name":        "test_view",
@@ -212,13 +240,37 @@ func TestViewHandle(t *testing.T) {
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			spec := map[string]any{
 				"name":        "test_view",
 				"database":    "schema",
 				"project":     "proj",
 				"description": "test update",
+				"view_query":  "select * from test_customer",
+			}
+			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
+			assert.Nil(t, err)
+
+			err = viewHandle.Update(res)
+			assert.Nil(t, err)
+		})
+		t.Run("returns success when view update with metadata in comment", func(t *testing.T) {
+			table := new(mockMaxComputeTable)
+			table.On("BatchLoadTables", mock.Anything).Return(normalTables, nil)
+			table.On("CreateViewWithHints", mock.MatchedBy(func(schema tableschema.TableSchema) bool {
+				return schema.Comment == fmt.Sprintf(`{"description":"%s","owner":"%s"}`, metadata.Description, metadata.Labels["owner"])
+			}), true, false, false, nilHints).Return(nil)
+			defer table.AssertExpectations(t)
+			schema := new(mockMaxComputeSchema)
+			odpsIns := new(mockOdpsIns)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, true)
+
+			spec := map[string]any{
+				"name":        "test_view",
+				"database":    "schema",
+				"project":     "proj",
+				"description": metadata.Description,
 				"view_query":  "select * from test_customer",
 			}
 			res, err := resource.NewResource(fullName, maxcompute.KindView, mcStore, tnnt, &metadata, spec)
@@ -237,7 +289,7 @@ func TestViewHandle(t *testing.T) {
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			exists := viewHandle.Exists(tableName)
 			assert.False(t, exists)
@@ -249,7 +301,7 @@ func TestViewHandle(t *testing.T) {
 			defer table.AssertExpectations(t)
 			schema := new(mockMaxComputeSchema)
 			odpsIns := new(mockOdpsIns)
-			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table)
+			viewHandle := maxcompute.NewViewHandle(odpsIns, schema, table, false)
 
 			exists := viewHandle.Exists(tableName)
 			assert.True(t, exists)

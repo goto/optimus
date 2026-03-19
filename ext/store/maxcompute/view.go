@@ -24,9 +24,10 @@ type ViewTable interface {
 }
 
 type ViewHandle struct {
-	viewSQLExecutor ViewSQLExecutor
-	viewSchema      ViewSchema
-	viewTable       ViewTable
+	viewSQLExecutor          ViewSQLExecutor
+	viewSchema               ViewSchema
+	viewTable                ViewTable
+	tableCommentWithMetadata bool
 }
 
 func (v ViewHandle) Create(res *resource.Resource) error {
@@ -38,8 +39,8 @@ func (v ViewHandle) Create(res *resource.Resource) error {
 	if err := v.viewSchema.Create(v.viewSQLExecutor.CurrentSchemaName(), true, ""); err != nil {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
-
-	viewSchema := buildViewSchema(view)
+	comment := getResourceComment(view.Description, res, v.tableCommentWithMetadata)
+	viewSchema := buildViewSchema(view, comment)
 	if err := v.viewTable.CreateViewWithHints(viewSchema, false, false, false, view.Hints); err != nil {
 		if strings.Contains(err.Error(), "Table or view already exists") {
 			return errors.AlreadyExists(EntityView, "view already exists on maxcompute: "+view.FullName())
@@ -60,8 +61,8 @@ func (v ViewHandle) Update(res *resource.Resource) error {
 	if err != nil {
 		return errors.InternalError(EntityView, "error while get view on maxcompute", err)
 	}
-
-	viewSchema := buildViewSchema(view)
+	comment := getResourceComment(view.Description, res, v.tableCommentWithMetadata)
+	viewSchema := buildViewSchema(view, comment)
 	if err := v.viewTable.CreateViewWithHints(viewSchema, true, false, false, view.Hints); err != nil {
 		return errors.InternalError(EntityView, "failed to update view "+res.FullName(), err)
 	}
@@ -74,10 +75,10 @@ func (v ViewHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func buildViewSchema(v *View) tableschema.TableSchema {
+func buildViewSchema(v *View, comment string) tableschema.TableSchema {
 	builder := tableschema.NewSchemaBuilder()
 	builder.Name(v.Name).
-		Comment(v.Description).
+		Comment(comment).
 		Lifecycle(v.Lifecycle).
 		IsVirtualView(true).
 		ViewText(v.ViewQuery)
@@ -85,6 +86,6 @@ func buildViewSchema(v *View) tableschema.TableSchema {
 	return builder.Build()
 }
 
-func NewViewHandle(viewSQLExecutor ViewSQLExecutor, viewSchema ViewSchema, viewTable ViewTable) *ViewHandle {
-	return &ViewHandle{viewSQLExecutor: viewSQLExecutor, viewSchema: viewSchema, viewTable: viewTable}
+func NewViewHandle(viewSQLExecutor ViewSQLExecutor, viewSchema ViewSchema, viewTable ViewTable, tableCommentWithMetadata bool) *ViewHandle {
+	return &ViewHandle{viewSQLExecutor: viewSQLExecutor, viewSchema: viewSchema, viewTable: viewTable, tableCommentWithMetadata: tableCommentWithMetadata}
 }

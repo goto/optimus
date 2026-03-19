@@ -39,10 +39,11 @@ type TableMaskingPolicyHandle interface {
 }
 
 type TableHandle struct {
-	mcSQLExecutor       McSQLExecutor
-	mcSchema            McSchema
-	mcTable             McTable
-	maskingPolicyHandle TableMaskingPolicyHandle
+	mcSQLExecutor            McSQLExecutor
+	mcSchema                 McSchema
+	mcTable                  McTable
+	maskingPolicyHandle      TableMaskingPolicyHandle
+	tableCommentWithMetadata bool
 }
 
 func (t TableHandle) Create(res *resource.Resource) error {
@@ -55,7 +56,8 @@ func (t TableHandle) Create(res *resource.Resource) error {
 		return errors.InternalError(EntitySchema, "error while creating schema on maxcompute", err)
 	}
 
-	tableSchema, err := buildTableSchema(table)
+	comment := getResourceComment(table.Description, res, t.tableCommentWithMetadata)
+	tableSchema, err := buildTableSchema(table, comment)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to create for "+table.FullName())
 	}
@@ -92,8 +94,8 @@ func (t TableHandle) Update(res *resource.Resource) error {
 		table.Hints = make(map[string]string)
 	}
 	table.Hints["odps.sql.schema.evolution.json.enable"] = "true"
-
-	tableSchema, err := buildTableSchema(table)
+	comment := getResourceComment(table.Description, res, t.tableCommentWithMetadata)
+	tableSchema, err := buildTableSchema(table, comment)
 	if err != nil {
 		return errors.AddErrContext(err, EntityTable, "failed to build table schema to update for "+table.FullName())
 	}
@@ -127,11 +129,11 @@ func (t TableHandle) Exists(tableName string) bool {
 	return err == nil
 }
 
-func buildTableSchema(t *Table) (tableschema.TableSchema, error) {
+func buildTableSchema(t *Table, comment string) (tableschema.TableSchema, error) {
 	builder := tableschema.NewSchemaBuilder()
 	builder.
 		Name(t.Name).
-		Comment(t.Description).
+		Comment(comment).
 		Lifecycle(t.Lifecycle).
 		TblProperties(t.TableProperties)
 
@@ -298,6 +300,6 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 	return nil
 }
 
-func NewTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcTable McTable, maskingPolicyHandle TableMaskingPolicyHandle) *TableHandle {
-	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcTable: mcTable, maskingPolicyHandle: maskingPolicyHandle}
+func NewTableHandle(mcSQLExecutor McSQLExecutor, mcSchema McSchema, mcTable McTable, maskingPolicyHandle TableMaskingPolicyHandle, tableCommentWithMetadata bool) *TableHandle {
+	return &TableHandle{mcSQLExecutor: mcSQLExecutor, mcSchema: mcSchema, mcTable: mcTable, maskingPolicyHandle: maskingPolicyHandle, tableCommentWithMetadata: tableCommentWithMetadata}
 }

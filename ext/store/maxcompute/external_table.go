@@ -26,11 +26,12 @@ type McExternalTable interface {
 }
 
 type ExternalTableHandle struct {
-	mcSQLExecutor       McSQLExecutor
-	mcSchema            McSchema
-	mcExternalTable     McExternalTable
-	maskingPolicyHandle TableMaskingPolicyHandle
-	tenantDetailsGetter TenantDetailsGetter
+	mcSQLExecutor            McSQLExecutor
+	mcSchema                 McSchema
+	mcExternalTable          McExternalTable
+	maskingPolicyHandle      TableMaskingPolicyHandle
+	tenantDetailsGetter      TenantDetailsGetter
+	tableCommentWithMetadata bool
 }
 
 func addQuoteSerde(serdeProperties map[string]string) map[string]string {
@@ -53,7 +54,8 @@ func (e ExternalTableHandle) Create(res *resource.Resource) error {
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to get source location for "+et.FullName())
 	}
-	tSchema, err := buildExternalTableSchema(et, location)
+	comment := getResourceComment(et.Description, res, e.tableCommentWithMetadata)
+	tSchema, err := buildExternalTableSchema(et, location, comment)
 	if err != nil {
 		return errors.AddErrContext(err, EntityExternalTable, "failed to build external table schema to create for "+et.FullName())
 	}
@@ -138,13 +140,15 @@ func NewExternalTableHandle(
 	mcExternalTable McExternalTable,
 	getter TenantDetailsGetter,
 	maskingPolicyHandle TableMaskingPolicyHandle,
+	tableCommentWithMetadata bool,
 ) *ExternalTableHandle {
 	return &ExternalTableHandle{
-		mcSQLExecutor:       mcSQLExecutor,
-		mcSchema:            mcSchema,
-		mcExternalTable:     mcExternalTable,
-		tenantDetailsGetter: getter,
-		maskingPolicyHandle: maskingPolicyHandle,
+		mcSQLExecutor:            mcSQLExecutor,
+		mcSchema:                 mcSchema,
+		mcExternalTable:          mcExternalTable,
+		tenantDetailsGetter:      getter,
+		maskingPolicyHandle:      maskingPolicyHandle,
+		tableCommentWithMetadata: tableCommentWithMetadata,
 	}
 }
 
@@ -185,13 +189,13 @@ func (e ExternalTableHandle) getLocation(ctx context.Context, et *ExternalTable,
 	}
 }
 
-func buildExternalTableSchema(t *ExternalTable, location string) (tableschema.TableSchema, error) {
+func buildExternalTableSchema(t *ExternalTable, location, comment string) (tableschema.TableSchema, error) {
 	handler := handlerForFormat(t.Source.ContentType)
 
 	builder := tableschema.NewSchemaBuilder()
 	builder.
 		Name(t.Name).
-		Comment(t.Description).
+		Comment(comment).
 		StorageHandler(handler).
 		Location(location).
 		TblProperties(t.Source.TableProperties)

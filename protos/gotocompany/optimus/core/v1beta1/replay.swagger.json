@@ -102,9 +102,6 @@
                 },
                 "jobConfig": {
                   "type": "string"
-                },
-                "category": {
-                  "type": "string"
                 }
               }
             }
@@ -226,9 +223,6 @@
                   "type": "string"
                 },
                 "jobConfig": {
-                  "type": "string"
-                },
-                "category": {
                   "type": "string"
                 }
               }
@@ -427,9 +421,6 @@
           }
         },
         "description": {
-          "type": "string"
-        },
-        "category": {
           "type": "string"
         }
       }

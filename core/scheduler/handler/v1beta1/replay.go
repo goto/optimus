@@ -12,8 +12,6 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/models"
-	"github.com/goto/optimus/internal/utils"
 	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -36,7 +34,6 @@ type replayRequest interface {
 	GetJobConfig() string
 	GetParallel() bool
 	GetDescription() string
-	GetCategory() string
 }
 
 type ReplayHandler struct {
@@ -223,21 +220,7 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		}
 	}
 
-	allowedReplayCategories := utils.ListToMap(models.ReplayCategories)
-
-	if !utils.Contains(allowedReplayCategories, req.GetCategory()) {
-		err = fmt.Errorf("invalid category: %s, allowed categories are: DQ_FIX, BACKFILL, OTHERS", req.GetCategory())
-		l.Error(err.Error())
-		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
-	}
-
-	if strings.TrimSpace(req.GetDescription()) == "" {
-		err = fmt.Errorf("description cannot be empty")
-		l.Error(err.Error())
-		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
-	}
-
-	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription(), req.GetCategory())
+	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription())
 	if err != nil {
 		l.Error("error parsing job config: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse replay job config for "+req.GetJobName())
@@ -258,7 +241,6 @@ func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {
 			Parallel:    replay.Config().Parallel,
 			JobConfig:   replay.Config().JobConfig,
 			Description: replay.Config().Description,
-			Category:    replay.Config().Category,
 		},
 	}
 }

@@ -148,7 +148,7 @@ func (h ReplayHandler) GetReplayByApproverOrReplayID(ctx context.Context, replay
 		if err != nil {
 			if errors.IsErrorType(err, errors.ErrNotFound) {
 				h.l.Warn("replay with id [%s] is not found", id.String())
-				return nil, nil
+				return replay, nil
 			}
 			h.l.Error("error getting replay with id [%s]: %s", id.String(), err)
 			return nil, errors.GRPCErr(err, "unable to get replay for replayID "+replayID)
@@ -164,7 +164,7 @@ func (h ReplayHandler) GetReplayByApproverOrReplayID(ctx context.Context, replay
 		if err != nil {
 			if errors.IsErrorType(err, errors.ErrNotFound) {
 				h.l.Warn("replay with approver id [%s] is not found", approverID)
-				return nil, nil
+				return replay, nil
 			}
 			h.l.Error("error getting replay with approver id [%s]: %s", approverID, err)
 			return nil, errors.GRPCErr(err, "unable to get replay for approverID "+approverID)

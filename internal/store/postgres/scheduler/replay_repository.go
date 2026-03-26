@@ -489,10 +489,11 @@ func (r ReplayRepository) GetReplayRequestByID(ctx context.Context, replayID uui
 		JobConfig:   rr.JobConfig,
 		Parallel:    rr.Parallel,
 		Description: rr.Description,
+		Category:    rr.Category,
+		UserID:      rr.UserID,
+		ApproverID:  rr.ApproverID,
 	}
-	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message).
-		WithUserID(rr.UserID).
-		WithApproverID(rr.ApproverID)
+	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message)
 	return replay, nil
 }
 

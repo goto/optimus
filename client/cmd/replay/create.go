@@ -15,6 +15,9 @@ import (
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
+	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/utils"
+
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/config"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -132,6 +135,12 @@ func (r *createCommand) RunE(_ *cobra.Command, args []string) error {
 		endTime = args[2]
 	}
 
+	allowedReplayCategories := utils.ListToMap(models.ReplayCategories)
+
+	if !utils.Contains(allowedReplayCategories, r.category) {
+		return fmt.Errorf("invalid category: %s, allowed categories are: DQ_FIX, BACKFILL, OTHERS", r.category)
+	}
+
 	replayReq, err := r.createReplayRequest(jobName, startTime, endTime, r.jobConfig)
 	if err != nil {
 		return err
@@ -159,6 +168,7 @@ func convertReplayToReplayDryRunRequest(replayReq *pb.ReplayRequest) *pb.ReplayD
 		Parallel:      replayReq.GetParallel(),
 		Description:   replayReq.GetDescription(),
 		JobConfig:     replayReq.GetJobConfig(),
+		Category:      replayReq.GetCategory(),
 	}
 }
 

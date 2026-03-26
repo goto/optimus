@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/models"
 	"github.com/goto/optimus/internal/utils"
 	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
@@ -35,6 +36,7 @@ type replayRequest interface {
 	GetJobConfig() string
 	GetParallel() bool
 	GetDescription() string
+	GetCategory() string
 }
 
 type ReplayHandler struct {
@@ -278,7 +280,9 @@ func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {
 			Parallel:    replay.Config().Parallel,
 			JobConfig:   replay.Config().JobConfig,
 			Description: replay.Config().Description,
+			Category:    replay.Config().Category,
 		},
+		ApproverId: replay.Config().ApproverID,
 	}
 }
 

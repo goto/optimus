@@ -38,8 +38,8 @@ const (
 	RunState            = Operand(bitOnRunState)
 	StartDate           = Operand(bitOnStartDate)
 	EndDate             = Operand(bitOnEndDate)
-	ApproverID         = Operand(bitOnApproverID)
-	UserID             = Operand(bitOnUserID)
+	ApproverID          = Operand(bitOnApproverID)
+	UserID              = Operand(bitOnUserID)
 	TableName           = Operand(bitOnTableName)
 )
 

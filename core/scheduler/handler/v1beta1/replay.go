@@ -19,7 +19,7 @@ import (
 )
 
 type ReplayService interface {
-	CreateReplay(ctx context.Context, replay *scheduler.Replay) (replayID uuid.UUID, err error)
+	CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error)
 	GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error)
 	GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (replay *scheduler.ReplayWithRun, err error)
@@ -72,7 +72,7 @@ func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.R
 	}
 
 	// TODO: should convert from logical time
-	replayID, err := h.service.CreateReplay(ctx, replayReq)
+	replayID, err := h.service.CreateReplay(ctx, replayReq.Tenant(), replayReq.JobName(), replayReq.Config())
 	if err != nil {
 		h.l.Error("error creating replay for job [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, "unable to start replay for "+req.GetJobName())

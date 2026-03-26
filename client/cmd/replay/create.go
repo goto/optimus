@@ -15,11 +15,10 @@ import (
 	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
-	"github.com/goto/optimus/internal/models"
-	"github.com/goto/optimus/internal/utils"
-
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/internal/models"
+	"github.com/goto/optimus/internal/utils"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 

@@ -37,6 +37,8 @@ type replayRequest interface {
 	GetParallel() bool
 	GetDescription() string
 	GetCategory() string
+	GetApproverId() string
+	GetUserId() string
 }
 
 type ReplayHandler struct {
@@ -63,28 +65,9 @@ func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayDryRunReq
 	}, nil
 }
 
-func (h ReplayHandler) EnrichUserAndApprover(replayReq *scheduler.Replay, req *pb.ReplayRequest) error {
-	if strings.TrimSpace(req.GetApproverId()) == "" {
-		err := fmt.Errorf("approver ID cannot be empty")
-		h.l.Error(err.Error())
-		return errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+replayReq.JobName().String())
-	}
-	if strings.TrimSpace(req.GetUserId()) == "" {
-		err := fmt.Errorf("user ID cannot be empty")
-		h.l.Error(err.Error())
-		return errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+replayReq.JobName().String())
-	}
-	replayReq.Config().WithApproverID(req.GetApproverId()).WithUserID(req.GetUserId())
-	return nil
-}
-
 func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.ReplayResponse, error) {
 	replayReq, err := newReplayRequest(h.l, req)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := h.EnrichUserAndApprover(replayReq, req); err != nil {
 		return nil, err
 	}
 
@@ -234,6 +217,18 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		}
 	}
 
+	if strings.TrimSpace(req.GetApproverId()) == "" {
+		err := fmt.Errorf("approver ID cannot be empty")
+		l.Error(err.Error())
+		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
+	}
+
+	if strings.TrimSpace(req.GetUserId()) == "" {
+		err := fmt.Errorf("user ID cannot be empty")
+		l.Error(err.Error())
+		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
+	}
+
 	jobConfig := make(map[string]string)
 	if req.GetJobConfig() != "" {
 		jobConfig, err = parseJobConfig(req.GetJobConfig())
@@ -262,7 +257,10 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		req.GetParallel(),
 		jobConfig,
 		req.GetDescription(),
-		req.GetCategory())
+		req.GetCategory(),
+		req.GetApproverId(),
+		req.GetUserId(),
+	)
 
 	replayReq := scheduler.NewReplayRequest(jobName, replayTenant, replayConfig, scheduler.ReplayStateCreated)
 	return replayReq, nil

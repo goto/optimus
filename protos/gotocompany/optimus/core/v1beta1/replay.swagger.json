@@ -242,6 +242,12 @@
                 },
                 "category": {
                   "type": "string"
+                },
+                "approverId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
                 }
               }
             }

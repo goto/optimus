@@ -57,8 +57,7 @@ func (r *replayRequest) toSchedulerReplayRequest() (*scheduler.Replay, error) {
 	if err != nil {
 		return nil, err
 	}
-	conf := scheduler.NewReplayConfig(r.StartTime, r.EndTime, r.Parallel, r.JobConfig, r.Description, r.Category).WithUserID(r.UserID).
-		WithApproverID(r.ApproverID)
+	conf := scheduler.NewReplayConfig(r.StartTime, r.EndTime, r.Parallel, r.JobConfig, r.Description, r.Category, r.ApproverID, r.UserID)
 	replayStatus, err := scheduler.ReplayStateFromString(r.Status)
 	if err != nil {
 		return nil, err
@@ -144,7 +143,7 @@ func (r ReplayRepository) GetReplayRequestsByStatus(ctx context.Context, statusL
 	return replayReqs, nil
 }
 
-func (r ReplayRepository) GetReplayRequestsByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error) {
+func (r ReplayRepository) GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error) {
 	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE approver_id=$1`
 	row := r.db.QueryRow(ctx, getReplayRequest, approverID)
 	var rr replayRequest
@@ -198,14 +197,6 @@ func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName t
 		replayReqs = append(replayReqs, schedulerReplayReq)
 	}
 	return replayReqs, nil
-}
-
-func (r ReplayRepository) GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error) {
-	rr, err := r.GetReplayRequestsByApproverID(ctx, approverID)
-	if err != nil {
-		return nil, err
-	}
-	return rr, nil
 }
 
 func (r ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
@@ -361,7 +352,7 @@ func (r ReplayRepository) getReplayRequestWithFilters(ctx context.Context, proje
 	for rows.Next() {
 		var rr replayRequest
 		err = rows.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
-			&rr.Status, &rr.Message, &rr.CreatedAt, &rr.UpdatedAt)
+			&rr.Status, &rr.Message, &rr.Category, &rr.CreatedAt, &rr.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}

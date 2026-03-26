@@ -161,16 +161,6 @@ type ReplayConfig struct {
 	UserID      string
 }
 
-func NewReplayConfig(startTime, endTime time.Time, parallel bool, jobConfig map[string]string, description string, category string) *ReplayConfig {
-	return &ReplayConfig{StartTime: startTime.UTC(), EndTime: endTime.UTC(), Parallel: parallel, JobConfig: jobConfig, Description: description, Category: category}
-}
-
-func (r *ReplayConfig) WithApproverID(approverID string) *ReplayConfig {
-	r.ApproverID = approverID
-	return r
-}
-
-func (r *ReplayConfig) WithUserID(userID string) *ReplayConfig {
-	r.UserID = userID
-	return r
+func NewReplayConfig(startTime, endTime time.Time, parallel bool, jobConfig map[string]string, description, category, approverID, userID string) *ReplayConfig {
+	return &ReplayConfig{StartTime: startTime.UTC(), EndTime: endTime.UTC(), Parallel: parallel, JobConfig: jobConfig, Description: description, Category: category, ApproverID: approverID, UserID: userID}
 }

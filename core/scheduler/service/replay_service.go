@@ -47,7 +47,7 @@ type ReplayRepository interface {
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
-	// GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error)
+	GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error)
 }
 
 type TenantGetter interface {

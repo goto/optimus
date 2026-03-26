@@ -134,12 +134,7 @@ func TestReplayService(t *testing.T) {
 			tenantGetter := new(TenantGetter)
 			defer tenantGetter.AssertExpectations(t)
 
-<<<<<<< Updated upstream
-			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description)
-			replayConfigWithNamespaceConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{"EXECUTION_PROJECT": "example_project_from_namespace"}, description)
-=======
 			replayConfigWithNamespaceConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{"EXECUTION_PROJECT": "example_project_from_namespace"}, description, "")
->>>>>>> Stashed changes
 
 			scheduledTime1Str := "2023-01-03T12:00:00Z"
 			scheduledTime1, _ := time.Parse(scheduler.ISODateFormat, scheduledTime1Str)
@@ -182,12 +177,7 @@ func TestReplayService(t *testing.T) {
 			tenantGetter := new(TenantGetter)
 			defer tenantGetter.AssertExpectations(t)
 
-<<<<<<< Updated upstream
-			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description)
-
-=======
 			replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfig, scheduler.ReplayStateCreated)
->>>>>>> Stashed changes
 			internalErr := errors.New("internal error")
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
 			tenantGetter.On("GetDetails", ctx, tnnt).Return(nil, internalErr)
@@ -306,15 +296,9 @@ func TestReplayService(t *testing.T) {
 	})
 	t.Run("GetReplayList", func(t *testing.T) {
 		t.Run("should return replay list with no error", func(t *testing.T) {
-<<<<<<< Updated upstream
-			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description)
-			replay1 := scheduler.NewReplayRequest("sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress)
-			replay2 := scheduler.NewReplayRequest("sample-job-B", tnnt, replayConfig, scheduler.ReplayStateCreated)
-=======
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "")
 			replay1 := scheduler.NewReplayRequest("sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress).WithUserID("test-user").WithApproverID("test-approver")
 			replay2 := scheduler.NewReplayRequest("sample-job-B", tnnt, replayConfig, scheduler.ReplayStateCreated).WithUserID("test-user").WithApproverID("test-approver")
->>>>>>> Stashed changes
 			replay3 := scheduler.NewReplayRequest("sample-job-C", tnnt, replayConfig, scheduler.ReplayStateFailed)
 			replays := []*scheduler.Replay{replay1, replay2, replay3}
 			replayRepository := new(ReplayRepository)

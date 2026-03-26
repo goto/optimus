@@ -102,8 +102,6 @@
                 },
                 "jobConfig": {
                   "type": "string"
-<<<<<<< Updated upstream
-=======
                 },
                 "category": {
                   "type": "string"
@@ -113,7 +111,6 @@
                 },
                 "userId": {
                   "type": "string"
->>>>>>> Stashed changes
                 }
               }
             }
@@ -241,6 +238,9 @@
                   "type": "string"
                 },
                 "jobConfig": {
+                  "type": "string"
+                },
+                "category": {
                   "type": "string"
                 }
               }
@@ -445,6 +445,9 @@
           }
         },
         "description": {
+          "type": "string"
+        },
+        "category": {
           "type": "string"
         }
       }

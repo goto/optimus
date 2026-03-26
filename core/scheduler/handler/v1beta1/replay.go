@@ -12,6 +12,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/utils"
 	"github.com/goto/optimus/internal/utils/filter"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -239,13 +240,6 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		}
 	}
 
-<<<<<<< Updated upstream
-	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription())
-	if err != nil {
-		l.Error("error parsing job config: %s", err)
-		return nil, errors.GRPCErr(err, "unable to parse replay job config for "+req.GetJobName())
-	}
-=======
 	allowedReplayCategories := utils.ListToMap(models.ReplayCategories)
 
 	if !utils.Contains(allowedReplayCategories, req.GetCategory()) {
@@ -267,7 +261,6 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		jobConfig,
 		req.GetDescription(),
 		req.GetCategory())
->>>>>>> Stashed changes
 
 	replayReq := scheduler.NewReplayRequest(jobName, replayTenant, replayConfig, scheduler.ReplayStateCreated)
 	return replayReq, nil

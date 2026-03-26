@@ -156,8 +156,24 @@ type ReplayConfig struct {
 	Parallel    bool
 	JobConfig   map[string]string
 	Description string
+<<<<<<< Updated upstream
+=======
+	Category    string
+	ApproverID  string
+	UserID      string
+>>>>>>> Stashed changes
 }
 
 func NewReplayConfig(startTime, endTime time.Time, parallel bool, jobConfig map[string]string, description string) *ReplayConfig {
 	return &ReplayConfig{StartTime: startTime.UTC(), EndTime: endTime.UTC(), Parallel: parallel, JobConfig: jobConfig, Description: description}
+}
+
+func (r *ReplayConfig) WithApproverID(approverID string) *ReplayConfig {
+	r.ApproverID = approverID
+	return r
+}
+
+func (r *ReplayConfig) WithUserID(userID string) *ReplayConfig {
+	r.UserID = userID
+	return r
 }

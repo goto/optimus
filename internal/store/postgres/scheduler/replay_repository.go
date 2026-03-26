@@ -18,8 +18,13 @@ import (
 )
 
 const (
+<<<<<<< Updated upstream
 	replayColumnsToStore = `job_name, namespace_name, project_name, start_time, end_time, description, parallel, job_config, status, message`
 	replayColumns        = `id, ` + replayColumnsToStore + `, created_at, updated_at`
+=======
+	replayColumnsToStore = `job_name, namespace_name, project_name, start_time, end_time, description, parallel, job_config, status, message, category, approver_id, user_id`
+	replayColumns        = `id, job_name, namespace_name, project_name, start_time, end_time, description, parallel, job_config, status, message, category, approver_id, user_id, created_at, updated_at`
+>>>>>>> Stashed changes
 
 	replayRunColumns    = `replay_id, scheduled_at, status`
 	updateReplayRequest = `UPDATE replay_request SET status = $1, message = $2, updated_at = NOW() WHERE id = $3 and status <> 'cancelled'`
@@ -42,8 +47,10 @@ type replayRequest struct {
 	Parallel    bool
 	JobConfig   map[string]string
 
-	Status  string
-	Message string
+	Status     string
+	Message    string
+	ApproverID string
+	UserID     string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -54,7 +61,12 @@ func (r *replayRequest) toSchedulerReplayRequest() (*scheduler.Replay, error) {
 	if err != nil {
 		return nil, err
 	}
+<<<<<<< Updated upstream
 	conf := scheduler.NewReplayConfig(r.StartTime, r.EndTime, r.Parallel, r.JobConfig, r.Description)
+=======
+	conf := scheduler.NewReplayConfig(r.StartTime, r.EndTime, r.Parallel, r.JobConfig, r.Description, r.Category).WithUserID(r.UserID).
+		WithApproverID(r.ApproverID)
+>>>>>>> Stashed changes
 	replayStatus, err := scheduler.ReplayStateFromString(r.Status)
 	if err != nil {
 		return nil, err
@@ -128,7 +140,11 @@ func (r ReplayRepository) GetReplayRequestsByStatus(ctx context.Context, statusL
 	for rows.Next() {
 		var rr replayRequest
 		if err := rows.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+<<<<<<< Updated upstream
 			&rr.Status, &rr.Message, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+=======
+			&rr.Status, &rr.Message, &rr.Category, &rr.ApproverID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+>>>>>>> Stashed changes
 			return nil, errors.Wrap(scheduler.EntityJobRun, "unable to get the stored replay", err)
 		}
 		schedulerReplayReq, err := rr.toSchedulerReplayRequest()
@@ -138,6 +154,17 @@ func (r ReplayRepository) GetReplayRequestsByStatus(ctx context.Context, statusL
 		replayReqs = append(replayReqs, schedulerReplayReq)
 	}
 	return replayReqs, nil
+}
+
+func (r ReplayRepository) GetReplayRequestsByApproverID(ctx context.Context, approverID string) (*scheduler.Replay, error) {
+	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE approver_id=$1 `
+	row := r.db.QueryRow(ctx, getReplayRequest, approverID)
+	var rr replayRequest
+	if err := row.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+		&rr.Status, &rr.Message, &rr.Category, &rr.ApproverID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return rr.toSchedulerReplayRequest()
 }
 
 func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error) {
@@ -152,7 +179,11 @@ func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName t
 	for rows.Next() {
 		var rr replayRequest
 		if err := rows.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+<<<<<<< Updated upstream
 			&rr.Status, &rr.Message, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+=======
+			&rr.Status, &rr.Message, &rr.Category, &rr.ApproverID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+>>>>>>> Stashed changes
 			return nil, errors.Wrap(scheduler.EntityJobRun, "unable to get the stored replay", err)
 		}
 		schedulerReplayReq, err := rr.toSchedulerReplayRequest()
@@ -162,6 +193,14 @@ func (r ReplayRepository) GetReplaysByProject(ctx context.Context, projectName t
 		replayReqs = append(replayReqs, schedulerReplayReq)
 	}
 	return replayReqs, nil
+}
+
+func (r ReplayRepository) GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error) {
+	rr, err := r.GetReplayRequestsByApproverID(ctx, approverID)
+	if err != nil {
+		return nil, err
+	}
+	return rr, nil
 }
 
 func (r ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
@@ -243,7 +282,11 @@ func (r ReplayRepository) ScanAbandonedReplayRequests(ctx context.Context, unhan
 	for rows.Next() {
 		var rr replayRequest
 		if err := rows.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+<<<<<<< Updated upstream
 			&rr.Status, &rr.Message, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+=======
+			&rr.Status, &rr.Message, &rr.Category, &rr.ApproverID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+>>>>>>> Stashed changes
 			return nil, errors.Wrap(scheduler.EntityJobRun, "unable to get the stored replay", err)
 		}
 		schedulerReplayReq, err := rr.toSchedulerReplayRequest()
@@ -298,6 +341,14 @@ func (r ReplayRepository) getReplayRequestWithFilters(ctx context.Context, proje
 			return nil, err
 		}
 		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("status ='%s'", replayState))
+	}
+	if f.Contains(filter.ApproverID) {
+		approverID := f.GetStringValue(filter.ApproverID)
+		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("approver_id ='%s'", approverID))
+	}
+	if f.Contains(filter.UserID) {
+		userID := f.GetStringValue(filter.UserID)
+		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("user_id ='%s'", userID))
 	}
 	getReplayRequest := fmt.Sprintf(`SELECT %s FROM replay_request WHERE %s ORDER BY created_at`, replayColumns, strings.Join(filterQueryFragments, " AND "))
 
@@ -398,9 +449,15 @@ func (r ReplayRepository) UpdateReplayHeartbeat(ctx context.Context, id uuid.UUI
 }
 
 func (ReplayRepository) insertReplay(ctx context.Context, tx pgx.Tx, replay *scheduler.Replay) error {
+<<<<<<< Updated upstream
 	insertReplay := `INSERT INTO replay_request (` + replayColumnsToStore + `, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`
 	_, err := tx.Exec(ctx, insertReplay, replay.JobName().String(), replay.Tenant().NamespaceName(), replay.Tenant().ProjectName(),
 		replay.Config().StartTime, replay.Config().EndTime, replay.Config().Description, replay.Config().Parallel, replay.Config().JobConfig, replay.State(), replay.Message())
+=======
+	insertReplay := `INSERT INTO replay_request (` + replayColumnsToStore + `, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())`
+	_, err := tx.Exec(ctx, insertReplay, replay.JobName().String(), replay.Tenant().NamespaceName(), replay.Tenant().ProjectName(),
+		replay.Config().StartTime, replay.Config().EndTime, replay.Config().Description, replay.Config().Parallel, replay.Config().JobConfig, replay.State(), replay.Message(), replay.Config().Category, replay.ApproverID(), replay.UserID())
+>>>>>>> Stashed changes
 	if err != nil {
 		return errors.Wrap(scheduler.EntityJobRun, "unable to store replay", err)
 	}
@@ -412,7 +469,11 @@ func (ReplayRepository) getReplayRequest(ctx context.Context, tx pgx.Tx, replay 
 	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request where project_name = $1 and job_name = $2 and start_time = $3 and end_time = $4 order by created_at desc limit 1`
 	if err := tx.QueryRow(ctx, getReplayRequest, replay.Tenant().ProjectName(), replay.JobName().String(), replay.Config().StartTime, replay.Config().EndTime).
 		Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+<<<<<<< Updated upstream
 			&rr.Status, &rr.Message, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+=======
+			&rr.Status, &rr.Message, &rr.Category, &rr.ApproverID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt); err != nil {
+>>>>>>> Stashed changes
 		return rr, errors.Wrap(scheduler.EntityJobRun, "unable to get the stored replay", err)
 	}
 	return rr, nil
@@ -438,7 +499,9 @@ func (r ReplayRepository) GetReplayRequestByID(ctx context.Context, replayID uui
 		Parallel:    rr.Parallel,
 		Description: rr.Description,
 	}
-	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message)
+	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message).
+		WithUserID(rr.UserID).
+		WithApproverID(rr.ApproverID)
 	return replay, nil
 }
 
@@ -446,7 +509,11 @@ func (r ReplayRepository) getReplayRequestByID(ctx context.Context, replayID uui
 	var rr replayRequest
 	getReplayRequest := `SELECT ` + replayColumns + ` FROM replay_request WHERE id=$1`
 	err := r.db.QueryRow(ctx, getReplayRequest, replayID).Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+<<<<<<< Updated upstream
 		&rr.Status, &rr.Message, &rr.CreatedAt, &rr.UpdatedAt)
+=======
+		&rr.Status, &rr.Message, &rr.Category, &rr.ApproverID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt)
+>>>>>>> Stashed changes
 	if err != nil {
 		return rr, err
 	}

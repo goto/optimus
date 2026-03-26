@@ -219,6 +219,10 @@ func local_request_ReplayService_ListReplay_0(ctx context.Context, marshaler run
 
 }
 
+var (
+	filter_ReplayService_GetReplay_0 = &utilities.DoubleArray{Encoding: map[string]int{"project_name": 0, "replay_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+)
+
 func request_ReplayService_GetReplay_0(ctx context.Context, marshaler runtime.Marshaler, client ReplayServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq GetReplayRequest
 	var metadata runtime.ServerMetadata
@@ -248,6 +252,13 @@ func request_ReplayService_GetReplay_0(ctx context.Context, marshaler runtime.Ma
 	protoReq.ReplayId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "replay_id", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_ReplayService_GetReplay_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := client.GetReplay(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -286,10 +297,21 @@ func local_request_ReplayService_GetReplay_0(ctx context.Context, marshaler runt
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "replay_id", err)
 	}
 
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_ReplayService_GetReplay_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
 	msg, err := server.GetReplay(ctx, &protoReq)
 	return msg, metadata, err
 
 }
+
+var (
+	filter_ReplayService_CancelReplay_0 = &utilities.DoubleArray{Encoding: map[string]int{"project_name": 0, "replay_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+)
 
 func request_ReplayService_CancelReplay_0(ctx context.Context, marshaler runtime.Marshaler, client ReplayServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq CancelReplayRequest
@@ -320,6 +342,13 @@ func request_ReplayService_CancelReplay_0(ctx context.Context, marshaler runtime
 	protoReq.ReplayId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "replay_id", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_ReplayService_CancelReplay_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := client.CancelReplay(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -356,6 +385,13 @@ func local_request_ReplayService_CancelReplay_0(ctx context.Context, marshaler r
 	protoReq.ReplayId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "replay_id", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_ReplayService_CancelReplay_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := server.CancelReplay(ctx, &protoReq)

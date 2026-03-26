@@ -102,6 +102,18 @@
                 },
                 "jobConfig": {
                   "type": "string"
+<<<<<<< Updated upstream
+=======
+                },
+                "category": {
+                  "type": "string"
+                },
+                "approverId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+>>>>>>> Stashed changes
                 }
               }
             }
@@ -161,6 +173,12 @@
           },
           {
             "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "approverId",
             "in": "query",
             "required": false,
             "type": "string"
@@ -262,6 +280,12 @@
             "name": "replayId",
             "in": "path",
             "required": true,
+            "type": "string"
+          },
+          {
+            "name": "approverId",
+            "in": "query",
+            "required": false,
             "type": "string"
           }
         ],

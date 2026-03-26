@@ -47,6 +47,7 @@ type ReplayRepository interface {
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
+	// GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error)
 }
 
 type TenantGetter interface {
@@ -84,27 +85,27 @@ type ReplayService struct {
 	pluginToExecutionProjectKeyMap map[string]string
 }
 
-func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error) {
+func (r *ReplayService) CreateReplay(ctx context.Context, replayReq *scheduler.Replay) (replayID uuid.UUID, err error) {
+	t := replayReq.Tenant()
+	jobName := replayReq.JobName()
 	jobCron, err := getJobCron(ctx, r.logger, r.jobRepo, t, jobName)
 	if err != nil {
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return uuid.Nil, err
 	}
 
-	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, t, jobName, config)
+	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, t, jobName, replayReq.Config())
 	if err != nil {
 		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
 		return uuid.Nil, err
 	}
-	config.JobConfig = newConfig
-
-	replayReq := scheduler.NewReplayRequest(jobName, t, config, scheduler.ReplayStateCreated)
+	replayReq.Config().JobConfig = newConfig
 	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
 		r.logger.Error("error validating replay request: %s", err)
 		return uuid.Nil, err
 	}
 
-	runs := getExpectedRuns(jobCron, config.StartTime, config.EndTime)
+	runs := getExpectedRuns(jobCron, replayReq.Config().StartTime, replayReq.Config().EndTime)
 	replayID, err = r.replayRepo.RegisterReplay(ctx, replayReq, runs)
 	if err != nil {
 		return uuid.Nil, err
@@ -196,7 +197,16 @@ func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectN
 		}
 		return []*scheduler.ReplayWithRun{replay}, nil
 	}
-
+	if f.Contains(filter.ApproverID) {
+		r.logger.Debug("getting all replays by approverId [%s]", f.GetStringValue(filter.ApproverID))
+		approverID := f.GetStringValue(filter.ApproverID)
+		replay, err := r.replayRepo.GetReplayByApproverID(ctx, approverID)
+		if err != nil {
+			r.logger.Error("error getting replays by approver id [%s]: %s", approverID, err)
+			return nil, errors.GRPCErr(err, "unable to get replays for approverID "+approverID)
+		}
+		return []*scheduler.ReplayWithRun{replay}, nil
+	}
 	replayWithRuns, err := r.replayRepo.GetReplayByFilters(ctx, project, filters...)
 	if err != nil {
 		return nil, err
@@ -206,6 +216,15 @@ func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectN
 
 func (r *ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
 	replayWithRun, err := r.replayRepo.GetReplayByID(ctx, replayID)
+	if err != nil {
+		return nil, err
+	}
+	replayWithRun.Runs = scheduler.JobRunStatusList(replayWithRun.Runs).GetSortedRunsByScheduledAt()
+	return replayWithRun, nil
+}
+
+func (r *ReplayService) GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error) {
+	replayWithRun, err := r.replayRepo.GetReplayByApproverID(ctx, approverID)
 	if err != nil {
 		return nil, err
 	}

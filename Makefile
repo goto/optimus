@@ -5,7 +5,11 @@ NAME = "github.com/goto/optimus"
 LAST_COMMIT := $(shell git rev-parse --short HEAD)
 LAST_TAG := "$(shell git rev-list --tags --max-count=1)"
 OPMS_VERSION := "$(shell git describe --tags ${LAST_TAG})-next"
+<<<<<<< Updated upstream
 PROTON_COMMIT := "b95054a6983b21201141a46c8cb8ecc95e6cdf7d"
+=======
+PROTON_COMMIT := "1bc046e6091c8bb15c5354ec1ab8e5ad2a86b484"
+>>>>>>> Stashed changes
 
 
 .PHONY: build test test-ci generate-proto unit-test-ci integration-test vet coverage clean install lint

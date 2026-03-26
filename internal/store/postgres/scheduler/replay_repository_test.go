@@ -144,7 +144,40 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			assert.Len(t, replayReqs, 0)
 		})
 	})
+	t.Run("GetReplayRequestsByApproverID", func(t *testing.T) {
+		db := dbSetup()
+		replayRepo := postgres.NewReplayRepository(db)
 
+		replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "")
+		replayReq1 := scheduler.NewReplayRequest(jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress).WithUserID("user-1").WithApproverID("approver-1")
+		_, err := replayRepo.RegisterReplay(ctx, replayReq1, jobRunsAllPending)
+		assert.NoError(t, err)
+
+		replayReq, err := replayRepo.GetReplayRequestsByApproverID(ctx, "approver-1")
+		assert.NoError(t, err)
+		assert.NotNil(t, replayReq)
+		assert.Equal(t, "approver-1", replayReq.ApproverID())
+		assert.Equal(t, "user-1", replayReq.UserID())
+	})
+
+	t.Run("GetReplayRequestsByUserID", func(t *testing.T) {
+		db := dbSetup()
+		replayRepo := postgres.NewReplayRepository(db)
+
+		replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "")
+		replayReq1 := scheduler.NewReplayRequest(jobAName, tnnt, replayConfig, scheduler.ReplayStateInProgress).WithUserID("user-1").WithApproverID("approver-a")
+		replayReq2 := scheduler.NewReplayRequest(jobBName, tnnt, replayConfig, scheduler.ReplayStateCreated).WithUserID("user-1").WithApproverID("approver-b")
+		_, err = replayRepo.RegisterReplay(ctx, replayReq1, jobRunsAllPending)
+		assert.NoError(t, err)
+		_, err = replayRepo.RegisterReplay(ctx, replayReq2, jobRunsAllPending)
+		assert.NoError(t, err)
+
+		replayReqs, err := replayRepo.GetReplayRequestsByUserID(ctx, "user-1")
+		assert.NoError(t, err)
+		assert.Len(t, replayReqs, 2)
+		assert.Equal(t, "user-1", replayReqs[0].UserID())
+		assert.Equal(t, "user-1", replayReqs[1].UserID())
+	})
 	t.Run("GetReplayJobConfig", func(t *testing.T) {
 		t.Run("return replay task config when scheduledAt is provided", func(t *testing.T) {
 			db := dbSetup()

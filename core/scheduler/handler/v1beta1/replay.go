@@ -17,7 +17,7 @@ import (
 )
 
 type ReplayService interface {
-	CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error)
+	CreateReplay(ctx context.Context, replay *scheduler.Replay) (replayID uuid.UUID, err error)
 	GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error)
 	GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (replay *scheduler.ReplayWithRun, err error)
@@ -48,7 +48,6 @@ func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayDryRunReq
 	if err != nil {
 		return nil, err
 	}
-
 	// TODO: should convert from logical time
 	runs, err := h.service.GetRunsStatus(ctx, replayReq.Tenant(), replayReq.JobName(), replayReq.Config())
 	if err != nil {
@@ -61,14 +60,33 @@ func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayDryRunReq
 	}, nil
 }
 
+func (h ReplayHandler) EnrichUserAndApprover(replayReq *scheduler.Replay, req *pb.ReplayRequest) error {
+	if strings.TrimSpace(req.GetApproverId()) == "" {
+		err := fmt.Errorf("approver ID cannot be empty")
+		h.l.Error(err.Error())
+		return errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+replayReq.JobName().String())
+	}
+	if strings.TrimSpace(req.GetUserId()) == "" {
+		err := fmt.Errorf("user ID cannot be empty")
+		h.l.Error(err.Error())
+		return errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+replayReq.JobName().String())
+	}
+	replayReq.Config().WithApproverID(req.GetApproverId()).WithUserID(req.GetUserId())
+	return nil
+}
+
 func (h ReplayHandler) Replay(ctx context.Context, req *pb.ReplayRequest) (*pb.ReplayResponse, error) {
 	replayReq, err := newReplayRequest(h.l, req)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := h.EnrichUserAndApprover(replayReq, req); err != nil {
+		return nil, err
+	}
+
 	// TODO: should convert from logical time
-	replayID, err := h.service.CreateReplay(ctx, replayReq.Tenant(), replayReq.JobName(), replayReq.Config())
+	replayID, err := h.service.CreateReplay(ctx, replayReq)
 	if err != nil {
 		h.l.Error("error creating replay for job [%s]: %s", req.GetJobName(), err)
 		return nil, errors.GRPCErr(err, "unable to start replay for "+req.GetJobName())
@@ -110,6 +128,7 @@ func (h ReplayHandler) GetReplayDetails(ctx context.Context, req *pb.GetReplayDe
 		filter.WithTime(filter.ScheduledAt, req.GetScheduledAt().AsTime()),
 		filter.WithString(filter.ReplayID, req.GetReplayId()),
 		filter.WithString(filter.ReplayStatus, req.GetStatus()),
+		filter.WithString(filter.ApproverID, req.GetApproverId()),
 	)
 	if err != nil {
 		h.l.Error(fmt.Sprintf("error getting replays for req: %+v, err: %s", req, err.Error()))
@@ -220,13 +239,38 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		}
 	}
 
+<<<<<<< Updated upstream
 	replayConfig := scheduler.NewReplayConfig(req.GetStartTime().AsTime(), req.GetEndTime().AsTime(), req.GetParallel(), jobConfig, req.GetDescription())
 	if err != nil {
 		l.Error("error parsing job config: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse replay job config for "+req.GetJobName())
 	}
+=======
+	allowedReplayCategories := utils.ListToMap(models.ReplayCategories)
 
-	return scheduler.NewReplayRequest(jobName, replayTenant, replayConfig, scheduler.ReplayStateCreated), nil
+	if !utils.Contains(allowedReplayCategories, req.GetCategory()) {
+		err = fmt.Errorf("invalid category: %s, allowed categories are: DQ_FIX, BACKFILL, OTHERS", req.GetCategory())
+		l.Error(err.Error())
+		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
+	}
+
+	if strings.TrimSpace(req.GetDescription()) == "" {
+		err = fmt.Errorf("description cannot be empty")
+		l.Error(err.Error())
+		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
+	}
+
+	replayConfig := scheduler.NewReplayConfig(
+		req.GetStartTime().AsTime(),
+		req.GetEndTime().AsTime(),
+		req.GetParallel(),
+		jobConfig,
+		req.GetDescription(),
+		req.GetCategory())
+>>>>>>> Stashed changes
+
+	replayReq := scheduler.NewReplayRequest(jobName, replayTenant, replayConfig, scheduler.ReplayStateCreated)
+	return replayReq, nil
 }
 
 func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {

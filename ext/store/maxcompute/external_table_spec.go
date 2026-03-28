@@ -145,7 +145,7 @@ func (e ExternalSource) Validate() error {
 				"Found `Source.Type` `OSS`. For `Source.Type` `OSS`, server only reads from `Source.Location` or default locations configured in Project Config, `ext_location`")
 		}
 		return nil
-	case LarkSheet:
+	case LarkSheet, LarkDrive:
 		if len(e.SourceURIs) == 0 {
 			return errors.InvalidArgument(EntityExternalTable, "source uri list is empty")
 		}

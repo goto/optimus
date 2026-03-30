@@ -220,9 +220,12 @@ func (r ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUID)
 	replayConfig := scheduler.ReplayConfig{
 		StartTime:   rr.StartTime,
 		EndTime:     rr.EndTime,
-		JobConfig:   rr.JobConfig,
 		Parallel:    rr.Parallel,
+		JobConfig:   rr.JobConfig,
 		Description: rr.Description,
+		Category:    rr.Category,
+		ApproverID:  rr.ApproverID,
+		UserID:      rr.UserID,
 	}
 	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message)
 	replayRuns := make([]*scheduler.JobRunStatus, len(runs))

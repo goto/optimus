@@ -419,6 +419,9 @@
         },
         "approverId": {
           "type": "string"
+        },
+        "userId": {
+          "type": "string"
         }
       }
     },

@@ -22,8 +22,9 @@ type cancelCommand struct {
 
 	configFilePath string
 
-	projectName string
-	host        string
+	projectName   string
+	host          string
+	useApproverID bool
 }
 
 // CancelCommand cancel the corresponding replay
@@ -34,12 +35,12 @@ func CancelCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "cancel",
-		Short:   "Cancel replay using replay ID",
-		Long:    "This operation takes 1 argument, replayID [required] \nwhich UUID format ",
-		Example: "optimus replay cancel <replay_id>",
+		Short:   "Cancel replay using replay ID or approver ID",
+		Long:    "This operation takes 1 argument, ID [required]\nBy default the ID is used as replay_id. Use --approver-id flag to treat the ID as approver_id.",
+		Example: "optimus replay cancel <replay_id>\noptimus replay cancel <approver_id> --approver-id",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) < 1 {
-				return errors.New("replayID is required")
+				return errors.New("ID is required")
 			}
 			return nil
 		},
@@ -58,6 +59,7 @@ func (c *cancelCommand) injectFlags(cmd *cobra.Command) {
 	// Mandatory flags if config is not set
 	cmd.Flags().StringVarP(&c.projectName, "project-name", "p", "", "Name of the optimus project")
 	cmd.Flags().StringVar(&c.host, "host", "", "Optimus service endpoint url")
+	cmd.Flags().BoolVar(&c.useApproverID, "approver-id", false, "Treat the provided ID as approver_id instead of replay_id")
 }
 
 func (c *cancelCommand) PreRunE(cmd *cobra.Command, _ []string) error {
@@ -82,24 +84,29 @@ func (c *cancelCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 }
 
 func (c *cancelCommand) RunE(_ *cobra.Command, args []string) error {
-	replayID := args[0]
-	resp, err := c.cancelReplay(replayID)
+	id := args[0]
+	resp, err := c.cancelReplay(id)
 	if err != nil {
 		return err
 	}
-	result := c.stringifyReplayCancelResponse(replayID, resp)
+	result := c.stringifyReplayCancelResponse(id, resp)
 	c.logger.Info(result)
 	return nil
 }
 
-func (c *cancelCommand) cancelReplay(replayID string) (*pb.CancelReplayResponse, error) {
+func (c *cancelCommand) cancelReplay(id string) (*pb.CancelReplayResponse, error) {
 	conn, err := c.connection.Create(c.host)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	req := &pb.CancelReplayRequest{ReplayId: replayID}
+	var req *pb.CancelReplayRequest
+	if c.useApproverID {
+		req = &pb.CancelReplayRequest{ApproverId: id}
+	} else {
+		req = &pb.CancelReplayRequest{ReplayId: id}
+	}
 
 	replayService := pb.NewReplayServiceClient(conn)
 

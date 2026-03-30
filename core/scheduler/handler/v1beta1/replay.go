@@ -308,6 +308,7 @@ func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {
 			Category:    replay.Config().Category,
 		},
 		ApproverId: replay.Config().ApproverID,
+		UserId:     replay.Config().UserID,
 	}
 }
 

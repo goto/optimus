@@ -132,55 +132,24 @@ func (h ReplayHandler) GetReplayDetails(ctx context.Context, req *pb.GetReplayDe
 	}, nil
 }
 
-func (h ReplayHandler) GetReplayByApproverOrReplayID(ctx context.Context, replayID, approverID string) (*scheduler.ReplayWithRun, error) {
-	var replay *scheduler.ReplayWithRun
-	var err error
-
-	if replayID != "" {
-		id, parseErr := uuid.Parse(replayID)
-		if parseErr != nil {
-			h.l.Error("error parsing replay id [%s]: %s", replayID, parseErr)
-			err = errors.InvalidArgument(scheduler.EntityReplay, parseErr.Error())
-			return nil, errors.GRPCErr(err, "unable to get replay for replayID "+replayID)
-		}
-
-		replay, err = h.service.GetReplayByID(ctx, id)
-		if err != nil {
-			if errors.IsErrorType(err, errors.ErrNotFound) {
-				h.l.Warn("replay with id [%s] is not found", id.String())
-				return replay, nil
-			}
-			h.l.Error("error getting replay with id [%s]: %s", id.String(), err)
-			return nil, errors.GRPCErr(err, "unable to get replay for replayID "+replayID)
-		}
-	} else {
-		if approverID == "" {
-			err = errors.InvalidArgument(scheduler.EntityReplay, "either replay_id or approver_id must be provided")
-			h.l.Error(err.Error())
-			return nil, errors.GRPCErr(err, "unable to get replay")
-		}
-
-		replay, err = h.service.GetReplayByApproverID(ctx, approverID)
-		if err != nil {
-			if errors.IsErrorType(err, errors.ErrNotFound) {
-				h.l.Warn("replay with approver id [%s] is not found", approverID)
-				return replay, nil
-			}
-			h.l.Error("error getting replay with approver id [%s]: %s", approverID, err)
-			return nil, errors.GRPCErr(err, "unable to get replay for approverID "+approverID)
-		}
-	}
-	return replay, nil
-}
-
 func (h ReplayHandler) GetReplay(ctx context.Context, req *pb.GetReplayRequest) (*pb.GetReplayResponse, error) {
-	replay, err := h.GetReplayByApproverOrReplayID(ctx, req.GetReplayId(), req.GetApproverId())
+	id, err := uuid.Parse(req.GetReplayId())
 	if err != nil {
-		return nil, err
+		h.l.Error("error parsing replay id [%s]: %s", req.GetReplayId(), err)
+		err = errors.InvalidArgument(scheduler.EntityReplay, err.Error())
+		return nil, errors.GRPCErr(err, "unable to get replay for replayID "+req.GetReplayId())
 	}
-	if replay == nil {
-		return &pb.GetReplayResponse{}, nil
+
+	replay, err := h.service.GetReplayByID(ctx, id)
+	if err != nil {
+		if errors.IsErrorType(err, errors.ErrNotFound) {
+			h.l.Warn("replay with id [%s] is not found", id.String())
+			return &pb.GetReplayResponse{}, nil
+		}
+		h.l.Error("error getting replay with id [%s]: %s", id.String(), err)
+		return nil, errors.GRPCErr(err, "unable to get replay for replayID "+req.GetReplayId())
 	}
+
 	replayProto := replayToProto(replay.Replay)
 	replayProto.ReplayRuns = replayRunsToProto(replay.Runs)
 
@@ -188,12 +157,56 @@ func (h ReplayHandler) GetReplay(ctx context.Context, req *pb.GetReplayRequest) 
 }
 
 func (h ReplayHandler) CancelReplay(ctx context.Context, req *pb.CancelReplayRequest) (*pb.CancelReplayResponse, error) {
-	replay, err := h.GetReplayByApproverOrReplayID(ctx, req.GetReplayId(), req.GetApproverId())
+	id, err := uuid.Parse(req.GetReplayId())
+	if err != nil {
+		h.l.Error("error parsing replay id [%s]: %s", req.GetReplayId(), err)
+		err = errors.InvalidArgument(scheduler.EntityReplay, err.Error())
+		return nil, errors.GRPCErr(err, "unable to cancel replay "+req.GetReplayId())
+	}
+
+	replay, err := h.service.GetReplayByID(ctx, id)
+	if err != nil {
+		h.l.Error("error getting replay with id [%s]: %s", id.String(), err)
+		return nil, errors.GRPCErr(err, "unable to cancel replay "+req.GetReplayId())
+	}
+
+	err = h.service.CancelReplay(ctx, replay)
+	if err != nil {
+		h.l.Error("error cancelling replay [%s]: %s", id.String(), err)
+		return nil, errors.GRPCErr(err, "unable to cancel replay "+req.GetReplayId())
+	}
+
+	return &pb.CancelReplayResponse{
+		JobName:    replay.Replay.JobName().String(),
+		ReplayRuns: replayRunsToProto(replay.Runs),
+	}, nil
+}
+
+func (h ReplayHandler) CancelReplayByApproverID(ctx context.Context, req *pb.CancelReplayByApproverIDRequest) (*pb.CancelReplayByApproverIDResponse, error) {
+	approverID := req.GetApproverId()
+	var err error
+
+	if approverID == "" {
+		err = errors.InvalidArgument(scheduler.EntityReplay, "approver_id must be provided")
+		h.l.Error(err.Error())
+		return nil, errors.GRPCErr(err, "unable to get replay")
+	}
+
+	replay, err := h.service.GetReplayByApproverID(ctx, approverID)
+	if err != nil {
+		if errors.IsErrorType(err, errors.ErrNotFound) {
+			h.l.Warn("replay with approver id [%s] is not found", approverID)
+			return &pb.CancelReplayByApproverIDResponse{}, nil
+		}
+		h.l.Error("error getting replay with approver id [%s]: %s", approverID, err)
+		return nil, errors.GRPCErr(err, "unable to get replay for approverID "+approverID)
+	}
+
 	if err != nil {
 		return nil, errors.GRPCErr(err, "unable to cancel replay")
 	}
 	if replay == nil {
-		return &pb.CancelReplayResponse{}, errors.GRPCErr(errors.NotFound("Replay", "not found"), "unable to cancel replay")
+		return &pb.CancelReplayByApproverIDResponse{}, errors.GRPCErr(errors.NotFound("Replay", "not found"), "unable to cancel replay")
 	}
 
 	err = h.service.CancelReplay(ctx, replay)
@@ -202,10 +215,36 @@ func (h ReplayHandler) CancelReplay(ctx context.Context, req *pb.CancelReplayReq
 		return nil, errors.GRPCErr(err, "unable to cancel replay "+replay.Replay.ID().String())
 	}
 
-	return &pb.CancelReplayResponse{
+	return &pb.CancelReplayByApproverIDResponse{
 		JobName:    replay.Replay.JobName().String(),
 		ReplayRuns: replayRunsToProto(replay.Runs),
 	}, nil
+}
+
+func (h ReplayHandler) GetReplayByApproverID(ctx context.Context, req *pb.GetReplayByApproverIDRequest) (*pb.GetReplayByApproverIDResponse, error) {
+	approverID := req.GetApproverId()
+	var err error
+
+	if approverID == "" {
+		err = errors.InvalidArgument(scheduler.EntityReplay, "approver_id must be provided")
+		h.l.Error(err.Error())
+		return nil, errors.GRPCErr(err, "unable to get replay")
+	}
+
+	replay, err := h.service.GetReplayByApproverID(ctx, approverID)
+	if err != nil {
+		if errors.IsErrorType(err, errors.ErrNotFound) {
+			h.l.Warn("replay with approver id [%s] is not found", approverID)
+			return &pb.GetReplayByApproverIDResponse{}, nil
+		}
+		h.l.Error("error getting replay with approver id [%s]: %s", approverID, err)
+		return nil, errors.GRPCErr(err, "unable to get replay for approverID "+approverID)
+	}
+
+	replayProto := replayToApproverResponseProto(replay.Replay)
+	replayProto.ReplayRuns = replayRunsToProto(replay.Runs)
+
+	return replayProto, nil
 }
 
 func replayRunsToProto(runs []*scheduler.JobRunStatus) []*pb.ReplayRun {
@@ -295,6 +334,25 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 
 func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {
 	return &pb.GetReplayResponse{
+		Id:      replay.ID().String(),
+		JobName: replay.JobName().String(),
+		Status:  replay.State().String(),
+		Message: replay.Message(),
+		ReplayConfig: &pb.ReplayConfig{
+			StartTime:   timestamppb.New(replay.Config().StartTime),
+			EndTime:     timestamppb.New(replay.Config().EndTime),
+			Parallel:    replay.Config().Parallel,
+			JobConfig:   replay.Config().JobConfig,
+			Description: replay.Config().Description,
+			Category:    replay.Config().Category,
+		},
+		ApproverId: replay.Config().ApproverID,
+		UserId:     replay.Config().UserID,
+	}
+}
+
+func replayToApproverResponseProto(replay *scheduler.Replay) *pb.GetReplayByApproverIDResponse {
+	return &pb.GetReplayByApproverIDResponse{
 		Id:      replay.ID().String(),
 		JobName: replay.JobName().String(),
 		Status:  replay.State().String(),

@@ -85,12 +85,19 @@ func (c *cancelCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 
 func (c *cancelCommand) RunE(_ *cobra.Command, args []string) error {
 	id := args[0]
+	if c.useApproverID {
+		resp, err := c.cancelReplayByApproverID(id)
+		if err != nil {
+			return err
+		}
+		c.logger.Info(stringifyCancelResponse(id, resp.GetJobName(), resp.GetReplayRuns()))
+		return nil
+	}
 	resp, err := c.cancelReplay(id)
 	if err != nil {
 		return err
 	}
-	result := c.stringifyReplayCancelResponse(id, resp)
-	c.logger.Info(result)
+	c.logger.Info(stringifyCancelResponse(id, resp.GetJobName(), resp.GetReplayRuns()))
 	return nil
 }
 
@@ -101,29 +108,37 @@ func (c *cancelCommand) cancelReplay(id string) (*pb.CancelReplayResponse, error
 	}
 	defer conn.Close()
 
-	var req *pb.CancelReplayRequest
-	if c.useApproverID {
-		req = &pb.CancelReplayRequest{ApproverId: id}
-	} else {
-		req = &pb.CancelReplayRequest{ReplayId: id}
+	replayService := pb.NewReplayServiceClient(conn)
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
+	defer cancelFunc()
+
+	return replayService.CancelReplay(ctx, &pb.CancelReplayRequest{ReplayId: id})
+}
+
+func (c *cancelCommand) cancelReplayByApproverID(approverID string) (*pb.CancelReplayByApproverIDResponse, error) {
+	conn, err := c.connection.Create(c.host)
+	if err != nil {
+		return nil, err
 	}
+	defer conn.Close()
 
 	replayService := pb.NewReplayServiceClient(conn)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancelFunc()
 
-	return replayService.CancelReplay(ctx, req)
+	return replayService.CancelReplayByApproverID(ctx, &pb.CancelReplayByApproverIDRequest{ApproverId: approverID})
 }
 
-func (*cancelCommand) stringifyReplayCancelResponse(replayID string, resp *pb.CancelReplayResponse) string {
+func stringifyCancelResponse(id, jobName string, runs []*pb.ReplayRun) string {
 	buff := &bytes.Buffer{}
-	fmt.Fprintf(buff, "Job Name      : %s\n", resp.GetJobName())
-	fmt.Fprintf(buff, "Total Runs    : %d\n\n", len(resp.GetReplayRuns()))
-	if len(resp.GetReplayRuns()) > 0 {
+	fmt.Fprintf(buff, "Job Name      : %s\n", jobName)
+	fmt.Fprintf(buff, "Total Runs    : %d\n\n", len(runs))
+	if len(runs) > 0 {
 		header := []string{"scheduled at", "latest status"}
-		stringifyReplayRuns(buff, header, resp.GetReplayRuns())
+		stringifyReplayRuns(buff, header, runs)
 	}
-	fmt.Fprintf(buff, "\nReplay with ID %s has been cancelled.", replayID)
+	fmt.Fprintf(buff, "\nReplay with ID %s has been cancelled.", id)
 	return buff.String()
 }

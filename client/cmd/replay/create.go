@@ -253,7 +253,7 @@ func (r *createCommand) waitForReplayState(replayID string) error {
 }
 
 func (r *createCommand) getReplay(replayID string) (*pb.GetReplayResponse, error) {
-	return getReplay(r.host, replayID, false, r.connection)
+	return getReplay(r.host, replayID, r.connection)
 }
 
 func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, jobConfig string) (*pb.ReplayRequest, error) {

@@ -87,62 +87,84 @@ func (r *statusCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 
 func (r *statusCommand) RunE(_ *cobra.Command, args []string) error {
 	id := args[0]
+	if r.useApproverID {
+		resp, err := r.getReplayByApproverID(id)
+		if err != nil {
+			return err
+		}
+		r.logger.Info("Replay status for approver ID: %s", id)
+		r.logger.Info(stringifyReplayStatus(resp))
+		return nil
+	}
 	resp, err := r.getReplay(id)
 	if err != nil {
 		return err
 	}
-	result := stringifyReplayStatus(resp)
-	if r.useApproverID {
-		r.logger.Info("Replay status for approver ID: %s", id)
-	} else {
-		r.logger.Info("Replay status for replay ID: %s", id)
-	}
-	r.logger.Info(result)
+	r.logger.Info("Replay status for replay ID: %s", id)
+	r.logger.Info(stringifyReplayStatus(resp))
 	return nil
 }
 
 func (r *statusCommand) getReplay(id string) (*pb.GetReplayResponse, error) {
-	return getReplay(r.host, id, r.useApproverID, r.connection)
+	return getReplay(r.host, id, r.connection)
 }
 
-func getReplay(host, id string, useApproverID bool, connection connection.Connection) (*pb.GetReplayResponse, error) {
-	conn, err := connection.Create(host)
+func (r *statusCommand) getReplayByApproverID(approverID string) (*pb.GetReplayByApproverIDResponse, error) {
+	conn, err := r.connection.Create(r.host)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-
-	var req *pb.GetReplayRequest
-	if useApproverID {
-		req = &pb.GetReplayRequest{ApproverId: id}
-	} else {
-		req = &pb.GetReplayRequest{ReplayId: id}
-	}
 
 	replayService := pb.NewReplayServiceClient(conn)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancelFunc()
 
-	return replayService.GetReplay(ctx, req)
+	return replayService.GetReplayByApproverID(ctx, &pb.GetReplayByApproverIDRequest{ApproverId: approverID})
 }
 
-func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
+func getReplay(host, replayID string, connection connection.Connection) (*pb.GetReplayResponse, error) {
+	conn, err := connection.Create(host)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	replayService := pb.NewReplayServiceClient(conn)
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
+	defer cancelFunc()
+
+	return replayService.GetReplay(ctx, &pb.GetReplayRequest{ReplayId: replayID})
+}
+
+type replayStatusResponse interface {
+	GetJobName() string
+	GetStatus() string
+	GetReplayConfig() *pb.ReplayConfig
+	GetReplayRuns() []*pb.ReplayRun
+	GetMessage() string
+	GetApproverId() string
+	GetUserId() string
+}
+
+func stringifyReplayStatus(resp replayStatusResponse) string {
 	buff := &bytes.Buffer{}
 	mode := "sequential"
 	if resp.GetReplayConfig().GetParallel() {
 		mode = "parallel"
 	}
 	var message string
-	if resp.Message != "" {
-		message = fmt.Sprintf(" (%s)", resp.Message)
+	if resp.GetMessage() != "" {
+		message = fmt.Sprintf(" (%s)", resp.GetMessage())
 	}
 	fmt.Fprintf(buff, "_________________________________________________________\n")
 	fmt.Fprintf(buff, "| Job Name      : %s\n", resp.GetJobName())
 	fmt.Fprintf(buff, "| Replay Mode   : %s\n", mode)
-	fmt.Fprintf(buff, "| Description   : %s\n", resp.ReplayConfig.GetDescription())
-	fmt.Fprintf(buff, "| Start Date    : %s\n", resp.ReplayConfig.GetStartTime().AsTime().Format(time.RFC3339))
-	fmt.Fprintf(buff, "| End Date      : %s\n", resp.ReplayConfig.GetEndTime().AsTime().Format(time.RFC3339))
+	fmt.Fprintf(buff, "| Description   : %s\n", resp.GetReplayConfig().GetDescription())
+	fmt.Fprintf(buff, "| Start Date    : %s\n", resp.GetReplayConfig().GetStartTime().AsTime().Format(time.RFC3339))
+	fmt.Fprintf(buff, "| End Date      : %s\n", resp.GetReplayConfig().GetEndTime().AsTime().Format(time.RFC3339))
 	fmt.Fprintf(buff, "|--------------------------------------------------------\n")
 	fmt.Fprintf(buff, "| Description   : %s\n", resp.GetReplayConfig().GetDescription())
 	fmt.Fprintf(buff, "| Category      : %s\n", resp.GetReplayConfig().GetCategory())
@@ -154,8 +176,8 @@ func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	fmt.Fprintf(buff, "| Total Runs    : %d\n", len(resp.GetReplayRuns()))
 	fmt.Fprintf(buff, "---------------------------------------------------------\n")
 
-	if len(resp.ReplayConfig.GetJobConfig()) > 0 {
-		stringifyReplayConfig(buff, resp.ReplayConfig.GetJobConfig())
+	if len(resp.GetReplayConfig().GetJobConfig()) > 0 {
+		stringifyReplayConfig(buff, resp.GetReplayConfig().GetJobConfig())
 		buff.WriteString("\n")
 	}
 

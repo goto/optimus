@@ -22,9 +22,8 @@ type cancelCommand struct {
 
 	configFilePath string
 
-	projectName   string
-	host          string
-	useApproverID bool
+	projectName string
+	host        string
 }
 
 // CancelCommand cancel the corresponding replay
@@ -35,12 +34,12 @@ func CancelCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "cancel",
-		Short:   "Cancel replay using replay ID or approver ID",
-		Long:    "This operation takes 1 argument, ID [required]\nBy default the ID is used as replay_id. Use --approver-id flag to treat the ID as approver_id.",
-		Example: "optimus replay cancel <replay_id>\noptimus replay cancel <approver_id> --approver-id",
+		Short:   "Cancel replay using replay ID",
+		Long:    "This operation takes 1 argument, replayID [required] \nwhich UUID format ",
+		Example: "optimus replay cancel <replay_id>",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) < 1 {
-				return errors.New("ID is required")
+				return errors.New("replayID is required")
 			}
 			return nil
 		},
@@ -59,7 +58,6 @@ func (c *cancelCommand) injectFlags(cmd *cobra.Command) {
 	// Mandatory flags if config is not set
 	cmd.Flags().StringVarP(&c.projectName, "project-name", "p", "", "Name of the optimus project")
 	cmd.Flags().StringVar(&c.host, "host", "", "Optimus service endpoint url")
-	cmd.Flags().BoolVar(&c.useApproverID, "approver-id", false, "Treat the provided ID as approver_id instead of replay_id")
 }
 
 func (c *cancelCommand) PreRunE(cmd *cobra.Command, _ []string) error {
@@ -84,61 +82,41 @@ func (c *cancelCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 }
 
 func (c *cancelCommand) RunE(_ *cobra.Command, args []string) error {
-	id := args[0]
-	if c.useApproverID {
-		resp, err := c.cancelReplayByApproverID(id)
-		if err != nil {
-			return err
-		}
-		c.logger.Info(stringifyCancelResponse(id, resp.GetJobName(), resp.GetReplayRuns()))
-		return nil
-	}
-	resp, err := c.cancelReplay(id)
+	replayID := args[0]
+	resp, err := c.cancelReplay(replayID)
 	if err != nil {
 		return err
 	}
-	c.logger.Info(stringifyCancelResponse(id, resp.GetJobName(), resp.GetReplayRuns()))
+	result := c.stringifyReplayCancelResponse(replayID, resp)
+	c.logger.Info(result)
 	return nil
 }
 
-func (c *cancelCommand) cancelReplay(id string) (*pb.CancelReplayResponse, error) {
+func (c *cancelCommand) cancelReplay(replayID string) (*pb.CancelReplayResponse, error) {
 	conn, err := c.connection.Create(c.host)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	replayService := pb.NewReplayServiceClient(conn)
-
-	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
-	defer cancelFunc()
-
-	return replayService.CancelReplay(ctx, &pb.CancelReplayRequest{ReplayId: id})
-}
-
-func (c *cancelCommand) cancelReplayByApproverID(approverID string) (*pb.CancelReplayByApproverIDResponse, error) {
-	conn, err := c.connection.Create(c.host)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
+	req := &pb.CancelReplayRequest{ReplayId: replayID}
 
 	replayService := pb.NewReplayServiceClient(conn)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancelFunc()
 
-	return replayService.CancelReplayByApproverID(ctx, &pb.CancelReplayByApproverIDRequest{ApproverId: approverID})
+	return replayService.CancelReplay(ctx, req)
 }
 
-func stringifyCancelResponse(id, jobName string, runs []*pb.ReplayRun) string {
+func (*cancelCommand) stringifyReplayCancelResponse(replayID string, resp *pb.CancelReplayResponse) string {
 	buff := &bytes.Buffer{}
-	fmt.Fprintf(buff, "Job Name      : %s\n", jobName)
-	fmt.Fprintf(buff, "Total Runs    : %d\n\n", len(runs))
-	if len(runs) > 0 {
+	fmt.Fprintf(buff, "Job Name      : %s\n", resp.GetJobName())
+	fmt.Fprintf(buff, "Total Runs    : %d\n\n", len(resp.GetReplayRuns()))
+	if len(resp.GetReplayRuns()) > 0 {
 		header := []string{"scheduled at", "latest status"}
-		stringifyReplayRuns(buff, header, runs)
+		stringifyReplayRuns(buff, header, resp.GetReplayRuns())
 	}
-	fmt.Fprintf(buff, "\nReplay with ID %s has been cancelled.", id)
+	fmt.Fprintf(buff, "\nReplay with ID %s has been cancelled.", replayID)
 	return buff.String()
 }

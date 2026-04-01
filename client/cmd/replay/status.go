@@ -24,9 +24,8 @@ type statusCommand struct {
 
 	configFilePath string
 
-	projectName   string
-	host          string
-	useApproverID bool
+	projectName string
+	host        string
 }
 
 // StatusCommand get status for corresponding replay
@@ -37,12 +36,12 @@ func StatusCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "status",
-		Short:   "Get replay detailed status by replay ID or approver ID",
-		Long:    "This operation takes 1 argument, ID [required]\nBy default the ID is used as replay_id. Use --approver-id flag to treat the ID as approver_id.",
-		Example: "optimus replay status <replay_id>\noptimus replay status <approver_id> --approver-id",
+		Short:   "Get replay detailed status by replay ID",
+		Long:    "This operation takes 1 argument, replayID [required] \nwhich UUID format ",
+		Example: "optimus replay status <replay_id>",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) < 1 {
-				return errors.New("ID is required")
+				return errors.New("replayID is required")
 			}
 			return nil
 		},
@@ -61,7 +60,6 @@ func (r *statusCommand) injectFlags(cmd *cobra.Command) {
 	// Mandatory flags if config is not set
 	cmd.Flags().StringVarP(&r.projectName, "project-name", "p", "", "Name of the optimus project")
 	cmd.Flags().StringVar(&r.host, "host", "", "Optimus service endpoint url")
-	cmd.Flags().BoolVar(&r.useApproverID, "approver-id", false, "Treat the provided ID as approver_id instead of replay_id")
 }
 
 func (r *statusCommand) PreRunE(cmd *cobra.Command, _ []string) error {
@@ -86,42 +84,19 @@ func (r *statusCommand) PreRunE(cmd *cobra.Command, _ []string) error {
 }
 
 func (r *statusCommand) RunE(_ *cobra.Command, args []string) error {
-	id := args[0]
-	if r.useApproverID {
-		resp, err := r.getReplayByApproverID(id)
-		if err != nil {
-			return err
-		}
-		r.logger.Info("Replay status for approver ID: %s", id)
-		r.logger.Info(stringifyReplayStatus(resp))
-		return nil
-	}
-	resp, err := r.getReplay(id)
+	replayID := args[0]
+	resp, err := r.getReplay(replayID)
 	if err != nil {
 		return err
 	}
-	r.logger.Info("Replay status for replay ID: %s", id)
-	r.logger.Info(stringifyReplayStatus(resp))
+	result := stringifyReplayStatus(resp)
+	r.logger.Info("Replay status for replay ID: %s", replayID)
+	r.logger.Info(result)
 	return nil
 }
 
 func (r *statusCommand) getReplay(id string) (*pb.GetReplayResponse, error) {
 	return getReplay(r.host, id, r.connection)
-}
-
-func (r *statusCommand) getReplayByApproverID(approverID string) (*pb.GetReplayByApproverIDResponse, error) {
-	conn, err := r.connection.Create(r.host)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	replayService := pb.NewReplayServiceClient(conn)
-
-	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
-	defer cancelFunc()
-
-	return replayService.GetReplayByApproverID(ctx, &pb.GetReplayByApproverIDRequest{ApproverId: approverID})
 }
 
 func getReplay(host, replayID string, connection connection.Connection) (*pb.GetReplayResponse, error) {
@@ -131,25 +106,17 @@ func getReplay(host, replayID string, connection connection.Connection) (*pb.Get
 	}
 	defer conn.Close()
 
+	req := &pb.GetReplayRequest{ReplayId: replayID}
+
 	replayService := pb.NewReplayServiceClient(conn)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancelFunc()
 
-	return replayService.GetReplay(ctx, &pb.GetReplayRequest{ReplayId: replayID})
+	return replayService.GetReplay(ctx, req)
 }
 
-type replayStatusResponse interface {
-	GetJobName() string
-	GetStatus() string
-	GetReplayConfig() *pb.ReplayConfig
-	GetReplayRuns() []*pb.ReplayRun
-	GetMessage() string
-	GetApproverId() string
-	GetUserId() string
-}
-
-func stringifyReplayStatus(resp replayStatusResponse) string {
+func stringifyReplayStatus(resp *pb.GetReplayResponse) string {
 	buff := &bytes.Buffer{}
 	mode := "sequential"
 	if resp.GetReplayConfig().GetParallel() {
@@ -169,7 +136,7 @@ func stringifyReplayStatus(resp replayStatusResponse) string {
 	fmt.Fprintf(buff, "| Description   : %s\n", resp.GetReplayConfig().GetDescription())
 	fmt.Fprintf(buff, "| Category      : %s\n", resp.GetReplayConfig().GetCategory())
 	fmt.Fprintf(buff, "|--------------------------------------------------------\n")
-	fmt.Fprintf(buff, "| Approver ID   : %s\n", resp.GetApproverId())
+	fmt.Fprintf(buff, "| Approval ID   : %s\n", resp.GetApprovalId())
 	fmt.Fprintf(buff, "| User ID       : %s\n", resp.GetUserId())
 	fmt.Fprintf(buff, "|--------------------------------------------------------\n")
 	fmt.Fprintf(buff, "| Replay Status : %s%s\n", resp.GetStatus(), message)

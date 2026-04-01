@@ -165,7 +165,7 @@ func convertReplayToReplayDryRunRequest(replayReq *pb.ReplayRequest) *pb.ReplayD
 		Description:   replayReq.GetDescription(),
 		JobConfig:     replayReq.GetJobConfig(),
 		Category:      replayReq.GetCategory(),
-		ApproverId:    replayReq.GetApproverId(),
+		ApprovalId:    replayReq.GetApprovalId(),
 		UserId:        replayReq.GetUserId(),
 	}
 }
@@ -280,7 +280,7 @@ func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, j
 		Description:   r.description,
 		JobConfig:     jobConfig,
 		Category:      r.category,
-		ApproverId:    "Optimus CLI Direct",
+		ApprovalId:    "Optimus CLI Direct",
 		UserId:        r.userID,
 	}
 

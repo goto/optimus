@@ -49,7 +49,7 @@ type ReplayRepository interface {
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
 
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
-	GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error)
+	GetReplayByApprovalID(ctx context.Context, approvalID string) (*scheduler.ReplayWithRun, error)
 }
 
 type TenantGetter interface {
@@ -198,13 +198,13 @@ func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectN
 		}
 		return []*scheduler.ReplayWithRun{replay}, nil
 	}
-	if f.Contains(filter.ApproverID) {
-		r.logger.Debug("getting all replays by approverId [%s]", f.GetStringValue(filter.ApproverID))
-		approverID := f.GetStringValue(filter.ApproverID)
-		replay, err := r.replayRepo.GetReplayByApproverID(ctx, approverID)
+	if f.Contains(filter.ApprovalID) {
+		r.logger.Debug("getting all replays by approvalID [%s]", f.GetStringValue(filter.ApprovalID))
+		approvalID := f.GetStringValue(filter.ApprovalID)
+		replay, err := r.replayRepo.GetReplayByApprovalID(ctx, approvalID)
 		if err != nil {
-			r.logger.Error("error getting replays by approver id [%s]: %s", approverID, err)
-			return nil, errors.GRPCErr(err, "unable to get replays for approverID "+approverID)
+			r.logger.Error("error getting replays by approval id [%s]: %s", approvalID, err)
+			return nil, errors.GRPCErr(err, "unable to get replays for approvalID "+approvalID)
 		}
 		return []*scheduler.ReplayWithRun{replay}, nil
 	}
@@ -224,8 +224,8 @@ func (r *ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (
 	return replayWithRun, nil
 }
 
-func (r *ReplayService) GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error) {
-	replayWithRun, err := r.replayRepo.GetReplayByApproverID(ctx, approverID)
+func (r *ReplayService) GetReplayByApprovalID(ctx context.Context, approvalID string) (*scheduler.ReplayWithRun, error) {
+	replayWithRun, err := r.replayRepo.GetReplayByApprovalID(ctx, approvalID)
 	if err != nil {
 		return nil, err
 	}

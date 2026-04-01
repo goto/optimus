@@ -106,7 +106,7 @@
                 "category": {
                   "type": "string"
                 },
-                "approverId": {
+                "approvalId": {
                   "type": "string"
                 },
                 "userId": {
@@ -175,7 +175,7 @@
             "type": "string"
           },
           {
-            "name": "approverId",
+            "name": "approvalId",
             "in": "query",
             "required": false,
             "type": "string"
@@ -243,7 +243,7 @@
                 "category": {
                   "type": "string"
                 },
-                "approverId": {
+                "approvalId": {
                   "type": "string"
                 },
                 "userId": {
@@ -251,78 +251,6 @@
                 }
               }
             }
-          }
-        ],
-        "tags": [
-          "ReplayService"
-        ]
-      }
-    },
-    "/v1beta1/project/{projectName}/replay/approver/{approverId}": {
-      "get": {
-        "operationId": "ReplayService_GetReplayByApproverID",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1GetReplayByApproverIDResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "approverId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ReplayService"
-        ]
-      }
-    },
-    "/v1beta1/project/{projectName}/replay/approver/{approverId}/cancel": {
-      "put": {
-        "operationId": "ReplayService_CancelReplayByApproverID",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1CancelReplayByApproverIDResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "approverId",
-            "in": "path",
-            "required": true,
-            "type": "string"
           }
         ],
         "tags": [
@@ -434,20 +362,6 @@
         }
       }
     },
-    "v1beta1CancelReplayByApproverIDResponse": {
-      "type": "object",
-      "properties": {
-        "jobName": {
-          "type": "string"
-        },
-        "replayRuns": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1beta1ReplayRun"
-          }
-        }
-      }
-    },
     "v1beta1CancelReplayResponse": {
       "type": "object",
       "properties": {
@@ -459,38 +373,6 @@
           "items": {
             "$ref": "#/definitions/v1beta1ReplayRun"
           }
-        }
-      }
-    },
-    "v1beta1GetReplayByApproverIDResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "jobName": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "replayConfig": {
-          "$ref": "#/definitions/v1beta1ReplayConfig"
-        },
-        "replayRuns": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1beta1ReplayRun"
-          }
-        },
-        "message": {
-          "type": "string"
-        },
-        "approverId": {
-          "type": "string"
-        },
-        "userId": {
-          "type": "string"
         }
       }
     },
@@ -529,7 +411,7 @@
         "message": {
           "type": "string"
         },
-        "approverId": {
+        "approvalId": {
           "type": "string"
         },
         "userId": {

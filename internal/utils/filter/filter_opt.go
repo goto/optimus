@@ -20,7 +20,7 @@ const (
 	bitOnRunState            uint64 = 1 << 9
 	bitOnStartDate           uint64 = 1 << 10
 	bitOnEndDate             uint64 = 1 << 11
-	bitOnApproverID          uint64 = 1 << 12
+	bitOnApprovalID          uint64 = 1 << 12
 	bitOnUserID              uint64 = 1 << 13
 	bitOnTableName           uint64 = 1 << 14
 )
@@ -38,7 +38,7 @@ const (
 	RunState            = Operand(bitOnRunState)
 	StartDate           = Operand(bitOnStartDate)
 	EndDate             = Operand(bitOnEndDate)
-	ApproverID          = Operand(bitOnApproverID)
+	ApprovalID          = Operand(bitOnApprovalID)
 	UserID              = Operand(bitOnUserID)
 	TableName           = Operand(bitOnTableName)
 )

@@ -27,8 +27,6 @@ type ReplayServiceClient interface {
 	ListReplay(ctx context.Context, in *ListReplayRequest, opts ...grpc.CallOption) (*ListReplayResponse, error)
 	GetReplay(ctx context.Context, in *GetReplayRequest, opts ...grpc.CallOption) (*GetReplayResponse, error)
 	CancelReplay(ctx context.Context, in *CancelReplayRequest, opts ...grpc.CallOption) (*CancelReplayResponse, error)
-	GetReplayByApproverID(ctx context.Context, in *GetReplayByApproverIDRequest, opts ...grpc.CallOption) (*GetReplayByApproverIDResponse, error)
-	CancelReplayByApproverID(ctx context.Context, in *CancelReplayByApproverIDRequest, opts ...grpc.CallOption) (*CancelReplayByApproverIDResponse, error)
 	GetReplayDetails(ctx context.Context, in *GetReplayDetailsRequest, opts ...grpc.CallOption) (*GetReplayDetailsResponse, error)
 }
 
@@ -85,24 +83,6 @@ func (c *replayServiceClient) CancelReplay(ctx context.Context, in *CancelReplay
 	return out, nil
 }
 
-func (c *replayServiceClient) GetReplayByApproverID(ctx context.Context, in *GetReplayByApproverIDRequest, opts ...grpc.CallOption) (*GetReplayByApproverIDResponse, error) {
-	out := new(GetReplayByApproverIDResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ReplayService/GetReplayByApproverID", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *replayServiceClient) CancelReplayByApproverID(ctx context.Context, in *CancelReplayByApproverIDRequest, opts ...grpc.CallOption) (*CancelReplayByApproverIDResponse, error) {
-	out := new(CancelReplayByApproverIDResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ReplayService/CancelReplayByApproverID", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *replayServiceClient) GetReplayDetails(ctx context.Context, in *GetReplayDetailsRequest, opts ...grpc.CallOption) (*GetReplayDetailsResponse, error) {
 	out := new(GetReplayDetailsResponse)
 	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ReplayService/GetReplayDetails", in, out, opts...)
@@ -121,8 +101,6 @@ type ReplayServiceServer interface {
 	ListReplay(context.Context, *ListReplayRequest) (*ListReplayResponse, error)
 	GetReplay(context.Context, *GetReplayRequest) (*GetReplayResponse, error)
 	CancelReplay(context.Context, *CancelReplayRequest) (*CancelReplayResponse, error)
-	GetReplayByApproverID(context.Context, *GetReplayByApproverIDRequest) (*GetReplayByApproverIDResponse, error)
-	CancelReplayByApproverID(context.Context, *CancelReplayByApproverIDRequest) (*CancelReplayByApproverIDResponse, error)
 	GetReplayDetails(context.Context, *GetReplayDetailsRequest) (*GetReplayDetailsResponse, error)
 	mustEmbedUnimplementedReplayServiceServer()
 }
@@ -145,12 +123,6 @@ func (UnimplementedReplayServiceServer) GetReplay(context.Context, *GetReplayReq
 }
 func (UnimplementedReplayServiceServer) CancelReplay(context.Context, *CancelReplayRequest) (*CancelReplayResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelReplay not implemented")
-}
-func (UnimplementedReplayServiceServer) GetReplayByApproverID(context.Context, *GetReplayByApproverIDRequest) (*GetReplayByApproverIDResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetReplayByApproverID not implemented")
-}
-func (UnimplementedReplayServiceServer) CancelReplayByApproverID(context.Context, *CancelReplayByApproverIDRequest) (*CancelReplayByApproverIDResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CancelReplayByApproverID not implemented")
 }
 func (UnimplementedReplayServiceServer) GetReplayDetails(context.Context, *GetReplayDetailsRequest) (*GetReplayDetailsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReplayDetails not implemented")
@@ -258,42 +230,6 @@ func _ReplayService_CancelReplay_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ReplayService_GetReplayByApproverID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetReplayByApproverIDRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReplayServiceServer).GetReplayByApproverID(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.ReplayService/GetReplayByApproverID",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReplayServiceServer).GetReplayByApproverID(ctx, req.(*GetReplayByApproverIDRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ReplayService_CancelReplayByApproverID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CancelReplayByApproverIDRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReplayServiceServer).CancelReplayByApproverID(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.ReplayService/CancelReplayByApproverID",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReplayServiceServer).CancelReplayByApproverID(ctx, req.(*CancelReplayByApproverIDRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ReplayService_GetReplayDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetReplayDetailsRequest)
 	if err := dec(in); err != nil {
@@ -338,14 +274,6 @@ var ReplayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelReplay",
 			Handler:    _ReplayService_CancelReplay_Handler,
-		},
-		{
-			MethodName: "GetReplayByApproverID",
-			Handler:    _ReplayService_GetReplayByApproverID_Handler,
-		},
-		{
-			MethodName: "CancelReplayByApproverID",
-			Handler:    _ReplayService_CancelReplayByApproverID_Handler,
 		},
 		{
 			MethodName: "GetReplayDetails",

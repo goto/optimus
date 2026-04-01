@@ -23,7 +23,7 @@ type ReplayService interface {
 	GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error)
 	GetByFilter(ctx context.Context, project tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (replay *scheduler.ReplayWithRun, err error)
-	GetReplayByApproverID(ctx context.Context, approverID string) (*scheduler.ReplayWithRun, error)
+	GetReplayByApprovalID(ctx context.Context, approvalID string) (*scheduler.ReplayWithRun, error)
 	GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (runs []*scheduler.JobRunStatus, err error)
 	CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error
 }
@@ -38,7 +38,7 @@ type replayRequest interface {
 	GetParallel() bool
 	GetDescription() string
 	GetCategory() string
-	GetApproverId() string
+	GetApprovalId() string
 	GetUserId() string
 }
 
@@ -115,7 +115,7 @@ func (h ReplayHandler) GetReplayDetails(ctx context.Context, req *pb.GetReplayDe
 		filter.WithTime(filter.ScheduledAt, req.GetScheduledAt().AsTime()),
 		filter.WithString(filter.ReplayID, req.GetReplayId()),
 		filter.WithString(filter.ReplayStatus, req.GetStatus()),
-		filter.WithString(filter.ApproverID, req.GetApproverId()),
+		filter.WithString(filter.ApprovalID, req.GetApprovalId()),
 	)
 	if err != nil {
 		h.l.Error(fmt.Sprintf("error getting replays for req: %+v, err: %s", req, err.Error()))
@@ -182,71 +182,6 @@ func (h ReplayHandler) CancelReplay(ctx context.Context, req *pb.CancelReplayReq
 	}, nil
 }
 
-func (h ReplayHandler) CancelReplayByApproverID(ctx context.Context, req *pb.CancelReplayByApproverIDRequest) (*pb.CancelReplayByApproverIDResponse, error) {
-	approverID := req.GetApproverId()
-	var err error
-
-	if approverID == "" {
-		err = errors.InvalidArgument(scheduler.EntityReplay, "approver_id must be provided")
-		h.l.Error(err.Error())
-		return nil, errors.GRPCErr(err, "unable to get replay")
-	}
-
-	replay, err := h.service.GetReplayByApproverID(ctx, approverID)
-	if err != nil {
-		if errors.IsErrorType(err, errors.ErrNotFound) {
-			h.l.Warn("replay with approver id [%s] is not found", approverID)
-			return &pb.CancelReplayByApproverIDResponse{}, nil
-		}
-		h.l.Error("error getting replay with approver id [%s]: %s", approverID, err)
-		return nil, errors.GRPCErr(err, "unable to get replay for approverID "+approverID)
-	}
-
-	if err != nil {
-		return nil, errors.GRPCErr(err, "unable to cancel replay")
-	}
-	if replay == nil {
-		return &pb.CancelReplayByApproverIDResponse{}, errors.GRPCErr(errors.NotFound("Replay", "not found"), "unable to cancel replay")
-	}
-
-	err = h.service.CancelReplay(ctx, replay)
-	if err != nil {
-		h.l.Error("error cancelling replay [%s]: %s", replay.Replay.ID().String(), err)
-		return nil, errors.GRPCErr(err, "unable to cancel replay "+replay.Replay.ID().String())
-	}
-
-	return &pb.CancelReplayByApproverIDResponse{
-		JobName:    replay.Replay.JobName().String(),
-		ReplayRuns: replayRunsToProto(replay.Runs),
-	}, nil
-}
-
-func (h ReplayHandler) GetReplayByApproverID(ctx context.Context, req *pb.GetReplayByApproverIDRequest) (*pb.GetReplayByApproverIDResponse, error) {
-	approverID := req.GetApproverId()
-	var err error
-
-	if approverID == "" {
-		err = errors.InvalidArgument(scheduler.EntityReplay, "approver_id must be provided")
-		h.l.Error(err.Error())
-		return nil, errors.GRPCErr(err, "unable to get replay")
-	}
-
-	replay, err := h.service.GetReplayByApproverID(ctx, approverID)
-	if err != nil {
-		if errors.IsErrorType(err, errors.ErrNotFound) {
-			h.l.Warn("replay with approver id [%s] is not found", approverID)
-			return &pb.GetReplayByApproverIDResponse{}, nil
-		}
-		h.l.Error("error getting replay with approver id [%s]: %s", approverID, err)
-		return nil, errors.GRPCErr(err, "unable to get replay for approverID "+approverID)
-	}
-
-	replayProto := replayToApproverResponseProto(replay.Replay)
-	replayProto.ReplayRuns = replayRunsToProto(replay.Runs)
-
-	return replayProto, nil
-}
-
 func replayRunsToProto(runs []*scheduler.JobRunStatus) []*pb.ReplayRun {
 	runsProto := make([]*pb.ReplayRun, len(runs))
 	for i, run := range runs {
@@ -283,8 +218,8 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		}
 	}
 
-	if strings.TrimSpace(req.GetApproverId()) == "" {
-		err := fmt.Errorf("approver ID cannot be empty")
+	if strings.TrimSpace(req.GetApprovalId()) == "" {
+		err := fmt.Errorf("approval ID cannot be empty")
 		l.Error(err.Error())
 		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityReplay, err.Error()), "unable to start replay for "+req.GetJobName())
 	}
@@ -324,7 +259,7 @@ func newReplayRequest(l log.Logger, req replayRequest) (*scheduler.Replay, error
 		jobConfig,
 		req.GetDescription(),
 		req.GetCategory(),
-		req.GetApproverId(),
+		req.GetApprovalId(),
 		req.GetUserId(),
 	)
 
@@ -346,26 +281,7 @@ func replayToProto(replay *scheduler.Replay) *pb.GetReplayResponse {
 			Description: replay.Config().Description,
 			Category:    replay.Config().Category,
 		},
-		ApproverId: replay.Config().ApproverID,
-		UserId:     replay.Config().UserID,
-	}
-}
-
-func replayToApproverResponseProto(replay *scheduler.Replay) *pb.GetReplayByApproverIDResponse {
-	return &pb.GetReplayByApproverIDResponse{
-		Id:      replay.ID().String(),
-		JobName: replay.JobName().String(),
-		Status:  replay.State().String(),
-		Message: replay.Message(),
-		ReplayConfig: &pb.ReplayConfig{
-			StartTime:   timestamppb.New(replay.Config().StartTime),
-			EndTime:     timestamppb.New(replay.Config().EndTime),
-			Parallel:    replay.Config().Parallel,
-			JobConfig:   replay.Config().JobConfig,
-			Description: replay.Config().Description,
-			Category:    replay.Config().Category,
-		},
-		ApproverId: replay.Config().ApproverID,
+		ApprovalId: replay.Config().ApprovalID,
 		UserId:     replay.Config().UserID,
 	}
 }

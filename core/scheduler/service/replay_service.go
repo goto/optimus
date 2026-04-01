@@ -198,16 +198,6 @@ func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectN
 		}
 		return []*scheduler.ReplayWithRun{replay}, nil
 	}
-	if f.Contains(filter.ApprovalID) {
-		r.logger.Debug("getting all replays by approvalID [%s]", f.GetStringValue(filter.ApprovalID))
-		approvalID := f.GetStringValue(filter.ApprovalID)
-		replay, err := r.replayRepo.GetReplayByApprovalID(ctx, approvalID)
-		if err != nil {
-			r.logger.Error("error getting replays by approval id [%s]: %s", approvalID, err)
-			return nil, errors.GRPCErr(err, "unable to get replays for approvalID "+approvalID)
-		}
-		return []*scheduler.ReplayWithRun{replay}, nil
-	}
 	replayWithRuns, err := r.replayRepo.GetReplayByFilters(ctx, project, filters...)
 	if err != nil {
 		return nil, err

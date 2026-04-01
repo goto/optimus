@@ -355,7 +355,7 @@ func (r ReplayRepository) getReplayRequestWithFilters(ctx context.Context, proje
 	for rows.Next() {
 		var rr replayRequest
 		err = rows.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
-			&rr.Status, &rr.Message, &rr.Category, &rr.CreatedAt, &rr.UpdatedAt)
+			&rr.Status, &rr.Message, &rr.Category, &rr.ApprovalID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -385,9 +385,12 @@ func (r ReplayRepository) GetReplayByFilters(ctx context.Context, projectName te
 		replayConfig := scheduler.ReplayConfig{
 			StartTime:   rr.StartTime,
 			EndTime:     rr.EndTime,
-			JobConfig:   rr.JobConfig,
 			Parallel:    rr.Parallel,
+			JobConfig:   rr.JobConfig,
 			Description: rr.Description,
+			Category:    rr.Category,
+			ApprovalID:  rr.ApprovalID,
+			UserID:      rr.UserID,
 		}
 		replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message)
 		replayRuns := make([]*scheduler.JobRunStatus, len(runs))

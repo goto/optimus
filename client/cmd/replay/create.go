@@ -44,6 +44,7 @@ type createCommand struct {
 	jobConfig   string
 	category    string
 	userID      string
+	approvalID  string
 
 	projectName   string
 	namespaceName string
@@ -91,6 +92,7 @@ func (r *createCommand) injectFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&r.dryRun, "dry-run", "", false, "inspect replayed runs without taking effect on scheduler")
 	cmd.Flags().StringVarP(&r.category, "category", "", "", "Category for replay: DQ_FIX, BACKFILL, OTHERS")
 	cmd.Flags().StringVarP(&r.userID, "user-id", "", "", "User Email ID for the replay request")
+	cmd.Flags().StringVarP(&r.approvalID, "approval-id", "", "Direct from CLI", "Approval ID for the replay request")
 
 	// Mandatory flags if config is not set
 	cmd.Flags().StringVarP(&r.projectName, "project-name", "p", "", "Name of the optimus project")
@@ -280,7 +282,7 @@ func (r *createCommand) createReplayRequest(jobName, startTimeStr, endTimeStr, j
 		Description:   r.description,
 		JobConfig:     jobConfig,
 		Category:      r.category,
-		ApprovalId:    "Optimus CLI Direct",
+		ApprovalId:    r.approvalID,
 		UserId:        r.userID,
 	}
 

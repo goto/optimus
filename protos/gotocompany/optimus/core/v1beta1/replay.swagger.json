@@ -179,6 +179,12 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [

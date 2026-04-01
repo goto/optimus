@@ -116,6 +116,7 @@ func (h ReplayHandler) GetReplayDetails(ctx context.Context, req *pb.GetReplayDe
 		filter.WithString(filter.ReplayID, req.GetReplayId()),
 		filter.WithString(filter.ReplayStatus, req.GetStatus()),
 		filter.WithString(filter.ApprovalID, req.GetApprovalId()),
+		filter.WithString(filter.UserID, req.GetUserId()),
 	)
 	if err != nil {
 		h.l.Error(fmt.Sprintf("error getting replays for req: %+v, err: %s", req, err.Error()))

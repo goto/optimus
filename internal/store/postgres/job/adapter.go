@@ -66,7 +66,7 @@ type ChangeLog struct {
 	Change   []Change
 	Type     string
 	Time     time.Time
-	Actor    *string
+	Author   *string
 	Source   *string
 	Metadata map[string]string
 }
@@ -473,8 +473,8 @@ func fromStorageChangelog(changeLog *ChangeLog) *job.ChangeLog {
 		Metadata: changeLog.Metadata,
 	}
 
-	if changeLog.Actor != nil {
-		jobChangeLog.Actor = *changeLog.Actor
+	if changeLog.Author != nil {
+		jobChangeLog.Author = *changeLog.Author
 	}
 	if changeLog.Source != nil {
 		jobChangeLog.Source = *changeLog.Source
@@ -827,7 +827,7 @@ func fromStorageWebhook(raw []byte) ([]*job.WebhookSpec, error) {
 
 func FromChangelogRow(row pgx.Row) (*ChangeLog, error) {
 	var cl ChangeLog
-	err := row.Scan(&cl.Change, &cl.Type, &cl.Time, &cl.Actor, &cl.Source, &cl.Metadata)
+	err := row.Scan(&cl.Change, &cl.Type, &cl.Time, &cl.Author, &cl.Source, &cl.Metadata)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(job.EntityJobChangeLog, "changelog not found")

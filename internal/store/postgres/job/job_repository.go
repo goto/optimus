@@ -297,9 +297,9 @@ func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, pr
 	}
 
 	origin := audit.FromContext(ctx)
-	var actor, source *string
-	if origin.Actor != "" {
-		actor = &origin.Actor
+	var author, source *string
+	if origin.Author != "" {
+		author = &origin.Author
 	}
 	if origin.Source != "" {
 		source = &origin.Source
@@ -314,10 +314,10 @@ func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, pr
 		}
 	}
 
-	insertChangeLogQuery := `INSERT INTO changelog ( entity_type , name , project_name , change_type , changes , created_at , actor , source , metadata )
+	insertChangeLogQuery := `INSERT INTO changelog ( entity_type , name , project_name , change_type , changes , created_at , author , source , metadata )
 	VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8);`
 
-	tag, err := j.db.Exec(ctx, insertChangeLogQuery, "job", jobName, projectName, "update", string(changeLogBytes), actor, source, metadataJSON)
+	tag, err := j.db.Exec(ctx, insertChangeLogQuery, "job", jobName, projectName, "update", string(changeLogBytes), author, source, metadataJSON)
 	if err != nil {
 		return errors.Wrap(job.EntityJobChangeLog, "unable to insert job changelog", err)
 	}
@@ -331,7 +331,7 @@ func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, pr
 func (j JobRepository) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
 	me := errors.NewMultiError("get change log errors")
 
-	getChangeLogQuery := `select changes, change_type, created_at, actor, source, metadata from changeLog where project_name = $1 and name = $2 and entity_type = $3;`
+	getChangeLogQuery := `select changes, change_type, created_at, author, source, metadata from changeLog where project_name = $1 and name = $2 and entity_type = $3;`
 
 	rows, err := j.db.Query(ctx, getChangeLogQuery, projectName, jobName, "job")
 	if err != nil {

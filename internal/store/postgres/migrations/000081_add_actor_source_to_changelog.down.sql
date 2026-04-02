@@ -1,4 +1,4 @@
 ALTER TABLE changelog
-  DROP COLUMN IF EXISTS actor,
+  DROP COLUMN IF EXISTS author,
   DROP COLUMN IF EXISTS source,
   DROP COLUMN IF EXISTS metadata;

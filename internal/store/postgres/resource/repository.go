@@ -24,8 +24,8 @@ const (
 	resColumnsPrefix = `rs.full_name, rs.kind, rs.store, rs.status, rs.urn, rs.project_name, rs.namespace_name, rs.metadata, rs.spec, rs.created_at, rs.updated_at`
 	resourceColumns  = `id, ` + columnsToStore
 
-	changelogColumnsToStore = `entity_type, name, project_name, change_type, changes, created_at, actor, source, metadata`
-	changelogColumnsToFetch = `changes, change_type, created_at, actor, source, metadata`
+	changelogColumnsToStore = `entity_type, name, project_name, change_type, changes, created_at, author, source, metadata`
+	changelogColumnsToFetch = `changes, change_type, created_at, author, source, metadata`
 )
 
 var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -113,9 +113,9 @@ func (r Repository) insertChangelog(ctx context.Context, projectName tenant.Proj
 	}
 
 	origin := audit.FromContext(ctx)
-	var actor, source *string
-	if origin.Actor != "" {
-		actor = &origin.Actor
+	var author, source *string
+	if origin.Author != "" {
+		author = &origin.Author
 	}
 	if origin.Source != "" {
 		source = &origin.Source
@@ -133,7 +133,7 @@ func (r Repository) insertChangelog(ctx context.Context, projectName tenant.Proj
 	insertChangeLogQuery := `INSERT INTO changelog (` + changelogColumnsToStore + `) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8);`
 
 	res, err := r.db.Exec(ctx, insertChangeLogQuery, resource.EntityResource, resourceName, projectName,
-		changeType, string(changesEncoded), actor, source, metadataJSON)
+		changeType, string(changesEncoded), author, source, metadataJSON)
 	if err != nil {
 		return errors.Wrap(resource.EntityResourceChangelog, "unable to insert resource changelog", err)
 	}

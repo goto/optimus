@@ -707,7 +707,7 @@ type ChangeLog struct {
 	Change   []Change
 	Type     string
 	Time     time.Time
-	Actor    string
+	Author   string
 	Source   string
 	Metadata map[string]string
 }

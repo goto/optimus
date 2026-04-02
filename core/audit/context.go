@@ -3,7 +3,7 @@ package audit
 import "context"
 
 type ChangeOrigin struct {
-	Actor    string
+	Author   string
 	Source   string
 	Metadata map[string]string
 }

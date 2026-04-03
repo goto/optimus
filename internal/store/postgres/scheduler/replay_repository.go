@@ -339,7 +339,8 @@ func (r ReplayRepository) getReplayRequestWithFilters(ctx context.Context, proje
 	}
 	if f.Contains(filter.ApprovalID) {
 		approvalID := f.GetStringValue(filter.ApprovalID)
-		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("approval_id ='%s'", approvalID))
+		approvalIDs := strings.Split(approvalID, ",")
+		filterQueryFragments = append(filterQueryFragments, fmt.Sprintf("approval_id  in ('%s')", strings.Join(approvalIDs, "', '")))
 	}
 	if f.Contains(filter.UserID) {
 		userID := f.GetStringValue(filter.UserID)

@@ -115,6 +115,7 @@ func stringifyListOfReplays(resp *pb.ListReplayResponse) string {
 		"Start Date",
 		"End Date",
 		"Description",
+		"Approval ID",
 		"Status",
 	})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
@@ -125,6 +126,7 @@ func stringifyListOfReplays(resp *pb.ListReplayResponse) string {
 			replay.GetReplayConfig().GetStartTime().AsTime().Format(time.RFC3339),
 			replay.GetReplayConfig().GetEndTime().AsTime().Format(time.RFC3339),
 			replay.GetReplayConfig().GetDescription(),
+			replay.GetApprovalId(),
 			replay.GetStatus(),
 		})
 	}

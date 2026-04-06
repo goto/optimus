@@ -32,7 +32,7 @@ func TestReplayService(t *testing.T) {
 	parallel := true
 	description := "sample backfill"
 	replayJobConfig := map[string]string{"EXECUTION_PROJECT": "example_project"}
-	replayConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, replayJobConfig, description)
+	replayConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, replayJobConfig, description, "", "approval_id", "user_id")
 	replayID := uuid.New()
 	job := scheduler.Job{
 		Name:   jobName,
@@ -134,8 +134,8 @@ func TestReplayService(t *testing.T) {
 			tenantGetter := new(TenantGetter)
 			defer tenantGetter.AssertExpectations(t)
 
-			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description)
-			replayConfigWithNamespaceConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{"EXECUTION_PROJECT": "example_project_from_namespace"}, description)
+			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description, "", "approval_id", "user_id")
+			replayConfigWithNamespaceConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{"EXECUTION_PROJECT": "example_project_from_namespace"}, description, "", "approval_id", "user_id")
 
 			scheduledTime1Str := "2023-01-03T12:00:00Z"
 			scheduledTime1, _ := time.Parse(scheduler.ISODateFormat, scheduledTime1Str)
@@ -178,7 +178,7 @@ func TestReplayService(t *testing.T) {
 			tenantGetter := new(TenantGetter)
 			defer tenantGetter.AssertExpectations(t)
 
-			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description)
+			replayConfigEmptyJobConfig := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{}, description, "", "approval_id", "user_id")
 
 			internalErr := errors.New("internal error")
 			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
@@ -295,7 +295,7 @@ func TestReplayService(t *testing.T) {
 	})
 	t.Run("GetReplayList", func(t *testing.T) {
 		t.Run("should return replay list with no error", func(t *testing.T) {
-			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description)
+			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "", "approval_id", "user_id")
 			replay1 := scheduler.NewReplayRequest("sample-job-A", tnnt, replayConfig, scheduler.ReplayStateInProgress)
 			replay2 := scheduler.NewReplayRequest("sample-job-B", tnnt, replayConfig, scheduler.ReplayStateCreated)
 			replay3 := scheduler.NewReplayRequest("sample-job-C", tnnt, replayConfig, scheduler.ReplayStateFailed)
@@ -692,6 +692,11 @@ func (_m *ReplayRepository) GetReplayByID(ctx context.Context, replayID uuid.UUI
 	}
 
 	return r0, r1
+}
+
+func (_m *ReplayRepository) GetReplayByApprovalID(ctx context.Context, approvalID string) (*scheduler.ReplayWithRun, error) {
+	args := _m.Called(ctx, approvalID)
+	return args.Get(0).(*scheduler.ReplayWithRun), args.Error(1)
 }
 
 func (_m *ReplayRepository) UpdateReplayRuns(ctx context.Context, replayID uuid.UUID, runs []*scheduler.JobRunStatus) error {

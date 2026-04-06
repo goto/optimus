@@ -102,6 +102,15 @@
                 },
                 "jobConfig": {
                   "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "approvalId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
                 }
               }
             }
@@ -164,6 +173,18 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "approvalId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -223,6 +244,15 @@
                   "type": "string"
                 },
                 "jobConfig": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "approvalId": {
+                  "type": "string"
+                },
+                "userId": {
                   "type": "string"
                 }
               }
@@ -386,6 +416,12 @@
         },
         "message": {
           "type": "string"
+        },
+        "approvalId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
         }
       }
     },
@@ -421,6 +457,9 @@
           }
         },
         "description": {
+          "type": "string"
+        },
+        "category": {
           "type": "string"
         }
       }

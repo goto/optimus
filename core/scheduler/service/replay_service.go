@@ -43,10 +43,13 @@ type ReplayRepository interface {
 	AcquireReplayRequest(ctx context.Context, replayID uuid.UUID, unhandledClassifierDuration time.Duration) error
 
 	GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error)
+
 	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
 	GetReplayRequestsByStatus(ctx context.Context, statusList []scheduler.ReplayState) ([]*scheduler.Replay, error)
 	GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error)
+
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error)
+	GetReplayByApprovalID(ctx context.Context, approvalID string) (*scheduler.ReplayWithRun, error)
 }
 
 type TenantGetter interface {
@@ -97,7 +100,6 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		return uuid.Nil, err
 	}
 	config.JobConfig = newConfig
-
 	replayReq := scheduler.NewReplayRequest(jobName, t, config, scheduler.ReplayStateCreated)
 	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
 		r.logger.Error("error validating replay request: %s", err)
@@ -135,7 +137,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		AlertManager:   getAlertManagerProjectConfig(tenantDetails),
 	})
 
-	go r.executor.Execute(replayID, replayReq.Tenant(), jobName) //nolint:contextcheck
+	go r.executor.Execute(replayID, t, jobName) //nolint:contextcheck
 
 	return replayID, nil
 }
@@ -196,7 +198,6 @@ func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectN
 		}
 		return []*scheduler.ReplayWithRun{replay}, nil
 	}
-
 	replayWithRuns, err := r.replayRepo.GetReplayByFilters(ctx, project, filters...)
 	if err != nil {
 		return nil, err
@@ -206,6 +207,15 @@ func (r *ReplayService) GetByFilter(ctx context.Context, project tenant.ProjectN
 
 func (r *ReplayService) GetReplayByID(ctx context.Context, replayID uuid.UUID) (*scheduler.ReplayWithRun, error) {
 	replayWithRun, err := r.replayRepo.GetReplayByID(ctx, replayID)
+	if err != nil {
+		return nil, err
+	}
+	replayWithRun.Runs = scheduler.JobRunStatusList(replayWithRun.Runs).GetSortedRunsByScheduledAt()
+	return replayWithRun, nil
+}
+
+func (r *ReplayService) GetReplayByApprovalID(ctx context.Context, approvalID string) (*scheduler.ReplayWithRun, error) {
+	replayWithRun, err := r.replayRepo.GetReplayByApprovalID(ctx, approvalID)
 	if err != nil {
 		return nil, err
 	}

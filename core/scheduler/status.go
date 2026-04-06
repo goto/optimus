@@ -139,12 +139,12 @@ func (j JobRunDetailsList) GetSortedRunsByStates(states []State) []*JobRunWithDe
 func (j JobRunDetailsList) FilterRunsManagedByReplay(runs []*JobRunStatus) JobRunDetailsList {
 	runMap := make(map[time.Time]bool, len(runs))
 	for _, state := range runs {
-		runMap[state.ScheduledAt] = true
+		runMap[state.ScheduledAt.UTC()] = true
 	}
 
 	var result []*JobRunWithDetails
 	for _, run := range j {
-		if runMap[run.ScheduledAt] {
+		if runMap[run.ScheduledAt.UTC()] {
 			result = append(result, run)
 		}
 	}

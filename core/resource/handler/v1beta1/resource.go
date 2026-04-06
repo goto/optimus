@@ -590,6 +590,9 @@ func toChangelogProto(cl *resource.ChangeLog) *pb.ResourceChangelog {
 	pbChange := &pb.ResourceChangelog{
 		EventType: cl.Type,
 		Timestamp: cl.Time.String(),
+		Author:    cl.Author,
+		Source:    cl.Source,
+		Metadata:  cl.Metadata,
 	}
 
 	pbChange.Change = make([]*pb.ResourceChange, len(cl.Change))

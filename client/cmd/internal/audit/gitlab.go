@@ -19,9 +19,9 @@ type GitlabAuditSource struct {
 }
 
 func NewGitlabAuditSourceFromEnv() (*GitlabAuditSource, error) {
-	gitlabToken := os.Getenv("GIT_TOKEN")
-	gitlabHost := os.Getenv("GIT_HOST")
-	gitlabProjectID := os.Getenv("GIT_PROJECT_ID")
+	gitlabToken := os.Getenv("CI_JOB_TOKEN")
+	gitlabHost := os.Getenv("CI_SERVER_URL")
+	gitlabProjectID := os.Getenv("CI_PROJECT_ID")
 
 	if gitlabToken == "" || gitlabHost == "" || gitlabProjectID == "" {
 		return nil, errors.New("missing required environment variables for Gitlab audit source")

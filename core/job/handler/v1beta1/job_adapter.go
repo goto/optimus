@@ -634,6 +634,9 @@ func toJobChangeLogProto(changeLog *job.ChangeLog) *pb.JobChangelog {
 	pbChange := &pb.JobChangelog{
 		EventType: changeLog.Type,
 		Timestamp: changeLog.Time.String(),
+		Author:    changeLog.Author,
+		Source:    changeLog.Source,
+		Metadata:  changeLog.Metadata,
 	}
 	pbChange.Change = make([]*pb.JobChange, len(changeLog.Change))
 	for i, change := range changeLog.Change {

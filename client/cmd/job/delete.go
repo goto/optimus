@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
+	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/survey"
@@ -58,6 +59,7 @@ func NewDeleteCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&deleteCmd.configFilePath, "config", "c", config.EmptyPath, "File path for client configuration")
+
 	cmd.Flags().BoolVar(&deleteCmd.force, "force", false, "Whether to force delete regardless of downstream or not")
 	cmd.Flags().BoolVar(&deleteCmd.cleanHistory, "clean-history", false, "Whether to clean history or not")
 
@@ -180,7 +182,8 @@ func (d *deleteCommand) deleteFromServer(namespaceName, jobName string) error {
 
 	client := pb.NewJobSpecificationServiceClient(conn)
 
-	ctx, dialCancel := context.WithTimeout(context.Background(), deleteTimeout)
+	ctx := internal.NewBaseContext(context.Background())
+	ctx, dialCancel := context.WithTimeout(ctx, deleteTimeout)
 	defer dialCancel()
 
 	response, err := client.DeleteJobSpecification(ctx, &pb.DeleteJobSpecificationRequest{

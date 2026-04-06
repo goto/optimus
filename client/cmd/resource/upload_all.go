@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
+	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/local/model"
@@ -95,7 +96,8 @@ func (u *uploadAllCommand) uploadAll(selectedNamespaces []*config.Namespace) err
 	}
 	defer conn.Close()
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), uploadAllTimeout)
+	ctx := internal.NewBaseContext(context.Background())
+	ctx, cancelFunc := context.WithTimeout(ctx, uploadAllTimeout)
 	defer cancelFunc()
 
 	if err := u.uploadAllResources(ctx, conn, selectedNamespaces); err != nil {

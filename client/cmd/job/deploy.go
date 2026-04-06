@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
+	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/local/model"
@@ -105,7 +106,8 @@ func (e *deployCommand) deployJobSpecifications(namespacePath string) error {
 	defer conn.Close()
 
 	jobSpecificationServiceClient := pb.NewJobSpecificationServiceClient(conn)
-	ctx, dialCancel := context.WithTimeout(context.Background(), deployTimeout)
+	ctx := internal.NewBaseContext(context.Background())
+	ctx, dialCancel := context.WithTimeout(ctx, deployTimeout)
 	defer dialCancel()
 
 	jobSpecs, err := e.getJobSpecs(namespacePath)

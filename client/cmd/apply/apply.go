@@ -178,7 +178,8 @@ func (c *applyCommand) RunE(cmd *cobra.Command, _ []string) error {
 
 	jobClient := pb.NewJobSpecificationServiceClient(conn)
 	resourceClient := pb.NewResourceServiceClient(conn)
-	ctx, dialCancel := context.WithTimeout(cmd.Context(), applyTimeout)
+	ctx := internal.NewBaseContext(cmd.Context())
+	ctx, dialCancel := context.WithTimeout(ctx, applyTimeout)
 	defer dialCancel()
 
 	// read from plan file

@@ -1,6 +1,8 @@
 package connection
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"time"
@@ -13,8 +15,10 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/goto/optimus/config"
+	"github.com/goto/optimus/core/audit"
 )
 
 const (
@@ -65,11 +69,13 @@ func defaultDialOptions() []grpc.DialOption {
 			grpc.MaxCallRecvMsgSize(grpcMaxClientRecvSize),
 		),
 		grpc.WithUnaryInterceptor(grpc_middleware.ChainUnaryClient(
+			auditClientInterceptor,
 			grpc_retry.UnaryClientInterceptor(retryOpts...),
 			otelgrpc.UnaryClientInterceptor(),
 			grpc_prometheus.UnaryClientInterceptor,
 		)),
 		grpc.WithStreamInterceptor(grpc_middleware.ChainStreamClient(
+			auditStreamClientInterceptor,
 			otelgrpc.StreamClientInterceptor(),
 			grpc_prometheus.StreamClientInterceptor,
 		)),
@@ -80,4 +86,28 @@ func defaultDialOptions() []grpc.DialOption {
 		}),
 	)
 	return opts
+}
+
+func appendContextWithAudit(ctx context.Context) context.Context {
+	origin := audit.FromContext(ctx)
+	if origin.Author != "" || origin.Source != "" {
+		pairs := []string{audit.HeaderAuthor, origin.Author, audit.HeaderSource, origin.Source}
+		if len(origin.Metadata) > 0 {
+			if b, err := json.Marshal(origin.Metadata); err == nil {
+				pairs = append(pairs, audit.HeaderMetadata, string(b))
+			}
+		}
+		ctx = metadata.AppendToOutgoingContext(ctx, pairs...)
+	}
+	return ctx
+}
+
+func auditClientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	ctx = appendContextWithAudit(ctx)
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
+func auditStreamClientInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	ctx = appendContextWithAudit(ctx)
+	return streamer(ctx, desc, cc, method, opts...)
 }

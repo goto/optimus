@@ -52,6 +52,7 @@ func extractAuditHeaders(ctx context.Context) context.Context {
 	return audit.ToContext(ctx, origin)
 }
 
+// nolint:containedctx
 type wrappedServerStream struct {
 	grpc.ServerStream
 	ctx context.Context

@@ -5,8 +5,9 @@ import (
 	"errors"
 	"os"
 
-	"github.com/goto/optimus/core/audit"
 	gitlab "github.com/xanzy/go-gitlab"
+
+	"github.com/goto/optimus/core/audit"
 )
 
 const gitlabAuditSourceKey = "gitlab"

@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	defaultAuditSource = "optimus_api"
+	defaultAuditAuthor = "unknown"
+	defaultAuditSource = "unknown"
 )
 
 func auditUnaryServerInterceptor() grpc.UnaryServerInterceptor {
@@ -34,7 +35,10 @@ func extractAuditHeaders(ctx context.Context) context.Context {
 		return ctx
 	}
 
-	origin := audit.ChangeOrigin{Source: defaultAuditSource}
+	origin := audit.ChangeOrigin{
+		Source: defaultAuditSource,
+		Author: defaultAuditAuthor,
+	}
 
 	if vals := md.Get(audit.HeaderAuthor); len(vals) > 0 {
 		origin.Author = vals[0]

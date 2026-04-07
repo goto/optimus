@@ -81,6 +81,7 @@ func setupGRPCServer(l log.Logger) (*grpc.Server, error) {
 	}
 	grpcOpts := []grpc.ServerOption{
 		grpc_middleware.WithUnaryServerChain(
+			auditUnaryServerInterceptor(),
 			grpctags.UnaryServerInterceptor(grpctags.WithFieldExtractor(grpctags.CodeGenRequestFieldExtractor)),
 			grpc_logrus.UnaryServerInterceptor(grpcLogrusEntry, opts...),
 			otelgrpc.UnaryServerInterceptor(),
@@ -88,6 +89,7 @@ func setupGRPCServer(l log.Logger) (*grpc.Server, error) {
 			grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandler(recoverPanic)),
 		),
 		grpc_middleware.WithStreamServerChain(
+			auditStreamServerInterceptor(),
 			otelgrpc.StreamServerInterceptor(),
 			grpc_logrus.StreamServerInterceptor(grpcLogrusEntry, opts...),
 			grpc_prometheus.StreamServerInterceptor,

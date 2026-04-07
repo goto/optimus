@@ -1475,6 +1475,18 @@
           "items": {
             "$ref": "#/definitions/v1beta1JobChange"
           }
+        },
+        "author": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

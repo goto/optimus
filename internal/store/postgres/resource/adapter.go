@@ -15,14 +15,17 @@ type Change struct {
 }
 
 type ChangeLog struct {
-	Change []Change
-	Type   string
-	Time   time.Time
+	Change   []Change
+	Type     string
+	Time     time.Time
+	Author   *string
+	Source   *string
+	Metadata map[string]string
 }
 
 func FromChangelogRow(row pgx.Row) (*ChangeLog, error) {
 	var cl ChangeLog
-	err := row.Scan(&cl.Change, &cl.Type, &cl.Time)
+	err := row.Scan(&cl.Change, &cl.Type, &cl.Time, &cl.Author, &cl.Source, &cl.Metadata)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(resource.EntityResourceChangelog, "changelog not found")
@@ -34,8 +37,16 @@ func FromChangelogRow(row pgx.Row) (*ChangeLog, error) {
 
 func fromStorageChangelog(changeLog *ChangeLog) *resource.ChangeLog {
 	resourceChangeLog := resource.ChangeLog{
-		Type: changeLog.Type,
-		Time: changeLog.Time,
+		Type:     changeLog.Type,
+		Time:     changeLog.Time,
+		Metadata: changeLog.Metadata,
+	}
+
+	if changeLog.Author != nil {
+		resourceChangeLog.Author = *changeLog.Author
+	}
+	if changeLog.Source != nil {
+		resourceChangeLog.Source = *changeLog.Source
 	}
 
 	resourceChangeLog.Change = make([]resource.Change, len(changeLog.Change))

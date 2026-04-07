@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/goto/optimus/core/audit"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -23,8 +24,8 @@ const (
 	resColumnsPrefix = `rs.full_name, rs.kind, rs.store, rs.status, rs.urn, rs.project_name, rs.namespace_name, rs.metadata, rs.spec, rs.created_at, rs.updated_at`
 	resourceColumns  = `id, ` + columnsToStore
 
-	changelogColumnsToStore = `entity_type, name, project_name, change_type, changes, created_at`
-	changelogColumnsToFetch = `changes, change_type, created_at`
+	changelogColumnsToStore = `entity_type, name, project_name, change_type, changes, created_at, author, source, metadata`
+	changelogColumnsToFetch = `changes, change_type, created_at, author, source, metadata`
 )
 
 var changelogMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -111,10 +112,28 @@ func (r Repository) insertChangelog(ctx context.Context, projectName tenant.Proj
 		return err
 	}
 
-	insertChangeLogQuery := `INSERT INTO changelog (` + changelogColumnsToStore + `) VALUES ($1, $2, $3, $4, $5, NOW());`
+	origin := audit.FromContext(ctx)
+	var author, source *string
+	if origin.Author != "" {
+		author = &origin.Author
+	}
+	if origin.Source != "" {
+		source = &origin.Source
+	}
+
+	var metadataJSON *string
+	if len(origin.Metadata) > 0 {
+		b, merr := json.Marshal(origin.Metadata)
+		if merr == nil {
+			s := string(b)
+			metadataJSON = &s
+		}
+	}
+
+	insertChangeLogQuery := `INSERT INTO changelog (` + changelogColumnsToStore + `) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8);`
 
 	res, err := r.db.Exec(ctx, insertChangeLogQuery, resource.EntityResource, resourceName, projectName,
-		changeType, string(changesEncoded))
+		changeType, string(changesEncoded), author, source, metadataJSON)
 	if err != nil {
 		return errors.Wrap(resource.EntityResourceChangelog, "unable to insert resource changelog", err)
 	}

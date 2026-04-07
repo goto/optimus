@@ -704,9 +704,12 @@ type Change struct {
 }
 
 type ChangeLog struct {
-	Change []Change
-	Type   string
-	Time   time.Time
+	Change   []Change
+	Type     string
+	Time     time.Time
+	Author   string
+	Source   string
+	Metadata map[string]string
 }
 
 func (s SpecHTTPUpstream) Name() string {

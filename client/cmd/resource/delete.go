@@ -9,6 +9,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/spf13/cobra"
 
+	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/cmd/internal/progressbar"
@@ -119,7 +120,8 @@ func (a *deleteCommand) delete() error {
 		Force:         a.force,
 	}
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), applyTimeout)
+	ctx := internal.NewBaseContext(context.Background())
+	ctx, cancelFunc := context.WithTimeout(ctx, applyTimeout)
 	defer cancelFunc()
 
 	responses, err := apply.DeleteResource(ctx, &deleteResourceRequest)

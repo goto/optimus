@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
+	"github.com/goto/optimus/client/cmd/internal"
 	"github.com/goto/optimus/client/cmd/internal/connection"
 	"github.com/goto/optimus/client/cmd/internal/logger"
 	"github.com/goto/optimus/client/local/specio"
@@ -108,7 +109,8 @@ func (r *replaceAllCommand) replaceAllJobs(conn *grpc.ClientConn, selectedNamesp
 	}
 	r.logger.Info("> Replacing all jobs for namespaces [%s]", strings.Join(namespaceNames, ","))
 
-	ctx, dialCancel := context.WithTimeout(context.Background(), replaceAllTimeout)
+	ctx := internal.NewBaseContext(context.Background())
+	ctx, dialCancel := context.WithTimeout(ctx, replaceAllTimeout)
 	defer dialCancel()
 
 	stream, err := r.getJobStreamClient(ctx, conn)

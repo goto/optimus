@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/goto/optimus/core/audit"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
@@ -294,10 +295,29 @@ func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, pr
 	if err != nil {
 		return err
 	}
-	insertChangeLogQuery := `INSERT INTO changelog ( entity_type , name , project_name , change_type , changes , created_at )
-	VALUES ($1, $2, $3, $4, $5, NOW());`
 
-	tag, err := j.db.Exec(ctx, insertChangeLogQuery, "job", jobName, projectName, "update", string(changeLogBytes))
+	origin := audit.FromContext(ctx)
+	var author, source *string
+	if origin.Author != "" {
+		author = &origin.Author
+	}
+	if origin.Source != "" {
+		source = &origin.Source
+	}
+
+	var metadataJSON *string
+	if len(origin.Metadata) > 0 {
+		b, merr := json.Marshal(origin.Metadata)
+		if merr == nil {
+			s := string(b)
+			metadataJSON = &s
+		}
+	}
+
+	insertChangeLogQuery := `INSERT INTO changelog ( entity_type , name , project_name , change_type , changes , created_at , author , source , metadata )
+	VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8);`
+
+	tag, err := j.db.Exec(ctx, insertChangeLogQuery, "job", jobName, projectName, "update", string(changeLogBytes), author, source, metadataJSON)
 	if err != nil {
 		return errors.Wrap(job.EntityJobChangeLog, "unable to insert job changelog", err)
 	}
@@ -311,7 +331,7 @@ func (j JobRepository) insertChangelog(ctx context.Context, jobName job.Name, pr
 func (j JobRepository) GetChangelog(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.ChangeLog, error) {
 	me := errors.NewMultiError("get change log errors")
 
-	getChangeLogQuery := `select changes, change_type, created_at from changeLog where project_name = $1 and name = $2 and entity_type = $3;`
+	getChangeLogQuery := `select changes, change_type, created_at, author, source, metadata from changeLog where project_name = $1 and name = $2 and entity_type = $3;`
 
 	rows, err := j.db.Query(ctx, getChangeLogQuery, projectName, jobName, "job")
 	if err != nil {

@@ -17,19 +17,19 @@ const (
 
 func auditUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		ctx = extractAuditHeaders(ctx)
+		ctx = ExtractAuditHeaders(ctx)
 		return handler(ctx, req)
 	}
 }
 
 func auditStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		ctx := extractAuditHeaders(ss.Context())
+		ctx := ExtractAuditHeaders(ss.Context())
 		return handler(srv, &wrappedServerStream{ServerStream: ss, ctx: ctx})
 	}
 }
 
-func extractAuditHeaders(ctx context.Context) context.Context {
+func ExtractAuditHeaders(ctx context.Context) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return ctx

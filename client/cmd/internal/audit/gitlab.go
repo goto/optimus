@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 
 	gitlab "github.com/xanzy/go-gitlab"
@@ -81,11 +82,11 @@ func (g *GitlabAuditSource) getAuditDataFromMR(ctx context.Context, commitSHA st
 
 	// get the first MR associated with the commit
 	mr := mrs[0]
-	author := mr.Author.Name
+	author := fmt.Sprintf("%s <%s>", mr.Author.Name, mr.Author.Username)
 	meta := map[string]string{
 		"merge_request_url": mr.WebURL,
 		"commit_sha":        commitSHA,
-		"approved_by":       mr.MergedBy.Name,
+		"approved_by":       fmt.Sprintf("%s <%s>", mr.MergedBy.Name, mr.MergedBy.Username),
 	}
 
 	return author, meta, nil
@@ -97,9 +98,10 @@ func (g *GitlabAuditSource) getAuditDataFromStandaloneCommit(ctx context.Context
 		return "", nil, err
 	}
 
-	author := commit.AuthorName
+	author := fmt.Sprintf("%s <%s>", commit.AuthorName, commit.AuthorEmail)
 	meta := map[string]string{
 		"commit_sha": commit.ID,
+		"merged_by":  author,
 	}
 
 	return author, meta, nil

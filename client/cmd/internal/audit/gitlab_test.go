@@ -34,8 +34,8 @@ func TestGitlabAuditSource_GetChangeOrigin(t *testing.T) {
 						"iid":           42,
 						"web_url":       "https://gitlab.example.com/project/mr/42",
 						"source_branch": "feature/my-feature",
-						"author":        map[string]interface{}{"name": "Alice Developer"},
-						"merged_by":     map[string]interface{}{"name": "Bob Reviewer"},
+						"author":        map[string]interface{}{"name": "Alice Developer", "username": "alice@dev"},
+						"merged_by":     map[string]interface{}{"name": "Bob Reviewer", "username": "bob@rev"},
 					},
 				}
 				w.Header().Set("Content-Type", "application/json")
@@ -48,11 +48,11 @@ func TestGitlabAuditSource_GetChangeOrigin(t *testing.T) {
 
 		origin := gitlabSource(t, srv.URL).GetChangeOrigin(context.Background())
 
-		assert.Equal(t, "Alice Developer", origin.Author)
+		assert.Equal(t, "Alice Developer <alice@dev>", origin.Author)
 		assert.Equal(t, "gitlab", origin.Source)
 		assert.Equal(t, "https://gitlab.example.com/project/mr/42", origin.Metadata["merge_request_url"])
 		assert.Equal(t, commitSHA, origin.Metadata["commit_sha"])
-		assert.Equal(t, "Bob Reviewer", origin.Metadata["approved_by"])
+		assert.Equal(t, "Bob Reviewer <bob@rev>", origin.Metadata["approved_by"])
 	})
 
 	t.Run("falls back to standalone commit when no MR exists", func(t *testing.T) {
@@ -69,8 +69,9 @@ func TestGitlabAuditSource_GetChangeOrigin(t *testing.T) {
 				_ = json.NewEncoder(w).Encode([]interface{}{})
 			case commitPath:
 				commit := map[string]interface{}{
-					"id":          commitSHA,
-					"author_name": "Carol Committer",
+					"id":           commitSHA,
+					"author_name":  "Carol Committer",
+					"author_email": "carol@commit.com",
 				}
 				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(commit)
@@ -82,7 +83,7 @@ func TestGitlabAuditSource_GetChangeOrigin(t *testing.T) {
 
 		origin := gitlabSource(t, srv.URL).GetChangeOrigin(context.Background())
 
-		assert.Equal(t, "Carol Committer", origin.Author)
+		assert.Equal(t, "Carol Committer <carol@commit.com>", origin.Author)
 		assert.Equal(t, "gitlab", origin.Source)
 		assert.Equal(t, commitSHA, origin.Metadata["commit_sha"])
 	})
@@ -103,7 +104,7 @@ func TestGitlabAuditSource_GetChangeOrigin(t *testing.T) {
 		commitSHA := "failsha"
 		t.Setenv("CI_COMMIT_SHA", commitSHA)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 		}))
 		defer srv.Close()

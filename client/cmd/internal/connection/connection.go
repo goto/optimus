@@ -88,7 +88,7 @@ func defaultDialOptions() []grpc.DialOption {
 	return opts
 }
 
-func appendContextWithAudit(ctx context.Context) context.Context {
+func AppendContextWithAudit(ctx context.Context) context.Context {
 	origin := audit.FromContext(ctx)
 	if origin.Author != "" || origin.Source != "" {
 		pairs := []string{audit.HeaderAuthor, origin.Author, audit.HeaderSource, origin.Source}
@@ -103,11 +103,11 @@ func appendContextWithAudit(ctx context.Context) context.Context {
 }
 
 func auditClientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ctx = appendContextWithAudit(ctx)
+	ctx = AppendContextWithAudit(ctx)
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
 func auditStreamClientInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	ctx = appendContextWithAudit(ctx)
+	ctx = AppendContextWithAudit(ctx)
 	return streamer(ctx, desc, cc, method, opts...)
 }

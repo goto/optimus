@@ -160,14 +160,14 @@ func populateColumns(t *Table, schemaBuilder *tableschema.SchemaBuilder) error {
 func generateUpdateQuery(incoming, existing tableschema.TableSchema, schemaName string) ([]string, error) {
 	var sqlTasks []string
 	if incoming.Comment != existing.Comment {
-		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set comment %s;", schemaName, existing.TableName, common.QuoteString(incoming.Comment)))
+		sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set comment %s;", QuoteIdentifier(schemaName), QuoteIdentifier(existing.TableName), common.QuoteString(incoming.Comment)))
 	}
 
 	if incoming.Lifecycle != existing.Lifecycle {
 		if incoming.Lifecycle <= 0 && existing.Lifecycle >= 0 {
-			sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s disable lifecycle;", schemaName, existing.TableName))
+			sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s disable lifecycle;", QuoteIdentifier(schemaName), QuoteIdentifier(existing.TableName)))
 		} else if incoming.Lifecycle > 0 {
-			sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set lifecycle %d;", schemaName, existing.TableName, incoming.Lifecycle))
+			sqlTasks = append(sqlTasks, fmt.Sprintf("alter table %s.%s set lifecycle %d;", QuoteIdentifier(schemaName), QuoteIdentifier(existing.TableName), incoming.Lifecycle))
 		}
 	}
 
@@ -259,7 +259,7 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 			if incomingColumnRecord.columnValue.NotNull {
 				return fmt.Errorf("unable to add new required column")
 			}
-			segment := fmt.Sprintf("if not exists %s %s", incomingColumnRecord.columnStructure, incomingColumnRecord.columnValue.Type.Name())
+			segment := fmt.Sprintf("if not exists %s %s", QuoteIdentifier(incomingColumnRecord.columnStructure), incomingColumnRecord.columnValue.Type.Name())
 			if incomingColumnRecord.columnValue.Comment != "" {
 				segment += fmt.Sprintf(" comment %s", common.QuoteString(incomingColumnRecord.columnValue.Comment))
 			}
@@ -270,7 +270,7 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 		if !columnFound.NotNull && incomingColumnRecord.columnValue.NotNull {
 			return fmt.Errorf("unable to modify column mode from nullable to required")
 		} else if columnFound.NotNull && !incomingColumnRecord.columnValue.NotNull {
-			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s null;", schemaName, tableName, columnFound.Name))
+			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s null;", QuoteIdentifier(schemaName), QuoteIdentifier(tableName), QuoteIdentifier(columnFound.Name)))
 		}
 
 		if columnFound.Type.ID() != incomingColumnRecord.columnValue.Type.ID() {
@@ -279,7 +279,7 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 
 		if incomingColumnRecord.columnValue.Comment != columnFound.Comment {
 			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment %s;",
-				schemaName, tableName, columnFound.Name, incomingColumnRecord.columnValue.Name, columnFound.Type, common.QuoteString(incomingColumnRecord.columnValue.Comment)))
+				QuoteIdentifier(schemaName), QuoteIdentifier(tableName), QuoteIdentifier(columnFound.Name), QuoteIdentifier(incomingColumnRecord.columnValue.Name), columnFound.Type, common.QuoteString(incomingColumnRecord.columnValue.Comment)))
 		}
 		delete(existing, incomingColumnRecord.columnStructure)
 	}
@@ -292,7 +292,7 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming []ColumnR
 
 	if len(columnAddition) > 0 {
 		for _, segment := range columnAddition {
-			addColumnQuery := fmt.Sprintf("alter table %s.%s add column ", schemaName, tableName) + segment + ";"
+			addColumnQuery := fmt.Sprintf("alter table %s.%s add column ", QuoteIdentifier(schemaName), QuoteIdentifier(tableName)) + segment + ";"
 			*sqlTasks = append(*sqlTasks, addColumnQuery)
 		}
 	}

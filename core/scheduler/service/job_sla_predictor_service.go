@@ -256,34 +256,40 @@ func getJobWithDetails(ctx context.Context, l log.Logger, jobDetailsGetter JobDe
 		}
 		jobsWithDetails, err := jobDetailsGetter.GetJobs(ctx, projectName, jobNameStr)
 		if err != nil {
-			return nil, err
+			if jobsWithDetails == nil {
+				return nil, err
+			}
+			l.Error("[getJobWithDetails] encountered non-blocking error when fetching jobs by names: %s", err.Error())
 		}
 		for _, job := range jobsWithDetails {
 			filteredJobsByName[job.Name] = job
 			filteredJobMerged[job.Name] = job
 		}
-		l.Info("fetched jobs by names", "count", len(filteredJobsByName))
-		l.Info("jobs fetched by names", "jobs", filteredJobsByName)
+		l.Info("[getJobWithDetails] fetched jobs by names", "count", len(filteredJobsByName))
+		l.Info("[getJobWithDetails] jobs fetched by names", "jobs", filteredJobsByName)
 	}
 
 	if len(labels) > 0 {
 		jobsWithDetails, err := jobDetailsGetter.GetJobsByLabels(ctx, projectName, labels)
 		if err != nil {
-			return nil, err
+			if jobsWithDetails == nil {
+				return nil, err
+			}
+			l.Error("[getJobWithDetails] encountered non-blocking error when fetching jobs by labels: %s", err.Error())
 		}
 		for _, job := range jobsWithDetails {
 			filteredJobByLabel[job.Name] = job
 			filteredJobMerged[job.Name] = job
 		}
-		l.Info("fetched jobs by labels", "count", len(filteredJobByLabel))
-		l.Info("jobs fetched by labels", "jobs", filteredJobByLabel)
+		l.Info("[getJobWithDetails] fetched jobs by labels", "count", len(filteredJobByLabel))
+		l.Info("[getJobWithDetails] jobs fetched by labels", "jobs", filteredJobByLabel)
 	}
 
 	filteredJobSchedules := []*scheduler.JobWithDetails{}
 	for _, job := range filteredJobMerged {
 		filteredJobSchedules = append(filteredJobSchedules, job)
 	}
-	l.Info("total jobs fetched after merging by names and labels", "count", len(filteredJobSchedules))
+	l.Info("[getJobWithDetails] total jobs fetched after merging by names and labels", "count", len(filteredJobSchedules))
 
 	return filteredJobSchedules, nil
 }

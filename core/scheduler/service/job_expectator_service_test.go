@@ -65,7 +65,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		jobAName := scheduler.JobName("job-A")
 
-		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{}, errors.New("some error"))
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return(nil, errors.New("some error"))
 
 		// when
 		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
@@ -93,7 +93,7 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 
 		labels := map[string]string{"category": "some-category"}
 
-		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return([]*scheduler.JobWithDetails{}, errors.New("some error"))
+		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return(nil, errors.New("some error"))
 
 		// when
 		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{}, labels, referenceTime, scheduleRangeInHours)
@@ -317,6 +317,66 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: jobLineageSummary}, nil)
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
 		jobRunExpectationDetailsRepo.On("UpsertExpectedFinishTime", ctx, projectName, jobAName, scheduledAt, scheduledAt.Add(30*time.Minute)).Return(nil)
+
+		// when
+		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)
+
+		// then
+		assert.NoError(t, err)
+		expectedExpectedFinishTime := scheduledAt.Add(30 * time.Minute)
+		assert.Equal(t, map[scheduler.JobSchedule]service.FinishTimeDetail{{JobName: jobAName, ScheduledAt: scheduledAt}: {FinishTime: expectedExpectedFinishTime, Status: service.FinishTimeStatusInprogress}}, expectedFinishTimes)
+	})
+
+	t.Run("given a complete job but with nonblocking error, should still return the expected finish time", func(t *testing.T) {
+		// given
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+
+		jobExpectatorService := service.NewJobExpectatorService(
+			l,
+			10,
+			jobRunExpectationDetailsRepo,
+			jobDetailsGetter,
+			jobLineageFetcher,
+			durationEstimator,
+		)
+
+		tenant, _ := tenant.NewTenant("project-a", "team-a")
+		jobAName := scheduler.JobName("job-A")
+		startDate := referenceTime.Add(-24 * time.Hour).Truncate(time.Hour)
+		scheduledAt := referenceTime.Add(scheduleRangeInHours - 1*time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour()) // daily
+
+		jobWithDetails := &scheduler.JobWithDetails{
+			Name: jobAName,
+			Job: &scheduler.Job{
+				Tenant: tenant,
+				Name:   jobAName,
+			},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+		}
+
+		jobLineageSummary := &scheduler.JobLineageSummary{
+			JobName:   jobAName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobAName: {
+					JobName:     jobAName,
+					ScheduledAt: scheduledAt,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobWithDetails}, errors.New("nonblocking error")).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: jobLineageSummary}, nil).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil).Once()
+		jobRunExpectationDetailsRepo.On("UpsertExpectedFinishTime", ctx, projectName, jobAName, scheduledAt, scheduledAt.Add(30*time.Minute)).Return(nil).Once()
 
 		// when
 		expectedFinishTimes, err := jobExpectatorService.GenerateExpectedFinishTimes(ctx, projectName, []scheduler.JobName{jobAName}, map[string]string{}, referenceTime, scheduleRangeInHours)

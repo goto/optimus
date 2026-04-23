@@ -513,7 +513,7 @@ func groupUpstreamsByJobName(jobUpstreams []*JobUpstreams) (map[string][]*schedu
 	jobUpstreamGroup := map[string][]*scheduler.JobUpstream{}
 
 	for _, upstream := range jobUpstreams {
-		if upstream.UpstreamState != "resolved" {
+		if upstream.UpstreamState != job.UpstreamStateResolved.String() {
 			if strings.EqualFold(upstream.UpstreamType, "static") {
 				multiError.Append(errors.NewError(errors.ErrInvalidState, scheduler.EntityJobRun, "unresolved upstream "+upstream.UpstreamJobName.String+" for "+upstream.JobName))
 			}

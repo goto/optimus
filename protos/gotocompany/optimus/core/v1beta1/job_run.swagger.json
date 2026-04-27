@@ -804,9 +804,6 @@
         "numberOfUpstreamPerLevel": {
           "type": "integer",
           "format": "int32"
-        },
-        "historicalDurationConfig": {
-          "$ref": "#/definitions/v1beta1HistoricalDurationConfig"
         }
       }
     },
@@ -848,19 +845,6 @@
       "properties": {
         "dexSensorResponse": {
           "$ref": "#/definitions/v1beta1DexSensorResponse"
-        }
-      }
-    },
-    "v1beta1HistoricalDurationConfig": {
-      "type": "object",
-      "properties": {
-        "lastNRuns": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "percentile": {
-          "type": "integer",
-          "format": "int32"
         }
       }
     },

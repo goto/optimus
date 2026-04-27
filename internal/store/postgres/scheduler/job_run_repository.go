@@ -505,6 +505,7 @@ WITH operations AS (
 		opr.start_time,
 		opr.status,
 		opr.end_time,
+		opr.operation_name,
 		CASE 
 			WHEN opr.operation_type = 'sensor' THEN 
 				ROW_NUMBER() OVER (PARTITION BY jr.job_name, jr.project_name, jr.scheduled_at, opr.operation_type ORDER BY CASE WHEN opr.status = 'success' THEN 0 ELSE 1 END, opr.end_time DESC)
@@ -519,11 +520,11 @@ WITH operations AS (
 		END as rn_end
 	FROM job_run jr
 	JOIN (
-		SELECT job_run_id, start_time, end_time, status, 'sensor' AS operation_type FROM sensor_run 
+		SELECT job_run_id, start_time, end_time, status, 'sensor' AS operation_type, name AS operation_name FROM sensor_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, status, 'task' AS operation_type FROM task_run 
+		SELECT job_run_id, start_time, end_time, status, 'task' AS operation_type, name AS operation_name FROM task_run 
 		UNION ALL 
-		SELECT job_run_id, start_time, end_time, status, 'hook' AS operation_type FROM hook_run 
+		SELECT job_run_id, start_time, end_time, status, 'hook' AS operation_type, name AS operation_name FROM hook_run 
 	) opr ON opr.job_run_id = jr.id
 	WHERE (%s)
 	AND jr.project_name NOT LIKE '%%-preprod'
@@ -535,10 +536,13 @@ summary_operations AS (
 		job_start_time,
 		job_end_time,
 		job_status,
+		MAX(CASE WHEN operation_type = 'sensor' AND rn_end = 1 THEN operation_name END) as sensor_name,
 		MAX(CASE WHEN operation_type = 'sensor' AND rn_start = 1 THEN start_time END) as sensor_start_time,
 		MAX(CASE WHEN operation_type = 'sensor' AND rn_end = 1 THEN end_time END) as sensor_end_time,
+		MAX(CASE WHEN operation_type = 'task' AND rn_end = 1 THEN operation_name END) as task_name,
 		MAX(CASE WHEN operation_type = 'task' AND rn_start = 1 THEN start_time END) as task_start_time,
 		MAX(CASE WHEN operation_type = 'task' AND rn_end = 1 THEN end_time END) as task_end_time,
+		MAX(CASE WHEN operation_type = 'hook' AND rn_end = 1 THEN operation_name END) as hook_name,
 		MAX(CASE WHEN operation_type = 'hook' AND rn_start = 1 THEN start_time END) as hook_start_time,
 		MAX(CASE WHEN operation_type = 'hook' AND rn_end = 1 THEN end_time END) as hook_end_time
 	FROM operations
@@ -556,7 +560,10 @@ SELECT
 	task_start_time,
 	task_end_time,
 	hook_start_time,
-	hook_end_time
+	hook_end_time,
+	sensor_name,
+	task_name,
+	hook_name
 FROM summary_operations
 ORDER BY scheduled_at DESC
 	`, strings.Join(conditions, " OR "))
@@ -581,12 +588,16 @@ ORDER BY scheduled_at DESC
 			taskEndTime     *time.Time
 			hookStartTime   *time.Time
 			hookEndTime     *time.Time
+			sensorName      *string
+			taskName        *string
+			hookName        *string
 		)
 
 		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime, &jobStatus,
 			&sensorStartTime, &sensorEndTime,
 			&taskStartTime, &taskEndTime,
-			&hookStartTime, &hookEndTime)
+			&hookStartTime, &hookEndTime,
+			&sensorName, &taskName, &hookName)
 		if err != nil {
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while scanning job run summary", err)
 		}
@@ -603,6 +614,9 @@ ORDER BY scheduled_at DESC
 			TaskEndTime:   taskEndTime,
 			HookStartTime: hookStartTime,
 			HookEndTime:   hookEndTime,
+			SensorName:    sensorName,
+			TaskName:      taskName,
+			HookName:      hookName,
 		}
 		summaries = append(summaries, summary)
 	}

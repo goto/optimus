@@ -804,6 +804,9 @@
         "numberOfUpstreamPerLevel": {
           "type": "integer",
           "format": "int32"
+        },
+        "historicalDurationConfig": {
+          "$ref": "#/definitions/v1beta1HistoricalDurationConfig"
         }
       }
     },
@@ -845,6 +848,32 @@
       "properties": {
         "dexSensorResponse": {
           "$ref": "#/definitions/v1beta1DexSensorResponse"
+        }
+      }
+    },
+    "v1beta1HistoricalDurationConfig": {
+      "type": "object",
+      "properties": {
+        "lastNRuns": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "percentile": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1beta1HistoricalSummary": {
+      "type": "object",
+      "properties": {
+        "taskDurationSeconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "hookDurationSeconds": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },
@@ -923,6 +952,9 @@
         },
         "delaySummary": {
           "$ref": "#/definitions/v1beta1JobRunDelaySummary"
+        },
+        "historicalSummary": {
+          "$ref": "#/definitions/v1beta1HistoricalSummary"
         }
       }
     },

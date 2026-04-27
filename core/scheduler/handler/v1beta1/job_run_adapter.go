@@ -107,6 +107,10 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					SystemSchedulingDelaySeconds: int32(run.DelaySummary.SystemSchedulingDelaySeconds),
 				}
 			}
+			pbJobRun.HistoricalSummary = &pb.HistoricalSummary{
+				TaskDurationSeconds: int32(run.HistoricalSummary.TaskDuration.Seconds()),
+				HookDurationSeconds: int32(run.HistoricalSummary.HookDuration.Seconds()),
+			}
 
 			pbJobRuns = append(pbJobRuns, pbJobRun)
 		}

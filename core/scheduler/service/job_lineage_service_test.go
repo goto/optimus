@@ -214,7 +214,8 @@ func (m *MockLineageBuilder) BuildLineage(ctx context.Context, jobSchedules []*s
 func NewMockLineageBuilder(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *MockLineageBuilder {
+},
+) *MockLineageBuilder {
 	m := &MockLineageBuilder{}
 	m.Test(t)
 	t.Cleanup(func() { m.AssertExpectations(t) })
@@ -258,7 +259,8 @@ func (m *MockDurationEstimatorRepo) GetPercentileDurationByJobNames(ctx context.
 func NewMockDurationEstimatorRepo(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *MockDurationEstimatorRepo {
+},
+) *MockDurationEstimatorRepo {
 	m := &MockDurationEstimatorRepo{}
 	m.Test(t)
 	t.Cleanup(func() { m.AssertExpectations(t) })

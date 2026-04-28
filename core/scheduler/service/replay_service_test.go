@@ -162,6 +162,49 @@ func TestReplayService(t *testing.T) {
 			assert.Equal(t, replayID, result)
 		})
 
+		t.Run("should use job config EXECUTION_PROJECT if it is provided in replay config, even if tenant config is available", func(t *testing.T) {
+			replayRepository := new(ReplayRepository)
+			defer replayRepository.AssertExpectations(t)
+
+			jobRepository := new(JobRepository)
+			defer jobRepository.AssertExpectations(t)
+
+			replayValidator := new(ReplayValidator)
+			defer replayValidator.AssertExpectations(t)
+
+			replayWorker := new(ReplayExecutor)
+			defer replayWorker.AssertExpectations(t)
+
+			tenantGetter := new(TenantGetter)
+			defer tenantGetter.AssertExpectations(t)
+
+			replayConfigWithSpecificExecutionProject := scheduler.NewReplayConfig(startTime, endTime, parallel, map[string]string{"EXECUTION_PROJECT": "example_project_from_replay_config"}, description, "", "approval_id", "user_id")
+
+			scheduledTime1Str := "2023-01-03T12:00:00Z"
+			scheduledTime1, _ := time.Parse(scheduler.ISODateFormat, scheduledTime1Str)
+			scheduledTime2 := scheduledTime1.Add(24 * time.Hour)
+			replayRuns := []*scheduler.JobRunStatus{
+				{ScheduledAt: scheduledTime1, State: scheduler.StatePending},
+				{ScheduledAt: scheduledTime2, State: scheduler.StatePending},
+			}
+			replayReq := scheduler.NewReplayRequest(jobName, tnnt, replayConfigWithSpecificExecutionProject, scheduler.ReplayStateCreated)
+
+			jobRepository.On("GetJobDetails", ctx, projName, jobName).Return(jobWithDetails, nil)
+			tenantGetter.On("GetDetails", ctx, tnnt).Return(tenantWithDetails, nil)
+			jobRepository.On("GetJob", ctx, projName, jobName).Return(&job, nil)
+			replayValidator.On("Validate", ctx, replayReq, jobCron).Return(nil)
+			replayRepository.On("RegisterReplay", ctx, replayReq, replayRuns).Return(replayID, nil)
+			replayWorker.On("Execute", replayID, tnnt, jobName).Return().Maybe()
+
+			alertManager := new(mockAlertManager)
+			alertManager.On("SendReplayEvent", mock.Anything).Return()
+			defer alertManager.AssertExpectations(t)
+			replayService := service.NewReplayService(replayRepository, jobRepository, tenantGetter, replayValidator, replayWorker, nil, logger, taskNameToExecutionProjectMap, alertManager)
+			result, err := replayService.CreateReplay(ctx, tnnt, jobName, replayConfigWithSpecificExecutionProject)
+			assert.NoError(t, err)
+			assert.Equal(t, replayID, result)
+		})
+
 		t.Run("should return error if get tenant error", func(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)

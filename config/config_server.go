@@ -9,22 +9,23 @@ const (
 )
 
 type ServerConfig struct {
-	Version                Version              `mapstructure:"version"`
-	Log                    LogConfig            `mapstructure:"log"`
-	Serve                  Serve                `mapstructure:"serve"`
-	Telemetry              TelemetryConfig      `mapstructure:"telemetry"`
-	Alerting               AlertingConfig       `mapstructure:"alerting"`
-	SLAConfig              SLAConfig            `mapstructure:"sla"`
-	ResourceManagers       []ResourceManager    `mapstructure:"resource_managers"`
-	UpstreamResolvers      []UpstreamResolver   `mapstructure:"upstream_resolvers"`
-	Replay                 ReplayConfig         `mapstructure:"replay"`
-	Publisher              *Publisher           `mapstructure:"publisher"`
-	JobSyncIntervalMinutes int                  `mapstructure:"job_sync_interval_minutes"`
-	ExternalTables         ExternalTablesConfig `mapstructure:"external_tables"`
-	Features               FeaturesConfig       `mapstructure:"features"`
-	Plugins                Plugins              `mapstructure:"plugins"`
-	JobValidationConfig    JobValidationConfig  `mapstructure:"job_validation"`
-	JobExpectatorConfig    JobExpectatorConfig  `mapstructure:"job_expectator"`
+	Version                   Version                   `mapstructure:"version"`
+	Log                       LogConfig                 `mapstructure:"log"`
+	Serve                     Serve                     `mapstructure:"serve"`
+	Telemetry                 TelemetryConfig           `mapstructure:"telemetry"`
+	Alerting                  AlertingConfig            `mapstructure:"alerting"`
+	SLAConfig                 SLAConfig                 `mapstructure:"sla"`
+	ResourceManagers          []ResourceManager         `mapstructure:"resource_managers"`
+	UpstreamResolvers         []UpstreamResolver        `mapstructure:"upstream_resolvers"`
+	Replay                    ReplayConfig              `mapstructure:"replay"`
+	Publisher                 *Publisher                `mapstructure:"publisher"`
+	JobSyncIntervalMinutes    int                       `mapstructure:"job_sync_interval_minutes"`
+	ExternalTables            ExternalTablesConfig      `mapstructure:"external_tables"`
+	Features                  FeaturesConfig            `mapstructure:"features"`
+	Plugins                   Plugins                   `mapstructure:"plugins"`
+	JobValidationConfig       JobValidationConfig       `mapstructure:"job_validation"`
+	JobExpectatorConfig       JobExpectatorConfig       `mapstructure:"job_expectator"`
+	JobExecutionSummaryConfig JobExecutionSummaryConfig `mapstructure:"job_execution_summary"`
 }
 
 type UpstreamResolver struct {
@@ -171,4 +172,14 @@ type ValidateScheduleConfig struct {
 type JobExpectatorConfig struct {
 	BufferDurationInMinutes int                     `mapstructure:"buffer_duration_in_minutes" default:"10"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
+}
+
+type JobExecutionSummaryConfig struct {
+	MaxLineageDepth    int                      `mapstructure:"max_lineage_depth" default:"25"`
+	HistoricalDuration HistoricalDurationConfig `mapstructure:"historical_duration"`
+}
+
+type HistoricalDurationConfig struct {
+	LastNRuns  int `mapstructure:"last_n_runs" default:"7"`
+	Percentile int `mapstructure:"percentile" default:"95"`
 }

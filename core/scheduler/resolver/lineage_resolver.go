@@ -333,6 +333,9 @@ func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap 
 				jobRuns[scheduleKey].TaskEndTime = detail.TaskEndTime
 				jobRuns[scheduleKey].HookStartTime = detail.HookStartTime
 				jobRuns[scheduleKey].HookEndTime = detail.HookEndTime
+				jobRuns[scheduleKey].SensorName = detail.SensorName
+				jobRuns[scheduleKey].TaskName = detail.TaskName
+				jobRuns[scheduleKey].HookName = detail.HookName
 			}
 		}
 	}
@@ -391,5 +394,8 @@ func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {
 		TaskEndTime:   source.TaskEndTime,
 		HookStartTime: source.HookStartTime,
 		HookEndTime:   source.HookEndTime,
+		SensorName:    source.SensorName,
+		TaskName:      source.TaskName,
+		HookName:      source.HookName,
 	}
 }

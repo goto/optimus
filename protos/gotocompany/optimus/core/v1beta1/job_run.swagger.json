@@ -848,6 +848,19 @@
         }
       }
     },
+    "v1beta1HistoricalDurationTrend": {
+      "type": "object",
+      "properties": {
+        "taskDurationSeconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "hookDurationSeconds": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "v1beta1IdentifyPotentialSLABreachResponse": {
       "type": "object",
       "properties": {
@@ -923,6 +936,9 @@
         },
         "delaySummary": {
           "$ref": "#/definitions/v1beta1JobRunDelaySummary"
+        },
+        "historicalDurationTrend": {
+          "$ref": "#/definitions/v1beta1HistoricalDurationTrend"
         }
       }
     },
@@ -1051,6 +1067,15 @@
         "hookEndTime": {
           "type": "string",
           "format": "date-time"
+        },
+        "sensorName": {
+          "type": "string"
+        },
+        "taskName": {
+          "type": "string"
+        },
+        "hookName": {
+          "type": "string"
         }
       }
     },

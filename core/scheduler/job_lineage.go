@@ -358,6 +358,31 @@ type JobRunLineage struct {
 	ExecutionSummary *LineageExecutionSummary
 }
 
+func (j *JobRunLineage) GetAllJobNames() []JobName {
+	jobNamesMap := make(map[JobName]struct{})
+	for _, jobRun := range j.JobRuns {
+		jobNamesMap[jobRun.JobName] = struct{}{}
+	}
+
+	var jobNames []JobName
+	for jobName := range jobNamesMap {
+		jobNames = append(jobNames, jobName)
+	}
+	return jobNames
+}
+
+func (j *JobRunLineage) GroupJobsInLineageByHookNames() map[string][]JobName {
+	hookNames := make(map[string][]JobName)
+	for _, jobRun := range j.JobRuns {
+		if jobRun.JobRunSummary.HookName != nil {
+			hookName := *jobRun.JobRunSummary.HookName
+			hookNames[hookName] = append(hookNames[hookName], jobRun.JobName)
+		}
+	}
+
+	return hookNames
+}
+
 type LineageExecutionSummary struct {
 	TotalScheduledWayTooLateSeconds     int64
 	TotalSystemSchedulingDelaySeconds   int64
@@ -397,6 +422,12 @@ type JobExecutionSummary struct {
 	JobRunSummary      *JobRunSummary
 	DownstreamPathName string
 	DelaySummary       *JobRunDelaySummary
+	HistoricalSummary  JobHistoricalDuration
+}
+
+type JobHistoricalDuration struct {
+	TaskDuration time.Duration
+	HookDuration time.Duration
 }
 
 type SLAConfig struct {
@@ -417,6 +448,10 @@ type JobRunSummary struct {
 	TaskEndTime   *time.Time
 	HookStartTime *time.Time
 	HookEndTime   *time.Time
+
+	SensorName *string
+	TaskName   *string
+	HookName   *string
 }
 
 func (j *JobRunSummary) GetActualEndTime() *time.Time {

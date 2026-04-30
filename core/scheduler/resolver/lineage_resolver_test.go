@@ -108,6 +108,9 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		jobRepo := new(MockJobRepository)
 		jobRunService := new(MockJobRunService)
 		projectGetter := new(MockProjectGetter)
+		sampleSensorName := "sample-sensor"
+		sampleTaskName := "sample-task"
+		sampleHookName := "sample-hook"
 
 		jobSchedules := []*scheduler.JobSchedule{
 			{JobName: jobNameA, ScheduledAt: scheduledTime},
@@ -155,6 +158,9 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 				TaskEndTime:   timePtr(time.Date(2023, 1, 1, 19, 15, 0, 0, time.UTC)),
 				HookStartTime: timePtr(time.Date(2023, 1, 1, 19, 15, 0, 0, time.UTC)),
 				HookEndTime:   timePtr(time.Date(2023, 1, 1, 19, 30, 0, 0, time.UTC)),
+				SensorName:    nil,
+				TaskName:      &sampleTaskName,
+				HookName:      &sampleHookName,
 			},
 			{
 				JobName:       jobNameB,
@@ -167,6 +173,9 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 				TaskEndTime:   timePtr(time.Date(2023, 1, 1, 13, 10, 0, 0, time.UTC)),
 				HookStartTime: timePtr(time.Date(2023, 1, 1, 13, 10, 0, 0, time.UTC)),
 				HookEndTime:   timePtr(time.Date(2023, 1, 1, 13, 20, 0, 0, time.UTC)),
+				SensorName:    &sampleSensorName,
+				TaskName:      &sampleTaskName,
+				HookName:      &sampleHookName,
 			},
 			{
 				JobName:       jobNameC,
@@ -179,6 +188,9 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 				TaskEndTime:   timePtr(time.Date(2023, 1, 1, 7, 5, 0, 0, time.UTC)),
 				HookStartTime: timePtr(time.Date(2023, 1, 1, 7, 5, 0, 0, time.UTC)),
 				HookEndTime:   timePtr(time.Date(2023, 1, 1, 7, 10, 0, 0, time.UTC)),
+				SensorName:    &sampleSensorName,
+				TaskName:      &sampleTaskName,
+				HookName:      &sampleHookName,
 			},
 		}
 

@@ -321,6 +321,13 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			MaxPaddingMinutes: 1000,
 		},
 	}
+	s.expectedServerConfig.JobExecutionSummaryConfig = config.JobExecutionSummaryConfig{
+		MaxLineageDepth: 25,
+		HistoricalDuration: config.HistoricalDurationConfig{
+			LastNRuns:  7,
+			Percentile: 95,
+		},
+	}
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

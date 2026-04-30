@@ -81,6 +81,21 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				slaTime = timestamppb.New(*run.JobRunSummary.SLATime)
 			}
 
+			var sensorName string
+			if run.JobRunSummary.SensorName != nil {
+				sensorName = *run.JobRunSummary.SensorName
+			}
+
+			var taskName string
+			if run.JobRunSummary.TaskName != nil {
+				taskName = *run.JobRunSummary.TaskName
+			}
+
+			var hookName string
+			if run.JobRunSummary.HookName != nil {
+				hookName = *run.JobRunSummary.HookName
+			}
+
 			pbJobRun := &pb.JobExecutionSummary{
 				JobName: run.JobName.String(),
 				Sla: &pb.SLAConfig{
@@ -97,6 +112,9 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					WaitEndTime:   waitEndTime,
 					TaskStartTime: taskStartTime,
 					TaskEndTime:   taskEndTime,
+					SensorName:    sensorName,
+					TaskName:      taskName,
+					HookName:      hookName,
 				},
 				Level:              int32(run.Level),
 				DownstreamPathName: run.DownstreamPathName,
@@ -107,7 +125,7 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					SystemSchedulingDelaySeconds: int32(run.DelaySummary.SystemSchedulingDelaySeconds),
 				}
 			}
-			pbJobRun.HistoricalSummary = &pb.HistoricalSummary{
+			pbJobRun.HistoricalDurationTrend = &pb.HistoricalDurationTrend{
 				TaskDurationSeconds: int32(run.HistoricalSummary.TaskDuration.Seconds()),
 				HookDurationSeconds: int32(run.HistoricalSummary.HookDuration.Seconds()),
 			}

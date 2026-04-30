@@ -848,7 +848,7 @@
         }
       }
     },
-    "v1beta1HistoricalSummary": {
+    "v1beta1HistoricalDurationTrend": {
       "type": "object",
       "properties": {
         "taskDurationSeconds": {
@@ -937,8 +937,8 @@
         "delaySummary": {
           "$ref": "#/definitions/v1beta1JobRunDelaySummary"
         },
-        "historicalSummary": {
-          "$ref": "#/definitions/v1beta1HistoricalSummary"
+        "historicalDurationTrend": {
+          "$ref": "#/definitions/v1beta1HistoricalDurationTrend"
         }
       }
     },
@@ -1067,6 +1067,15 @@
         "hookEndTime": {
           "type": "string",
           "format": "date-time"
+        },
+        "sensorName": {
+          "type": "string"
+        },
+        "taskName": {
+          "type": "string"
+        },
+        "hookName": {
+          "type": "string"
         }
       }
     },

@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -145,9 +146,7 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
 	// copy ReplayConfig to a new map to mutate it
 	newConfig := map[string]string{}
-	for cfgKey, cfgVal := range config.JobConfig {
-		newConfig[cfgKey] = cfgVal
-	}
+	maps.Copy(newConfig, config.JobConfig)
 
 	// get tenant (project & namespace) configuration to obtain the execution project specifically for replay.
 	// note that the current behavior of GetDetails in the implementing struct prioritized namespace config over project config.
@@ -169,9 +168,11 @@ func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tn
 	// override the default execution project with the one in tenant config.
 	// only inject tenant-level config if execution project is not provided in ReplayConfig
 	overridedConfigKey, isSupported := r.pluginToExecutionProjectKeyMap[job.Task.Name]
-	tenantExecutionProject := tenantConfig[tenantReplayExecutionProjectConfigKey]
-	if isSupported && tenantExecutionProject != "" {
-		newConfig[overridedConfigKey] = tenantExecutionProject
+	if isSupported && newConfig[overridedConfigKey] == "" {
+		tenantExecutionProject := tenantConfig[tenantReplayExecutionProjectConfigKey]
+		if tenantExecutionProject != "" {
+			newConfig[overridedConfigKey] = tenantExecutionProject
+		}
 	}
 
 	return newConfig, nil

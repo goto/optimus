@@ -2,8 +2,9 @@ package gsheet
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-var delays = []int{0, 10, 30, 90}
+var delays = []int{30, 60, 120, 0}
 
 type GSheets struct {
 	srv *sheets.Service
@@ -65,7 +66,8 @@ func (gs *GSheets) getSheetContent(sheetID, sheetRange string, getFormattedDateT
 			var batchErr *googleapi.Error
 			if errors.As(err, &batchErr) && batchErr.Code == http.StatusTooManyRequests {
 				// When too many request, sleep delay sec and try again once
-				jitter := rand.Intn(16)
+				n, _ := rand.Int(rand.Reader, big.NewInt(11))
+				jitter := int(n.Int64())
 				time.Sleep(time.Second * time.Duration(d+jitter))
 				continue
 			}

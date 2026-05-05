@@ -153,7 +153,7 @@ type EventHandler interface {
 
 type UpstreamResolver interface {
 	CheckStaticResolvable(ctx context.Context, tnnt tenant.Tenant, jobs []*job.Job, logWriter writer.LogWriter) error
-	BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
+	BulkResolve(ctx context.Context, jobs []*job.Job, logWriter writer.LogWriter) (jobWithUpstreams []*job.WithUpstream, err error)
 	Resolve(ctx context.Context, subjectJob *job.Job, logWriter writer.LogWriter) ([]*job.Upstream, error)
 }
 
@@ -190,7 +190,7 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	jobsToBeResolved = append(jobsToBeResolved, downstreamJobs...)
 	jobsToBeResolved = job.Jobs(jobsToBeResolved).Deduplicate()
 
-	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), jobsToBeResolved, logWriter)
+	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobsToBeResolved, logWriter)
 	me.Append(err)
 
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
@@ -255,7 +255,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	jobsToBeResolved = append(jobsToBeResolved, downstreamUpdatedJobs...)
 	jobsToBeResolved = job.Jobs(jobsToBeResolved).Deduplicate()
 
-	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), jobsToBeResolved, logWriter)
+	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobsToBeResolved, logWriter)
 	me.Append(err)
 
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
@@ -331,7 +331,7 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	jobsToBeResolved = job.Jobs(jobsToBeResolved).Deduplicate()
 
 	if len(upsertedJobs) > 0 {
-		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), jobsToBeResolved, logWriter)
+		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobsToBeResolved, logWriter)
 		me.Append(err)
 
 		err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
@@ -842,7 +842,7 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 		}
 
 		j.logger.Debug("resolving upstreams for [%d] jobs of project [%s] namespace [%s]", len(updatedJobs), projectName, namespaceName)
-		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, projectName, updatedJobs, logWriter)
+		jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, updatedJobs, logWriter)
 		me.Append(err)
 
 		err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
@@ -988,7 +988,7 @@ func (j *JobService) resolveAndSaveUpstreams(ctx context.Context, jobTenant tena
 	me := errors.NewMultiError("resolve and save upstream errors")
 
 	j.logger.Debug("resolving upstreams for %d jobs of project [%s] namespace [%s]", len(allJobsToResolve), jobTenant.ProjectName(), jobTenant.NamespaceName())
-	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, jobTenant.ProjectName(), allJobsToResolve, logWriter)
+	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, allJobsToResolve, logWriter)
 	me.Append(err)
 
 	j.logger.Debug("replacing upstreams for %d jobs of project [%s] namespace [%s]", len(jobsWithUpstreams), jobTenant.ProjectName(), jobTenant.NamespaceName())
@@ -1737,7 +1737,7 @@ func (j *JobService) validateCyclic(ctx context.Context, tnnt tenant.Tenant, inc
 
 	jobsToValidate := j.getCombinedJobsToValidate(incomingJobs, existingJobs)
 
-	jobsWithUpstream, err := j.upstreamResolver.BulkResolve(ctx, tnnt.ProjectName(), jobsToValidate, writer.NewSafeBufferedLogger())
+	jobsWithUpstream, err := j.upstreamResolver.BulkResolve(ctx, jobsToValidate, writer.NewSafeBufferedLogger())
 	if err != nil {
 		return nil, err
 	}

@@ -335,14 +335,15 @@ func (j Jobs) GetFullNameToSpecMap() map[FullName]*Spec {
 	return fullNameToSpecMap
 }
 
-func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
+func (j Jobs) GetJobsWithUnresolvedUpstreams() (map[tenant.ProjectName][]*WithUpstream, error) {
 	me := errors.NewMultiError("get unresolved upstreams errors")
 
-	var jobsWithUnresolvedUpstream []*WithUpstream
+	jobsWithUnresolvedUpstream := make(map[tenant.ProjectName][]*WithUpstream)
 	for _, subjectJob := range j {
 		jobWithUnresolvedUpstream, err := subjectJob.GetJobWithUnresolvedUpstream()
 		me.Append(err)
-		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, jobWithUnresolvedUpstream)
+		projectName := jobWithUnresolvedUpstream.job.ProjectName()
+		jobsWithUnresolvedUpstream[projectName] = append(jobsWithUnresolvedUpstream[projectName], jobWithUnresolvedUpstream)
 	}
 
 	return jobsWithUnresolvedUpstream, me.ToErr()

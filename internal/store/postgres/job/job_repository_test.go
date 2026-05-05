@@ -1131,7 +1131,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			expectedDownstream := []*job.Downstream{
 				job.NewDownstream(jobSpecA.Name(), proj.Name(), namespace.Name(), jobSpecA.Task().Name()),
 			}
-			result, err := jobRepo.GetDownstreamByDestination(ctx, resourceURNC)
+			result, err := jobRepo.GetDownstreamByDestination(ctx, proj.Name(), resourceURNC)
 			assert.NoError(t, err)
 			assert.EqualValues(t, expectedDownstream, result)
 		})

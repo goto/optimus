@@ -1963,10 +1963,12 @@ func TestJobService(t *testing.T) {
 		newNamespaceName := "newNamespace"
 		newTenant, _ := tenant.NewTenant(project.Name().String(), newNamespaceName)
 		specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+		jobAOld := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 		jobA := job.NewJob(newTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 
 		t.Run("should fail if error in repo", func(t *testing.T) {
 			jobRepo := new(JobRepository)
+			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(jobAOld, nil)
 			jobRepo.On("ChangeJobNamespace", ctx, specA.Name(), sampleTenant, newTenant).Return(errors.New("error in transaction"))
 			defer jobRepo.AssertExpectations(t)
 
@@ -1977,8 +1979,9 @@ func TestJobService(t *testing.T) {
 
 		t.Run("should fail if error getting newly created job", func(t *testing.T) {
 			jobRepo := new(JobRepository)
+			jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), specA.Name()).Return(jobAOld, nil).Once()
 			jobRepo.On("ChangeJobNamespace", ctx, specA.Name(), sampleTenant, newTenant).Return(nil)
-			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(nil, errors.New("error in fetching job from DB"))
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(nil, errors.New("error in fetching job from DB")).Once()
 			defer jobRepo.AssertExpectations(t)
 
 			jobService := service.NewJobService(jobRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, service.JobValidateConfig{})
@@ -1988,6 +1991,7 @@ func TestJobService(t *testing.T) {
 
 		t.Run("should fail if error in upload job", func(t *testing.T) {
 			jobRepo := new(JobRepository)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobAOld, nil).Once()
 			jobRepo.On("ChangeJobNamespace", ctx, specA.Name(), sampleTenant, newTenant).Return(nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 			defer jobRepo.AssertExpectations(t)
@@ -2004,6 +2008,7 @@ func TestJobService(t *testing.T) {
 
 		t.Run("should fail if error in upload new job", func(t *testing.T) {
 			jobRepo := new(JobRepository)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobAOld, nil).Once()
 			jobRepo.On("ChangeJobNamespace", ctx, specA.Name(), sampleTenant, newTenant).Return(nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 			defer jobRepo.AssertExpectations(t)
@@ -2022,6 +2027,7 @@ func TestJobService(t *testing.T) {
 
 		t.Run("successfully", func(t *testing.T) {
 			jobRepo := new(JobRepository)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobAOld, nil).Once()
 			jobRepo.On("ChangeJobNamespace", ctx, specA.Name(), sampleTenant, newTenant).Return(nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil)
 			defer jobRepo.AssertExpectations(t)
@@ -2068,6 +2074,8 @@ func TestJobService(t *testing.T) {
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(nil, nil)
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil).Once()
 			jobRepo.On("Delete", ctx, project.Name(), specA.Name(), false).Return(nil)
 
 			jobNamesToRemove := []string{specA.Name().String()}
@@ -2129,6 +2137,8 @@ func TestJobService(t *testing.T) {
 			jobRepo.On("Delete", ctx, project.Name(), specA.Name(), false).Return(nil)
 
 			// if there are downstreams
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil).Once()
 			jobRepo.On("GetByJobName", ctx, project.Name(), jobB.Spec().Name()).Return(jobB, nil)
 			jobRepo.On("GetByJobName", ctx, project.Name(), jobC.Spec().Name()).Return(jobC, nil)
 
@@ -2156,7 +2166,10 @@ func TestJobService(t *testing.T) {
 			assert.EqualValues(t, downstreamFullNames, affectedDownstream)
 		})
 		t.Run("not delete the job if it has downstream and not a force delete", func(t *testing.T) {
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
 			jobRepo := new(JobRepository)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil).Once()
 			defer jobRepo.AssertExpectations(t)
 
 			upstreamRepo := new(UpstreamRepository)
@@ -2164,8 +2177,6 @@ func TestJobService(t *testing.T) {
 
 			downstreamRepo := new(DownstreamRepository)
 			defer downstreamRepo.AssertExpectations(t)
-
-			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
 			downstreamList := []*job.Downstream{
 				job.NewDownstream("job-B", project.Name(), namespace.Name(), taskName),
@@ -2180,6 +2191,9 @@ func TestJobService(t *testing.T) {
 		})
 		t.Run("returns error if unable to get downstream", func(t *testing.T) {
 			jobRepo := new(JobRepository)
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil).Once()
 			defer jobRepo.AssertExpectations(t)
 
 			upstreamRepo := new(UpstreamRepository)
@@ -2187,8 +2201,6 @@ func TestJobService(t *testing.T) {
 
 			downstreamRepo := new(DownstreamRepository)
 			defer downstreamRepo.AssertExpectations(t)
-
-			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(nil, errors.New("internal error"))
 
@@ -2199,9 +2211,6 @@ func TestJobService(t *testing.T) {
 			assert.Empty(t, affectedDownstream)
 		})
 		t.Run("returns error if unable to delete job", func(t *testing.T) {
-			jobRepo := new(JobRepository)
-			defer jobRepo.AssertExpectations(t)
-
 			upstreamRepo := new(UpstreamRepository)
 			defer upstreamRepo.AssertExpectations(t)
 
@@ -2209,6 +2218,10 @@ func TestJobService(t *testing.T) {
 			defer downstreamRepo.AssertExpectations(t)
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
+			jobRepo := new(JobRepository)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil).Once()
+			defer jobRepo.AssertExpectations(t)
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), specA.Name(), false).Return(errors.New("internal error"))
@@ -2220,6 +2233,9 @@ func TestJobService(t *testing.T) {
 		})
 		t.Run("return error if encounter issue when removing jobs from scheduler", func(t *testing.T) {
 			jobRepo := new(JobRepository)
+			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
+			jobRepo.On("GetByJobName", ctx, project.Name(), specA.Name()).Return(jobA, nil).Once()
 			defer jobRepo.AssertExpectations(t)
 
 			upstreamRepo := new(UpstreamRepository)
@@ -2237,8 +2253,6 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
-
-			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
 			downstreamRepo.On("GetDownstreamByJobName", ctx, project.Name(), specA.Name()).Return(nil, nil)
 			jobRepo.On("Delete", ctx, project.Name(), specA.Name(), false).Return(nil)

@@ -196,7 +196,7 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
-	me.Append(j.uploadJobs(ctx, jobs, nil))
+	me.Append(j.uploadJobs(ctx, jobsToBeResolved, nil))
 
 	for _, addedJob := range addedJobs {
 		j.raiseCreateEvent(addedJob)
@@ -260,7 +260,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
-	me.Append(j.uploadJobs(ctx, jobs, nil))
+	me.Append(j.uploadJobs(ctx, jobsToBeResolved, nil))
 
 	if len(updatedJobs) > 0 {
 		for _, updatedJob := range updatedJobs {
@@ -626,6 +626,9 @@ func (j *JobService) GetByFilter(ctx context.Context, filters ...filter.FilterOp
 }
 
 func (j *JobService) bulkJobCleanup(ctx context.Context, jobTenant tenant.Tenant, toDelete []*job.Spec, logWriter writer.LogWriter) error {
+	if len(toDelete) == 0 {
+		return nil
+	}
 	me := errors.NewMultiError("bulk Job Cleanup errors")
 	deletedJobNames, err := j.bulkDelete(ctx, jobTenant, toDelete, logWriter)
 	me.Append(err)
@@ -634,11 +637,12 @@ func (j *JobService) bulkJobCleanup(ctx context.Context, jobTenant tenant.Tenant
 	for i, deletedJobName := range deletedJobNames {
 		deletedJobNamesStr[i] = deletedJobName.String()
 	}
-
-	err = j.jobDeploymentService.UploadJobs(ctx, jobTenant, nil, deletedJobNamesStr)
-	if err != nil {
-		me.Append(err)
-		return errors.Wrap(job.EntityJob, "critical error deleting DAGS from scheduler storage, consider deleting the dags manually and report this incident to administrators, this wont fix on a retry", me.ToErr())
+	if len(deletedJobNamesStr) > 0 {
+		err = j.jobDeploymentService.UploadJobs(ctx, jobTenant, nil, deletedJobNamesStr)
+		if err != nil {
+			me.Append(err)
+			return errors.Wrap(job.EntityJob, "critical error deleting DAGS from scheduler storage, consider deleting the dags manually and report this incident to administrators, this wont fix on a retry", me.ToErr())
+		}
 	}
 	return me.ToErr()
 }

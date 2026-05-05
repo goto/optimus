@@ -13,8 +13,13 @@ type IncrementalWindow struct {
 }
 
 func (w IncrementalWindow) GetInterval(referenceTime time.Time) (interval.Interval, error) {
+	var end time.Time
 	s := w.schedule.Prev(referenceTime)
-	end := w.schedule.Next(referenceTime)
+	if w.schedule.Next(s).Equal(referenceTime) {
+		end = referenceTime
+	} else {
+		end = w.schedule.Next(referenceTime)
+	}
 	return interval.NewInterval(s, end), nil
 }
 

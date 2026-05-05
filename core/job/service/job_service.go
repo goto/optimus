@@ -142,7 +142,7 @@ type UpstreamRepository interface {
 }
 
 type DownstreamRepository interface {
-	GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination resource.URN) ([]*job.Downstream, error)
+	GetDownstreamByDestination(ctx context.Context, destination resource.URN) ([]*job.Downstream, error)
 	GetDownstreamByJobName(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Downstream, error)
 	GetDownstreamBySources(ctx context.Context, sources []resource.URN) ([]*job.Downstream, error)
 }
@@ -182,7 +182,7 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	addedJobs, err := j.jobRepo.Add(ctx, jobs)
 	me.Append(err)
 
-	downstreamJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), jobs)
+	downstreamJobs, err := j.getDownstreamJobs(ctx, jobs)
 	me.Append(err)
 
 	var jobsToBeResolved []*job.Job
@@ -236,7 +236,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 		existingJobs = append(existingJobs, existingJob)
 	}
 
-	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), existingJobs)
+	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, existingJobs)
 	me.Append(err)
 
 	jobs, err := j.generateJobs(ctx, tenantWithDetails, specs, logWriter)
@@ -245,7 +245,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	updatedJobs, err := j.jobRepo.Update(ctx, jobs)
 	me.Append(err)
 
-	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), updatedJobs)
+	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, updatedJobs)
 	me.Append(err)
 
 	var jobsToBeResolved []*job.Job
@@ -302,7 +302,7 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 		}
 		existingJobs = append(existingJobs, existingJob)
 	}
-	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), existingJobs)
+	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, existingJobs)
 	me.Append(err)
 
 	specsToAdd, specsToUpdate, _, specsUnmodified, specsDirty := j.differentiateSpecs(tenantWithDetails.ToTenant(), existingJobs, specs, nil)
@@ -312,9 +312,9 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 	me.Append(err)
 	j.raiseUpdateEvents(existingJobs, addedJobs, updatedJobs)
 
-	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), updatedJobs)
+	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, updatedJobs)
 	me.Append(err)
-	downstreamAddedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), addedJobs)
+	downstreamAddedJobs, err := j.getDownstreamJobs(ctx, addedJobs)
 	me.Append(err)
 
 	var upsertedJobs []*job.Job
@@ -739,7 +739,7 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 			toUpdateJobs = append(toUpdateJobs, currentJob)
 		}
 	}
-	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), toUpdateJobs)
+	downstreamExistingJobs, err := j.getDownstreamJobs(ctx, toUpdateJobs)
 	me.Append(err)
 
 	addedJobs, updatedJobs, err := j.bulkJobPersist(ctx, tenantWithDetails, toAdd, toUpdate, logWriter)
@@ -756,9 +756,9 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 		return err
 	}
 
-	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), updatedJobs)
+	downstreamUpdatedJobs, err := j.getDownstreamJobs(ctx, updatedJobs)
 	me.Append(err)
-	downstreamAddedJobs, err := j.getDownstreamJobs(ctx, jobTenant.ProjectName(), addedJobs)
+	downstreamAddedJobs, err := j.getDownstreamJobs(ctx, addedJobs)
 	me.Append(err)
 
 	jobsToBeResolved := []*job.Job{}
@@ -1388,7 +1388,7 @@ func (j *JobService) GetUpstreamsToInspect(ctx context.Context, subjectJob *job.
 
 func (j *JobService) GetDownstream(ctx context.Context, subjectJob *job.Job, localJob bool) ([]*job.Downstream, error) {
 	if localJob {
-		return j.downstreamRepo.GetDownstreamByDestination(ctx, subjectJob.ProjectName(), subjectJob.Destination())
+		return j.downstreamRepo.GetDownstreamByDestination(ctx, subjectJob.Destination())
 	}
 	return j.downstreamRepo.GetDownstreamByJobName(ctx, subjectJob.ProjectName(), subjectJob.Spec().Name())
 }
@@ -2158,20 +2158,20 @@ func (j *JobService) GetDownstreamByResourceURN(ctx context.Context, tnnt tenant
 	return dependentJobs, nil
 }
 
-func (j *JobService) getDownstreamJobs(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job) ([]*job.Job, error) {
+func (j *JobService) getDownstreamJobs(ctx context.Context, jobs []*job.Job) ([]*job.Job, error) {
 	me := errors.NewMultiError("get downstream jobs errors")
 	downstreamJobs := []*job.Job{}
 	for _, currentJob := range jobs {
 		if currentJob.Destination() == resource.ZeroURN() {
 			continue
 		}
-		downstreams, err := j.downstreamRepo.GetDownstreamByDestination(ctx, projectName, currentJob.Destination())
+		downstreams, err := j.downstreamRepo.GetDownstreamByDestination(ctx, currentJob.Destination())
 		if err != nil {
 			me.Append(err)
 			continue
 		}
 		for _, d := range downstreams {
-			downstreamJob, err := j.jobRepo.GetByJobName(ctx, projectName, d.Name())
+			downstreamJob, err := j.jobRepo.GetByJobName(ctx, d.ProjectName(), d.Name())
 			if err != nil {
 				me.Append(err)
 				continue

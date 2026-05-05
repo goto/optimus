@@ -196,8 +196,7 @@ func (j *JobService) Add(ctx context.Context, jobTenant tenant.Tenant, specs []*
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
-	err = j.uploadJobs(ctx, jobTenant, jobsToBeResolved, nil)
-	me.Append(err)
+	me.Append(j.uploadJobs(ctx, jobs, nil))
 
 	for _, addedJob := range addedJobs {
 		j.raiseCreateEvent(addedJob)
@@ -261,8 +260,7 @@ func (j *JobService) Update(ctx context.Context, jobTenant tenant.Tenant, specs 
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
-	err = j.uploadJobs(ctx, jobTenant, jobsToBeResolved, nil)
-	me.Append(err)
+	me.Append(j.uploadJobs(ctx, jobs, nil))
 
 	if len(updatedJobs) > 0 {
 		for _, updatedJob := range updatedJobs {
@@ -337,8 +335,7 @@ func (j *JobService) Upsert(ctx context.Context, jobTenant tenant.Tenant, specs 
 		err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 		me.Append(err)
 
-		err = j.uploadJobs(ctx, jobTenant, jobsToBeResolved, nil)
-		me.Append(err)
+		me.Append(j.uploadJobs(ctx, jobsToBeResolved, nil))
 	}
 
 	totalFailures := len(specs) - len(addedJobs) - len(updatedJobs) - len(specsUnmodified)
@@ -402,6 +399,12 @@ func (j *JobService) SyncState(ctx context.Context, jobTenant tenant.Tenant, dis
 }
 
 func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, cleanFlag, forceFlag bool) (affectedDownstream []job.FullName, err error) {
+	jobToBeDeleted, err := j.jobRepo.GetByJobName(ctx, jobTenant.ProjectName(), jobName)
+	if err != nil {
+		raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleteFailed, 1)
+		j.logger.Error("error getting jobs for deletion name:[%s], err: %s", jobName, err)
+		return nil, err
+	}
 	downstreamList, err := j.downstreamRepo.GetDownstreamByJobName(ctx, jobTenant.ProjectName(), jobName)
 	if err != nil {
 		raiseJobEventMetric(jobTenant, job.MetricJobEventStateDeleteFailed, 1)
@@ -428,13 +431,13 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 
 	if forceFlag && len(downstreamList) > 0 {
 		// if force delete, upstreams of all direct downstreams of the deleted job must be resolved
-		err := j.resolveDownstreamsForDeletedUpstream(ctx, jobTenant, downstreamList)
+		err := j.resolveDownstreamsForDeletedUpstream(ctx, downstreamList)
 		if err != nil {
 			j.logger.Error("error resolving upstreams of downstream jobs of deleted job [%s]: %s", jobName, err.Error())
 		}
 	}
 
-	if err := j.uploadJobs(ctx, jobTenant, nil, []job.Name{jobName}); err != nil {
+	if err := j.uploadJobs(ctx, nil, []*job.Job{jobToBeDeleted}); err != nil {
 		j.logger.Error("error uploading job [%s]: %s", jobName, err)
 		return downstreamFullNames, err
 	}
@@ -444,7 +447,7 @@ func (j *JobService) Delete(ctx context.Context, jobTenant tenant.Tenant, jobNam
 	return downstreamFullNames, nil
 }
 
-func (j *JobService) resolveDownstreamsForDeletedUpstream(ctx context.Context, jobTenant tenant.Tenant, downstreamList []*job.Downstream) error {
+func (j *JobService) resolveDownstreamsForDeletedUpstream(ctx context.Context, downstreamList []*job.Downstream) error {
 	toResolveDownstreamJobs := []*job.Job{}
 	me := errors.NewMultiError("downstream resolve on force delete errors")
 
@@ -458,57 +461,44 @@ func (j *JobService) resolveDownstreamsForDeletedUpstream(ctx context.Context, j
 		toResolveDownstreamJobs = append(toResolveDownstreamJobs, downstreamJob)
 	}
 
-	err := j.resolveAndSaveUpstreams(ctx, jobTenant, writer.NewLogWriter(j.logger), toResolveDownstreamJobs)
-	me.Append(err)
+	me.Append(j.resolveAndSaveUpstreams(ctx, writer.NewLogWriter(j.logger), toResolveDownstreamJobs))
 
-	// since downstream can be cross-tenant, update of jobs must also be done per tenant
-	downstreamJobsByTenant := make(map[string][]*job.Job)
-	for _, downstreamJob := range toResolveDownstreamJobs {
-		tenantKey := downstreamJob.Tenant().String()
-		downstreamJobsByTenant[tenantKey] = append(downstreamJobsByTenant[tenantKey], downstreamJob)
-	}
-
-	for tenantKey, jobsForTenant := range downstreamJobsByTenant {
-		tenantForJobs, err := tenant.TenantFromString(tenantKey)
-		if err != nil {
-			me.Append(err)
-			continue
-		}
-
-		err = j.uploadJobs(ctx, tenantForJobs, jobsForTenant, nil)
-		me.Append(err)
-
-		raiseJobEventMetric(tenantForJobs, job.MetricJobEventStateUpdated, len(jobsForTenant))
-	}
+	me.Append(j.uploadJobs(ctx, toResolveDownstreamJobs, nil))
 
 	return me.ToErr()
 }
 
 func (j *JobService) ChangeNamespace(ctx context.Context, jobTenant, jobNewTenant tenant.Tenant, jobName job.Name) error {
-	err := j.jobRepo.ChangeJobNamespace(ctx, jobName, jobTenant, jobNewTenant)
+	oldJob, err := j.jobRepo.GetByJobName(ctx, jobTenant.ProjectName(), jobName)
+	if err != nil {
+		errorsMsg := fmt.Sprintf("unable to fetch job for namespace change for job : %s, namespace: %s, err: %s", jobName, jobTenant.NamespaceName(), err.Error())
+		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
+	}
+
+	err = j.jobRepo.ChangeJobNamespace(ctx, jobName, jobTenant, jobNewTenant)
 	if err != nil {
 		errorsMsg := fmt.Sprintf("unable to successfully finish job namespace change transaction : %s", err.Error())
 		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
 	}
 
-	newJobSpec, err := j.jobRepo.GetByJobName(ctx, jobNewTenant.ProjectName(), jobName)
+	newJob, err := j.jobRepo.GetByJobName(ctx, jobNewTenant.ProjectName(), jobName)
 	if err != nil {
 		errorsMsg := fmt.Sprintf(" unable fetch jobSpecs for newly modified job : %s, namespace: %s, err: %s", jobName, jobNewTenant.NamespaceName(), err.Error())
 		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
 	}
 
-	err = j.uploadJobs(ctx, jobTenant, nil, []job.Name{jobName})
+	err = j.uploadJobs(ctx, nil, job.Jobs{oldJob})
 	if err != nil {
 		errorsMsg := fmt.Sprintf(" unable to remove old job : %s", err.Error())
 		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
 	}
 
-	err = j.uploadJobs(ctx, jobNewTenant, []*job.Job{newJobSpec}, nil)
+	err = j.uploadJobs(ctx, job.Jobs{newJob}, nil)
 	if err != nil {
 		errorsMsg := fmt.Sprintf(" unable to create new job on scheduler : %s", err.Error())
 		return errors.NewError(errors.ErrInternalError, job.EntityJob, errorsMsg)
 	}
-	j.raiseUpdateEvent(newJobSpec, job.UnspecifiedImpactChange)
+	j.raiseUpdateEvent(newJob, job.UnspecifiedImpactChange)
 	return nil
 }
 
@@ -639,7 +629,13 @@ func (j *JobService) bulkJobCleanup(ctx context.Context, jobTenant tenant.Tenant
 	me := errors.NewMultiError("bulk Job Cleanup errors")
 	deletedJobNames, err := j.bulkDelete(ctx, jobTenant, toDelete, logWriter)
 	me.Append(err)
-	err = j.uploadJobs(ctx, jobTenant, nil, deletedJobNames)
+
+	deletedJobNamesStr := make([]string, len(deletedJobNames))
+	for i, deletedJobName := range deletedJobNames {
+		deletedJobNamesStr[i] = deletedJobName.String()
+	}
+
+	err = j.jobDeploymentService.UploadJobs(ctx, jobTenant, nil, deletedJobNamesStr)
 	if err != nil {
 		me.Append(err)
 		return errors.Wrap(job.EntityJob, "critical error deleting DAGS from scheduler storage, consider deleting the dags manually and report this incident to administrators, this wont fix on a retry", me.ToErr())
@@ -769,11 +765,12 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	jobsToBeResolved = append(jobsToBeResolved, downstreamAddedJobs...)
 	jobsToBeResolved = job.Jobs(jobsToBeResolved).Deduplicate()
 
-	if err := j.resolveAndSaveUpstreams(ctx, jobTenant, logWriter, jobsToBeResolved); err != nil {
+	if err := j.resolveAndSaveUpstreams(ctx, logWriter, jobsToBeResolved); err != nil {
 		return errors.Wrap(job.EntityJob, "failed resolving job upstreams", err)
 	}
 
-	if err := j.uploadJobs(ctx, jobTenant, jobsToBeResolved, nil); err != nil {
+	err = j.uploadJobs(ctx, jobsToBeResolved, nil)
+	if err != nil {
 		return errors.Wrap(job.EntityJob, "failed uploading compiled dags", err)
 	}
 
@@ -786,23 +783,22 @@ func (j *JobService) ReplaceAll(ctx context.Context, jobTenant tenant.Tenant, sp
 	return nil
 }
 
-func (j *JobService) uploadJobs(ctx context.Context, jobTenant tenant.Tenant, jobsToUpload []*job.Job, deletedJobNames []job.Name) error {
-	if len(jobsToUpload) == 0 && len(deletedJobNames) == 0 {
+func (j *JobService) uploadJobs(ctx context.Context, jobsToUpload job.Jobs, jobsToDelete []*job.Job) error {
+	if len(jobsToUpload) == 0 && len(jobsToDelete) == 0 {
 		j.logger.Warn("no jobs to be uploaded")
 		return nil
 	}
 
-	var jobNamesToUpload []string
-	for _, jobToUpload := range jobsToUpload {
-		jobNamesToUpload = append(jobNamesToUpload, jobToUpload.GetName())
+	me := errors.NewMultiError("uploadJobs errors")
+	for tnnt, jobs := range groupByTenant(jobsToUpload) {
+		me.Append(j.jobDeploymentService.UploadJobs(ctx, tnnt, jobs.GetJobNamesString(), nil))
 	}
 
-	var jobNamesToRemove []string
-	for _, deletedJobName := range deletedJobNames {
-		jobNamesToRemove = append(jobNamesToRemove, deletedJobName.String())
+	for tnnt, jobs := range groupByTenant(jobsToDelete) {
+		me.Append(j.jobDeploymentService.UploadJobs(ctx, tnnt, nil, jobs.GetJobNamesString()))
 	}
 
-	return j.jobDeploymentService.UploadJobs(ctx, jobTenant, jobNamesToUpload, jobNamesToRemove)
+	return me.ToErr()
 }
 
 func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName, namespaceNames, jobNames []string, logWriter writer.LogWriter) (err error) {
@@ -849,7 +845,7 @@ func (j *JobService) Refresh(ctx context.Context, projectName tenant.ProjectName
 		me.Append(err)
 
 		j.logger.Debug("uploading [%d] jobs of project [%s] namespace [%s] to scheduler", len(jobs), projectName, namespaceName)
-		err = j.uploadJobs(ctx, jobTenant, jobs, nil)
+		err = j.uploadJobs(ctx, jobs, nil)
 		me.Append(err)
 	}
 
@@ -975,7 +971,7 @@ func (*JobService) getIdentifierToJobsMap(jobsToValidateMap map[job.Name]*job.Wi
 	return identifierToJobsMap
 }
 
-func (j *JobService) resolveAndSaveUpstreams(ctx context.Context, jobTenant tenant.Tenant, logWriter writer.LogWriter, jobsToResolve ...[]*job.Job) error {
+func (j *JobService) resolveAndSaveUpstreams(ctx context.Context, logWriter writer.LogWriter, jobsToResolve ...[]*job.Job) error {
 	var allJobsToResolve []*job.Job
 	for _, group := range jobsToResolve {
 		allJobsToResolve = append(allJobsToResolve, group...)
@@ -987,11 +983,15 @@ func (j *JobService) resolveAndSaveUpstreams(ctx context.Context, jobTenant tena
 
 	me := errors.NewMultiError("resolve and save upstream errors")
 
-	j.logger.Debug("resolving upstreams for %d jobs of project [%s] namespace [%s]", len(allJobsToResolve), jobTenant.ProjectName(), jobTenant.NamespaceName())
+	for tnnt, jobs := range groupByTenant(allJobsToResolve) {
+		j.logger.Debug("resolving upstreams for %d jobs of project [%s] namespace [%s], List: [%v]", len(jobs), tnnt.ProjectName(), tnnt.NamespaceName(), strings.Join(jobs.GetJobNamesString(), ", "))
+	}
 	jobsWithUpstreams, err := j.upstreamResolver.BulkResolve(ctx, allJobsToResolve, logWriter)
 	me.Append(err)
 
-	j.logger.Debug("replacing upstreams for %d jobs of project [%s] namespace [%s]", len(jobsWithUpstreams), jobTenant.ProjectName(), jobTenant.NamespaceName())
+	for tnnt, jobsWithUpstreams := range groupJobWithUpstreamsByTenant(jobsWithUpstreams) {
+		j.logger.Debug("replacing upstreams for %d jobs of project [%s] namespace [%s], , List: [%v]", len(jobsWithUpstreams), tnnt.ProjectName(), tnnt.NamespaceName(), strings.Join(jobsWithUpstreams.GetSubjectJobNameStrings(), ", "))
+	}
 	err = j.upstreamRepo.ReplaceUpstreams(ctx, jobsWithUpstreams)
 	me.Append(err)
 
@@ -1725,6 +1725,7 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	return output
 }
 
+// todo: ensure cycles are validated across projects
 func (j *JobService) validateCyclic(ctx context.Context, tnnt tenant.Tenant, incomingJobs []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
 	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, tnnt)
 	if err != nil {
@@ -2214,13 +2215,9 @@ func (j *JobService) BulkDeleteJobs(ctx context.Context, projectName tenant.Proj
 	}
 
 	me := errors.NewMultiError("error cleanup jobs in scheduler")
-	deletedJobsPerNamespace := deletedJobs.GetNamespaceNameAndJobsMap()
-	for namespaceName, deletedJobs := range deletedJobsPerNamespace {
-		tnnt, _ := tenant.NewTenant(projectName.String(), namespaceName.String())
-		err := j.uploadJobs(ctx, tnnt, nil, job.Jobs(deletedJobs).GetJobNames())
-		if err != nil {
-			me.Append(err)
-		}
+	err := j.uploadJobs(ctx, nil, deletedJobs)
+	if err != nil {
+		me.Append(err)
 	}
 
 	return deletionTrackerMap, me.ToErr()
@@ -2351,4 +2348,13 @@ func (j *JobService) validatePlugin(ctx context.Context, job *job.Job) dto.Valid
 		Messages: []string{"no issue"},
 		Success:  true,
 	}
+}
+
+func groupJobWithUpstreamsByTenant(jobs job.WithUpstreams) map[tenant.Tenant]job.WithUpstreams {
+	grouped := make(map[tenant.Tenant]job.WithUpstreams)
+	for _, j := range jobs {
+		tnnt := j.Job().Tenant()
+		grouped[tnnt] = append(grouped[tnnt], j)
+	}
+	return grouped
 }

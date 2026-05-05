@@ -293,7 +293,7 @@ func (j Jobs) GetJobNames() []Name {
 	return jobNames
 }
 
-func (j Jobs) GetJobNamesSring() []string {
+func (j Jobs) GetJobNamesString() []string {
 	jobNames := make([]string, len(j))
 	for i, job := range j {
 		jobNames[i] = job.spec.Name().String()
@@ -436,6 +436,14 @@ func (w WithUpstreams) GetSubjectJobNames() []Name {
 	names := make([]Name, len(w))
 	for i, withUpstream := range w {
 		names[i] = withUpstream.Name()
+	}
+	return names
+}
+
+func (w WithUpstreams) GetSubjectJobNameStrings() []string {
+	names := make([]string, len(w))
+	for i, withUpstream := range w {
+		names[i] = withUpstream.Name().String()
 	}
 	return names
 }

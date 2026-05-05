@@ -293,7 +293,7 @@ func (j Jobs) GetJobNames() []Name {
 	return jobNames
 }
 
-func (j Jobs) GetJobNamesSring() []string {
+func (j Jobs) GetJobNamesString() []string {
 	jobNames := make([]string, len(j))
 	for i, job := range j {
 		jobNames[i] = job.spec.Name().String()
@@ -335,14 +335,15 @@ func (j Jobs) GetFullNameToSpecMap() map[FullName]*Spec {
 	return fullNameToSpecMap
 }
 
-func (j Jobs) GetJobsWithUnresolvedUpstreams() ([]*WithUpstream, error) {
+func (j Jobs) GetJobsWithUnresolvedUpstreams() (map[tenant.ProjectName][]*WithUpstream, error) {
 	me := errors.NewMultiError("get unresolved upstreams errors")
 
-	var jobsWithUnresolvedUpstream []*WithUpstream
+	jobsWithUnresolvedUpstream := make(map[tenant.ProjectName][]*WithUpstream)
 	for _, subjectJob := range j {
 		jobWithUnresolvedUpstream, err := subjectJob.GetJobWithUnresolvedUpstream()
 		me.Append(err)
-		jobsWithUnresolvedUpstream = append(jobsWithUnresolvedUpstream, jobWithUnresolvedUpstream)
+		projectName := jobWithUnresolvedUpstream.job.ProjectName()
+		jobsWithUnresolvedUpstream[projectName] = append(jobsWithUnresolvedUpstream[projectName], jobWithUnresolvedUpstream)
 	}
 
 	return jobsWithUnresolvedUpstream, me.ToErr()
@@ -435,6 +436,14 @@ func (w WithUpstreams) GetSubjectJobNames() []Name {
 	names := make([]Name, len(w))
 	for i, withUpstream := range w {
 		names[i] = withUpstream.Name()
+	}
+	return names
+}
+
+func (w WithUpstreams) GetSubjectJobNameStrings() []string {
+	names := make([]string, len(w))
+	for i, withUpstream := range w {
+		names[i] = withUpstream.Name().String()
 	}
 	return names
 }

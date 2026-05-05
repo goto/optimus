@@ -80,12 +80,12 @@ func (w *JobWorker) SyncJobStatusByProject(ctx context.Context, projectName tena
 	multierror := errors.NewMultiError("SyncJobStatusByProject")
 
 	if len(toDisable) > 0 {
-		w.logger.Info(fmt.Sprintf("[SyncJobStatus] Job Status changed to disabled on scheduler jobs: %s", strings.Join(toDisable.GetJobNamesSring(), ", ")))
+		w.logger.Info(fmt.Sprintf("[SyncJobStatus] Job Status changed to disabled on scheduler jobs: %s", strings.Join(toDisable.GetJobNamesString(), ", ")))
 		err = w.UpdateStateInStore(ctx, toDisable, job.DISABLED)
 		multierror.Append(err)
 	}
 	if len(toEnable) > 0 {
-		w.logger.Info(fmt.Sprintf("[SyncJobStatus] Job Status changed to enabled on scheduler jobs: %s", strings.Join(toEnable.GetJobNamesSring(), ", ")))
+		w.logger.Info(fmt.Sprintf("[SyncJobStatus] Job Status changed to enabled on scheduler jobs: %s", strings.Join(toEnable.GetJobNamesString(), ", ")))
 		err = w.UpdateStateInStore(ctx, toEnable, job.ENABLED)
 		multierror.Append(err)
 	}

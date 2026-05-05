@@ -70,22 +70,26 @@ func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant
 	return me.ToErr()
 }
 
-func (u UpstreamResolver) BulkResolve(ctx context.Context, projectName tenant.ProjectName, jobs []*job.Job, logWriter writer.LogWriter) ([]*job.WithUpstream, error) {
+func (u UpstreamResolver) BulkResolve(ctx context.Context, jobs []*job.Job, logWriter writer.LogWriter) ([]*job.WithUpstream, error) {
 	me := errors.NewMultiError("bulk resolve jobs errors")
 
-	jobsWithUnresolvedUpstream, err := job.Jobs(jobs).GetJobsWithUnresolvedUpstreams()
+	jobsWithUnresolvedUpstreamMap, err := job.Jobs(jobs).GetJobsWithUnresolvedUpstreams()
 	if err != nil {
 		errorMsg := fmt.Sprintf("[%s] %s", jobs[0].Tenant().NamespaceName().String(), err.Error())
 		logWriter.Write(writer.LogLevelError, errorMsg)
 		me.Append(err)
 	}
 
-	jobsWithResolvedInternalUpstreams, err := u.internalUpstreamResolver.BulkResolve(ctx, projectName, jobsWithUnresolvedUpstream)
-	if err != nil {
-		errorMsg := fmt.Sprintf("unable to resolve upstream: %s", err.Error())
-		logWriter.Write(writer.LogLevelError, errorMsg)
-		me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg))
-		return nil, me.ToErr()
+	var jobsWithResolvedInternalUpstreams []*job.WithUpstream
+	for projectName, jobsWithUnresolvedUpstream := range jobsWithUnresolvedUpstreamMap {
+		jobsWithResolvedInternalUpstreamsAtProject, err := u.internalUpstreamResolver.BulkResolve(ctx, projectName, jobsWithUnresolvedUpstream)
+		if err != nil {
+			errorMsg := fmt.Sprintf("unable to resolve upstream: %s", err.Error())
+			logWriter.Write(writer.LogLevelError, errorMsg)
+			me.Append(errors.NewError(errors.ErrInternalError, job.EntityJob, errorMsg))
+			return nil, me.ToErr()
+		}
+		jobsWithResolvedInternalUpstreams = append(jobsWithResolvedInternalUpstreams, jobsWithResolvedInternalUpstreamsAtProject...)
 	}
 
 	jobsWithResolvedExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedInternalUpstreams, logWriter)

@@ -252,7 +252,7 @@ func TestUpstreamResolver(t *testing.T) {
 			expectedJobWitUpstreams := []*job.WithUpstream{job.NewWithUpstream(jobA, []*job.Upstream{upstreamB, upstreamC})}
 
 			upstreamResolver := resolver.NewUpstreamResolver(jobRepo, externalUpstreamResolver, internalUpstreamResolver)
-			result, err := upstreamResolver.BulkResolve(ctx, project.Name(), jobs, logWriter)
+			result, err := upstreamResolver.BulkResolve(ctx, jobs, logWriter)
 			assert.NoError(t, err)
 			assert.EqualValues(t, expectedJobWitUpstreams, result)
 		})
@@ -296,7 +296,7 @@ func TestUpstreamResolver(t *testing.T) {
 			}
 
 			upstreamResolver := resolver.NewUpstreamResolver(jobRepo, externalUpstreamResolver, internalUpstreamResolver)
-			result, err := upstreamResolver.BulkResolve(ctx, project.Name(), jobs, logWriter)
+			result, err := upstreamResolver.BulkResolve(ctx, jobs, logWriter)
 			assert.NoError(t, err)
 			assert.EqualValues(t, expectedJobWitUpstreams, result)
 		})
@@ -321,7 +321,7 @@ func TestUpstreamResolver(t *testing.T) {
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
 			upstreamResolver := resolver.NewUpstreamResolver(jobRepo, externalUpstreamResolver, internalUpstreamResolver)
-			result, err := upstreamResolver.BulkResolve(ctx, project.Name(), jobs, logWriter)
+			result, err := upstreamResolver.BulkResolve(ctx, jobs, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 			assert.Nil(t, result)
 		})
@@ -363,7 +363,7 @@ func TestUpstreamResolver(t *testing.T) {
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
 			upstreamResolver := resolver.NewUpstreamResolver(jobRepo, externalUpstreamResolver, internalUpstreamResolver)
-			result, err := upstreamResolver.BulkResolve(ctx, project.Name(), jobs, logWriter)
+			result, err := upstreamResolver.BulkResolve(ctx, jobs, logWriter)
 			assert.Error(t, err)
 			assert.EqualValues(t, []*job.WithUpstream{jobWithExternalUpstreams}, result)
 		})
@@ -405,7 +405,7 @@ func TestUpstreamResolver(t *testing.T) {
 			logWriter.On("Write", mock.Anything, mock.Anything).Return(nil)
 
 			upstreamResolver := resolver.NewUpstreamResolver(jobRepo, externalUpstreamResolver, internalUpstreamResolver)
-			result, err := upstreamResolver.BulkResolve(ctx, project.Name(), jobs, logWriter)
+			result, err := upstreamResolver.BulkResolve(ctx, jobs, logWriter)
 			assert.ErrorContains(t, err, "internal error")
 			assert.EqualValues(t, []*job.WithUpstream{jobWithExternalUpstreams}, result)
 		})

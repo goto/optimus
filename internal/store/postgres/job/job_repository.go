@@ -1133,7 +1133,7 @@ func (j JobRepository) GetDownstreamByDestination(ctx context.Context, destinati
 SELECT
 	name as job_name, project_name, namespace_name, task_name
 FROM job
-WHERE $2 = ANY(sources)
+WHERE $1 = ANY(sources)
 AND deleted_at IS NULL;`
 
 	rows, err := j.db.Query(ctx, query, destination.String())

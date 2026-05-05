@@ -423,7 +423,7 @@ func BenchmarkJobRepository(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			actualDownstreams, actualError := repo.GetDownstreamByDestination(ctx, rootJobDestination)
+			actualDownstreams, actualError := repo.GetDownstreamByDestination(ctx, tnnt.ProjectName(), rootJobDestination)
 			assert.Len(b, actualDownstreams, maxNumberOfDownstreams)
 			assert.NoError(b, actualError)
 		}

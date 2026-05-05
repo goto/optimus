@@ -1128,15 +1128,15 @@ WHERE project_name=$1 AND job_name=$2;`
 	return j.toUpstreams(storeJobsWithUpstreams)
 }
 
-func (j JobRepository) GetDownstreamByDestination(ctx context.Context, destination resource.URN) ([]*job.Downstream, error) {
+func (j JobRepository) GetDownstreamByDestination(ctx context.Context, projectName tenant.ProjectName, destination resource.URN) ([]*job.Downstream, error) {
 	query := `
 SELECT
 	name as job_name, project_name, namespace_name, task_name
 FROM job
-WHERE $1 = ANY(sources)
+WHERE project_name = $1 AND $2 = ANY(sources)
 AND deleted_at IS NULL;`
 
-	rows, err := j.db.Query(ctx, query, destination.String())
+	rows, err := j.db.Query(ctx, query, projectName, destination.String())
 	if err != nil {
 		return nil, errors.Wrap(job.EntityJob, "error while getting job downstream", err)
 	}

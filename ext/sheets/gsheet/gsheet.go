@@ -3,6 +3,7 @@ package gsheet
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-var delays = []int{10, 30, 90}
+var delays = []int{0, 10, 30, 90}
 
 type GSheets struct {
 	srv *sheets.Service
@@ -64,7 +65,8 @@ func (gs *GSheets) getSheetContent(sheetID, sheetRange string, getFormattedDateT
 			var batchErr *googleapi.Error
 			if errors.As(err, &batchErr) && batchErr.Code == http.StatusTooManyRequests {
 				// When too many request, sleep delay sec and try again once
-				time.Sleep(time.Second * time.Duration(d))
+				jitter := rand.Intn(16)
+				time.Sleep(time.Second * time.Duration(d+jitter))
 				continue
 			}
 
@@ -78,7 +80,7 @@ func (gs *GSheets) getSheetContent(sheetID, sheetRange string, getFormattedDateT
 		return resp.ValueRanges[0].Values, nil
 	}
 
-	return nil, errors.InternalError("sheets", "failed all the retry attempts", nil)
+	return nil, errors.InternalError("sheets", "failed all the retry attempts, err: status:429/TooMayRequests", nil)
 }
 
 func (gs *GSheets) GetSheetName(sheetURL string) (string, error) {

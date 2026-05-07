@@ -482,7 +482,7 @@ func TestEntityJob(t *testing.T) {
 
 			jobsWithUpstreams, err := jobs.GetJobsWithUnresolvedUpstreams()
 			assert.Error(t, err)
-			assert.Len(t, jobsWithUpstreams, 2)
+			assert.Len(t, jobsWithUpstreams[sampleTenant.ProjectName()], 2)
 		})
 		t.Run("should get unresolved upstreams", func(t *testing.T) {
 			jobTaskPython := job.NewTask("python", jobTaskConfig, "", nil)
@@ -493,7 +493,7 @@ func TestEntityJob(t *testing.T) {
 
 			jobsWithUpstreams, err := jobs.GetJobsWithUnresolvedUpstreams()
 			assert.NoError(t, err)
-			assert.Len(t, jobsWithUpstreams, 2)
+			assert.Len(t, jobsWithUpstreams[sampleTenant.ProjectName()], 2)
 		})
 	})
 	t.Run("JobsDeduplicate", func(t *testing.T) {

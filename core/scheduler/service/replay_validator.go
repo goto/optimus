@@ -22,7 +22,7 @@ func NewValidator(replayRepository ReplayRepository, scheduler ReplayScheduler, 
 }
 
 func (v Validator) Validate(ctx context.Context, replayRequest *scheduler.Replay, jobCron *cron.ScheduleSpec) error {
-	if err := v.validateDateRange(ctx, replayRequest, jobCron); err != nil {
+	if err := v.ValidateDateRange(ctx, replayRequest); err != nil {
 		return err
 	}
 
@@ -33,11 +33,20 @@ func (v Validator) Validate(ctx context.Context, replayRequest *scheduler.Replay
 	return v.validateConflictedRun(ctx, replayRequest, jobCron)
 }
 
-func (v Validator) validateDateRange(ctx context.Context, replayRequest *scheduler.Replay, jobCron *cron.ScheduleSpec) error {
+func (v Validator) ValidateDateRange(ctx context.Context, replayRequest *scheduler.Replay) error {
 	jobSpec, err := v.jobRepo.GetJobDetails(ctx, replayRequest.Tenant().ProjectName(), replayRequest.JobName())
 	if err != nil {
 		return err
 	}
+
+	if jobSpec.Schedule.Interval == "" {
+		return errors.NewError(errors.ErrInternalError, scheduler.EntityReplay, "job schedule interval is empty")
+	}
+	jobCron, err := cron.ParseCronSchedule(jobSpec.Schedule.Interval)
+	if err != nil {
+		return err
+	}
+
 	replayStartDate := replayRequest.Config().StartTime.UTC()
 	replayEndDate := replayRequest.Config().EndTime.UTC()
 	jobLogicalStartDate := jobSpec.Schedule.StartDate.UTC()

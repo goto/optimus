@@ -69,6 +69,7 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
 					EndDate:   &jobEndTime,
+					Interval:  jobCronStr,
 				},
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(onGoingReplay, nil)
@@ -92,6 +93,7 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime.Add(24 * time.Hour), // logical start date 24 hours ahead
 					EndDate:   &jobEndTime,
+					Interval:  jobCronStr,
 				},
 			}, nil)
 
@@ -114,6 +116,7 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
 					EndDate:   &schEndTime, // end date 1 second prior of replay
+					Interval:  jobCronStr,
 				},
 			}, nil)
 
@@ -152,6 +155,7 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
 					EndDate:   &jobAEndTime,
+					Interval:  jobCronStr,
 				},
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(nil, nil)
@@ -179,6 +183,7 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
 					EndDate:   &jobEndTime,
+					Interval:  jobCronStr,
 				},
 			}, nil)
 
@@ -213,6 +218,7 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
 					EndDate:   &jobEndTime,
+					Interval:  jobCronStr,
 				},
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(onGoingReplay, nil)
@@ -237,6 +243,7 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
 					EndDate:   &jobEndTime,
+					Interval:  jobCronStr,
 				},
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(nil, internalErr)
@@ -267,13 +274,14 @@ func TestReplayValidator(t *testing.T) {
 				Schedule: &scheduler.Schedule{
 					StartDate: jobStartTime,
 					EndDate:   &jobEndTime,
+					Interval:  jobCronStr,
 				},
 			}, nil)
 			sch.On("GetJobRuns", ctx, tnnt, replayRunsCriteriaJobA, jobCron).Return(nil, internalErr)
 
 			validator := service.NewValidator(replayRepository, sch, jobRepository)
 			err := validator.Validate(ctx, replayReq, jobCron)
-			assert.ErrorIs(t, err, internalErr)
+			assert.Error(t, err, internalErr)
 		})
 	})
 }

@@ -18,6 +18,9 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+type ReplayValidator interface {
+	ValidateDateRange(ctx context.Context, replayRequest *scheduler.Replay) error
+}
 type ReplayService interface {
 	CreateReplay(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (replayID uuid.UUID, err error)
 	GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error)
@@ -43,8 +46,9 @@ type replayRequest interface {
 }
 
 type ReplayHandler struct {
-	l       log.Logger
-	service ReplayService
+	l         log.Logger
+	service   ReplayService
+	validator ReplayValidator
 
 	pb.UnimplementedReplayServiceServer
 }
@@ -54,6 +58,11 @@ func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayDryRunReq
 	if err != nil {
 		return nil, err
 	}
+	err = h.validator.ValidateDateRange(ctx, replayReq)
+	if err != nil {
+		return nil, errors.GRPCErr(err, "invalid date range for replay")
+	}
+
 	// TODO: should convert from logical time
 	runs, err := h.service.GetRunsStatus(ctx, replayReq.Tenant(), replayReq.JobName(), replayReq.Config())
 	if err != nil {
@@ -302,6 +311,6 @@ func parseJobConfig(jobConfig string) (map[string]string, error) {
 	return configs, nil
 }
 
-func NewReplayHandler(l log.Logger, service ReplayService) *ReplayHandler {
-	return &ReplayHandler{l: l, service: service}
+func NewReplayHandler(l log.Logger, service ReplayService, validator ReplayValidator) *ReplayHandler {
+	return &ReplayHandler{l: l, service: service, validator: validator}
 }

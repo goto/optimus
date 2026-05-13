@@ -41,7 +41,8 @@ func TestReplayHandler(t *testing.T) {
 	t.Run("ReplayDryRun", func(t *testing.T) {
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayDryRunRequest{
 				JobName:       jobName.String(),
@@ -62,7 +63,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns error when job name is invalid", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
@@ -83,7 +85,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns error when start time is invalid", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
@@ -105,7 +108,8 @@ func TestReplayHandler(t *testing.T) {
 
 		t.Run("returns error when end time is present but invalid", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
@@ -127,9 +131,6 @@ func TestReplayHandler(t *testing.T) {
 		})
 
 		t.Run("returns error when unable to get runs status", func(t *testing.T) {
-			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
-
 			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
 				JobName:       jobName.String(),
@@ -145,6 +146,12 @@ func TestReplayHandler(t *testing.T) {
 			}
 			replayConfig := scheduler.NewReplayConfig(req.StartTime.AsTime(), req.EndTime.AsTime(), false, jobConfig, description, category, approvalID, userID)
 
+			service := new(mockReplayService)
+			validator := new(mockReplayValidator)
+
+			validator.On("ValidateDateRange", ctx, mock.Anything).Return(nil).Once()
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
+
 			service.On("GetRunsStatus", ctx, jobTenant, jobName, replayConfig).Return(nil, errors.New("internal error"))
 
 			result, err := replayHandler.ReplayDryRun(ctx, req)
@@ -154,7 +161,8 @@ func TestReplayHandler(t *testing.T) {
 
 		t.Run("returns list of replay runs status when success", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
@@ -177,6 +185,7 @@ func TestReplayHandler(t *testing.T) {
 				},
 			}
 
+			validator.On("ValidateDateRange", ctx, mock.Anything).Return(nil).Once()
 			service.On("GetRunsStatus", ctx, jobTenant, jobName, replayConfig).Return(runs, nil)
 
 			result, err := replayHandler.ReplayDryRun(ctx, req)
@@ -188,7 +197,8 @@ func TestReplayHandler(t *testing.T) {
 	t.Run("Replay", func(t *testing.T) {
 		t.Run("returns replay ID when able to create replay successfully", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				ProjectName:   projectName,
@@ -213,7 +223,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns replay ID when able to create replay successfully without overriding job config", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				ProjectName:   projectName,
@@ -237,7 +248,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns error when unable to create tenant", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				JobName:       jobName.String(),
@@ -258,7 +270,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns error when job name is invalid", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				ProjectName:   projectName,
@@ -279,7 +292,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns error when start time is invalid", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				ProjectName:   projectName,
@@ -300,7 +314,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns no error when end time is empty", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				ProjectName:   projectName,
@@ -324,7 +339,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns error when end time is present but invalid", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				ProjectName:   projectName,
@@ -349,7 +365,8 @@ func TestReplayHandler(t *testing.T) {
 		})
 		t.Run("returns error when unable to create replay", func(t *testing.T) {
 			service := new(mockReplayService)
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ReplayRequest{
 				ProjectName:   projectName,
@@ -379,7 +396,8 @@ func TestReplayHandler(t *testing.T) {
 			service := new(mockReplayService)
 			defer service.AssertExpectations(t)
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ListReplayRequest{
 				ProjectName: "",
@@ -394,7 +412,8 @@ func TestReplayHandler(t *testing.T) {
 			service.On("GetReplayList", ctx, tenant.ProjectName("project-test")).Return(nil, errors.New("some error"))
 			defer service.AssertExpectations(t)
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ListReplayRequest{
 				ProjectName: "project-test",
@@ -409,7 +428,8 @@ func TestReplayHandler(t *testing.T) {
 			service.On("GetReplayList", ctx, tenant.ProjectName("project-test")).Return([]*scheduler.Replay{}, nil)
 			defer service.AssertExpectations(t)
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ListReplayRequest{
 				ProjectName: "project-test",
@@ -433,7 +453,8 @@ func TestReplayHandler(t *testing.T) {
 			service.On("GetReplayList", ctx, tenant.ProjectName("project-test")).Return([]*scheduler.Replay{replay1, replay2, replay3}, nil)
 			defer service.AssertExpectations(t)
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.ListReplayRequest{
 				ProjectName: "project-test",
@@ -447,7 +468,7 @@ func TestReplayHandler(t *testing.T) {
 
 	t.Run("GetReplay", func(t *testing.T) {
 		t.Run("returns error when uuid is not valid", func(t *testing.T) {
-			replayHandler := v1beta1.NewReplayHandler(logger, nil)
+			replayHandler := v1beta1.NewReplayHandler(logger, nil, nil)
 
 			req := &pb.GetReplayRequest{
 				ProjectName: projectName,
@@ -464,7 +485,8 @@ func TestReplayHandler(t *testing.T) {
 			replayID := uuid.New()
 			service.On("GetReplayByID", ctx, replayID).Return(nil, errors.New("internal error"))
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.GetReplayRequest{
 				ProjectName: projectName,
@@ -481,7 +503,8 @@ func TestReplayHandler(t *testing.T) {
 			replayID := uuid.New()
 			service.On("GetReplayByID", ctx, replayID).Return(nil, errs.NotFound("entity", "not found"))
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.GetReplayRequest{
 				ProjectName: projectName,
@@ -512,7 +535,8 @@ func TestReplayHandler(t *testing.T) {
 				},
 			}, nil)
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.GetReplayRequest{
 				ProjectName: projectName,
@@ -526,7 +550,7 @@ func TestReplayHandler(t *testing.T) {
 
 	t.Run("CancelReplay", func(t *testing.T) {
 		t.Run("returns error when uuid is not valid", func(t *testing.T) {
-			replayHandler := v1beta1.NewReplayHandler(logger, nil)
+			replayHandler := v1beta1.NewReplayHandler(logger, nil, nil)
 
 			req := &pb.CancelReplayRequest{
 				ProjectName: projectName,
@@ -543,7 +567,8 @@ func TestReplayHandler(t *testing.T) {
 			replayID := uuid.New()
 			service.On("GetReplayByID", ctx, replayID).Return(nil, errors.New("internal error"))
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.CancelReplayRequest{
 				ProjectName: projectName,
@@ -560,7 +585,8 @@ func TestReplayHandler(t *testing.T) {
 			replayID := uuid.New()
 			service.On("GetReplayByID", ctx, replayID).Return(nil, errs.NotFound("entity", "not found"))
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.CancelReplayRequest{
 				ProjectName: projectName,
@@ -594,7 +620,8 @@ func TestReplayHandler(t *testing.T) {
 			service.On("GetReplayByID", ctx, replayID).Return(replayWithRun, nil)
 			service.On("CancelReplay", ctx, replayWithRun).Return(nil)
 
-			replayHandler := v1beta1.NewReplayHandler(logger, service)
+			validator := new(mockReplayValidator)
+			replayHandler := v1beta1.NewReplayHandler(logger, service, validator)
 
 			req := &pb.CancelReplayRequest{
 				ProjectName: projectName,
@@ -784,4 +811,22 @@ func (_m *mockReplayService) GetReplayConfig(ctx context.Context, projectName te
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(map[string]string), args.Error(1)
+}
+
+// ReplayValidator is an autogenerated mock type for the ReplayValidator type
+type mockReplayValidator struct {
+	mock.Mock
+}
+
+// ValidateDateRange provides a mock function with given fields: ctx, replayRequest
+func (_m *mockReplayValidator) ValidateDateRange(ctx context.Context, replayRequest *scheduler.Replay) error {
+	ret := _m.Called(ctx, replayRequest)
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.Replay) error); ok {
+		r0 = rf(ctx, replayRequest)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }

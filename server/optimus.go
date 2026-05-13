@@ -507,7 +507,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Core Job Handler
 	pb.RegisterJobSpecificationServiceServer(s.grpcServer, jHandler.NewJobHandler(jJobService, jchangeLogService, s.logger))
 
-	pb.RegisterReplayServiceServer(s.grpcServer, schedulerHandler.NewReplayHandler(s.logger, replayService))
+	pb.RegisterReplayServiceServer(s.grpcServer, schedulerHandler.NewReplayHandler(s.logger, replayService, replayValidator))
 
 	s.cleanupFn = append(s.cleanupFn, func() {
 		err = eventsService.Close()

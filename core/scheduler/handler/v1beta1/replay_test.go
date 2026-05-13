@@ -131,7 +131,6 @@ func TestReplayHandler(t *testing.T) {
 		})
 
 		t.Run("returns error when unable to get runs status", func(t *testing.T) {
-
 			req := &pb.ReplayDryRunRequest{
 				ProjectName:   projectName,
 				JobName:       jobName.String(),

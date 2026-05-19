@@ -13,6 +13,12 @@ const (
 	EntitySchedulerAirflow = "schedulerAirflow"
 )
 
+type HeartbeatDagContext struct {
+	Hostname    string
+	ProjectName string
+	StartDate   string
+}
+
 type TemplateContext struct {
 	JobDetails *scheduler.JobWithDetails
 

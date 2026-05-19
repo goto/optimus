@@ -30,7 +30,7 @@ func TestProjectHandler(t *testing.T) {
 	t.Run("RegisterProject", func(t *testing.T) {
 		t.Run("returns error when name is empty", func(t *testing.T) {
 			projectService := new(projectService)
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
 				Name:      "",
@@ -45,7 +45,7 @@ func TestProjectHandler(t *testing.T) {
 		})
 		t.Run("returns error when preset has error", func(t *testing.T) {
 			projectService := new(projectService)
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
 				Name:   "proj",
@@ -68,7 +68,7 @@ func TestProjectHandler(t *testing.T) {
 			projectService.On("Save", ctx, mock.Anything).Return(errors.New("error in saving"))
 			defer projectService.AssertExpectations(t)
 
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
 				Name:      "proj",
@@ -86,7 +86,7 @@ func TestProjectHandler(t *testing.T) {
 			projectService.On("Save", ctx, mock.Anything).Return(nil)
 			defer projectService.AssertExpectations(t)
 
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			registerReq := pb.RegisterProjectRequest{Project: &pb.ProjectSpecification{
 				Name:      "proj",
@@ -111,7 +111,7 @@ func TestProjectHandler(t *testing.T) {
 			projectService.On("GetAll", ctx).Return(nil, errors.New("unable to fetch"))
 			defer projectService.AssertExpectations(t)
 
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			_, err := handler.ListProjects(ctx, &pb.ListProjectsRequest{})
 			assert.NotNil(t, err)
@@ -124,7 +124,7 @@ func TestProjectHandler(t *testing.T) {
 				Return([]*tenant.Project{savedProject}, nil)
 			defer projectService.AssertExpectations(t)
 
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			projRes, err := handler.ListProjects(ctx, &pb.ListProjectsRequest{})
 			assert.Nil(t, err)
@@ -137,7 +137,7 @@ func TestProjectHandler(t *testing.T) {
 		t.Run("returns error when project name is empty", func(t *testing.T) {
 			projectService := new(projectService)
 
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			_, err := handler.GetProject(ctx, &pb.GetProjectRequest{})
 			assert.NotNil(t, err)
@@ -150,7 +150,7 @@ func TestProjectHandler(t *testing.T) {
 				Return(nil, errors.New("random error"))
 			defer projectService.AssertExpectations(t)
 
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			_, err := handler.GetProject(ctx, &pb.GetProjectRequest{ProjectName: "savedProj"})
 			assert.NotNil(t, err)
@@ -171,7 +171,7 @@ func TestProjectHandler(t *testing.T) {
 			projectService.On("Get", ctx, tenant.ProjectName("savedProj")).Return(savedProj, nil)
 			defer projectService.AssertExpectations(t)
 
-			handler := v1beta1.NewProjectHandler(logger, projectService)
+			handler := v1beta1.NewProjectHandler(logger, projectService, nil)
 
 			proj, err := handler.GetProject(ctx, &pb.GetProjectRequest{
 				ProjectName: "savedProj",
@@ -183,12 +183,54 @@ func TestProjectHandler(t *testing.T) {
 			assert.Equal(t, len(savedProj.GetPresets()), len(proj.Project.Presets))
 		})
 	})
+	t.Run("DeployHeartbeatDag", func(t *testing.T) {
+		t.Run("returns error when project name is empty", func(t *testing.T) {
+			handler := v1beta1.NewProjectHandler(logger, new(projectService), new(heartbeatService))
+
+			_, err := handler.DeployHeartbeatDag(ctx, &pb.DeployHeartbeatDagRequest{ProjectName: ""})
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
+				"project: project name is empty: failed to deploy heartbeat dag for project []")
+		})
+		t.Run("returns error when service returns error", func(t *testing.T) {
+			projectName := tenant.ProjectName("savedProj")
+			svc := new(heartbeatService)
+			svc.On("DeployHeartbeatDag", ctx, projectName).Return(errors.New("bucket error"))
+			defer svc.AssertExpectations(t)
+
+			handler := v1beta1.NewProjectHandler(logger, new(projectService), svc)
+
+			_, err := handler.DeployHeartbeatDag(ctx, &pb.DeployHeartbeatDagRequest{ProjectName: "savedProj"})
+			assert.NotNil(t, err)
+			assert.EqualError(t, err, "rpc error: code = Internal desc = bucket error: failed to deploy heartbeat dag for project [savedProj]")
+		})
+		t.Run("deploys heartbeat dag successfully", func(t *testing.T) {
+			projectName := tenant.ProjectName("savedProj")
+			svc := new(heartbeatService)
+			svc.On("DeployHeartbeatDag", ctx, projectName).Return(nil)
+			defer svc.AssertExpectations(t)
+
+			handler := v1beta1.NewProjectHandler(logger, new(projectService), svc)
+
+			resp, err := handler.DeployHeartbeatDag(ctx, &pb.DeployHeartbeatDagRequest{ProjectName: "savedProj"})
+			assert.Nil(t, err)
+			assert.True(t, resp.GetSuccess())
+		})
+	})
+}
+
+type heartbeatService struct {
+	mock.Mock
+}
+
+func (h *heartbeatService) DeployHeartbeatDag(ctx context.Context, projectName tenant.ProjectName) error {
+	args := h.Called(ctx, projectName)
+	return args.Error(0)
 }
 
 type projectService struct {
 	mock.Mock
 }
-
 func (p *projectService) Save(ctx context.Context, project *tenant.Project) error {
 	args := p.Called(ctx, project)
 	return args.Error(0)

@@ -113,6 +113,7 @@ type Scheduler interface {
 	GetJobState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error)
 	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
 	AddRole(ctx context.Context, t tenant.Tenant, roleName string, ifNotExist bool) error
+	DeployHeartbeatDag(ctx context.Context, projectName tenant.ProjectName) error
 }
 
 type EventHandler interface {

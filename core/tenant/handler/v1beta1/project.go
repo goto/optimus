@@ -15,6 +15,7 @@ import (
 type ProjectHandler struct {
 	l              log.Logger
 	projectService ProjectService
+	heartbeatService HeartbeatService
 
 	pb.UnimplementedProjectServiceServer
 }
@@ -23,6 +24,10 @@ type ProjectService interface {
 	Save(context.Context, *tenant.Project) error
 	Get(context.Context, tenant.ProjectName) (*tenant.Project, error)
 	GetAll(context.Context) ([]*tenant.Project, error)
+}
+
+type HeartbeatService interface {
+	DeployHeartbeatDag(ctx context.Context, projectName tenant.ProjectName) error
 }
 
 type TenantService interface {
@@ -78,10 +83,24 @@ func (ph *ProjectHandler) GetProject(ctx context.Context, req *pb.GetProjectRequ
 	}, nil
 }
 
-func NewProjectHandler(l log.Logger, projectService ProjectService) *ProjectHandler {
+func (ph *ProjectHandler) DeployHeartbeatDag(ctx context.Context, req *pb.DeployHeartbeatDagRequest) (*pb.DeployHeartbeatDagResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		ph.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, fmt.Sprintf("failed to deploy heartbeat dag for project [%s]", req.GetProjectName()))
+	}
+	if err = ph.heartbeatService.DeployHeartbeatDag(ctx, projectName); err != nil {
+		ph.l.Error("failed to deploy heartbeat dag for project [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, fmt.Sprintf("failed to deploy heartbeat dag for project [%s]", req.GetProjectName()))
+	}
+	return &pb.DeployHeartbeatDagResponse{Success: true}, nil
+}
+
+func NewProjectHandler(l log.Logger, projectService ProjectService, heartbeatService HeartbeatService) *ProjectHandler {
 	return &ProjectHandler{
-		l:              l,
-		projectService: projectService,
+		l:                l,
+		projectService:   projectService,
+		heartbeatService: heartbeatService,
 	}
 }
 

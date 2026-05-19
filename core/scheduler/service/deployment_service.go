@@ -78,6 +78,10 @@ func (s *JobRunService) UpdateJobScheduleState(ctx context.Context, projectName 
 	return s.scheduler.UpdateJobState(ctx, projectName, jobName, state.String())
 }
 
+func (s *JobRunService) DeployHeartbeatDag(ctx context.Context, projectName tenant.ProjectName) error {
+	return s.scheduler.DeployHeartbeatDag(ctx, projectName)
+}
+
 func (s *JobRunService) GetJobSchedulerState(ctx context.Context, projectName tenant.ProjectName) (map[string]bool, error) {
 	return s.scheduler.GetJobState(ctx, projectName)
 }

@@ -105,6 +105,37 @@
           "ProjectService"
         ]
       }
+    },
+    "/v1beta1/project/{projectName}/scheduler/heartbeat-dag": {
+      "post": {
+        "summary": "DeployHeartbeatDag generates and uploads a system heartbeat DAG to the project's scheduler bucket",
+        "operationId": "ProjectService_DeployHeartbeatDag",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1DeployHeartbeatDagResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ProjectService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -164,6 +195,14 @@
           "items": {
             "$ref": "#/definitions/protobufAny"
           }
+        }
+      }
+    },
+    "v1beta1DeployHeartbeatDagResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
         }
       }
     },

@@ -1,6 +1,7 @@
 package airflow
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -25,12 +27,16 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/scheduler/airflow/dag"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
 )
 
 //go:embed __lib.py
 var SharedLib []byte
+
+//go:embed heartbeat_dag.py.tmpl
+var HeartbeatDagTemplate []byte
 
 const (
 	EntityAirflow = "Airflow"
@@ -234,6 +240,7 @@ type Scheduler struct {
 	projectGetter ProjectGetter
 	secretGetter  SecretGetter
 
+	hostname        string
 	hasLibSyncedMap sync.Map
 }
 
@@ -799,7 +806,7 @@ func (s *Scheduler) GetOperatorInstance(ctx context.Context, tnnt tenant.Tenant,
 	return taskInstance.toSchedulerOperatorRunInstance()
 }
 
-func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler DagCompiler, projectGetter ProjectGetter, secretGetter SecretGetter) *Scheduler {
+func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler DagCompiler, projectGetter ProjectGetter, secretGetter SecretGetter, hostname string) *Scheduler {
 	return &Scheduler{
 		l:             l,
 		bucketFac:     bucketFac,
@@ -807,5 +814,47 @@ func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler
 		client:        client,
 		projectGetter: projectGetter,
 		secretGetter:  secretGetter,
+		hostname:      hostname,
 	}
+}
+
+func (s *Scheduler) DeployHeartbeatDag(ctx context.Context, projectName tenant.ProjectName) error {
+	project, err := s.projectGetter.Get(ctx, projectName)
+	if err != nil {
+		return errors.AddErrContext(err, EntityAirflow, "error fetching project for heartbeat dag deployment")
+	}
+
+	minimalTenant, err := tenant.NewTenant(project.Name().String(), "_heartbeat")
+	if err != nil {
+		return errors.AddErrContext(err, EntityAirflow, "error creating tenant for heartbeat dag deployment")
+	}
+
+	bucket, err := s.bucketFac.New(ctx, minimalTenant)
+	if err != nil {
+		return errors.AddErrContext(err, EntityAirflow, "error creating storage client for heartbeat dag deployment")
+	}
+	defer bucket.Close()
+
+	tmpl, err := template.New("heartbeat").Parse(string(HeartbeatDagTemplate))
+	if err != nil {
+		return errors.AddErrContext(err, EntityAirflow, "error parsing heartbeat dag template")
+	}
+
+	dagCtx := dag.HeartbeatDagContext{
+		Hostname:    s.hostname,
+		ProjectName: project.Name().String(),
+		StartDate:   "2024, 1, 1",
+	}
+
+	var buf bytes.Buffer
+	if err = tmpl.Execute(&buf, dagCtx); err != nil {
+		return errors.AddErrContext(err, EntityAirflow, "error executing heartbeat dag template")
+	}
+
+	blobKey := filepath.Join(jobsDir, "__system_heartbeat.py")
+	if err = bucket.WriteAll(ctx, blobKey, buf.Bytes(), nil); err != nil {
+		return errors.AddErrContext(err, EntityAirflow, "error uploading heartbeat dag to bucket")
+	}
+
+	return nil
 }

@@ -28,6 +28,8 @@ type ProjectServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	// GetProject returns project details based on project_name
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
+	// DeployHeartbeatDag generates and uploads a system heartbeat DAG to the project's scheduler bucket
+	DeployHeartbeatDag(ctx context.Context, in *DeployHeartbeatDagRequest, opts ...grpc.CallOption) (*DeployHeartbeatDagResponse, error)
 }
 
 type projectServiceClient struct {
@@ -65,6 +67,15 @@ func (c *projectServiceClient) GetProject(ctx context.Context, in *GetProjectReq
 	return out, nil
 }
 
+func (c *projectServiceClient) DeployHeartbeatDag(ctx context.Context, in *DeployHeartbeatDagRequest, opts ...grpc.CallOption) (*DeployHeartbeatDagResponse, error) {
+	out := new(DeployHeartbeatDagResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.ProjectService/DeployHeartbeatDag", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProjectServiceServer is the server API for ProjectService service.
 // All implementations must embed UnimplementedProjectServiceServer
 // for forward compatibility
@@ -75,6 +86,8 @@ type ProjectServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	// GetProject returns project details based on project_name
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
+	// DeployHeartbeatDag generates and uploads a system heartbeat DAG to the project's scheduler bucket
+	DeployHeartbeatDag(context.Context, *DeployHeartbeatDagRequest) (*DeployHeartbeatDagResponse, error)
 	mustEmbedUnimplementedProjectServiceServer()
 }
 
@@ -90,6 +103,9 @@ func (UnimplementedProjectServiceServer) ListProjects(context.Context, *ListProj
 }
 func (UnimplementedProjectServiceServer) GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetProject not implemented")
+}
+func (UnimplementedProjectServiceServer) DeployHeartbeatDag(context.Context, *DeployHeartbeatDagRequest) (*DeployHeartbeatDagResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeployHeartbeatDag not implemented")
 }
 func (UnimplementedProjectServiceServer) mustEmbedUnimplementedProjectServiceServer() {}
 
@@ -158,6 +174,24 @@ func _ProjectService_GetProject_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_DeployHeartbeatDag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployHeartbeatDagRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).DeployHeartbeatDag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.ProjectService/DeployHeartbeatDag",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).DeployHeartbeatDag(ctx, req.(*DeployHeartbeatDagRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProjectService_ServiceDesc is the grpc.ServiceDesc for ProjectService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -176,6 +210,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetProject",
 			Handler:    _ProjectService_GetProject_Handler,
+		},
+		{
+			MethodName: "DeployHeartbeatDag",
+			Handler:    _ProjectService_DeployHeartbeatDag_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -13,8 +13,8 @@ import (
 )
 
 type ProjectHandler struct {
-	l              log.Logger
-	projectService ProjectService
+	l                log.Logger
+	projectService   ProjectService
 	heartbeatService HeartbeatService
 
 	pb.UnimplementedProjectServiceServer

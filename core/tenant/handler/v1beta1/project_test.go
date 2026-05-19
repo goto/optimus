@@ -231,6 +231,7 @@ func (h *heartbeatService) DeployHeartbeatDag(ctx context.Context, projectName t
 type projectService struct {
 	mock.Mock
 }
+
 func (p *projectService) Save(ctx context.Context, project *tenant.Project) error {
 	args := p.Called(ctx, project)
 	return args.Error(0)

@@ -1871,8 +1871,11 @@ func (j *JobService) validateScheduleWithUpstreams(ctx context.Context, subjectJ
 		return true, []string{"schedule validation is disabled"}
 	}
 
-	// this reference time is used as a base time to calculate next schedule time
-	refTimeForSchedule := time.Now().In(j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)
+	// this reference time is midnight-1 second today in the reference timezone, used as a stable base for
+	// comparing next cron schedule occurrences — using midnight ensures all daily schedules resolve
+	// to the same day so their intra-day ordering is compared correctly and consistently
+	now := time.Now().In(j.jobValidateConfig.ValidateSchedule.ReferenceTimezone)
+	refTimeForSchedule := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, j.jobValidateConfig.ValidateSchedule.ReferenceTimezone).Add(-1 * time.Second)
 
 	messages := []string{}
 	for _, upstream := range upstreams {

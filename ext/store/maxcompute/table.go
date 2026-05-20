@@ -283,8 +283,7 @@ func getNormalColumnDifferences(tableName, schemaName string, incoming, existing
 			return fmt.Errorf("unable to modify column %s data type from %s to %s", columnFound.Name, columnFound.Type.Name(), incomingColumnRecord.columnValue.Type.Name())
 		}
 
-		// Skip altering comment for partition columns as maxcompute does not allow it
-		// can remove this logic if maxcompute supports it in future
+		// TODO: Skip altering comment for partition columns as maxcompute does not allow modifications on autopartition columns. Remove this logic if maxcompute supports it in future
 		_, isPartitionColumn := autoPartitionColumnsMap[columnFound.Name]
 		if incomingColumnRecord.columnValue.Comment != columnFound.Comment && !isPartitionColumn {
 			*sqlTasks = append(*sqlTasks, fmt.Sprintf("alter table %s.%s change column %s %s %s comment %s;",

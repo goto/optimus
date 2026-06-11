@@ -82,6 +82,7 @@ type JobRunRepository interface {
 
 type JobReplayRepository interface {
 	GetReplayJobConfig(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (map[string]string, error)
+	GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error)
 }
 
 type OperatorRunRepository interface {
@@ -138,6 +139,10 @@ type JobRunService struct {
 	features         config.FeaturesConfig
 
 	durationEstimatorService DurationEstimator
+}
+
+func (s *JobRunService) GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error) {
+	return s.replayRepo.GetReplayRunByScheduledAt(ctx, projectName, jobName, scheduledAt)
 }
 
 func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, config scheduler.RunConfig) (*scheduler.ExecutorInput, error) {

@@ -266,6 +266,56 @@ func (r ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tena
 	return configs, nil
 }
 
+func (r ReplayRepository) GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error) {
+	getReplayRunRequest := `
+	select rq.id, rq.job_name, rq.namespace_name, rq.project_name, rq.start_time,
+		rq.end_time, rq.description, rq.parallel, rq.job_config, rq.status, rq.message,
+		rq.category, rq.approval_id, rq.user_id, rq.created_at, rq.updated_at,
+		rr.scheduled_at, rr.status
+	 from replay_request rq
+	 join replay_run  rr on rr.replay_id = rq.id
+	where rq.job_name = $1 and rq.project_name = $2  and rq.status = $3 and rr.scheduled_at= $4 and rr.status = $5`
+	var rr replayRequest
+	var replayRun replayRun
+	row := r.db.QueryRow(ctx, getReplayRunRequest, jobName, projectName, scheduler.ReplayStateInProgress.String(), scheduledAt, scheduler.ReplayRunStateInProgress.String())
+
+	err := row.Scan(&rr.ID, &rr.JobName, &rr.NamespaceName, &rr.ProjectName, &rr.StartTime, &rr.EndTime, &rr.Description, &rr.Parallel, &rr.JobConfig,
+		&rr.Status, &rr.Message, &rr.Category, &rr.ApprovalID, &rr.UserID, &rr.CreatedAt, &rr.UpdatedAt,
+		&replayRun.ScheduledTime, &replayRun.RunStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.NotFound(scheduler.EntityReplay, fmt.Sprintf("no replay run found for job %s at scheduled time %s", jobName, scheduledAt.Format(time.RFC3339)))
+		}
+		return nil, errors.Wrap(scheduler.EntityReplay, "unable to get replay run by scheduled time", err)
+	}
+
+	replayTenant, err := tenant.NewTenant(rr.ProjectName, rr.NamespaceName)
+	if err != nil {
+		return nil, err
+	}
+	replayConfig := scheduler.ReplayConfig{
+		StartTime:   rr.StartTime,
+		EndTime:     rr.EndTime,
+		Parallel:    rr.Parallel,
+		JobConfig:   rr.JobConfig,
+		Description: rr.Description,
+		Category:    rr.Category,
+		UserID:      rr.UserID,
+		ApprovalID:  rr.ApprovalID,
+	}
+	replay := scheduler.NewReplay(rr.ID, scheduler.JobName(rr.JobName), replayTenant, &replayConfig, scheduler.ReplayState(rr.Status), rr.CreatedAt, rr.UpdatedAt, rr.Message)
+
+	return &scheduler.ReplayWithRun{
+		Replay: replay,
+		Runs: []*scheduler.JobRunStatus{
+			{
+				ScheduledAt: replayRun.ScheduledTime,
+				State:       scheduler.State(replayRun.RunStatus),
+			},
+		},
+	}, nil
+}
+
 func (r ReplayRepository) ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error) {
 	nonTerminalStateString := make([]string, len(scheduler.ReplayNonTerminalStates))
 	for i, state := range scheduler.ReplayNonTerminalStates {

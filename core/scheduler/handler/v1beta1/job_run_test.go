@@ -324,6 +324,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobIntervalEnd := time.Date(2025, time.April, 25, 8, 0, 0, 0, time.UTC)
 			dataInterval := interval.NewInterval(jobIntervalStart, jobIntervalEnd)
 
+			jobRunService.On("GetReplayRunByScheduledAt", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(nil, nil)
 			jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(dataInterval, nil)
 			defer jobRunService.AssertExpectations(t)
 
@@ -390,6 +391,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobIntervalEnd := jobScheduleTime
 			dataInterval := interval.NewInterval(jobIntervalStart, jobIntervalEnd)
 
+			jobRunService.On("GetReplayRunByScheduledAt", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(nil, nil)
 			jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(dataInterval, nil)
 			defer jobRunService.AssertExpectations(t)
 
@@ -1176,6 +1178,14 @@ func (m *mockJobRunService) GetJobRuns(ctx context.Context, projectName tenant.P
 		return nil, "", args.Error(2)
 	}
 	return args.Get(0).([]*scheduler.JobRunStatus), "", args.Error(2)
+}
+
+func (m *mockJobRunService) GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error) {
+	args := m.Called(ctx, projectName, jobName, scheduledAt)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*scheduler.ReplayWithRun), args.Error(1)
 }
 
 func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error) {

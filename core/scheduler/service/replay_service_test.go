@@ -685,6 +685,14 @@ type ReplayRepository struct {
 	mock.Mock
 }
 
+func (_m *ReplayRepository) GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error) {
+	args := _m.Called(ctx, projectName, jobName, scheduledAt)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*scheduler.ReplayWithRun), args.Error(1)
+}
+
 // GetReplaysByProject provides a mock function with given fields: ctx, projectName, dayLimits
 func (_m *ReplayRepository) GetReplaysByProject(ctx context.Context, projectName tenant.ProjectName, dayLimits int) ([]*scheduler.Replay, error) {
 	ret := _m.Called(ctx, projectName, dayLimits)

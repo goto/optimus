@@ -295,8 +295,8 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 }
 
 func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName,
-	referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
-
+	referenceTime time.Time, lastNRuns, percentile int,
+) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
@@ -323,8 +323,8 @@ func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []sched
 }
 
 func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName,
-	hookNames []string, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName][]*time.Duration, error) {
-
+	hookNames []string, referenceTime time.Time, lastNRuns, percentile int,
+) (map[scheduler.JobName][]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName][]*time.Duration{}, nil
 	}

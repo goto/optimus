@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS job_run_job_name_scheduled_at_desc_idx;

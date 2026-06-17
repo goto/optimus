@@ -294,7 +294,9 @@ func (j *JobRunRepository) GetPercentileDurationByJobNames(ctx context.Context, 
 	return jobDurations, nil
 }
 
-func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []scheduler.JobName,
+	referenceTime time.Time, lastNRuns, percentile int,
+) (map[scheduler.JobName]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName]*time.Duration{}, nil
 	}
@@ -320,7 +322,9 @@ func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []sched
 	return jobDurations, nil
 }
 
-func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName, hookNames []string, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName][]*time.Duration, error) {
+func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName,
+	hookNames []string, referenceTime time.Time, lastNRuns, percentile int,
+) (map[scheduler.JobName][]*time.Duration, error) {
 	if len(jobNames) == 0 {
 		return map[scheduler.JobName][]*time.Duration{}, nil
 	}
@@ -354,24 +358,34 @@ func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []sched
 	return jobDurations, nil
 }
 
+// both getQueryTask & getQueryHook depend heavily on this index: job_run_job_name_scheduled_at_desc_idx
+// this enables the cross join lateral to iteratively get the last n runs for each job
+// without the need of ROW_NUMBER() which requires full scan
 func getQueryTask(lastNRuns, percentile int) string {
 	query := fmt.Sprintf(`
-	WITH last_n_runs AS (
+	WITH target_jobs AS (
+		SELECT UNNEST($1::text[]) AS job_name
+	),
+	last_n_runs AS (
 		SELECT
-			j.id AS job_run_id,
-			j.job_name,
-			t.start_time,
-			t.end_time,
-			ROW_NUMBER() OVER (
-				PARTITION BY j.job_name
+			tj.job_name,
+			r.start_time,
+			r.end_time
+		FROM
+			target_jobs tj
+			CROSS JOIN LATERAL (
+				SELECT
+					t.start_time,
+					t.end_time
+				FROM job_run j
+				JOIN task_run t ON t.job_run_id = j.id
+				WHERE j.job_name = tj.job_name
+					AND t.status = 'success'
+					AND t.end_time IS NOT NULL
+					AND j.scheduled_at <= $2
 				ORDER BY j.scheduled_at DESC
-			) AS rn
-		FROM job_run j
-		JOIN task_run t ON t.job_run_id = j.id
-		WHERE t.end_time IS NOT NULL
-		AND j.job_name = ANY($1)
-		AND j.updated_at <= $2
-		and t.status = 'success'
+				LIMIT %d
+			) r
 	)
 	SELECT
 		job_name,
@@ -379,9 +393,8 @@ func getQueryTask(lastNRuns, percentile int) string {
 			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
 		) AS percentile_duration_seconds
 	FROM last_n_runs
-	WHERE rn <= %d
 	GROUP BY job_name;
-	`, percentile, lastNRuns)
+	`, lastNRuns, percentile)
 
 	return query
 }
@@ -393,24 +406,32 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 	}
 
 	query := fmt.Sprintf(`
-	WITH last_n_runs AS (
+	WITH target_jobs AS (
+		SELECT UNNEST($1::text[]) AS job_name
+	),
+	last_n_runs AS (
 		SELECT
-			j.id AS job_run_id,
-			j.job_name,
-			h.name AS hook_name,
-			h.start_time,
-			h.end_time,
-			ROW_NUMBER() OVER (
-				PARTITION BY j.job_name
+			tj.job_name,
+			r.hook_name,
+			r.start_time,
+			r.end_time
+		FROM
+			target_jobs tj
+			CROSS JOIN LATERAL (
+				SELECT
+					h.name AS hook_name,
+					h.start_time,
+					h.end_time
+				FROM job_run j
+				JOIN hook_run h ON h.job_run_id = j.id
+				WHERE j.job_name = tj.job_name
+					AND h.status = 'success'
+					AND h.end_time IS NOT NULL
+					AND j.scheduled_at <= $2
+					%s
 				ORDER BY j.scheduled_at DESC
-			) AS rn
-		FROM job_run j
-		JOIN hook_run h ON h.job_run_id = j.id
-		WHERE h.end_time IS NOT NULL
-		and h.status = 'success'
-		AND j.job_name = ANY($1)
-		AND j.updated_at <= $2
-		%s
+				LIMIT %d
+			) r
 	)
 	SELECT
 		job_name,
@@ -419,9 +440,8 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
 		) AS percentile_duration_seconds
 	FROM last_n_runs
-	WHERE rn <= %d
 	GROUP BY job_name, hook_name;
-	`, hookFilter, percentile, lastNRuns)
+	`, hookFilter, lastNRuns, percentile)
 
 	return query
 }

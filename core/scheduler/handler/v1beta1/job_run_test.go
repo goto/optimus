@@ -324,7 +324,6 @@ func TestJobRunHandler(t *testing.T) {
 			jobIntervalEnd := time.Date(2025, time.April, 25, 8, 0, 0, 0, time.UTC)
 			dataInterval := interval.NewInterval(jobIntervalStart, jobIntervalEnd)
 
-			jobRunService.On("GetReplayRunByScheduledAt", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(nil, nil)
 			jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(dataInterval, nil)
 			defer jobRunService.AssertExpectations(t)
 

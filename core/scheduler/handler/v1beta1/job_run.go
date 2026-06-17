@@ -35,7 +35,7 @@ const (
 	sensorRunTypeScheduled = "scheduled"
 	sensorRunTypeBackfill  = "backfill"
 
-	backfillLookbackPeriodInHours = 12 * time.Hour
+	backfillLookbackPeriodInHours = 24 * time.Hour
 )
 
 type JobSLAPredictorService interface {
@@ -246,12 +246,13 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 	if time.Since(req.GetScheduledAt().AsTime()) > backfillLookbackPeriodInHours {
 		// consider attempts to get sensor status for a scheduled time in the past beyond the lookback period as backfill
 		runType = sensorRunTypeBackfill
-	} else {
-		replayWithRun, _ := h.service.GetReplayRunByScheduledAt(ctx, projectName, jobName, req.GetScheduledAt().AsTime())
-		if replayWithRun != nil {
-			runType = sensorRunTypeBackfill
-		}
 	}
+
+	// TODO reevaluate this logic in the future, but ideally replayed runs should already be covered on the case above
+	// replayWithRun, _ := h.service.GetReplayRunByScheduledAt(ctx, projectName, jobName, req.GetScheduledAt().AsTime())
+	// if replayWithRun != nil {
+	// 	runType = sensorRunTypeBackfill
+	// }
 
 	startTime := intervalResp.GetStartTime().AsTime().In(getJakartaTimeZone())
 	endTime := intervalResp.GetEndTime().AsTime().In(getJakartaTimeZone())

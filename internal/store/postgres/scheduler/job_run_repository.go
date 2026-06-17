@@ -382,7 +382,7 @@ func getQueryTask(lastNRuns, percentile int) string {
 				WHERE j.job_name = tj.job_name
 					AND t.status = 'success'
 					AND t.end_time IS NOT NULL
-					AND j.scheduled_at < $2
+					AND j.scheduled_at <= $2
 				ORDER BY j.scheduled_at DESC
 				LIMIT %d
 			) r
@@ -427,7 +427,7 @@ func getQueryHook(lastNRuns, percentile int, hookNames []string) string {
 				WHERE j.job_name = tj.job_name
 					AND h.status = 'success'
 					AND h.end_time IS NOT NULL
-					AND j.scheduled_at < $2
+					AND j.scheduled_at <= $2
 					%s
 				ORDER BY j.scheduled_at DESC
 				LIMIT %d

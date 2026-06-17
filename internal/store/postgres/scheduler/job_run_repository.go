@@ -370,7 +370,7 @@ func getQueryTask(lastNRuns, percentile int) string {
 		SELECT
 			tj.job_name,
 			r.start_time,
-			r.end_time,
+			r.end_time
 		FROM
 			target_jobs tj
 			CROSS JOIN LATERAL (

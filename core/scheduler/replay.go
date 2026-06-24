@@ -15,7 +15,8 @@ const (
 	ReplayStateCreated ReplayState = "created"
 
 	// ReplayStateInProgress indicates the replay is being executed
-	ReplayStateInProgress ReplayState = "in progress"
+	ReplayStateInProgress    ReplayState = "in progress"
+	ReplayRunStateInProgress ReplayState = "in_progress"
 
 	// ReplayStateSuccess is a terminal state which occurs when the replay execution finished with successful job runs
 	ReplayStateSuccess ReplayState = "success"

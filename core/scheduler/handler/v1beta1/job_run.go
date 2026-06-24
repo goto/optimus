@@ -25,12 +25,17 @@ import (
 
 var dexAPIResponse = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "dex_api_response",
-}, []string{"project", "job", "resource_urn", "status"})
+}, []string{"project", "job", "resource_urn", "status", "run_type", "scheduled_date"})
 
 const (
 	sensorStatusErr        = "error"
 	sensorStatusIncomplete = "incomplete"
 	sensorStatusComplete   = "complete"
+
+	sensorRunTypeScheduled = "scheduled"
+	sensorRunTypeBackfill  = "backfill"
+
+	backfillLookbackPeriodInHours = 24 * time.Hour
 )
 
 type JobSLAPredictorService interface {
@@ -48,6 +53,8 @@ type JobRunService interface {
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
+
+	GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error)
 }
 
 type JobLineageService interface {
@@ -235,6 +242,18 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 		return nil, errors.GRPCErr(err, "unable to get third party sensor status for "+req.GetJobName())
 	}
 
+	runType := sensorRunTypeScheduled
+	if time.Since(req.GetScheduledAt().AsTime()) > backfillLookbackPeriodInHours {
+		// consider attempts to get sensor status for a scheduled time in the past beyond the lookback period as backfill
+		runType = sensorRunTypeBackfill
+	}
+
+	// TODO reevaluate this logic in the future, but ideally replayed runs should already be covered on the case above
+	// replayWithRun, _ := h.service.GetReplayRunByScheduledAt(ctx, projectName, jobName, req.GetScheduledAt().AsTime())
+	// if replayWithRun != nil {
+	// 	runType = sensorRunTypeBackfill
+	// }
+
 	startTime := intervalResp.GetStartTime().AsTime().In(getJakartaTimeZone())
 	endTime := intervalResp.GetEndTime().AsTime().In(getJakartaTimeZone())
 	logicalEndTime := getJakartaMidnightTime().Add(-1 * time.Minute)
@@ -262,7 +281,7 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 		resp, err := h.GetDexSensorStatus(ctx, resourceURN, startTime, endTime)
 		if err != nil {
 			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, err: %s", string(projectName), string(jobName), resourceURN.String(), err.Error()))
-			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusErr).Inc()
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusErr, runType, req.GetScheduledAt().AsTime().Format(time.RFC3339)).Inc()
 			return nil, err
 		}
 		if resp != nil && !resp.IsComplete {
@@ -275,9 +294,9 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 					completeness.Date.AsTime().In(getJakartaTimeZone()).Format(time.RFC3339), completeness.IsComplete)
 			}
 			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, log: %v", string(projectName), string(jobName), resourceURN.String(), completenessLog))
-			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusIncomplete).Inc()
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusIncomplete, runType, req.GetScheduledAt().AsTime().Format(time.RFC3339)).Inc()
 		} else {
-			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusComplete).Inc()
+			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusComplete, runType, req.GetScheduledAt().AsTime().Format(time.RFC3339)).Inc()
 		}
 
 		return &pb.GetThirdPartySensorResponse{

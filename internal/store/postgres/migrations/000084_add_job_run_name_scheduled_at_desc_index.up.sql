@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS job_run_job_name_scheduled_at_desc_idx ON job_run (job_name, scheduled_at DESC);

@@ -63,9 +63,10 @@ type RunConfig struct {
 
 	ScheduledAt time.Time
 	JobRunID    JobRunID
+	DagRunID    string
 }
 
-func RunConfigFrom(executor Executor, scheduledAt time.Time, runID string) (RunConfig, error) {
+func RunConfigFrom(executor Executor, scheduledAt time.Time, runID, dagRunID string) (RunConfig, error) {
 	jobRunID, err := JobRunIDFromString(runID) // runID can be empty or a valid uuid
 	if err != nil {
 		return RunConfig{}, errors.InvalidArgument(EntityJobRun, "invalid job run ID "+runID)
@@ -75,6 +76,7 @@ func RunConfigFrom(executor Executor, scheduledAt time.Time, runID string) (RunC
 		Executor:    executor,
 		ScheduledAt: scheduledAt,
 		JobRunID:    jobRunID,
+		DagRunID:    dagRunID,
 	}, nil
 }
 

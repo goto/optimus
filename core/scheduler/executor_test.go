@@ -64,7 +64,7 @@ func TestExecutor(t *testing.T) {
 		t.Run("returns error when run id is invalid", func(t *testing.T) {
 			executor := scheduler.Executor{Name: "bq2bq", Type: scheduler.ExecutorTask}
 
-			_, err := scheduler.RunConfigFrom(executor, time.Now(), "c06049ad-cb2e-43a5-9daf-c3c53d18")
+			_, err := scheduler.RunConfigFrom(executor, time.Now(), "c06049ad-cb2e-43a5-9daf-c3c53d18", "")
 			assert.Error(t, err)
 			assert.EqualError(t, err, "invalid argument for entity jobRun: invalid job run ID"+
 				" c06049ad-cb2e-43a5-9daf-c3c53d18")
@@ -73,7 +73,7 @@ func TestExecutor(t *testing.T) {
 			executor := scheduler.Executor{Name: "bq2bq", Type: scheduler.ExecutorTask}
 			now := time.Now()
 
-			runConfig, err := scheduler.RunConfigFrom(executor, now, "")
+			runConfig, err := scheduler.RunConfigFrom(executor, now, "", "")
 			assert.NoError(t, err)
 			assert.Equal(t, uuid.Nil, runConfig.JobRunID.UUID())
 			assert.Equal(t, "bq2bq", runConfig.Executor.Name)

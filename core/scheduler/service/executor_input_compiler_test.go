@@ -68,7 +68,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, nil, nil, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour))
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour), nil)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "get details error")
@@ -103,7 +103,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer tenantService.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, nil, nil, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour))
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, currentTime.Add(time.Hour), nil)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "failed to parse task window with size 2: time: missing unit in duration \"2\"")
@@ -160,7 +160,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer assetCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "CompileJobRunAssets error")
@@ -233,7 +233,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler := new(mockAssetCompiler)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
 
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "some.config compilation error")
@@ -249,7 +249,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler := new(mockAssetCompiler)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutor, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
 
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "secret.config compilation error")
@@ -266,7 +266,7 @@ func TestExecutorCompiler(t *testing.T) {
 				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
 
 				assert.Nil(t, err)
 				expectedInputExecutor := &scheduler.ExecutorInput{
@@ -318,7 +318,7 @@ func TestExecutorCompiler(t *testing.T) {
 
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompilerNew, logger)
 
-				inputExecutorResp, err := inputCompiler.Compile(ctx, &detailsNew, config, executedAt)
+				inputExecutorResp, err := inputCompiler.Compile(ctx, &detailsNew, config, executedAt, nil)
 				assert.Nil(t, err)
 
 				expectedInputExecutor := &scheduler.ExecutorInput{
@@ -423,7 +423,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
 
 			assert.Nil(t, err)
 			expectedInputExecutor := &scheduler.ExecutorInput{
@@ -521,7 +521,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
 
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "error in compiling hook template")
@@ -590,7 +590,7 @@ func TestExecutorCompiler(t *testing.T) {
 			defer templateCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
-			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt)
+			inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
 
 			assert.NotNil(t, err)
 			assert.Nil(t, inputExecutorResp)

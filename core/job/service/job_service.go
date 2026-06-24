@@ -158,7 +158,7 @@ type UpstreamResolver interface {
 }
 
 type JobRunInputCompiler interface {
-	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time, customOverrideConfig map[string]string) (*scheduler.ExecutorInput, error)
 }
 
 type ResourceExistenceChecker interface {
@@ -1242,7 +1242,7 @@ func (j *JobService) compileAssets(ctx context.Context, subjectJob job.Job, dest
 	jobWithDetails := j.getSchedulerJobWithDetail(&subjectJob, destination)
 
 	// compile executor input
-	executorInput, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, runConfig, referenceTime)
+	executorInput, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, runConfig, referenceTime, nil)
 	if err != nil {
 		j.logger.Error("error compiling assets: %s", err)
 		return nil, err
@@ -2014,7 +2014,7 @@ func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, desti
 	jobWithDetails := j.getSchedulerJobWithDetail(subjectJob, destination)
 	for _, config := range runConfigs {
 		var msg string
-		if _, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, config, referenceTime); err != nil {
+		if _, err := j.jobRunInputCompiler.Compile(ctx, jobWithDetails, config, referenceTime, nil); err != nil {
 			success = false
 
 			msg = fmt.Sprintf("compiling [%s] with type [%s] failed with error: %v", config.Executor.Name, config.Executor.Type.String(), err)
@@ -2080,7 +2080,7 @@ func (*JobService) getRunConfigs(referenceTime time.Time, spec *job.Spec) ([]sch
 		return nil, err
 	}
 
-	runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "")
+	runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -2093,7 +2093,7 @@ func (*JobService) getRunConfigs(referenceTime time.Time, spec *job.Spec) ([]sch
 			return nil, err
 		}
 
-		runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "")
+		runConfig, err := scheduler.RunConfigFrom(executor, referenceTime, "", "")
 		if err != nil {
 			return nil, err
 		}

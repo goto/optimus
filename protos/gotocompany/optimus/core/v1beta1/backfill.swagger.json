@@ -1,0 +1,438 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "gotocompany/optimus/core/v1beta1/backfill.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "BackfillService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1beta1/project/{projectName}/backfill": {
+      "get": {
+        "operationId": "BackfillService_GetBackfill",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1GetBackfillResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "schedulerRunId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "jobNames",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "approvalId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "backfillId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BackfillService"
+        ]
+      },
+      "post": {
+        "operationId": "BackfillService_CreateBackfill",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1CreateBackfillResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "jobName": {
+                  "type": "string"
+                },
+                "namespaceName": {
+                  "type": "string"
+                },
+                "dataStartTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "dataEndTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "jobConfig": {
+                  "type": "string"
+                },
+                "overriddenAssets": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "description": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "approvalId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "BackfillService"
+        ]
+      }
+    },
+    "/v1beta1/project/{projectName}/backfill-dry-run": {
+      "post": {
+        "operationId": "BackfillService_BackfillDryRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1BackfillDryRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "jobName": {
+                  "type": "string"
+                },
+                "namespaceName": {
+                  "type": "string"
+                },
+                "dataStartTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "dataEndTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "jobConfig": {
+                  "type": "string"
+                },
+                "overriddenAssets": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "description": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "approvalId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "BackfillService"
+        ]
+      }
+    },
+    "/v1beta1/project/{projectName}/backfill/{backfillId}/cancel": {
+      "put": {
+        "operationId": "BackfillService_CancelBackfill",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1CancelBackfillResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "backfillId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BackfillService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "typeUrl": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1beta1BackfillCompiledAssets": {
+      "type": "object",
+      "properties": {
+        "envs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "secrets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1beta1BackfillDryRunResponse": {
+      "type": "object",
+      "properties": {
+        "compiledAssets": {
+          "$ref": "#/definitions/v1beta1BackfillCompiledAssets"
+        }
+      }
+    },
+    "v1beta1BackfillSpec": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "schedulerRunId": {
+          "type": "string"
+        },
+        "projectName": {
+          "type": "string"
+        },
+        "namespaceName": {
+          "type": "string"
+        },
+        "jobName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "dataStartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dataEndTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "customAssets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "jobConfig": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "category": {
+          "type": "string"
+        },
+        "approvalId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1CancelBackfillResponse": {
+      "type": "object",
+      "properties": {
+        "backfill": {
+          "$ref": "#/definitions/v1beta1BackfillSpec"
+        }
+      }
+    },
+    "v1beta1CreateBackfillResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "dagRunId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1GetBackfillResponse": {
+      "type": "object",
+      "properties": {
+        "backfills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1BackfillSpec"
+          }
+        }
+      }
+    }
+  }
+}

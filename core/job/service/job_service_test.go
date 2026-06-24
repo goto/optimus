@@ -7010,9 +7010,9 @@ type JobRunInputCompiler struct {
 	mock.Mock
 }
 
-// Compile provides a mock function with given fields: ctx, job, config, executedAt
-func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error) {
-	ret := _m.Called(ctx, job, config, executedAt)
+// Compile provides a mock function with given fields: ctx, job, config, executedAt, overridenConfigs
+func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time, overridenConfigs map[string]string) (*scheduler.ExecutorInput, error) {
+	ret := _m.Called(ctx, job, config, executedAt, overridenConfigs)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Compile")
@@ -7020,19 +7020,19 @@ func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWi
 
 	var r0 *scheduler.ExecutorInput
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) (*scheduler.ExecutorInput, error)); ok {
-		return rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time, map[string]string) (*scheduler.ExecutorInput, error)); ok {
+		return rf(ctx, job, config, executedAt, overridenConfigs)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) *scheduler.ExecutorInput); ok {
-		r0 = rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time, map[string]string) *scheduler.ExecutorInput); ok {
+		r0 = rf(ctx, job, config, executedAt, overridenConfigs)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*scheduler.ExecutorInput)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time) error); ok {
-		r1 = rf(ctx, job, config, executedAt)
+	if rf, ok := ret.Get(1).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time, map[string]string) error); ok {
+		r1 = rf(ctx, job, config, executedAt, overridenConfigs)
 	} else {
 		r1 = ret.Error(1)
 	}

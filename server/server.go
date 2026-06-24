@@ -158,6 +158,9 @@ func prepareHTTPProxy(httpAddr, grpcAddr string) (*http.Server, func(), error) {
 	if err := pb.RegisterReplayServiceHandler(runtimeCtx, gwmux, grpcConn); err != nil {
 		return nil, cleanup, fmt.Errorf("RegisterReplayServiceHandler: %w", err)
 	}
+	if err := pb.RegisterBackfillServiceHandler(runtimeCtx, gwmux, grpcConn); err != nil {
+		return nil, cleanup, fmt.Errorf("RegisterBackfillServiceHandler: %w", err)
+	}
 	if err := pb.RegisterBackupServiceHandler(runtimeCtx, gwmux, grpcConn); err != nil {
 		return nil, cleanup, fmt.Errorf("RegisterBackupServiceHandler: %w", err)
 	}

@@ -15,10 +15,11 @@ echo "INSTANCE_TYPE:$INSTANCE_TYPE"
 echo "INSTANCE_NAME:$INSTANCE_NAME"
 echo "SCHEDULED_AT:$SCHEDULED_AT"
 echo "OPTIMUS_HOST:$OPTIMUS_HOST"
+echo "DAG_RUN_ID:$DAG_RUN_ID"
 echo ""
 
 echo "-- initializing optimus assets"
 optimus job run-input "$JOB_NAME" --project-name \
 	"$PROJECT" --output-dir "$JOB_DIR" \
 	--type "$INSTANCE_TYPE" --name "$INSTANCE_NAME" \
-	--scheduled-at "$SCHEDULED_AT" --host "$OPTIMUS_HOST"
+	--scheduled-at "$SCHEDULED_AT" --host "$OPTIMUS_HOST" --dag-run-id "$DAG_RUN_ID"

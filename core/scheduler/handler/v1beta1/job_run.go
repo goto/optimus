@@ -148,7 +148,7 @@ func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputReque
 		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityJobRun, "invalid scheduled_at"), "unable to get job run input for "+req.GetJobName())
 	}
 
-	runConfig, err := scheduler.RunConfigFrom(executor, req.ScheduledAt.AsTime(), req.JobrunId)
+	runConfig, err := scheduler.RunConfigFrom(executor, req.ScheduledAt.AsTime(), req.JobrunId, req.DagRunId)
 	if err != nil {
 		h.l.Error("error adapting run config: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+req.GetJobName())

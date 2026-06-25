@@ -15,7 +15,7 @@ import (
 
 type BackfillWatcherRepository interface {
 	GetBackfillDetails(ctx context.Context, backfillID uuid.UUID) (*scheduler.Backfill, error)
-	UpdateBackfillStatus(ctx context.Context, backfillID uuid.UUID, state scheduler.BackfilState, message string) error
+	UpdateBackfillStatus(ctx context.Context, backfillID uuid.UUID, state scheduler.BackfillState, message string) error
 	UpdateBackfillHeartbeat(ctx context.Context, backfillID uuid.UUID) error
 	ScanAbandonedBackfillRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Backfill, error)
 	AcquireBackfillRequest(ctx context.Context, backfillID uuid.UUID, unhandledClassifierDuration time.Duration) error
@@ -66,7 +66,7 @@ func (w *BackfillWorker) WatchBackfillExecution(ctx context.Context, backfillID 
 		}
 		w.logger.Debug("[BackfillID: %s] current state: %s, scheduler run ID: %s", backfillID, backfill.State(), backfill.SchedulerRunID)
 
-		if backfill.State() == scheduler.BackfilStateCancelled {
+		if backfill.State() == scheduler.BackfillStateCancelled {
 			w.logger.Info("[BackfillID: %s] backfill was cancelled externally, stopping watcher", backfillID)
 			return nil
 		}
@@ -101,15 +101,15 @@ func (w *BackfillWorker) WatchBackfillExecution(ctx context.Context, backfillID 
 	}
 }
 
-func resolveBackfillTerminalState(run *scheduler.JobRunStatus) (scheduler.BackfilState, string) {
+func resolveBackfillTerminalState(run *scheduler.JobRunStatus) (scheduler.BackfillState, string) {
 	if run == nil {
 		return "", ""
 	}
 	switch run.State {
 	case scheduler.StateFailed:
-		return scheduler.BackfilStateFailed, "backfill dag run failed"
+		return scheduler.BackfillStateFailed, "backfill dag run failed"
 	case scheduler.StateSuccess:
-		return scheduler.BackfilStateSuccess, "backfill dag run completed successfully"
+		return scheduler.BackfillStateSuccess, "backfill dag run completed successfully"
 	default:
 		return "", ""
 	}

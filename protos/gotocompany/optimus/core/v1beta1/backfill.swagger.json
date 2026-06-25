@@ -159,14 +159,14 @@
         ]
       }
     },
-    "/v1beta1/project/{projectName}/backfill-dry-run": {
+    "/v1beta1/project/{projectName}/backfill-preview": {
       "post": {
-        "operationId": "BackfillService_BackfillDryRun",
+        "operationId": "BackfillService_BackfillPreview",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1beta1BackfillDryRunResponse"
+              "$ref": "#/definitions/v1beta1BackfillPreviewResponse"
             }
           },
           "default": {
@@ -316,16 +316,10 @@
           "additionalProperties": {
             "type": "string"
           }
-        },
-        "secrets": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
         }
       }
     },
-    "v1beta1BackfillDryRunResponse": {
+    "v1beta1BackfillPreviewResponse": {
       "type": "object",
       "properties": {
         "compiledAssets": {

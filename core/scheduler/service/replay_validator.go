@@ -10,12 +10,14 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/utils/filter"
 )
 
 type Validator struct {
-	replayRepository ReplayRepository
-	scheduler        ReplayScheduler
-	jobRepo          JobRepository
+	replayRepository   ReplayRepository
+	backfillRepository BackfillRepository
+	scheduler          ReplayScheduler
+	jobRepo            JobRepository
 }
 
 type ReplayRequest interface {
@@ -26,8 +28,8 @@ type ReplayRequest interface {
 	GetEndTime() time.Time
 }
 
-func NewValidator(replayRepository ReplayRepository, scheduler ReplayScheduler, jobRepo JobRepository) *Validator {
-	return &Validator{replayRepository: replayRepository, scheduler: scheduler, jobRepo: jobRepo}
+func NewValidator(replayRepository ReplayRepository, scheduler ReplayScheduler, jobRepo JobRepository, backfillRepo BackfillRepository) *Validator {
+	return &Validator{replayRepository: replayRepository, scheduler: scheduler, jobRepo: jobRepo, backfillRepository: backfillRepo}
 }
 
 func (v Validator) ValidateBackfill(ctx context.Context, replayRequest ReplayRequest, jobCron *cron.ScheduleSpec) error {
@@ -35,6 +37,11 @@ func (v Validator) ValidateBackfill(ctx context.Context, replayRequest ReplayReq
 		return err
 	}
 	// validate conflicted backfills
+	err := v.validateConflictedBackfills(ctx, replayRequest)
+	if err != nil {
+		return err
+	}
+
 	return v.validateConflictedRun(ctx, replayRequest, jobCron)
 }
 
@@ -42,8 +49,14 @@ func (v Validator) Validate(ctx context.Context, replayRequest ReplayRequest, jo
 	if err := v.validateDateRange(ctx, replayRequest, jobCron); err != nil {
 		return err
 	}
-	// validate conflicted backfills
+
 	if err := v.validateConflictedReplay(ctx, replayRequest); err != nil {
+		return err
+	}
+
+	// validate conflicted backfills
+	err := v.validateConflictedBackfills(ctx, replayRequest)
+	if err != nil {
 		return err
 	}
 
@@ -79,6 +92,24 @@ func (v Validator) validateDateRange(ctx context.Context, replayRequest ReplayRe
 		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay start date (%s) is not allowed to be set before job scheduling start date (%s)", replayStartDate.String(), jobScheduleStartDate.String()))
 	}
 
+	return nil
+}
+
+func (v Validator) validateConflictedBackfills(ctx context.Context, replayRequest ReplayRequest) error {
+	backfills, err := v.backfillRepository.GetBackfillsByFilter(ctx, replayRequest.Tenant().ProjectName(),
+		filter.WithString(filter.BackfillStatus, scheduler.BackfillStateInProgress.String()),
+		filter.WithStringArray(filter.JobNames, []string{replayRequest.JobName().String()}),
+	)
+	if err != nil {
+		return err
+	}
+	// check if any intersection of date range
+	for _, backfill := range backfills {
+		if (backfill.Config().Dstart.Equal(replayRequest.GetEndTime()) || backfill.Config().Dstart.Before(replayRequest.GetEndTime())) &&
+			(backfill.Config().Dend.Equal(replayRequest.GetStartTime()) || backfill.Config().Dend.After(replayRequest.GetStartTime())) {
+			return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityJobRun, fmt.Sprintf("request is conflicted with an on going backfill with ID %s", backfill.ID().String()))
+		}
+	}
 	return nil
 }
 

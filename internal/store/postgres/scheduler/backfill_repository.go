@@ -56,7 +56,7 @@ func fromBackfillDB(b *backfillDB) (*scheduler.Backfill, error) {
 
 	config := scheduler.NewBackfillConfig(b.Dstart, b.Dend, b.JobConfig, b.CustomAssets, b.Description, b.Category, b.ApprovalID, b.UserID)
 
-	backfill := scheduler.NewBackfill(b.ID, jobName, t, config, scheduler.BackfilState(b.Status), b.CreatedAt, b.UpdatedAt, b.Message)
+	backfill := scheduler.NewBackfill(b.ID, jobName, t, config, scheduler.BackfillState(b.Status), b.CreatedAt, b.UpdatedAt, b.Message)
 	backfill.SchedulerRunID = b.SchedulerRunID
 	if b.CanceledBy != nil {
 		backfill.CanceledBy = *b.CanceledBy
@@ -132,7 +132,7 @@ func NewBackfillRepository(db *pgxpool.Pool) *BackfillRepository {
 	return &BackfillRepository{db: db}
 }
 
-func (r BackfillRepository) UpdateBackfillStatus(ctx context.Context, backfillID uuid.UUID, state scheduler.BackfilState, message string) error {
+func (r BackfillRepository) UpdateBackfillStatus(ctx context.Context, backfillID uuid.UUID, state scheduler.BackfillState, message string) error {
 	query := `UPDATE backfill SET status = $1, message = $2, updated_at = NOW() WHERE id = $3`
 	if _, err := r.db.Exec(ctx, query, state, message, backfillID); err != nil {
 		return errors.Wrap(scheduler.EntityBackfill, "unable to update backfill status", err)
@@ -157,8 +157,8 @@ func (r BackfillRepository) UpdateBackfillSchedulerRunID(ctx context.Context, ba
 }
 
 func (r BackfillRepository) ScanAbandonedBackfillRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Backfill, error) {
-	nonTerminalStates := make([]string, len(scheduler.BackfilNonTerminalStates))
-	for i, state := range scheduler.BackfilNonTerminalStates {
+	nonTerminalStates := make([]string, len(scheduler.BackfillNonTerminalStates))
+	for i, state := range scheduler.BackfillNonTerminalStates {
 		nonTerminalStates[i] = state.String()
 	}
 	query := fmt.Sprintf(
@@ -228,8 +228,8 @@ func (r BackfillRepository) GetBackfillsByFilter(ctx context.Context, projectNam
 		}
 		fragments = append(fragments, fmt.Sprintf("job_name IN (%s)", strings.Join(quoted, ", ")))
 	}
-	if f.Contains(filter.ReplayStatus) {
-		fragments = append(fragments, fmt.Sprintf("status = '%s'", f.GetStringValue(filter.ReplayStatus)))
+	if f.Contains(filter.BackfillStatus) {
+		fragments = append(fragments, fmt.Sprintf("status = '%s'", f.GetStringValue(filter.BackfillStatus)))
 	}
 	if f.Contains(filter.ApprovalID) {
 		fragments = append(fragments, fmt.Sprintf("approval_id = '%s'", f.GetStringValue(filter.ApprovalID)))
@@ -268,7 +268,7 @@ func (r BackfillRepository) GetBackfillsByFilter(ctx context.Context, projectNam
 
 func (r BackfillRepository) CancelBackfill(ctx context.Context, backfillID uuid.UUID, canceledBy string) error {
 	query := `UPDATE backfill SET status = $1, canceled_by = $2, updated_at = NOW() WHERE id = $3`
-	if _, err := r.db.Exec(ctx, query, scheduler.BackfilStateCancelled, canceledBy, backfillID); err != nil {
+	if _, err := r.db.Exec(ctx, query, scheduler.BackfillStateCancelled, canceledBy, backfillID); err != nil {
 		return errors.Wrap(scheduler.EntityBackfill, "unable to cancel backfill", err)
 	}
 	return nil

@@ -23,7 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BackfillServiceClient interface {
 	CreateBackfill(ctx context.Context, in *CreateBackfillRequest, opts ...grpc.CallOption) (*CreateBackfillResponse, error)
-	BackfillDryRun(ctx context.Context, in *BackfillDryRunRequest, opts ...grpc.CallOption) (*BackfillDryRunResponse, error)
+	BackfillPreview(ctx context.Context, in *BackfillPreviewRequest, opts ...grpc.CallOption) (*BackfillPreviewResponse, error)
 	GetBackfill(ctx context.Context, in *GetBackfillRequest, opts ...grpc.CallOption) (*GetBackfillResponse, error)
 	CancelBackfill(ctx context.Context, in *CancelBackfillRequest, opts ...grpc.CallOption) (*CancelBackfillResponse, error)
 }
@@ -45,9 +45,9 @@ func (c *backfillServiceClient) CreateBackfill(ctx context.Context, in *CreateBa
 	return out, nil
 }
 
-func (c *backfillServiceClient) BackfillDryRun(ctx context.Context, in *BackfillDryRunRequest, opts ...grpc.CallOption) (*BackfillDryRunResponse, error) {
-	out := new(BackfillDryRunResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.BackfillService/BackfillDryRun", in, out, opts...)
+func (c *backfillServiceClient) BackfillPreview(ctx context.Context, in *BackfillPreviewRequest, opts ...grpc.CallOption) (*BackfillPreviewResponse, error) {
+	out := new(BackfillPreviewResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.BackfillService/BackfillPreview", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (c *backfillServiceClient) CancelBackfill(ctx context.Context, in *CancelBa
 // for forward compatibility
 type BackfillServiceServer interface {
 	CreateBackfill(context.Context, *CreateBackfillRequest) (*CreateBackfillResponse, error)
-	BackfillDryRun(context.Context, *BackfillDryRunRequest) (*BackfillDryRunResponse, error)
+	BackfillPreview(context.Context, *BackfillPreviewRequest) (*BackfillPreviewResponse, error)
 	GetBackfill(context.Context, *GetBackfillRequest) (*GetBackfillResponse, error)
 	CancelBackfill(context.Context, *CancelBackfillRequest) (*CancelBackfillResponse, error)
 	mustEmbedUnimplementedBackfillServiceServer()
@@ -90,8 +90,8 @@ type UnimplementedBackfillServiceServer struct {
 func (UnimplementedBackfillServiceServer) CreateBackfill(context.Context, *CreateBackfillRequest) (*CreateBackfillResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBackfill not implemented")
 }
-func (UnimplementedBackfillServiceServer) BackfillDryRun(context.Context, *BackfillDryRunRequest) (*BackfillDryRunResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BackfillDryRun not implemented")
+func (UnimplementedBackfillServiceServer) BackfillPreview(context.Context, *BackfillPreviewRequest) (*BackfillPreviewResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BackfillPreview not implemented")
 }
 func (UnimplementedBackfillServiceServer) GetBackfill(context.Context, *GetBackfillRequest) (*GetBackfillResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackfill not implemented")
@@ -130,20 +130,20 @@ func _BackfillService_CreateBackfill_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BackfillService_BackfillDryRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BackfillDryRunRequest)
+func _BackfillService_BackfillPreview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BackfillPreviewRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BackfillServiceServer).BackfillDryRun(ctx, in)
+		return srv.(BackfillServiceServer).BackfillPreview(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.BackfillService/BackfillDryRun",
+		FullMethod: "/gotocompany.optimus.core.v1beta1.BackfillService/BackfillPreview",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BackfillServiceServer).BackfillDryRun(ctx, req.(*BackfillDryRunRequest))
+		return srv.(BackfillServiceServer).BackfillPreview(ctx, req.(*BackfillPreviewRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -196,8 +196,8 @@ var BackfillService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BackfillService_CreateBackfill_Handler,
 		},
 		{
-			MethodName: "BackfillDryRun",
-			Handler:    _BackfillService_BackfillDryRun_Handler,
+			MethodName: "BackfillPreview",
+			Handler:    _BackfillService_BackfillPreview_Handler,
 		},
 		{
 			MethodName: "GetBackfill",

@@ -29,6 +29,7 @@ var jobBackfillMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 type BackfillRepository interface {
 	RegisterBackfill(ctx context.Context, backfill *scheduler.Backfill) (uuid.UUID, error)
 	UpdateBackfillSchedulerRunID(ctx context.Context, backfillID uuid.UUID, schedulerRunID string) error
+	UpdateBackfillStatus(ctx context.Context, backfillID uuid.UUID, state scheduler.BackfillState, message string) error
 	GetBackfillDetails(ctx context.Context, backfillID uuid.UUID) (*scheduler.Backfill, error)
 	GetBackfillsByFilter(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.Backfill, error)
 	CancelBackfill(ctx context.Context, backfillID uuid.UUID, canceledBy string) error
@@ -167,6 +168,11 @@ func (b *BackfillService) CreateBackfill(ctx context.Context, backfillReq *sched
 	err = b.backfillRepo.UpdateBackfillSchedulerRunID(ctx, backfillID, dagRunID)
 	if err != nil {
 		b.logger.Error("error updating backfill scheduler run ID for backfill [%s]: %s", backfillID.String(), err)
+		return uuid.Nil, "", err
+	}
+	err = b.backfillRepo.UpdateBackfillStatus(ctx, backfillID, scheduler.BackfillStateInProgress, "backfill started")
+	if err != nil {
+		b.logger.Error("error marking backfill to state in progress. [%s]: %s", backfillID.String(), err)
 		return uuid.Nil, "", err
 	}
 	return backfillID, dagRunID, nil

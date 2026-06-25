@@ -357,7 +357,9 @@ func (s *OptimusServer) setupHandlers() error {
 	s.cleanupFn = append(s.cleanupFn, closeReplayScan)
 	go replayWorker.ScanReplayRequest(replayContext)
 
-	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
+	backfillRepo := schedulerRepo.NewBackfillRepository(s.dbPool)
+
+	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo, backfillRepo)
 	replayService := schedulerService.NewReplayService(
 		replayRepository, jobProviderRepo, tenantService,
 		replayValidator, replayWorker, newScheduler,
@@ -368,8 +370,6 @@ func (s *OptimusServer) setupHandlers() error {
 		s.conf.Alerting.AutoSLABreachConfig.LastNRuns, s.conf.Alerting.AutoSLABreachConfig.Percentile,
 		s.conf.Alerting.AutoSLABreachConfig.PaddingPercentage, s.conf.Alerting.AutoSLABreachConfig.MinPaddingMinutes,
 		s.conf.Alerting.AutoSLABreachConfig.MaxPaddingMinutes)
-
-	backfillRepo := schedulerRepo.NewBackfillRepository(s.dbPool)
 
 	backfillWorker := schedulerService.NewBackfillWorker(s.logger, backfillRepo, newScheduler, s.conf.Backfill)
 	backfillScanContext, closeBackfillScan := context.WithCancel(context.Background())

@@ -9,53 +9,36 @@ import (
 )
 
 const (
-	// BackfilStateCreated is an initial state which indicates the backfil has been created but not picked up yet
-	BackfilStateCreated BackfilState = "created"
+	// BackfillStateCreated is an initial state which indicates the backfil has been created but not picked up yet
+	BackfillStateCreated BackfillState = "created"
 
-	// BackfilStateInProgress indicates the backfil is being executed
-	BackfilStateInProgress BackfilState = "in progress"
+	// BackfillStateInProgress indicates the backfil is being executed
+	BackfillStateInProgress BackfillState = "in progress"
 
-	// BackfilStateSuccess is a terminal state which occurs when the backfil execution finished with successful job runs
-	BackfilStateSuccess BackfilState = "success"
+	// BackfillStateSuccess is a terminal state which occurs when the backfil execution finished with successful job runs
+	BackfillStateSuccess BackfillState = "success"
 
-	BackfilStateTimeout BackfilState = "timeout"
+	BackfillStateTimeout BackfillState = "timeout"
 
-	// BackfilStateFailed is a terminal state which occurs when the backfil execution failed, timed out, or finished with one of the run fails
-	BackfilStateFailed BackfilState = "failed"
+	// BackfillStateFailed is a terminal state which occurs when the backfil execution failed, timed out, or finished with one of the run fails
+	BackfillStateFailed BackfillState = "failed"
 
-	// BackfilStateCancelled is a terminal state which occurs when the backfil is cancelled by user
-	BackfilStateCancelled BackfilState = "cancelled"
+	// BackfillStateCancelled is a terminal state which occurs when the backfil is cancelled by user
+	BackfillStateCancelled BackfillState = "cancelled"
 
 	EntityBackfill = "backfill"
 )
 
 var (
-	BackfilTerminalStates    = []BackfilState{BackfilStateSuccess, BackfilStateFailed, BackfilStateCancelled}
-	BackfilNonTerminalStates = []BackfilState{BackfilStateCreated, BackfilStateInProgress}
+	BackfillTerminalStates    = []BackfillState{BackfillStateSuccess, BackfillStateFailed, BackfillStateCancelled}
+	BackfillNonTerminalStates = []BackfillState{BackfillStateCreated, BackfillStateInProgress}
 )
 
 type (
-	BackfilState string
+	BackfillState string
 )
 
-// func BackfilStateFromString(state string) (BackfilState, error) {
-//	switch strings.ToLower(state) {
-//	case string(BackfilStateCreated):
-//		return BackfilStateCreated, nil
-//	case string(BackfilStateInProgress):
-//		return BackfilStateInProgress, nil
-//	case string(BackfilStateSuccess):
-//		return BackfilStateSuccess, nil
-//	case string(BackfilStateFailed):
-//		return BackfilStateFailed, nil
-//	case string(BackfilStateCancelled):
-//		return BackfilStateCancelled, nil
-//	default:
-//		return "", errors.InvalidArgument(EntityBackfil, "invalid state for backfil "+state)
-//	}
-//}
-
-func (j BackfilState) String() string {
+func (j BackfillState) String() string {
 	return string(j)
 }
 
@@ -79,7 +62,7 @@ type Backfill struct {
 	tenant  tenant.Tenant
 	config  *BackfilConfig
 
-	state   BackfilState
+	state   BackfillState
 	message string
 
 	createdAt time.Time
@@ -110,7 +93,7 @@ func (r *Backfill) SetJobConfig(config map[string]string) {
 	r.config.JobConfig = config
 }
 
-func (r *Backfill) State() BackfilState {
+func (r *Backfill) State() BackfillState {
 	return r.state
 }
 
@@ -151,7 +134,7 @@ func (r *Backfill) GetJobConfig() map[string]string {
 }
 
 func (r *Backfill) IsTerminated() bool {
-	for _, terminalState := range BackfilTerminalStates {
+	for _, terminalState := range BackfillTerminalStates {
 		if r.State() == terminalState {
 			return true
 		}
@@ -159,11 +142,11 @@ func (r *Backfill) IsTerminated() bool {
 	return false
 }
 
-func NewBackfill(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *BackfilConfig, state BackfilState, createdAt, updatedAt time.Time, message string) *Backfill {
+func NewBackfill(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *BackfilConfig, state BackfillState, createdAt, updatedAt time.Time, message string) *Backfill {
 	return &Backfill{id: id, jobName: jobName, tenant: tenant, config: config, state: state, createdAt: createdAt, updatedAt: updatedAt, message: message}
 }
 
-func NewBackfillRequest(jobName JobName, tenant tenant.Tenant, config *BackfilConfig, state BackfilState, message string) *Backfill {
+func NewBackfillRequest(jobName JobName, tenant tenant.Tenant, config *BackfilConfig, state BackfillState, message string) *Backfill {
 	return &Backfill{id: uuid.New(), jobName: jobName, tenant: tenant, config: config, state: state, message: message}
 }
 

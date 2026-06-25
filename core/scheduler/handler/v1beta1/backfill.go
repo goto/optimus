@@ -116,7 +116,7 @@ func newBackfilllRequest(l log.Logger, req backfillRequest) (*scheduler.Backfill
 		req.GetUserId(),
 	)
 
-	backfillReq := scheduler.NewBackfillRequest(jobName, replayTenant, backfillConfig, scheduler.BackfilStateCreated, "create backfill request")
+	backfillReq := scheduler.NewBackfillRequest(jobName, replayTenant, backfillConfig, scheduler.BackfillStateCreated, "create backfill request")
 	return backfillReq, nil
 }
 
@@ -138,7 +138,7 @@ func (h BackfillHandler) CreateBackfill(ctx context.Context, req *pb.CreateBackf
 	}, nil
 }
 
-func (h BackfillHandler) BackfillDryRun(ctx context.Context, req *pb.BackfillDryRunRequest) (*pb.BackfillDryRunResponse, error) {
+func (h BackfillHandler) BackfillPreview(ctx context.Context, req *pb.BackfillPreviewRequest) (*pb.BackfillPreviewResponse, error) {
 	backfillReq, err := newBackfilllRequest(h.l, req)
 	if err != nil {
 		return nil, err
@@ -150,13 +150,10 @@ func (h BackfillHandler) BackfillDryRun(ctx context.Context, req *pb.BackfillDry
 		return nil, errors.GRPCErr(err, "unable to run backfill dry run for "+req.GetJobName())
 	}
 
-	return &pb.BackfillDryRunResponse{
+	return &pb.BackfillPreviewResponse{
 		CompiledAssets: &pb.BackfillCompiledAssets{
 			Envs:  jobRunInput.Configs,
 			Files: jobRunInput.Files,
-			Secrets: map[string]string{
-				"REDACTED": "REDACTED",
-			},
 		},
 	}, nil
 }
@@ -205,7 +202,7 @@ func (h BackfillHandler) GetBackfill(ctx context.Context, req *pb.GetBackfillReq
 		filter.WithString(filter.SchedulerRunID, req.GetSchedulerRunId()),
 		filter.WithString(filter.BackfillID, req.GetBackfillId()),
 		filter.WithStringArray(filter.JobNames, req.GetJobNames()),
-		filter.WithString(filter.ReplayStatus, req.GetStatus()),
+		filter.WithString(filter.BackfillStatus, req.GetStatus()),
 		filter.WithString(filter.ApprovalID, req.GetApprovalId()),
 		filter.WithString(filter.UserID, req.GetUserId()),
 	)

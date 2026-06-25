@@ -95,17 +95,17 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		return uuid.Nil, err
 	}
 
-	job, err := r.jobRepo.GetJob(ctx, t.ProjectName(), jobName)
-	if err != nil {
-		return uuid.Nil, errors.AddErrContext(err, scheduler.EntityReplay,
-			fmt.Sprintf("failed to get job for job name [%s]", jobName))
-	}
-
 	tenantWithDetails, err := r.tenantGetter.GetDetails(ctx, t)
 	if err != nil {
 		return uuid.Nil, errors.AddErrContext(err, scheduler.EntityReplay,
 			fmt.Sprintf("failed to get tenant details for project [%s], namespace [%s]",
 				t.ProjectName(), t.NamespaceName()))
+	}
+
+	job, err := r.jobRepo.GetJob(ctx, t.ProjectName(), jobName)
+	if err != nil {
+		return uuid.Nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("failed to get job for job name [%s]", jobName))
 	}
 
 	config.JobConfig = injectJobConfigWithTenantConfigs(config.JobConfig, tenantWithDetails.GetConfigs(), job.Task.Name, r.pluginToExecutionProjectKeyMap)

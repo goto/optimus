@@ -900,7 +900,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt, mock.Anything).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
@@ -962,7 +962,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, executedAt, mock.Anything).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
@@ -1017,7 +1017,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime, mock.Anything).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 
@@ -1071,7 +1071,7 @@ func TestJobRunService(t *testing.T) {
 			defer jobReplayRepo.AssertExpectations(t)
 
 			jobInputCompiler := new(mockJobInputCompiler)
-			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime).
+			jobInputCompiler.On("Compile", ctx, &jobToCompileDetails, runConfig, someScheduleTime, mock.Anything).
 				Return(&dummyExecutorInput, nil)
 			defer jobInputCompiler.AssertExpectations(t)
 

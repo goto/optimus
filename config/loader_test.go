@@ -328,6 +328,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			Percentile: 95,
 		},
 	}
+	s.expectedServerConfig.Backfill.ExecutionIntervalInSeconds = 60
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

@@ -130,7 +130,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -192,7 +192,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -261,7 +261,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
@@ -296,7 +296,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -358,7 +358,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -407,7 +407,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -463,7 +463,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -523,7 +523,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
@@ -572,7 +572,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -632,7 +632,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -704,7 +704,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -766,7 +766,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			alertManager := new(AlertManager)
 			alertManager.On("SendJobEvent", mock.Anything).Return()
@@ -833,7 +833,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -917,7 +917,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
@@ -953,7 +953,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1030,7 +1030,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -1086,7 +1086,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1147,7 +1147,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 			eventHandler.On("HandleEvent", mock.Anything).Times(1)
@@ -1214,7 +1214,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
@@ -1268,7 +1268,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1357,7 +1357,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1419,7 +1419,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1486,7 +1486,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1579,7 +1579,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specs := []*job.Spec{specA}
 
@@ -1614,7 +1614,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1661,7 +1661,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1722,7 +1722,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1802,7 +1802,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -1888,7 +1888,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2067,7 +2067,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2108,7 +2108,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			upstreamResolver := new(UpstreamResolver)
 			defer upstreamResolver.AssertExpectations(t)
@@ -2250,7 +2250,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2294,7 +2294,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2368,7 +2368,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2447,7 +2447,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2511,7 +2511,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2585,7 +2585,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2682,7 +2682,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2775,7 +2775,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 			alertManager := new(AlertManager)
@@ -2872,7 +2872,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -2921,7 +2921,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -2992,7 +2992,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -3080,7 +3080,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -3142,7 +3142,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -3200,7 +3200,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -3252,7 +3252,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -3303,7 +3303,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -3378,7 +3378,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			specB, _ := job.NewSpecBuilder(jobVersion, "job-B", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
@@ -3420,7 +3420,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -3497,7 +3497,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -3571,7 +3571,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -3646,7 +3646,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return(nil, errors.New("internal error"))
 
@@ -3684,7 +3684,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -3725,7 +3725,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -4911,7 +4911,7 @@ func TestJobService(t *testing.T) {
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
-					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(nil, errors.New("unexpected get by urn error"))
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(false, errors.New("unexpected exist in store error"))
@@ -5079,7 +5079,7 @@ func TestJobService(t *testing.T) {
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC, resourceURND}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
-					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
@@ -5247,7 +5247,7 @@ func TestJobService(t *testing.T) {
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
-					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
@@ -5374,7 +5374,7 @@ func TestJobService(t *testing.T) {
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
-					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
@@ -5505,7 +5505,7 @@ func TestJobService(t *testing.T) {
 					sourcesToValidate := []resource.URN{resourceURNA, resourceURNB, resourceURNC}
 					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return(sourcesToValidate, nil)
 
-					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
@@ -5644,7 +5644,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			jobA := job.NewJob(sampleTenant, specA, resourceURNA, []resource.URN{resourceURNB}, false)
@@ -5715,7 +5715,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
@@ -5757,7 +5757,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			jobADestination := resourceURNA
@@ -5793,7 +5793,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
@@ -5825,7 +5825,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
@@ -5863,7 +5863,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specASchedule, err := job.NewScheduleBuilder(startDate).WithCatchUp(true).Build()
 			assert.NoError(t, err)
@@ -5903,7 +5903,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
@@ -5935,7 +5935,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 
@@ -5967,7 +5967,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			jobADestination := resourceURNA
@@ -6008,7 +6008,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			jobADestination := resourceURNA
@@ -6047,7 +6047,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			jobA := job.NewJob(sampleTenant, specA, resourceURNA, nil, false)
@@ -6083,7 +6083,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			specA, _ := job.NewSpecBuilder(jobVersion, "job-A", "sample-owner", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 			jobA := job.NewJob(sampleTenant, specA, resourceURNA, nil, false)
@@ -6213,7 +6213,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -6284,7 +6284,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -6326,7 +6326,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -6392,7 +6392,7 @@ func TestJobService(t *testing.T) {
 			jobRunInputCompiler := new(JobRunInputCompiler)
 			defer jobRunInputCompiler.AssertExpectations(t)
 
-			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
+			jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil).Maybe()
 
 			eventHandler := newEventHandler(t)
 
@@ -7012,32 +7012,8 @@ type JobRunInputCompiler struct {
 
 // Compile provides a mock function with given fields: ctx, job, config, executedAt, overridenConfigs
 func (_m *JobRunInputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time, overridenConfigs map[string]string) (*scheduler.ExecutorInput, error) {
-	ret := _m.Called(ctx, job, config, executedAt, overridenConfigs)
-
-	if len(ret) == 0 {
-		panic("no return value specified for Compile")
-	}
-
-	var r0 *scheduler.ExecutorInput
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time, map[string]string) (*scheduler.ExecutorInput, error)); ok {
-		return rf(ctx, job, config, executedAt, overridenConfigs)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time, map[string]string) *scheduler.ExecutorInput); ok {
-		r0 = rf(ctx, job, config, executedAt, overridenConfigs)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*scheduler.ExecutorInput)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, *scheduler.JobWithDetails, scheduler.RunConfig, time.Time, map[string]string) error); ok {
-		r1 = rf(ctx, job, config, executedAt, overridenConfigs)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	args := _m.Called(ctx, job, config, executedAt, overridenConfigs)
+	return args.Get(0).(*scheduler.ExecutorInput), args.Error(1)
 }
 
 // AlertManager is an autogenerated mock type for the AlertManager type

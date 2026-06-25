@@ -144,7 +144,6 @@ type ReplayConfig struct {
 }
 
 type BackfillConfig struct {
-	TimeoutInMinutes           int `mapstructure:"timeout_in_minutes" default:"180"`
 	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"60"`
 }
 

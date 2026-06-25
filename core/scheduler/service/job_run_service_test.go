@@ -2600,6 +2600,51 @@ func (m *mockJobRunRepository) GetPercentileDurationByJobNames(
 	return r0, r1
 }
 
+type mockBackfillRepository struct {
+	mock.Mock
+}
+
+func (b *mockBackfillRepository) GetBackfills(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) ([]*scheduler.Backfill, error) {
+	args := b.Called(ctx, projectName, jobName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.Backfill), args.Error(1)
+}
+
+func (b *mockBackfillRepository) RegisterBackfill(ctx context.Context, backfill *scheduler.Backfill) (uuid.UUID, error) {
+	args := b.Called(ctx, backfill)
+	return args.Get(0).(uuid.UUID), args.Error(1)
+}
+
+func (b *mockBackfillRepository) UpdateBackfillSchedulerRunID(ctx context.Context, backfillID uuid.UUID, schedulerRunID string) error {
+	args := b.Called(ctx, backfillID, schedulerRunID)
+	return args.Error(0)
+}
+
+func (b *mockBackfillRepository) UpdateBackfillStatus(ctx context.Context, backfillID uuid.UUID, state scheduler.BackfillState, message string) error {
+	args := b.Called(ctx, backfillID, backfillID, state, message)
+	return args.Error(0)
+}
+
+func (b *mockBackfillRepository) GetBackfillDetails(ctx context.Context, backfillID uuid.UUID) (*scheduler.Backfill, error) {
+	args := b.Called(ctx, backfillID)
+	return args.Get(0).(*scheduler.Backfill), args.Error(1)
+}
+
+func (b *mockBackfillRepository) GetBackfillsByFilter(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.Backfill, error) {
+	args := b.Called(ctx, projectName, filters)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.Backfill), args.Error(1)
+}
+
+func (b *mockBackfillRepository) CancelBackfill(ctx context.Context, backfillID uuid.UUID, canceledBy string) error {
+	args := b.Called(ctx, backfillID, canceledBy)
+	return args.Error(0)
+}
+
 type JobRepository struct {
 	mock.Mock
 }

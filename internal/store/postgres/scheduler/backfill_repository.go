@@ -232,7 +232,13 @@ func (r BackfillRepository) GetBackfillsByFilter(ctx context.Context, projectNam
 		fragments = append(fragments, fmt.Sprintf("status = '%s'", f.GetStringValue(filter.BackfillStatus)))
 	}
 	if f.Contains(filter.ApprovalID) {
-		fragments = append(fragments, fmt.Sprintf("approval_id = '%s'", f.GetStringValue(filter.ApprovalID)))
+		approvalID := f.GetStringValue(filter.ApprovalID)
+		approvalIDs := strings.Split(approvalID, ",")
+		quoted := make([]string, len(approvalIDs))
+		for i, id := range approvalIDs {
+			quoted[i] = fmt.Sprintf("'%s'", strings.TrimSpace(id))
+		}
+		fragments = append(fragments, fmt.Sprintf("approval_id IN (%s)", strings.Join(quoted, ", ")))
 	}
 	if f.Contains(filter.UserID) {
 		fragments = append(fragments, fmt.Sprintf("user_id = '%s'", f.GetStringValue(filter.UserID)))

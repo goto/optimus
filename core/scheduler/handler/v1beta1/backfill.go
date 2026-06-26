@@ -191,7 +191,7 @@ func NewBackfilllHandler(l log.Logger, service BackfillService) *BackfillHandler
 	return &BackfillHandler{l: l, service: service}
 }
 
-func (h BackfillHandler) GetBackfill(ctx context.Context, req *pb.GetBackfillRequest) (*pb.GetBackfillResponse, error) {
+func (h BackfillHandler) GetBackfills(ctx context.Context, req *pb.GetBackfillsRequest) (*pb.GetBackfillsResponse, error) {
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
@@ -216,30 +216,30 @@ func (h BackfillHandler) GetBackfill(ctx context.Context, req *pb.GetBackfillReq
 		specs[i] = backfillToProto(b)
 	}
 
-	return &pb.GetBackfillResponse{Backfills: specs}, nil
+	return &pb.GetBackfillsResponse{Backfills: specs}, nil
 }
 
 func backfillToProto(b *scheduler.Backfill) *pb.BackfillSpec {
 	return &pb.BackfillSpec{
-		Id:             b.ID().String(),
-		SchedulerRunId: b.SchedulerRunID,
-		ProjectName:    b.Tenant().ProjectName().String(),
-		NamespaceName:  b.Tenant().NamespaceName().String(),
-		JobName:        b.JobName().String(),
-		Description:    b.Config().Description,
-		DataStartTime:  timestamppb.New(b.Config().Dstart),
-		DataEndTime:    timestamppb.New(b.Config().Dend),
-		CustomAssets:   b.Config().Assets,
-		StartTime:      timestamppb.New(b.CreatedAt()),
-		EndTime:        timestamppb.New(b.UpdatedAt()),
-		JobConfig:      formatJobConfig(b.Config().JobConfig),
-		Status:         b.State().String(),
-		Message:        b.Message(),
-		CreatedAt:      timestamppb.New(b.CreatedAt()),
-		UpdatedAt:      timestamppb.New(b.UpdatedAt()),
-		Category:       b.Config().Category,
-		ApprovalId:     b.Config().ApprovalID,
-		UserId:         b.Config().UserID,
+		Id:               b.ID().String(),
+		SchedulerRunId:   b.SchedulerRunID,
+		ProjectName:      b.Tenant().ProjectName().String(),
+		NamespaceName:    b.Tenant().NamespaceName().String(),
+		JobName:          b.JobName().String(),
+		Description:      b.Config().Description,
+		DataStartTime:    timestamppb.New(b.Config().Dstart),
+		DataEndTime:      timestamppb.New(b.Config().Dend),
+		OverriddenAssets: b.Config().Assets,
+		StartTime:        timestamppb.New(b.CreatedAt()),
+		EndTime:          timestamppb.New(b.UpdatedAt()),
+		JobConfig:        formatJobConfig(b.Config().JobConfig),
+		Status:           b.State().String(),
+		Message:          b.Message(),
+		CreatedAt:        timestamppb.New(b.CreatedAt()),
+		UpdatedAt:        timestamppb.New(b.UpdatedAt()),
+		Category:         b.Config().Category,
+		ApprovalId:       b.Config().ApprovalID,
+		UserId:           b.Config().UserID,
 	}
 }
 

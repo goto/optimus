@@ -18,12 +18,12 @@
   "paths": {
     "/v1beta1/project/{projectName}/backfill": {
       "get": {
-        "operationId": "BackfillService_GetBackfill",
+        "operationId": "BackfillService_GetBackfills",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1beta1GetBackfillResponse"
+              "$ref": "#/definitions/v1beta1GetBackfillsResponse"
             }
           },
           "default": {
@@ -364,7 +364,7 @@
           "type": "string",
           "format": "date-time"
         },
-        "customAssets": {
+        "overriddenAssets": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -417,7 +417,7 @@
         }
       }
     },
-    "v1beta1GetBackfillResponse": {
+    "v1beta1GetBackfillsResponse": {
       "type": "object",
       "properties": {
         "backfills": {

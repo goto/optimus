@@ -24,7 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type BackfillServiceClient interface {
 	CreateBackfill(ctx context.Context, in *CreateBackfillRequest, opts ...grpc.CallOption) (*CreateBackfillResponse, error)
 	BackfillPreview(ctx context.Context, in *BackfillPreviewRequest, opts ...grpc.CallOption) (*BackfillPreviewResponse, error)
-	GetBackfill(ctx context.Context, in *GetBackfillRequest, opts ...grpc.CallOption) (*GetBackfillResponse, error)
+	GetBackfills(ctx context.Context, in *GetBackfillsRequest, opts ...grpc.CallOption) (*GetBackfillsResponse, error)
 	CancelBackfill(ctx context.Context, in *CancelBackfillRequest, opts ...grpc.CallOption) (*CancelBackfillResponse, error)
 }
 
@@ -54,9 +54,9 @@ func (c *backfillServiceClient) BackfillPreview(ctx context.Context, in *Backfil
 	return out, nil
 }
 
-func (c *backfillServiceClient) GetBackfill(ctx context.Context, in *GetBackfillRequest, opts ...grpc.CallOption) (*GetBackfillResponse, error) {
-	out := new(GetBackfillResponse)
-	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.BackfillService/GetBackfill", in, out, opts...)
+func (c *backfillServiceClient) GetBackfills(ctx context.Context, in *GetBackfillsRequest, opts ...grpc.CallOption) (*GetBackfillsResponse, error) {
+	out := new(GetBackfillsResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.BackfillService/GetBackfills", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (c *backfillServiceClient) CancelBackfill(ctx context.Context, in *CancelBa
 type BackfillServiceServer interface {
 	CreateBackfill(context.Context, *CreateBackfillRequest) (*CreateBackfillResponse, error)
 	BackfillPreview(context.Context, *BackfillPreviewRequest) (*BackfillPreviewResponse, error)
-	GetBackfill(context.Context, *GetBackfillRequest) (*GetBackfillResponse, error)
+	GetBackfills(context.Context, *GetBackfillsRequest) (*GetBackfillsResponse, error)
 	CancelBackfill(context.Context, *CancelBackfillRequest) (*CancelBackfillResponse, error)
 	mustEmbedUnimplementedBackfillServiceServer()
 }
@@ -93,8 +93,8 @@ func (UnimplementedBackfillServiceServer) CreateBackfill(context.Context, *Creat
 func (UnimplementedBackfillServiceServer) BackfillPreview(context.Context, *BackfillPreviewRequest) (*BackfillPreviewResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BackfillPreview not implemented")
 }
-func (UnimplementedBackfillServiceServer) GetBackfill(context.Context, *GetBackfillRequest) (*GetBackfillResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetBackfill not implemented")
+func (UnimplementedBackfillServiceServer) GetBackfills(context.Context, *GetBackfillsRequest) (*GetBackfillsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBackfills not implemented")
 }
 func (UnimplementedBackfillServiceServer) CancelBackfill(context.Context, *CancelBackfillRequest) (*CancelBackfillResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelBackfill not implemented")
@@ -148,20 +148,20 @@ func _BackfillService_BackfillPreview_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BackfillService_GetBackfill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetBackfillRequest)
+func _BackfillService_GetBackfills_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBackfillsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BackfillServiceServer).GetBackfill(ctx, in)
+		return srv.(BackfillServiceServer).GetBackfills(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/gotocompany.optimus.core.v1beta1.BackfillService/GetBackfill",
+		FullMethod: "/gotocompany.optimus.core.v1beta1.BackfillService/GetBackfills",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BackfillServiceServer).GetBackfill(ctx, req.(*GetBackfillRequest))
+		return srv.(BackfillServiceServer).GetBackfills(ctx, req.(*GetBackfillsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -200,8 +200,8 @@ var BackfillService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BackfillService_BackfillPreview_Handler,
 		},
 		{
-			MethodName: "GetBackfill",
-			Handler:    _BackfillService_GetBackfill_Handler,
+			MethodName: "GetBackfills",
+			Handler:    _BackfillService_GetBackfills_Handler,
 		},
 		{
 			MethodName: "CancelBackfill",

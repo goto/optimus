@@ -487,11 +487,11 @@ func TestBackfillHandler(t *testing.T) {
 			service := new(mockBackfillService)
 			handler := v1beta1.NewBackfilllHandler(logger, service)
 
-			req := &pb.GetBackfillRequest{
+			req := &pb.GetBackfillsRequest{
 				ProjectName: "",
 			}
 
-			result, err := handler.GetBackfill(ctx, req)
+			result, err := handler.GetBackfills(ctx, req)
 			assert.Error(t, err)
 			assert.Nil(t, result)
 		})
@@ -501,14 +501,14 @@ func TestBackfillHandler(t *testing.T) {
 			defer service.AssertExpectations(t)
 			handler := v1beta1.NewBackfilllHandler(logger, service)
 
-			req := &pb.GetBackfillRequest{
+			req := &pb.GetBackfillsRequest{
 				ProjectName: projectName,
 			}
 
 			service.On("GetBackfills", ctx, tenant.ProjectName(projectName), mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				Return(nil, errors.New("internal error"))
 
-			result, err := handler.GetBackfill(ctx, req)
+			result, err := handler.GetBackfills(ctx, req)
 			assert.ErrorContains(t, err, "internal error")
 			assert.Nil(t, result)
 		})
@@ -518,14 +518,14 @@ func TestBackfillHandler(t *testing.T) {
 			defer service.AssertExpectations(t)
 			handler := v1beta1.NewBackfilllHandler(logger, service)
 
-			req := &pb.GetBackfillRequest{
+			req := &pb.GetBackfillsRequest{
 				ProjectName: projectName,
 			}
 
 			service.On("GetBackfills", ctx, tenant.ProjectName(projectName), mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				Return([]*scheduler.Backfill{}, nil)
 
-			result, err := handler.GetBackfill(ctx, req)
+			result, err := handler.GetBackfills(ctx, req)
 			assert.NoError(t, err)
 			assert.Empty(t, result.Backfills)
 		})
@@ -535,7 +535,7 @@ func TestBackfillHandler(t *testing.T) {
 			defer service.AssertExpectations(t)
 			handler := v1beta1.NewBackfilllHandler(logger, service)
 
-			req := &pb.GetBackfillRequest{
+			req := &pb.GetBackfillsRequest{
 				ProjectName: projectName,
 				JobNames:    []string{jobName.String()},
 				Status:      "created",
@@ -547,7 +547,7 @@ func TestBackfillHandler(t *testing.T) {
 			service.On("GetBackfills", ctx, tenant.ProjectName(projectName), mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				Return([]*scheduler.Backfill{bf}, nil)
 
-			result, err := handler.GetBackfill(ctx, req)
+			result, err := handler.GetBackfills(ctx, req)
 			assert.NoError(t, err)
 			assert.Len(t, result.Backfills, 1)
 			assert.Equal(t, backfillID.String(), result.Backfills[0].Id)

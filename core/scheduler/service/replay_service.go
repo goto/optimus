@@ -203,6 +203,12 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return nil, err
 	}
+	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
+	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
+		r.logger.Error("error validating replay request: %s", err)
+		return nil, err
+	}
+
 	existingRuns, err := r.runGetter.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
 	if err != nil {
 		return nil, err

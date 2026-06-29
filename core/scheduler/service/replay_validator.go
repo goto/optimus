@@ -33,6 +33,11 @@ func NewValidator(replayRepository ReplayRepository, scheduler ReplayScheduler, 
 }
 
 func (v Validator) ValidateBackfill(ctx context.Context, replayRequest ReplayRequest, jobCron *cron.ScheduleSpec) error {
+	currentTime := time.Now().UTC()
+	if replayRequest.GetEndTime().After(currentTime) {
+		return errors.NewError(errors.ErrFailedPrecond, scheduler.EntityReplay, fmt.Sprintf("replay end date (%s) is not allowed to be set to a future date, current time: (%s)", replayRequest.GetEndTime().String(), currentTime.String()))
+	}
+
 	if err := v.validateConflictedReplay(ctx, replayRequest); err != nil {
 		return err
 	}

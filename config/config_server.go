@@ -144,7 +144,7 @@ type ReplayConfig struct {
 }
 
 type BackfillConfig struct {
-	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"60"`
+	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"300"`
 }
 
 type Publisher struct {

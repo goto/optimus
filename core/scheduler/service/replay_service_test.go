@@ -627,7 +627,11 @@ func TestReplayService(t *testing.T) {
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobName).Return(jobWithDetails, nil)
 			schedulerRunGetter.On("GetJobRuns", ctx, tnnt, mock.Anything, mock.Anything).Return(nil, errors.New("internal error"))
 
-			replayService := service.NewReplayService(nil, jobRepository, nil, nil, nil, schedulerRunGetter, logger, nil, nil)
+			replayValidator := new(ReplayValidator)
+			defer replayValidator.AssertExpectations(t)
+			replayValidator.On("Validate", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+
+			replayService := service.NewReplayService(nil, jobRepository, nil, replayValidator, nil, schedulerRunGetter, logger, nil, nil)
 			result, err := replayService.GetRunsStatus(ctx, tnnt, jobName, replayConfig)
 			assert.Error(t, err)
 			assert.Nil(t, result)
@@ -643,8 +647,11 @@ func TestReplayService(t *testing.T) {
 			runs := []*scheduler.JobRunStatus{}
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobName).Return(jobWithDetails, nil)
 			schedulerRunGetter.On("GetJobRuns", ctx, tnnt, mock.Anything, mock.Anything).Return(runs, nil)
+			replayValidator := new(ReplayValidator)
+			defer replayValidator.AssertExpectations(t)
+			replayValidator.On("Validate", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 
-			replayService := service.NewReplayService(nil, jobRepository, nil, nil, nil, schedulerRunGetter, logger, nil, nil)
+			replayService := service.NewReplayService(nil, jobRepository, nil, replayValidator, nil, schedulerRunGetter, logger, nil, nil)
 			result, err := replayService.GetRunsStatus(ctx, tnnt, jobName, replayConfig)
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
@@ -668,8 +675,11 @@ func TestReplayService(t *testing.T) {
 			}
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobName).Return(jobWithDetails, nil)
 			schedulerRunGetter.On("GetJobRuns", ctx, tnnt, mock.Anything, mock.Anything).Return(runs, nil)
+			replayValidator := new(ReplayValidator)
+			defer replayValidator.AssertExpectations(t)
+			replayValidator.On("Validate", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 
-			replayService := service.NewReplayService(nil, jobRepository, nil, nil, nil, schedulerRunGetter, logger, nil, nil)
+			replayService := service.NewReplayService(nil, jobRepository, nil, replayValidator, nil, schedulerRunGetter, logger, nil, nil)
 			result, err := replayService.GetRunsStatus(ctx, tnnt, jobName, replayConfig)
 			assert.NoError(t, err)
 			assert.NotNil(t, result)

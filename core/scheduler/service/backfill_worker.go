@@ -115,12 +115,10 @@ func resolveBackfillTerminalState(run *scheduler.JobRunStatus) (scheduler.Backfi
 	}
 }
 
-const backfillSyncMultiplier = 3
-
 func (w *BackfillWorker) ScanBackfillRequest(ctx context.Context) {
-	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds*backfillSyncMultiplier) * time.Second
-	requestScanInterval := time.Duration(w.config.ExecutionIntervalInSeconds*backfillSyncMultiplier) * time.Second
-	w.logger.Info("backfill worker started: scan interval=%s, unhandled threshold=%s", requestScanInterval, unhandledClassifierDuration)
+	unhandledClassifierDuration := time.Duration(w.config.ExecutionIntervalInSeconds) * time.Second
+	requestScanInterval := time.Duration(w.config.ExecutionIntervalInSeconds) * time.Second
+	w.logger.Info("backfill worker started: empty scan sleep interval=%s, unhandled request clasifier threshold=%s", requestScanInterval, unhandledClassifierDuration)
 	for {
 		select {
 		case <-ctx.Done():

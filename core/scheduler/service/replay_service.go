@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,7 +57,8 @@ type TenantGetter interface {
 }
 
 type ReplayValidator interface {
-	Validate(ctx context.Context, replayRequest *scheduler.Replay, jobCron *cron.ScheduleSpec) error
+	ValidateBackfill(ctx context.Context, replayRequest ReplayRequest, jobCron *cron.ScheduleSpec) error
+	Validate(ctx context.Context, replayRequest ReplayRequest, jobCron *cron.ScheduleSpec) error
 }
 
 type ReplayExecutor interface {
@@ -95,12 +95,20 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		return uuid.Nil, err
 	}
 
-	newConfig, err := r.injectJobConfigWithTenantConfigs(ctx, t, jobName, config)
+	tenantWithDetails, err := r.tenantGetter.GetDetails(ctx, t)
 	if err != nil {
-		r.logger.Error("unable to get namespace details for job %s: %s", jobName.String(), err)
-		return uuid.Nil, err
+		return uuid.Nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("failed to get tenant details for project [%s], namespace [%s]",
+				t.ProjectName(), t.NamespaceName()))
 	}
-	config.JobConfig = newConfig
+
+	job, err := r.jobRepo.GetJob(ctx, t.ProjectName(), jobName)
+	if err != nil {
+		return uuid.Nil, errors.AddErrContext(err, scheduler.EntityReplay,
+			fmt.Sprintf("failed to get job for job name [%s]", jobName))
+	}
+
+	config.JobConfig = injectJobConfigWithTenantConfigs(config.JobConfig, tenantWithDetails.GetConfigs(), job.Task.Name, r.pluginToExecutionProjectKeyMap)
 	replayReq := scheduler.NewReplayRequest(jobName, t, config, scheduler.ReplayStateCreated)
 	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
 		r.logger.Error("error validating replay request: %s", err)
@@ -123,11 +131,6 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		return uuid.Nil, err
 	}
 
-	tenantDetails, err := r.tenantGetter.GetDetails(ctx, t)
-	if err != nil {
-		return uuid.Nil, err
-	}
-
 	r.alertManager.SendReplayEvent(&scheduler.ReplayNotificationAttrs{
 		JobName:        jobName.String(),
 		ReplayID:       replayID.String(),
@@ -135,47 +138,12 @@ func (r *ReplayService) CreateReplay(ctx context.Context, t tenant.Tenant, jobNa
 		JobURN:         jobName.GetJobURN(t),
 		State:          scheduler.ReplayStateCreated,
 		JobWithDetails: jobWithDetails,
-		AlertManager:   getAlertManagerProjectConfig(tenantDetails),
+		AlertManager:   getAlertManagerProjectConfig(tenantWithDetails),
 	})
 
 	go r.executor.Execute(replayID, t, jobName) //nolint:contextcheck
 
 	return replayID, nil
-}
-
-func (r *ReplayService) injectJobConfigWithTenantConfigs(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
-	// copy ReplayConfig to a new map to mutate it
-	newConfig := map[string]string{}
-	maps.Copy(newConfig, config.JobConfig)
-
-	// get tenant (project & namespace) configuration to obtain the execution project specifically for replay.
-	// note that the current behavior of GetDetails in the implementing struct prioritized namespace config over project config.
-	tenantWithDetails, err := r.tenantGetter.GetDetails(ctx, tnnt)
-	if err != nil {
-		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
-			fmt.Sprintf("failed to get tenant details for project [%s], namespace [%s]",
-				tnnt.ProjectName(), tnnt.NamespaceName()))
-	}
-
-	job, err := r.jobRepo.GetJob(ctx, tnnt.ProjectName(), jobName)
-	if err != nil {
-		return nil, errors.AddErrContext(err, scheduler.EntityReplay,
-			fmt.Sprintf("failed to get job for job name [%s]", jobName))
-	}
-
-	tenantConfig := tenantWithDetails.GetConfigs()
-
-	// override the default execution project with the one in tenant config.
-	// only inject tenant-level config if execution project is not provided in ReplayConfig
-	overridedConfigKey, isSupported := r.pluginToExecutionProjectKeyMap[job.Task.Name]
-	if isSupported && newConfig[overridedConfigKey] == "" {
-		tenantExecutionProject := tenantConfig[tenantReplayExecutionProjectConfigKey]
-		if tenantExecutionProject != "" {
-			newConfig[overridedConfigKey] = tenantExecutionProject
-		}
-	}
-
-	return newConfig, nil
 }
 
 func (r *ReplayService) GetReplayList(ctx context.Context, projectName tenant.ProjectName) (replays []*scheduler.Replay, err error) {
@@ -235,6 +203,12 @@ func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant,
 		r.logger.Error("unable to get cron value for job [%s]: %s", jobName.String(), err.Error())
 		return nil, err
 	}
+	replayReq := scheduler.NewReplayRequest(jobName, tenant, config, scheduler.ReplayStateCreated)
+	if err := r.validator.Validate(ctx, replayReq, jobCron); err != nil {
+		r.logger.Error("error validating replay request: %s", err)
+		return nil, err
+	}
+
 	existingRuns, err := r.runGetter.GetJobRuns(ctx, tenant, jobRunCriteria, jobCron)
 	if err != nil {
 		return nil, err

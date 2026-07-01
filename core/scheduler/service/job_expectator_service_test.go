@@ -19,7 +19,7 @@ import (
 func TestGenerateExpectedFinishTimes(t *testing.T) {
 	ctx := context.Background()
 	projectName := tenant.ProjectName("project-a")
-	referenceTime := time.Now()
+	referenceTime := time.Now().UTC()
 	scheduleRangeInHours := 10 * time.Hour
 	l := log.NewNoop()
 

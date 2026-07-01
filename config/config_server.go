@@ -18,6 +18,7 @@ type ServerConfig struct {
 	ResourceManagers          []ResourceManager         `mapstructure:"resource_managers"`
 	UpstreamResolvers         []UpstreamResolver        `mapstructure:"upstream_resolvers"`
 	Replay                    ReplayConfig              `mapstructure:"replay"`
+	Backfill                  BackfillConfig            `mapstructure:"backfill"`
 	Publisher                 *Publisher                `mapstructure:"publisher"`
 	JobSyncIntervalMinutes    int                       `mapstructure:"job_sync_interval_minutes"`
 	ExternalTables            ExternalTablesConfig      `mapstructure:"external_tables"`
@@ -140,6 +141,10 @@ type ReplayConfig struct {
 	ReplayTimeoutInMinutes            int               `mapstructure:"replay_timeout_in_minutes" default:"180"`
 	ExecutionIntervalInSeconds        int               `mapstructure:"execution_interval_in_seconds" default:"120"`
 	PluginExecutionProjectConfigNames map[string]string `mapstructure:"plugin_execution_project_config_names"`
+}
+
+type BackfillConfig struct {
+	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"300"`
 }
 
 type Publisher struct {

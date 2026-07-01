@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
@@ -74,7 +75,11 @@ func TestReplayValidator(t *testing.T) {
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(onGoingReplay, nil)
 			sch.On("GetJobRuns", ctx, tnnt, replayRunsCriteriaJobA, jobCron).Return(currentRuns, nil)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			backfillRepo := new(mockBackfillRepository)
+			defer backfillRepo.AssertExpectations(t)
+			backfillRepo.On("GetBackfillsByFilter", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+			validator := service.NewValidator(replayRepository, sch, jobRepository, backfillRepo)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.NoError(t, err)
 		})
@@ -95,7 +100,7 @@ func TestReplayValidator(t *testing.T) {
 				},
 			}, nil)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			validator := service.NewValidator(replayRepository, sch, jobRepository, nil)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.ErrorContains(t, err, "replay start date")
 		})
@@ -117,7 +122,7 @@ func TestReplayValidator(t *testing.T) {
 				},
 			}, nil)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			validator := service.NewValidator(replayRepository, sch, jobRepository, nil)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.ErrorContains(t, err, "replay end date")
 		})
@@ -157,7 +162,11 @@ func TestReplayValidator(t *testing.T) {
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(nil, nil)
 			sch.On("GetJobRuns", ctx, tnnt, replayJobARunsCriteria, jobCron).Return(nil, nil)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			backfillRepo := new(mockBackfillRepository)
+			defer backfillRepo.AssertExpectations(t)
+			backfillRepo.On("GetBackfillsByFilter", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+			validator := service.NewValidator(replayRepository, sch, jobRepository, backfillRepo)
 			err := validator.Validate(ctx, replayJobAReq, jobCron)
 			assert.NoError(t, err)
 		})
@@ -184,7 +193,7 @@ func TestReplayValidator(t *testing.T) {
 
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(onGoingReplay, nil)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			validator := service.NewValidator(replayRepository, sch, jobRepository, nil)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.ErrorContains(t, err, "request is conflicted")
 		})
@@ -217,8 +226,11 @@ func TestReplayValidator(t *testing.T) {
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(onGoingReplay, nil)
 			sch.On("GetJobRuns", ctx, tnnt, replayRunsCriteriaJobA, jobCron).Return(currentRuns, nil)
+			backfillRepo := new(mockBackfillRepository)
+			defer backfillRepo.AssertExpectations(t)
+			backfillRepo.On("GetBackfillsByFilter", ctx, mock.Anything, mock.Anything).Return(nil, nil)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			validator := service.NewValidator(replayRepository, sch, jobRepository, backfillRepo)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.ErrorContains(t, err, "conflicted job run found")
 		})
@@ -241,7 +253,7 @@ func TestReplayValidator(t *testing.T) {
 			}, nil)
 			replayRepository.On("GetReplayRequestsByStatus", ctx, replayStatusToValidate).Return(nil, internalErr)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			validator := service.NewValidator(replayRepository, sch, jobRepository, nil)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.ErrorIs(t, err, internalErr)
 		})
@@ -271,7 +283,11 @@ func TestReplayValidator(t *testing.T) {
 			}, nil)
 			sch.On("GetJobRuns", ctx, tnnt, replayRunsCriteriaJobA, jobCron).Return(nil, internalErr)
 
-			validator := service.NewValidator(replayRepository, sch, jobRepository)
+			backfillRepo := new(mockBackfillRepository)
+			defer backfillRepo.AssertExpectations(t)
+			backfillRepo.On("GetBackfillsByFilter", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+			validator := service.NewValidator(replayRepository, sch, jobRepository, backfillRepo)
 			err := validator.Validate(ctx, replayReq, jobCron)
 			assert.ErrorIs(t, err, internalErr)
 		})

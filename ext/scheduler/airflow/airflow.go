@@ -42,7 +42,7 @@ const (
 	dagRunClearURL     = "api/v1/dags/%s/clearTaskInstances"
 	dagRunCreateURL    = "api/v1/dags/%s/dagRuns"
 	getTaskInstanceURL = "api/v1/dags/%s/dagRuns/%s/taskInstances/%s"
-	dagRunModifyURL    = "api/v1/dags/%s/dagRuns/%s"
+	dagRunIDURL        = "api/v1/dags/%s/dagRuns/%s"
 	airflowDateFormat  = "2006-01-02T15:04:05+00:00"
 
 	schedulerHostKey = "SCHEDULER_HOST"
@@ -736,7 +736,7 @@ func (s *Scheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName s
 	defer span.End()
 	data := []byte(`{"state": "failed"}`)
 	req := airflowRequest{
-		path:   fmt.Sprintf(dagRunModifyURL, jobName.String(), dagRunID),
+		path:   fmt.Sprintf(dagRunIDURL, jobName.String(), dagRunID),
 		method: http.MethodPatch,
 		body:   data,
 	}
@@ -751,12 +751,12 @@ func (s *Scheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName s
 	return nil
 }
 
-func (s *Scheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error {
+func (s *Scheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) (string, error) {
 	spanCtx, span := startChildSpan(ctx, "CreateRun")
 	defer span.End()
-
+	dagRunID := fmt.Sprintf("%s__%s", dagRunIDPrefix, executionTime.UTC().Format(airflowDateFormat))
 	data := []byte(fmt.Sprintf(`{"dag_run_id": %q, "execution_date": %q}`,
-		fmt.Sprintf("%s__%s", dagRunIDPrefix, executionTime.UTC().Format(airflowDateFormat)),
+		dagRunID,
 		executionTime.UTC().Format(airflowDateFormat)),
 	)
 	req := airflowRequest{
@@ -766,13 +766,36 @@ func (s *Scheduler) CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName s
 	}
 	schdAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
 	if err != nil {
-		return err
+		return "", err
 	}
 	_, err = s.client.Invoke(spanCtx, req, schdAuth)
 	if err != nil {
-		return errors.Wrap(EntityAirflow, "failure while creating airflow dag run", err)
+		return "", errors.Wrap(EntityAirflow, "failure while creating airflow dag run", err)
 	}
-	return nil
+	return dagRunID, nil
+}
+
+func (s *Scheduler) GetRunStatusByDagRunID(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, dagRunID string) (*scheduler.JobRunStatus, error) {
+	spanCtx, span := startChildSpan(ctx, "GetRunStatusByDagRunID")
+	defer span.End()
+	req := airflowRequest{
+		path:   fmt.Sprintf(dagRunIDURL, jobName.String(), dagRunID),
+		method: http.MethodGet,
+	}
+	schdAuth, err := s.getSchedulerAuth(ctx, tnnt.ProjectName())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.client.Invoke(spanCtx, req, schdAuth)
+	if err != nil {
+		return nil, errors.Wrap(EntityAirflow, "failure while getting airflow dag run status", err)
+	}
+	var jobRunStatuses *scheduler.JobRunStatus
+	// todo: ideally it should only return a single run, check the resp and adapt accordingly
+	if err := json.Unmarshal(resp, &jobRunStatuses); err != nil {
+		return nil, errors.Wrap(EntityAirflow, "failure while unmarshalling airflow dag run status", err)
+	}
+	return jobRunStatuses, nil
 }
 
 func (s *Scheduler) GetOperatorInstance(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, dagRunID, operatorID string) (*scheduler.OperatorRunInstance, error) {

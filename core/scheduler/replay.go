@@ -113,6 +113,18 @@ func (r *Replay) CreatedAt() time.Time {
 	return r.createdAt
 }
 
+func (r *Replay) GetStartTime() time.Time {
+	return r.config.StartTime
+}
+
+func (r *Replay) GetEndTime() time.Time {
+	return r.config.EndTime
+}
+
+func (r *Replay) GetJobConfig() map[string]string {
+	return r.config.JobConfig
+}
+
 func (r *Replay) IsTerminated() bool {
 	for _, terminalState := range ReplayTerminalStates {
 		if r.State() == terminalState {

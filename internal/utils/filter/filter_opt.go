@@ -23,6 +23,9 @@ const (
 	bitOnApprovalID          uint64 = 1 << 12
 	bitOnUserID              uint64 = 1 << 13
 	bitOnTableName           uint64 = 1 << 14
+	bitOnSchedulerRunID      uint64 = 1 << 15
+	bitOnBackfillID          uint64 = 1 << 16
+	bitOnBackfillStatus      uint64 = 1 << 17
 )
 
 const (
@@ -41,6 +44,9 @@ const (
 	ApprovalID          = Operand(bitOnApprovalID)
 	UserID              = Operand(bitOnUserID)
 	TableName           = Operand(bitOnTableName)
+	SchedulerRunID      = Operand(bitOnSchedulerRunID)
+	BackfillID          = Operand(bitOnBackfillID)
+	BackfillStatus      = Operand(bitOnBackfillStatus)
 )
 
 func WithTime(operand Operand, value time.Time) FilterOpt {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"time"
 
@@ -98,7 +99,7 @@ type SLARepository interface {
 }
 
 type JobInputCompiler interface {
-	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time) (*scheduler.ExecutorInput, error)
+	Compile(ctx context.Context, job *scheduler.JobWithDetails, config scheduler.RunConfig, executedAt time.Time, customOverrideConfig map[string]string) (*scheduler.ExecutorInput, error)
 }
 
 type PriorityResolver interface {
@@ -128,6 +129,7 @@ type JobRunService struct {
 	l                log.Logger
 	repo             JobRunRepository
 	replayRepo       JobReplayRepository
+	backfillRepo     BackfillRepository
 	slaRepo          SLARepository
 	operatorRunRepo  OperatorRunRepository
 	eventHandler     EventHandler
@@ -139,6 +141,33 @@ type JobRunService struct {
 	features         config.FeaturesConfig
 
 	durationEstimatorService DurationEstimator
+}
+
+var DagRunIDRegex = regexp.MustCompile(`(.*?)(_(.+))?__(.+)`)
+
+func parseDagRunID(dagRunID string) (string, string, string, error) {
+	matches := DagRunIDRegex.FindStringSubmatch(dagRunID)
+	if len(matches) == 0 {
+		return "", "", "", fmt.Errorf("invalid dag run id format: %s", dagRunID)
+	}
+	runType := matches[1]
+	backfillID := matches[3]
+	logicalTime := matches[4]
+	return runType, backfillID, logicalTime, nil
+}
+
+func isRunCustomBackfillType(dagRunID string) (bool, uuid.UUID) {
+	runType, backfillID, _, err := parseDagRunID(dagRunID)
+	if err != nil {
+		return false, uuid.Nil
+	}
+	if runType == CustomBackfillPrefix {
+		parsedUUID, err := uuid.Parse(backfillID)
+		if err == nil {
+			return true, parsedUUID
+		}
+	}
+	return false, uuid.Nil
 }
 
 func (s *JobRunService) GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error) {
@@ -169,7 +198,28 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	} else {
 		executedAt = jobRun.StartTime
 	}
-	// Additional task config from existing replay
+
+	if ok, backfillID := isRunCustomBackfillType(config.DagRunID); ok {
+		backfillWithDetails, err := s.backfillRepo.GetBackfillDetails(ctx, backfillID)
+		if err != nil {
+			s.l.Error("error getting backfill details from db: %s", err)
+			return nil, err
+		}
+
+		customOverrideConfig := map[string]string{
+			configDstart: backfillWithDetails.Config().Dstart.Format(TimeISOFormat),
+			configDend:   backfillWithDetails.Config().Dend.Format(TimeISOFormat),
+		}
+		for k, v := range backfillWithDetails.Config().Assets {
+			details.Job.Assets[k] = v
+		}
+		for k, v := range backfillWithDetails.GetJobConfig() {
+			details.Job.Task.Config[k] = v
+		}
+
+		return s.compiler.Compile(ctx, details, config, executedAt, customOverrideConfig)
+	}
+
 	replayJobConfig, err := s.replayRepo.GetReplayJobConfig(ctx, details.Job.Tenant, details.Job.Name, config.ScheduledAt)
 	if err != nil {
 		s.l.Error("error getting replay job config from db: %s", err)
@@ -179,7 +229,7 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 		details.Job.Task.Config[k] = v
 	}
 
-	return s.compiler.Compile(ctx, details, config, executedAt)
+	return s.compiler.Compile(ctx, details, config, executedAt, nil)
 }
 
 func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {
@@ -1222,7 +1272,7 @@ func (s *JobRunService) GetJobRunsByIdentifiers(ctx context.Context, identifiers
 func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRunRepository, replayRepo JobReplayRepository,
 	operatorRunRepo OperatorRunRepository, slaRepo SLARepository, scheduler Scheduler, resolver PriorityResolver,
 	compiler JobInputCompiler, eventHandler EventHandler, projectGetter ProjectGetter, features config.FeaturesConfig,
-	durationEstimatorService DurationEstimator,
+	durationEstimatorService DurationEstimator, backfillRepo BackfillRepository,
 ) *JobRunService {
 	return &JobRunService{
 		l:                        logger,
@@ -1238,6 +1288,7 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 		projectGetter:            projectGetter,
 		features:                 features,
 		durationEstimatorService: durationEstimatorService,
+		backfillRepo:             backfillRepo,
 	}
 }
 

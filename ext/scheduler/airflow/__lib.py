@@ -105,6 +105,7 @@ class SuperKubernetesPodOperator(KubernetesPodOperator):
             env = getattr(ic, 'env')
             if env:
                 self.init_containers[index].env.append(k8s.V1EnvVar(name="SCHEDULED_AT", value=get_scheduled_at(context)))
+                self.init_containers[index].env.append(k8s.V1EnvVar(name="DAG_RUN_ID", value=context.get('dag_run').run_id))
                 self.render_template(env, context)
 
     def execute(self, context):
@@ -348,6 +349,11 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
     def poke(self, context):
         sensor_toggle_val = Variable.get(THIRD_PARTY_SENSOR_TOGGLE, default_var="")
 
+        dagrunid = context.get('dag_run').run_id
+        if dagrunid.startswith("custom-backfill_"):
+            log.info("Bypassing upstream check as dag run id '{}' indicates a custom backfill run".format(dagrunid))
+            return True
+
         if self.third_party_type not in self._third_party_types_supported:
             self.log.warning("third party type '{}' not supported, skipping sensor check".format(self.third_party_type))
             return True
@@ -458,6 +464,12 @@ class SuperExternalTaskSensor(BaseSensorOperator):
 
         schedule_time = get_scheduled_at(context)
         job_config = self._optimus_client.get_job_replay_config(self.project_name, self.job_name, schedule_time)
+
+        dagrunid = context.get('dag_run').run_id
+        if dagrunid.startswith("custom-backfill_"):
+            log.info("Bypassing upstream check as dag run id '{}' indicates a custom backfill run".format(dagrunid))
+            return True
+
         if 'IGNORE_UPSTREAM' in job_config.keys():
             if job_config['IGNORE_UPSTREAM'] == "True":
                 log.info("Bypassing upstream check as replay_config contains IGNORE_UPSTREAM=True")

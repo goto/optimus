@@ -48,7 +48,7 @@ type ReplayScheduler interface {
 	ClearBatch(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, startTime, endTime time.Time) error
 
 	CancelRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, dagRunID string) error
-	CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) error
+	CreateRun(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, executionTime time.Time, dagRunIDPrefix string) (string, error)
 	GetJobRuns(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 	GetJobRunsForReplay(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)
 	GetJobRunsWithDetails(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error)
@@ -351,7 +351,7 @@ func (w *ReplayWorker) replayRunOnScheduler(ctx context.Context, jobCron *cron.S
 	for _, run := range missingRuns {
 		logicalTime := run.GetLogicalTime(jobCron)
 		w.logger.Info("[ReplayID: %s] creating a new run with logical time: %s", replayReq.ID(), logicalTime)
-		if err := w.scheduler.CreateRun(ctx, replayReq.Tenant(), replayReq.JobName(), logicalTime, prefixReplayed); err != nil {
+		if _, err := w.scheduler.CreateRun(ctx, replayReq.Tenant(), replayReq.JobName(), logicalTime, prefixReplayed); err != nil {
 			w.logger.Error("[ReplayID: %s] unable to create job run: %s", replayReq.ID(), err)
 			me.Append(err)
 		}

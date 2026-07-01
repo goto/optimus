@@ -357,7 +357,9 @@ func (s *OptimusServer) setupHandlers() error {
 	s.cleanupFn = append(s.cleanupFn, closeReplayScan)
 	go replayWorker.ScanReplayRequest(replayContext)
 
-	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo)
+	backfillRepo := schedulerRepo.NewBackfillRepository(s.dbPool)
+
+	replayValidator := schedulerService.NewValidator(replayRepository, newScheduler, jobProviderRepo, backfillRepo)
 	replayService := schedulerService.NewReplayService(
 		replayRepository, jobProviderRepo, tenantService,
 		replayValidator, replayWorker, newScheduler,
@@ -369,10 +371,15 @@ func (s *OptimusServer) setupHandlers() error {
 		s.conf.Alerting.AutoSLABreachConfig.PaddingPercentage, s.conf.Alerting.AutoSLABreachConfig.MinPaddingMinutes,
 		s.conf.Alerting.AutoSLABreachConfig.MaxPaddingMinutes)
 
+	backfillWorker := schedulerService.NewBackfillWorker(s.logger, backfillRepo, newScheduler, s.conf.Backfill)
+	backfillScanContext, closeBackfillScan := context.WithCancel(context.Background())
+	s.cleanupFn = append(s.cleanupFn, closeBackfillScan)
+	go backfillWorker.ScanBackfillRequest(backfillScanContext)
+
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, slaRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
-		s.conf.Features, autoSLADurationEstimatorService,
+		s.conf.Features, autoSLADurationEstimatorService, backfillRepo,
 	)
 
 	newSchedulerService := schedulerService.NewSchedulerService(newScheduler)
@@ -508,6 +515,10 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterJobSpecificationServiceServer(s.grpcServer, jHandler.NewJobHandler(jJobService, jchangeLogService, s.logger))
 
 	pb.RegisterReplayServiceServer(s.grpcServer, schedulerHandler.NewReplayHandler(s.logger, replayService))
+
+	backfillService := schedulerService.NewBackfillService(backfillRepo, jobProviderRepo, tenantService,
+		replayValidator, newScheduler, s.logger, s.conf.Replay.PluginExecutionProjectConfigNames, alertsHandler, jobInputCompiler)
+	pb.RegisterBackfillServiceServer(s.grpcServer, schedulerHandler.NewBackfilllHandler(s.logger, backfillService))
 
 	s.cleanupFn = append(s.cleanupFn, func() {
 		err = eventsService.Close()

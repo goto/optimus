@@ -50,6 +50,7 @@ type jobRunInputCommand struct {
 	retryBackoffMs int64
 
 	keysWithUnsubstitutedValue []string
+	dagRunID                   string
 }
 
 // NewJobRunInputCommand gets compiled assets required for a job run
@@ -83,6 +84,7 @@ func (j *jobRunInputCommand) injectFlags(cmd *cobra.Command) {
 	// Mandatory flags
 	cmd.Flags().StringVar(&j.assetOutputDir, "output-dir", j.assetOutputDir, "Output directory for assets")
 	cmd.Flags().StringVar(&j.scheduledAt, "scheduled-at", "", "Time at which the job was scheduled for execution")
+	cmd.Flags().StringVar(&j.dagRunID, "dag-run-id", "", "ID of the DAG run, used to fetch the job run input assets for a specific DAG run")
 	cmd.Flags().StringVar(&j.runType, "type", "task", "Type of instance, could be task/hook")
 	cmd.Flags().StringVar(&j.runName, "name", "", "Name of running instance, e.g., bq2bq/transporter/predator")
 
@@ -241,6 +243,7 @@ func (j *jobRunInputCommand) sendJobRunInputRequest(jobName string, jobScheduled
 		ScheduledAt:  jobScheduledTimeProto,
 		InstanceType: pb.InstanceSpec_Type(pb.InstanceSpec_Type_value[utils.ToEnumProto(j.runType, "type")]),
 		InstanceName: j.runName,
+		DagRunId:     j.dagRunID,
 	}
 
 	ctx, reqCancel := context.WithTimeout(context.Background(), jobRunInputCompileAssetsTimeout)

@@ -40,6 +40,7 @@ const (
 
 type JobSLAPredictorService interface {
 	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig service.JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
+	IdentifySLABreachesBatch(ctx context.Context, combos []service.SLABreachCombo, reqConfig service.JobSLAPredictorRequestConfig) (map[string]*service.TargetBreach, error)
 }
 
 type JobExpectatorService interface {
@@ -512,9 +513,31 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-// IdentifyPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time
+// IdentifyPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time.
+// It accepts multiple projects and multiple label groups in a single request, evaluates the cross product, and
+// consolidates alerting into one message per team.
 func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.IdentifyPotentialSLABreachRequest) (*pb.IdentifyPotentialSLABreachResponse, error) {
 	response := pb.IdentifyPotentialSLABreachResponse{}
+
+	// resolve projects: prefer repeated project_names, fall back to path project_name
+	projectNameStrs := req.GetProjectNames()
+	if len(projectNameStrs) == 0 && req.GetProjectName() != "" {
+		projectNameStrs = []string{req.GetProjectName()}
+	}
+	if len(projectNameStrs) == 0 {
+		err := errors.InvalidArgument(scheduler.EntityJobRun, "no project provided")
+		h.l.Error("error identifying potential SLA breaches: %v", err)
+		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")
+	}
+	projectNames := make([]tenant.ProjectName, 0, len(projectNameStrs))
+	for _, pn := range projectNameStrs {
+		projectName, err := tenant.ProjectNameFrom(pn)
+		if err != nil {
+			h.l.Error("error adapting project name [%s]: %v", pn, err)
+			return nil, errors.GRPCErr(err, "unable to adapt project name")
+		}
+		projectNames = append(projectNames, projectName)
+	}
 
 	jobNames := []scheduler.JobName{}
 	for _, jn := range req.GetJobNames() {
@@ -526,11 +549,21 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		jobNames = append(jobNames, jobName)
 	}
 
-	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
-	if err != nil {
-		h.l.Error("error adapting project name [%s]: %v", req.GetProjectName(), err)
-		return nil, errors.GRPCErr(err, "unable to adapt project name")
+	// resolve label groups: prefer repeated label_groups, fall back to job_labels + request severity
+	type labelGroup struct {
+		labels   map[string]string
+		severity string
+		name     string
 	}
+	labelGroups := make([]labelGroup, 0, len(req.GetLabelGroups()))
+	for _, g := range req.GetLabelGroups() {
+		labelGroups = append(labelGroups, labelGroup{labels: g.GetJobLabels(), severity: g.GetSeverity(), name: g.GetName()})
+	}
+	legacyMode := len(labelGroups) == 0
+	if legacyMode {
+		labelGroups = append(labelGroups, labelGroup{labels: req.GetJobLabels(), severity: req.GetSeverity()})
+	}
+
 	// consider jobs with next schedule within next and before scheduleRangeInHours hours
 	scheduleRangeInHours := time.Duration(req.GetScheduledRangeInHours()) * time.Hour
 	referenceTime := time.Now().UTC()
@@ -546,16 +579,35 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		Severity:             req.GetSeverity(),
 		DamperCoeff:          float64(req.GetDamperCoeff()),
 	}
-	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, req.GetJobLabels(), reqConfig)
+
+	// build combos = projects x label groups. job_names only applies in legacy
+	// single-project mode where target selection isn't ambiguous.
+	combos := make([]service.SLABreachCombo, 0, len(projectNames)*len(labelGroups))
+	for _, projectName := range projectNames {
+		for _, g := range labelGroups {
+			combo := service.SLABreachCombo{
+				ProjectName: projectName,
+				Labels:      g.labels,
+				GroupName:   g.name,
+				Severity:    g.severity,
+			}
+			if legacyMode && len(projectNames) == 1 {
+				combo.JobNames = jobNames
+			}
+			combos = append(combos, combo)
+		}
+	}
+
+	targetBreaches, err := h.jobSLAPredictorService.IdentifySLABreachesBatch(ctx, combos, reqConfig)
 	if err != nil {
 		h.l.Error("error identifying potential SLA breaches: %v", err)
 		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")
 	}
 
 	jobs := make(map[string]*pb.UpstreamJobsStatus)
-	for jobNameTarget, upstreamJobStates := range jobBreaches {
+	for key, breach := range targetBreaches {
 		upstreamStatus := []*pb.UpstreamJobStatus{}
-		for upstreamJobName, upstreamJobState := range upstreamJobStates {
+		for upstreamJobName, upstreamJobState := range breach.Upstreams {
 			if upstreamJobState == nil || upstreamJobState.InferredSLA == nil {
 				continue
 			}
@@ -571,8 +623,10 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		if len(upstreamStatus) == 0 {
 			continue
 		}
-		jobs[jobNameTarget.String()] = &pb.UpstreamJobsStatus{
-			JobsStatus: upstreamStatus,
+		jobs[key] = &pb.UpstreamJobsStatus{
+			JobsStatus:        upstreamStatus,
+			TargetProjectName: breach.TargetProject,
+			TargetJobName:     breach.TargetJobName.String(),
 		}
 	}
 

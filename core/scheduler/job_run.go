@@ -135,11 +135,34 @@ type UpstreamAttrs struct {
 	Status        string
 }
 
+// SLABreachTarget is a single SLA-bearing (target) job that may breach, along
+// with the upstream cause jobs owned by the alerted team.
+type SLABreachTarget struct {
+	JobName string
+	Causes  []UpstreamAttrs
+}
+
+// SLABreachGroup groups targets that share the same SLA target (label group),
+// carrying its own severity so different SLA buckets can be distinguished within
+// a single team's message.
+type SLABreachGroup struct {
+	Name     string
+	Severity string
+	Targets  []SLABreachTarget
+}
+
+// SLABreachProject groups the breaching targets by the target job's project.
+type SLABreachProject struct {
+	Name   string
+	Groups []SLABreachGroup
+}
+
+// PotentialSLABreachAttrs is a single consolidated alert for one team. It is
+// routed to the team owning the root-cause (upstream) jobs, and its body is
+// organized as project -> SLA group (with severity) -> target -> causes.
 type PotentialSLABreachAttrs struct {
-	ProjectName         string
-	TeamName            string
-	JobToUpstreamsCause map[string][]UpstreamAttrs
-	Severity            string
+	TeamName string
+	Projects []SLABreachProject
 }
 
 const (

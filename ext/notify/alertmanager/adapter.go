@@ -249,36 +249,87 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 	})
 }
 
+// severityRank orders severities so we can pick the most severe one as the
+// single routing label for a team's consolidated message.
+func severityRank(severity string) int {
+	switch getSeverity(severity) {
+	case CriticalSeverity:
+		return 3
+	case WarningSeverity:
+		return 2
+	case InfoSeverity:
+		return 1
+	default:
+		return 0
+	}
+}
+
 func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreachAttrs) {
-	content := map[string][]string{}
-	for jobName, upstreamCauses := range attr.JobToUpstreamsCause {
-		content[jobName] = []string{}
-		for _, cause := range upstreamCauses {
-			content[jobName] = append(content[jobName], fmt.Sprintf("- %s (level: %d) (status: %s)", cause.JobName, cause.RelativeLevel, cause.Status))
+	a.relay(a.buildPotentialSLABreachPayload(attr))
+}
+
+// buildPotentialSLABreachPayload builds the structured alert payload for one
+// team: project -> group (severity) -> target -> causes. The routing severity
+// label is the max across all groups in this team's message, while each group
+// keeps its own severity in the body.
+func (a *AlertManager) buildPotentialSLABreachPayload(attr *scheduler.PotentialSLABreachAttrs) *AlertPayload {
+	maxSeverity := ""
+	projects := make([]map[string]interface{}, 0, len(attr.Projects))
+	firstProject := ""
+	for _, project := range attr.Projects {
+		if firstProject == "" {
+			firstProject = project.Name
 		}
+		groups := make([]map[string]interface{}, 0, len(project.Groups))
+		for _, group := range project.Groups {
+			groupSeverity := getSeverity(group.Severity)
+			if severityRank(groupSeverity) > severityRank(maxSeverity) {
+				maxSeverity = groupSeverity
+			}
+			targets := make([]map[string]interface{}, 0, len(group.Targets))
+			for _, target := range group.Targets {
+				causes := make([]string, 0, len(target.Causes))
+				for _, cause := range target.Causes {
+					causes = append(causes, fmt.Sprintf("%s (level: %d) (status: %s)", cause.JobName, cause.RelativeLevel, cause.Status))
+				}
+				targets = append(targets, map[string]interface{}{
+					"job_name": target.JobName,
+					"causes":   causes,
+				})
+			}
+			groups = append(groups, map[string]interface{}{
+				"name":     group.Name,
+				"severity": groupSeverity,
+				"targets":  targets,
+			})
+		}
+		projects = append(projects, map[string]interface{}{
+			"name":   project.Name,
+			"groups": groups,
+		})
 	}
 
-	severity := attr.Severity
-	if severity == "" || (severity != InfoSeverity && severity != WarningSeverity && severity != CriticalSeverity) {
-		severity = WarningSeverity
+	if maxSeverity == "" {
+		maxSeverity = DefaultSeverity
 	}
 
 	alertPayload := &AlertPayload{
-		Project: attr.ProjectName,
+		Project: firstProject,
 		Data: map[string]interface{}{
-			"content": content,
+			"team":     attr.TeamName,
+			"projects": projects,
 		},
 		Template: OptimusPotentialSLABreachTemplate,
 		Labels: map[string]string{
 			DefaultChannelLabel: attr.TeamName,
-			SeverityLabel:       severity,
+			SeverityLabel:       maxSeverity,
 		},
 		Endpoint: a.endpoint,
 	}
 
-	if severity == CriticalSeverity {
+	if maxSeverity == CriticalSeverity {
 		alertPayload.Labels[EnvironmentLabel] = "production"
 	}
 
-	a.relay(alertPayload)
+	return alertPayload
 }

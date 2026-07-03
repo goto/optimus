@@ -549,19 +549,19 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		jobNames = append(jobNames, jobName)
 	}
 
-	// resolve label groups: prefer repeated label_groups, fall back to job_labels + request severity
+	// resolve label groups: prefer repeated label_groups, fall back to job_labels.
+	// severity is a single request-level value (req.GetSeverity()), not per-group.
 	type labelGroup struct {
-		labels   map[string]string
-		severity string
-		name     string
+		labels map[string]string
+		name   string
 	}
 	labelGroups := make([]labelGroup, 0, len(req.GetLabelGroups()))
 	for _, g := range req.GetLabelGroups() {
-		labelGroups = append(labelGroups, labelGroup{labels: g.GetJobLabels(), severity: g.GetSeverity(), name: g.GetName()})
+		labelGroups = append(labelGroups, labelGroup{labels: g.GetJobLabels(), name: g.GetName()})
 	}
 	legacyMode := len(labelGroups) == 0
 	if legacyMode {
-		labelGroups = append(labelGroups, labelGroup{labels: req.GetJobLabels(), severity: req.GetSeverity()})
+		labelGroups = append(labelGroups, labelGroup{labels: req.GetJobLabels()})
 	}
 
 	// consider jobs with next schedule within next and before scheduleRangeInHours hours
@@ -589,7 +589,6 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 				ProjectName: projectName,
 				Labels:      g.labels,
 				GroupName:   g.name,
-				Severity:    g.severity,
 			}
 			if legacyMode && len(projectNames) == 1 {
 				combo.JobNames = jobNames

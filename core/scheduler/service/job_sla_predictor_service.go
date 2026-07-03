@@ -41,7 +41,6 @@ type SLABreachCombo struct {
 	JobNames    []scheduler.JobName
 	Labels      map[string]string
 	GroupName   string // display name for the SLA group; derived from labels if empty
-	Severity    string // severity for this group; falls back to reqConfig.Severity if empty
 }
 
 // comboBreachResult holds the computed breaches for one combo, retained so that
@@ -135,7 +134,6 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 		ProjectName: projectName,
 		JobNames:    jobNames,
 		Labels:      labels,
-		Severity:    reqConfig.Severity,
 	}
 	result, err := s.computeBreaches(ctx, combo, reqConfig)
 	if err != nil {
@@ -753,10 +751,7 @@ func (s *JobSLAPredictorService) sendConsolidatedAlerts(ctx context.Context, res
 		if groupName == "" {
 			groupName = deriveGroupName(r.combo.Labels)
 		}
-		severity := r.combo.Severity
-		if severity == "" {
-			severity = reqConfig.Severity
-		}
+		severity := reqConfig.Severity
 		for targetName, upstreamCauses := range r.jobBreachCauses {
 			if suppressed[targetName] {
 				s.l.Info("skipping target for alerting as it was recently predicted", "job", targetName.String())

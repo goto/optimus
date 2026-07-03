@@ -41,8 +41,20 @@ configYaml: |-
     level: DEBUG
   serve:
     ingress_host: optimus-dev.optimus-dev.svc.cluster.local:80
+    ingress_host_grpc: optimus-dev.optimus-dev.svc.cluster.local:8081
+    port_grpc: 9101
   scheduler:
     name: airflow2
+  sla:
+    worker_interval_minutes: 60
+    worker_lock_duration_minutes: 120
+  plugins:
+    location: /app/plugins
+  alerting:
+    alert_manager:
+      enabled: true
+      host: "http://siren.com"
+      endpoint: "/v1beta1/notifications"
 
 config:
   OPTIMUS_SERVE_DB_DSN: postgres://optimus:optimus@database-service/optimus?sslmode=disable

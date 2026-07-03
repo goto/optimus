@@ -96,7 +96,7 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 		}, nil).Once()
 
 		combos := []service.SLABreachCombo{
-			{ProjectName: projectName, JobNames: []scheduler.JobName{"job-A"}, GroupName: "sla-8am", Severity: "CRITICAL"},
+			{ProjectName: projectName, JobNames: []scheduler.JobName{"job-A"}, GroupName: "sla-8am"},
 		}
 
 		// when

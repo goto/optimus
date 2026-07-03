@@ -1601,7 +1601,6 @@ func TestCalculateInferredSLAs(t *testing.T) {
 	l := log.NewNoop()
 	svc := service.NewJobSLAPredictorService(l, config.PotentialSLABreachConfig{}, nil, nil, nil, nil, nil, nil, nil)
 
-	// anchor schedule date
 	base := time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
 
 	node := func(name scheduler.JobName, upstreams ...*scheduler.JobLineageSummary) *scheduler.JobLineageSummary {
@@ -1610,14 +1609,18 @@ func TestCalculateInferredSLAs(t *testing.T) {
 
 	t.Run("single target node with no upstreams", func(t *testing.T) {
 		a := node("job-A")
-		got := svc.CalculateInferredSLAs(a, map[scheduler.JobName]*time.Duration{"job-A": dur(20)}, &base, 1.0)
-		assert.Equal(t, &base, got["job-A"])
-		assert.Len(t, got, 1)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, map[scheduler.JobName]*time.Duration{"job-A": dur(20 * time.Minute)}, &base, 1.0)
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Len(t, gotSLAs, 1)
+		assert.Empty(t, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0}, gotPath.Level)
 	})
 
-	t.Run("linear chain damper=1.0 propagates duration at each hop", func(t *testing.T) {
+	t.Run("linear chain damper=1.0 propagates full duration at each hop", func(t *testing.T) {
 		// topology: A -> B -> C
-		// S(A)=base, S(B)=base-20m (A's duration), S(C)=base-35m (A+B duration)
+		// S(B) = base - dur_A*1.0 = base-20m   (level 1)
+		// S(C) = base-20m - dur_B*1.0 = base-35m (level 2)
 		c := node("job-C")
 		b := node("job-B", c)
 		a := node("job-A", b)
@@ -1626,16 +1629,19 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-B": dur(15 * time.Minute),
 			"job-C": dur(10 * time.Minute),
 		}
-		got := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
-		assert.Equal(t, base, *got["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *got["job-B"])
-		assert.Equal(t, base.Add(-35*time.Minute), *got["job-C"])
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-B"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 2}, gotPath.Level)
 	})
 
 	t.Run("linear chain damper=0.5 attenuates duration at each level", func(t *testing.T) {
 		// topology: A -> B -> C, alpha=0.5
-		// level 0 (A): applied = dur_A * 1.0 = 20m  -> S(B) = base - 20m
-		// level 1 (B): applied = dur_B * 0.5 = 10m  -> S(C) = base - 30m
+		// S(B) = base - dur_A*1.0 = base-20m        (level 1, damper still 1.0 at target level)
+		// S(C) = base-20m - dur_B*0.5 = base-30m    (level 2, damper = 0.5)
 		c := node("job-C")
 		b := node("job-B", c)
 		a := node("job-A", b)
@@ -1644,19 +1650,21 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-B": dur(20 * time.Minute),
 			"job-C": dur(20 * time.Minute),
 		}
-		got := svc.CalculateInferredSLAs(a, durations, &base, 0.5)
-		assert.Equal(t, base, *got["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *got["job-B"])
-		assert.Equal(t, base.Add(-30*time.Minute), *got["job-C"])
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 0.5)
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-30*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-B"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 2}, gotPath.Level)
 	})
 
-	t.Run("diamond shared upstream receives earliest inferred SLA", func(t *testing.T) {
+	t.Run("simple diamond: shared node gets the tightest inferred SLA", func(t *testing.T) {
 		// topology: A -> {B, C}, both B and C -> D
 		// dur_A=20m, dur_B=5m, dur_C=15m, damper=1.0
-		// S(A)=base, S(B)=S(C)=base-20m
-		// Via C: S(D) = (base-20m) - 15m = base-35m
-		// Via B: candidate = (base-20m) - 5m = base-25m; base-35m is already earlier
-		// S(D) = base-35m (tightest)
+		// Via B (processed first in BFS): S(D) = base-20m - 5m  = base-25m
+		// Via C (processed second):       S(D) = base-20m - 15m = base-35m  <- tighter, wins
+		// winningPred[D] = C, winningLevel[D] = 2
 		d := node("job-D")
 		b := node("job-B", d)
 		c := node("job-C", d)
@@ -1667,16 +1675,62 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-C": dur(15 * time.Minute),
 			"job-D": dur(10 * time.Minute),
 		}
-		got := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
-		assert.Equal(t, base, *got["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *got["job-B"])
-		assert.Equal(t, base.Add(-20*time.Minute), *got["job-C"])
-		assert.Equal(t, base.Add(-35*time.Minute), *got["job-D"])
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-D"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-A", "job-D": "job-C"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 1, "job-D": 2}, gotPath.Level)
+	})
+
+	t.Run("asymmetric diamond: shared node anchored to the longest (bottleneck) path", func(t *testing.T) {
+		// topology: A->{B,C}, B->D, C->F, F->D, D->E   (same as the breach detection suite)
+		// dur: A=20m, B=15m, C=15m, F=10m, D=10m, E=5m, damper=1.0
+		//
+		// Paths to D:
+		//   via B (level 2): S(D) = base-20m - 15m = base-35m
+		//   via C-F (level 3): S(D) = base-35m - 10m = base-45m  <- tighter, wins
+		// winningPred[D]=F, winningLevel[D]=3
+		// S(E) = base-45m - 10m = base-55m, winningPred[E]=D, winningLevel[E]=4
+		e := node("job-E")
+		d := node("job-D", e)
+		f := node("job-F", d)
+		b := node("job-B", d)
+		c := node("job-C", f)
+		a := node("job-A", b, c)
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			"job-B": dur(15 * time.Minute),
+			"job-C": dur(15 * time.Minute),
+			"job-F": dur(10 * time.Minute),
+			"job-D": dur(10 * time.Minute),
+			"job-E": dur(5 * time.Minute),
+		}
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-F"])
+		assert.Equal(t, base.Add(-45*time.Minute), *gotSLAs["job-D"])
+		assert.Equal(t, base.Add(-55*time.Minute), *gotSLAs["job-E"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{
+			"job-B": "job-A",
+			"job-C": "job-A",
+			"job-F": "job-C",
+			"job-D": "job-F",
+			"job-E": "job-D",
+		}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{
+			"job-A": 0, "job-B": 1, "job-C": 1, "job-F": 2, "job-D": 3, "job-E": 4,
+		}, gotPath.Level)
 	})
 
 	t.Run("job with missing duration stops propagation to its upstreams", func(t *testing.T) {
 		// topology: A -> B -> C; B has no duration entry
-		// S(A)=base, S(B)=base-20m (from A's processing), C gets no SLA (B is skipped)
+		// S(B) = base-20m (A propagates to B), but B is skipped so C gets no SLA
 		c := node("job-C")
 		b := node("job-B", c)
 		a := node("job-A", b)
@@ -1685,10 +1739,13 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			// job-B intentionally missing
 			"job-C": dur(10 * time.Minute),
 		}
-		got := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
-		assert.Equal(t, base, *got["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *got["job-B"])
-		assert.Nil(t, got["job-C"], "C should have no SLA because B's duration is missing")
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Nil(t, gotSLAs["job-C"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1}, gotPath.Level)
 	})
 }
 
@@ -1726,7 +1783,7 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 		currentJobLineage.Upstreams = []*scheduler.JobLineageSummary{upstreamJobLineage}
 	}
 
-	slaStates := slaPredictorService.CalculateInferredSLAs(jobTargetLineageMap[jobNameTarget], jobDurations, &targetSLA, damperCoeff)
+	slaStates, _ := slaPredictorService.CalculateInferredSLAs(jobTargetLineageMap[jobNameTarget], jobDurations, &targetSLA, damperCoeff)
 
 	for _, jobName := range jobNamePath {
 		currentInferredSLA := slaStates[jobName]

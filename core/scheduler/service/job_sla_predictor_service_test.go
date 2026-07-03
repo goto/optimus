@@ -1598,8 +1598,6 @@ func TestIdentifySLABreach(t *testing.T) {
 }
 
 func TestCalculateInferredSLAs(t *testing.T) {
-	t.Parallel()
-
 	l := log.NewNoop()
 	svc := service.NewJobSLAPredictorService(l, config.PotentialSLABreachConfig{}, nil, nil, nil, nil, nil, nil, nil)
 

@@ -1,4 +1,4 @@
-package alertmanager
+package alertmanager // nolint: testpackage
 
 import (
 	"testing"

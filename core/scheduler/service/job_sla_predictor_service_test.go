@@ -1195,6 +1195,257 @@ func TestIdentifySLABreaches(t *testing.T) {
 	})
 }
 
+func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
+	// Diamond lineage with an asymmetric shared merge point:
+	//
+	//        job-B ------------\
+	//       /                   job-D -> job-E   (job-E is the deepest shared root)
+	//   job-A                  /
+	//       \                 /
+	//        job-C -> job-F --
+	//
+	// Upstream edges: A->{B,C}, B->D, C->F, F->D, D->E. The two branches out of job-A have
+	// different lengths and merge back at the shared job-D. scheduledAt is a fixed anchor;
+	// each case only varies referenceTime ("now") and per-job run states.
+	//
+	// Durations (mins): A=20, B=15, C=15, F=10, D=10, E=5.
+	// With a daily 1h SLA and damper 1.0 (s = scheduledAt):
+	// 	 job-D & job-E's inferred SLA should be derived from the longest path itself, which is A-C-F-D-E
+	//   inferred SLA: S(A)=s+60, S(B)=S(C)=s+40, S(F)=s+25, S(D)=s+15 (not s+25), S(E)=s+5 (not s+15)
+	//   must-start (=inferredSLA-duration): A=s+40, B=C=s+25, F=s+15, D=s+5, E=s+0
+
+	ctx := context.Background()
+	l := log.NewNoop()
+	conf := config.PotentialSLABreachConfig{DamperCoeff: 1.0, EnablePersistentLogging: false}
+
+	scheduledChangeGetter := NewScheduledChangeGetter(t)
+	scheduledChangeGetter.On("GetRecentScheduleChange", ctx, mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+
+	projectName := tenant.ProjectName("project-a")
+	tnnt, _ := tenant.NewTenant("project-a", "team-a")
+	scheduledAt := time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)
+	interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
+	nextScheduledRangeInHours := 10 * time.Hour
+
+	off := func(d time.Duration) *time.Duration { return &d }
+	durations := map[scheduler.JobName]*time.Duration{
+		"job-A": off(20 * time.Minute),
+		"job-B": off(15 * time.Minute),
+		"job-C": off(15 * time.Minute),
+		"job-F": off(10 * time.Minute),
+		"job-D": off(10 * time.Minute),
+		"job-E": off(5 * time.Minute),
+	}
+
+	// per-job run state, offsets relative to scheduledAt: nil start = not started;
+	// start set with nil end = running; both set = done.
+	type runState struct {
+		start *time.Duration
+		end   *time.Duration
+	}
+
+	buildLineage := func(states map[scheduler.JobName]runState) *scheduler.JobLineageSummary {
+		node := func(name scheduler.JobName) *scheduler.JobLineageSummary {
+			run := &scheduler.JobRunSummary{ScheduledAt: scheduledAt}
+			if st := states[name]; st.start != nil {
+				start := scheduledAt.Add(*st.start)
+				run.JobStartTime = &start
+				run.TaskStartTime = &start
+				if st.end != nil {
+					end := scheduledAt.Add(*st.end)
+					run.TaskEndTime = &end
+					run.JobEndTime = &end
+				}
+			}
+			return &scheduler.JobLineageSummary{
+				JobName:          name,
+				ScheduleInterval: interval,
+				IsEnabled:        true,
+				JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
+				Upstreams:        []*scheduler.JobLineageSummary{},
+			}
+		}
+		a, b, c := node("job-A"), node("job-B"), node("job-C")
+		f, d, e := node("job-F"), node("job-D"), node("job-E")
+		a.Upstreams = []*scheduler.JobLineageSummary{b, c}
+		b.Upstreams = []*scheduler.JobLineageSummary{d}
+		c.Upstreams = []*scheduler.JobLineageSummary{f}
+		f.Upstreams = []*scheduler.JobLineageSummary{d}
+		d.Upstreams = []*scheduler.JobLineageSummary{e}
+		return a
+	}
+
+	run := func(t *testing.T, referenceTime time.Time, states map[scheduler.JobName]runState) map[scheduler.JobName]map[scheduler.JobName]*scheduler.JobState {
+		t.Helper()
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		svc := service.NewJobSLAPredictorService(l, conf, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter)
+
+		jobA := &scheduler.JobWithDetails{
+			Name: "job-A",
+			Job:  &scheduler.Job{Tenant: tnnt, Name: "job-A"},
+			Schedule: &scheduler.Schedule{
+				StartDate: scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour),
+				Interval:  interval,
+			},
+			Alerts: []scheduler.Alert{{On: scheduler.EventCategorySLAMiss, Config: map[string]string{"duration": "1h"}}},
+		}
+		jobASchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobASchedule.JobName: jobASchedule,
+		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+			jobASchedule.JobName: buildLineage(states),
+		}, nil).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
+			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C", "job-D", "job-E", "job-F"}, jobNames)
+		})).Return(durations, nil).Once()
+
+		reqConfig := service.JobSLAPredictorRequestConfig{
+			ReferenceTime:        referenceTime,
+			ScheduleRangeInHours: nextScheduledRangeInHours,
+			DamperCoeff:          conf.DamperCoeff,
+		}
+		res, err := svc.IdentifySLABreaches(ctx, projectName, []scheduler.JobName{"job-A"}, map[string]string{}, reqConfig)
+		assert.NoError(t, err)
+		return res
+	}
+
+	t.Run("reference time mid-lineage, deepest root running late -> single root cause job-E", func(t *testing.T) {
+		// now = s+6. job-E started (s+2) and still running; everything else not started.
+		// B/C/F/D are also flagged (not started, past must-start) but each has a breaching
+		// upstream, so only job-E (no breaching upstream) is the root cause.
+		res := run(t, scheduledAt.Add(16*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: off(2 * time.Minute)},
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-E"), res["job-A"]["job-E"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-E"].Status)
+		assert.Equal(t, 4, res["job-A"]["job-E"].RelativeLevel)
+	})
+
+	t.Run("reference time just past job-E inferred SLA, only job-E flagged (not started)", func(t *testing.T) {
+		// now = s+12: past job-E's inferred SLA (s+10) but before every other inferred SLA
+		// (>= s+15), so job-E is the only breaching job. Nothing has started.
+		res := run(t, scheduledAt.Add(12*time.Minute), map[scheduler.JobName]runState{})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-E"), res["job-A"]["job-E"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseNotStarted, res["job-A"]["job-E"].Status)
+		assert.Equal(t, 4, res["job-A"]["job-E"].RelativeLevel)
+	})
+
+	t.Run("breach isolated to one branch upstream -> root cause job-F", func(t *testing.T) {
+		// now = s+30. The shared job-D (end s+14 <= S(D)=s+15) and job-E (end s+4 <= S(E)=s+5)
+		// finished on time; only job-F (C-branch) is running late. job-C is blocked behind it
+		// (flagged not-started) but excluded because its upstream job-F breaches. The B-branch
+		// is entirely done and clean.
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: off(0), end: off(4 * time.Minute)},
+			"job-D": {start: off(4 * time.Minute), end: off(14 * time.Minute)},
+			"job-F": {start: off(14 * time.Minute)},
+			"job-B": {start: off(15 * time.Minute), end: off(28 * time.Minute)},
+			// job-C not started (blocked behind late job-F)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-F"), res["job-A"]["job-F"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-F"].Status)
+		assert.Equal(t, 2, res["job-A"]["job-F"].RelativeLevel)
+	})
+
+	t.Run("breach is in 2 upstream branch job-F and job-B", func(t *testing.T) {
+		// now = s+30. The shared job-D (end s+14 <= S(D)=s+15) and job-E (end s+4 <= S(E)=s+5)
+		// finished on time;
+		// job-F is running late, while job-B hasn't started yet.
+		// highlight both job-F and job-B as the root cause
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: off(0), end: off(4 * time.Minute)},
+			"job-D": {start: off(4 * time.Minute), end: off(14 * time.Minute)},
+			"job-F": {start: off(14 * time.Minute)},
+			// job-B not started due to some reason
+			// job-C not started (blocked behind late job-F)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 2)
+
+		assert.Equal(t, scheduler.JobName("job-F"), res["job-A"]["job-F"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-F"].Status)
+		assert.Equal(t, 2, res["job-A"]["job-F"].RelativeLevel)
+
+		assert.Equal(t, scheduler.JobName("job-B"), res["job-A"]["job-B"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseNotStarted, res["job-A"]["job-B"].Status)
+		assert.Equal(t, 1, res["job-A"]["job-B"].RelativeLevel)
+	})
+
+	t.Run("shared merge point job-D running late -> root cause job-D", func(t *testing.T) {
+		// now = s+30. job-E finished on time (end s+4 <= S(E)=s+5) but the shared merge job-D
+		// is running late. B/C/F are blocked behind job-D and excluded; job-D has no breaching
+		// upstream.
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: off(0), end: off(4 * time.Minute)},
+			"job-D": {start: off(6 * time.Minute)},
+			// B, C, F not started (blocked behind late job-D)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-D"), res["job-A"]["job-D"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-D"].Status)
+		assert.Equal(t, 3, res["job-A"]["job-D"].RelativeLevel)
+	})
+
+	t.Run("shared merge point job-D finished late -> root cause job-D", func(t *testing.T) {
+		// now = s+30. job-D is finishing late (s+17 > s+15). B/C/F are blocked behind job-D and excluded; job-D has no breaching
+		// upstream.
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: off(0), end: off(4 * time.Minute)},
+			"job-D": {start: off(4 * time.Minute), end: off(17 * time.Minute)},
+			// B, C, F not started yet (blocked behind late job-D)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-D"), res["job-A"]["job-D"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-D"].Status)
+		assert.Equal(t, 3, res["job-A"]["job-D"].RelativeLevel)
+	})
+
+	t.Run("target job itself running late, upstreams done -> root cause job-A", func(t *testing.T) {
+		// now = s+65, past job-A's own SLA (s+60). All upstreams finished before their
+		// inferred SLAs (E<=s+5, D<=s+15, F<=s+25, B/C<=s+40), so job-A itself is the only
+		// breaching job (level 0).
+		res := run(t, scheduledAt.Add(65*time.Minute), map[scheduler.JobName]runState{
+			"job-A": {start: off(50 * time.Minute)},
+			"job-B": {start: off(25 * time.Minute), end: off(38 * time.Minute)},
+			"job-C": {start: off(25 * time.Minute), end: off(38 * time.Minute)},
+			"job-F": {start: off(14 * time.Minute), end: off(24 * time.Minute)},
+			"job-D": {start: off(4 * time.Minute), end: off(14 * time.Minute)},
+			"job-E": {start: off(0), end: off(4 * time.Minute)},
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-A"), res["job-A"]["job-A"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-A"].Status)
+		assert.Equal(t, 0, res["job-A"]["job-A"].RelativeLevel)
+	})
+
+	t.Run("every job completed before its inferred SLA -> no breach", func(t *testing.T) {
+		// now = s+50, everything done ahead of its inferred SLA
+		// (E<=s+5, D<=s+15, F<=s+25, B/C<=s+40, A<=s+60).
+		res := run(t, scheduledAt.Add(50*time.Minute), map[scheduler.JobName]runState{
+			"job-A": {start: off(40 * time.Minute), end: off(45 * time.Minute)},
+			"job-B": {start: off(25 * time.Minute), end: off(38 * time.Minute)},
+			"job-C": {start: off(25 * time.Minute), end: off(38 * time.Minute)},
+			"job-F": {start: off(14 * time.Minute), end: off(24 * time.Minute)},
+			"job-D": {start: off(4 * time.Minute), end: off(14 * time.Minute)},
+			"job-E": {start: off(0), end: off(4 * time.Minute)},
+		})
+		assert.Len(t, res, 0)
+	})
+}
+
 func TestIdentifySLABreach(t *testing.T) {
 	l := log.NewNoop()
 	conf := config.PotentialSLABreachConfig{

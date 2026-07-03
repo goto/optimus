@@ -469,11 +469,16 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 
 		inferredSLA := targetedInferredSLA.Add(-time.Duration(duration) * time.Millisecond)
 		for _, upstreamJob := range job.Upstreams {
-			if _, ok := jobSLAs[upstreamJob.JobName]; ok {
-				// already calculated, skip
+			existingSLA, ok := jobSLAs[upstreamJob.JobName]
+			// only reassign SLA if it does not exist yet,
+			// or if the newly calculated inferred SLA is earlier than the currently tracked ones
+			if ok && existingSLA.Before(inferredSLA) {
 				continue
 			}
+
 			jobSLAs[upstreamJob.JobName] = &inferredSLA
+			// export dampening factor calculation as a new function
+			// even do not make it exponential
 			stack = append(stack, &state{job: upstreamJob, damper: current.damper * alpha})
 		}
 	}
@@ -611,23 +616,44 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 		}
 	}
 
-	// find root causes from potentialBreachPaths
-	// root causes are the leaf nodes in the potentialBreachPaths
+	// find *true* root causes among the breaching jobs, where none of its direct upstreams are
+	// breaching too; otherwise its breach is only propagated from an upstream. This
+	// relies on the global breach set (jobBreachStates) and the lineage graph rather than on
+	// the traversal path leaves, so shared-ancestor (diamond) lineages collapse to the deepest
+	// breaching job regardless of which branch the traversal happened to explore first.
+	rootCauseNames := make(map[scheduler.JobName]bool)
 	rootCauses := make([][]*scheduler.JobState, 0)
-	compactedAllUpstreamStates := compactingStatePaths(allUpstreamStates)
-	if len(compactedAllUpstreamStates) > 0 {
-		for _, upstreamStates := range compactedAllUpstreamStates {
-			rootCause := make([]*scheduler.JobState, 0)
-			for _, state := range upstreamStates {
-				if jobState, ok := jobBreachStates[state.JobName]; ok {
-					rootCause = append(rootCause, jobState)
+	for jobName, breachState := range jobBreachStates {
+		hasBreachingUpstream := false
+		if lineage, ok := jobsWithLineageVisitedMap[jobName]; ok && lineage != nil {
+			for _, upstream := range lineage.Upstreams {
+				if _, breaching := jobBreachStates[upstream.JobName]; breaching {
+					hasBreachingUpstream = true
+					break
 				}
 			}
-			rootCauses = append(rootCauses, rootCause)
+		}
+		if !hasBreachingUpstream {
+			rootCauseNames[jobName] = true
+			rootCauses = append(rootCauses, []*scheduler.JobState{breachState})
 		}
 	}
 
-	return rootCauses, compactedAllUpstreamStates
+	// keep only the full lineage paths that terminate at a true root cause, so the stored/
+	// logged paths stay consistent with the reported root causes.
+	compactedAllUpstreamStates := compactingStatePaths(allUpstreamStates)
+	fullPaths := make([][]*scheduler.JobState, 0, len(compactedAllUpstreamStates))
+	for _, upstreamStates := range compactedAllUpstreamStates {
+		if len(upstreamStates) == 0 {
+			continue
+		}
+		leaf := upstreamStates[len(upstreamStates)-1]
+		if rootCauseNames[leaf.JobName] {
+			fullPaths = append(fullPaths, upstreamStates)
+		}
+	}
+
+	return rootCauses, fullPaths
 }
 
 // populateJobSLAStates populates the jobSLAStatesByJobName map with the estimated durations and inferred SLAs for each job.

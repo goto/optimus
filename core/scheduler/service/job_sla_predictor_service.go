@@ -430,6 +430,10 @@ func getJobSchedules(l log.Logger, jobs []*scheduler.JobWithDetails, scheduleRan
 	return jobSchedules
 }
 
+// damperState tracks the effective dampening coefficient for one node in the traversal.
+// alpha is the base coefficient (constant); value is alpha^depth (1.0 at the target job).
+// lowest is a shared pointer so all states derived from the same root update the same minimum.
+
 // calculateInferredSLAs calculates the inferred SLAs for each job based on their downstream critical jobs and estimated durations.
 // infer SLA for each job based on its jobs and their inferred SLAs. bottom up calculation, leaf node should meet targetedSLA
 // for an upstream job u and a downstream critical job j with SLA S(j) and average duration D(j), the inferred SLA for u induced by j (S(u|j)) = S(j) - D(u)
@@ -440,17 +444,16 @@ func getJobSchedules(l log.Logger, jobs []*scheduler.JobWithDetails, scheduleRan
 // where, S(u0|j) = S(j), D(u0) = D(j)
 func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperCoeff float64) map[scheduler.JobName]*time.Time {
 	jobSLAs := make(map[scheduler.JobName]*time.Time)
-	alpha := damperCoeff // damper factor to reduce the impact of upstream jobs in higher levels
-	lowestDamperCoeff := damperCoeff
 	// inferred SLA for leaf node = targetedSLA S(j)
 	jobSLAs[jobTarget.JobName] = targetedSLA
 	// bottom up calculation of inferred SLA for upstream jobs
-	s.l.Info("damper coefficient used for inferred SLA calculation", "damper_coeff", alpha)
+	rootDamper := scheduler.NewDamper(damperCoeff)
+	s.l.Info("damper coefficient used for inferred SLA calculation", "damper_coeff", damperCoeff)
 	type state struct {
 		job    *scheduler.JobLineageSummary
-		damper float64
+		damper scheduler.DamperState
 	}
-	stack := []*state{{job: jobTarget, damper: 1.0}}
+	stack := []*state{{job: jobTarget, damper: rootDamper}}
 	for len(stack) > 0 {
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
@@ -460,30 +463,24 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 		if jobDurations[job.JobName] == nil || targetedInferredSLA == nil {
 			continue
 		}
-		if current.damper < lowestDamperCoeff {
-			lowestDamperCoeff = current.damper
-		}
 
-		duration := jobDurations[job.JobName].Milliseconds()
-		duration = int64(float64(duration) * current.damper)
+		duration := current.damper.ApplyTo(jobDurations[job.JobName].Milliseconds())
 
 		inferredSLA := targetedInferredSLA.Add(-time.Duration(duration) * time.Millisecond)
 		for _, upstreamJob := range job.Upstreams {
 			existingSLA, ok := jobSLAs[upstreamJob.JobName]
-			// only reassign SLA if it does not exist yet,
-			// or if the newly calculated inferred SLA is earlier than the currently tracked ones
+			// only reassign SLA if it does not exist yet, or if the newly calculated
+			// inferred SLA is earlier than the currently tracked ones
 			if ok && existingSLA.Before(inferredSLA) {
 				continue
 			}
 
 			jobSLAs[upstreamJob.JobName] = &inferredSLA
-			// export dampening factor calculation as a new function
-			// even do not make it exponential
-			stack = append(stack, &state{job: upstreamJob, damper: current.damper * alpha})
+			stack = append(stack, &state{job: upstreamJob, damper: current.damper.Descend()})
 		}
 	}
 
-	s.l.Info("lowest damper coefficient used in inferred SLA calculation", "damper_coeff", lowestDamperCoeff)
+	s.l.Info("lowest damper coefficient used in inferred SLA calculation", "damper_coeff", rootDamper.LowestCoeff())
 
 	return jobSLAs
 }

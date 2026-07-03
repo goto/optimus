@@ -507,3 +507,34 @@ type ChangelogFilter struct {
 	StartTime   time.Time
 	EndTime     time.Time
 }
+
+type DamperState struct {
+	alpha  float64
+	value  float64
+	lowest float64
+}
+
+func NewDamper(alpha float64) DamperState {
+	lowest := alpha
+	return DamperState{alpha: alpha, value: 1.0, lowest: lowest}
+}
+
+// ApplyTo applies the current damper state to the given value
+func (d DamperState) ApplyTo(value int64) int64 {
+	return int64(float64(value) * d.value)
+}
+
+// Descend returns a new DamperState where alpha is applied to the current damper value
+// using a defined calculation. For now, only support exponential
+func (d DamperState) Descend() DamperState {
+	next := d.value * d.alpha
+	if next < d.lowest {
+		d.lowest = next
+	}
+	return DamperState{alpha: d.alpha, value: next, lowest: d.lowest}
+}
+
+// LowestCoeff returns the minimum effective coefficient seen across all descended states.
+func (d DamperState) LowestCoeff() float64 {
+	return d.lowest
+}

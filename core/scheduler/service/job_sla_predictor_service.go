@@ -583,11 +583,10 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 		if jobSLAStates[job.JobName] == nil || jobSLAStates[job.JobName].InferredSLA == nil || jobSLAStates[job.JobName].EstimatedDuration == nil { // less likely occur, but just in case
 			continue
 		}
-		if _, ok := job.JobRuns[jobTarget.JobName]; !ok {
-			s.l.Info("skipping job for SLA breach check as it has no job run for the targeted job", "job", job.JobName, "targeted_job", jobTarget.JobName)
+		if len(job.JobRuns) == 0 {
+			s.l.Info("skipping job for SLA breach check as it has no job run associated", "job", job.JobName)
 			continue
 		}
-		jobRun := job.JobRuns[jobTarget.JobName]
 
 		if skipJobNames[job.JobName] {
 			s.l.Info("skipping job for SLA breach check as it's in the skip list", "job", job.JobName)
@@ -595,36 +594,51 @@ func (s *JobSLAPredictorService) identifySLABreachRootCauses(ctx context.Context
 				continue
 			}
 		} else {
-			if oldScheduled, err := s.scheduledChangeGetter.GetRecentScheduleChange(ctx, job.JobName, job.Tenant, jobRun.ScheduledAt); err != nil {
-				s.l.Error("failed to get recent schedule change for job, check the breach anyway", "job", job.JobName, "error", err)
-			} else if oldScheduled != "" {
-				s.l.Info("skipping job for SLA breach check as it has recent schedule change", "job", job.JobName, "old_scheduled_at", oldScheduled, "new_scheduled_at", jobRun.ScheduledAt)
-				continue
-			}
-
 			inferredSLA := *jobSLAStates[job.JobName].InferredSLA
 			estimatedDuration := *jobSLAStates[job.JobName].EstimatedDuration
+
+			// A job reached via multiple downstream paths (a diamond) can carry more than one
+			// distinct run in JobRuns - one per path, since different downstream jobs can imply
+			// different actual schedules for the same shared upstream. Check every run so a
+			// breach on any converging branch isn't silently dropped just because another
+			// branch's run happens to look fine.
 			var state *scheduler.JobState
-			// condition 1: T(now)>= S(u|j) and the job u has not completed yet
-			if (referenceTime.After(inferredSLA) && jobRun.JobEndTime == nil) || (jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
-				state = &scheduler.JobState{
-					JobSLAState:   *jobSLAStates[job.JobName],
-					JobName:       job.JobName,
-					JobRun:        *jobRun,
-					Tenant:        job.Tenant,
-					RelativeLevel: bottleneck.Level[job.JobName],
-					Status:        scheduler.SLABreachCauseRunningLate,
+			for _, jobRun := range sortedJobRuns(job.JobRuns) {
+				if oldScheduled, err := s.scheduledChangeGetter.GetRecentScheduleChange(ctx, job.JobName, job.Tenant, jobRun.ScheduledAt); err != nil {
+					s.l.Error("failed to get recent schedule change for job, check the breach anyway", "job", job.JobName, "error", err)
+				} else if oldScheduled != "" {
+					s.l.Info("skipping run for SLA breach check as it has recent schedule change", "job", job.JobName, "old_scheduled_at", oldScheduled, "new_scheduled_at", jobRun.ScheduledAt)
+					continue
 				}
-			}
-			// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
-			if referenceTime.After(inferredSLA.Add(-estimatedDuration)) && jobRun.TaskStartTime == nil {
-				state = &scheduler.JobState{
-					JobSLAState:   *jobSLAStates[job.JobName],
-					JobName:       job.JobName,
-					JobRun:        *jobRun,
-					Tenant:        job.Tenant,
-					RelativeLevel: bottleneck.Level[job.JobName],
-					Status:        scheduler.SLABreachCauseNotStarted,
+
+				// a single run can satisfy both conditions at once; condition 2 takes precedence,
+				// matching the original single-run check order.
+				var runState *scheduler.JobState
+				// condition 1: T(now)>= S(u|j) and the job u has not completed yet
+				if (referenceTime.After(inferredSLA) && jobRun.JobEndTime == nil) || (jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
+					runState = &scheduler.JobState{
+						JobSLAState:   *jobSLAStates[job.JobName],
+						JobName:       job.JobName,
+						JobRun:        *jobRun,
+						Tenant:        job.Tenant,
+						RelativeLevel: bottleneck.Level[job.JobName],
+						Status:        scheduler.SLABreachCauseRunningLate,
+					}
+				}
+				// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
+				if referenceTime.After(inferredSLA.Add(-estimatedDuration)) && jobRun.TaskStartTime == nil {
+					runState = &scheduler.JobState{
+						JobSLAState:   *jobSLAStates[job.JobName],
+						JobName:       job.JobName,
+						JobRun:        *jobRun,
+						Tenant:        job.Tenant,
+						RelativeLevel: bottleneck.Level[job.JobName],
+						Status:        scheduler.SLABreachCauseNotStarted,
+					}
+				}
+				if runState != nil {
+					state = runState
+					break
 				}
 			}
 			if state != nil {
@@ -714,6 +728,20 @@ func reconstructStatePath(targetName, breachName scheduler.JobName, bottleneck b
 		path = append(path, plain)
 	}
 	return path
+}
+
+// sortedJobRuns returns a job's runs ordered by ScheduledAt ascending, so a diamond-shared job
+// with multiple candidate runs (one per downstream path) is checked deterministically, earliest
+// (most likely overdue) first.
+func sortedJobRuns(jobRuns map[scheduler.JobName]*scheduler.JobRunSummary) []*scheduler.JobRunSummary {
+	runs := make([]*scheduler.JobRunSummary, 0, len(jobRuns))
+	for _, run := range jobRuns {
+		runs = append(runs, run)
+	}
+	sort.Slice(runs, func(i, j int) bool {
+		return runs[i].ScheduledAt.Before(runs[j].ScheduledAt)
+	})
+	return runs
 }
 
 // populateJobSLAStates populates the jobSLAStatesByJobName map with the estimated durations and inferred SLAs for each job.

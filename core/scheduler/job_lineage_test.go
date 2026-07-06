@@ -352,4 +352,58 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 		}
 		assert.Equal(t, 1, level1Count)
 	})
+
+	t.Run("should look up a run beyond the first level by its immediate parent, not the tree root", func(t *testing.T) {
+		// chain: root -> level1 -> level2. level2's run is keyed by "level1" (its true immediate
+		// downstream), not "root". Only correct immediate-parent threading through the traversal
+		// can resolve it - looking it up via the tree root ("root") would find nothing.
+		level2 := createJobLineage("level2", tnnt, &windowConfig, nil,
+			createJobRunPair("level1", "level2", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(5*time.Minute)))
+		level1 := createJobLineage("level1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2},
+			createJobRunPair("root", "level1", baseTime, baseTime.Add(10*time.Minute), baseTime.Add(15*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(25*time.Minute)))
+
+		summaries := root.GetFlattenedSummaries(10, 5)
+
+		var foundLevel2 bool
+		for _, summary := range summaries {
+			if summary.JobName == "level2" {
+				foundLevel2 = true
+				assert.Equal(t, baseTime.Add(1*time.Minute), *summary.JobRunSummary.TaskStartTime)
+			}
+		}
+		assert.True(t, foundLevel2, "level2 should be found via its immediate parent's key")
+	})
+
+	t.Run("diamond shared upstream is resolved with the run belonging to the traversed path", func(t *testing.T) {
+		// topology: root -> {B, C}, both B and C -> D. D is the same shared node, but carries two
+		// distinct runs - one per downstream path. B is crafted to rank ahead of C so the
+		// traversal continues through B into D; D's run must then be the one keyed by "B", not
+		// "C" or the tree root.
+		d := createJobLineage("D", tnnt, &windowConfig, nil,
+			createJobRunPair("B", "D", baseTime.Add(-1*time.Hour), baseTime.Add(-55*time.Minute), baseTime.Add(-50*time.Minute)),
+			createJobRunPair("C", "D", baseTime.Add(-2*time.Hour), baseTime.Add(-115*time.Minute), baseTime.Add(-110*time.Minute)),
+		)
+		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
+			createJobRunPair("root", "B", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
+		c := createJobLineage("C", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
+			createJobRunPair("root", "C", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(2*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{b, c},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(25*time.Minute)))
+
+		summaries := root.GetFlattenedSummaries(10, 5)
+
+		var dSummary *scheduler.JobExecutionSummary
+		for _, summary := range summaries {
+			if summary.JobName == "D" {
+				dSummary = summary
+			}
+		}
+
+		if assert.NotNil(t, dSummary, "D should be reachable via B, the higher-ranked path") {
+			assert.Equal(t, baseTime.Add(-1*time.Hour), dSummary.JobRunSummary.ScheduledAt)
+			assert.Equal(t, "B", dSummary.DownstreamPathName)
+		}
+	})
 }

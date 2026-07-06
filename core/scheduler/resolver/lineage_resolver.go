@@ -194,7 +194,7 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 
 	// calculate upstream job runs within the valid lineage interval
 	referenceTime := scheduledAt.Add(-time.Duration(validLineageIntervalInHours) * time.Hour)
-	err := r.calculateAllUpstreamRuns(ctx, lineage, lineage.JobName, lineageData, allJobRunsMap, make(map[visitKey]bool), referenceTime)
+	err := r.calculateAllUpstreamRuns(ctx, lineage, lineageData, allJobRunsMap, make(map[visitKey]bool), referenceTime)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,12 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 	return r.populateLineageWithJobRuns(lineage, jobRunDetails, make(map[scheduler.JobName]*scheduler.JobLineageSummary)), nil
 }
 
-func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, targetJob scheduler.JobName, lineageData *LineageData, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary, visited map[visitKey]bool, referenceTime time.Time) error {
+// calculateAllUpstreamRuns walks the lineage tree and, for each job, computes the schedule of
+// its upstreams. A job reached via multiple downstream paths (a diamond) is keyed in JobRuns by
+// its immediate downstream job name, not by the traversal's ultimate root - this lets a shared
+// upstream carry a distinct run per path instead of the last-visited path silently overwriting
+// the others.
+func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, lineageData *LineageData, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary, visited map[visitKey]bool, referenceTime time.Time) error {
 	if len(lineage.JobRuns) == 0 {
 		return nil
 	}
@@ -263,9 +268,9 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 			if upstream.JobRuns == nil {
 				upstream.JobRuns = make(map[scheduler.JobName]*scheduler.JobRunSummary)
 			}
-			upstream.JobRuns[targetJob] = allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]
+			upstream.JobRuns[lineage.JobName] = allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]
 
-			err = r.calculateAllUpstreamRuns(ctx, upstream, targetJob, lineageData, allJobRunsMap, visited, referenceTime)
+			err = r.calculateAllUpstreamRuns(ctx, upstream, lineageData, allJobRunsMap, visited, referenceTime)
 			if err != nil {
 				return err
 			}

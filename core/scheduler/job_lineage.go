@@ -39,13 +39,19 @@ type upstreamCandidate struct {
 	EndTime     time.Time
 }
 
-func (j *JobLineageSummary) sortUpstreamCandidates(jobName JobName) []upstreamCandidate {
+// sortUpstreamCandidates ranks j's upstreams by how their run compares to j's own run.
+// selfParent is the immediate downstream job that led to j in the current traversal - j's own
+// run is keyed by that name, while each upstream's run is keyed by j itself, since j is the
+// upstream's immediate downstream. This distinction matters for diamond-shaped lineages, where
+// the same upstream node is shared across multiple downstream paths, each potentially carrying
+// a different run.
+func (j *JobLineageSummary) sortUpstreamCandidates(selfParent JobName) []upstreamCandidate {
 	candidates := []upstreamCandidate{}
 
-	currentJobRun := j.GetRunForJob(jobName)
+	currentJobRun := j.GetRunForJob(selfParent)
 
 	for _, upstream := range j.Upstreams {
-		latestFinishTime, latestScheduledAt := getLatestFinishTime(jobName, upstream.JobRuns)
+		latestFinishTime, latestScheduledAt := getLatestFinishTime(j.JobName, upstream.JobRuns)
 		if latestFinishTime == nil {
 			continue
 		}
@@ -298,10 +304,14 @@ func (j *JobLineageSummary) GetFlattenedSummaries(maxUpstreamsPerLevel, maxDepth
 
 	type nodeInfo struct {
 		original *JobLineageSummary
-		depth    int
+		// parent is the immediate downstream job that led to `original` in this traversal -
+		// original's own run is keyed by this name.
+		parent JobName
+		depth  int
 	}
 	queue := []*nodeInfo{{
 		original: j,
+		parent:   j.JobName,
 		depth:    0,
 	}}
 
@@ -313,7 +323,7 @@ func (j *JobLineageSummary) GetFlattenedSummaries(maxUpstreamsPerLevel, maxDepth
 			continue
 		}
 
-		candidates := current.original.sortUpstreamCandidates(j.JobName)
+		candidates := current.original.sortUpstreamCandidates(current.parent)
 		upstreamLevel := current.depth + 1
 
 		for i := 0; i < maxUpstreamsPerLevel && i < len(candidates); i++ {
@@ -323,7 +333,7 @@ func (j *JobLineageSummary) GetFlattenedSummaries(maxUpstreamsPerLevel, maxDepth
 					continue
 				}
 
-				latestJobRun := upstream.GetRunForJob(j.JobName)
+				latestJobRun := upstream.GetRunForJob(current.original.JobName)
 				if latestJobRun != nil {
 					result = append(result, &JobExecutionSummary{
 						JobName:            upstream.JobName,
@@ -340,6 +350,7 @@ func (j *JobLineageSummary) GetFlattenedSummaries(maxUpstreamsPerLevel, maxDepth
 					if i == 0 {
 						queue = append(queue, &nodeInfo{
 							original: upstream,
+							parent:   current.original.JobName,
 							depth:    upstreamLevel,
 						})
 					}

@@ -165,6 +165,35 @@ type PotentialSLABreachAttrs struct {
 	Projects []SLABreachProject
 }
 
+type SLABreachCause string
+
+const (
+	SLABreachCauseNotStarted  SLABreachCause = "NOT_STARTED"
+	SLABreachCauseRunningLate SLABreachCause = "RUNNING_LATE"
+)
+
+type JobSLAState struct {
+	EstimatedDuration *time.Duration
+	InferredSLA       *time.Time
+}
+
+type JobState struct {
+	JobSLAState
+	JobName       JobName
+	JobRun        JobRunSummary
+	Tenant        tenant.Tenant
+	RelativeLevel int
+	Status        SLABreachCause
+}
+
+// TargetBreach is the per-target result returned to the caller for building the
+// API response. It is project-qualified to avoid clashes across projects.
+type TargetBreach struct {
+	TargetProject string
+	TargetJobName JobName
+	Upstreams     map[JobName]*JobState
+}
+
 // SLABreachCombo is a single (project, label-group) unit of work. The batch
 // entrypoint evaluates the cross product of projects x label-groups as combos
 // and consolidates the results into one alert per team.

@@ -2,13 +2,98 @@ package v1beta1
 
 import (
 	"fmt"
+	"time"
 
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/service"
+	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
+
+// buildIdentifySLABreachInputs resolves an IdentifyPotentialSLABreachRequest into
+// the combos (cross product of projects x label groups) to evaluate and the
+// shared predictor config. job_names only applies in legacy single-project mode,
+// where target selection isn't ambiguous.
+func buildIdentifySLABreachInputs(req *pb.IdentifyPotentialSLABreachRequest) ([]scheduler.SLABreachCombo, service.JobSLAPredictorRequestConfig, error) {
+	// resolve projects: prefer repeated project_names, fall back to path project_name
+	projectNameStrs := req.GetProjectNames()
+	if len(projectNameStrs) == 0 && req.GetProjectName() != "" {
+		projectNameStrs = []string{req.GetProjectName()}
+	}
+	if len(projectNameStrs) == 0 {
+		return nil, service.JobSLAPredictorRequestConfig{}, errors.InvalidArgument(scheduler.EntityJobRun, "no project provided")
+	}
+	projectNames := make([]tenant.ProjectName, 0, len(projectNameStrs))
+	for _, pn := range projectNameStrs {
+		projectName, err := tenant.ProjectNameFrom(pn)
+		if err != nil {
+			return nil, service.JobSLAPredictorRequestConfig{}, fmt.Errorf("failure in adapting project name [%s]: %w", pn, err)
+		}
+		projectNames = append(projectNames, projectName)
+	}
+
+	jobNames := []scheduler.JobName{}
+	for _, jn := range req.GetJobNames() {
+		jobName, err := scheduler.JobNameFrom(jn)
+		if err != nil {
+			return nil, service.JobSLAPredictorRequestConfig{}, fmt.Errorf("failure in adapting job name [%s]: %w", jn, err)
+		}
+		jobNames = append(jobNames, jobName)
+	}
+
+	// resolve label groups: prefer repeated label_groups, fall back to job_labels.
+	// severity is a single request-level value (req.GetSeverity()), not per-group.
+	type labelGroup struct {
+		labels map[string]string
+		name   string
+	}
+	labelGroups := make([]labelGroup, 0, len(req.GetLabelGroups()))
+	for _, g := range req.GetLabelGroups() {
+		labelGroups = append(labelGroups, labelGroup{labels: g.GetJobLabels(), name: g.GetName()})
+	}
+	legacyMode := len(labelGroups) == 0
+	if legacyMode {
+		labelGroups = append(labelGroups, labelGroup{labels: req.GetJobLabels()})
+	}
+
+	// consider jobs with next schedule within next and before scheduleRangeInHours hours
+	scheduleRangeInHours := time.Duration(req.GetScheduledRangeInHours()) * time.Hour
+	referenceTime := time.Now().UTC()
+	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
+		referenceTime = req.GetReferenceTime().AsTime().UTC()
+	}
+	reqConfig := service.JobSLAPredictorRequestConfig{
+		ReferenceTime:        referenceTime,
+		ScheduleRangeInHours: scheduleRangeInHours,
+		SkipJobNames:         req.GetSkipJobNames(),
+		EnableAlert:          req.GetAlertOnBreach(),
+		EnableDeduplication:  req.GetEnableDeduplication(),
+		Severity:             req.GetSeverity(),
+		DamperCoeff:          float64(req.GetDamperCoeff()),
+	}
+
+	// build combos = projects x label groups.
+	combos := make([]scheduler.SLABreachCombo, 0, len(projectNames)*len(labelGroups))
+	for _, projectName := range projectNames {
+		for _, g := range labelGroups {
+			combo := scheduler.SLABreachCombo{
+				ProjectName: projectName,
+				Labels:      g.labels,
+				GroupName:   g.name,
+			}
+			if legacyMode && len(projectNames) == 1 {
+				combo.JobNames = jobNames
+			}
+			combos = append(combos, combo)
+		}
+	}
+
+	return combos, reqConfig, nil
+}
 
 func fromJobRunLineageSummaryRequest(req *pb.GetJobRunLineageSummaryRequest) ([]*scheduler.JobSchedule, error) {
 	targetJobSchedules := make([]*scheduler.JobSchedule, 0, len(req.GetTargetJobs()))

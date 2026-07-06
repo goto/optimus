@@ -144,15 +144,17 @@ func (d *Client) getCompletenessStats(ctx context.Context, store, tableName stri
 		return nil, fmt.Errorf("error encountered when constructing request: %w", err)
 	}
 
+	requestUrl := request.URL.String()
 	response, err := d.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("error encountered when sending request: %w", err)
+		d.l.Error("error encountered when sending request to dex", "request", requestUrl, "error", err)
+		return nil, fmt.Errorf("error encountered when sending request: %w, request: %s", err, requestUrl)
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		d.l.Error("unexpected status response", "status", response.Status, "body", response.Body)
-		return nil, fmt.Errorf("unexpected status response: %s", response.Status)
+		d.l.Error("unexpected status response from dex", "request", requestUrl, "status", response.Status, "body", response.Body)
+		return nil, fmt.Errorf("unexpected status response: %s, request: %s", response.Status, requestUrl)
 	}
 
 	var statsResp dexTableStatsAPIResponse

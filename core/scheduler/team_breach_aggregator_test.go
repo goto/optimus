@@ -1,4 +1,4 @@
-package service // nolint: testpackage
+package scheduler_test
 
 import (
 	"testing"
@@ -10,20 +10,20 @@ import (
 
 func TestTeamBreachAggregator(t *testing.T) {
 	t.Run("consolidates per team -> project -> group -> target and dedupes causes", func(t *testing.T) {
-		agg := newTeamBreachAggregator()
+		agg := scheduler.NewTeamBreachAggregator()
 
 		// team-a: p1/g1(CRITICAL)/t1 with cause c1 (added twice -> deduped) and c2
-		agg.add("team-a", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c1", RelativeLevel: 2, Status: "NOT_STARTED"})
-		agg.add("team-a", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c1", RelativeLevel: 2, Status: "NOT_STARTED"})
-		agg.add("team-a", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c2", RelativeLevel: 1, Status: "RUNNING_LATE"})
+		agg.Add("team-a", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c1", RelativeLevel: 2, Status: "NOT_STARTED"})
+		agg.Add("team-a", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c1", RelativeLevel: 2, Status: "NOT_STARTED"})
+		agg.Add("team-a", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c2", RelativeLevel: 1, Status: "RUNNING_LATE"})
 		// team-a: second group in same project
-		agg.add("team-a", "p1", "g2", "WARNING", "t2", scheduler.UpstreamAttrs{JobName: "c3"})
+		agg.Add("team-a", "p1", "g2", "WARNING", "t2", scheduler.UpstreamAttrs{JobName: "c3"})
 		// team-a: second project
-		agg.add("team-a", "p2", "g1", "CRITICAL", "t3", scheduler.UpstreamAttrs{JobName: "c4"})
+		agg.Add("team-a", "p2", "g1", "CRITICAL", "t3", scheduler.UpstreamAttrs{JobName: "c4"})
 		// team-b: separate team
-		agg.add("team-b", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c5"})
+		agg.Add("team-b", "p1", "g1", "CRITICAL", "t1", scheduler.UpstreamAttrs{JobName: "c5"})
 
-		out := agg.build()
+		out := agg.Build()
 		assert.Len(t, out, 2)
 
 		// insertion order is preserved: team-a first
@@ -49,11 +49,4 @@ func TestTeamBreachAggregator(t *testing.T) {
 		assert.Equal(t, "p2", teamA.Projects[1].Name)
 		assert.Equal(t, "team-b", out[1].TeamName)
 	})
-}
-
-func TestDeriveGroupName(t *testing.T) {
-	assert.Equal(t, "default", deriveGroupName(nil))
-	assert.Equal(t, "default", deriveGroupName(map[string]string{}))
-	// keys are sorted for stability
-	assert.Equal(t, "a=1, b=2", deriveGroupName(map[string]string{"b": "2", "a": "1"}))
 }

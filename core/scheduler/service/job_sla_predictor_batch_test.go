@@ -95,7 +95,7 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 			"job-C": durationPtr(10 * time.Minute),
 		}, nil).Once()
 
-		combos := []service.SLABreachCombo{
+		combos := []scheduler.SLABreachCombo{
 			{ProjectName: projectName, JobNames: []scheduler.JobName{"job-A"}, GroupName: "sla-8am"},
 		}
 
@@ -129,7 +129,7 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 
 		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return(nil, assert.AnError).Once()
 
-		combos := []service.SLABreachCombo{{ProjectName: projectName, Labels: labels}}
+		combos := []scheduler.SLABreachCombo{{ProjectName: projectName, Labels: labels}}
 
 		res, err := svc.IdentifySLABreachesBatch(ctx, combos, reqConfig)
 

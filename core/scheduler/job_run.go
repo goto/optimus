@@ -165,6 +165,112 @@ type PotentialSLABreachAttrs struct {
 	Projects []SLABreachProject
 }
 
+// SLABreachCombo is a single (project, label-group) unit of work. The batch
+// entrypoint evaluates the cross product of projects x label-groups as combos
+// and consolidates the results into one alert per team.
+type SLABreachCombo struct {
+	ProjectName tenant.ProjectName
+	JobNames    []JobName
+	Labels      map[string]string
+	GroupName   string // display name for the SLA group; derived from labels if empty
+}
+
+// TeamBreachAggregator accumulates breaches into a deterministic, insertion-
+// ordered team -> project -> group -> target -> causes structure and builds one
+// PotentialSLABreachAttrs per team.
+type TeamBreachAggregator struct {
+	teams     map[string]*teamAgg
+	teamOrder []string
+}
+
+type teamAgg struct {
+	name         string
+	projects     map[string]*projectAgg
+	projectOrder []string
+}
+
+type projectAgg struct {
+	name       string
+	groups     map[string]*groupAgg
+	groupOrder []string
+}
+
+type groupAgg struct {
+	name        string
+	severity    string
+	targets     map[string]*targetAgg
+	targetOrder []string
+}
+
+type targetAgg struct {
+	name       string
+	causes     map[string]UpstreamAttrs
+	causeOrder []string
+}
+
+func NewTeamBreachAggregator() *TeamBreachAggregator {
+	return &TeamBreachAggregator{teams: map[string]*teamAgg{}}
+}
+
+func (a *TeamBreachAggregator) Add(team, project, group, severity, target string, cause UpstreamAttrs) {
+	t, ok := a.teams[team]
+	if !ok {
+		t = &teamAgg{name: team, projects: map[string]*projectAgg{}}
+		a.teams[team] = t
+		a.teamOrder = append(a.teamOrder, team)
+	}
+	p, ok := t.projects[project]
+	if !ok {
+		p = &projectAgg{name: project, groups: map[string]*groupAgg{}}
+		t.projects[project] = p
+		t.projectOrder = append(t.projectOrder, project)
+	}
+	g, ok := p.groups[group]
+	if !ok {
+		g = &groupAgg{name: group, severity: severity, targets: map[string]*targetAgg{}}
+		p.groups[group] = g
+		p.groupOrder = append(p.groupOrder, group)
+	}
+	tg, ok := g.targets[target]
+	if !ok {
+		tg = &targetAgg{name: target, causes: map[string]UpstreamAttrs{}}
+		g.targets[target] = tg
+		g.targetOrder = append(g.targetOrder, target)
+	}
+	if _, ok := tg.causes[cause.JobName]; !ok {
+		tg.causes[cause.JobName] = cause
+		tg.causeOrder = append(tg.causeOrder, cause.JobName)
+	}
+}
+
+func (a *TeamBreachAggregator) Build() []*PotentialSLABreachAttrs {
+	out := make([]*PotentialSLABreachAttrs, 0, len(a.teamOrder))
+	for _, teamName := range a.teamOrder {
+		t := a.teams[teamName]
+		attr := &PotentialSLABreachAttrs{TeamName: t.name}
+		for _, projectName := range t.projectOrder {
+			p := t.projects[projectName]
+			project := SLABreachProject{Name: p.name}
+			for _, groupName := range p.groupOrder {
+				g := p.groups[groupName]
+				group := SLABreachGroup{Name: g.name, Severity: g.severity}
+				for _, targetName := range g.targetOrder {
+					tg := g.targets[targetName]
+					target := SLABreachTarget{JobName: tg.name}
+					for _, causeName := range tg.causeOrder {
+						target.Causes = append(target.Causes, tg.causes[causeName])
+					}
+					group.Targets = append(group.Targets, target)
+				}
+				project.Groups = append(project.Groups, group)
+			}
+			attr.Projects = append(attr.Projects, project)
+		}
+		out = append(out, attr)
+	}
+	return out
+}
+
 const (
 	MetricNotificationQueue         = "notification_queue_total"
 	MetricNotificationWorkerBatch   = "notification_worker_batch_total"

@@ -33,20 +33,10 @@ type JobSLAPredictorRequestConfig struct {
 	Severity             string
 }
 
-// SLABreachCombo is a single (project, label-group) unit of work. The batch
-// entrypoint evaluates the cross product of projects x label-groups as combos
-// and consolidates the results into one alert per team.
-type SLABreachCombo struct {
-	ProjectName tenant.ProjectName
-	JobNames    []scheduler.JobName
-	Labels      map[string]string
-	GroupName   string // display name for the SLA group; derived from labels if empty
-}
-
 // comboBreachResult holds the computed breaches for one combo, retained so that
 // deduplication, alerting and storage can each run once across all combos.
 type comboBreachResult struct {
-	combo               SLABreachCombo
+	combo               scheduler.SLABreachCombo
 	jobBreachCauses     map[scheduler.JobName]map[scheduler.JobName]*JobState
 	jobFullBreachCauses map[scheduler.JobName]map[scheduler.JobName][]*JobState
 	targetedSLA         map[scheduler.JobName]*time.Time
@@ -130,7 +120,7 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 // backward compatibility; it now shares the same consolidation pipeline as the
 // batch entrypoint, so alerts are still grouped into one message per team.
 func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*JobState, error) {
-	combo := SLABreachCombo{
+	combo := scheduler.SLABreachCombo{
 		ProjectName: projectName,
 		JobNames:    jobNames,
 		Labels:      labels,
@@ -148,7 +138,7 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 // IdentifySLABreachesBatch evaluates many (project, label-group) combos and
 // consolidates the results into exactly one alert per team. A failure in one
 // combo is logged and skipped so the rest of the batch still produces alerts.
-func (s *JobSLAPredictorService) IdentifySLABreachesBatch(ctx context.Context, combos []SLABreachCombo, reqConfig JobSLAPredictorRequestConfig) (map[string]*TargetBreach, error) {
+func (s *JobSLAPredictorService) IdentifySLABreachesBatch(ctx context.Context, combos []scheduler.SLABreachCombo, reqConfig JobSLAPredictorRequestConfig) (map[string]*TargetBreach, error) {
 	results := make([]*comboBreachResult, 0, len(combos))
 	me := errors.NewMultiError("IdentifySLABreachesBatch")
 	for _, combo := range combos {
@@ -185,7 +175,7 @@ func (s *JobSLAPredictorService) IdentifySLABreachesBatch(ctx context.Context, c
 
 // computeBreaches runs the pure breach-detection pipeline for a single combo. It
 // does not alert or persist; callers aggregate results and do that once.
-func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo SLABreachCombo, reqConfig JobSLAPredictorRequestConfig) (*comboBreachResult, error) {
+func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo scheduler.SLABreachCombo, reqConfig JobSLAPredictorRequestConfig) (*comboBreachResult, error) {
 	// map of jobName -> map of upstreamJobName -> JobState
 	jobBreachCauses := make(map[scheduler.JobName]map[scheduler.JobName]*JobState)
 	jobFullBreachCauses := make(map[scheduler.JobName]map[scheduler.JobName][]*JobState)
@@ -736,7 +726,7 @@ func (s *JobSLAPredictorService) sendConsolidatedAlerts(ctx context.Context, res
 	// deduplicate target job names against previously predicted breaches
 	suppressed := map[scheduler.JobName]bool{}
 	if reqConfig.EnableDeduplication {
-		existing, err := s.getSuppressedTargetNames(ctx, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime)
+		existing, err := s.deduplicateTargetNames(ctx, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime)
 		if err != nil {
 			s.l.Error("failed to compute deduplication set, sending alerts without deduplication", "error", err)
 		} else {
@@ -744,7 +734,7 @@ func (s *JobSLAPredictorService) sendConsolidatedAlerts(ctx context.Context, res
 		}
 	}
 
-	agg := newTeamBreachAggregator()
+	agg := scheduler.NewTeamBreachAggregator()
 	teamCache := map[tenant.Tenant]string{}
 	for _, r := range results {
 		groupName := r.combo.GroupName
@@ -762,7 +752,7 @@ func (s *JobSLAPredictorService) sendConsolidatedAlerts(ctx context.Context, res
 				if team == "" {
 					continue
 				}
-				agg.add(team, r.combo.ProjectName.String(), groupName, severity, targetName.String(), scheduler.UpstreamAttrs{
+				agg.Add(team, r.combo.ProjectName.String(), groupName, severity, targetName.String(), scheduler.UpstreamAttrs{
 					JobName:       upstreamCause.JobName.String(),
 					RelativeLevel: upstreamCause.RelativeLevel,
 					Status:        string(upstreamCause.Status),
@@ -771,7 +761,7 @@ func (s *JobSLAPredictorService) sendConsolidatedAlerts(ctx context.Context, res
 		}
 	}
 
-	for _, attr := range agg.build() {
+	for _, attr := range agg.Build() {
 		s.potentialSLANotifier.SendPotentialSLABreach(attr)
 	}
 }
@@ -892,11 +882,11 @@ func collectJobNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineage
 	return jobNames
 }
 
-// getSuppressedTargetNames returns the set of target job names that were already
+// deduplicateTargetNames returns the set of target job names that were already
 // predicted to breach within the time window, so they can be skipped when
 // alerting. Deduplication is name-based; it relies on Optimus job names being
 // globally unique. Requires persistent logging to be enabled.
-func (s *JobSLAPredictorService) getSuppressedTargetNames(ctx context.Context, scheduleRangeInHours time.Duration, referenceTime time.Time) (map[scheduler.JobName]bool, error) {
+func (s *JobSLAPredictorService) deduplicateTargetNames(ctx context.Context, scheduleRangeInHours time.Duration, referenceTime time.Time) (map[scheduler.JobName]bool, error) {
 	if !s.config.EnablePersistentLogging {
 		s.l.Warn("persistent logging is disabled, cannot perform deduplication")
 		return map[scheduler.JobName]bool{}, nil
@@ -919,100 +909,4 @@ func (s *JobSLAPredictorService) getSuppressedTargetNames(ctx context.Context, s
 	s.l.Info("computed deduplication set", "count", len(suppressed), "from", from, "to", to)
 
 	return suppressed, nil
-}
-
-// teamBreachAggregator accumulates breaches into a deterministic, insertion-
-// ordered team -> project -> group -> target -> causes structure and builds one
-// PotentialSLABreachAttrs per team.
-type teamBreachAggregator struct {
-	teams     map[string]*teamAgg
-	teamOrder []string
-}
-
-type teamAgg struct {
-	name         string
-	projects     map[string]*projectAgg
-	projectOrder []string
-}
-
-type projectAgg struct {
-	name       string
-	groups     map[string]*groupAgg
-	groupOrder []string
-}
-
-type groupAgg struct {
-	name        string
-	severity    string
-	targets     map[string]*targetAgg
-	targetOrder []string
-}
-
-type targetAgg struct {
-	name       string
-	causes     map[string]scheduler.UpstreamAttrs
-	causeOrder []string
-}
-
-func newTeamBreachAggregator() *teamBreachAggregator {
-	return &teamBreachAggregator{teams: map[string]*teamAgg{}}
-}
-
-func (a *teamBreachAggregator) add(team, project, group, severity, target string, cause scheduler.UpstreamAttrs) {
-	t, ok := a.teams[team]
-	if !ok {
-		t = &teamAgg{name: team, projects: map[string]*projectAgg{}}
-		a.teams[team] = t
-		a.teamOrder = append(a.teamOrder, team)
-	}
-	p, ok := t.projects[project]
-	if !ok {
-		p = &projectAgg{name: project, groups: map[string]*groupAgg{}}
-		t.projects[project] = p
-		t.projectOrder = append(t.projectOrder, project)
-	}
-	g, ok := p.groups[group]
-	if !ok {
-		g = &groupAgg{name: group, severity: severity, targets: map[string]*targetAgg{}}
-		p.groups[group] = g
-		p.groupOrder = append(p.groupOrder, group)
-	}
-	tg, ok := g.targets[target]
-	if !ok {
-		tg = &targetAgg{name: target, causes: map[string]scheduler.UpstreamAttrs{}}
-		g.targets[target] = tg
-		g.targetOrder = append(g.targetOrder, target)
-	}
-	if _, ok := tg.causes[cause.JobName]; !ok {
-		tg.causes[cause.JobName] = cause
-		tg.causeOrder = append(tg.causeOrder, cause.JobName)
-	}
-}
-
-func (a *teamBreachAggregator) build() []*scheduler.PotentialSLABreachAttrs {
-	out := make([]*scheduler.PotentialSLABreachAttrs, 0, len(a.teamOrder))
-	for _, teamName := range a.teamOrder {
-		t := a.teams[teamName]
-		attr := &scheduler.PotentialSLABreachAttrs{TeamName: t.name}
-		for _, projectName := range t.projectOrder {
-			p := t.projects[projectName]
-			project := scheduler.SLABreachProject{Name: p.name}
-			for _, groupName := range p.groupOrder {
-				g := p.groups[groupName]
-				group := scheduler.SLABreachGroup{Name: g.name, Severity: g.severity}
-				for _, targetName := range g.targetOrder {
-					tg := g.targets[targetName]
-					target := scheduler.SLABreachTarget{JobName: tg.name}
-					for _, causeName := range tg.causeOrder {
-						target.Causes = append(target.Causes, tg.causes[causeName])
-					}
-					group.Targets = append(group.Targets, target)
-				}
-				project.Groups = append(project.Groups, group)
-			}
-			attr.Projects = append(attr.Projects, project)
-		}
-		out = append(out, attr)
-	}
-	return out
 }

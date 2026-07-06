@@ -27,6 +27,15 @@ var dexAPIResponse = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "dex_api_response",
 }, []string{"project", "job", "resource_urn", "status", "run_type", "scheduled_date"})
 
+// thirdPartyDataCompleteness is a generic gauge so any future ThirdPartyClient implementation can reuse it.
+// 1 means the given date's data was complete on last check, 0 means incomplete (matching the common Prometheus
+// convention of 1 = healthy/available, e.g. the "up" metric). A gauge (not a counter) is used so repeated sensor
+// retries for the same date don't inflate the count, and so a date that later becomes complete correctly flips to 1.
+var thirdPartyDataCompleteness = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "third_party_data_completeness",
+	Help: "1 if the given date's data was complete on last check, 0 if incomplete",
+}, []string{"project", "job", "resource_urn", "third_party_type", "run_type", "date"})
+
 const (
 	sensorStatusErr        = "error"
 	sensorStatusIncomplete = "incomplete"
@@ -283,6 +292,15 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 			h.l.Error(fmt.Sprintf("error getting third party sensor status for project: %s, job: %s, resourceURN: %s, err: %s", string(projectName), string(jobName), resourceURN.String(), err.Error()))
 			dexAPIResponse.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), sensorStatusErr, runType, req.GetScheduledAt().AsTime().Format(time.RFC3339)).Inc()
 			return nil, err
+		}
+		// record per-date completeness so a dashboard can show which job/date combos
+		// had incomplete data, independent of the overall (whole-interval) status below
+		for _, completeness := range resp.GetLog() {
+			value := 0.0
+			if completeness.GetIsComplete() {
+				value = 1.0
+			}
+			thirdPartyDataCompleteness.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), thirdPartyType, runType, completeness.GetDate().AsTime().Format("2006-01-02")).Set(value)
 		}
 		if resp != nil && !resp.IsComplete {
 			completenessLog := fmt.Sprintf("request interval start: %s, end, %s, ",

@@ -652,7 +652,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		assert.Len(t, jobBreachRootCause["job-A"], 1)
 		assert.Equal(t, scheduler.JobName("job-C"), jobBreachRootCause["job-A"]["job-C"].JobName)
 		assert.Equal(t, 2, jobBreachRootCause["job-A"]["job-C"].RelativeLevel)
-		assert.Equal(t, service.SLABreachCauseRunningLate, jobBreachRootCause["job-A"]["job-C"].Status)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, jobBreachRootCause["job-A"]["job-C"].Status)
 	})
 
 	t.Run("given 1 job that potentially breach due to upstream not started, return job causes", func(t *testing.T) {
@@ -777,7 +777,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		assert.Len(t, jobBreachRootCause["job-A"], 1)
 		assert.Equal(t, scheduler.JobName("job-B"), jobBreachRootCause["job-A"]["job-B"].JobName)
 		assert.Equal(t, 1, jobBreachRootCause["job-A"]["job-B"].RelativeLevel)
-		assert.Equal(t, service.SLABreachCauseNotStarted, jobBreachRootCause["job-A"]["job-B"].Status)
+		assert.Equal(t, scheduler.SLABreachCauseNotStarted, jobBreachRootCause["job-A"]["job-B"].Status)
 	})
 
 	t.Run("given 2 jobs that refer to the same upstream job, and only 1 job that has potential breach, return 1 job and its cause", func(t *testing.T) {
@@ -941,7 +941,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		assert.Len(t, jobBreachRootCause["job-A1"], 1)
 		assert.Equal(t, scheduler.JobName("job-C"), jobBreachRootCause["job-A1"]["job-C"].JobName)
 		assert.Equal(t, 2, jobBreachRootCause["job-A1"]["job-C"].RelativeLevel)
-		assert.Equal(t, service.SLABreachCauseRunningLate, jobBreachRootCause["job-A1"]["job-C"].Status)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, jobBreachRootCause["job-A1"]["job-C"].Status)
 	})
 
 	t.Run("given 1 job with nonblocking error, should still return the job SLA breach without error", func(t *testing.T) {
@@ -1191,7 +1191,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		assert.Len(t, jobBreachRootCause["job-A"], 1)
 		assert.Equal(t, scheduler.JobName("job-A"), jobBreachRootCause["job-A"]["job-A"].JobName)
 		assert.Equal(t, 0, jobBreachRootCause["job-A"]["job-A"].RelativeLevel)
-		assert.Equal(t, service.SLABreachCauseRunningLate, jobBreachRootCause["job-A"]["job-A"].Status)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, jobBreachRootCause["job-A"]["job-A"].Status)
 	})
 }
 
@@ -1265,7 +1265,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, 1.0, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
-		assert.Equal(t, breachesCauses["job-C"].Status, service.SLABreachCauseRunningLate)
+		assert.Equal(t, breachesCauses["job-C"].Status, scheduler.SLABreachCauseRunningLate)
 
 		assert.Len(t, fullBreachesCauses, 1)
 		assert.Len(t, fullBreachesCauses["job-C"], 3)
@@ -1303,7 +1303,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, damperCoeff, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
-		assert.Equal(t, breachesCauses["job-18"].Status, service.SLABreachCauseRunningLate)
+		assert.Equal(t, breachesCauses["job-18"].Status, scheduler.SLABreachCauseRunningLate)
 
 		assert.Len(t, fullBreachesCauses, 1)
 		assert.Len(t, fullBreachesCauses["job-18"], 18)

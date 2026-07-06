@@ -39,7 +39,8 @@ const (
 )
 
 type JobSLAPredictorService interface {
-	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig service.JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*service.JobState, error)
+	IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig service.JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*scheduler.JobState, error)
+	IdentifySLABreachesBatch(ctx context.Context, combos []scheduler.SLABreachCombo, reqConfig service.JobSLAPredictorRequestConfig) (map[string]*scheduler.TargetBreach, error)
 }
 
 type JobExpectatorService interface {
@@ -512,50 +513,30 @@ func (h JobRunHandler) GetInterval(ctx context.Context, req *pb.GetIntervalReque
 	}, nil
 }
 
-// IdentifyPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time
+// IdentifyPotentialSLABreach predicts potential SLA breaches for the given job targets at their targeted SLA time.
+// It accepts multiple projects and multiple label groups in a single request, evaluates the cross product, and
+// consolidates alerting into one message per team.
 func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.IdentifyPotentialSLABreachRequest) (*pb.IdentifyPotentialSLABreachResponse, error) {
 	response := pb.IdentifyPotentialSLABreachResponse{}
 
-	jobNames := []scheduler.JobName{}
-	for _, jn := range req.GetJobNames() {
-		jobName, err := scheduler.JobNameFrom(jn)
-		if err != nil {
-			h.l.Error("error adapting job name [%s]: %v", jn, err)
-			return nil, errors.GRPCErr(err, "unable to adapt job name")
-		}
-		jobNames = append(jobNames, jobName)
+	combos, reqConfig, err := buildIdentifySLABreachInputs(req)
+	if err != nil {
+		h.l.Error("error building identify potential SLA breach inputs: %v", err)
+		return nil, errors.GRPCErr(err, "bad request, failed to construct the request")
 	}
 
-	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
-	if err != nil {
-		h.l.Error("error adapting project name [%s]: %v", req.GetProjectName(), err)
-		return nil, errors.GRPCErr(err, "unable to adapt project name")
-	}
-	// consider jobs with next schedule within next and before scheduleRangeInHours hours
-	scheduleRangeInHours := time.Duration(req.GetScheduledRangeInHours()) * time.Hour
-	referenceTime := time.Now().UTC()
-	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
-		referenceTime = req.GetReferenceTime().AsTime().UTC()
-	}
-	reqConfig := service.JobSLAPredictorRequestConfig{
-		ReferenceTime:        referenceTime,
-		ScheduleRangeInHours: scheduleRangeInHours,
-		SkipJobNames:         req.GetSkipJobNames(),
-		EnableAlert:          req.GetAlertOnBreach(),
-		EnableDeduplication:  req.GetEnableDeduplication(),
-		Severity:             req.GetSeverity(),
-		DamperCoeff:          float64(req.GetDamperCoeff()),
-	}
-	jobBreaches, err := h.jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, req.GetJobLabels(), reqConfig)
+	targetBreaches, err := h.jobSLAPredictorService.IdentifySLABreachesBatch(ctx, combos, reqConfig)
 	if err != nil {
 		h.l.Error("error identifying potential SLA breaches: %v", err)
 		return nil, errors.GRPCErr(err, "unable to identify potential SLA breaches")
 	}
 
 	jobs := make(map[string]*pb.UpstreamJobsStatus)
-	for jobNameTarget, upstreamJobStates := range jobBreaches {
+	// "key" is the project-qualified target identifier ("<project>/<job>");
+	// "breach" holds that target's upstream cause jobs and their inferred SLA states.
+	for key, breach := range targetBreaches {
 		upstreamStatus := []*pb.UpstreamJobStatus{}
-		for upstreamJobName, upstreamJobState := range upstreamJobStates {
+		for upstreamJobName, upstreamJobState := range breach.Upstreams {
 			if upstreamJobState == nil || upstreamJobState.InferredSLA == nil {
 				continue
 			}
@@ -571,8 +552,10 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 		if len(upstreamStatus) == 0 {
 			continue
 		}
-		jobs[jobNameTarget.String()] = &pb.UpstreamJobsStatus{
-			JobsStatus: upstreamStatus,
+		jobs[key] = &pb.UpstreamJobsStatus{
+			JobsStatus:        upstreamStatus,
+			TargetProjectName: breach.TargetProject,
+			TargetJobName:     breach.TargetJobName.String(),
 		}
 	}
 

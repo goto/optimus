@@ -1601,7 +1601,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 	t.Run("target job already finished before its SLA, no alert even if upstream is running late", func(t *testing.T) {
 		// job-C -> job-B -> job-A
-		// job-A (target) completed 5 min before its SLA — the SLA was met.
+		// (target) completed 5 min before its SLA — the SLA was met.
 		// job-C is running late (past its inferredSLA): without the guard it would trigger a
 		// RUNNING_LATE alert for job-A. The guard should suppress all upstream alerts.
 
@@ -1614,7 +1614,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		referenceTime := time.Now().UTC()
 		targetSLA := referenceTime.Add(30 * time.Minute)
 
-		jobAEndTime := targetSLA.Add(-5 * time.Minute)   // finished 5 min before SLA
+		jobAEndTime := targetSLA.Add(-5 * time.Minute) // finished 5 min before SLA
 		jobAStartTime := jobAEndTime.Add(-20 * time.Minute)
 		jobCStartTime := referenceTime.Add(-10 * time.Minute) // running, not done
 

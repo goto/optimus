@@ -102,7 +102,7 @@ func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules map[
 	for _, schedule := range jobSchedules {
 		schedules = append(schedules, schedule)
 	}
-	jobLineages, err := j.lineageBuilder.BuildLineage(ctx, schedules, j.maxLineageDepth)
+	jobLineages, err := j.lineageBuilder.BuildLineage(ctx, schedules, validLineageIntervalInHours)
 	if err != nil {
 		j.l.Error("failed to get job lineage", "error", err)
 		return nil, err

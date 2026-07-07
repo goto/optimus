@@ -12,8 +12,13 @@ HOST?=localhost:9100
 
 apply.airflow: _context
 	mkdir -p ${DAGS_PATH}
-	helm repo add apache-airflow https://airflow.apache.org
-	helm upgrade --install airflow apache-airflow/airflow \
+	# airflow.values.yaml pins airflowVersion 2.9.3 (matching Optimus's DAG templates,
+	# which only support up to 2.9). Chart versions >=2.11.0 require Airflow >=2.11.0,
+	# so we need the last chart release supporting older Airflow versions (1.19.0).
+	# That release has been moved off the live downloads.apache.org mirror to the ASF
+	# archive, so we fetch it directly instead of via the (stale) repo index.
+	[ -f airflow-1.19.0.tgz ] || curl -sSL -o airflow-1.19.0.tgz https://archive.apache.org/dist/airflow/helm-chart/1.19.0/airflow-1.19.0.tgz
+	helm upgrade --install airflow ./airflow-1.19.0.tgz \
 		--namespace ${NAMESPACE} \
 		--set scheduler.extraVolumes[0].hostPath.path=$(abspath ${DAGS_PATH}) \
 		-f airflow.values.yaml

@@ -50,6 +50,14 @@ configYaml: |-
     worker_lock_duration_minutes: 120
   plugins:
     location: /app/plugins
+  telemetry:
+    profile_addr: ":9090"
+  upstream_resolvers:
+    - type: dex
+      config:
+        host: "http://mock-dex.optimus-dev.svc.cluster.local:8000"
+        auth_email: "dev@example.com"
+        producer_type: "mock-producer"
   alerting:
     alert_manager:
       enabled: true

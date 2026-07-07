@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-dex
+  labels:
+    app: mock-dex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-dex
+  template:
+    metadata:
+      labels:
+        app: mock-dex
+    spec:
+      containers:
+        - name: mock-dex
+          image: python:3.11-slim
+          command: ["python3", "/app/server.py"]
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: script
+              mountPath: /app
+      volumes:
+        - name: script
+          configMap:
+            name: mock-dex-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-dex
+spec:
+  selector:
+    app: mock-dex
+  ports:
+    - port: 8000
+      targetPort: 8000

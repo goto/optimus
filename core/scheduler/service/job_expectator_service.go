@@ -79,7 +79,7 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 	}
 
 	// get lineage
-	jobsWithLineageMap, err := s.jobLineageFetcher.GetJobLineage(ctx, jobSchedules)
+	jobsWithLineageMap, err := s.jobLineageFetcher.GetJobLineage(ctx, jobSchedules, int(scheduleRangeInHours.Hours()))
 	if err != nil {
 		s.l.Error(fmt.Sprintf("failed to get job lineage, skipping expected finish time generation: %s", err.Error()))
 		return nil, err

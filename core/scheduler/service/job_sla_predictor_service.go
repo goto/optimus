@@ -195,7 +195,7 @@ func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo sche
 	}
 
 	// get lineage
-	jobsWithLineageMap, err := s.jobLineageFetcher.GetJobLineage(ctx, jobSchedules)
+	jobsWithLineageMap, err := s.jobLineageFetcher.GetJobLineage(ctx, jobSchedules, int(reqConfig.ScheduleRangeInHours.Hours()))
 	if err != nil {
 		s.l.Error("failed to get job lineage, skipping SLA prediction", "error", err)
 		return nil, err
@@ -254,7 +254,16 @@ func (s *JobSLAPredictorService) processBreachResults(ctx context.Context, resul
 }
 
 func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperCoeff float64, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
-	// calculate inferred SLAs for each job based on their downstream critical jobs and estimated durations
+	// note: no need to realert again on target job which does not breached its SLA
+	if targetRun, ok := jobTarget.JobRuns[jobTarget.JobName]; ok && targetRun != nil {
+		if endTime := targetRun.GetActualEndTime(); endTime != nil && !endTime.After(*targetedSLA) {
+			s.l.Info("target job finished before SLA, skipping breach detection",
+				"job", jobTarget.JobName, "end_time", endTime, "sla", targetedSLA)
+			return make(map[scheduler.JobName]*scheduler.JobState), make(map[scheduler.JobName][]*scheduler.JobState)
+		}
+	}
+
+	// calculate inferred SLAs and record the tightest-path predecessor chain for level/path reporting
 	// S(u|j) = S(j) - D(u)
 	inferredSLAsByJobTarget, bottleneck := s.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperCoeff)
 
@@ -506,6 +515,11 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 		childDamper := current.damper * alpha
 
 		for _, upstreamJob := range current.job.Upstreams {
+			// do not set inferred sla from a job which has no valid job runs
+			if len(upstreamJob.JobRuns) == 0 {
+				s.l.Debug("upstream job does not have associated runs to attach SLA. skipping remaining upstreams for this table", "upstream", upstreamJob.JobName, "targetJob", jobTarget.JobName)
+				continue
+			}
 			// cycle guard: if the upstream already appears on the path from the target
 			// to the current entry, following it would form a back-edge.
 			cyclic := slices.Contains(current.path, upstreamJob.JobName)

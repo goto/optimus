@@ -503,6 +503,137 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		upstreamRepo.AssertExpectations(t)
 		jobRepo.AssertExpectations(t)
 	})
+
+	// this is an important assertion built around the functionality of lineage resolver
+	// containing 2 implicit expectations
+	// 1. jobs which is not running yet will still have job runs with empty start & end times,
+	//    as long as the schedule time is within the valid lineage interval hours
+	// 2. upstream jobs containing runs which are outside of the interval hours won't have the job run populated
+	t.Run("successfully builds lineage for runs outside valid interval hours", func(t *testing.T) {
+		// topology: A -> B -> C
+		// A is not running yet, B already runs, C already runs but outside of the valid hours (10 hours)
+		validLineageIntervalInHours := 10
+		upstreamRepo := new(MockJobUpstreamRepository)
+		jobRepo := new(MockJobRepository)
+		jobRunService := new(MockJobRunService)
+		projectGetter := new(MockProjectGetter)
+		sampleSensorName := "sample-sensor"
+		sampleTaskName := "sample-task"
+		sampleHookName := "sample-hook"
+
+		jobSchedules := []*scheduler.JobSchedule{
+			{JobName: jobNameA, ScheduledAt: scheduledTime},
+		}
+		jobMap := map[scheduler.JobName]*scheduler.JobSummary{
+			jobNameA: jobAWithDetails,
+			jobNameB: jobBWithDetails,
+			jobNameC: jobCWithDetails,
+		}
+
+		// expected job runs to be fetched
+		// from jobA to jobB, expected run is 2023-01-01 13:00 UTC (yesterday of jobA's scheduled time)
+		jobBExpectedSchedules := []time.Time{
+			time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC),
+		}
+		// from jobB to jobC, expected runs are 2023-01-01 07:00 UTC, 2022-12-31 07:00 UTC, 2022-12-30 07:00 UTC (last 3 days of jobB's scheduled time)
+		// and also 2023-12-29 07:00 UTC, 2023-12-28 07:00 UTC, 2023-12-27 07:00 UTC (last 3 days of jobB's scheduled time in previous year)
+		// but since this is outside of the 10 hours range, it wont be considered
+		jobCExpectedSchedules := []time.Time{
+			time.Date(2022, 12, 27, 7, 0, 0, 0, time.UTC),
+			time.Date(2022, 12, 28, 7, 0, 0, 0, time.UTC),
+			time.Date(2022, 12, 29, 7, 0, 0, 0, time.UTC),
+			time.Date(2022, 12, 30, 7, 0, 0, 0, time.UTC),
+			time.Date(2022, 12, 31, 7, 0, 0, 0, time.UTC),
+			time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC),
+		}
+
+		// although there are multiple expected schedules for jobC, only fetch the latest one
+		jobRunsToFetch := []scheduler.JobRunIdentifier{
+			{JobName: jobNameA, ScheduledAt: time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC)},
+			{JobName: jobNameB, ScheduledAt: time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)},
+		}
+
+		fetchedJobRunSummaries := []*scheduler.JobRunSummary{
+			{
+				JobName:       jobNameB,
+				ScheduledAt:   time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC),
+				JobStartTime:  timePtr(time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)),
+				JobEndTime:    timePtr(time.Date(2023, 1, 1, 13, 20, 0, 0, time.UTC)),
+				WaitStartTime: timePtr(time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)),
+				WaitEndTime:   timePtr(time.Date(2023, 1, 1, 13, 8, 0, 0, time.UTC)),
+				TaskStartTime: timePtr(time.Date(2023, 1, 1, 13, 8, 0, 0, time.UTC)),
+				TaskEndTime:   timePtr(time.Date(2023, 1, 1, 13, 10, 0, 0, time.UTC)),
+				HookStartTime: timePtr(time.Date(2023, 1, 1, 13, 10, 0, 0, time.UTC)),
+				HookEndTime:   timePtr(time.Date(2023, 1, 1, 13, 20, 0, 0, time.UTC)),
+				SensorName:    &sampleSensorName,
+				TaskName:      &sampleTaskName,
+				HookName:      &sampleHookName,
+			},
+		}
+
+		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(jobUpstreams, nil)
+		jobRepo.On("GetSummaryByNames",
+			ctx,
+			matchValues([]scheduler.JobName{jobNameA, jobNameB, jobNameC},
+				func(name scheduler.JobName) string {
+					return name.String()
+				}),
+		).Return(jobMap, nil)
+		projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
+
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobAWithDetails.ScheduleInterval, jobAWithDetails.Window, jobBWithDetails.ScheduleInterval, scheduledTime).Return(jobBExpectedSchedules, nil)
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobBWithDetails.ScheduleInterval, jobBWithDetails.Window, jobCWithDetails.ScheduleInterval, jobBExpectedSchedules[0]).Return(jobCExpectedSchedules, nil)
+
+		jobRunService.On("GetJobRunsByIdentifiers", ctx, matchValues(jobRunsToFetch, func(id scheduler.JobRunIdentifier) string {
+			return id.JobName.String() + id.ScheduledAt.String()
+		})).Return(fetchedJobRunSummaries, nil)
+
+		resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
+
+		resultMap, err := resolver.BuildLineage(ctx, jobSchedules, validLineageIntervalInHours)
+
+		assert.NoError(t, err)
+		assert.Len(t, resultMap, 1)
+		result := resultMap[jobSchedules[0]]
+
+		// assert job A results
+		assert.Equal(t, jobNameA, result.JobName)
+		assert.EqualValues(t, result.ScheduleInterval, jobAWithDetails.ScheduleInterval)
+		assert.EqualValues(t, result.Window, &yestWindowCfg)
+		assert.Equal(t, len(result.JobRuns), 1)
+		assert.Equal(t, scheduledTime, result.JobRuns[jobNameA].ScheduledAt)
+		assert.Nil(t, result.JobRuns[jobNameA].JobStartTime)
+		assert.Nil(t, result.JobRuns[jobNameA].JobEndTime)
+		assert.Nil(t, result.JobRuns[jobNameA].TaskStartTime)
+		assert.Nil(t, result.JobRuns[jobNameA].TaskEndTime)
+
+		// assert job B results
+		assert.Len(t, result.Upstreams, 1)
+		upstreamB := result.Upstreams[0]
+		assert.Equal(t, jobNameB, upstreamB.JobName)
+		assert.EqualValues(t, upstreamB.ScheduleInterval, jobBWithDetails.ScheduleInterval)
+		assert.EqualValues(t, upstreamB.Window, &multidayWindowCfg)
+		assert.Len(t, upstreamB.JobRuns, 1)
+		expectedBSchedule := jobBExpectedSchedules[0]
+		assert.Equal(t, expectedBSchedule, upstreamB.JobRuns[jobNameA].ScheduledAt)
+		assert.Equal(t, jobNameB, upstreamB.JobRuns[jobNameA].JobName)
+
+		// assert job C results: should be empty
+		assert.Len(t, upstreamB.Upstreams, 1)
+		upstreamC := upstreamB.Upstreams[0]
+		assert.Equal(t, jobNameC, upstreamC.JobName)
+		assert.EqualValues(t, upstreamC.ScheduleInterval, jobCWithDetails.ScheduleInterval)
+		assert.EqualValues(t, upstreamC.Window, &yestWindowCfg)
+		assert.Len(t, upstreamC.JobRuns, 0)
+		assert.Empty(t, upstreamC.Upstreams)
+
+		upstreamRepo.AssertExpectations(t)
+		jobRepo.AssertExpectations(t)
+		jobRunService.AssertExpectations(t)
+		projectGetter.AssertExpectations(t)
+	})
 }
 
 type MockJobUpstreamRepository struct {

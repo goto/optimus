@@ -85,7 +85,7 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{"job-A": jobASchedule}).
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{"job-A": jobASchedule}, int(reqConfig.ScheduleRangeInHours.Hours())).
 			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": jobALineage}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
 			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C"}, jobNames)

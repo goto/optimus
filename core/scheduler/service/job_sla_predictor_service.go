@@ -23,8 +23,8 @@ type JobSLAPredictorRequestConfig struct {
 	SkipJobNames         []string
 	EnableAlert          bool
 	EnableDeduplication  bool
-	DamperCoeff          float64
 	Severity             string
+	DamperFactor         scheduler.DamperFactor
 }
 
 // comboBreachResult holds the computed breaches for one combo, retained so that
@@ -153,10 +153,10 @@ func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo sche
 	jobFullBreachCauses := make(map[scheduler.JobName]map[scheduler.JobName][]*scheduler.JobState)
 	emptyResult := &comboBreachResult{combo: combo, jobBreachCauses: jobBreachCauses, jobFullBreachCauses: jobFullBreachCauses}
 
-	// damper coefficient to use default if not provided
-	damperCoeff := reqConfig.DamperCoeff
-	if damperCoeff <= 0 {
-		damperCoeff = s.config.DamperCoeff
+	// damper factor to use; fall back to config alpha if not provided
+	damperFactor := reqConfig.DamperFactor
+	if damperFactor.Alpha <= 0 {
+		damperFactor.Alpha = s.config.DamperCoeff
 	}
 
 	// job names to be skipped for checking
@@ -220,7 +220,7 @@ func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo sche
 		if !ok || targetSLA == nil {
 			continue
 		}
-		breachesCauses, fullBreachesCauses := s.IdentifySLABreach(ctx, jobWithLineage, jobDurations, targetSLA, skipJobNames, damperCoeff, reqConfig.ReferenceTime)
+		breachesCauses, fullBreachesCauses := s.IdentifySLABreach(ctx, jobWithLineage, jobDurations, targetSLA, skipJobNames, damperFactor, reqConfig.ReferenceTime)
 		// populate jobBreachCauses
 		if len(breachesCauses) > 0 {
 			jobBreachCauses[jobSchedule.JobName] = breachesCauses
@@ -253,7 +253,7 @@ func (s *JobSLAPredictorService) processBreachResults(ctx context.Context, resul
 	}
 }
 
-func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperCoeff float64, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
+func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
 	// note: no need to realert again on target job which does not breached its SLA
 	if targetRun, ok := jobTarget.JobRuns[jobTarget.JobName]; ok && targetRun != nil {
 		if endTime := targetRun.GetActualEndTime(); endTime != nil && !endTime.After(*targetedSLA) {
@@ -265,7 +265,7 @@ func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarge
 
 	// calculate inferred SLAs and record the tightest-path predecessor chain for level/path reporting
 	// S(u|j) = S(j) - D(u)
-	inferredSLAsByJobTarget, bottleneck := s.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperCoeff)
+	inferredSLAsByJobTarget, bottleneck := s.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperFactor)
 
 	// populate jobSLAStatesByJobTargetName
 	jobSLAStates := s.populateJobSLAStates(jobDurations, inferredSLAsByJobTarget)
@@ -462,7 +462,7 @@ type bottleneckPath struct {
 //   - bottleneckPath:
 //   - winningPred:  immediate downstream predecessor on the tightest path
 //   - winningLevel: depth of that tightest arrival (distance from the target)
-func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperCoeff float64) (map[scheduler.JobName]*time.Time, bottleneckPath) {
+func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, bottleneckPath) {
 	inferredSLAs := make(map[scheduler.JobName]*time.Time)
 	bottleneck := bottleneckPath{
 		Pred:  map[scheduler.JobName]scheduler.JobName{},
@@ -472,10 +472,9 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 		return inferredSLAs, bottleneck
 	}
 
-	alpha := damperCoeff
-	lowestDamperCoeff := damperCoeff
+	lowestDamperCoeff := damperFactor.InitialDamper()
 
-	s.l.Info("damper coefficient used for inferred SLA calculation", "damper_coeff", damperCoeff)
+	s.l.Info("damper coefficient used for inferred SLA calculation", "damper_coeff", damperFactor.Alpha)
 
 	// bestByNodeLevel holds the tightest inferred SLA seen for a (job, level) pair; it is the
 	// pruning key that keeps the relaxation bounded even on graphs with many overlapping paths.
@@ -497,7 +496,7 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 		sla    time.Time
 		path   []scheduler.JobName // job names from target down to (and including) this entry
 	}
-	queue := []state{{job: jobTarget, level: 0, damper: 1.0, sla: targetSLA, path: []scheduler.JobName{jobTarget.JobName}}}
+	queue := []state{{job: jobTarget, level: 0, damper: damperFactor.InitialDamper(), sla: targetSLA, path: []scheduler.JobName{jobTarget.JobName}}}
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
@@ -512,7 +511,7 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 
 		childSLA := current.sla.Add(-time.Duration(current.damper*float64(duration.Milliseconds())) * time.Millisecond)
 		childLevel := current.level + 1
-		childDamper := current.damper * alpha
+		childDamper := damperFactor.NextDamper(current.damper)
 
 		for _, upstreamJob := range current.job.Upstreams {
 			// do not set inferred sla from a job which has no valid job runs

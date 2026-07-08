@@ -47,8 +47,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 		// when
 		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, labels, reqConfig)
@@ -74,8 +76,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{}, nil).Once()
@@ -105,8 +109,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return([]*scheduler.JobWithDetails{}, nil).Once()
@@ -136,8 +142,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return(nil, assert.AnError).Once()
@@ -167,8 +175,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -207,8 +217,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -251,8 +263,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -305,8 +319,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
 			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -361,8 +377,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -442,8 +460,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -562,8 +582,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -684,8 +706,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -811,8 +835,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -968,8 +994,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -1091,8 +1119,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -1307,7 +1337,9 @@ func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
 		reqConfig := service.JobSLAPredictorRequestConfig{
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
-			DamperCoeff:          conf.DamperCoeff,
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
 		}
 		res, err := svc.IdentifySLABreaches(ctx, projectName, []scheduler.JobName{"job-A"}, map[string]string{}, reqConfig)
 		assert.NoError(t, err)
@@ -1471,11 +1503,11 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 		jobNames := []scheduler.JobName{"job-A", "job-B", "job-C"}
 
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, 1.0, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
-		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, map[scheduler.JobName]bool{}, 1.0, referenceTime)
+		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachCauses, 0)
 		assert.Len(t, allUpstreamStates, 0)
@@ -1502,7 +1534,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 		jobNames := []scheduler.JobName{"job-A", "job-B", "job-C"}
 
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, 1.0, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
@@ -1517,7 +1549,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, 1.0, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-C"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1539,7 +1571,7 @@ func TestIdentifySLABreach(t *testing.T) {
 			durations[jobName] = func() *time.Duration { d := 5 * time.Minute; return &d }()
 			jobNames = append(jobNames, jobName)
 		}
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, damperCoeff, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-1"]
 		// job-1 .. job-17 are not started yet
@@ -1555,7 +1587,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, damperCoeff, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-18"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1577,7 +1609,7 @@ func TestIdentifySLABreach(t *testing.T) {
 			durations[jobName] = func() *time.Duration { d := 5 * time.Minute; return &d }()
 			jobNames = append(jobNames, jobName)
 		}
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, damperCoeff, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-1"]
 		// job-1 .. job-17 are not started yet
@@ -1593,7 +1625,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, damperCoeff, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
 
 		assert.Len(t, breachesCauses, 0)
 		assert.Len(t, fullBreachesCauses, 0)
@@ -1655,7 +1687,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
-			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, 1.0, referenceTime,
+			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
 		)
 
 		assert.Len(t, breachesCauses, 0)
@@ -1719,7 +1751,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
-			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, 1.0, referenceTime,
+			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
 		)
 
 		assert.Len(t, breachesCauses, 0)
@@ -1745,7 +1777,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 
 	t.Run("single target node with no upstreams", func(t *testing.T) {
 		a := node("job-A", &base)
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, map[scheduler.JobName]*time.Duration{"job-A": dur(20 * time.Minute)}, &base, 1.0)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, map[scheduler.JobName]*time.Duration{"job-A": dur(20 * time.Minute)}, &base, scheduler.DamperFactor{Alpha: 1.0})
 
 		assert.Equal(t, base, *gotSLAs["job-A"])
 		assert.Len(t, gotSLAs, 1)
@@ -1765,7 +1797,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-B": dur(15 * time.Minute),
 			"job-C": dur(10 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
 		assert.Equal(t, base, *gotSLAs["job-A"])
 		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
@@ -1786,7 +1818,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-B": dur(20 * time.Minute),
 			"job-C": dur(20 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 0.5)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 0.5})
 
 		assert.Equal(t, base, *gotSLAs["job-A"])
 		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
@@ -1811,7 +1843,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-C": dur(15 * time.Minute),
 			"job-D": dur(10 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
 		assert.Equal(t, base, *gotSLAs["job-A"])
 		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
@@ -1844,7 +1876,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-D": dur(10 * time.Minute),
 			"job-E": dur(5 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
 		assert.Equal(t, base, *gotSLAs["job-A"])
 		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
@@ -1875,7 +1907,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			// job-B intentionally missing
 			"job-C": dur(10 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
 		assert.Equal(t, base, *gotSLAs["job-A"])
 		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
@@ -1899,7 +1931,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-D": dur(5 * time.Minute),
 		}
 
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, 1.0)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
 		assert.Equal(t, base, *gotSLAs["job-A"])
 		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
@@ -1910,7 +1942,7 @@ func TestCalculateInferredSLAs(t *testing.T) {
 	})
 }
 
-func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorService, jobDurations map[scheduler.JobName]*time.Duration, jobNamePath []scheduler.JobName, referenceTime time.Time, damperCoeff float64, targetSLA time.Time) map[scheduler.JobName]*scheduler.JobLineageSummary {
+func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorService, jobDurations map[scheduler.JobName]*time.Duration, jobNamePath []scheduler.JobName, referenceTime time.Time, damperFactor scheduler.DamperFactor, targetSLA time.Time) map[scheduler.JobName]*scheduler.JobLineageSummary {
 	// get hour from now for simulation purpose, we set scheduledAt to be now
 	scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
 	interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
@@ -1944,7 +1976,7 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 		currentJobLineage.Upstreams = []*scheduler.JobLineageSummary{upstreamJobLineage}
 	}
 
-	slaStates, _ := slaPredictorService.CalculateInferredSLAs(jobTargetLineageMap[jobNameTarget], jobDurations, &targetSLA, damperCoeff)
+	slaStates, _ := slaPredictorService.CalculateInferredSLAs(jobTargetLineageMap[jobNameTarget], jobDurations, &targetSLA, damperFactor)
 
 	for _, jobName := range jobNamePath {
 		currentInferredSLA := slaStates[jobName]

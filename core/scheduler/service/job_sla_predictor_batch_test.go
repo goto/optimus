@@ -40,7 +40,9 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: 10 * time.Hour,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
 		}
 
 		tnnt, _ := tenant.NewTenant("project-a", "team-a")
@@ -124,7 +126,9 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 			ReferenceTime:        time.Now().UTC(),
 			ScheduleRangeInHours: 10 * time.Hour,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
 		}
 
 		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return(nil, assert.AnError).Once()

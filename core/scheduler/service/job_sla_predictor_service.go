@@ -741,7 +741,13 @@ func sortedJobRuns(jobRuns map[scheduler.JobName]*scheduler.JobRunSummary) []*sc
 	sort.Slice(runs, func(i, j int) bool {
 		return runs[i].ScheduledAt.Before(runs[j].ScheduledAt)
 	})
-	return runs
+	unique := runs[:0]
+	for i, run := range runs {
+		if i == 0 || !run.ScheduledAt.Equal(runs[i-1].ScheduledAt) {
+			unique = append(unique, run)
+		}
+	}
+	return unique
 }
 
 // populateJobSLAStates populates the jobSLAStatesByJobName map with the estimated durations and inferred SLAs for each job.

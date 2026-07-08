@@ -135,6 +135,24 @@ def build_curl_equivalent(method, url, body=None):
     return curl
 
 
+def _raise_error_if_request_failed(response=None, method=None, url=None, body=None, error=None):
+    """Single place that logs request failures against optimus, so callers don't each log their own copy.
+
+    Pass `response` when a (possibly non-200) HTTP response was received. Pass `method`/`url`/`body`/`error`
+    instead when the request never got a response at all (e.g. a connection error) -- in that case this
+    only logs, since the caller already has the exception it needs to raise/wrap.
+    """
+    if response is not None:
+        if response.status_code == 200:
+            return
+        curl_equivalent = build_curl_equivalent(response.request.method, response.request.url, response.request.body)
+        log.error("Request to optimus returned non-200 status code. request: {}, response: {}".format(curl_equivalent, response.json()))
+        raise AssertionError("request to optimus returned non-200 status code, request: " + curl_equivalent)
+    else:
+        curl_equivalent = build_curl_equivalent(method, url, body)
+        log.error("Request to optimus failed. request: {}, error: {}".format(curl_equivalent, error))
+
+
 class OptimusAPIClient:
     def __init__(self, optimus_host):
         self.host = self._add_connection_adapter_if_absent(optimus_host)
@@ -187,7 +205,7 @@ class OptimusAPIClient:
             'downstream_project_name': downstream_project_name,
             'downstream_job_name': downstream_job_name
         }, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def execute_third_party_sensor(self, project_name: str, job_name: str, third_party_type: str, scheduled_at: str, config: dict) -> dict:
@@ -209,16 +227,15 @@ class OptimusAPIClient:
         try:
             response = requests.put(url, json=payload,
                                     timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-            self._raise_error_if_request_failed(response)
+            _raise_error_if_request_failed(response)
             return response.json()
         except Exception as e:
             if 'response' in locals() and response is not None:
-                # non-200 case: _raise_error_if_request_failed already logged it when it raised, above
                 status_code = response.status_code
             else:
-                # request never reached optimus (e.g. connection error): log it via the same single place
+                # request never reached optimus (e.g. connection error)
                 status_code = None
-                self._raise_error_if_request_failed(method='PUT', url=url, body=json.dumps(payload), error=e)
+                _raise_error_if_request_failed(method='PUT', url=url, body=json.dumps(payload), error=e)
             raise DexSensorAPIError(str(e), status_code) from e
 
 
@@ -230,7 +247,7 @@ class OptimusAPIClient:
             reference_time=scheduled_at,
         )
         response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
 
@@ -240,7 +257,7 @@ class OptimusAPIClient:
                             'instance_name': instance_name,
                             'instance_type': "TYPE_" + job_type.upper()}, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
 
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def get_jobs(self, project, job) -> dict:
@@ -249,7 +266,7 @@ class OptimusAPIClient:
             project_name=project,
             job_name=job)
         response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def get_job_metadata(self, namespace, project, job) -> dict:
@@ -259,7 +276,7 @@ class OptimusAPIClient:
             project_name=project,
             job_name=job)
         response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def notify_event(self, project, namespace, job, event) -> dict:
@@ -273,25 +290,8 @@ class OptimusAPIClient:
             "event": event
         }
         response = requests.post(url, data=json.dumps(request_data), timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
-
-    def _raise_error_if_request_failed(self, response=None, method=None, url=None, body=None, error=None):
-        """Single place that logs request failures against optimus, so callers don't each log their own copy.
-
-        Pass `response` when a (possibly non-200) HTTP response was received. Pass `method`/`url`/`body`/`error`
-        instead when the request never got a response at all (e.g. a connection error) -- in that case this
-        only logs, since the caller already has the exception it needs to raise/wrap.
-        """
-        if response is not None:
-            if response.status_code == 200:
-                return
-            curl_equivalent = build_curl_equivalent(response.request.method, response.request.url, response.request.body)
-            log.error("Request to optimus returned non-200 status code. request: {}, response: {}".format(curl_equivalent, response.json()))
-            raise AssertionError("request to optimus returned non-200 status code, request: " + curl_equivalent)
-        else:
-            curl_equivalent = build_curl_equivalent(method, url, body)
-            log.error("Request to optimus failed. request: {}, error: {}".format(curl_equivalent, error))
 
 
 class JobSpecTaskWindow:
@@ -409,9 +409,9 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
         # - OFF: skip the sensor check entirely
         # - ON: hard failure -- keep rescheduling (eventually times out) until upstream is available
         # - SOFT: hard failure until THIRD_PARTY_SENSOR_MAX_TIME elapses, then bypass regardless of availability
-        # - SOFT_5XX: behaves like ON (hard failure, never bypassed) by default; only falls back to
-        #   SOFT's bypass-after-max-time behavior specifically when dex itself returns a 5xx, since a
-        #   dex outage shouldn't block the pipeline forever the way genuine "not ready yet" should
+        # - SOFT_5XX: behaves like ON by default (hard failure, bypass disabled). The only exception
+        # is when Dex returns a 5xx, in which case it falls back to SOFT behavior and allows a
+        # bypass after the configured maximum wait time.
         # - anything else (empty/unrecognized): skip the sensor check, matching the pre-existing default
         self.log.info("Third party sensor mode: {}\n".format(sensor_toggle_val))
         if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_OFF:
@@ -433,17 +433,17 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
 
     def _poke_hard(self, context):
         schedule_time = get_scheduled_at(context)
-        is_available, _ = self._check_upstream_data_available(context, schedule_time)
+        is_available, _ = self._check_upstream_data_available(schedule_time)
         return self._hard_check(is_available, schedule_time)
 
     def _poke_soft(self, context):
         schedule_time = get_scheduled_at(context)
-        is_available, _ = self._check_upstream_data_available(context, schedule_time)
+        is_available, _ = self._check_upstream_data_available(schedule_time)
         return self._apply_soft_grace_period(context, schedule_time, is_available)
 
     def _poke_soft_5xx(self, context):
         schedule_time = get_scheduled_at(context)
-        is_available, is_5xx_error = self._check_upstream_data_available(context, schedule_time)
+        is_available, is_5xx_error = self._check_upstream_data_available(schedule_time)
 
         if is_5xx_error:
             self.log.warning("Third party sensor got a 5xx error from dex, so will acting like soft-style grace period.")
@@ -451,7 +451,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
 
         return self._hard_check(is_available, schedule_time)
 
-    def _hard_check(self, is_available, schedule_time):
+    def _hard_check(self, schedule_time, is_available):
         if not is_available:
             self.log.warning("upstream data not yet available for third party '{}' at schedule_time '{}', rescheduling sensor".
                             format(self.third_party_type, schedule_time))
@@ -477,7 +477,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
         self.log.info("Third party sensor is in SOFT/SOFT_5XX mode, without the flag 'THIRD_PARTY_SENSOR_MAX_TIME', Always yielding true for now.")
         return True
 
-    def _check_upstream_data_available(self, context, schedule_time):
+    def _check_upstream_data_available(self, schedule_time):
         self.log.info("Poking for third party upstream '{}'".format(self.third_party_type))
         self.log.info("Current schedule_time: {}".format(schedule_time))
         is_available, is_5xx_error = self.is_upstream_data_available(schedule_time.strftime(TIMESTAMP_FORMAT))
@@ -508,7 +508,6 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
                 return False, False
 
         except DexSensorAPIError as e:
-            # already logged where it originated (_raise_error_if_request_failed), don't repeat it
             return False, e.is_server_error()
         except Exception as e:
             self.log.warning("error while processing sensor :: {}".format(e))

@@ -59,7 +59,20 @@ THIRD_PARTY_SENSOR_MAX_TIME = "THIRD_PARTY_SENSOR_MAX_TIME_MINUTES"
 
 THIRD_PARTY_SENSOR_TOGGLE_OFF = "OFF"
 THIRD_PARTY_SENSOR_TOGGLE_SOFT = "SOFT"
+THIRD_PARTY_SENSOR_TOGGLE_SOFT_5XX = "SOFT_5XX"
 THIRD_PARTY_SENSOR_TOGGLE_ON = "ON"
+
+
+class DexSensorAPIError(Exception):
+    """Raised when a request to the dex third-party-sensor endpoint fails, carrying
+    the HTTP status code (if any was received) so callers can distinguish a genuine
+    server-side (5xx) error from other failures (network error, 4xx, bad payload)."""
+    def __init__(self, message, status_code=None):
+        super(DexSensorAPIError, self).__init__(message)
+        self.status_code = status_code
+
+    def is_server_error(self):
+        return self.status_code is not None and 500 <= self.status_code < 600
 
 
 def lookup_non_standard_cron_expression(expr: str) -> str:
@@ -114,6 +127,32 @@ class SuperKubernetesPodOperator(KubernetesPodOperator):
         return super().execute(context)
 
 
+def build_curl_equivalent(method, url, body=None):
+    curl = "curl -X {} '{}'".format(method, url)
+    if body:
+        body_str = body.decode() if isinstance(body, bytes) else body
+        curl += " -H 'Content-Type: application/json' -d '{}'".format(body_str)
+    return curl
+
+
+def _raise_error_if_request_failed(response=None, method=None, url=None, body=None, error=None):
+    """Single place that logs request failures against optimus, so callers don't each log their own copy.
+
+    Pass `response` when a (possibly non-200) HTTP response was received. Pass `method`/`url`/`body`/`error`
+    instead when the request never got a response at all (e.g. a connection error) -- in that case this
+    only logs, since the caller already has the exception it needs to raise/wrap.
+    """
+    if response is not None:
+        if response.status_code == 200:
+            return
+        curl_equivalent = build_curl_equivalent(response.request.method, response.request.url, response.request.body)
+        log.error("Request to optimus returned non-200 status code. request: {}, response: {}".format(curl_equivalent, response.json()))
+        raise AssertionError("request to optimus returned non-200 status code, request: " + curl_equivalent)
+    else:
+        curl_equivalent = build_curl_equivalent(method, url, body)
+        log.error("Request to optimus failed. request: {}, error: {}".format(curl_equivalent, error))
+
+
 class OptimusAPIClient:
     def __init__(self, optimus_host):
         self.host = self._add_connection_adapter_if_absent(optimus_host)
@@ -166,7 +205,7 @@ class OptimusAPIClient:
             'downstream_project_name': downstream_project_name,
             'downstream_job_name': downstream_job_name
         }, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def execute_third_party_sensor(self, project_name: str, job_name: str, third_party_type: str, scheduled_at: str, config: dict) -> dict:
@@ -176,7 +215,7 @@ class OptimusAPIClient:
             optimus_job=job_name
         )
         log.info("Executing third party sensor for project_name: {}, job_name: {}, third_party_type: {}, scheduled_at: {}".format(project_name, job_name, third_party_type, scheduled_at))
-        
+
         payload = {'scheduled_at': scheduled_at, 'third_party_type': third_party_type}
 
         if third_party_type == 'dex':
@@ -185,10 +224,19 @@ class OptimusAPIClient:
                 'resource_urn': resource_urn,
             }
 
-        response = requests.put(url, json=payload,
-                                timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
-        return response.json()
+        try:
+            response = requests.put(url, json=payload,
+                                    timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+            _raise_error_if_request_failed(response)
+            return response.json()
+        except Exception as e:
+            if 'response' in locals() and response is not None:
+                status_code = response.status_code
+            else:
+                # request never reached optimus (e.g. connection error)
+                status_code = None
+                _raise_error_if_request_failed(method='PUT', url=url, body=json.dumps(payload), error=e)
+            raise DexSensorAPIError(str(e), status_code) from e
 
 
     def get_task_window(self, project_name: str, job_name: str, scheduled_at: str) -> dict:
@@ -199,7 +247,7 @@ class OptimusAPIClient:
             reference_time=scheduled_at,
         )
         response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
 
@@ -209,7 +257,7 @@ class OptimusAPIClient:
                             'instance_name': instance_name,
                             'instance_type': "TYPE_" + job_type.upper()}, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
 
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def get_jobs(self, project, job) -> dict:
@@ -218,7 +266,7 @@ class OptimusAPIClient:
             project_name=project,
             job_name=job)
         response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def get_job_metadata(self, namespace, project, job) -> dict:
@@ -228,7 +276,7 @@ class OptimusAPIClient:
             project_name=project,
             job_name=job)
         response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
 
     def notify_event(self, project, namespace, job, event) -> dict:
@@ -242,14 +290,8 @@ class OptimusAPIClient:
             "event": event
         }
         response = requests.post(url, data=json.dumps(request_data), timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
-        self._raise_error_if_request_failed(response)
+        _raise_error_if_request_failed(response)
         return response.json()
-
-    def _raise_error_if_request_failed(self, response):
-        if response.status_code != 200:
-            log.error("Request to optimus returned non-200 status code. Server response:\n")
-            log.error(response.json())
-            raise AssertionError("request to optimus returned non-200 status code. url: " + response.url)
 
 
 class JobSpecTaskWindow:
@@ -357,54 +399,95 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
         if self.third_party_type not in self._third_party_types_supported:
             self.log.warning("third party type '{}' not supported, skipping sensor check".format(self.third_party_type))
             return True
-        
-        if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_OFF:
-            self.log.info("Third party sensor is turned OFF globally, skipping the sensor check.")
-            return True
-        
+
         blacklisted_jobs = Variable.get(THIRD_PARTY_BLACKLISTEDJOBS, default_var="").split(",")
         if self.job_name in blacklisted_jobs:
             self.log.info("Third party sensor is skipped for blacklisted job: '{}'".format(self.job_name))
             return True
 
-        if sensor_toggle_val in [THIRD_PARTY_SENSOR_TOGGLE_ON ,THIRD_PARTY_SENSOR_TOGGLE_SOFT]:
-            self.log.info("Poking for third party upstream '{}'".format(self.third_party_type))
-            schedule_time = get_scheduled_at(context)
-            self.log.info("Current schedule_time: {}".format(schedule_time))
+        # switch case on sensor toggle mode:
+        # - OFF: skip the sensor check entirely
+        # - ON: hard failure -- keep rescheduling (eventually times out) until upstream is available
+        # - SOFT: hard failure until THIRD_PARTY_SENSOR_MAX_TIME elapses, then bypass regardless of availability
+        # - SOFT_5XX: behaves like ON by default (hard failure, bypass disabled). The only exception
+        # is when Dex returns a 5xx, in which case it falls back to SOFT behavior and allows a
+        # bypass after the configured maximum wait time.
+        # - anything else (empty/unrecognized): skip the sensor check, matching the pre-existing default
+        self.log.info("Third party sensor mode: {}\n".format(sensor_toggle_val))
+        if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_OFF:
+            self.log.info("Third party sensor is turned OFF globally, skipping the sensor check.")
+            return True
 
-            is_available = self.is_upstream_data_available(schedule_time.strftime(TIMESTAMP_FORMAT))
-            self.log.info("Third party sensor data availability status: {}".format(is_available))
+        elif sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_ON:
+            return self._poke_hard(context)
 
-            if sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
-                self.log.info("Third party sensor is in SOFT mode, checking for max wait time configuration.")
-                max_sensor_time = Variable.get(THIRD_PARTY_SENSOR_MAX_TIME, default_var="")
-                if max_sensor_time.isdigit() :
-                    max_sensor_time = int(max_sensor_time)
-                    self.log.info("Found max sensor time limit of {} minutes for third party sensor in SOFT mode.".format(max_sensor_time))
-                    dag_run = context["dag_run"]
-                    job_start_time = dag_run.start_date
-                    time_delta = datetime.now(timezone.utc) - job_start_time.replace(tzinfo=timezone.utc)
-                    if time_delta > timedelta(minutes=max_sensor_time) :
-                        self.log.info("Skipping third party sensor as sensor in SOFT mode and current wait time is greater than max limit of {} minutes, time elapsed: {} minutes".format(max_sensor_time, time_delta.total_seconds() // 60))
-                        return True
-                    else :
-                        self.log.info("Third party sensor in SOFT mode within max time limit of {} minutes, time left for sensor processing : {} minutes".format(max_sensor_time, max_sensor_time - (time_delta.total_seconds() // 60)))
-                        if not is_available:
-                            self.log.warning("upstream data not yet available for third party '{}' at schedule_time '{}', rescheduling sensor".
-                                            format(self.third_party_type, schedule_time))
-                            return False
-                        return True
+        elif sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT:
+            return self._poke_soft(context)
 
-                self.log.info("Third party sensor is in SOFT mode, without the flag 'THIRD_PARTY_SENSOR_MAX_TIME', Always yielding true for now.")
-                return True
+        elif sensor_toggle_val == THIRD_PARTY_SENSOR_TOGGLE_SOFT_5XX:
+            return self._poke_soft_5xx(context)
 
-            if not is_available:
-                self.log.warning("upstream data not yet available for third party '{}' at schedule_time '{}', rescheduling sensor".
-                                format(self.third_party_type, schedule_time))
-                return False
+        else:
+            self.log.info("Unrecognized or empty third party sensor toggle value '{}', skipping sensor check.".format(sensor_toggle_val))
+            return True
+
+    def _poke_hard(self, context):
+        schedule_time = get_scheduled_at(context)
+        is_available, _ = self._check_upstream_data_available(schedule_time)
+        return self._hard_check(is_available, schedule_time)
+
+    def _poke_soft(self, context):
+        schedule_time = get_scheduled_at(context)
+        is_available, _ = self._check_upstream_data_available(schedule_time)
+        return self._apply_soft_grace_period(context, schedule_time, is_available)
+
+    def _poke_soft_5xx(self, context):
+        schedule_time = get_scheduled_at(context)
+        is_available, is_5xx_error = self._check_upstream_data_available(schedule_time)
+
+        if is_5xx_error:
+            self.log.warning("Third party sensor got a 5xx error from dex, so will acting like soft-style grace period.")
+            return self._apply_soft_grace_period(context, schedule_time, is_available)
+
+        return self._hard_check(is_available, schedule_time)
+
+    def _hard_check(self, schedule_time, is_available):
+        if not is_available:
+            self.log.warning("upstream data not yet available for third party '{}' at schedule_time '{}', rescheduling sensor".
+                            format(self.third_party_type, schedule_time))
+            return False
         return True
 
-    def is_upstream_data_available(self, schedule_time) -> bool:
+    def _apply_soft_grace_period(self, context, schedule_time, is_available):
+        self.log.info("processing soft-style grade period, checking for max wait time configuration.")
+        max_sensor_time = Variable.get(THIRD_PARTY_SENSOR_MAX_TIME, default_var="")
+        if max_sensor_time.isdigit():
+            max_sensor_time = int(max_sensor_time)
+            self.log.info("Found max sensor time limit of {} minutes for third party sensor".format(max_sensor_time))
+            dag_run = context["dag_run"]
+            job_start_time = dag_run.start_date
+            time_delta = datetime.now(timezone.utc) - job_start_time.replace(tzinfo=timezone.utc)
+            if time_delta > timedelta(minutes=max_sensor_time):
+                self.log.info("Skipping third party sensor as sensor and current wait time is greater than max limit of {} minutes, time elapsed: {} minutes".format(max_sensor_time, time_delta.total_seconds() // 60))
+                return True
+            else:
+                self.log.info("Third party sensor within max time limit of {} minutes, time left for sensor processing : {} minutes".format(max_sensor_time, max_sensor_time - (time_delta.total_seconds() // 60)))
+                return self._hard_check(is_available, schedule_time)
+
+        self.log.info("Third party sensor is in SOFT/SOFT_5XX mode, without the flag 'THIRD_PARTY_SENSOR_MAX_TIME', Always yielding true for now.")
+        return True
+
+    def _check_upstream_data_available(self, schedule_time):
+        self.log.info("Poking for third party upstream '{}'".format(self.third_party_type))
+        self.log.info("Current schedule_time: {}".format(schedule_time))
+        is_available, is_5xx_error = self.is_upstream_data_available(schedule_time.strftime(TIMESTAMP_FORMAT))
+        self.log.info("Third party sensor data availability status: {}".format(is_available))
+        return is_available, is_5xx_error
+
+    def is_upstream_data_available(self, schedule_time) -> (bool, bool):
+        """Returns (is_available, is_5xx_error). is_5xx_error is True only when the
+        failure was a confirmed 5xx response from dex, so callers can distinguish a
+        dex-side problem from genuine "not ready yet" or other kinds of errors."""
         try:
             log.info("logging parameters ")
             log.info("project_name          : {}".format(self.project_name))
@@ -418,15 +501,17 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
                 # dex specific response parsing
                 resp = api_response.get('dexSensorResponse', {})
                 if resp['isComplete']:
-                    return True
-                return False
+                    return True, False
+                return False, False
             else :
                 self.log.warn("third party type other than 'dex' detected : {}".format(self.third_party_type))
-                return False
+                return False, False
 
+        except DexSensorAPIError as e:
+            return False, e.is_server_error()
         except Exception as e:
             self.log.warning("error while processing sensor :: {}".format(e))
-            return False
+            return False, False
 
 
 

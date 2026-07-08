@@ -301,7 +301,7 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 			if completeness.GetIsComplete() {
 				value = 1.0
 			}
-			thirdPartyDataCompleteness.WithLabelValues(string(projectName), string(jobName), resourceURN.String(), thirdPartyType, runType, completeness.GetDate().AsTime().Format("2006-01-02")).Set(value)
+			thirdPartyDataCompleteness.WithLabelValues(projectName.String(), jobName.String(), resourceURN.String(), thirdPartyType, runType, completeness.GetDate().AsTime().Format("2006-01-02")).Set(value)
 		}
 		if resp != nil && !resp.IsComplete {
 			completenessLog := fmt.Sprintf("request interval start: %s, end, %s, ",

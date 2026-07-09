@@ -293,6 +293,15 @@ class OptimusAPIClient:
         _raise_error_if_request_failed(response)
         return response.json()
 
+<<<<<<< Updated upstream
+=======
+    def _raise_error_if_request_failed(self, response ):
+        if response.status_code != 200:
+            log.error("Request to optimus returned non-200 status code. Server response:\n")
+            log.error(response.json())
+            raise AssertionError("request to optimus returned non-200 status code. url: " + response.url)
+
+>>>>>>> Stashed changes
 
 class JobSpecTaskWindow:
     def __init__(self, optimus_client: OptimusAPIClient, project_name: str, job_name: str):

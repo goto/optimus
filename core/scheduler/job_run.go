@@ -317,3 +317,47 @@ type JobRunIdentifier struct {
 	JobName     JobName
 	ScheduledAt time.Time
 }
+
+type DamperFactorMethod int
+
+const (
+	DamperFactorMethodExponential DamperFactorMethod = iota
+	DamperFactorMethodDecrement
+	DamperFactorMethodConstant
+)
+
+type DamperFactor struct {
+	BaseValue float64
+	Alpha     float64
+	MinValue  float64
+	Method    DamperFactorMethod
+}
+
+func (d DamperFactor) InitialDamper() float64 {
+	switch d.Method {
+	case DamperFactorMethodConstant:
+		return d.BaseValue
+	default:
+		if d.BaseValue > 0 {
+			return d.BaseValue
+		}
+		return 1.0
+	}
+}
+
+func (d DamperFactor) NextDamper(current float64) float64 {
+	switch d.Method {
+	case DamperFactorMethodDecrement:
+		if next := current - d.Alpha; next > d.MinValue {
+			return next
+		}
+		return d.MinValue
+	case DamperFactorMethodConstant:
+		return d.BaseValue
+	default: // DamperFactorMethodExponential
+		if next := current * d.Alpha; next > d.MinValue {
+			return next
+		}
+		return d.MinValue
+	}
+}

@@ -17,6 +17,8 @@ import (
 	"github.com/goto/optimus/core/tenant"
 )
 
+func dur(d time.Duration) *time.Duration { return &d }
+
 func TestIdentifySLABreaches(t *testing.T) {
 	ctx := context.Background()
 	l := log.NewNoop()
@@ -45,8 +47,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 		// when
 		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, labels, reqConfig)
@@ -72,8 +76,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{}, nil).Once()
@@ -103,8 +109,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		jobDetailsGetter.On("GetJobsByLabels", ctx, projectName, labels).Return([]*scheduler.JobWithDetails{}, nil).Once()
@@ -134,8 +142,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return(nil, assert.AnError).Once()
@@ -165,8 +175,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -205,8 +217,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -249,8 +263,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -303,8 +319,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
 			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -332,7 +350,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
-		jobLineageFetcher.On("GetJobLineage", ctx, mock.Anything).Return(nil, assert.AnError).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, mock.Anything, mock.Anything).Return(nil, assert.AnError).Once()
 
 		// when
 		jobBreachRootCause, err := jobSLAPredictorService.IdentifySLABreaches(ctx, projectName, jobNames, labels, reqConfig)
@@ -359,8 +377,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -401,7 +421,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, mock.MatchedBy(func(jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) bool {
 			return len(jobSchedules) == 1 && jobSchedules[jobASchedule.JobName].ScheduledAt.Equal(jobASchedule.ScheduledAt)
-		})).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		}), int(reqConfig.ScheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil)
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobA.Name}).Return(nil, assert.AnError).Once()
@@ -440,8 +460,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -514,7 +536,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
 			jobASchedule.JobName: jobASchedule,
-		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		}, int(reqConfig.ScheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -560,8 +582,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -632,7 +656,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
 			jobASchedule.JobName: jobASchedule,
-		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		}, int(reqConfig.ScheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -682,8 +706,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -757,7 +783,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
 			jobASchedule.JobName: jobASchedule,
-		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		}, int(reqConfig.ScheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -809,8 +835,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -919,7 +947,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
 			jobASchedule1.JobName: jobASchedule1,
 			jobASchedule2.JobName: jobASchedule2,
-		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		}, int(reqConfig.ScheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule1.JobName: jobA1Lineage,
 			jobASchedule2.JobName: jobA2Lineage,
 		}, nil).Once()
@@ -966,8 +994,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -1040,7 +1070,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, errors.New("nonblocking error")).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
 			jobASchedule.JobName: jobASchedule,
-		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		}, int(reqConfig.ScheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -1089,8 +1119,10 @@ func TestIdentifySLABreaches(t *testing.T) {
 			ReferenceTime:        referenceTime,
 			ScheduleRangeInHours: nextScheduledRangeInHours,
 			EnableAlert:          false,
-			DamperCoeff:          conf.DamperCoeff,
-			Severity:             "",
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+			Severity: "",
 		}
 
 		tenant, _ := tenant.NewTenant("project-a", "team-a")
@@ -1171,7 +1203,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
 			jobASchedule.JobName: jobASchedule,
-		}).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+		}, int(reqConfig.ScheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
 			jobASchedule.JobName: jobALineage,
 		}, nil).Once()
 		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
@@ -1192,6 +1224,258 @@ func TestIdentifySLABreaches(t *testing.T) {
 		assert.Equal(t, scheduler.JobName("job-A"), jobBreachRootCause["job-A"]["job-A"].JobName)
 		assert.Equal(t, 0, jobBreachRootCause["job-A"]["job-A"].RelativeLevel)
 		assert.Equal(t, scheduler.SLABreachCauseRunningLate, jobBreachRootCause["job-A"]["job-A"].Status)
+	})
+}
+
+func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
+	// Diamond lineage with an asymmetric shared merge point:
+	//
+	//        job-B ------------\
+	//       /                   job-D -> job-E   (job-E is the deepest shared root)
+	//   job-A                  /
+	//       \                 /
+	//        job-C -> job-F --
+	//
+	// Upstream edges: A->{B,C}, B->D, C->F, F->D, D->E. The two branches out of job-A have
+	// different lengths and merge back at the shared job-D. scheduledAt is a fixed anchor;
+	// each case only varies referenceTime ("now") and per-job run states.
+	//
+	// Durations (mins): A=20, B=15, C=15, F=10, D=10, E=5.
+	// With a daily 1h SLA and damper 1.0 (s = scheduledAt):
+	// 	 job-D & job-E's inferred SLA should be derived from the longest path itself, which is A-C-F-D-E
+	//   inferred SLA: S(A)=s+60, S(B)=S(C)=s+40, S(F)=s+25, S(D)=s+15 (not s+25), S(E)=s+5 (not s+15)
+	//   must-start (=inferredSLA-duration): A=s+40, B=C=s+25, F=s+15, D=s+5, E=s+0
+
+	ctx := context.Background()
+	l := log.NewNoop()
+	conf := config.PotentialSLABreachConfig{DamperCoeff: 1.0, EnablePersistentLogging: false}
+
+	scheduledChangeGetter := NewScheduledChangeGetter(t)
+	scheduledChangeGetter.On("GetRecentScheduleChange", ctx, mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+
+	projectName := tenant.ProjectName("project-a")
+	tnnt, _ := tenant.NewTenant("project-a", "team-a")
+	scheduledAt := time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)
+	interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
+	nextScheduledRangeInHours := 10 * time.Hour
+
+	durations := map[scheduler.JobName]*time.Duration{
+		"job-A": dur(20 * time.Minute),
+		"job-B": dur(15 * time.Minute),
+		"job-C": dur(15 * time.Minute),
+		"job-F": dur(10 * time.Minute),
+		"job-D": dur(10 * time.Minute),
+		"job-E": dur(5 * time.Minute),
+	}
+
+	// per-job run state, offsets relative to scheduledAt: nil start = not started;
+	// start set with nil end = running; both set = done.
+	type runState struct {
+		start *time.Duration
+		end   *time.Duration
+	}
+
+	buildLineage := func(states map[scheduler.JobName]runState) *scheduler.JobLineageSummary {
+		node := func(name scheduler.JobName) *scheduler.JobLineageSummary {
+			run := &scheduler.JobRunSummary{ScheduledAt: scheduledAt}
+			if st := states[name]; st.start != nil {
+				start := scheduledAt.Add(*st.start)
+				run.JobStartTime = &start
+				run.TaskStartTime = &start
+				if st.end != nil {
+					end := scheduledAt.Add(*st.end)
+					run.TaskEndTime = &end
+					run.JobEndTime = &end
+				}
+			}
+			return &scheduler.JobLineageSummary{
+				JobName:          name,
+				ScheduleInterval: interval,
+				IsEnabled:        true,
+				JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
+				Upstreams:        []*scheduler.JobLineageSummary{},
+			}
+		}
+		a, b, c := node("job-A"), node("job-B"), node("job-C")
+		f, d, e := node("job-F"), node("job-D"), node("job-E")
+		a.Upstreams = []*scheduler.JobLineageSummary{b, c}
+		b.Upstreams = []*scheduler.JobLineageSummary{d}
+		c.Upstreams = []*scheduler.JobLineageSummary{f}
+		f.Upstreams = []*scheduler.JobLineageSummary{d}
+		d.Upstreams = []*scheduler.JobLineageSummary{e}
+		return a
+	}
+
+	run := func(t *testing.T, referenceTime time.Time, states map[scheduler.JobName]runState) map[scheduler.JobName]map[scheduler.JobName]*scheduler.JobState {
+		t.Helper()
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		svc := service.NewJobSLAPredictorService(l, conf, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter)
+
+		jobA := &scheduler.JobWithDetails{
+			Name: "job-A",
+			Job:  &scheduler.Job{Tenant: tnnt, Name: "job-A"},
+			Schedule: &scheduler.Schedule{
+				StartDate: scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour),
+				Interval:  interval,
+			},
+			Alerts: []scheduler.Alert{{On: scheduler.EventCategorySLAMiss, Config: map[string]string{"duration": "1h"}}},
+		}
+		jobASchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobASchedule.JobName: jobASchedule,
+		}, int(nextScheduledRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{
+			jobASchedule.JobName: buildLineage(states),
+		}, nil).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.MatchedBy(func(jobNames []scheduler.JobName) bool {
+			return assert.ElementsMatch(t, []scheduler.JobName{"job-A", "job-B", "job-C", "job-D", "job-E", "job-F"}, jobNames)
+		})).Return(durations, nil).Once()
+
+		reqConfig := service.JobSLAPredictorRequestConfig{
+			ReferenceTime:        referenceTime,
+			ScheduleRangeInHours: nextScheduledRangeInHours,
+			DamperFactor: scheduler.DamperFactor{
+				Alpha: conf.DamperCoeff,
+			},
+		}
+		res, err := svc.IdentifySLABreaches(ctx, projectName, []scheduler.JobName{"job-A"}, map[string]string{}, reqConfig)
+		assert.NoError(t, err)
+		return res
+	}
+
+	t.Run("reference time mid-lineage, deepest root running late -> single root cause job-E", func(t *testing.T) {
+		// now = s+6. job-E started (s+2) and still running; everything else not started.
+		// B/C/F/D are also flagged (not started, past must-start) but each has a breaching
+		// upstream, so only job-E (no breaching upstream) is the root cause.
+		res := run(t, scheduledAt.Add(16*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: dur(2 * time.Minute)},
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-E"), res["job-A"]["job-E"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-E"].Status)
+		assert.Equal(t, 4, res["job-A"]["job-E"].RelativeLevel)
+	})
+
+	t.Run("reference time just past job-E inferred SLA, only job-E flagged (not started)", func(t *testing.T) {
+		// now = s+12: past job-E's inferred SLA (s+10) but before every other inferred SLA
+		// (>= s+15), so job-E is the only breaching job. Nothing has started.
+		res := run(t, scheduledAt.Add(12*time.Minute), map[scheduler.JobName]runState{})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-E"), res["job-A"]["job-E"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseNotStarted, res["job-A"]["job-E"].Status)
+		assert.Equal(t, 4, res["job-A"]["job-E"].RelativeLevel)
+	})
+
+	t.Run("breach isolated to one branch upstream -> root cause job-F", func(t *testing.T) {
+		// now = s+30. The shared job-D (end s+14 <= S(D)=s+15) and job-E (end s+4 <= S(E)=s+5)
+		// finished on time; only job-F (C-branch) is running late. job-C is blocked behind it
+		// (flagged not-started) but excluded because its upstream job-F breaches. The B-branch
+		// is entirely done and clean.
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: dur(0), end: dur(4 * time.Minute)},
+			"job-D": {start: dur(4 * time.Minute), end: dur(14 * time.Minute)},
+			"job-F": {start: dur(14 * time.Minute)},
+			"job-B": {start: dur(15 * time.Minute), end: dur(28 * time.Minute)},
+			// job-C not started (blocked behind late job-F)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-F"), res["job-A"]["job-F"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-F"].Status)
+		assert.Equal(t, 2, res["job-A"]["job-F"].RelativeLevel)
+	})
+
+	t.Run("breach is in 2 upstream branch job-F and job-B", func(t *testing.T) {
+		// now = s+30. The shared job-D (end s+14 <= S(D)=s+15) and job-E (end s+4 <= S(E)=s+5)
+		// finished on time;
+		// job-F is running late, while job-B hasn't started yet.
+		// highlight both job-F and job-B as the root cause
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: dur(0), end: dur(4 * time.Minute)},
+			"job-D": {start: dur(4 * time.Minute), end: dur(14 * time.Minute)},
+			"job-F": {start: dur(14 * time.Minute)},
+			// job-B not started due to some reason
+			// job-C not started (blocked behind late job-F)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 2)
+
+		assert.Equal(t, scheduler.JobName("job-F"), res["job-A"]["job-F"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-F"].Status)
+		assert.Equal(t, 2, res["job-A"]["job-F"].RelativeLevel)
+
+		assert.Equal(t, scheduler.JobName("job-B"), res["job-A"]["job-B"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseNotStarted, res["job-A"]["job-B"].Status)
+		assert.Equal(t, 1, res["job-A"]["job-B"].RelativeLevel)
+	})
+
+	t.Run("shared merge point job-D running late -> root cause job-D", func(t *testing.T) {
+		// now = s+30. job-E finished on time (end s+4 <= S(E)=s+5) but the shared merge job-D
+		// is running late. B/C/F are blocked behind job-D and excluded; job-D has no breaching
+		// upstream.
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: dur(0), end: dur(4 * time.Minute)},
+			"job-D": {start: dur(6 * time.Minute)},
+			// B, C, F not started (blocked behind late job-D)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-D"), res["job-A"]["job-D"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-D"].Status)
+		assert.Equal(t, 3, res["job-A"]["job-D"].RelativeLevel)
+	})
+
+	t.Run("shared merge point job-D finished late -> root cause job-D", func(t *testing.T) {
+		// now = s+30. job-D is finishing late (s+17 > s+15). B/C/F are blocked behind job-D and excluded; job-D has no breaching
+		// upstream.
+		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
+			"job-E": {start: dur(0), end: dur(4 * time.Minute)},
+			"job-D": {start: dur(4 * time.Minute), end: dur(17 * time.Minute)},
+			// B, C, F not started yet (blocked behind late job-D)
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-D"), res["job-A"]["job-D"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-D"].Status)
+		assert.Equal(t, 3, res["job-A"]["job-D"].RelativeLevel)
+	})
+
+	t.Run("target job itself running late, upstreams done -> root cause job-A", func(t *testing.T) {
+		// now = s+65, past job-A's own SLA (s+60). All upstreams finished before their
+		// inferred SLAs (E<=s+5, D<=s+15, F<=s+25, B/C<=s+40), so job-A itself is the only
+		// breaching job (level 0).
+		res := run(t, scheduledAt.Add(65*time.Minute), map[scheduler.JobName]runState{
+			"job-A": {start: dur(50 * time.Minute)},
+			"job-B": {start: dur(25 * time.Minute), end: dur(38 * time.Minute)},
+			"job-C": {start: dur(25 * time.Minute), end: dur(38 * time.Minute)},
+			"job-F": {start: dur(14 * time.Minute), end: dur(24 * time.Minute)},
+			"job-D": {start: dur(4 * time.Minute), end: dur(14 * time.Minute)},
+			"job-E": {start: dur(0), end: dur(4 * time.Minute)},
+		})
+		assert.Len(t, res, 1)
+		assert.Len(t, res["job-A"], 1)
+		assert.Equal(t, scheduler.JobName("job-A"), res["job-A"]["job-A"].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-A"].Status)
+		assert.Equal(t, 0, res["job-A"]["job-A"].RelativeLevel)
+	})
+
+	t.Run("every job completed before its inferred SLA -> no breach", func(t *testing.T) {
+		// now = s+50, everything done ahead of its inferred SLA
+		// (E<=s+5, D<=s+15, F<=s+25, B/C<=s+40, A<=s+60).
+		res := run(t, scheduledAt.Add(50*time.Minute), map[scheduler.JobName]runState{
+			"job-A": {start: dur(40 * time.Minute), end: dur(45 * time.Minute)},
+			"job-B": {start: dur(25 * time.Minute), end: dur(38 * time.Minute)},
+			"job-C": {start: dur(25 * time.Minute), end: dur(38 * time.Minute)},
+			"job-F": {start: dur(14 * time.Minute), end: dur(24 * time.Minute)},
+			"job-D": {start: dur(4 * time.Minute), end: dur(14 * time.Minute)},
+			"job-E": {start: dur(0), end: dur(4 * time.Minute)},
+		})
+		assert.Len(t, res, 0)
 	})
 }
 
@@ -1219,11 +1503,11 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 		jobNames := []scheduler.JobName{"job-A", "job-B", "job-C"}
 
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, 1.0, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
-		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, map[scheduler.JobName]bool{}, 1.0, referenceTime)
+		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachCauses, 0)
 		assert.Len(t, allUpstreamStates, 0)
@@ -1250,10 +1534,13 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 		jobNames := []scheduler.JobName{"job-A", "job-B", "job-C"}
 
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, 1.0, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
+		jobTargetLineageMap["job-A"].JobRuns["job-A"].TaskStartTime = nil
+		jobTargetLineageMap["job-A"].JobRuns["job-A"].TaskEndTime = nil
+		jobTargetLineageMap["job-A"].JobRuns["job-A"].JobEndTime = nil
 		jobTargetLineageMap["job-B"].JobRuns["job-A"].TaskStartTime = nil
 		jobTargetLineageMap["job-B"].JobRuns["job-A"].TaskEndTime = nil
 		jobTargetLineageMap["job-B"].JobRuns["job-A"].JobEndTime = nil
@@ -1262,7 +1549,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, 1.0, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-C"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1284,7 +1571,7 @@ func TestIdentifySLABreach(t *testing.T) {
 			durations[jobName] = func() *time.Duration { d := 5 * time.Minute; return &d }()
 			jobNames = append(jobNames, jobName)
 		}
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, damperCoeff, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-1"]
 		// job-1 .. job-17 are not started yet
@@ -1300,7 +1587,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, damperCoeff, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-18"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1322,7 +1609,7 @@ func TestIdentifySLABreach(t *testing.T) {
 			durations[jobName] = func() *time.Duration { d := 5 * time.Minute; return &d }()
 			jobNames = append(jobNames, jobName)
 		}
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, damperCoeff, targetSLA)
+		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-1"]
 		// job-1 .. job-17 are not started yet
@@ -1338,14 +1625,324 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, damperCoeff, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
+
+		assert.Len(t, breachesCauses, 0)
+		assert.Len(t, fullBreachesCauses, 0)
+	})
+
+	t.Run("target job already finished before its SLA, no alert even if upstream is running late", func(t *testing.T) {
+		// job-C -> job-B -> job-A
+		// (target) completed 5 min before its SLA — the SLA was met.
+		// job-C is running late (past its inferredSLA): without the guard it would trigger a
+		// RUNNING_LATE alert for job-A. The guard should suppress all upstream alerts.
+
+		// | job | estimated duration | inferredSLA            |
+		// |-----|--------------------|------------------------|
+		// | A   | 20 mins            | now+30min (SLA)        | finished at now+25min ✓
+		// | B   | 15 mins            | now+10min              | not started
+		// | C   | 10 mins            | now-5min (past!)       | running — late without guard
+
+		referenceTime := time.Now().UTC()
+		targetSLA := referenceTime.Add(30 * time.Minute)
+
+		jobAEndTime := targetSLA.Add(-5 * time.Minute) // finished 5 min before SLA
+		jobAStartTime := jobAEndTime.Add(-20 * time.Minute)
+		jobCStartTime := referenceTime.Add(-10 * time.Minute) // running, not done
+
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			"job-B": dur(15 * time.Minute),
+			"job-C": dur(10 * time.Minute),
+		}
+
+		jobCLineage := &scheduler.JobLineageSummary{
+			JobName:   "job-C",
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: referenceTime, TaskStartTime: &jobCStartTime},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobBLineage := &scheduler.JobLineageSummary{
+			JobName:   "job-B",
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: referenceTime},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{jobCLineage},
+		}
+		jobALineage := &scheduler.JobLineageSummary{
+			JobName:   "job-A",
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {
+					ScheduledAt:   referenceTime,
+					TaskStartTime: &jobAStartTime,
+					TaskEndTime:   &jobAEndTime,
+					JobEndTime:    &jobAEndTime,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{jobBLineage},
+		}
+
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
+			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
+		)
+
+		assert.Len(t, breachesCauses, 0)
+		assert.Len(t, fullBreachesCauses, 0)
+	})
+
+	t.Run("upstream with no job run stops DFS — its own upstreams are not evaluated for breach", func(t *testing.T) {
+		// job-D -> job-C (no run for job-A) -> job-B -> job-A
+		// job-C has no job run keyed by job-A, so DFS stops at job-C.
+		// job-D is past its inferredSLA and still running (RUNNING_LATE if visited),
+		// but it is never reached and therefore not reported.
+
+		// | job | estimated duration | inferredSLA    |
+		// |-----|--------------------|----------------|
+		// | A   | 5 mins             | now+10min      |
+		// | B   | 5 mins             | now+5min       |
+		// | C   | 5 mins             | now (no run)   | DFS stops here
+		// | D   | 5 mins             | now-5min       | running late but not visited
+
+		referenceTime := time.Now().UTC()
+		targetSLA := referenceTime.Add(10 * time.Minute)
+
+		jobDStartTime := referenceTime.Add(-20 * time.Minute) // started 20 min ago, still running
+
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(5 * time.Minute),
+			"job-B": dur(5 * time.Minute),
+			"job-C": dur(5 * time.Minute),
+			"job-D": dur(5 * time.Minute),
+		}
+
+		jobDLineage := &scheduler.JobLineageSummary{
+			JobName:   "job-D",
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: referenceTime, TaskStartTime: &jobDStartTime},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobCLineage := &scheduler.JobLineageSummary{
+			JobName:   "job-C",
+			IsEnabled: true,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{}, // no run for job-A
+			Upstreams: []*scheduler.JobLineageSummary{jobDLineage},
+		}
+		jobBLineage := &scheduler.JobLineageSummary{
+			JobName:   "job-B",
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: referenceTime},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{jobCLineage},
+		}
+		jobALineage := &scheduler.JobLineageSummary{
+			JobName:   "job-A",
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: referenceTime},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{jobBLineage},
+		}
+
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
+			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
+		)
 
 		assert.Len(t, breachesCauses, 0)
 		assert.Len(t, fullBreachesCauses, 0)
 	})
 }
 
-func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorService, jobDurations map[scheduler.JobName]*time.Duration, jobNamePath []scheduler.JobName, referenceTime time.Time, damperCoeff float64, targetSLA time.Time) map[scheduler.JobName]*scheduler.JobLineageSummary {
+func TestCalculateInferredSLAs(t *testing.T) {
+	l := log.NewNoop()
+	svc := service.NewJobSLAPredictorService(l, config.PotentialSLABreachConfig{}, nil, nil, nil, nil, nil, nil, nil)
+
+	base := time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
+
+	node := func(name scheduler.JobName, scheduledAt *time.Time, upstreams ...*scheduler.JobLineageSummary) *scheduler.JobLineageSummary {
+		if scheduledAt != nil {
+			return &scheduler.JobLineageSummary{JobName: name, Upstreams: upstreams, JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				name: {ScheduledAt: *scheduledAt},
+			}}
+		}
+
+		return &scheduler.JobLineageSummary{JobName: name, Upstreams: upstreams}
+	}
+
+	t.Run("single target node with no upstreams", func(t *testing.T) {
+		a := node("job-A", &base)
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, map[scheduler.JobName]*time.Duration{"job-A": dur(20 * time.Minute)}, &base, scheduler.DamperFactor{Alpha: 1.0})
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Len(t, gotSLAs, 1)
+		assert.Empty(t, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0}, gotPath.Level)
+	})
+
+	t.Run("linear chain damper=1.0 propagates full duration at each hop", func(t *testing.T) {
+		// topology: A -> B -> C
+		// S(B) = base - dur_A*1.0 = base-20m   (level 1)
+		// S(C) = base-20m - dur_B*1.0 = base-35m (level 2)
+		c := node("job-C", &base)
+		b := node("job-B", &base, c)
+		a := node("job-A", &base, b)
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			"job-B": dur(15 * time.Minute),
+			"job-C": dur(10 * time.Minute),
+		}
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-B"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 2}, gotPath.Level)
+	})
+
+	t.Run("linear chain damper=0.5 attenuates duration at each level", func(t *testing.T) {
+		// topology: A -> B -> C, alpha=0.5
+		// S(B) = base - dur_A*1.0 = base-20m        (level 1, damper still 1.0 at target level)
+		// S(C) = base-20m - dur_B*0.5 = base-30m    (level 2, damper = 0.5)
+		c := node("job-C", &base)
+		b := node("job-B", &base, c)
+		a := node("job-A", &base, b)
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			"job-B": dur(20 * time.Minute),
+			"job-C": dur(20 * time.Minute),
+		}
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 0.5})
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-30*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-B"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 2}, gotPath.Level)
+	})
+
+	t.Run("simple diamond: shared node gets the tightest inferred SLA", func(t *testing.T) {
+		// topology: A -> {B, C}, both B and C -> D
+		// dur_A=20m, dur_B=5m, dur_C=15m, damper=1.0
+		// Via B (processed first in BFS): S(D) = base-20m - 5m  = base-25m
+		// Via C (processed second):       S(D) = base-20m - 15m = base-35m  <- tighter, wins
+		// winningPred[D] = C, winningLevel[D] = 2
+		d := node("job-D", &base)
+		b := node("job-B", &base, d)
+		c := node("job-C", &base, d)
+		a := node("job-A", &base, b, c)
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			"job-B": dur(5 * time.Minute),
+			"job-C": dur(15 * time.Minute),
+			"job-D": dur(10 * time.Minute),
+		}
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-D"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-A", "job-D": "job-C"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 1, "job-D": 2}, gotPath.Level)
+	})
+
+	t.Run("asymmetric diamond: shared node anchored to the longest (bottleneck) path", func(t *testing.T) {
+		// topology: A->{B,C}, B->D, C->F, F->D, D->E   (same as the breach detection suite)
+		// dur: A=20m, B=15m, C=15m, F=10m, D=10m, E=5m, damper=1.0
+		//
+		// Paths to D:
+		//   via B (level 2): S(D) = base-20m - 15m = base-35m
+		//   via C-F (level 3): S(D) = base-35m - 10m = base-45m  <- tighter, wins
+		// winningPred[D]=F, winningLevel[D]=3
+		// S(E) = base-45m - 10m = base-55m, winningPred[E]=D, winningLevel[E]=4
+		e := node("job-E", &base)
+		d := node("job-D", &base, e)
+		f := node("job-F", &base, d)
+		b := node("job-B", &base, d)
+		c := node("job-C", &base, f)
+		a := node("job-A", &base, b, c)
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			"job-B": dur(15 * time.Minute),
+			"job-C": dur(15 * time.Minute),
+			"job-F": dur(10 * time.Minute),
+			"job-D": dur(10 * time.Minute),
+			"job-E": dur(5 * time.Minute),
+		}
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-C"])
+		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-F"])
+		assert.Equal(t, base.Add(-45*time.Minute), *gotSLAs["job-D"])
+		assert.Equal(t, base.Add(-55*time.Minute), *gotSLAs["job-E"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{
+			"job-B": "job-A",
+			"job-C": "job-A",
+			"job-F": "job-C",
+			"job-D": "job-F",
+			"job-E": "job-D",
+		}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{
+			"job-A": 0, "job-B": 1, "job-C": 1, "job-F": 2, "job-D": 3, "job-E": 4,
+		}, gotPath.Level)
+	})
+
+	t.Run("job with missing duration stops propagation to its upstreams", func(t *testing.T) {
+		// topology: A -> B -> C; B has no duration entry
+		// S(B) = base-20m (A propagates to B), but B is skipped so C gets no SLA
+		c := node("job-C", &base)
+		b := node("job-B", &base, c)
+		a := node("job-A", &base, b)
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			// job-B intentionally missing
+			"job-C": dur(10 * time.Minute),
+		}
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Nil(t, gotSLAs["job-C"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1}, gotPath.Level)
+	})
+
+	t.Run("upstream job with missing job runs should not calculate inferred SLA", func(t *testing.T) {
+		// topology: A -> B -> C -> D, C does not have any associated job runs w.r.t job B dependency
+		// S(C) is empty , then S(D) is empty also
+		d := node("job-D", nil)
+		c := node("job-C", nil, d)
+		b := node("job-B", &base, c)
+		a := node("job-A", &base, b)
+
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(20 * time.Minute),
+			"job-B": dur(15 * time.Minute),
+			"job-C": dur(10 * time.Minute),
+			"job-D": dur(5 * time.Minute),
+		}
+
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+
+		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
+		assert.Nil(t, gotSLAs["job-C"])
+		assert.Nil(t, gotSLAs["job-D"])
+		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A"}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1}, gotPath.Level)
+	})
+}
+
+func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorService, jobDurations map[scheduler.JobName]*time.Duration, jobNamePath []scheduler.JobName, referenceTime time.Time, damperFactor scheduler.DamperFactor, targetSLA time.Time) map[scheduler.JobName]*scheduler.JobLineageSummary {
 	// get hour from now for simulation purpose, we set scheduledAt to be now
 	scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
 	interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
@@ -1379,7 +1976,7 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 		currentJobLineage.Upstreams = []*scheduler.JobLineageSummary{upstreamJobLineage}
 	}
 
-	slaStates := slaPredictorService.CalculateInferredSLAs(jobTargetLineageMap[jobNameTarget], jobDurations, &targetSLA, damperCoeff)
+	slaStates, _ := slaPredictorService.CalculateInferredSLAs(jobTargetLineageMap[jobNameTarget], jobDurations, &targetSLA, damperFactor)
 
 	for _, jobName := range jobNamePath {
 		currentInferredSLA := slaStates[jobName]
@@ -1404,8 +2001,8 @@ type JobLineageFetcher struct {
 }
 
 // GetJobLineage provides a mock function with given fields: ctx, jobSchedules
-func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
-	ret := _m.Called(ctx, jobSchedules)
+func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule, validLineageIntervalInHours int) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
+	ret := _m.Called(ctx, jobSchedules, validLineageIntervalInHours)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetJobLineage")
@@ -1413,19 +2010,19 @@ func (_m *JobLineageFetcher) GetJobLineage(ctx context.Context, jobSchedules map
 
 	var r0 map[scheduler.JobName]*scheduler.JobLineageSummary
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)); ok {
-		return rf(ctx, jobSchedules)
+	if rf, ok := ret.Get(0).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule, int) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)); ok {
+		return rf(ctx, jobSchedules, validLineageIntervalInHours)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule) map[scheduler.JobName]*scheduler.JobLineageSummary); ok {
-		r0 = rf(ctx, jobSchedules)
+	if rf, ok := ret.Get(0).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule, int) map[scheduler.JobName]*scheduler.JobLineageSummary); ok {
+		r0 = rf(ctx, jobSchedules, validLineageIntervalInHours)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(map[scheduler.JobName]*scheduler.JobLineageSummary)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule) error); ok {
-		r1 = rf(ctx, jobSchedules)
+	if rf, ok := ret.Get(1).(func(context.Context, map[scheduler.JobName]*scheduler.JobSchedule, int) error); ok {
+		r1 = rf(ctx, jobSchedules, validLineageIntervalInHours)
 	} else {
 		r1 = ret.Error(1)
 	}

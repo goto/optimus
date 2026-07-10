@@ -663,6 +663,9 @@
                   "items": {
                     "$ref": "#/definitions/v1beta1PotentialSLABreachLabelGroup"
                   }
+                },
+                "damperFactor": {
+                  "$ref": "#/definitions/v1beta1DamperFactor"
                 }
               }
             }
@@ -719,6 +722,16 @@
     }
   },
   "definitions": {
+    "DamperFactorApplyMethod": {
+      "type": "string",
+      "enum": [
+        "APPLY_METHOD_UNSPECIFIED",
+        "APPLY_METHOD_EXPONENTIAL",
+        "APPLY_METHOD_DECREMENT",
+        "APPLY_METHOD_CONSTANT"
+      ],
+      "default": "APPLY_METHOD_UNSPECIFIED"
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -737,7 +750,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -759,6 +772,27 @@
     },
     "v1beta1CreateSchedulerRoleResponse": {
       "type": "object"
+    },
+    "v1beta1DamperFactor": {
+      "type": "object",
+      "properties": {
+        "baseValue": {
+          "type": "number",
+          "format": "float"
+        },
+        "alpha": {
+          "type": "number",
+          "format": "float"
+        },
+        "minValue": {
+          "type": "number",
+          "format": "float"
+        },
+        "method": {
+          "$ref": "#/definitions/DamperFactorApplyMethod"
+        }
+      },
+      "title": "DamperFactor configures the dampening factor used to calculate\ninferredSLA for upstream jobs, applied at each upstream level"
     },
     "v1beta1DataCompleteness": {
       "type": "object",
@@ -971,6 +1005,9 @@
           "items": {
             "$ref": "#/definitions/v1beta1PotentialSLABreachLabelGroup"
           }
+        },
+        "damperFactor": {
+          "$ref": "#/definitions/v1beta1DamperFactor"
         }
       }
     },

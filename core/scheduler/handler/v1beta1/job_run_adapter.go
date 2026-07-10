@@ -66,6 +66,27 @@ func buildIdentifySLABreachInputs(req *pb.IdentifyPotentialSLABreachRequest) ([]
 	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
 		referenceTime = req.GetReferenceTime().AsTime().UTC()
 	}
+
+	var method scheduler.DamperFactorMethod
+	pbMethod := req.GetDamperFactor().GetMethod()
+	switch pbMethod {
+	case pb.DamperFactor_APPLY_METHOD_DECREMENT:
+		method = scheduler.DamperFactorMethodDecrement
+	case pb.DamperFactor_APPLY_METHOD_CONSTANT:
+		method = scheduler.DamperFactorMethodConstant
+	case pb.DamperFactor_APPLY_METHOD_EXPONENTIAL:
+		fallthrough
+	default:
+		method = scheduler.DamperFactorMethodExponential
+	}
+
+	damperFactor := scheduler.DamperFactor{
+		Alpha:     float64(req.GetDamperFactor().GetAlpha()),
+		MinValue:  float64(req.GetDamperFactor().GetMinValue()),
+		BaseValue: float64(req.GetDamperFactor().GetBaseValue()),
+		Method:    method,
+	}
+
 	reqConfig := service.JobSLAPredictorRequestConfig{
 		ReferenceTime:        referenceTime,
 		ScheduleRangeInHours: scheduleRangeInHours,
@@ -73,7 +94,7 @@ func buildIdentifySLABreachInputs(req *pb.IdentifyPotentialSLABreachRequest) ([]
 		EnableAlert:          req.GetAlertOnBreach(),
 		EnableDeduplication:  req.GetEnableDeduplication(),
 		Severity:             req.GetSeverity(),
-		DamperCoeff:          float64(req.GetDamperCoeff()),
+		DamperFactor:         damperFactor,
 	}
 
 	// build combos = projects x label groups.

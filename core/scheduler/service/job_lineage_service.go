@@ -11,7 +11,7 @@ import (
 
 // Contract that can be used by other callers to fetch job lineage information
 type JobLineageFetcher interface {
-	GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)
+	GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule, validLineageIntervalInHours int) (map[scheduler.JobName]*scheduler.JobLineageSummary, error)
 }
 
 type LineageBuilder interface {
@@ -96,13 +96,13 @@ func (j *JobLineageService) enrichWithHistoricalDurations(ctx context.Context, j
 	return nil
 }
 
-func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
+func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule, validLineageIntervalInHours int) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {
 	lineageToJobName := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
 	schedules := make([]*scheduler.JobSchedule, 0, len(jobSchedules))
 	for _, schedule := range jobSchedules {
 		schedules = append(schedules, schedule)
 	}
-	jobLineages, err := j.lineageBuilder.BuildLineage(ctx, schedules, j.maxLineageDepth)
+	jobLineages, err := j.lineageBuilder.BuildLineage(ctx, schedules, validLineageIntervalInHours)
 	if err != nil {
 		j.l.Error("failed to get job lineage", "error", err)
 		return nil, err

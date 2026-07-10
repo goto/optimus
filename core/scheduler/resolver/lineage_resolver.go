@@ -244,7 +244,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 				continue
 			}
 
-			upstreamSchedule, err := r.getUpstreamRun(ctx, currentJob, upstreamJob, jobRun.ScheduledAt, lineageData.ProjectsByName)
+			upstreamSchedule, err := r.getLatestUpstreamRun(ctx, currentJob, upstreamJob, jobRun.ScheduledAt, lineageData.ProjectsByName)
 			if err != nil {
 				return err
 			}
@@ -280,13 +280,14 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 	return nil
 }
 
-func (r *LineageResolver) getUpstreamRun(ctx context.Context, sourceJob, upstreamJob *scheduler.JobSummary, referenceTime time.Time, projectsByName map[tenant.ProjectName]*tenant.Project) (time.Time, error) {
+func (r *LineageResolver) getLatestUpstreamRun(ctx context.Context, sourceJob, upstreamJob *scheduler.JobSummary, referenceTime time.Time, projectsByName map[tenant.ProjectName]*tenant.Project) (time.Time, error) {
 	project := projectsByName[sourceJob.Tenant.ProjectName()]
 	if project == nil {
 		return time.Time{}, nil
 	}
 
 	// GetExpectedRunSchedules return sorted schedule from the earliest to the latest
+	// TODO: ideally since we only expect the latest run of upstream, we don't need to consider window to compute the full depending runs
 	schedules, err := r.jobRunService.GetExpectedRunSchedules(ctx, project, sourceJob.ScheduleInterval, sourceJob.Window, upstreamJob.ScheduleInterval, referenceTime)
 	if err != nil || len(schedules) < 1 {
 		return time.Time{}, err

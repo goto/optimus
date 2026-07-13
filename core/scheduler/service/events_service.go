@@ -190,8 +190,8 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 		return nil
 	}
 
-	if e.IsBackFill(event) {
-		e.l.Info(fmt.Sprintf("alert-manager: skipping alert for backfill job [%s]: %s %s",
+	if e.IsBackFill(event) && event.Type.IsOfType(scheduler.EventCategorySLAMiss) {
+		e.l.Info(fmt.Sprintf("alert-manager: skipping SLA miss alert for backfill job [%s]: %s %s",
 			event.JobName, event.JobScheduledAt, event.Type.String()))
 		return nil
 	}

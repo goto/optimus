@@ -2410,6 +2410,41 @@ func TestJobRunService(t *testing.T) {
 			assert.Equal(t, expectedUpstreamRuns, schedules)
 		})
 
+		t.Run("should return two runs for twice-daily upstream schedule", func(t *testing.T) {
+			twiceDailyUpstreamJob := &scheduler.JobWithDetails{
+				Name: upstreamJobName,
+				Job: &scheduler.Job{
+					Name:   upstreamJobName,
+					Tenant: tnnt,
+				},
+				Schedule: &scheduler.Schedule{
+					Interval: "0 18,0 * * *",
+				},
+			}
+
+			// downstream scheduled at 2023-12-15 08:00 UTC
+			// last upstream run before reference: 2023-12-15 00:00 UTC
+			// yesterday window anchored at 00:00 → [2023-12-14 00:00, 2023-12-15 00:00]
+			// upstream runs in window: 2023-12-14 18:00 and 2023-12-15 00:00
+			referenceTime := time.Date(2023, 12, 15, 8, 0, 0, 0, time.UTC)
+
+			runService := service.NewJobRunService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, feats, nil, nil)
+
+			schedules, err := runService.GetExpectedRunSchedules(ctx, project,
+				sourceJobWithYesterdayConfig.Schedule.Interval, sourceJobWithYesterdayConfig.Job.WindowConfig,
+				twiceDailyUpstreamJob.Schedule.Interval, referenceTime)
+
+			assert.NoError(t, err)
+			assert.NotEmpty(t, schedules)
+			assert.Equal(t, 2, len(schedules))
+
+			expectedUpstreamRuns := []time.Time{
+				time.Date(2023, 12, 14, 18, 0, 0, 0, time.UTC),
+				time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC),
+			}
+			assert.Equal(t, expectedUpstreamRuns, schedules)
+		})
+
 		t.Run("should normalize fetched runs to UTC if given non-UTC window", func(t *testing.T) {
 			dailyUpstreamJob := &scheduler.JobWithDetails{
 				Name: upstreamJobName,

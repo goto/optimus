@@ -121,7 +121,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 	if config.IsDryRun() {
 		redactedSecrets := make(map[string]string)
 		for key := range taskContext[contextSecret].(map[string]string) {
-			redactedSecrets[key] = fmt.Sprintf("\"<SECRET:%s>\"", key)
+			redactedSecrets[key] = fmt.Sprintf("<SECRET:%s>", key)
 		}
 		taskContext[contextSecret] = redactedSecrets
 	}

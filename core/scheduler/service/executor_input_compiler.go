@@ -118,6 +118,14 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 		compiler.From(systemDefinedVars).WithName(contextSystemDefined).AddToContext(),
 	)
 
+	if config.IsDryRun() {
+		redactedSecrets := make(map[string]string)
+		for key := range taskContext[contextSecret].(map[string]string) {
+			redactedSecrets[key] = fmt.Sprintf("\"<SECRET:%s>\"", key)
+		}
+		taskContext[contextSecret] = redactedSecrets
+	}
+
 	confs, secretConfs, err := i.compileConfigs(job.Job.Task.Config, taskContext)
 	if err != nil {
 		i.logger.Error("error compiling task config: %s", err)

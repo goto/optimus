@@ -110,6 +110,7 @@ func (b *BackfillService) BackfillDryRun(ctx context.Context, backfillReq *sched
 		b.logger.Error("error creating run config for job [%s]: %s", jobName.String(), err)
 		return nil, errors.GRPCErr(err, "unable to get job run input for "+jobName.String())
 	}
+	runConfig.WithRunMode(scheduler.DryRun)
 	return b.compiler.Compile(ctx, jobWithDetails, runConfig, time.Now(), customOverrideConfig)
 }
 

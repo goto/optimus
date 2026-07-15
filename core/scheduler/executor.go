@@ -58,12 +58,20 @@ func ExecutorFromEnum(name, enum string) (Executor, error) {
 	return ExecutorFrom(name, _typ)
 }
 
+const (
+	DryRun    RunMode = "DryRun"
+	Execution RunMode = "Execution"
+)
+
+type RunMode string
+
 type RunConfig struct {
 	Executor Executor
 
 	ScheduledAt time.Time
 	JobRunID    JobRunID
 	DagRunID    string
+	RunMode     RunMode
 }
 
 func RunConfigFrom(executor Executor, scheduledAt time.Time, runID, dagRunID string) (RunConfig, error) {
@@ -77,7 +85,16 @@ func RunConfigFrom(executor Executor, scheduledAt time.Time, runID, dagRunID str
 		ScheduledAt: scheduledAt,
 		JobRunID:    jobRunID,
 		DagRunID:    dagRunID,
+		RunMode:     Execution,
 	}, nil
+}
+
+func (r *RunConfig) WithRunMode(m RunMode) {
+	r.RunMode = m
+}
+
+func (r *RunConfig) IsDryRun() bool {
+	return r.RunMode == DryRun
 }
 
 type ConfigMap map[string]string

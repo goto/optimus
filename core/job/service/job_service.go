@@ -19,7 +19,6 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/compiler"
 	"github.com/goto/optimus/internal/errors"
-	"github.com/goto/optimus/internal/lib/tree"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils/filter"
 	"github.com/goto/optimus/internal/writer"
@@ -139,6 +138,7 @@ type UpstreamRepository interface {
 	ResolveUpstreams(context.Context, tenant.ProjectName, []job.Name) (map[job.Name][]*job.Upstream, error)
 	ReplaceUpstreams(context.Context, []*job.WithUpstream) error
 	GetUpstreams(ctx context.Context, projectName tenant.ProjectName, jobName job.Name) ([]*job.Upstream, error)
+	GetAllResolvedUpstreamEdges(ctx context.Context) (map[job.FullName][]job.FullName, error)
 }
 
 type DownstreamRepository interface {
@@ -958,23 +958,6 @@ func (j *JobService) getAllDownstreams(ctx context.Context, projectName tenant.P
 	return downstreamsPerLevel, nil
 }
 
-func (*JobService) getIdentifierToJobsMap(jobsToValidateMap map[job.Name]*job.WithUpstream) map[string][]*job.WithUpstream {
-	identifierToJobsMap := make(map[string][]*job.WithUpstream)
-	for _, jobEntity := range jobsToValidateMap {
-		jobIdentifiers := []string{jobEntity.Job().FullName()}
-		if jobDestination := jobEntity.Job().Destination().String(); jobDestination != "" {
-			jobIdentifiers = append(jobIdentifiers, jobDestination)
-		}
-		for _, jobIdentifier := range jobIdentifiers {
-			if _, ok := identifierToJobsMap[jobIdentifier]; !ok {
-				identifierToJobsMap[jobIdentifier] = []*job.WithUpstream{}
-			}
-			identifierToJobsMap[jobIdentifier] = append(identifierToJobsMap[jobIdentifier], jobEntity)
-		}
-	}
-	return identifierToJobsMap
-}
-
 func (j *JobService) resolveAndSaveUpstreams(ctx context.Context, logWriter writer.LogWriter, jobsToResolve ...[]*job.Job) error {
 	var allJobsToResolve []*job.Job
 	for _, group := range jobsToResolve {
@@ -1271,51 +1254,6 @@ func (j *JobService) generateJob(ctx context.Context, tenantWithDetails *tenant.
 	}
 
 	return job.NewJob(tenantWithDetails.ToTenant(), spec, destination, sources, false), nil
-}
-
-func (*JobService) buildDAGTree(rootName job.Name, jobMap map[job.Name]*job.WithUpstream, identifierToJobMap map[string][]*job.WithUpstream) *tree.MultiRootTree {
-	rootJob := jobMap[rootName]
-
-	dagTree := tree.NewMultiRootTree()
-	dagTree.AddNode(tree.NewTreeNode(rootJob))
-
-	for _, childJob := range jobMap {
-		childNode := findOrCreateDAGNode(dagTree, childJob)
-		for _, upstream := range childJob.Upstreams() {
-			identifier := upstream.Resource().String()
-			if _, ok := identifierToJobMap[identifier]; !ok {
-				identifier = upstream.FullName()
-				if _, ok := identifierToJobMap[identifier]; !ok {
-					// resource maybe from external optimus or outside project,
-					// as of now, we're not providing the capability to build tree from external optimus or outside project. skip
-					continue
-				}
-			}
-
-			parents := identifierToJobMap[identifier]
-			for _, parentJob := range parents {
-				parentNode := findOrCreateDAGNode(dagTree, parentJob)
-				parentNode.AddDependent(childNode)
-				dagTree.AddNode(parentNode)
-			}
-		}
-
-		if len(childJob.Upstreams()) == 0 {
-			dagTree.MarkRoot(childNode)
-		}
-	}
-
-	return dagTree
-}
-
-// sources: https://github.com/goto/optimus/blob/a6dafbc1fbeb8e1f1eb8d4a6e9582ada4a7f639e/job/replay.go#L101
-func findOrCreateDAGNode(dagTree *tree.MultiRootTree, dag tree.TreeData) *tree.TreeNode {
-	node, ok := dagTree.GetNodeByName(dag.GetName())
-	if !ok {
-		node = tree.NewTreeNode(dag)
-		dagTree.AddNode(node)
-	}
-	return node
 }
 
 func (j *JobService) GetJobBasicInfo(ctx context.Context, jobTenant tenant.Tenant, jobName job.Name, spec *job.Spec) (*job.Job, writer.BufferedLogger) {
@@ -1729,85 +1667,162 @@ func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.W
 	return output
 }
 
-// todo: ensure cycles are validated across projects
+// validateCyclic checks whether any of the incoming jobs, once applied, would sit on a cyclic
+// dependency. The check is global, not scoped to the request's tenant or project: it starts from
+// a resolved-upstream graph spanning the whole install (BuildGlobalUpstreamGraph), patched with
+// the delta this request would introduce, then runs cycle detection per incoming job so a cycle
+// affecting one job doesn't mask a separate, disjoint cycle affecting another.
+//
+// NOTE: only internal upstreams are considered - external upstreams are out of scope, same as before this change.
 func (j *JobService) validateCyclic(ctx context.Context, tnnt tenant.Tenant, incomingJobs []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
-	existingJobs, err := j.jobRepo.GetAllByTenant(ctx, tnnt)
-	if err != nil {
-		return nil, err
-	}
-
 	if err := j.upstreamResolver.CheckStaticResolvable(ctx, tnnt, incomingJobs, writer.NewSafeBufferedLogger()); err != nil {
 		return nil, err
 	}
 
-	jobsToValidate := j.getCombinedJobsToValidate(incomingJobs, existingJobs)
-
-	jobsWithUpstream, err := j.upstreamResolver.BulkResolve(ctx, jobsToValidate, writer.NewSafeBufferedLogger())
+	jobsWithUpstream, err := j.upstreamResolver.BulkResolve(ctx, incomingJobs, writer.NewSafeBufferedLogger())
 	if err != nil {
 		return nil, err
 	}
 
-	// NOTE: only check cyclic deps across internal upstreams (sources), need further discussion to check cyclic deps for external upstream
-	// assumption, all job specs from input are also the job within same project
-	jobWithUpstreamPerJobName := j.getJobWithUpstreamPerJobName(jobsWithUpstream)
-	identifierToJobsMap := j.getIdentifierToJobsMap(jobWithUpstreamPerJobName)
+	graph, err := j.BuildGlobalUpstreamGraph(ctx, incomingJobs, jobsWithUpstream)
+	if err != nil {
+		return nil, err
+	}
+
+	roots := make([]job.FullName, len(incomingJobs))
+	for i, subjectJob := range incomingJobs {
+		roots[i] = job.FullNameFrom(subjectJob.Tenant().ProjectName(), subjectJob.Spec().Name())
+	}
+	cycles := job.FindCyclicPaths(graph, roots)
 
 	output := make(map[job.Name][]dto.ValidateResult)
-
-	isJobNameCyclic := make(map[string]bool)
-	for _, subjectJob := range incomingJobs {
-		dagTree := j.buildDAGTree(subjectJob.Spec().Name(), jobWithUpstreamPerJobName, identifierToJobsMap)
-		cyclicNames, err := dagTree.ValidateCyclic()
-
-		for _, name := range cyclicNames {
-			isJobNameCyclic[name] = true
-		}
-
-		if err != nil && isJobNameCyclic[subjectJob.GetName()] {
-			output[subjectJob.Spec().Name()] = []dto.ValidateResult{
-				{
-					Stage: dto.StageCyclicValidation,
-					Messages: append([]string{
-						"cyclic dependency is detected",
-					}, cyclicNames...),
-					Success: false,
-				},
-			}
-
-			registerJobValidationMetric(tnnt, dto.StageCyclicValidation, false)
-		} else {
+	for i, subjectJob := range incomingJobs {
+		cycle, isCyclic := cycles[roots[i]]
+		if !isCyclic {
 			registerJobValidationMetric(tnnt, dto.StageCyclicValidation, true)
+			continue
 		}
+
+		messages := make([]string, 0, len(cycle)+1)
+		messages = append(messages, "cyclic dependency is detected")
+		for _, name := range cycle {
+			messages = append(messages, name.String())
+		}
+
+		output[subjectJob.Spec().Name()] = []dto.ValidateResult{
+			{
+				Stage:    dto.StageCyclicValidation,
+				Messages: messages,
+				Success:  false,
+			},
+		}
+		registerJobValidationMetric(tnnt, dto.StageCyclicValidation, false)
 	}
 
 	return output, nil
 }
 
-func (*JobService) getCombinedJobsToValidate(incoming, existing []*job.Job) []*job.Job {
-	uniqueJobs := make(map[job.Name]*job.Job)
-	for _, j := range existing {
-		uniqueJobs[j.Spec().Name()] = j
+// BuildGlobalUpstreamGraph assembles the job-dependency graph used for cyclic-dependency
+// detection. It starts from every resolved, internal upstream edge already persisted anywhere in
+// the install (job.FullName-keyed, so edges naturally span projects and namespaces), then patches
+// in the delta this validate request would introduce once applied:
+//
+//  1. Incoming jobs will have its upstreams/edges refreshed, because the incoming specs are the newly
+//     proposed state
+//  2. Existing jobs with sources referencing an incoming job's destination gain an additive
+//     edge to that incoming job, via the same GetDownstreamByDestination lookup
+func (j *JobService) BuildGlobalUpstreamGraph(ctx context.Context, incomingJobs []*job.Job, jobsWithUpstream []*job.WithUpstream) (job.UpstreamGraph, error) {
+	graph, err := j.upstreamRepo.GetAllResolvedUpstreamEdges(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, j := range incoming {
-		uniqueJobs[j.Spec().Name()] = j
+	me := errors.NewMultiError("build global upstream graph errors")
+
+	incomingFullNames := make(map[job.FullName]bool, len(incomingJobs))
+	destinationToFullName := make(map[resource.URN]job.FullName, len(incomingJobs))
+	for _, incomingJob := range incomingJobs {
+		fullName := job.FullNameFrom(incomingJob.Tenant().ProjectName(), incomingJob.Spec().Name())
+		incomingFullNames[fullName] = true
+		if incomingJob.Destination() != resource.ZeroURN() {
+			destinationToFullName[incomingJob.Destination()] = fullName
+		}
 	}
 
-	var output []*job.Job
-	for _, j := range uniqueJobs {
-		output = append(output, j)
+	jobWithUpstreamByName := make(map[job.Name]*job.WithUpstream, len(jobsWithUpstream))
+	for _, jwu := range jobsWithUpstream {
+		jobWithUpstreamByName[jwu.Name()] = jwu
 	}
 
-	return output
-}
+	// 1st Phase: incoming jobs' upstreams are rebuilt based on the incoming spec
+	for _, incomingJob := range incomingJobs {
+		fullName := job.FullNameFrom(incomingJob.Tenant().ProjectName(), incomingJob.Spec().Name())
 
-func (*JobService) getJobWithUpstreamPerJobName(jobsWithUpstream []*job.WithUpstream) map[job.Name]*job.WithUpstream {
-	jobsToValidateMap := make(map[job.Name]*job.WithUpstream)
-	for _, jobWithUpstream := range jobsWithUpstream {
-		jobsToValidateMap[jobWithUpstream.Name()] = jobWithUpstream
+		jwu, ok := jobWithUpstreamByName[incomingJob.Spec().Name()]
+		if !ok {
+			graph[fullName] = nil
+			continue
+		}
+
+		var edges []job.FullName
+		for _, upstream := range jwu.Upstreams() {
+			if upstream.External() {
+				// out of scope: external optimus dependencies aren't tracked here
+				continue
+			}
+
+			if upstream.Name() != "" && upstream.ProjectName() != "" {
+				edges = append(edges, job.FullNameFrom(upstream.ProjectName(), upstream.Name()))
+				continue
+			}
+
+			// unresolved inferred upstream: only a destination URN is known, no job
+			if upstream.Resource() == resource.ZeroURN() {
+				continue
+			}
+			if target, ok := destinationToFullName[upstream.Resource()]; ok {
+				edges = append(edges, target)
+				continue
+			}
+
+			existingUpstreamJobs, err := j.jobRepo.GetAllByResourceDestination(ctx, upstream.Resource())
+			if err != nil {
+				me.Append(err)
+				continue
+			}
+			if len(existingUpstreamJobs) > 0 {
+				owner := existingUpstreamJobs[0]
+				edges = append(edges, job.FullNameFrom(owner.Tenant().ProjectName(), owner.Spec().Name()))
+			}
+			// else: no job anywhere currently produces this resource - nothing to link yet.
+		}
+
+		graph[fullName] = edges
 	}
 
-	return jobsToValidateMap
+	// Overlay 2: existing jobs gaining a new edge into an incoming job (additive).
+	for _, incomingJob := range incomingJobs {
+		if incomingJob.Destination() == resource.ZeroURN() {
+			continue
+		}
+		incomingFullName := job.FullNameFrom(incomingJob.Tenant().ProjectName(), incomingJob.Spec().Name())
+
+		downstreams, err := j.downstreamRepo.GetDownstreamByDestination(ctx, incomingJob.Destination())
+		if err != nil {
+			me.Append(err)
+			continue
+		}
+
+		for _, downstream := range downstreams {
+			downstreamFullName := downstream.FullName()
+			if incomingFullNames[downstreamFullName] {
+				continue
+			}
+			graph[downstreamFullName] = append(graph[downstreamFullName], incomingFullName)
+		}
+	}
+
+	return graph, me.ToErr()
 }
 
 func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) dto.ValidateResult {
@@ -1988,11 +2003,7 @@ func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant
 		return "resource exists in db but not in store", false
 	}
 
-	// TODO there are issues related to the upstream checker which we use.
-	// for example, resource checker can return nested struct columns (which is not a table) and return validation error
-	// because the referenced table name won't exist in both DB & store.
-	// revert the return value back to "false" if we already fixed the upstream checker issue
-	return "resource does not exist in both db and store", true
+	return "resource does not exist in both db and store", false
 }
 
 func (j *JobService) validateRun(ctx context.Context, subjectJob *job.Job, destination resource.URN) dto.ValidateResult {

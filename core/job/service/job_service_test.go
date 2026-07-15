@@ -4710,6 +4710,9 @@ func TestJobService(t *testing.T) {
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
 
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
 					upstreamResolver := new(UpstreamResolver)
 					defer upstreamResolver.AssertExpectations(t)
 
@@ -4719,7 +4722,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
 
 					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
 					assert.NoError(t, err)
@@ -4739,11 +4742,15 @@ func TestJobService(t *testing.T) {
 					upstreamA := job.NewUpstreamResolved(jobSpecA.Name(), "", resourceURNA, sampleTenant, "static", taskName, false)
 					jobCWithUpstream := job.NewWithUpstream(jobC, []*job.Upstream{upstreamA})
 
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB, jobC}, nil)
-
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobB")).Return(jobB, nil)
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobC")).Return(jobC, nil)
+
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
+
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNA).Return(nil, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNB).Return(nil, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNC).Return(nil, nil)
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
 					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream, jobCWithUpstream}, nil)
@@ -4757,25 +4764,33 @@ func TestJobService(t *testing.T) {
 						DeletionMode: false,
 					}
 
+					// jobA depends on jobB, jobB depends on jobC, jobC depends on jobA - the cycle
+					// is now reported starting from whichever job is being validated (global,
+					// FullName-qualified identifiers), rather than the single shared, arbitrarily
+					// ordered path the old tenant-scoped tree-based implementation produced for
+					// every job in the batch regardless of which one was actually being checked.
+					fullNameA := "test-proj/jobA"
+					fullNameB := "test-proj/jobB"
+					fullNameC := "test-proj/jobC"
 					expectedResult := map[job.Name][]dto.ValidateResult{
 						"jobA": {
 							{
 								Stage:    "cyclic validation",
-								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
+								Messages: []string{"cyclic dependency is detected", fullNameA, fullNameB, fullNameC, fullNameA},
 								Success:  false,
 							},
 						},
 						"jobB": {
 							{
 								Stage:    "cyclic validation",
-								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
+								Messages: []string{"cyclic dependency is detected", fullNameB, fullNameC, fullNameA, fullNameB},
 								Success:  false,
 							},
 						},
 						"jobC": {
 							{
 								Stage:    "cyclic validation",
-								Messages: []string{"cyclic dependency is detected", "jobA", "jobC", "jobB", "jobA"},
+								Messages: []string{"cyclic dependency is detected", fullNameC, fullNameA, fullNameB, fullNameC},
 								Success:  false,
 							},
 						},
@@ -4788,6 +4803,262 @@ func TestJobService(t *testing.T) {
 					assert.EqualValues(t, expectedResult["jobC"], actualResult["jobC"])
 					assert.NoError(t, actualError)
 				})
+
+				t.Run("detects a cycle spanning namespaces within the same project (previously invisible to a tenant-scoped check)", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+
+					// jobA is being validated in sampleTenant's namespace. jobB - its upstream -
+					// lives in otherTenant, a different namespace of the SAME project. jobB is not
+					// part of this request at all; its persisted edge back to jobA comes purely
+					// from the global upstream graph.
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+					assert.NoError(t, err)
+
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNB}, false)
+					upstreamB := job.NewUpstreamResolved("jobB", "", resourceURNB, otherTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
+
+					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
+
+					fullNameA := job.FullNameFrom(sampleTenant.ProjectName(), "jobA")
+					fullNameB := job.FullNameFrom(otherTenant.ProjectName(), "jobB")
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{
+						fullNameB: {fullNameA},
+					}, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNA).Return(nil, nil)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+
+					request := dto.ValidateRequest{
+						Tenant:   sampleTenant,
+						JobNames: []string{"jobA"},
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.NoError(t, actualError)
+					if assert.Len(t, actualResult["jobA"], 1) {
+						assert.False(t, actualResult["jobA"][0].Success)
+						assert.Equal(t, []string{"cyclic dependency is detected", fullNameA.String(), fullNameB.String(), fullNameA.String()}, actualResult["jobA"][0].Messages)
+					}
+				})
+
+				t.Run("detects a cycle spanning projects", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+
+					otherProjectTenant, err := tenant.NewTenant("other-project-xyz", "some-ns")
+					assert.NoError(t, err)
+
+					// jobA is being validated in sampleTenant's project. jobD - its upstream -
+					// lives in an entirely different project. jobD is not part of this request;
+					// its persisted edge back to jobA comes purely from the global upstream graph,
+					// which (unlike the old per-tenant lookup) is not scoped to any single project.
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+					assert.NoError(t, err)
+
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURND}, false)
+					upstreamD := job.NewUpstreamResolved("jobD", "", resourceURND, otherProjectTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamD})
+
+					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
+
+					fullNameA := job.FullNameFrom(sampleTenant.ProjectName(), "jobA")
+					fullNameD := job.FullNameFrom(otherProjectTenant.ProjectName(), "jobD")
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{
+						fullNameD: {fullNameA},
+					}, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNA).Return(nil, nil)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+
+					request := dto.ValidateRequest{
+						Tenant:   sampleTenant,
+						JobNames: []string{"jobA"},
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.NoError(t, actualError)
+					if assert.Len(t, actualResult["jobA"], 1) {
+						assert.False(t, actualResult["jobA"][0].Success)
+						assert.Equal(t, []string{"cyclic dependency is detected", fullNameA.String(), fullNameD.String(), fullNameA.String()}, actualResult["jobA"][0].Messages)
+					}
+				})
+
+				t.Run("detects a cycle between two jobs validated in the same request via inferred upstream matching, before either is persisted", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+
+					jobSpecX, err := job.NewSpecBuilder(1, "jobX", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+					assert.NoError(t, err)
+					jobSpecY, err := job.NewSpecBuilder(1, "jobY", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+					assert.NoError(t, err)
+
+					jobX := job.NewJob(sampleTenant, jobSpecX, resourceURNA, []resource.URN{resourceURNB}, false)
+					jobY := job.NewJob(sampleTenant, jobSpecY, resourceURNB, []resource.URN{resourceURNA}, false)
+
+					// neither job's inferred upstream has ever resolved/persisted - only a
+					// destination URN is known for each. The DB has no row for either job yet, so
+					// the only way to catch this cycle is to match each one's unresolved
+					// destination against the OTHER incoming job's destination in-memory.
+					unresolvedX := job.NewUpstreamUnresolvedInferred(resourceURNB)
+					unresolvedY := job.NewUpstreamUnresolvedInferred(resourceURNA)
+					jobXWithUpstream := job.NewWithUpstream(jobX, []*job.Upstream{unresolvedX})
+					jobYWithUpstream := job.NewWithUpstream(jobY, []*job.Upstream{unresolvedY})
+
+					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobX")).Return(jobX, nil)
+					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobY")).Return(jobY, nil)
+
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNA).Return(nil, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNB).Return(nil, nil)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobXWithUpstream, jobYWithUpstream}, nil)
+
+					request := dto.ValidateRequest{
+						Tenant:   sampleTenant,
+						JobNames: []string{"jobX", "jobY"},
+					}
+
+					fullNameX := job.FullNameFrom(sampleTenant.ProjectName(), "jobX")
+					fullNameY := job.FullNameFrom(sampleTenant.ProjectName(), "jobY")
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.NoError(t, actualError)
+					if assert.Len(t, actualResult["jobX"], 1) {
+						assert.False(t, actualResult["jobX"][0].Success)
+						assert.Equal(t, []string{"cyclic dependency is detected", fullNameX.String(), fullNameY.String(), fullNameX.String()}, actualResult["jobX"][0].Messages)
+					}
+					if assert.Len(t, actualResult["jobY"], 1) {
+						assert.False(t, actualResult["jobY"][0].Success)
+						assert.Equal(t, []string{"cyclic dependency is detected", fullNameY.String(), fullNameX.String(), fullNameY.String()}, actualResult["jobY"][0].Messages)
+					}
+				})
+
+				t.Run("detects a cycle created by reverse impact: an existing job's SQL already references the incoming job's destination", func(t *testing.T) {
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+
+					// jobA is new/incoming and statically depends on jobC, which already exists.
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
+					assert.NoError(t, err)
+
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, nil, false)
+					upstreamC := job.NewUpstreamResolved("jobC", "", resourceURNC, sampleTenant, "static", taskName, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamC})
+
+					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
+
+					// jobC is not part of this request at all. Its SQL already references jobA's
+					// destination - discovered via the reverse-impact lookup, not via any
+					// persisted job_upstream row, since jobA did not exist the last time jobC's
+					// upstreams were resolved and saved.
+					jobCDownstream := job.NewDownstream("jobC", sampleTenant.ProjectName(), sampleTenant.NamespaceName(), taskName)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNA).Return([]*job.Downstream{jobCDownstream}, nil)
+
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+
+					request := dto.ValidateRequest{
+						Tenant:   sampleTenant,
+						JobNames: []string{"jobA"},
+					}
+
+					fullNameA := job.FullNameFrom(sampleTenant.ProjectName(), "jobA")
+					fullNameC := job.FullNameFrom(sampleTenant.ProjectName(), "jobC")
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.NoError(t, actualError)
+					if assert.Len(t, actualResult["jobA"], 1) {
+						assert.False(t, actualResult["jobA"][0].Success)
+						assert.Equal(t, []string{"cyclic dependency is detected", fullNameA.String(), fullNameC.String(), fullNameA.String()}, actualResult["jobA"][0].Messages)
+					}
+				})
 			})
 
 			t.Run("validate jobs", func(t *testing.T) {
@@ -4797,6 +5068,9 @@ func TestJobService(t *testing.T) {
 
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
+
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
 
 					upstreamResolver := new(UpstreamResolver)
 					defer upstreamResolver.AssertExpectations(t)
@@ -4809,7 +5083,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
 
 					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
 					assert.NoError(t, err)
@@ -4825,7 +5099,9 @@ func TestJobService(t *testing.T) {
 
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
 					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobB")).Return(jobB, nil)
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNA).Return(nil, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNB).Return(nil, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -4865,12 +5141,91 @@ func TestJobService(t *testing.T) {
 					assert.NoError(t, actualError)
 				})
 
+				t.Run("returns unsuccessful source validation when an upstream resource is genuinely missing from both db and store", func(t *testing.T) {
+					// this specifically guards the revert of the validateResourceURN workaround:
+					// a resource missing from both db and store must fail validation now that the
+					// query parser no longer misidentifies struct/record field access as upstream
+					// tables (the workaround existed only to suppress that false-positive noise).
+					tenantDetailsGetter := new(TenantDetailsGetter)
+					defer tenantDetailsGetter.AssertExpectations(t)
+
+					jobRepo := new(JobRepository)
+					defer jobRepo.AssertExpectations(t)
+
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
+					upstreamResolver := new(UpstreamResolver)
+					defer upstreamResolver.AssertExpectations(t)
+
+					downstreamRepo := new(DownstreamRepository)
+					defer downstreamRepo.AssertExpectations(t)
+
+					pluginService := NewPluginService(t)
+
+					jobRunInputCompiler := NewJobRunInputCompiler(t)
+					resourceExistenceChecker := NewResourceExistenceChecker(t)
+
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+
+					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).WithAsset(jobAsset).Build()
+					assert.NoError(t, err)
+
+					jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNC}, false)
+					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{})
+
+					jobRepo.On("GetByJobName", ctx, sampleTenant.ProjectName(), job.Name("jobA")).Return(jobA, nil)
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
+					downstreamRepo.On("GetDownstreamByDestination", ctx, resourceURNA).Return(nil, nil)
+
+					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resourceURNA, nil)
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]resource.URN{resourceURNC}, nil)
+
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
+
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(nil, errors.New("not found"))
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
+
+					// resourceURNC (the only upstream source) exists in neither db nor store.
+					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(nil, errors.New("not found"))
+					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(false, nil)
+
+					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
+					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+					request := dto.ValidateRequest{
+						Tenant:   sampleTenant,
+						JobNames: []string{"jobA"},
+					}
+
+					actualResult, actualError := jobService.Validate(ctx, request)
+
+					assert.NoError(t, actualError)
+					var sourceResult *dto.ValidateResult
+					for i := range actualResult["jobA"] {
+						if actualResult["jobA"][i].Stage == dto.StageSourceValidation {
+							sourceResult = &actualResult["jobA"][i]
+						}
+					}
+					if assert.NotNil(t, sourceResult) {
+						assert.False(t, sourceResult.Success)
+						assert.Contains(t, sourceResult.Messages, "bigquery://project:dataset.tableC: resource does not exist in both db and store")
+					}
+				})
+
 				t.Run("returns unsuccessful result and nil if one or more validations failed", func(t *testing.T) {
 					tenantDetailsGetter := new(TenantDetailsGetter)
 					defer tenantDetailsGetter.AssertExpectations(t)
 
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
+
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
 
 					downstreamRepo := new(DownstreamRepository)
 					defer downstreamRepo.AssertExpectations(t)
@@ -4883,7 +5238,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo,
 						pluginService, upstreamResolver, tenantDetailsGetter, nil,
 						log, nil, compiler.NewEngine(),
 						jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{},
@@ -4920,7 +5275,11 @@ func TestJobService(t *testing.T) {
 					assert.NoError(t, err)
 					deletedRsc := resource.FromExisting(rsc, resource.ReplaceStatus(resource.StatusDeleted))
 
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
+					// jobA/jobB's real destination is generated via generateJobs/ConstructDestinationURN
+					// (mocked to ZeroURN above), so BuildGlobalUpstreamGraph's reverse-impact
+					// lookup (GetDownstreamByDestination) is skipped for both - only the global
+					// resolved-upstream graph fetch happens.
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
 
 					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(deletedRsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(false, nil)
@@ -5038,6 +5397,9 @@ func TestJobService(t *testing.T) {
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
 
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
 					downstreamRepo := new(DownstreamRepository)
 					defer downstreamRepo.AssertExpectations(t)
 
@@ -5049,7 +5411,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo,
 						pluginService, upstreamResolver, tenantDetailsGetter, nil,
 						log, nil, compiler.NewEngine(),
 						jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{},
@@ -5070,7 +5432,10 @@ func TestJobService(t *testing.T) {
 					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
 					jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
 
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobA, jobB}, nil)
+					// jobA/jobB's real destination is generated via generateJobs/ConstructDestinationURN
+					// (mocked to ZeroURN below), so BuildGlobalUpstreamGraph's reverse-impact
+					// lookup (GetDownstreamByDestination) is skipped for both.
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -5201,6 +5566,9 @@ func TestJobService(t *testing.T) {
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
 
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
 					downstreamRepo := new(DownstreamRepository)
 					defer downstreamRepo.AssertExpectations(t)
 
@@ -5212,7 +5580,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo,
 						pluginService, upstreamResolver, tenantDetailsGetter, nil,
 						log, nil, compiler.NewEngine(),
 						jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{
@@ -5238,7 +5606,9 @@ func TestJobService(t *testing.T) {
 					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
 					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
 
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobB}, nil)
+					// jobA's real destination is generated via generateJobs/ConstructDestinationURN
+					// (mocked to ZeroURN below), so the reverse-impact lookup is skipped.
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -5328,6 +5698,9 @@ func TestJobService(t *testing.T) {
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
 
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
 					downstreamRepo := new(DownstreamRepository)
 					defer downstreamRepo.AssertExpectations(t)
 
@@ -5339,7 +5712,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo,
 						pluginService, upstreamResolver, tenantDetailsGetter, nil,
 						log, nil, compiler.NewEngine(),
 						jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{
@@ -5365,7 +5738,9 @@ func TestJobService(t *testing.T) {
 					upstreamB := job.NewUpstreamResolved(jobSpecB.Name(), "", resourceURNB, sampleTenant, "static", taskName, false)
 					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
 
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobB}, nil)
+					// jobA's real destination is generated via generateJobs/ConstructDestinationURN
+					// (mocked to ZeroURN below), so the reverse-impact lookup is skipped.
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -5453,6 +5828,9 @@ func TestJobService(t *testing.T) {
 					jobRepo := new(JobRepository)
 					defer jobRepo.AssertExpectations(t)
 
+					upstreamRepo := new(UpstreamRepository)
+					defer upstreamRepo.AssertExpectations(t)
+
 					downstreamRepo := new(DownstreamRepository)
 					defer downstreamRepo.AssertExpectations(t)
 
@@ -5464,7 +5842,7 @@ func TestJobService(t *testing.T) {
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
 
-					jobService := service.NewJobService(jobRepo, nil, downstreamRepo,
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo,
 						pluginService, upstreamResolver, tenantDetailsGetter, nil,
 						log, nil, compiler.NewEngine(),
 						jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{
@@ -5496,7 +5874,9 @@ func TestJobService(t *testing.T) {
 					jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{upstreamB})
 					jobBWithUpstream := job.NewWithUpstream(jobB, []*job.Upstream{})
 
-					jobRepo.On("GetAllByTenant", ctx, sampleTenant).Return([]*job.Job{jobB}, nil)
+					// jobA/jobB's real destination is generated via generateJobs/ConstructDestinationURN
+					// (mocked to ZeroURN below), so the reverse-impact lookup is skipped for both.
+					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
 
@@ -6771,6 +7151,29 @@ func (_u *UpstreamRepository) ReplaceUpstreams(_a0 context.Context, _a1 []*job.W
 	}
 
 	return r0
+}
+
+// GetAllResolvedUpstreamEdges provides a mock function with given fields: ctx
+func (_u *UpstreamRepository) GetAllResolvedUpstreamEdges(ctx context.Context) (map[job.FullName][]job.FullName, error) {
+	ret := _u.Called(ctx)
+
+	var r0 map[job.FullName][]job.FullName
+	if rf, ok := ret.Get(0).(func(context.Context) map[job.FullName][]job.FullName); ok {
+		r0 = rf(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[job.FullName][]job.FullName)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // PluginService is an autogenerated mock type for the PluginService type

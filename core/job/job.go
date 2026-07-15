@@ -192,8 +192,10 @@ func (j *Job) IsScheduledAfter(otherJob *Job, referenceTime time.Time) (bool, st
 		return true, fmt.Sprintf("other job has sub-daily schedule [%s]", otherCronStr)
 	}
 
-	subjectNextSchedule := subjectJobCron.Next(referenceTime)
-	otherNextSchedule := otherJobCron.Next(referenceTime)
+	refTimeUTC := referenceTime.UTC()
+
+	subjectNextSchedule := subjectJobCron.Next(refTimeUTC)
+	otherNextSchedule := otherJobCron.Next(refTimeUTC)
 
 	if subjectNextSchedule.Before(otherNextSchedule) {
 		return false, fmt.Sprintf("current job [%s] is scheduled before job %s [%s]",

@@ -91,7 +91,17 @@ func (i internalUpstreamResolver) resolveStaticUpstream(ctx context.Context, pro
 			me.Append(err)
 			continue
 		}
-		jobUpstream, err := i.jobRepository.GetByJobName(ctx, projectName, upstreamJobName)
+
+		upstreamProjectName := projectName
+		if upstreamName.IsWithProjectName() {
+			upstreamProjectName, err = upstreamName.GetProjectName()
+			if err != nil {
+				me.Append(err)
+				continue
+			}
+		}
+
+		jobUpstream, err := i.jobRepository.GetByJobName(ctx, upstreamProjectName, upstreamJobName)
 		if err != nil || jobUpstream == nil {
 			me.Append(err)
 			continue

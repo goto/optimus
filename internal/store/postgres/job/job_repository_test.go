@@ -1168,6 +1168,63 @@ func TestPostgresJobRepository(t *testing.T) {
 		})
 	})
 
+	t.Run("GetAllResolvedUpstreamEdges", func(t *testing.T) {
+		t.Run("returns only resolved, internal edges across all projects, excluding soft-deleted jobs", func(t *testing.T) {
+			db := dbSetup()
+			jobRepo := postgres.NewJobRepository(db)
+
+			otherTenant, err := tenant.NewTenant(otherProj.Name().String(), otherNamespace2.Name().String())
+			assert.NoError(t, err)
+
+			// job-A (this project) resolved-depends on job-B (this project): should be included.
+			jobSpecA, err := job.NewSpecBuilder(jobVersion, "sample-job-A", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobA := job.NewJob(sampleTenant, jobSpecA, resourceURNA, []resource.URN{resourceURNB, resourceURNC}, false)
+			jobAUpstreamResolved := job.NewUpstreamResolved("sample-job-B", "", resourceURNB, sampleTenant, "inferred", taskName, false)
+			jobAUpstreamUnresolved := job.NewUpstreamUnresolvedInferred(resourceURNC)
+			jobAWithUpstream := job.NewWithUpstream(jobA, []*job.Upstream{jobAUpstreamResolved, jobAUpstreamUnresolved})
+
+			jobSpecB, err := job.NewSpecBuilder(jobVersion, "sample-job-B", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobB := job.NewJob(sampleTenant, jobSpecB, resourceURNB, nil, false)
+
+			// job-D (other project) resolved-depends on job-B (this project): a cross-project edge, should be included.
+			jobSpecD, err := job.NewSpecBuilder(jobVersion, "sample-job-D", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobD := job.NewJob(otherTenant, jobSpecD, resourceURND, []resource.URN{resourceURNB}, false)
+			jobDUpstreamResolved := job.NewUpstreamResolved("sample-job-B", "", resourceURNB, sampleTenant, "inferred", taskName, false)
+			jobDWithUpstream := job.NewWithUpstream(jobD, []*job.Upstream{jobDUpstreamResolved})
+
+			// job-E (this project) resolved-depends on job-F (this project), but job-F will be soft-deleted: should be excluded.
+			jobSpecE, err := job.NewSpecBuilder(jobVersion, "sample-job-E", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobE := job.NewJob(sampleTenant, jobSpecE, resourceURNE, []resource.URN{resourceURNF}, false)
+			jobEUpstreamResolved := job.NewUpstreamResolved("sample-job-F", "", resourceURNF, sampleTenant, "inferred", taskName, false)
+			jobEWithUpstream := job.NewWithUpstream(jobE, []*job.Upstream{jobEUpstreamResolved})
+
+			jobSpecF, err := job.NewSpecBuilder(jobVersion, "sample-job-F", jobOwner, jobSchedule, customConfig, jobTask).WithDescription(jobDescription).Build()
+			assert.NoError(t, err)
+			jobF := job.NewJob(sampleTenant, jobSpecF, resourceURNF, nil, false)
+
+			_, err = jobRepo.Add(ctx, []*job.Job{jobA, jobB, jobD, jobE, jobF})
+			assert.NoError(t, err)
+			assert.NoError(t, jobRepo.ReplaceUpstreams(ctx, []*job.WithUpstream{jobAWithUpstream, jobDWithUpstream, jobEWithUpstream}))
+			assert.NoError(t, jobRepo.Delete(ctx, proj.Name(), jobSpecF.Name(), false))
+
+			result, err := jobRepo.GetAllResolvedUpstreamEdges(ctx)
+			assert.NoError(t, err)
+
+			jobAFullName := job.FullName(proj.Name().String() + "/" + jobSpecA.Name().String())
+			jobDFullName := job.FullName(otherProj.Name().String() + "/" + jobSpecD.Name().String())
+			jobBFullName := job.FullName(proj.Name().String() + "/" + jobSpecB.Name().String())
+			jobEFullName := job.FullName(proj.Name().String() + "/" + jobSpecE.Name().String())
+
+			assert.ElementsMatch(t, []job.FullName{jobBFullName}, result[jobAFullName], "resolved edge to job-B should be present, unresolved edge to job-C should not")
+			assert.ElementsMatch(t, []job.FullName{jobBFullName}, result[jobDFullName], "cross-project resolved edge should be present")
+			assert.Empty(t, result[jobEFullName], "edge to a soft-deleted upstream job should be excluded")
+		})
+	})
+
 	t.Run("GetDownstreamBySources", func(t *testing.T) {
 		t.Run("returns empty downstream if resource urns are empty", func(t *testing.T) {
 			db := dbSetup()

@@ -143,6 +143,36 @@ func TestInternalUpstreamResolver(t *testing.T) {
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, expectedJobWithUpstream.Upstreams(), result.Upstreams())
 		})
+		t.Run("resolves static upstream declared with an explicit cross-project name against that project, not the subject job's own project", func(t *testing.T) {
+			jobRepo := new(JobRepository)
+			logWriter := new(mockWriter)
+			defer logWriter.AssertExpectations(t)
+
+			otherTenant, err := tenant.NewTenant("other-project", "namespace")
+			assert.NoError(t, err)
+
+			crossProjectUpstreamSpec, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{"other-project/job-C"}).Build()
+			specX, _ := job.NewSpecBuilder(jobVersion, "job-X", "sample-owner", jobSchedule, jobWindow, jobTask).WithSpecUpstream(crossProjectUpstreamSpec).Build()
+			jobX := job.NewJob(sampleTenant, specX, resourceURNX, nil, false)
+
+			jobCInOtherProject := job.NewJob(otherTenant, specC, jobCDestination, nil, false)
+
+			// the subject job (jobX) belongs to sampleTenant's project, but the static upstream
+			// explicitly names "other-project" - the lookup must use that, not sampleTenant's project.
+			jobRepo.On("GetByJobName", ctx, otherTenant.ProjectName(), specC.Name()).Return(jobCInOtherProject, nil)
+
+			unresolvedUpstreamCCrossProject := job.NewUpstreamUnresolvedStatic("job-C", otherTenant.ProjectName())
+			expectedUpstreamCCrossProject := job.NewUpstreamResolved("job-C", "", resourceURNC, otherTenant, "static", taskName, false)
+
+			jobWithUnresolvedUpstream := job.NewWithUpstream(jobX, []*job.Upstream{unresolvedUpstreamCCrossProject})
+			expectedJobWithUpstream := job.NewWithUpstream(jobX, []*job.Upstream{expectedUpstreamCCrossProject})
+
+			internalUpstreamResolver := resolver.NewInternalUpstreamResolver(jobRepo)
+			result, err := internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedUpstream)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, expectedJobWithUpstream.Upstreams(), result.Upstreams())
+			jobRepo.AssertNotCalled(t, "GetByJobName", ctx, sampleTenant.ProjectName(), specC.Name())
+		})
 		t.Run("should not stop the process but keep appending error when unable to resolve inferred upstream", func(t *testing.T) {
 			jobRepo := new(JobRepository)
 

@@ -489,7 +489,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			urn, err := serviceResource.ParseURN("bigquery://project:dataset")
 			assert.NoError(t, err)
 
-			actualResource, actualError := repository.ReadByURN(ctx, tnnt, urn)
+			actualResource, actualError := repository.ReadByURN(ctx, urn)
 			assert.Nil(t, actualResource)
 			assert.ErrorContains(t, actualError, "not found for entity resource")
 		})
@@ -509,7 +509,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)
 
-			actualResource, actualError := repository.ReadByURN(ctx, tnnt, urn)
+			actualResource, actualError := repository.ReadByURN(ctx, urn)
 			assert.NotNil(t, actualResource)
 			assert.NoError(t, actualError)
 			resourceToCreate.SetUpdateAt(actualResource.GetUpdateAt())

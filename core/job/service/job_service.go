@@ -162,7 +162,7 @@ type JobRunInputCompiler interface {
 }
 
 type ResourceExistenceChecker interface {
-	GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
+	GetByURN(ctx context.Context, urn resource.URN) (*resource.Resource, error)
 	ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error)
 }
 
@@ -1679,10 +1679,8 @@ func (j *JobService) validateCyclic(ctx context.Context, tnnt tenant.Tenant, inc
 		return nil, err
 	}
 
-	jobsWithUpstream, err := j.upstreamResolver.BulkResolve(ctx, incomingJobs, writer.NewSafeBufferedLogger())
-	if err != nil {
-		return nil, err
-	}
+	// disregard any error in this stage
+	jobsWithUpstream, _ := j.upstreamResolver.BulkResolve(ctx, incomingJobs, writer.NewSafeBufferedLogger())
 
 	graph, err := j.BuildGlobalUpstreamGraph(ctx, incomingJobs, jobsWithUpstream)
 	if err != nil {
@@ -1976,7 +1974,8 @@ func (j *JobService) validateSource(ctx context.Context, tenantWithDetails *tena
 
 func (j *JobService) validateResourceURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (string, bool) {
 	activeInDB := true
-	if rsc, err := j.resourceChecker.GetByURN(ctx, tnnt, urn); err != nil {
+	rsc, err := j.resourceChecker.GetByURN(ctx, urn)
+	if err != nil {
 		j.logger.Warn("suppress error is encountered when reading resource from db: %v", err)
 		activeInDB = false
 	} else {

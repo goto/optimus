@@ -5186,11 +5186,11 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(nil, errors.New("not found"))
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNA).Return(nil, errors.New("not found"))
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
 
 					// resourceURNC (the only upstream source) exists in neither db nor store.
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(nil, errors.New("not found"))
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNC).Return(nil, errors.New("not found"))
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(false, nil)
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
@@ -5268,7 +5268,7 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(nil, errors.New("unexpected get by urn error"))
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNA).Return(nil, errors.New("unexpected get by urn error"))
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(false, errors.New("unexpected exist in store error"))
 
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
@@ -5281,13 +5281,13 @@ func TestJobService(t *testing.T) {
 					// resolved-upstream graph fetch happens.
 					upstreamRepo.On("GetAllResolvedUpstreamEdges", ctx).Return(map[job.FullName][]job.FullName{}, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(deletedRsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNB).Return(deletedRsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(false, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNC).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(false, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURND).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURND).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURND).Return(true, nil)
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
@@ -5449,19 +5449,19 @@ func TestJobService(t *testing.T) {
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNA).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNB).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNC).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
 					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURND).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURND).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURND).Return(true, nil)
 
 					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
@@ -5622,13 +5622,13 @@ func TestJobService(t *testing.T) {
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNA).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNB).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNC).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
@@ -5754,13 +5754,13 @@ func TestJobService(t *testing.T) {
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNA).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNB).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNC).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
@@ -5890,13 +5890,13 @@ func TestJobService(t *testing.T) {
 					rsc, err := resource.NewResource("resource_1", "table", resource.Bigquery, sampleTenant, &resource.Metadata{Description: "table for test"}, map[string]any{"version": 1})
 					assert.NoError(t, err)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNA).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNA).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNA).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNB).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNB).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNB).Return(true, nil)
 
-					resourceExistenceChecker.On("GetByURN", ctx, sampleTenant, resourceURNC).Return(rsc, nil)
+					resourceExistenceChecker.On("GetByURN", ctx, resourceURNC).Return(rsc, nil)
 					resourceExistenceChecker.On("ExistInStore", ctx, sampleTenant, resourceURNC).Return(true, nil)
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
@@ -7477,8 +7477,8 @@ func (_m *ResourceExistenceChecker) ExistInStore(ctx context.Context, tnnt tenan
 }
 
 // GetByURN provides a mock function with given fields: ctx, tnnt, urn
-func (_m *ResourceExistenceChecker) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error) {
-	ret := _m.Called(ctx, tnnt, urn)
+func (_m *ResourceExistenceChecker) GetByURN(ctx context.Context, urn resource.URN) (*resource.Resource, error) {
+	ret := _m.Called(ctx, urn)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetByURN")
@@ -7486,19 +7486,19 @@ func (_m *ResourceExistenceChecker) GetByURN(ctx context.Context, tnnt tenant.Te
 
 	var r0 *resource.Resource
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, resource.URN) (*resource.Resource, error)); ok {
-		return rf(ctx, tnnt, urn)
+	if rf, ok := ret.Get(0).(func(context.Context, resource.URN) (*resource.Resource, error)); ok {
+		return rf(ctx, urn)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, resource.URN) *resource.Resource); ok {
-		r0 = rf(ctx, tnnt, urn)
+	if rf, ok := ret.Get(0).(func(context.Context, resource.URN) *resource.Resource); ok {
+		r0 = rf(ctx, urn)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*resource.Resource)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, resource.URN) error); ok {
-		r1 = rf(ctx, tnnt, urn)
+	if rf, ok := ret.Get(1).(func(context.Context, resource.URN) error); ok {
+		r1 = rf(ctx, urn)
 	} else {
 		r1 = ret.Error(1)
 	}

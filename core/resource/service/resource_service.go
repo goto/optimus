@@ -35,7 +35,7 @@ type ResourceRepository interface {
 	GetExternal(ctx context.Context, projName tenant.ProjectName, store resource.Store, filters []filter.FilterOpt) ([]*resource.Resource, error)
 	GetAllExternal(ctx context.Context, store resource.Store) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
-	ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error)
+	ReadByURN(ctx context.Context, urn resource.URN) (*resource.Resource, error)
 	GetExternalCreateFailures(ctx context.Context) ([]*resource.Resource, error)
 }
 
@@ -525,13 +525,13 @@ func (rs ResourceService) SyncResources(ctx context.Context, tnnt tenant.Tenant,
 	return synced, nil
 }
 
-func (rs ResourceService) GetByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error) {
+func (rs ResourceService) GetByURN(ctx context.Context, urn resource.URN) (*resource.Resource, error) {
 	if urn.IsZero() {
 		rs.logger.Error("urn is zero value")
 		return nil, errors.InvalidArgument(resource.EntityResource, "urn is zero value")
 	}
 
-	return rs.repo.ReadByURN(ctx, tnnt, urn)
+	return rs.repo.ReadByURN(ctx, urn)
 }
 
 func (rs ResourceService) ExistInStore(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (bool, error) {

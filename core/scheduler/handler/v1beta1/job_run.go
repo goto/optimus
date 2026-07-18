@@ -276,6 +276,12 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 		startTime = endTime.Add(-24 * time.Hour)
 	}
 
+	if startTime.Before(logicalEndTime.Add(-7 * 24 * time.Hour)) {
+		h.l.Info(fmt.Sprintf("resetting the third party sensor window start time to "+
+			"max 7 day look back: %s, job: %s", logicalEndTime.Add(-7*24*time.Hour).Format(time.RFC3339), jobName))
+		startTime = logicalEndTime.Add(-7 * 24 * time.Hour)
+	}
+
 	thirdPartyType := req.GetThirdPartyType()
 	if thirdPartyType == job.ThirdPartyTypeDex {
 		dexSensorReq := req.GetDexSensorRequest()

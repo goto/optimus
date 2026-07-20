@@ -1451,13 +1451,17 @@ func (j *JobService) Validate(ctx context.Context, request dto.ValidateRequest) 
 		return j.validateJobsForDeletion(ctx, request.Tenant, jobsToValidate), nil
 	}
 
-	if result, err := j.validateCyclic(ctx, request.Tenant, jobsToValidate); err != nil {
+	cyclicResults, err := j.validateCyclic(ctx, request.Tenant, jobsToValidate)
+	if err != nil {
 		return nil, err
-	} else if len(result) > 0 {
-		return result, nil
 	}
 
-	return j.validateJobs(ctx, tenantDetails, jobsToValidate)
+	results := j.validateJobs(ctx, tenantDetails, jobsToValidate)
+	for name, cyclicResult := range cyclicResults {
+		results[name] = append(cyclicResult, results[name]...)
+	}
+
+	return results, nil
 }
 
 func (*JobService) validateRequest(request dto.ValidateRequest) error {
@@ -1613,7 +1617,7 @@ func (*JobService) validateTenantOnEachJob(rootTnnt tenant.Tenant, jobsToValidat
 	return output
 }
 
-func (j *JobService) validateJobs(ctx context.Context, tenantDetails *tenant.WithDetails, jobsToValidate []*job.Job) (map[job.Name][]dto.ValidateResult, error) {
+func (j *JobService) validateJobs(ctx context.Context, tenantDetails *tenant.WithDetails, jobsToValidate []*job.Job) map[job.Name][]dto.ValidateResult {
 	jobsToValidateMap := make(map[job.Name]*job.Job)
 	for _, job := range jobsToValidate {
 		jobsToValidateMap[job.Spec().Name()] = job
@@ -1624,7 +1628,7 @@ func (j *JobService) validateJobs(ctx context.Context, tenantDetails *tenant.Wit
 		output[subjectJob.Spec().Name()] = j.validateOneJob(ctx, tenantDetails, subjectJob, jobsToValidateMap)
 	}
 
-	return output, nil
+	return output
 }
 
 func (j *JobService) validateOneJob(ctx context.Context, tenantDetails *tenant.WithDetails, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) []dto.ValidateResult {

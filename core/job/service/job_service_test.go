@@ -4721,8 +4721,9 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
+					pluginService := NewPluginService(t)
 
-					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
 
 					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
 					assert.NoError(t, err)
@@ -4754,8 +4755,22 @@ func TestJobService(t *testing.T) {
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
 					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream, jobCWithUpstream}, nil)
+					// used by the (now unconditionally-run) other validation stages, not by the
+					// cyclic check itself - schedule validation is disabled (zero JobValidateConfig)
+					// so the resolved upstream content doesn't matter here.
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
 
 					tenantDetailsGetter.On("GetDetails", ctx, sampleTenant).Return(detailedTenant, nil)
+
+					// trivial, uniform mocks so the other validation stages (destination, source,
+					// window, plugin, run) run to completion and succeed for all three jobs,
+					// keeping the focus of this test on the cyclic-vs-other-stages merge behavior
+					// rather than exercising every other stage's own logic (already covered by
+					// other tests in this file).
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]resource.URN{}, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					request := dto.ValidateRequest{
 						Tenant:       sampleTenant,
@@ -4769,31 +4784,44 @@ func TestJobService(t *testing.T) {
 					// FullName-qualified identifiers), rather than the single shared, arbitrarily
 					// ordered path the old tenant-scoped tree-based implementation produced for
 					// every job in the batch regardless of which one was actually being checked.
+					//
+					// A cyclic-dependency failure no longer short-circuits the other validation
+					// stages: each job's result now leads with its cyclic-validation failure,
+					// followed by the (here, trivially successful) destination/source/window/
+					// plugin/run/upstream stage results.
 					fullNameA := "test-proj/jobA"
 					fullNameB := "test-proj/jobB"
 					fullNameC := "test-proj/jobC"
+					otherStageResults := []dto.ValidateResult{
+						{Stage: "destination validation", Messages: []string{"no issue"}, Success: true},
+						{Stage: "source validation", Messages: []string{"no issue"}, Success: true},
+						{Stage: "window validation", Messages: []string{"no issue"}, Success: true},
+						{Stage: "plugin validation", Messages: []string{"no issue"}, Success: true},
+						{Stage: "compile validation for run", Messages: []string{"compiling [bq2bq] with type [task] contains no issue"}, Success: true},
+						{Stage: "upstream validation", Messages: []string{"no issue"}, Success: true},
+					}
 					expectedResult := map[job.Name][]dto.ValidateResult{
-						"jobA": {
+						"jobA": append([]dto.ValidateResult{
 							{
 								Stage:    "cyclic validation",
 								Messages: []string{"cyclic dependency is detected", fullNameA, fullNameB, fullNameC, fullNameA},
 								Success:  false,
 							},
-						},
-						"jobB": {
+						}, otherStageResults...),
+						"jobB": append([]dto.ValidateResult{
 							{
 								Stage:    "cyclic validation",
 								Messages: []string{"cyclic dependency is detected", fullNameB, fullNameC, fullNameA, fullNameB},
 								Success:  false,
 							},
-						},
-						"jobC": {
+						}, otherStageResults...),
+						"jobC": append([]dto.ValidateResult{
 							{
 								Stage:    "cyclic validation",
 								Messages: []string{"cyclic dependency is detected", fullNameC, fullNameA, fullNameB, fullNameC},
 								Success:  false,
 							},
-						},
+						}, otherStageResults...),
 					}
 
 					actualResult, actualError := jobService.Validate(ctx, request)
@@ -4822,8 +4850,9 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
+					pluginService := NewPluginService(t)
 
-					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
 
 					// jobA is being validated in sampleTenant's namespace. jobB - its upstream -
 					// lives in otherTenant, a different namespace of the SAME project. jobB is not
@@ -4849,6 +4878,14 @@ func TestJobService(t *testing.T) {
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
 					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+					// trivial mocks so the other (now unconditionally-run) validation stages
+					// succeed - this test's focus is on the cyclic-check scope, not those stages.
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]resource.URN{}, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					request := dto.ValidateRequest{
 						Tenant:   sampleTenant,
@@ -4858,8 +4895,11 @@ func TestJobService(t *testing.T) {
 					actualResult, actualError := jobService.Validate(ctx, request)
 
 					assert.NoError(t, actualError)
-					if assert.Len(t, actualResult["jobA"], 1) {
+					// cyclic failure leads, followed by the (trivially successful) other stages -
+					// a cyclic failure no longer short-circuits the rest of the validation.
+					if assert.Len(t, actualResult["jobA"], 7) {
 						assert.False(t, actualResult["jobA"][0].Success)
+						assert.Equal(t, dto.StageCyclicValidation, actualResult["jobA"][0].Stage)
 						assert.Equal(t, []string{"cyclic dependency is detected", fullNameA.String(), fullNameB.String(), fullNameA.String()}, actualResult["jobA"][0].Messages)
 					}
 				})
@@ -4882,8 +4922,9 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
+					pluginService := NewPluginService(t)
 
-					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
 
 					otherProjectTenant, err := tenant.NewTenant("other-project-xyz", "some-ns")
 					assert.NoError(t, err)
@@ -4912,6 +4953,12 @@ func TestJobService(t *testing.T) {
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
 					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]resource.URN{}, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					request := dto.ValidateRequest{
 						Tenant:   sampleTenant,
@@ -4921,8 +4968,9 @@ func TestJobService(t *testing.T) {
 					actualResult, actualError := jobService.Validate(ctx, request)
 
 					assert.NoError(t, actualError)
-					if assert.Len(t, actualResult["jobA"], 1) {
+					if assert.Len(t, actualResult["jobA"], 7) {
 						assert.False(t, actualResult["jobA"][0].Success)
+						assert.Equal(t, dto.StageCyclicValidation, actualResult["jobA"][0].Stage)
 						assert.Equal(t, []string{"cyclic dependency is detected", fullNameA.String(), fullNameD.String(), fullNameA.String()}, actualResult["jobA"][0].Messages)
 					}
 				})
@@ -4945,8 +4993,9 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
+					pluginService := NewPluginService(t)
 
-					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
 
 					jobSpecX, err := job.NewSpecBuilder(1, "jobX", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
 					assert.NoError(t, err)
@@ -4976,6 +5025,12 @@ func TestJobService(t *testing.T) {
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
 					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobXWithUpstream, jobYWithUpstream}, nil)
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]resource.URN{}, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					request := dto.ValidateRequest{
 						Tenant:   sampleTenant,
@@ -4988,12 +5043,14 @@ func TestJobService(t *testing.T) {
 					actualResult, actualError := jobService.Validate(ctx, request)
 
 					assert.NoError(t, actualError)
-					if assert.Len(t, actualResult["jobX"], 1) {
+					if assert.Len(t, actualResult["jobX"], 7) {
 						assert.False(t, actualResult["jobX"][0].Success)
+						assert.Equal(t, dto.StageCyclicValidation, actualResult["jobX"][0].Stage)
 						assert.Equal(t, []string{"cyclic dependency is detected", fullNameX.String(), fullNameY.String(), fullNameX.String()}, actualResult["jobX"][0].Messages)
 					}
-					if assert.Len(t, actualResult["jobY"], 1) {
+					if assert.Len(t, actualResult["jobY"], 7) {
 						assert.False(t, actualResult["jobY"][0].Success)
+						assert.Equal(t, dto.StageCyclicValidation, actualResult["jobY"][0].Stage)
 						assert.Equal(t, []string{"cyclic dependency is detected", fullNameY.String(), fullNameX.String(), fullNameY.String()}, actualResult["jobY"][0].Messages)
 					}
 				})
@@ -5016,8 +5073,9 @@ func TestJobService(t *testing.T) {
 
 					jobRunInputCompiler := NewJobRunInputCompiler(t)
 					resourceExistenceChecker := NewResourceExistenceChecker(t)
+					pluginService := NewPluginService(t)
 
-					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, nil, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
+					jobService := service.NewJobService(jobRepo, upstreamRepo, downstreamRepo, pluginService, upstreamResolver, tenantDetailsGetter, nil, log, nil, compiler.NewEngine(), jobRunInputCompiler, resourceExistenceChecker, nil, service.JobValidateConfig{})
 
 					// jobA is new/incoming and statically depends on jobC, which already exists.
 					jobSpecA, err := job.NewSpecBuilder(1, "jobA", "optimus@goto", jobSchedule, jobWindow, jobTask).Build()
@@ -5042,6 +5100,12 @@ func TestJobService(t *testing.T) {
 
 					upstreamResolver.On("CheckStaticResolvable", ctx, sampleTenant, mock.Anything, mock.Anything).Return(nil)
 					upstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream}, nil)
+					upstreamResolver.On("Resolve", ctx, mock.Anything, mock.Anything).Return(nil, nil)
+
+					pluginService.On("Info", ctx, jobTask.Name().String()).Return(&pluginSpec, nil)
+					pluginService.On("ConstructDestinationURN", ctx, jobTask.Name().String(), mock.Anything).Return(resource.ZeroURN(), nil)
+					pluginService.On("IdentifyUpstreams", ctx, jobTask.Name().String(), mock.Anything, mock.Anything).Return([]resource.URN{}, nil)
+					jobRunInputCompiler.On("Compile", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(executorInput, nil)
 
 					request := dto.ValidateRequest{
 						Tenant:   sampleTenant,
@@ -5054,8 +5118,9 @@ func TestJobService(t *testing.T) {
 					actualResult, actualError := jobService.Validate(ctx, request)
 
 					assert.NoError(t, actualError)
-					if assert.Len(t, actualResult["jobA"], 1) {
+					if assert.Len(t, actualResult["jobA"], 7) {
 						assert.False(t, actualResult["jobA"][0].Success)
+						assert.Equal(t, dto.StageCyclicValidation, actualResult["jobA"][0].Stage)
 						assert.Equal(t, []string{"cyclic dependency is detected", fullNameA.String(), fullNameC.String(), fullNameA.String()}, actualResult["jobA"][0].Messages)
 					}
 				})

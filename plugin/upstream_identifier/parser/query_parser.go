@@ -52,41 +52,19 @@ func ParseTopLevelUpstreamsFromQuery(query string) []string {
 	pseudoTable := map[string]bool{}
 
 	matches := topLevelUpstreamsPattern.FindAllStringSubmatchIndex(cleanedQuery, -1)
-	inFromList := newFromListChecker(cleanedQuery, matches)
+	insideFromList := newFromListChecker(cleanedQuery, matches)
 
 	for _, idx := range matches {
-		var tableIdx, ignoreUpstreamIdx int
 		tokens := strings.Fields(groupText(cleanedQuery, idx, 0))
 		clause := strings.ToLower(tokens[0])
 
-		isKeywordMatch := true
-		switch clause {
-		case "from":
-			ignoreUpstreamIdx, tableIdx = 1, 2
-		case "join":
-			ignoreUpstreamIdx, tableIdx = 3, 4
-		case "with":
-			ignoreUpstreamIdx, tableIdx = 5, 6
-		case "merge":
-			ignoreUpstreamIdx, tableIdx = 7, 8
-		case "insert":
-			ignoreUpstreamIdx, tableIdx = 9, 10
-		case "delete":
-			ignoreUpstreamIdx, tableIdx = 11, 12
-		case "create":
-			ignoreUpstreamIdx, tableIdx = 13, 14
-		case "set":
-			ignoreUpstreamIdx, tableIdx = 15, 16
-		default:
-			ignoreUpstreamIdx, tableIdx = 17, 18
-			isKeywordMatch = false
-		}
+		ignoreUpstreamIdx, tableIdx, isKeywordMatch := clauseGroupIndices(clause)
 
 		if strings.TrimSpace(groupText(cleanedQuery, idx, ignoreUpstreamIdx)) == "@ignoreupstream" {
 			continue
 		}
 
-		if clause == "create" || clause == "merge" || clause == "insert" || clause == "delete" || clause == "set" {
+		if isWriteOnlyClause(clause) {
 			continue
 		}
 
@@ -94,7 +72,7 @@ func ParseTopLevelUpstreamsFromQuery(query string) []string {
 		// a FROM/JOIN clause (e.g. SELECT * FROM a.b.c, a.b.f which makes a.b.c & a.b.f actual upstreams) -
 		// otherwise it's a false positive, such as struct/record field access, a SELECT-list
 		// expression, or a WHERE/ON condition, and must not be treated as an upstream.
-		if !isKeywordMatch && !inFromList(idx[0]) {
+		if !isKeywordMatch && !insideFromList(idx[0]) {
 			continue
 		}
 
@@ -106,15 +84,50 @@ func ParseTopLevelUpstreamsFromQuery(query string) []string {
 		}
 	}
 
-	output := []string{}
+	return filterAliases(tableFound, pseudoTable)
+}
 
-	for table := range tableFound {
-		if pseudoTable[table] {
-			continue
-		}
-		output = append(output, table)
+// clauseGroupIndices maps a SQL clause keyword to the submatch group indices used by
+// topLevelUpstreamsPattern: ignoreIdx is the @ignoreupstream annotation group, tableIdx is the
+// table-name group. isKeyword is false only for the pattern's keyword-less final alternative.
+func clauseGroupIndices(clause string) (ignoreIdx, tableIdx int, isKeyword bool) {
+	switch clause {
+	case "from":
+		return 1, 2, true
+	case "join":
+		return 3, 4, true
+	case "with":
+		return 5, 6, true
+	case "merge":
+		return 7, 8, true
+	case "insert":
+		return 9, 10, true
+	case "delete":
+		return 11, 12, true
+	case "create":
+		return 13, 14, true
+	case "set":
+		return 15, 16, true
+	default:
+		return 17, 18, false
 	}
+}
 
+func isWriteOnlyClause(clause string) bool {
+	switch clause {
+	case "create", "merge", "insert", "delete", "set":
+		return true
+	}
+	return false
+}
+
+func filterAliases(tableFound, pseudoTable map[string]bool) []string {
+	output := make([]string, 0, len(tableFound))
+	for table := range tableFound {
+		if !pseudoTable[table] {
+			output = append(output, table)
+		}
+	}
 	return output
 }
 

@@ -1,9 +1,7 @@
 package job
 
 // UpstreamGraph is a lightweight, install-wide job dependency graph keyed by FullName
-// ("project/job_name") on both sides. It intentionally carries no other job data, so it can be
-// built cheaply from persisted upstream edges and patched with in-memory edges from an incoming
-// validate request, without needing full Job objects for every job in the graph.
+// ("project/job_name") on both sides
 type UpstreamGraph map[FullName][]FullName
 
 // FindCyclicPath performs a DFS over the graph starting at root, following outgoing (upstream)
@@ -13,11 +11,6 @@ type UpstreamGraph map[FullName][]FullName
 // This is scoped per root rather than scanning the whole graph for "the first" cycle: each root
 // gets its own accurate answer, so validating job B still detects a cycle through B even if job A
 // sits on a separate, disjoint cycle elsewhere in the same graph.
-//
-// visited is a caller-provided cache of nodes already proven cycle-free by a previous call; it is
-// safe to share across multiple FindCyclicPath calls against the same graph, since a node found to
-// have no path back to any of its ancestors during one DFS will never have one in a later DFS
-// either (the graph does not change between calls).
 func FindCyclicPath(graph UpstreamGraph, root FullName, visited map[FullName]bool) []FullName {
 	visiting := map[FullName]bool{}
 	var path []FullName

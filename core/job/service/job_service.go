@@ -1739,24 +1739,29 @@ func (j *JobService) BuildGlobalUpstreamGraph(ctx context.Context, incomingJobs 
 		return nil, err
 	}
 
+	return j.mergeUpstreamGraphWithIncomingSpecs(ctx, graph, incomingJobs, jobsWithUpstream)
+}
+
+func (j *JobService) mergeUpstreamGraphWithIncomingSpecs(ctx context.Context, graph job.UpstreamGraph, incomingJobs []*job.Job, jobsWithUpstream []*job.WithUpstream) (job.UpstreamGraph, error) {
+	jobs := job.Jobs(incomingJobs)
 	me := errors.NewMultiError("build global upstream graph errors")
 
-	incomingFullNames := make(map[job.FullName]bool, len(incomingJobs))
-	destinationToFullName := make(map[resource.URN]job.FullName, len(incomingJobs))
-	for _, incomingJob := range incomingJobs {
-		fullName := job.FullNameFrom(incomingJob.Tenant().ProjectName(), incomingJob.Spec().Name())
-		incomingFullNames[fullName] = true
-		if incomingJob.Destination() != resource.ZeroURN() {
-			destinationToFullName[incomingJob.Destination()] = fullName
-		}
-	}
+	err := j.rebuildIncomingUpstreamEdges(ctx, graph, jobs, jobsWithUpstream)
+	me.Append(err)
 
-	jobWithUpstreamByName := make(map[job.Name]*job.WithUpstream, len(jobsWithUpstream))
-	for _, jwu := range jobsWithUpstream {
-		jobWithUpstreamByName[jwu.Name()] = jwu
-	}
+	err = j.patchExistingDownstreamEdges(ctx, graph, jobs)
+	me.Append(err)
 
-	// 1st Phase: incoming jobs' upstreams are rebuilt based on the incoming spec
+	return graph, me.ToErr()
+}
+
+// rebuildIncomingUpstreamEdges replaces each incoming job's edges in the graph with the
+// upstreams from its freshly-resolved spec
+func (j *JobService) rebuildIncomingUpstreamEdges(ctx context.Context, graph job.UpstreamGraph, incomingJobs job.Jobs, jobsWithUpstream []*job.WithUpstream) error {
+	me := errors.NewMultiError("rebuild incoming upstream edges errors")
+	jobWithUpstreamByName := job.WithUpstreams(jobsWithUpstream).GetNameToWithUpstreamMap()
+	destinationToFullName := incomingJobs.GetDestinationToFullNameMap()
+
 	for _, incomingJob := range incomingJobs {
 		fullName := job.FullNameFrom(incomingJob.Tenant().ProjectName(), incomingJob.Spec().Name())
 
@@ -1768,25 +1773,28 @@ func (j *JobService) BuildGlobalUpstreamGraph(ctx context.Context, incomingJobs 
 
 		var edges []job.FullName
 		for _, upstream := range jwu.Upstreams() {
+			// 1. external upstreams are out of scope
 			if upstream.External() {
-				// out of scope: external optimus dependencies aren't tracked here
 				continue
 			}
 
+			// 2. already resolved upstreams we directly add it as edge
 			if upstream.Name() != "" && upstream.ProjectName() != "" {
 				edges = append(edges, job.FullNameFrom(upstream.ProjectName(), upstream.Name()))
 				continue
 			}
 
-			// unresolved inferred upstream: only a destination URN is known, no job
+			// 3. unresolved upstreams: only resource URN is known
 			if upstream.Resource() == resource.ZeroURN() {
 				continue
 			}
+			// 3.a. unresolved upstreams are jobs which are part of the request but not persisted yet
 			if target, ok := destinationToFullName[upstream.Resource()]; ok {
 				edges = append(edges, target)
 				continue
 			}
 
+			// 3.b. handle edge cases where the previous resolve does not consider this upstream as resolved
 			existingUpstreamJobs, err := j.jobRepo.GetAllByResourceDestination(ctx, upstream.Resource())
 			if err != nil {
 				me.Append(err)
@@ -1796,13 +1804,20 @@ func (j *JobService) BuildGlobalUpstreamGraph(ctx context.Context, incomingJobs 
 				owner := existingUpstreamJobs[0]
 				edges = append(edges, job.FullNameFrom(owner.Tenant().ProjectName(), owner.Spec().Name()))
 			}
-			// else: no job anywhere currently produces this resource - nothing to link yet.
 		}
 
 		graph[fullName] = edges
 	}
 
-	// Overlay 2: existing jobs gaining a new edge into an incoming job (additive).
+	return me.ToErr()
+}
+
+// patchExistingDownstreamEdges adds edges from already-persisted jobs that consume an incoming
+// job's destination, so the graph reflects the new inbound connections the incoming spec creates.
+func (j *JobService) patchExistingDownstreamEdges(ctx context.Context, graph job.UpstreamGraph, incomingJobs job.Jobs) error {
+	me := errors.NewMultiError("patch existing downstream edges errors")
+	incomingJobMap := incomingJobs.GetFullNameSet()
+
 	for _, incomingJob := range incomingJobs {
 		if incomingJob.Destination() == resource.ZeroURN() {
 			continue
@@ -1817,14 +1832,15 @@ func (j *JobService) BuildGlobalUpstreamGraph(ctx context.Context, incomingJobs 
 
 		for _, downstream := range downstreams {
 			downstreamFullName := downstream.FullName()
-			if incomingFullNames[downstreamFullName] {
+			// if it is already a part of the incoming jobs, do not update
+			if incomingJobMap[downstreamFullName] {
 				continue
 			}
 			graph[downstreamFullName] = append(graph[downstreamFullName], incomingFullName)
 		}
 	}
 
-	return graph, me.ToErr()
+	return me.ToErr()
 }
 
 func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) dto.ValidateResult {

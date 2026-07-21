@@ -311,6 +311,28 @@ func (j Jobs) GetNameMap() map[Name]*Job {
 	return jobNameMap
 }
 
+func (j Jobs) GetDestinationToFullNameMap() map[resource.URN]FullName {
+	destinationToFullName := make(map[resource.URN]FullName)
+	for _, jb := range j {
+		fullName := FullNameFrom(jb.Tenant().ProjectName(), jb.Spec().Name())
+		if jb.Destination() != resource.ZeroURN() {
+			destinationToFullName[jb.Destination()] = fullName
+		}
+	}
+
+	return destinationToFullName
+}
+
+func (j Jobs) GetFullNameSet() map[FullName]bool {
+	fullNameSet := make(map[FullName]bool)
+	for _, jb := range j {
+		fullName := FullNameFrom(jb.Tenant().ProjectName(), jb.Spec().Name())
+		fullNameSet[fullName] = true
+	}
+
+	return fullNameSet
+}
+
 func (j Jobs) GetNamespaceNameAndJobsMap() map[tenant.NamespaceName][]*Job {
 	jobsPerNamespaceName := make(map[tenant.NamespaceName][]*Job, len(j))
 	for _, job := range j {
@@ -448,6 +470,14 @@ func (w WithUpstreams) GetSubjectJobNameStrings() []string {
 		names[i] = withUpstream.Name().String()
 	}
 	return names
+}
+
+func (w WithUpstreams) GetNameToWithUpstreamMap() map[Name]*WithUpstream {
+	m := make(map[Name]*WithUpstream, len(w))
+	for _, jwu := range w {
+		m[jwu.Name()] = jwu
+	}
+	return m
 }
 
 func (w WithUpstreams) MergeWithResolvedUpstreams(resolvedUpstreamsBySubjectJobMap map[Name][]*Upstream) []*WithUpstream {

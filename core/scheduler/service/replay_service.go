@@ -42,6 +42,7 @@ type ReplayRepository interface {
 	ScanAbandonedReplayRequests(ctx context.Context, unhandledClassifierDuration time.Duration) ([]*scheduler.Replay, error)
 	AcquireReplayRequest(ctx context.Context, replayID uuid.UUID, unhandledClassifierDuration time.Duration) error
 
+	GetReplayJobConfig(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (map[string]string, error)
 	GetReplayRequestByID(ctx context.Context, replayID uuid.UUID) (*scheduler.Replay, error)
 
 	GetReplayByFilters(ctx context.Context, projectName tenant.ProjectName, filters ...filter.FilterOpt) ([]*scheduler.ReplayWithRun, error)
@@ -190,6 +191,18 @@ func (r *ReplayService) GetReplayByApprovalID(ctx context.Context, approvalID st
 	}
 	replayWithRun.Runs = scheduler.JobRunStatusList(replayWithRun.Runs).GetSortedRunsByScheduledAt()
 	return replayWithRun, nil
+}
+
+func (r *ReplayService) GetReplayJobConfig(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
+	details, err := r.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
+	if err != nil {
+		r.logger.Error("error getting job [%s]: %s", jobName, err)
+		return nil, err
+	}
+	for k, v := range config.JobConfig {
+		details.Job.Task.Config[k] = v
+	}
+	return details.Job.Task.Config, nil
 }
 
 func (r *ReplayService) GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) ([]*scheduler.JobRunStatus, error) {

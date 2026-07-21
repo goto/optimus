@@ -138,6 +138,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 	)
 
 	mergedContext := utils.MergeAnyMaps(taskContext, allTaskConfigs)
+	ctx = context.WithValue(ctx, "run-mode", scheduler.DryRun)
 	fileMap, err := i.assetCompiler.CompileJobRunAssets(ctx, job.Job, systemDefinedVars, interval, mergedContext)
 	if err != nil {
 		i.logger.Error("error compiling job run assets: %s", err)

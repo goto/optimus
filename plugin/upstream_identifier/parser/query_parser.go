@@ -54,9 +54,7 @@ var (
 func ParseTopLevelUpstreamsFromQuery(query string) []string {
 	cleanedQuery := cleanQueryFromComment(query)
 
-	upstreamTables := extractUpstreamTables(cleanedQuery)
-
-	return upstreamTables
+	return extractUpstreamTables(cleanedQuery)
 }
 
 func extractUpstreamTables(query string) []string {
@@ -67,29 +65,15 @@ func extractUpstreamTables(query string) []string {
 	insideFromOrJoinClause := buildFromListChecker(query, matchIndexes)
 
 	for _, idx := range matchIndexes {
-		clause := getClauseFromMatch(query, idx)
-		ignoreUpstreamIdx, tableIdx, isKeywordMatch := clauseGroupIndices(clause)
-
-		ignoreUpstreamClause := groupText(query, idx, ignoreUpstreamIdx)
-		tableName := groupText(query, idx, tableIdx)
-
-		if strings.TrimSpace(ignoreUpstreamClause) == "@ignoreupstream" {
+		tableName, isCTEAlias := extractValidTable(query, idx, insideFromOrJoinClause)
+		if tableName == "" {
 			continue
 		}
 
-		if isWriteOnlyClause(clause) {
-			continue
-		}
-
-		if !isKeywordMatch && !insideFromOrJoinClause(idx[0]) {
-			continue
-		}
-
-		cleanTableName := cleanTableFromTickQuote(tableName)
-		if clause == "with" {
-			cteAliases[cleanTableName] = true
+		if isCTEAlias {
+			cteAliases[tableName] = true
 		} else {
-			referencedTables[cleanTableName] = true
+			referencedTables[tableName] = true
 		}
 	}
 
@@ -127,10 +111,10 @@ func isWriteOnlyClause(clause string) bool {
 	return false
 }
 
-func filterAliases(tableFound, pseudoTable map[string]bool) []string {
-	output := make([]string, 0, len(tableFound))
-	for table := range tableFound {
-		if !pseudoTable[table] {
+func filterAliases(referencedTables, cteAliases map[string]bool) []string {
+	output := make([]string, 0, len(referencedTables))
+	for table := range referencedTables {
+		if !cteAliases[table] {
 			output = append(output, table)
 		}
 	}
@@ -147,7 +131,7 @@ func groupText(query string, idx []int, groupIndex int) string {
 	return query[start:end]
 }
 
-// newFromListChecker returns a closure that answers, for any position index in query, whether that
+// buildFromListChecker returns a closure that answers, for any position index in query, whether that
 // position sits inside an active FROM/JOIN table list. This is used to differentiate dotted
 // identifiers (like the comma-joined `a.b.d` in `FROM a.b.c, a.b.d`) from false positives like
 // nested struct field access
@@ -165,6 +149,25 @@ func buildFromListChecker(query string, upstreamMatches [][]int) func(pos int) b
 		}
 		return states[i-1]
 	}
+}
+
+// extractValidTable validates a single regex match and returns the cleaned table name and whether
+// it is a CTE alias. Returns ("", false) if the match should be skipped.
+func extractValidTable(query string, idx []int, insideFromOrJoinClause func(int) bool) (string, bool) {
+	clause := getClauseFromMatch(query, idx)
+	ignoreUpstreamIdx, tableIdx, isKeywordMatch := clauseGroupIndices(clause)
+
+	if strings.TrimSpace(groupText(query, idx, ignoreUpstreamIdx)) == "@ignoreupstream" {
+		return "", false
+	}
+	if isWriteOnlyClause(clause) {
+		return "", false
+	}
+	if !isKeywordMatch && !insideFromOrJoinClause(idx[0]) {
+		return "", false
+	}
+
+	return cleanTableFromTickQuote(groupText(query, idx, tableIdx)), clause == "with"
 }
 
 func getClauseFromMatch(query string, upstreamMatchIdx []int) string {
@@ -186,6 +189,16 @@ func collectWriteOnlySpans(query string, upstreamMatches [][]int) [][2]int {
 // buildFromListEvents scans query for clause keywords and parentheses, skipping any keyword
 // that falls inside a write-only span, and returns all events sorted by position.
 func buildFromListEvents(query string, writeOnlySpans [][2]int) []fromListEvent {
+	keywordEvents := buildKeywordEvents(query, writeOnlySpans)
+	parenthesesEvents := buildParenthesesEvents(query)
+
+	events := append(keywordEvents, parenthesesEvents...)
+	sort.Slice(events, func(i, j int) bool { return events[i].pos < events[j].pos })
+
+	return events
+}
+
+func buildKeywordEvents(query string, writeOnlySpans [][2]int) []fromListEvent {
 	var events []fromListEvent
 
 	for _, keywordIdx := range fromListStateKeywordPattern.FindAllStringIndex(query, -1) {
@@ -200,6 +213,12 @@ func buildFromListEvents(query string, writeOnlySpans [][2]int) []fromListEvent 
 		})
 	}
 
+	return events
+}
+
+func buildParenthesesEvents(query string) []fromListEvent {
+	var events []fromListEvent
+
 	for i, c := range query {
 		switch c {
 		case '(':
@@ -209,7 +228,6 @@ func buildFromListEvents(query string, writeOnlySpans [][2]int) []fromListEvent 
 		}
 	}
 
-	sort.Slice(events, func(i, j int) bool { return events[i].pos < events[j].pos })
 	return events
 }
 

@@ -6,6 +6,20 @@ import (
 	"strings"
 )
 
+type fromListEventKind int
+
+const (
+	eventKindKeyword    fromListEventKind = iota
+	eventKindOpenParen                    // entering a subquery
+	eventKindCloseParen                   // leaving a subquery
+)
+
+type fromListEvent struct {
+	pos     int
+	kind    fromListEventKind
+	turnsOn bool // only meaningful for eventKindKeyword: true for FROM/JOIN, false otherwise
+}
+
 var (
 	topLevelUpstreamsPattern = regexp.MustCompile(
 		"(?i)(?:FROM)\\s*(?:/\\*\\s*([a-zA-Z0-9@_-]*)\\s*\\*/)?\\s+`?(`?[\\w-]+`?\\.`?[\\w-]+`?\\.`?[\\w-\\*?]+`?)`?" + //nolint:gocritic
@@ -34,33 +48,32 @@ var (
 	multiLineCommentsPattern  = regexp.MustCompile(`(((/\*)+?[\w\W]*?(\*/)+))`)
 	specialCommentPattern     = regexp.MustCompile(`(\/\*\s*(@[a-zA-Z0-9_-]+)\s*\*\/)`)
 
-	// fromListStateKeywordPattern recognizes the keywords that toggle whether a given position in
-	// the query is inside an active FROM/JOIN table list. It is scanned independently of
-	// topLevelUpstreamsPattern (see newFromListChecker) precisely because a bare dotted identifier
-	// with no clause keyword directly in front of it (topLevelUpstreamsPattern's keyword-less final
-	// alternative, dispatched to the "default" case below) is structurally ambiguous on its own:
-	// it might be the next item in a comma-joined FROM list, or it might be a struct/record field
-	// access, a SELECT-list expression, or part of a WHERE/ON condition. This independent scan is
-	// what disambiguates the two by tracking which clause is actually in effect at that position.
 	fromListStateKeywordPattern = regexp.MustCompile(`(?i)\b(FROM|JOIN|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|ON|WINDOW|QUALIFY|UNION|LIMIT)\b`)
 )
 
 func ParseTopLevelUpstreamsFromQuery(query string) []string {
 	cleanedQuery := cleanQueryFromComment(query)
 
-	tableFound := map[string]bool{}
-	pseudoTable := map[string]bool{}
+	upstreamTables := extractUpstreamTables(cleanedQuery)
 
-	matches := topLevelUpstreamsPattern.FindAllStringSubmatchIndex(cleanedQuery, -1)
-	insideFromList := newFromListChecker(cleanedQuery, matches)
+	return upstreamTables
+}
 
-	for _, idx := range matches {
-		tokens := strings.Fields(groupText(cleanedQuery, idx, 0))
-		clause := strings.ToLower(tokens[0])
+func extractUpstreamTables(query string) []string {
+	referencedTables := map[string]bool{}
+	cteAliases := map[string]bool{}
 
+	matchIndexes := topLevelUpstreamsPattern.FindAllStringSubmatchIndex(query, -1)
+	insideFromOrJoinClause := buildFromListChecker(query, matchIndexes)
+
+	for _, idx := range matchIndexes {
+		clause := getClauseFromMatch(query, idx)
 		ignoreUpstreamIdx, tableIdx, isKeywordMatch := clauseGroupIndices(clause)
 
-		if strings.TrimSpace(groupText(cleanedQuery, idx, ignoreUpstreamIdx)) == "@ignoreupstream" {
+		ignoreUpstreamClause := groupText(query, idx, ignoreUpstreamIdx)
+		tableName := groupText(query, idx, tableIdx)
+
+		if strings.TrimSpace(ignoreUpstreamClause) == "@ignoreupstream" {
 			continue
 		}
 
@@ -68,29 +81,22 @@ func ParseTopLevelUpstreamsFromQuery(query string) []string {
 			continue
 		}
 
-		// A keyword-less match is only a genuine table reference if it's actually reachable from
-		// a FROM/JOIN clause (e.g. SELECT * FROM a.b.c, a.b.f which makes a.b.c & a.b.f actual upstreams) -
-		// otherwise it's a false positive, such as struct/record field access, a SELECT-list
-		// expression, or a WHERE/ON condition, and must not be treated as an upstream.
-		if !isKeywordMatch && !insideFromList(idx[0]) {
+		if !isKeywordMatch && !insideFromOrJoinClause(idx[0]) {
 			continue
 		}
 
-		tableName := cleanTableFromTickQuote(groupText(cleanedQuery, idx, tableIdx))
+		cleanTableName := cleanTableFromTickQuote(tableName)
 		if clause == "with" {
-			pseudoTable[tableName] = true
+			cteAliases[cleanTableName] = true
 		} else {
-			tableFound[tableName] = true
+			referencedTables[cleanTableName] = true
 		}
 	}
 
-	return filterAliases(tableFound, pseudoTable)
+	return filterAliases(referencedTables, cteAliases)
 }
 
-// clauseGroupIndices maps a SQL clause keyword to the submatch group indices used by
-// topLevelUpstreamsPattern: ignoreIdx is the @ignoreupstream annotation group, tableIdx is the
-// table-name group. isKeyword is false only for the pattern's keyword-less final alternative.
-func clauseGroupIndices(clause string) (ignoreIdx, tableIdx int, isKeyword bool) {
+func clauseGroupIndices(clause string) (ignoreUpstreamIdx, tableIdx int, isKeyword bool) {
 	switch clause {
 	case "from":
 		return 1, 2, true
@@ -141,81 +147,103 @@ func groupText(query string, idx []int, groupIndex int) string {
 	return query[start:end]
 }
 
-// newFromListChecker returns a function reporting, for a given byte offset into query, whether
-// that position is reachable from a preceding FROM/JOIN keyword without having crossed into a
-// different clause (WHERE, GROUP BY, ORDER BY, HAVING, ON, WINDOW, QUALIFY, UNION, LIMIT) or out
-// of the parenthesis depth it was set at (so a subquery's own FROM doesn't leak its "in a table
-// list" state into the clause that encloses it, e.g. `WHERE x IN (SELECT y FROM a.b.c) AND d.e.f`
-// must not treat d.e.f as a table just because the subquery had an active FROM).
-// upstreamMatches masks out MERGE/INSERT/DELETE/CREATE/SET spans (already found by the caller via
-// topLevelUpstreamsPattern) so that e.g. the literal "FROM" inside "DELETE FROM x.y.z" is never
-// treated as a real FROM clause.
-func newFromListChecker(query string, upstreamMatches [][]int) func(pos int) bool {
-	var ignoredSpans [][2]int
-	for _, idx := range upstreamMatches {
-		clause := strings.ToLower(strings.Fields(groupText(query, idx, 0))[0])
-		switch clause {
-		case "merge", "insert", "delete", "create", "set":
-			ignoredSpans = append(ignoredSpans, [2]int{idx[0], idx[1]})
-		}
-	}
+// newFromListChecker returns a closure that answers, for any position index in query, whether that
+// position sits inside an active FROM/JOIN table list. This is used to differentiate dotted
+// identifiers (like the comma-joined `a.b.d` in `FROM a.b.c, a.b.d`) from false positives like
+// nested struct field access
+func buildFromListChecker(query string, upstreamMatches [][]int) func(pos int) bool {
+	writeOnlySpans := collectWriteOnlySpans(query, upstreamMatches)
 
-	type event struct {
-		pos     int
-		turnsOn bool
-		paren   byte // '(', ')', or 0 for a keyword event
-	}
+	events := buildFromListEvents(query, writeOnlySpans)
 
-	var events []event
-	for _, kwIdx := range fromListStateKeywordPattern.FindAllStringIndex(query, -1) {
-		if withinAnySpan(kwIdx[0], ignoredSpans) {
-			continue
-		}
-		kw := strings.ToLower(strings.Join(strings.Fields(query[kwIdx[0]:kwIdx[1]]), " "))
-		events = append(events, event{pos: kwIdx[0], turnsOn: kw == "from" || kw == "join"})
-	}
-	for i, c := range query {
-		switch c {
-		case '(':
-			events = append(events, event{pos: i, paren: '('})
-		case ')':
-			events = append(events, event{pos: i, paren: ')'})
-		}
-	}
-	sort.Slice(events, func(i, j int) bool { return events[i].pos < events[j].pos })
-
-	positions := make([]int, len(events))
-	states := make([]bool, len(events))
-
-	state := false
-	var stack []bool
-	for i, e := range events {
-		switch e.paren {
-		case '(':
-			stack = append(stack, state)
-			state = false
-		case ')':
-			if len(stack) > 0 {
-				state = stack[len(stack)-1]
-				stack = stack[:len(stack)-1]
-			} else {
-				state = false
-			}
-		default:
-			state = e.turnsOn
-		}
-		positions[i] = e.pos
-		states[i] = state
-	}
+	positions, states := buildFromListStateIndex(events)
 
 	return func(pos int) bool {
-		// binary search for the last event strictly before pos
 		i := sort.SearchInts(positions, pos)
 		if i == 0 {
 			return false
 		}
 		return states[i-1]
 	}
+}
+
+func getClauseFromMatch(query string, upstreamMatchIdx []int) string {
+	tokens := strings.Fields(groupText(query, upstreamMatchIdx, 0))
+	return strings.ToLower(tokens[0])
+}
+
+func collectWriteOnlySpans(query string, upstreamMatches [][]int) [][2]int {
+	var spans [][2]int
+	for _, idx := range upstreamMatches {
+		clause := getClauseFromMatch(query, idx)
+		if isWriteOnlyClause(clause) {
+			spans = append(spans, [2]int{idx[0], idx[1]})
+		}
+	}
+	return spans
+}
+
+// buildFromListEvents scans query for clause keywords and parentheses, skipping any keyword
+// that falls inside a write-only span, and returns all events sorted by position.
+func buildFromListEvents(query string, writeOnlySpans [][2]int) []fromListEvent {
+	var events []fromListEvent
+
+	for _, keywordIdx := range fromListStateKeywordPattern.FindAllStringIndex(query, -1) {
+		if withinAnySpan(keywordIdx[0], writeOnlySpans) {
+			continue
+		}
+		kw := strings.ToLower(strings.Join(strings.Fields(query[keywordIdx[0]:keywordIdx[1]]), " "))
+		events = append(events, fromListEvent{
+			pos:     keywordIdx[0],
+			kind:    eventKindKeyword,
+			turnsOn: kw == "from" || kw == "join",
+		})
+	}
+
+	for i, c := range query {
+		switch c {
+		case '(':
+			events = append(events, fromListEvent{pos: i, kind: eventKindOpenParen})
+		case ')':
+			events = append(events, fromListEvent{pos: i, kind: eventKindCloseParen})
+		}
+	}
+
+	sort.Slice(events, func(i, j int) bool { return events[i].pos < events[j].pos })
+	return events
+}
+
+// buildFromListStateIndex walks the sorted events and tracks whether a FROM/JOIN clause is
+// active at each position. Parentheses create an isolated scope: opening a paren saves the
+// current active state and resets it (so a subquery's FROM doesn't leak into the enclosing
+// clause), and closing a paren restores the enclosing scope's state.
+func buildFromListStateIndex(events []fromListEvent) (positions []int, states []bool) {
+	positions = make([]int, len(events))
+	states = make([]bool, len(events))
+
+	active := false
+	var scopeStack []bool
+
+	for i, e := range events {
+		switch e.kind {
+		case eventKindOpenParen:
+			scopeStack = append(scopeStack, active)
+			active = false
+		case eventKindCloseParen:
+			if len(scopeStack) > 0 {
+				active = scopeStack[len(scopeStack)-1]
+				scopeStack = scopeStack[:len(scopeStack)-1]
+			} else {
+				active = false
+			}
+		case eventKindKeyword:
+			active = e.turnsOn
+		}
+		positions[i] = e.pos
+		states[i] = active
+	}
+
+	return
 }
 
 func withinAnySpan(pos int, spans [][2]int) bool {

@@ -178,6 +178,7 @@ func TestReplayHandler(t *testing.T) {
 			}
 
 			service.On("GetRunsStatus", ctx, jobTenant, jobName, replayConfig).Return(runs, nil)
+			service.On("GetJobConfig", ctx, jobTenant, jobName, replayConfig).Return(jobConfig, nil)
 
 			result, err := replayHandler.ReplayDryRun(ctx, req)
 			assert.NoError(t, err)
@@ -778,8 +779,8 @@ func (_m *mockReplayService) CancelReplay(ctx context.Context, replayWithRun *sc
 	return r0
 }
 
-func (_m *mockReplayService) GetReplayConfig(ctx context.Context, projectName tenant.ProjectName, name scheduler.JobName, scheduledAt time.Time) (map[string]string, error) {
-	args := _m.Called(ctx, projectName, name, scheduledAt)
+func (_m *mockReplayService) GetJobConfig(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
+	args := _m.Called(ctx, jobTenant, jobName, config)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

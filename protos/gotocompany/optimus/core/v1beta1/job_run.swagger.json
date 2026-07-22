@@ -54,6 +54,39 @@
         ]
       }
     },
+    "/v1beta1/potential_sla_breach/identify": {
+      "post": {
+        "summary": "IdentifyPotentialSLABreach notifies optimus service about potential SLA breach for given job(s)",
+        "operationId": "JobRunService_IdentifyPotentialSLABreach2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1IdentifyPotentialSLABreachResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1IdentifyPotentialSLABreachRequest"
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/expected_job_finish_time": {
       "post": {
         "summary": "GenerateExpectedFinishTime generates and stores the expected finish time for a given job(s)",
@@ -617,6 +650,22 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "projectNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Batch mode. When project_names is non-empty it takes precedence over\nproject_name; when label_groups is non-empty it takes precedence over\njob_labels + the request-level severity. The server evaluates the cross\nproduct of project_names x label_groups and emits one consolidated alert\nper team. job_names remains single-project only (path project_name)."
+                },
+                "labelGroups": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/v1beta1PotentialSLABreachLabelGroup"
+                  }
+                },
+                "damperFactor": {
+                  "$ref": "#/definitions/v1beta1DamperFactor"
                 }
               }
             }
@@ -673,6 +722,16 @@
     }
   },
   "definitions": {
+    "DamperFactorApplyMethod": {
+      "type": "string",
+      "enum": [
+        "APPLY_METHOD_UNSPECIFIED",
+        "APPLY_METHOD_EXPONENTIAL",
+        "APPLY_METHOD_DECREMENT",
+        "APPLY_METHOD_CONSTANT"
+      ],
+      "default": "APPLY_METHOD_UNSPECIFIED"
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -713,6 +772,27 @@
     },
     "v1beta1CreateSchedulerRoleResponse": {
       "type": "object"
+    },
+    "v1beta1DamperFactor": {
+      "type": "object",
+      "properties": {
+        "baseValue": {
+          "type": "number",
+          "format": "float"
+        },
+        "alpha": {
+          "type": "number",
+          "format": "float"
+        },
+        "minValue": {
+          "type": "number",
+          "format": "float"
+        },
+        "method": {
+          "$ref": "#/definitions/DamperFactorApplyMethod"
+        }
+      },
+      "title": "DamperFactor configures the dampening factor used to calculate\ninferredSLA for upstream jobs, applied at each upstream level"
     },
     "v1beta1DataCompleteness": {
       "type": "object",
@@ -864,6 +944,73 @@
         }
       }
     },
+    "v1beta1IdentifyPotentialSLABreachRequest": {
+      "type": "object",
+      "properties": {
+        "projectName": {
+          "type": "string"
+        },
+        "jobNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "jobLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "nextScheduledRangeInHours": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "alertOnBreach": {
+          "type": "boolean"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "referenceTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "scheduledRangeInHours": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "enableDeduplication": {
+          "type": "boolean"
+        },
+        "damperCoeff": {
+          "type": "number",
+          "format": "float"
+        },
+        "skipJobNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "projectNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Batch mode. When project_names is non-empty it takes precedence over\nproject_name; when label_groups is non-empty it takes precedence over\njob_labels + the request-level severity. The server evaluates the cross\nproduct of project_names x label_groups and emits one consolidated alert\nper team. job_names remains single-project only (path project_name)."
+        },
+        "labelGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1PotentialSLABreachLabelGroup"
+          }
+        },
+        "damperFactor": {
+          "$ref": "#/definitions/v1beta1DamperFactor"
+        }
+      }
+    },
     "v1beta1IdentifyPotentialSLABreachResponse": {
       "type": "object",
       "properties": {
@@ -871,7 +1018,8 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/v1beta1UpstreamJobsStatus"
-          }
+          },
+          "description": "key is \"\u003cproject_name\u003e/\u003cjob_name\u003e\" (project-qualified) so targets from\ndifferent projects don't collide in batch mode."
         }
       }
     },
@@ -1187,6 +1335,21 @@
         }
       }
     },
+    "v1beta1PotentialSLABreachLabelGroup": {
+      "type": "object",
+      "properties": {
+        "jobLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "description": "PotentialSLABreachLabelGroup is one set of job labels (AND-ed together) that\nshare the same SLA target. Each group can carry its own severity and a\nhuman-friendly display name used when rendering the consolidated alert."
+    },
     "v1beta1RegisterJobEventResponse": {
       "type": "object"
     },
@@ -1255,6 +1418,12 @@
           "items": {
             "$ref": "#/definitions/v1beta1UpstreamJobStatus"
           }
+        },
+        "targetProjectName": {
+          "type": "string"
+        },
+        "targetJobName": {
+          "type": "string"
         }
       }
     }

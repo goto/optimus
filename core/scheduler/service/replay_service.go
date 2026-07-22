@@ -193,7 +193,7 @@ func (r *ReplayService) GetReplayByApprovalID(ctx context.Context, approvalID st
 	return replayWithRun, nil
 }
 
-func (r *ReplayService) GetReplayJobConfig(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
+func (r *ReplayService) GetJobConfig(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error) {
 	details, err := r.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
 	if err != nil {
 		r.logger.Error("error getting job [%s]: %s", jobName, err)

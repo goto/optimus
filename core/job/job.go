@@ -2,6 +2,7 @@ package job
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -758,4 +759,16 @@ type DeployState string
 
 func (d DeployState) String() string {
 	return string(d)
+}
+
+// UpstreamGraph is a lightweight, install-wide job dependency graph keyed by FullName
+// ("project/job_name") on both sides
+type UpstreamGraph map[FullName][]FullName
+
+func (ug UpstreamGraph) DeepClone() UpstreamGraph {
+	clone := make(UpstreamGraph, len(ug))
+	for k, v := range ug {
+		clone[k] = slices.Clone(v)
+	}
+	return clone
 }

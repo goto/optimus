@@ -1,9 +1,5 @@
 package job
 
-// UpstreamGraph is a lightweight, install-wide job dependency graph keyed by FullName
-// ("project/job_name") on both sides
-type UpstreamGraph map[FullName][]FullName
-
 // FindCyclicPath performs a DFS over the graph starting at root, following outgoing (upstream)
 // edges. It returns the specific cycle path (root -> ... -> root) if root can reach itself
 // through the graph, or nil if no cycle involving root exists.

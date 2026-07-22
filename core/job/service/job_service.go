@@ -1746,28 +1746,29 @@ func (j *JobService) mergeUpstreamGraphWithIncomingSpecs(ctx context.Context, gr
 	jobs := job.Jobs(incomingJobs)
 	me := errors.NewMultiError("build global upstream graph errors")
 
-	err := j.rebuildIncomingUpstreamEdges(ctx, graph, jobs, jobsWithUpstream)
+	updatedGraph, err := j.resolveUpstreamsForIncomingJobs(ctx, graph, jobs, jobsWithUpstream)
 	me.Append(err)
 
-	err = j.patchExistingDownstreamEdges(ctx, graph, jobs)
+	updatedFullGraph, err := j.resolveDownstreamsForIncomingJobs(ctx, updatedGraph, jobs)
 	me.Append(err)
 
-	return graph, me.ToErr()
+	return updatedFullGraph, me.ToErr()
 }
 
-// rebuildIncomingUpstreamEdges replaces each incoming job's edges in the graph with the
+// resolveUpstreamsForIncomingJobs replaces each incoming job's edges in the graph with the
 // upstreams from its freshly-resolved spec
-func (j *JobService) rebuildIncomingUpstreamEdges(ctx context.Context, graph job.UpstreamGraph, incomingJobs job.Jobs, jobsWithUpstream []*job.WithUpstream) error {
+func (j *JobService) resolveUpstreamsForIncomingJobs(ctx context.Context, graph job.UpstreamGraph, incomingJobs job.Jobs, jobsWithUpstream []*job.WithUpstream) (job.UpstreamGraph, error) {
 	me := errors.NewMultiError("rebuild incoming upstream edges errors")
 	jobWithUpstreamByName := job.WithUpstreams(jobsWithUpstream).GetNameToWithUpstreamMap()
 	destinationToFullName := incomingJobs.GetDestinationToFullNameMap()
+	updatedGraph := graph.DeepClone()
 
 	for _, incomingJob := range incomingJobs {
 		fullName := job.FullNameFrom(incomingJob.Tenant().ProjectName(), incomingJob.Spec().Name())
 
 		jwu, ok := jobWithUpstreamByName[incomingJob.Spec().Name()]
 		if !ok {
-			graph[fullName] = nil
+			updatedGraph[fullName] = nil
 			continue
 		}
 
@@ -1806,17 +1807,18 @@ func (j *JobService) rebuildIncomingUpstreamEdges(ctx context.Context, graph job
 			}
 		}
 
-		graph[fullName] = edges
+		updatedGraph[fullName] = edges
 	}
 
-	return me.ToErr()
+	return updatedGraph, me.ToErr()
 }
 
-// patchExistingDownstreamEdges adds edges from already-persisted jobs that consume an incoming
+// resolveDownstreamsForIncomingJobs adds edges from already-persisted jobs that consume an incoming
 // job's destination, so the graph reflects the new inbound connections the incoming spec creates.
-func (j *JobService) patchExistingDownstreamEdges(ctx context.Context, graph job.UpstreamGraph, incomingJobs job.Jobs) error {
+func (j *JobService) resolveDownstreamsForIncomingJobs(ctx context.Context, graph job.UpstreamGraph, incomingJobs job.Jobs) (job.UpstreamGraph, error) {
 	me := errors.NewMultiError("patch existing downstream edges errors")
 	incomingJobMap := incomingJobs.GetFullNameSet()
+	updatedGraph := graph.DeepClone()
 
 	for _, incomingJob := range incomingJobs {
 		if incomingJob.Destination() == resource.ZeroURN() {
@@ -1836,11 +1838,11 @@ func (j *JobService) patchExistingDownstreamEdges(ctx context.Context, graph job
 			if incomingJobMap[downstreamFullName] {
 				continue
 			}
-			graph[downstreamFullName] = append(graph[downstreamFullName], incomingFullName)
+			updatedGraph[downstreamFullName] = append(updatedGraph[downstreamFullName], incomingFullName)
 		}
 	}
 
-	return me.ToErr()
+	return updatedGraph, me.ToErr()
 }
 
 func (j *JobService) validateUpstream(ctx context.Context, subjectJob *job.Job, jobsToValidateMap map[job.Name]*job.Job) dto.ValidateResult {

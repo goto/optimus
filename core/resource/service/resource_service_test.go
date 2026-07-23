@@ -1729,7 +1729,7 @@ func TestResourceService(t *testing.T) {
 
 			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil, nil, nil)
 
-			_, err := rscService.GetByURN(ctx, tnnt, resource.ZeroURN())
+			_, err := rscService.GetByURN(ctx, resource.ZeroURN())
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "urn is zero value")
 		})
@@ -1742,11 +1742,11 @@ func TestResourceService(t *testing.T) {
 			urn, err := resource.ParseURN("bigquery://project:dataset.table")
 			assert.NoError(t, err)
 
-			repo.On("ReadByURN", ctx, tnnt, urn).Return(nil, errors.New("unknown error"))
+			repo.On("ReadByURN", ctx, urn).Return(nil, errors.New("unknown error"))
 
 			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil, nil, nil)
 
-			_, err = rscService.GetByURN(ctx, tnnt, urn)
+			_, err = rscService.GetByURN(ctx, urn)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "unknown error")
 		})
@@ -1762,11 +1762,11 @@ func TestResourceService(t *testing.T) {
 			expectedResource, err := resource.NewResource("project.dataset", "dataset", resource.Bigquery, tnnt, meta, spec)
 			assert.NoError(t, err)
 
-			repo.On("ReadByURN", ctx, tnnt, urn).Return(expectedResource, nil)
+			repo.On("ReadByURN", ctx, urn).Return(expectedResource, nil)
 
 			rscService := service.NewResourceService(logger, repo, nil, mgr, nil, nil, nil, nil, nil, nil, nil)
 
-			actualResource, err := rscService.GetByURN(ctx, tnnt, urn)
+			actualResource, err := rscService.GetByURN(ctx, urn)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedResource, actualResource)
 		})
@@ -1835,8 +1835,8 @@ func (m *mockResourceRepository) Delete(ctx context.Context, res *resource.Resou
 	return m.Called(ctx, res).Error(0)
 }
 
-func (m *mockResourceRepository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error) {
-	args := m.Called(ctx, tnnt, urn)
+func (m *mockResourceRepository) ReadByURN(ctx context.Context, urn resource.URN) (*resource.Resource, error) {
+	args := m.Called(ctx, urn)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

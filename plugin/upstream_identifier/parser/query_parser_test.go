@@ -330,6 +330,68 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 				InputQuery:     "create or replace table `data-engineering.testing.table_b`",
 				ExpectedTables: []string{},
 			},
+			{
+				Name:           "does not treat a struct/record field access in the select list as an upstream",
+				InputQuery:     "select struct_col.nested_field.subfield from `data-engineering.testing.table1`",
+				ExpectedTables: []string{newTable("data-engineering", "testing", "table1")},
+			},
+			{
+				Name:           "does not treat a qualified-alias struct field access in the select list as an upstream",
+				InputQuery:     "select t.struct_col.field from `data-engineering.testing.table1` t",
+				ExpectedTables: []string{newTable("data-engineering", "testing", "table1")},
+			},
+			{
+				Name:           "does not treat multiple comma-separated struct field accesses in the select list as upstreams",
+				InputQuery:     "select a.b.c, d.e.f from `data-engineering.testing.table1`",
+				ExpectedTables: []string{newTable("data-engineering", "testing", "table1")},
+			},
+			{
+				Name:       "still captures the second and later tables of a comma-joined from list",
+				InputQuery: "select * from `data-engineering.testing.table1`, `data-engineering.testing.table2`",
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "table1"),
+					newTable("data-engineering", "testing", "table2"),
+				},
+			},
+			{
+				Name:       "still captures a comma-joined from list without backtick quoting",
+				InputQuery: "select * from data-engineering.testing.table1, data-engineering.testing.table2 where table1.id = table2.id",
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "table1"),
+					newTable("data-engineering", "testing", "table2"),
+				},
+			},
+			{
+				Name:           "does not treat a struct field access in a where clause as an upstream",
+				InputQuery:     "select * from data-engineering.testing.table1 where x.y.z = 1",
+				ExpectedTables: []string{newTable("data-engineering", "testing", "table1")},
+			},
+			{
+				Name:           "does not treat a struct field access in a group by clause as an upstream",
+				InputQuery:     "select * from data-engineering.testing.table1 group by x.y.z",
+				ExpectedTables: []string{newTable("data-engineering", "testing", "table1")},
+			},
+			{
+				Name:           "does not treat a struct field access in an order by clause as an upstream",
+				InputQuery:     "select * from data-engineering.testing.table1 order by x.y.z",
+				ExpectedTables: []string{newTable("data-engineering", "testing", "table1")},
+			},
+			{
+				Name:       "does not treat a struct field access in a join's on clause as an upstream",
+				InputQuery: "select * from data-engineering.testing.table1 x join data-engineering.testing.table2 y on x.struct_field.value = y.id",
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "table1"),
+					newTable("data-engineering", "testing", "table2"),
+				},
+			},
+			{
+				Name:       "does not leak a subquery's from-list state into the clause that encloses it",
+				InputQuery: "select * from data-engineering.testing.table1 where x in (select y from data-engineering.testing.table2) and g.h.i = 1",
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "table1"),
+					newTable("data-engineering", "testing", "table2"),
+				},
+			},
 		}
 		for _, test := range testCases {
 			t.Run(test.Name, func(t *testing.T) {

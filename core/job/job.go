@@ -2,6 +2,7 @@ package job
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -192,8 +193,10 @@ func (j *Job) IsScheduledAfter(otherJob *Job, referenceTime time.Time) (bool, st
 		return true, fmt.Sprintf("other job has sub-daily schedule [%s]", otherCronStr)
 	}
 
-	subjectNextSchedule := subjectJobCron.Next(referenceTime)
-	otherNextSchedule := otherJobCron.Next(referenceTime)
+	refTimeUTC := referenceTime.UTC()
+
+	subjectNextSchedule := subjectJobCron.Next(refTimeUTC)
+	otherNextSchedule := otherJobCron.Next(refTimeUTC)
 
 	if subjectNextSchedule.Before(otherNextSchedule) {
 		return false, fmt.Sprintf("current job [%s] is scheduled before job %s [%s]",
@@ -307,6 +310,28 @@ func (j Jobs) GetNameMap() map[Name]*Job {
 		jobNameMap[job.spec.Name()] = job
 	}
 	return jobNameMap
+}
+
+func (j Jobs) GetDestinationToFullNameMap() map[resource.URN]FullName {
+	destinationToFullName := make(map[resource.URN]FullName)
+	for _, jb := range j {
+		fullName := FullNameFrom(jb.Tenant().ProjectName(), jb.Spec().Name())
+		if jb.Destination() != resource.ZeroURN() {
+			destinationToFullName[jb.Destination()] = fullName
+		}
+	}
+
+	return destinationToFullName
+}
+
+func (j Jobs) GetFullNameSet() map[FullName]bool {
+	fullNameSet := make(map[FullName]bool)
+	for _, jb := range j {
+		fullName := FullNameFrom(jb.Tenant().ProjectName(), jb.Spec().Name())
+		fullNameSet[fullName] = true
+	}
+
+	return fullNameSet
 }
 
 func (j Jobs) GetNamespaceNameAndJobsMap() map[tenant.NamespaceName][]*Job {
@@ -446,6 +471,14 @@ func (w WithUpstreams) GetSubjectJobNameStrings() []string {
 		names[i] = withUpstream.Name().String()
 	}
 	return names
+}
+
+func (w WithUpstreams) GetNameToWithUpstreamMap() map[Name]*WithUpstream {
+	m := make(map[Name]*WithUpstream, len(w))
+	for _, jwu := range w {
+		m[jwu.Name()] = jwu
+	}
+	return m
 }
 
 func (w WithUpstreams) MergeWithResolvedUpstreams(resolvedUpstreamsBySubjectJobMap map[Name][]*Upstream) []*WithUpstream {
@@ -726,4 +759,16 @@ type DeployState string
 
 func (d DeployState) String() string {
 	return string(d)
+}
+
+// UpstreamGraph is a lightweight, install-wide job dependency graph keyed by FullName
+// ("project/job_name") on both sides
+type UpstreamGraph map[FullName][]FullName
+
+func (ug UpstreamGraph) DeepClone() UpstreamGraph {
+	clone := make(UpstreamGraph, len(ug))
+	for k, v := range ug {
+		clone[k] = slices.Clone(v)
+	}
+	return clone
 }

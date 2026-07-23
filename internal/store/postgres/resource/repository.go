@@ -460,13 +460,13 @@ func (r Repository) GetChangelogs(ctx context.Context, projectName tenant.Projec
 	return changeLog, me.ToErr()
 }
 
-func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) (*resource.Resource, error) {
+func (r Repository) ReadByURN(ctx context.Context, urn resource.URN) (*resource.Resource, error) {
 	query := `
 		SELECT ` + resourceColumns + ` FROM resource
-		WHERE urn = $1 AND project_name = $2 AND namespace_name = $3 AND status NOT IN ($4, $5)
+		WHERE urn = $1 AND status NOT IN ($2, $3)
 		LIMIT 1
 	`
-	args := []any{urn.String(), tnnt.ProjectName(), tnnt.NamespaceName(), resource.StatusDeleted, resource.StatusToDelete}
+	args := []any{urn.String(), resource.StatusDeleted, resource.StatusToDelete}
 
 	var res Resource
 	err := r.db.QueryRow(ctx, query, args...).
@@ -474,10 +474,10 @@ func (r Repository) ReadByURN(ctx context.Context, tnnt tenant.Tenant, urn resou
 			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errors.NotFound(resource.EntityResource, fmt.Sprintf("no resource with urn: '%s' found for project:%s, namespace:%s ", urn, tnnt.ProjectName(), tnnt.NamespaceName()))
+			return nil, errors.NotFound(resource.EntityResource, fmt.Sprintf("no resource with urn: '%s' found", urn))
 		}
 
-		return nil, errors.Wrap(resource.EntityResource, fmt.Sprintf("error reading resource with urn: '%s' found for project:%s, namespace:%s ", urn, tnnt.ProjectName(), tnnt.NamespaceName()), err)
+		return nil, errors.Wrap(resource.EntityResource, fmt.Sprintf("error reading resource with urn: '%s' found", urn), err)
 	}
 
 	return FromModelToResource(&res)

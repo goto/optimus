@@ -1128,6 +1128,43 @@ WHERE project_name=$1 AND job_name=$2;`
 	return j.toUpstreams(storeJobsWithUpstreams)
 }
 
+// GetAllResolvedUpstreamEdges return all cross-project upstream edges. Supposed to be lightweight only
+func (j JobRepository) GetAllResolvedUpstreamEdges(ctx context.Context) (map[job.FullName][]job.FullName, error) {
+	query := `
+SELECT
+	ju.project_name, ju.job_name, ju.upstream_project_name, ju.upstream_job_name
+FROM job_upstream ju
+JOIN job j ON (ju.job_name = j.name AND ju.project_name = j.project_name)
+JOIN job uj ON (ju.upstream_job_name = uj.name AND ju.upstream_project_name = uj.project_name)
+WHERE ju.upstream_state = 'resolved'
+AND ju.upstream_external = false
+AND j.deleted_at IS NULL
+AND uj.deleted_at IS NULL;`
+
+	rows, err := j.db.Query(ctx, query)
+	if err != nil {
+		return nil, errors.Wrap(job.EntityJob, "error while getting all resolved upstream edges", err)
+	}
+	defer rows.Close()
+
+	edges := make(map[job.FullName][]job.FullName)
+	for rows.Next() {
+		var projectName, jobName, upstreamProjectName, upstreamJobName string
+		if err := rows.Scan(&projectName, &jobName, &upstreamProjectName, &upstreamJobName); err != nil {
+			return nil, errors.Wrap(job.EntityJob, "error while scanning resolved upstream edge", err)
+		}
+
+		subject := job.FullName(projectName + "/" + jobName)
+		upstream := job.FullName(upstreamProjectName + "/" + upstreamJobName)
+		edges[subject] = append(edges[subject], upstream)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(job.EntityJob, "error while iterating resolved upstream edges", err)
+	}
+
+	return edges, nil
+}
+
 func (j JobRepository) GetDownstreamByDestination(ctx context.Context, destination resource.URN) ([]*job.Downstream, error) {
 	query := `
 SELECT

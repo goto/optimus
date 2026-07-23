@@ -485,6 +485,42 @@
           "then": {
             "required": ["decimal"]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": ["array", "ARRAY"]
+              }
+            }
+          },
+          "then": {
+            "required": ["array"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": ["struct", "STRUCT"]
+              }
+            }
+          },
+          "then": {
+            "required": ["struct"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": ["map", "MAP"]
+              }
+            }
+          },
+          "then": {
+            "required": ["map"]
+          }
         }
       ]
     },

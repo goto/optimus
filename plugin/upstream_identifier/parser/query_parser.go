@@ -189,10 +189,10 @@ func collectWriteOnlySpans(query string, upstreamMatches [][]int) [][2]int {
 // buildFromListEvents scans query for clause keywords and parentheses, skipping any keyword
 // that falls inside a write-only span, and returns all events sorted by position.
 func buildFromListEvents(query string, writeOnlySpans [][2]int) []fromListEvent {
-	keywordEvents := buildKeywordEvents(query, writeOnlySpans)
+	events := buildKeywordEvents(query, writeOnlySpans)
 	parenthesesEvents := buildParenthesesEvents(query)
 
-	events := append(keywordEvents, parenthesesEvents...)
+	events = append(events, parenthesesEvents...)
 	sort.Slice(events, func(i, j int) bool { return events[i].pos < events[j].pos })
 
 	return events

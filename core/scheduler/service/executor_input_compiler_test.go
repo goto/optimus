@@ -156,7 +156,7 @@ func TestExecutorCompiler(t *testing.T) {
 			templateCompiler.On("Compile", mock.Anything, taskContext).Return(map[string]string{}, nil)
 			defer templateCompiler.AssertExpectations(t)
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(nil, fmt.Errorf("CompileJobRunAssets error"))
+			assetCompiler.On("CompileJobRunAssets", mock.Anything, &job, systemDefinedVars, interval, taskContext).Return(nil, fmt.Errorf("CompileJobRunAssets error"))
 			defer assetCompiler.AssertExpectations(t)
 
 			inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
@@ -263,7 +263,7 @@ func TestExecutorCompiler(t *testing.T) {
 					Return(map[string]string{"secret.config.compiled": "a.secret.val.compiled"}, nil)
 				defer templateCompiler.AssertExpectations(t)
 				assetCompiler := new(mockAssetCompiler)
-				assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+				assetCompiler.On("CompileJobRunAssets", mock.Anything, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompiler.AssertExpectations(t)
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompiler, logger)
 				inputExecutorResp, err := inputCompiler.Compile(ctx, &details, config, executedAt, nil)
@@ -313,7 +313,7 @@ func TestExecutorCompiler(t *testing.T) {
 				}
 
 				assetCompilerNew := new(mockAssetCompiler)
-				assetCompilerNew.On("CompileJobRunAssets", ctx, &jobNew, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+				assetCompilerNew.On("CompileJobRunAssets", mock.Anything, &jobNew, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 				defer assetCompilerNew.AssertExpectations(t)
 
 				inputCompiler := service.NewJobInputCompiler(tenantService, templateCompiler, assetCompilerNew, logger)
@@ -408,7 +408,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"someFileName": "fileContents",
 			}
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+			assetCompiler.On("CompileJobRunAssets", mock.Anything, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 			defer assetCompiler.AssertExpectations(t)
 
 			templateCompiler := new(mockTemplateCompiler)
@@ -507,7 +507,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"someFileName": "fileContents",
 			}
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+			assetCompiler.On("CompileJobRunAssets", mock.Anything, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 			defer assetCompiler.AssertExpectations(t)
 
 			templateCompiler := new(mockTemplateCompiler)
@@ -579,7 +579,7 @@ func TestExecutorCompiler(t *testing.T) {
 				"someFileName": "fileContents",
 			}
 			assetCompiler := new(mockAssetCompiler)
-			assetCompiler.On("CompileJobRunAssets", ctx, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
+			assetCompiler.On("CompileJobRunAssets", mock.Anything, &job, systemDefinedVars, interval, taskContext).Return(compiledFile, nil)
 			defer assetCompiler.AssertExpectations(t)
 
 			templateCompiler := new(mockTemplateCompiler)

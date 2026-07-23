@@ -53,6 +53,10 @@ const (
 
 var invalidLabelCharacterRegex *regexp.Regexp
 
+var jobRunMode ctxContext = "run-mode"
+
+type ctxContext string
+
 type TenantService interface {
 	GetDetails(ctx context.Context, tnnt tenant.Tenant) (*tenant.WithDetails, error)
 	GetSecrets(ctx context.Context, tnnt tenant.Tenant) ([]*tenant.PlainTextSecret, error)
@@ -138,6 +142,7 @@ func (i InputCompiler) Compile(ctx context.Context, job *scheduler.JobWithDetail
 	)
 
 	mergedContext := utils.MergeAnyMaps(taskContext, allTaskConfigs)
+	ctx = context.WithValue(ctx, jobRunMode, scheduler.DryRun)
 	fileMap, err := i.assetCompiler.CompileJobRunAssets(ctx, job.Job, systemDefinedVars, interval, mergedContext)
 	if err != nil {
 		i.logger.Error("error compiling job run assets: %s", err)

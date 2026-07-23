@@ -25,6 +25,7 @@ type ReplayService interface {
 	GetReplayByID(ctx context.Context, replayID uuid.UUID) (replay *scheduler.ReplayWithRun, err error)
 	GetReplayByApprovalID(ctx context.Context, approvalID string) (*scheduler.ReplayWithRun, error)
 	GetRunsStatus(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (runs []*scheduler.JobRunStatus, err error)
+	GetJobConfig(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, config *scheduler.ReplayConfig) (map[string]string, error)
 	CancelReplay(ctx context.Context, replayWithRun *scheduler.ReplayWithRun) error
 }
 
@@ -61,8 +62,15 @@ func (h ReplayHandler) ReplayDryRun(ctx context.Context, req *pb.ReplayDryRunReq
 		return nil, errors.GRPCErr(err, "unable to fetch runs status for "+req.JobName)
 	}
 
+	jobConfig, err := h.service.GetJobConfig(ctx, replayReq.Tenant(), replayReq.JobName(), replayReq.Config())
+	if err != nil {
+		h.l.Error("error fetching runs status for replay dry run: %s", err)
+		return nil, errors.GRPCErr(err, "unable to fetch runs status for "+req.JobName)
+	}
+
 	return &pb.ReplayDryRunResponse{
 		ReplayRuns: replayRunsToProto(runs),
+		JobConfig:  jobConfig,
 	}, nil
 }
 

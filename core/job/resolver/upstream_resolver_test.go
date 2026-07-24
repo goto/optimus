@@ -85,7 +85,7 @@ func TestUpstreamResolver(t *testing.T) {
 			upstreamsB := []*job.Upstream{upstreamB1}
 			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
 
-			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil)
+			internalUpstreamResolver.On("Resolve", ctx, mock.Anything).Return(jobBWithUpstream, nil)
 
 			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil, nil)
 
@@ -111,7 +111,7 @@ func TestUpstreamResolver(t *testing.T) {
 			upstreamsB := []*job.Upstream{upstreamB0, upstreamB1}
 			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
 
-			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil)
+			internalUpstreamResolver.On("Resolve", ctx, mock.Anything).Return(jobBWithUpstream, nil)
 
 			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil, nil)
 
@@ -136,7 +136,7 @@ func TestUpstreamResolver(t *testing.T) {
 			upstreamsB := []*job.Upstream{upstreamB0}
 			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
 
-			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil)
+			internalUpstreamResolver.On("Resolve", ctx, mock.Anything).Return(jobBWithUpstream, nil)
 
 			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobBWithUpstream}, nil, nil)
 
@@ -170,7 +170,8 @@ func TestUpstreamResolver(t *testing.T) {
 			upstreamsB := []*job.Upstream{upstreamB0, upstreamB1}
 			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
 
-			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil)
+			internalUpstreamResolver.On("Resolve", ctx, mock.MatchedBy(func(j *job.WithUpstream) bool { return j.GetName() == "job-A" })).Return(jobAWithUpstream, nil)
+			internalUpstreamResolver.On("Resolve", ctx, mock.MatchedBy(func(j *job.WithUpstream) bool { return j.GetName() == "job-B" })).Return(jobBWithUpstream, nil)
 
 			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, nil, nil)
 
@@ -206,7 +207,8 @@ func TestUpstreamResolver(t *testing.T) {
 			upstreamsB := []*job.Upstream{upstreamB0, upstreamB1}
 			jobBWithUpstream := job.NewWithUpstream(jobB, upstreamsB)
 
-			internalUpstreamResolver.On("BulkResolve", ctx, project.Name(), mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, errors.New("error in Internal bulkResolve"))
+			internalUpstreamResolver.On("Resolve", ctx, mock.MatchedBy(func(j *job.WithUpstream) bool { return j.GetName() == "job-A" })).Return(jobAWithUpstream, errors.New("error in Internal bulkResolve"))
+			internalUpstreamResolver.On("Resolve", ctx, mock.MatchedBy(func(j *job.WithUpstream) bool { return j.GetName() == "job-B" })).Return(jobBWithUpstream, errors.New("error in Internal bulkResolve"))
 
 			externalUpstreamResolver.On("BulkResolve", ctx, mock.Anything, mock.Anything).Return([]*job.WithUpstream{jobAWithUpstream, jobBWithUpstream}, errors.New("error in External bulkResolve"))
 

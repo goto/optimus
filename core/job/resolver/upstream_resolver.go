@@ -124,7 +124,7 @@ func (u UpstreamResolver) Resolve(ctx context.Context, subjectJob *job.Job, logW
 		me.Append(err)
 	}
 
-	return jobWithInternalExternalUpstream.Upstreams(), me.ToErr()
+	return jobWithThirdPartyUpstream.Upstreams(), me.ToErr()
 }
 
 func (UpstreamResolver) getUnresolvedUpstreamsErrors(jobsWithUpstreams []*job.WithUpstream, logWriter writer.LogWriter) error {

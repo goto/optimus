@@ -54,8 +54,13 @@ func (u UpstreamResolver) CheckStaticResolvable(ctx context.Context, tnnt tenant
 	jobsWithUnresolvedStaticUpstream, err := job.Jobs(incomingJobs).GetJobsWithUnresolvedStaticUpstreams()
 	me.Append(err)
 
-	jobsWithResolvedStaticInternalUpstreams, err := u.internalUpstreamResolver.BulkResolve(ctx, tnnt.ProjectName(), jobsWithUnresolvedStaticUpstream)
-	me.Append(err)
+	var jobsWithResolvedStaticInternalUpstreams []*job.WithUpstream
+	for _, jobWithUnresolvedStaticUpstream := range jobsWithUnresolvedStaticUpstream {
+		jobWithResolvedStaticUpstream, err := u.internalUpstreamResolver.Resolve(ctx, jobWithUnresolvedStaticUpstream)
+		jobsWithResolvedStaticInternalUpstreams = append(jobsWithResolvedStaticInternalUpstreams, jobWithResolvedStaticUpstream)
+		me.Append(err)
+	}
+
 	jobsWithResolvedStaticExternalUpstreams, err := u.externalUpstreamResolver.BulkResolve(ctx, jobsWithResolvedStaticInternalUpstreams, logWriter)
 	me.Append(err)
 

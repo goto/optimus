@@ -12,6 +12,7 @@ const (
 	eventKindKeyword    fromListEventKind = iota
 	eventKindOpenParen                    // entering a subquery
 	eventKindCloseParen                   // leaving a subquery
+	eventKindSemicolon                    // semicolon char `;`, ending a part of a scripted query
 )
 
 type fromListEvent struct {
@@ -157,7 +158,8 @@ func extractValidTable(query string, idx []int, insideFromOrJoinClause func(int)
 	clause := getClauseFromMatch(query, idx)
 	ignoreUpstreamIdx, tableIdx, isKeywordMatch := clauseGroupIndices(clause)
 
-	if strings.TrimSpace(groupText(query, idx, ignoreUpstreamIdx)) == "@ignoreupstream" {
+	ignoreUpstreamClause := groupText(query, idx, ignoreUpstreamIdx)
+	if strings.TrimSpace(ignoreUpstreamClause) == "@ignoreupstream" {
 		return "", false
 	}
 	if isWriteOnlyClause(clause) {
@@ -167,7 +169,8 @@ func extractValidTable(query string, idx []int, insideFromOrJoinClause func(int)
 		return "", false
 	}
 
-	return cleanTableFromTickQuote(groupText(query, idx, tableIdx)), clause == "with"
+	tableName := groupText(query, idx, tableIdx)
+	return cleanTableFromTickQuote(tableName), clause == "with"
 }
 
 func getClauseFromMatch(query string, upstreamMatchIdx []int) string {
@@ -225,6 +228,8 @@ func buildParenthesesEvents(query string) []fromListEvent {
 			events = append(events, fromListEvent{pos: i, kind: eventKindOpenParen})
 		case ')':
 			events = append(events, fromListEvent{pos: i, kind: eventKindCloseParen})
+		case ';':
+			events = append(events, fromListEvent{pos: i, kind: eventKindSemicolon})
 		}
 	}
 
@@ -247,7 +252,7 @@ func buildFromListStateIndex(events []fromListEvent) (positions []int, states []
 		case eventKindOpenParen:
 			scopeStack = append(scopeStack, active)
 			active = false
-		case eventKindCloseParen:
+		case eventKindCloseParen, eventKindSemicolon:
 			if len(scopeStack) > 0 {
 				active = scopeStack[len(scopeStack)-1]
 				scopeStack = scopeStack[:len(scopeStack)-1]

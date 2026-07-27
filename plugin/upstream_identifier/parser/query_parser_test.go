@@ -392,6 +392,23 @@ func TestParseTopLevelUpstreamsFromQuery(t *testing.T) {
 					newTable("data-engineering", "testing", "table2"),
 				},
 			},
+			{
+				Name: "query containing multiple variable assignments does not extract the nested columns as parsed table",
+				InputQuery: `
+				@select_result := select * from data-engineering.testing.table1 where value in
+					(select name from data-engineering.testing.table2);
+
+				@select_result_2 := select * from data-engineering.testing.table1 tb1,
+				(select value from data-engineering.testing.table3) tb3 where tb1.name = tb3.value;
+
+				select a.b.c, a.b.d from @select_result join @select_result_2;
+				`,
+				ExpectedTables: []string{
+					newTable("data-engineering", "testing", "table1"),
+					newTable("data-engineering", "testing", "table2"),
+					newTable("data-engineering", "testing", "table3"),
+				},
+			},
 		}
 		for _, test := range testCases {
 			t.Run(test.Name, func(t *testing.T) {

@@ -194,11 +194,19 @@ func (j *Job) IsScheduledAfter(otherJob *Job, referenceTime time.Time) (bool, st
 	}
 
 	refTimeUTC := referenceTime.UTC()
+	subjectNext := subjectJobCron.Next(refTimeUTC)
+	otherNext := otherJobCron.Next(refTimeUTC)
 
-	subjectNextSchedule := subjectJobCron.Next(refTimeUTC)
-	otherNextSchedule := otherJobCron.Next(refTimeUTC)
+	// Only enforce precedence between daily+ jobs with the same interval.
+	// A daily job depending on a weekly job (or vice versa) has no meaningful ordering.
+	subjectInterval := subjectJobCron.Next(subjectNext).Sub(subjectNext)
+	otherInterval := otherJobCron.Next(otherNext).Sub(otherNext)
+	if subjectInterval != otherInterval {
+		return true, fmt.Sprintf("skip schedule precedence: different schedule types (subject: %s, upstream: %s)",
+			subjectCronStr, otherCronStr)
+	}
 
-	if subjectNextSchedule.Before(otherNextSchedule) {
+	if subjectNext.Before(otherNext) {
 		return false, fmt.Sprintf("current job [%s] is scheduled before job %s [%s]",
 			subjectCronStr, otherJob.FullName(), otherCronStr)
 	}

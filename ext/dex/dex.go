@@ -126,6 +126,11 @@ func (d *Client) isResourceManagedUntil(ctx context.Context, store, resourceURN 
 
 	if response.StatusCode != http.StatusOK {
 		d.l.Error("unexpected status response", "status", response.Status, "body", response.Body)
+		// 404 means dex couldn't associate the provided resource URN as a table (either wrong table name or passing non-table string)
+		// treat this directly as nonmanaged, but not returning error for now
+		if response.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
 		return false, fmt.Errorf("unexpected status response: %s", response.Status)
 	}
 

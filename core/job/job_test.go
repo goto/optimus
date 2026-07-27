@@ -568,6 +568,30 @@ func TestEntityJob(t *testing.T) {
 				expectedIsAfter: true,
 				expectedMessage: "current job has sub-daily schedule [0 * * * *]",
 			},
+			{
+				name:            "scheduleSubject is daily, scheduleOther is weekly — different types, skip",
+				scheduleSubject: "0 2 * * *",
+				scheduleOther:   "0 2 * * 1",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "skip schedule precedence: different schedule types (subject: 0 2 * * *, upstream: 0 2 * * 1)",
+			},
+			{
+				name:            "scheduleSubject is weekly, scheduleOther is daily — different types, skip",
+				scheduleSubject: "0 2 * * 1",
+				scheduleOther:   "0 2 * * *",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "skip schedule precedence: different schedule types (subject: 0 2 * * 1, upstream: 0 2 * * *)",
+			},
+			{
+				name:            "skip when both schedule are subdaily",
+				scheduleSubject: "0 18,0 * * *",
+				scheduleOther:   "0 18,0 * * *",
+				referenceTime:   time.Date(2022, 10, 2, 0, 0, 0, 0, time.UTC),
+				expectedIsAfter: true,
+				expectedMessage: "current job has sub-daily schedule [0 18,0 * * *]",
+			},
 		}
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {

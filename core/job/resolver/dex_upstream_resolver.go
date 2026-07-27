@@ -9,6 +9,7 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/job"
+	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
@@ -70,6 +71,12 @@ func (u *dexUpstreamResolver) Resolve(ctx context.Context, jobWithUpstream *job.
 	unresolvedUpstreams := []*job.Upstream{}
 	thirdPartyUpstreams := []*job.ThirdPartyUpstream{}
 	for _, unresolvedUpstream := range jobWithUpstream.GetUnresolvedUpstreams() {
+		// dex should only resolve upstreams with resource URN
+		// static dependencies are not supposed to be resolved here
+		if unresolvedUpstream.Resource() == resource.ZeroURN() {
+			continue
+		}
+
 		// segregate DEX managed upstreams and non-DEX managed upstreams
 		if isDEXManaged, err := u.dexClient.IsManaged(ctx, unresolvedUpstream.Resource()); err == nil && isDEXManaged {
 			cfg := map[string]string{}

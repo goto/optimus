@@ -76,11 +76,11 @@ func (a *AirflowSyncStateRepository) ReclaimStaleWindow(ctx context.Context, pro
 			ORDER BY start_time ASC
 			LIMIT 1
 		)
-		RETURNING id, project_name, start_time, end_time, status, attempt_count, worker_id, locked_until`
+		RETURNING id, project_name, start_time, end_time, status, attempt_count, last_error, worker_id, locked_until`
 
 	var w airflowSyncStateRow
 	err := a.db.QueryRow(ctx, query, workerID, lockDuration, projectName, scheduler.AirflowSyncInProgress, maxAttempts).Scan(
-		&w.ID, &w.ProjectName, &w.StartTime, &w.EndTime, &w.Status, &w.AttemptCount, &w.WorkerID, &w.LockedUntil)
+		&w.ID, &w.ProjectName, &w.StartTime, &w.EndTime, &w.Status, &w.AttemptCount, &w.LastError, &w.WorkerID, &w.LockedUntil)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil //nolint:nilnil

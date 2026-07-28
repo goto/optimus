@@ -92,6 +92,7 @@ func (j *jobRun) toJobRun() (*scheduler.JobRun, error) {
 		WindowEnd:     windowEnd,
 		SLADefinition: j.SLADefinition,
 		Monitoring:    monitoring,
+		UpdatedAt:     j.UpdatedAt,
 	}, nil
 }
 
@@ -189,10 +190,10 @@ func (j *JobRunRepository) GetRunsByTimeRange(ctx context.Context, project tenan
 func (j *JobRunRepository) GetByScheduledAt(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error) {
 	var jr jobRun
 	// todo: check if `order by created_at desc limit 1` is required
-	getJobRunByScheduledAt := `SELECT ` + jobRunColumns + `, created_at FROM job_run j where project_name = $1 and namespace_name = $2 and job_name = $3 and scheduled_at = $4 order by created_at desc limit 1`
+	getJobRunByScheduledAt := `SELECT ` + jobRunColumns + `, created_at, updated_at FROM job_run j where project_name = $1 and namespace_name = $2 and job_name = $3 and scheduled_at = $4 order by created_at desc limit 1`
 	err := j.db.QueryRow(ctx, getJobRunByScheduledAt, t.ProjectName(), t.NamespaceName(), jobName, scheduledAt).
 		Scan(&jr.ID, &jr.JobName, &jr.NamespaceName, &jr.ProjectName, &jr.ScheduledAt, &jr.StartTime, &jr.EndTime,
-			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt)
+			&jr.WindowStart, &jr.WindowEnd, &jr.Status, &jr.SLADefinition, &jr.SLAAlert, &jr.Monitoring, &jr.CreatedAt, &jr.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityJobRun, "no record for job:"+jobName.String()+" scheduled at: "+scheduledAt.String())

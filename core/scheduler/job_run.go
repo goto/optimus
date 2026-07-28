@@ -47,6 +47,12 @@ type JobRun struct {
 	WindowEnd     *time.Time
 	SLADefinition int64
 
+	// UpdatedAt is only populated by GetByScheduledAt today, not every JobRunRepository
+	// method -- it exists for the airflow-sync reconciler to compare against an external
+	// change's timestamp so a stale write never overwrites fresher data. Don't assume it is
+	// set on a JobRun obtained from another method.
+	UpdatedAt time.Time
+
 	Monitoring map[string]any
 }
 
@@ -70,6 +76,9 @@ type OperatorRun struct {
 	Status       State
 	StartTime    time.Time
 	EndTime      *time.Time
+
+	// UpdatedAt is only populated by GetOperatorRun today. See JobRun.UpdatedAt for why.
+	UpdatedAt time.Time
 }
 
 type AlertAttrs struct {

@@ -329,6 +329,15 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		},
 	}
 	s.expectedServerConfig.Backfill.ExecutionIntervalInSeconds = 300
+
+	s.expectedServerConfig.AirflowSync = config.AirflowSyncConfig{
+		SettlingDelayInSeconds:   60,
+		LockDurationInSeconds:    300,
+		InitialLookbackInSeconds: 3600,
+		OverlapEpsilonInSeconds:  2,
+		MaxAttempts:              3,
+		MaxWindowsPerTick:        6,
+	}
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

@@ -49,6 +49,13 @@ const (
 	OperatorSensor OperatorType = "sensor"
 	OperatorHook   OperatorType = "hook"
 
+	// airflowSensorTaskIDPrefix / airflowHookTaskIDPrefix mirror the task_id naming
+	// convention the DAG templates use (ext/scheduler/airflow/dag/template/*.tmpl) and
+	// that __lib.py's get_run_type classifies on. Anything without either prefix is the
+	// main transformation task.
+	airflowSensorTaskIDPrefix = "wait_"
+	airflowHookTaskIDPrefix   = "hook_"
+
 	UpstreamTypeStatic   = "static"
 	UpstreamTypeInferred = "inferred"
 )
@@ -106,6 +113,22 @@ func (j *Job) GetHookAlertConfigByName(hookName string) *OperatorAlertConfig {
 		}
 	}
 	return nil
+}
+
+// OperatorTypeFromTaskID classifies a raw Airflow task_id by the same convention
+// __lib.py's get_run_type uses: a "wait_" prefix is a sensor, a "hook_" prefix is a
+// hook, anything else is the main task. There is deliberately no error return -- every
+// task_id classifies to something, unlike NewOperatorType which validates an explicit
+// operator-type string.
+func OperatorTypeFromTaskID(taskID string) OperatorType {
+	switch {
+	case strings.HasPrefix(taskID, airflowSensorTaskIDPrefix):
+		return OperatorSensor
+	case strings.HasPrefix(taskID, airflowHookTaskIDPrefix):
+		return OperatorHook
+	default:
+		return OperatorTask
+	}
 }
 
 func (j *Job) GetOperatorAlertConfigByName(operatorType OperatorType, operatorName string) *OperatorAlertConfig {

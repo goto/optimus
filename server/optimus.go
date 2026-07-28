@@ -483,6 +483,29 @@ func (s *OptimusServer) setupHandlers() error {
 		time.Minute*time.Duration(s.conf.SLAConfig.WorkerIntervalMinutes),
 		time.Minute*time.Duration(s.conf.SLAConfig.LockDurationMinutes))
 
+	// manual-state-override reconciliation, see
+	// docs/docs/rfcs/20260727_manual_state_override_reconciliation.md. Opt-in: a zero
+	// WindowIntervalInSeconds (the default, since AirflowSyncConfig has no `default` tag on
+	// it) leaves this off entirely.
+	if s.conf.AirflowSync.WindowIntervalInSeconds > 0 {
+		airflowSyncStateRepo := schedulerRepo.NewAirflowSyncStateRepository(s.dbPool)
+		airflowStateSyncService := schedulerService.NewAirflowStateSyncService(
+			s.logger, newScheduler, jobProviderRepo, jobRunRepo, operatorRunRepository, s.eventHandler)
+		airflowStateSyncWorker := schedulerService.NewAirflowStateSyncWorker(s.logger, tProjectService, airflowSyncStateRepo, airflowStateSyncService,
+			schedulerService.AirflowStateSyncConfig{
+				WindowInterval:    time.Second * time.Duration(s.conf.AirflowSync.WindowIntervalInSeconds),
+				SettlingDelay:     time.Second * time.Duration(s.conf.AirflowSync.SettlingDelayInSeconds),
+				LockDuration:      time.Second * time.Duration(s.conf.AirflowSync.LockDurationInSeconds),
+				InitialLookback:   time.Second * time.Duration(s.conf.AirflowSync.InitialLookbackInSeconds),
+				OverlapEpsilon:    time.Second * time.Duration(s.conf.AirflowSync.OverlapEpsilonInSeconds),
+				MaxAttempts:       s.conf.AirflowSync.MaxAttempts,
+				MaxWindowsPerTick: s.conf.AirflowSync.MaxWindowsPerTick,
+			})
+		airflowSyncWorkerCtx, closeAirflowSyncWorker := context.WithCancel(context.Background())
+		s.cleanupFn = append(s.cleanupFn, closeAirflowSyncWorker)
+		airflowStateSyncWorker.ScheduleAirflowStateSync(airflowSyncWorkerCtx)
+	}
+
 	resourceWorkerCtx, closeResourceWorker := context.WithCancel(context.Background())
 	s.cleanupFn = append(s.cleanupFn, closeResourceWorker)
 

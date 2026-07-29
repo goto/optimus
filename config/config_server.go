@@ -167,9 +167,14 @@ type RunAttributionConfig struct {
 	// ResolveTimeoutSeconds bounds one audit resolution, including its retries. The resolver
 	// runs detached from the request that triggered it, so this is the only thing that ends it.
 	ResolveTimeoutSeconds int `mapstructure:"resolve_timeout_seconds" default:"30"`
-	// MaxConcurrentResolves caps in-flight resolutions. When saturated Optimus records the run
-	// as manual with an unresolved actor rather than queueing work or blocking event ingestion.
+	// MaxConcurrentResolves caps concurrent calls *into Airflow*. Resolutions collapsed by
+	// singleflight — every task of one cleared dag run shares a single lookup — do not consume a
+	// slot, so this bounds load on the Airflow webserver rather than counting waiters.
 	MaxConcurrentResolves int `mapstructure:"max_concurrent_resolves" default:"16"`
+	// MaxPendingResolves caps in-flight resolver goroutines. Most are cheap waiters, so this
+	// exists only so a prolonged Airflow outage cannot grow memory without bound. Beyond it a run
+	// is still recorded as manual, with the actor left unidentified.
+	MaxPendingResolves    int `mapstructure:"max_pending_resolves" default:"512"`
 	ResolveRetryMax       int `mapstructure:"resolve_retry_max" default:"3"`
 	ResolveRetryBackoffMs int `mapstructure:"resolve_retry_backoff_ms" default:"500"`
 
@@ -177,6 +182,10 @@ type RunAttributionConfig struct {
 	// must cover the delay between a user's click and the task actually starting, which
 	// includes a scheduler loop plus queue and pool wait.
 	AuditLookbackMinutes int `mapstructure:"audit_lookback_minutes" default:"30"`
+	// IdentifyLookbackHours bounds the dag-scoped audit query so it stays indexed on the log
+	// table's timestamp. Generous by design: it exists for query efficiency, not to decide which
+	// run an event belongs to — AuditLookbackMinutes does that.
+	IdentifyLookbackHours int `mapstructure:"identify_lookback_hours" default:"24"`
 	// AuditPageLimit caps rows fetched per audit query.
 	AuditPageLimit int `mapstructure:"audit_page_limit" default:"100"`
 

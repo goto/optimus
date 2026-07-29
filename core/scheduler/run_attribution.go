@@ -38,6 +38,10 @@ const (
 	AttributionOptimusReplay = "optimus_replay"
 	// AttributionAuditRunID: an Airflow audit row matched on both dag_id and run_id. Exact.
 	AttributionAuditRunID = "airflow_audit_run_id"
+	// AttributionAuditDagID: an Airflow audit row named this DAG but not which run of it, so the
+	// correlation window is what ties it to this attempt. Weaker than a run_id match, far stronger
+	// than a dag-less bulk action.
+	AttributionAuditDagID = "airflow_audit_dag_id"
 	// AttributionAuditHeuristic: correlated only by time against audit rows that carry no
 	// dag_id or run_id, as produced by Airflow's bulk list-page clears. Low confidence.
 	AttributionAuditHeuristic = "airflow_audit_heuristic"

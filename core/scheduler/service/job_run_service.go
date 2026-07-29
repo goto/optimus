@@ -1181,7 +1181,7 @@ func (*JobRunService) attributionInputFrom(event *scheduler.Event, operatorType 
 // classifyRun decides why a run is executing. Attribution is best effort by nature, so a
 // failure to classify degrades to 'scheduled' rather than rejecting the event.
 func (s *JobRunService) classifyRun(ctx context.Context, in AttributionInput) scheduler.RunAttribution {
-	if s.runAttributionService == nil {
+	if s.runAttributionService == nil || in.OperatorType == scheduler.OperatorSensor {
 		return scheduler.ScheduledAttribution()
 	}
 	return s.runAttributionService.Classify(ctx, in)
@@ -1293,9 +1293,6 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	case scheduler.JobSuccessEvent, scheduler.JobFailureEvent:
 		return s.updateJobRun(ctx, event)
 	case scheduler.SensorStartEvent:
-		// Sensors are not attributed: they are upstream waits, and a sensor start is frequent
-		// enough that the extra lookup is not worth what it would tell us. Their columns exist
-		// only so all three operator tables keep one shared schema and one shared query builder.
 		return s.createOperatorRun(ctx, event, scheduler.OperatorSensor, nil)
 	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
 		return s.updateOperatorRun(ctx, event, scheduler.OperatorSensor)

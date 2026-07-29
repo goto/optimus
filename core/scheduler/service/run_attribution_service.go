@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,10 +25,14 @@ import (
 // being talked to, established by reading its source, and a wrong value would silently yield
 // unattributed runs rather than an error.
 //
-// exactMatchEvents identify a specific dag run, because Airflow populates the audit row's
-// dag_id and run_id from the request's form or query parameters. heuristicEvents are what the
-// /dagrun/list/ and /taskinstance/list/ bulk actions emit; those requests carry only opaque row
-// ids, so Airflow records no dag_id or run_id and the rows can be correlated by time alone.
+// exactMatchEvents always identify the DAG, because Airflow fills dag_id from the request's path or
+// form. They identify the *run* only sometimes: a plain Trigger DAG leaves the Run Id field blank,
+// and the REST clears pass it in a JSON body, both of which leave run_id NULL. So run_id is treated
+// as a bonus discriminator rather than a filter.
+//
+// heuristicEvents are what the /dagrun/list/ and /taskinstance/list/ bulk actions emit; those
+// requests carry only opaque row ids, so Airflow records no dag_id or run_id at all and the rows can
+// be correlated by time alone.
 var (
 	exactMatchEvents = []string{
 		"clear",        // grid page, clear a task instance
@@ -54,9 +59,11 @@ var (
 // Fallbacks for when this service is constructed with a zero config, e.g. in tests. Normal
 // operation gets these from the config loader's struct tag defaults.
 const (
-	defaultResolveTimeout = 30 * time.Second
-	defaultAuditLookback  = 30 * time.Minute
-	defaultAuditPageLimit = 100
+	defaultResolveTimeout   = 30 * time.Second
+	defaultAuditLookback    = 30 * time.Minute
+	defaultAuditPageLimit   = 100
+	defaultMaxPending       = 512
+	defaultIdentifyLookback = 24 * time.Hour
 )
 
 var runAttributionMetric = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -78,6 +85,7 @@ type RunAttributionRepository interface {
 	InsertTriggerSource(ctx context.Context, src *scheduler.TriggerSource) (uuid.UUID, error)
 	UpdateTriggerSourceResolution(ctx context.Context, triggerSourceID uuid.UUID, operatorType scheduler.OperatorType,
 		operatorRunID uuid.UUID, attribution scheduler.RunAttribution, resolveAttempts int) error
+	GetTriggerSourceByOperatorRunID(ctx context.Context, operatorRunID uuid.UUID) (*scheduler.TriggerSource, error)
 }
 
 type ReplayAttributionGetter interface {
@@ -116,10 +124,12 @@ type RunAttributionService struct {
 	backfillRepo BackfillAttributionGetter
 	auditGetter  AuditLogGetter
 
-	// sem caps concurrent resolutions. A full semaphore sheds the resolution rather than
-	// queueing it, so a slow Airflow cannot pile up goroutines on the event ingestion path.
-	sem   chan struct{}
-	group singleflight.Group
+	// sem caps concurrent calls into Airflow. Acquired inside the singleflight closure, so
+	// resolutions that collapse onto a shared lookup do not consume a slot.
+	sem chan struct{}
+	// inFlight counts resolver goroutines, as a memory backstop distinct from sem.
+	inFlight atomic.Int64
+	group    singleflight.Group
 
 	serviceAccounts map[string]bool
 
@@ -160,41 +170,71 @@ func NewRunAttributionService(l log.Logger, conf config.RunAttributionConfig, re
 // an existing dag run in place, leaving Airflow's run id reading as an ordinary scheduled run
 // that would otherwise be mistaken for a manual clear.
 func (s *RunAttributionService) Classify(ctx context.Context, in AttributionInput) scheduler.RunAttribution {
-	// 1. Optimus custom backfill. The backfill id is embedded in the dag run id, so this is an
+	// 1. A scheduler retry carries the previous attempt's verdict forward. Checked first because
+	// nothing about how the dag run originally came about can override the fact that Airflow
+	// itself started this attempt.
+	if in.PreviousRun != nil && in.PreviousRun.Status == scheduler.StateRetry {
+		return s.inheritedAttribution(ctx, in.PreviousRun)
+	}
+
+	// An earlier attempt of this operator already reached a terminal state, so this attempt was
+	// not started by the scheduler and not by whatever originally created the dag run. Something
+	// re-ran it. Who that was depends on the dag run's provenance, below.
+	rerun := in.PreviousRun != nil
+
+	// 2. Optimus custom backfill. The backfill id is embedded in the dag run id, so this is an
 	// exact match with no scan. Note we do not filter the backfill by status: BackfillService
 	// sets 'in progress' only after the Airflow dag run has been created, so a fast-starting
 	// task can legitimately observe 'created'.
 	if ok, backfillID := isRunCustomBackfillType(in.SchedulerRunID); ok {
 		if attribution, err := s.attributeToBackfill(ctx, backfillID); err == nil {
+			if rerun {
+				// Optimus never clears a backfill: it creates one dag run and then only watches
+				// it. So a further attempt that is not a scheduler retry was started by a person,
+				// and naming whoever requested the backfill would attribute their action to
+				// somebody else. The dag run id says nothing about who re-ran it, and it never
+				// changes, so without this the original requester would be blamed forever.
+				return manualRerunOf(attribution)
+			}
 			return attribution
 		}
 		s.l.Warn("run attribution: dag run %s names backfill %s but it could not be read", in.SchedulerRunID, backfillID)
 	}
 
-	// 2. Optimus replay. Matched on the replay's time window rather than the dag run id,
-	// because a replay of an existing run does not change that run's id.
+	// 3. Optimus replay. Matched on the replay's time window rather than the dag run id, because
+	// a replay of an existing run clears it in place and does not change its id.
+	//
+	// This deliberately wins over the rerun check: replaying an existing run *is* a clear issued
+	// by Optimus, so a terminal previous attempt is the expected state here rather than evidence
+	// of a person. Only replays that are still in flight match, so a human clearing a run whose
+	// replay has already finished falls through to the manual path below and is named correctly.
+	// The residual case — a human clearing a run while its replay is still running — is
+	// attributed to the replay; see the note in the solution doc.
 	if attribution, ok := s.attributeToReplay(ctx, in); ok {
 		return attribution
 	}
 
-	// 3. Somebody used Airflow's Trigger DAG button.
-	if scheduler.IsManualDagRunID(in.SchedulerRunID) {
-		return pendingManualAttribution()
-	}
-
-	// 4. An earlier attempt of this operator exists.
-	if in.PreviousRun != nil {
-		if in.PreviousRun.Status == scheduler.StateRetry {
-			// The scheduler retried it. Carry the earlier attempt's verdict forward.
-			return inheritedAttribution(in.PreviousRun)
-		}
-		// The previous attempt had already finished, so something outside the scheduler made
-		// this one happen: a task or dag run cleared in Airflow.
+	// 4. Either somebody used Airflow's Trigger DAG button, or somebody cleared an earlier
+	// attempt. Both are manual actions whose actor only Airflow's audit log knows.
+	if rerun || scheduler.IsManualDagRunID(in.SchedulerRunID) {
 		return pendingManualAttribution()
 	}
 
 	// 5. Nothing suggests otherwise; the scheduler started it on its own.
 	return scheduler.ScheduledAttribution()
+}
+
+// manualRerunOf marks an attempt that a person started on a dag run Optimus originally created.
+//
+// The link to the originating replay or backfill is kept, because it still explains why the run
+// exists at all, but the actor is deliberately not inherited: whoever re-ran it need not be
+// whoever requested it. The audit log supplies the real actor; failing that the run is recorded
+// as manual with an unidentified actor, which is honest, rather than naming the wrong person.
+func manualRerunOf(provenance scheduler.RunAttribution) scheduler.RunAttribution {
+	attribution := pendingManualAttribution()
+	attribution.ReplayID = provenance.ReplayID
+	attribution.BackfillID = provenance.BackfillID
+	return attribution
 }
 
 // Record persists the cause of a run, and where the actor is still unknown, starts a detached
@@ -261,25 +301,40 @@ func (s *RunAttributionService) attributeToReplay(ctx context.Context, in Attrib
 	}, true
 }
 
-func inheritedAttribution(previous *scheduler.OperatorRun) scheduler.RunAttribution {
-	runType := previous.RunType
-	if runType == "" {
-		runType = scheduler.RunTypeScheduled
-	}
-	triggeredBy := previous.TriggeredBy
-	if triggeredBy == "" {
-		triggeredBy = scheduler.TriggeredByScheduler
-	}
-	if runType == scheduler.RunTypeScheduled {
+// inheritedAttribution carries the previous attempt's verdict onto a scheduler retry.
+//
+// task_run and hook_run hold only the run type and actor, so the link to the originating replay
+// or backfill has to be read back from the previous attempt's trigger source row. Without that
+// the retry would record e.g. run_type=replay with a null replay_id, losing exactly the link the
+// trigger source table exists to preserve.
+func (s *RunAttributionService) inheritedAttribution(ctx context.Context, previous *scheduler.OperatorRun) scheduler.RunAttribution {
+	if previous.RunType == "" || previous.RunType == scheduler.RunTypeScheduled {
 		// A retry of an ordinary scheduled run is still just a scheduled run; nothing to link.
 		return scheduler.ScheduledAttribution()
 	}
-	return scheduler.RunAttribution{
-		RunType:     runType,
+
+	triggeredBy := previous.TriggeredBy
+	if triggeredBy == "" {
+		triggeredBy = scheduler.TriggeredByUnidentified
+	}
+	attribution := scheduler.RunAttribution{
+		RunType:     previous.RunType,
 		TriggeredBy: triggeredBy,
 		SourceType:  scheduler.SourceTypeManual,
 		Attribution: scheduler.AttributionInherited,
 	}
+
+	previousSource, err := s.repo.GetTriggerSourceByOperatorRunID(ctx, previous.ID)
+	if err != nil {
+		if !errors.IsErrorType(err, errors.ErrNotFound) {
+			s.l.Error("run attribution: unable to read trigger source of previous attempt %s: %s", previous.ID, err)
+		}
+		return attribution
+	}
+	attribution.SourceType = previousSource.Attribution.SourceType
+	attribution.ReplayID = previousSource.Attribution.ReplayID
+	attribution.BackfillID = previousSource.Attribution.BackfillID
+	return attribution
 }
 
 // pendingManualAttribution marks a run as manual with the actor not yet established. If
@@ -295,13 +350,17 @@ func pendingManualAttribution() scheduler.RunAttribution {
 }
 
 // resolveDetached runs the Airflow audit lookup outside the caller's request.
+//
+// The bound here is on goroutines, not on work. Concurrency against Airflow is limited separately,
+// inside the singleflight closure in resolve, so that the waiters collapsed onto a shared lookup do
+// not consume Airflow slots. Bounding both here would mean one cleared dag run burned a slot per
+// task and shed the rest — which is precisely the case singleflight exists to make cheap.
 func (s *RunAttributionService) resolveDetached(parent context.Context, in AttributionInput, triggerSourceID, operatorRunID uuid.UUID) {
-	select {
-	case s.sem <- struct{}{}:
-	default:
-		// Shed rather than block event ingestion or grow goroutines without bound. The row
+	if inFlight := s.inFlight.Add(1); inFlight > int64(s.maxPending()) {
+		s.inFlight.Add(-1)
+		// Shed rather than grow memory without bound during a prolonged Airflow outage. The row
 		// stays as a manual run with an unresolved actor.
-		s.l.Warn("run attribution: resolver saturated, leaving %s unresolved", operatorRunID)
+		s.l.Warn("run attribution: %d resolutions already in flight, leaving %s unresolved", inFlight-1, operatorRunID)
 		runAttributionMetric.WithLabelValues(scheduler.RunTypeManual.String(), "shed").Inc()
 		return
 	}
@@ -310,7 +369,7 @@ func (s *RunAttributionService) resolveDetached(parent context.Context, in Attri
 	}
 
 	go func() {
-		defer func() { <-s.sem }()
+		defer s.inFlight.Add(-1)
 		if s.resolved != nil {
 			defer s.resolved.Done()
 		}
@@ -338,6 +397,16 @@ func (s *RunAttributionService) resolve(ctx context.Context, in AttributionInput
 	// collapses the concurrent lookups; every caller then updates only its own row.
 	key := in.Tenant.ProjectName().String() + "/" + in.JobName.String() + "/" + in.SchedulerRunID
 	result, err, _ := s.group.Do(key, func() (any, error) {
+		// Only the one goroutine that actually reaches Airflow takes a slot; everybody collapsed
+		// onto this call is waiting on singleflight and holds nothing. So one cleared dag run costs
+		// one slot however many tasks it has.
+		select {
+		case s.sem <- struct{}{}:
+		case <-ctx.Done():
+			return scheduler.RunAttribution{}, ctx.Err()
+		}
+		defer func() { <-s.sem }()
+
 		var resolved scheduler.RunAttribution
 		err := utils.Retry(s.l, s.retryMax(), int64(s.conf.ResolveRetryBackoffMs), func() error {
 			attempts++
@@ -365,32 +434,53 @@ func (s *RunAttributionService) resolve(ctx context.Context, in AttributionInput
 	runAttributionMetric.WithLabelValues(attribution.RunType.String(), attribution.Attribution).Inc()
 }
 
-// resolveFromAudit asks Airflow who acted. It tries an exact match on the dag run first, then
-// falls back to correlating by time against the bulk actions that record no dag run at all.
+// resolveFromAudit asks Airflow who acted. It tries an exact match on the dag run first, and only
+// where a bulk action could plausibly be responsible does it fall back to correlating by time.
 func (s *RunAttributionService) resolveFromAudit(ctx context.Context, in AttributionInput) (scheduler.RunAttribution, error) {
 	after, before := s.auditWindow(in.StartTime)
 
-	if in.SchedulerRunID != "" {
-		events, err := s.auditGetter.GetEventLogs(ctx, scheduler.AuditEventFilter{
-			Tenant:         in.Tenant,
-			DagID:          in.JobName.String(),
-			RunID:          in.SchedulerRunID,
-			After:          after,
-			Before:         before,
-			IncludedEvents: exactMatchEvents,
-			Limit:          s.auditPageLimit(),
-		})
-		if err != nil {
-			return scheduler.RunAttribution{}, err
-		}
-		if event := s.pickLatestActionable(events); event != nil {
-			return auditAttribution(event, scheduler.AttributionAuditRunID), nil
-		}
+	// One dag-scoped query answers both the run-exact and the run-agnostic case, because a query
+	// filtered only by dag_id returns a superset of what adding run_id would. Filtering on run_id
+	// server-side would be actively harmful: Airflow leaves run_id NULL for a plain Trigger DAG
+	// (the Run Id form field is optional) and for REST clears that pass it in a JSON body, so those
+	// rows — the common ones — would be dropped before we ever saw them. It would not even be
+	// faster: the log table is indexed on dag_id, dttm and event, but not on run_id.
+	//
+	// The window here is deliberately generous, since its job is to keep the query indexed rather
+	// than to decide which run an event belongs to. That decision is made below, per candidate.
+	events, err := s.auditGetter.GetEventLogs(ctx, scheduler.AuditEventFilter{
+		Tenant:         in.Tenant,
+		DagID:          in.JobName.String(),
+		After:          in.StartTime.Add(-s.identifyLookback()),
+		Before:         before,
+		IncludedEvents: exactMatchEvents,
+		Limit:          s.auditPageLimit(),
+	})
+	if err != nil {
+		return scheduler.RunAttribution{}, err
 	}
 
-	// Nothing named this dag run. The bulk clear pages log no dag_id or run_id at all, so all
-	// that is left is timing.
-	events, err := s.auditGetter.GetEventLogs(ctx, scheduler.AuditEventFilter{
+	// A row naming this exact dag run is conclusive however old it is.
+	if event := s.pickLatestActionable(namingRun(events, in.SchedulerRunID)); event != nil {
+		return auditAttribution(event, scheduler.AttributionAuditRunID), nil
+	}
+
+	// A row naming the DAG but no run could be about any run of it, so here the tight correlation
+	// window is what ties it to this attempt.
+	if event := s.pickLatestActionable(runAgnosticSince(events, after)); event != nil {
+		return auditAttribution(event, scheduler.AttributionAuditDagID), nil
+	}
+
+	// Only a re-run of an earlier attempt can have come from one of Airflow's bulk list-page
+	// actions, which are the only ones that record no dag_id at all. Anything that touched this DAG
+	// would have appeared above, so falling through for a first attempt would let an unrelated bulk
+	// clear of some other DAG, by somebody with no connection to this run, supply the actor.
+	if in.PreviousRun == nil {
+		return unidentifiedManual(), nil
+	}
+
+	// The bulk clear pages log no dag_id or run_id at all, so all that is left is timing.
+	events, err = s.auditGetter.GetEventLogs(ctx, scheduler.AuditEventFilter{
 		Tenant:         in.Tenant,
 		After:          after,
 		Before:         before,
@@ -401,6 +491,43 @@ func (s *RunAttributionService) resolveFromAudit(ctx context.Context, in Attribu
 		return scheduler.RunAttribution{}, err
 	}
 	return s.correlateByTime(events), nil
+}
+
+// unidentifiedManual records a run as manual with the actor established as unknown, which is a
+// terminal answer rather than the provisional pending state.
+func unidentifiedManual() scheduler.RunAttribution {
+	attribution := pendingManualAttribution()
+	attribution.Attribution = scheduler.AttributionUnidentified
+	return attribution
+}
+
+// namingRun keeps only rows that explicitly name this dag run. Such a row is conclusive: nothing
+// else could have produced it.
+func namingRun(events []*scheduler.AuditEvent, schedulerRunID string) []*scheduler.AuditEvent {
+	if schedulerRunID == "" {
+		return nil
+	}
+	var matched []*scheduler.AuditEvent
+	for _, event := range events {
+		if event.RunID == schedulerRunID {
+			matched = append(matched, event)
+		}
+	}
+	return matched
+}
+
+// runAgnosticSince keeps rows that name the DAG but no run, and are recent enough to plausibly be
+// about this attempt. A row naming some *other* run is discarded outright — it has already told us
+// it is about something else.
+func runAgnosticSince(events []*scheduler.AuditEvent, after time.Time) []*scheduler.AuditEvent {
+	var matched []*scheduler.AuditEvent
+	for _, event := range events {
+		if event.RunID != "" || event.When.Before(after) {
+			continue
+		}
+		matched = append(matched, event)
+	}
+	return matched
 }
 
 // pickLatestActionable returns the most recent audit row that names a real actor. Events are
@@ -420,8 +547,7 @@ func (s *RunAttributionService) pickLatestActionable(events []*scheduler.AuditEv
 // and it is recorded as one: a single unambiguous actor is accepted, anything else is left
 // unidentified. The candidate rows are kept on the record either way so a human can adjudicate.
 func (s *RunAttributionService) correlateByTime(events []*scheduler.AuditEvent) scheduler.RunAttribution {
-	attribution := pendingManualAttribution()
-	attribution.Attribution = scheduler.AttributionUnidentified
+	attribution := unidentifiedManual()
 
 	owners := map[string]bool{}
 	var candidates []*scheduler.AuditEvent
@@ -491,6 +617,25 @@ func (s *RunAttributionService) retryMax() int {
 		return s.conf.ResolveRetryMax
 	}
 	return 1
+}
+
+// identifyLookback bounds the dag-scoped query so it stays indexed on dttm. It is generous on
+// purpose: its job is query efficiency, not deciding which run an event belongs to. Narrowing it to
+// the correlation window would hide the row that explains the attempt — a Trigger DAG action can
+// precede its tasks by a long queue wait — and a hidden row means a weaker guess wins instead.
+func (s *RunAttributionService) identifyLookback() time.Duration {
+	if s.conf.IdentifyLookbackHours > 0 {
+		return time.Duration(s.conf.IdentifyLookbackHours) * time.Hour
+	}
+	return defaultIdentifyLookback
+}
+
+// maxPending bounds resolver goroutines. Separate from sem, which bounds Airflow calls.
+func (s *RunAttributionService) maxPending() int {
+	if s.conf.MaxPendingResolves > 0 {
+		return s.conf.MaxPendingResolves
+	}
+	return defaultMaxPending
 }
 
 func (s *RunAttributionService) auditPageLimit() int {

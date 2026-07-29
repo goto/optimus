@@ -450,6 +450,46 @@ func TestJobRunService(t *testing.T) {
 				assert.NotNil(t, err)
 				assert.EqualError(t, err, "some error in GetByScheduledAt")
 			})
+			t.Run("should never consult the attribution service for a sensor start", func(t *testing.T) {
+				// Sensors are upstream waits. Classifying one would add a replay lookup to every
+				// sensor start for an answer already recorded against the run's task and hook rows,
+				// so the attributor must not be reached at all.
+				scheduledAtTimeStamp, _ := time.Parse(scheduler.ISODateFormat, "2022-01-02T15:04:05Z")
+				eventTime := time.Unix(todayDate.Add(time.Hour).Unix(), 0)
+				jobRun := scheduler.JobRun{ID: uuid.New(), JobName: jobName, Tenant: tnnt, State: scheduler.StateWaitUpstream}
+				event := &scheduler.Event{
+					JobName:        jobName,
+					Tenant:         tnnt,
+					Type:           scheduler.SensorStartEvent,
+					JobScheduledAt: scheduledAtTimeStamp,
+					EventTime:      eventTime,
+					OperatorName:   "wait-upstream",
+					Values:         map[string]any{},
+					EventContext: &scheduler.EventContext{
+						Type:         scheduler.OperatorStartEvent,
+						OperatorType: scheduler.OperatorSensor,
+						DagRun:       scheduler.DagRun{RunID: "manual__2026-07-20T13:00:00+00:00"},
+					},
+				}
+
+				jobRunRepo := new(mockJobRunRepository)
+				jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(&jobRun, nil)
+				jobRunRepo.On("UpdateSchedulerRunID", ctx, jobRun.ID, "manual__2026-07-20T13:00:00+00:00").Return(nil)
+
+				operatorRunRepository := new(mockOperatorRunRepository)
+				operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorSensor,
+					jobRun.ID, eventTime).Return(uuid.New(), nil)
+
+				// A run id that would otherwise classify as manual, so a sensor reaching the
+				// attributor at all would show up here.
+				attributor := new(mockRunAttributor)
+				defer attributor.AssertExpectations(t)
+
+				runService := service.NewJobRunService(logger,
+					nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, nil, nil, feats, nil, nil, attributor)
+
+				assert.NoError(t, runService.UpdateJobState(ctx, event))
+			})
 			t.Run("should return error on SensorStartEvent if GetJobDetails fails", func(t *testing.T) {
 				scheduledAtTimeStamp, _ := time.Parse(scheduler.ISODateFormat, "2022-01-02T15:04:05Z")
 				eventTime := time.Unix(todayDate.Add(time.Hour).Unix(), 0)
@@ -2811,6 +2851,21 @@ func (m *mockOperatorRunRepository) CreateOperatorRun(ctx context.Context, opera
 func (m *mockOperatorRunRepository) UpdateOperatorRun(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID, eventTime time.Time, state scheduler.State) error {
 	args := m.Called(ctx, operator, jobRunID, eventTime, state)
 	return args.Error(0)
+}
+
+// mockRunAttributor has no expectations set by default, so testify fails on any call. That is
+// the point: it proves a code path never reaches attribution.
+type mockRunAttributor struct {
+	mock.Mock
+}
+
+func (m *mockRunAttributor) Classify(ctx context.Context, in service.AttributionInput) scheduler.RunAttribution {
+	args := m.Called(ctx, in)
+	return args.Get(0).(scheduler.RunAttribution)
+}
+
+func (m *mockRunAttributor) Record(ctx context.Context, in service.AttributionInput, operatorRunID uuid.UUID, attribution scheduler.RunAttribution) error {
+	return m.Called(ctx, in, operatorRunID, attribution).Error(0)
 }
 
 type mockEventHandler struct {

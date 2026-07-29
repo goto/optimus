@@ -94,11 +94,17 @@ log:
 #   # between a user clicking Clear and the task actually starting: a scheduler loop plus queue
 #   # and pool wait.
 #   audit_lookback_minutes: 30
+#   # Bounds the dag-scoped audit query so it stays indexed on the log table's timestamp. Generous
+#   # by design: it is for query efficiency, not for deciding which run an event belongs to.
+#   identify_lookback_hours: 24
 #   audit_page_limit: 100
-#   # Attribution is resolved in detached goroutines, never on the event ingestion path. When all
-#   # slots are busy the run is still recorded as manual, with the actor left unidentified,
-#   # rather than blocking event ingestion or queueing unbounded work.
+#   # Concurrent calls into Airflow. Tasks of one cleared dag run share a single lookup and do not
+#   # each consume a slot, so this bounds load on the Airflow webserver.
 #   max_concurrent_resolves: 16
+#   # In-flight resolver goroutines. Attribution is resolved off the event ingestion path, so this
+#   # is only a memory backstop for a prolonged Airflow outage; beyond it a run is still recorded
+#   # as manual, with the actor left unidentified.
+#   max_pending_resolves: 512
 #   resolve_timeout_seconds: 30
 #   resolve_retry_max: 3
 #   resolve_retry_backoff_ms: 500

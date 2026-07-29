@@ -12,6 +12,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
@@ -70,6 +71,86 @@ func TestRunAttributionService(t *testing.T) {
 			assert.Equal(t, "alice", got.TriggeredBy)
 			assert.Equal(t, scheduler.AttributionOptimusBackfill, got.Attribution)
 			assert.Equal(t, backfillID, *got.BackfillID)
+		})
+
+		t.Run("does not blame the backfill requester when somebody re-runs their backfill", func(t *testing.T) {
+			// The dag run id keeps naming the backfill forever, but Optimus never clears a backfill
+			// run, so a further attempt that is not a scheduler retry was started by a person. The
+			// link to the backfill is kept; the requester's name is not reused as the actor.
+			backfillID := uuid.New()
+			backfillRepo := new(mockBackfillAttributionGetter)
+			backfillRepo.On("GetBackfillDetails", ctx, backfillID).Return(backfillWithUser("alice"), nil)
+
+			svc := service.NewRunAttributionService(logger, conf, new(mockRunAttributionRepository),
+				noReplayMatch(), backfillRepo, new(mockAuditLogGetter))
+
+			in := baseInput()
+			in.SchedulerRunID = fmt.Sprintf("custom-backfill_%s__2026-07-20T13:00:00+00:00", backfillID)
+			in.Attempt = 2
+			in.PreviousRun = &scheduler.OperatorRun{
+				Status:      scheduler.StateSuccess,
+				RunType:     scheduler.RunTypeBackfill,
+				TriggeredBy: "alice",
+			}
+
+			got := svc.Classify(ctx, in)
+			assert.Equal(t, scheduler.RunTypeManual, got.RunType)
+			assert.NotEqual(t, "alice", got.TriggeredBy, "the backfill requester must not be blamed for someone else's clear")
+			assert.Equal(t, scheduler.TriggeredByUnidentified, got.TriggeredBy)
+			assert.True(t, got.NeedsAuditResolution(), "the real actor has to come from the audit log")
+			// Linkage survives: the run still exists because of that backfill.
+			require.NotNil(t, got.BackfillID)
+			assert.Equal(t, backfillID, *got.BackfillID)
+		})
+
+		t.Run("still attributes a scheduler retry of a backfill run to the requester", func(t *testing.T) {
+			// The counterpart to the above: a retry really is a continuation of the backfill.
+			backfillID := uuid.New()
+			repo := new(mockRunAttributionRepository)
+			repo.On("GetTriggerSourceByOperatorRunID", ctx, mock.Anything).Return(&scheduler.TriggerSource{
+				Attribution: scheduler.RunAttribution{
+					SourceType: scheduler.SourceTypeBackfill,
+					BackfillID: &backfillID,
+				},
+			}, nil)
+
+			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
+				new(mockBackfillAttributionGetter), new(mockAuditLogGetter))
+
+			in := baseInput()
+			in.SchedulerRunID = fmt.Sprintf("custom-backfill_%s__2026-07-20T13:00:00+00:00", backfillID)
+			in.PreviousRun = &scheduler.OperatorRun{
+				ID: uuid.New(), Status: scheduler.StateRetry,
+				RunType: scheduler.RunTypeBackfill, TriggeredBy: "alice",
+			}
+
+			got := svc.Classify(ctx, in)
+			assert.Equal(t, scheduler.RunTypeBackfill, got.RunType)
+			assert.Equal(t, "alice", got.TriggeredBy)
+			assert.Equal(t, scheduler.AttributionInherited, got.Attribution)
+			// Inheritance must carry the link across, not just the run type and actor.
+			require.NotNil(t, got.BackfillID)
+			assert.Equal(t, backfillID, *got.BackfillID)
+			assert.Equal(t, scheduler.SourceTypeBackfill, got.SourceType)
+		})
+
+		t.Run("does not blame the replay requester once their replay has finished", func(t *testing.T) {
+			// The replay lookup only matches non-terminal replays, so a later manual clear of a run
+			// the replay produced falls through to the audit log rather than reusing their name.
+			svc := newClassifyOnlyService(logger, conf) // no in-flight replay matches
+
+			in := baseInput()
+			in.SchedulerRunID = "scheduled__2026-07-20T12:00:00+00:00"
+			in.PreviousRun = &scheduler.OperatorRun{
+				Status:      scheduler.StateSuccess,
+				RunType:     scheduler.RunTypeReplay,
+				TriggeredBy: "bob",
+			}
+
+			got := svc.Classify(ctx, in)
+			assert.Equal(t, scheduler.RunTypeManual, got.RunType)
+			assert.NotEqual(t, "bob", got.TriggeredBy)
+			assert.True(t, got.NeedsAuditResolution())
 		})
 
 		t.Run("attributes a replay even when the dag run id looks scheduled", func(t *testing.T) {
@@ -257,7 +338,8 @@ func TestRunAttributionService(t *testing.T) {
 
 			auditGetter := new(mockAuditLogGetter)
 			auditGetter.On("GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
-				return f.RunID == "manual__2026-07-20T13:00:00+00:00" && f.DagID == jobName.String()
+				// One dag-scoped query; run_id is a discriminator applied in code, not a filter.
+				return f.DagID == jobName.String() && f.RunID == ""
 			})).Return([]*scheduler.AuditEvent{{
 				EventLogID: 42, Event: "dagrun_clear", Owner: "dave",
 				DagID: jobName.String(), RunID: "manual__2026-07-20T13:00:00+00:00",
@@ -323,11 +405,12 @@ func TestRunAttributionService(t *testing.T) {
 			const taskCount = 8
 			var auditCalls atomic.Int32
 
+			var resolvedRows atomic.Int32
 			repo := new(mockRunAttributionRepository)
 			repo.On("InsertTriggerSource", mock.Anything, mock.Anything).Return(uuid.New(), nil)
 			repo.On("UpdateTriggerSourceResolution", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(a scheduler.RunAttribution) bool {
 				return a.TriggeredBy == "frank"
-			}), mock.Anything).Return(nil)
+			}), mock.Anything).Run(func(mock.Arguments) { resolvedRows.Add(1) }).Return(nil)
 
 			gate := make(chan struct{})
 			auditGetter := new(mockAuditLogGetter)
@@ -342,8 +425,11 @@ func TestRunAttributionService(t *testing.T) {
 					DagID: jobName.String(), RunID: "manual__2026-07-20T13:00:00+00:00",
 				}}, nil)
 
+			// Deliberately one Airflow slot for eight tasks: with the semaphore acquired inside the
+			// singleflight closure, the seven waiters hold nothing and all eight rows still resolve.
+			// This previously required MaxConcurrentResolves == taskCount, which was the symptom.
 			conf := conf
-			conf.MaxConcurrentResolves = taskCount
+			conf.MaxConcurrentResolves = 1
 			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
 				new(mockBackfillAttributionGetter), auditGetter)
 			done := svc.WaitGroupForTest()
@@ -361,6 +447,8 @@ func TestRunAttributionService(t *testing.T) {
 			done.Wait()
 
 			assert.Equal(t, int32(1), auditCalls.Load(), "one dag run should mean one audit query")
+			assert.Equal(t, int32(taskCount), resolvedRows.Load(),
+				"every task of the cleared dag run must be resolved, not just as many as there are Airflow slots")
 		})
 
 		t.Run("correlates by time when the audit rows carry no dag context", func(t *testing.T) {
@@ -377,11 +465,11 @@ func TestRunAttributionService(t *testing.T) {
 			auditGetter := new(mockAuditLogGetter)
 			// Exact match on the dag run finds nothing.
 			auditGetter.On("GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
-				return f.RunID != ""
+				return f.DagID != ""
 			})).Return([]*scheduler.AuditEvent{}, nil)
 			// The time-correlated query finds one bulk clear, plus noise that must be ignored.
 			auditGetter.On("GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
-				return f.RunID == ""
+				return f.DagID == ""
 			})).Return([]*scheduler.AuditEvent{
 				{EventLogID: 11, Event: "action_clear", Owner: "grace", When: startTime.Add(-2 * time.Minute)},
 				{EventLogID: 10, Event: "action_clear", Owner: "optimus", When: startTime.Add(-3 * time.Minute)},
@@ -392,8 +480,11 @@ func TestRunAttributionService(t *testing.T) {
 				new(mockBackfillAttributionGetter), auditGetter)
 			done := svc.WaitGroupForTest()
 
+			// A bulk clear re-runs an attempt that already finished, which is the only situation
+			// time correlation is allowed to explain.
 			in := baseInput()
-			in.SchedulerRunID = "manual__2026-07-20T13:00:00+00:00"
+			in.SchedulerRunID = "scheduled__2026-07-20T12:00:00+00:00"
+			in.PreviousRun = &scheduler.OperatorRun{Status: scheduler.StateSuccess}
 			assert.NoError(t, svc.Record(ctx, in, operatorRunID, svc.Classify(ctx, in)))
 
 			done.Wait()
@@ -415,13 +506,98 @@ func TestRunAttributionService(t *testing.T) {
 
 			auditGetter := new(mockAuditLogGetter)
 			auditGetter.On("GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
-				return f.RunID != ""
+				return f.DagID != ""
 			})).Return([]*scheduler.AuditEvent{}, nil)
 			auditGetter.On("GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
-				return f.RunID == ""
+				return f.DagID == ""
 			})).Return([]*scheduler.AuditEvent{
 				{EventLogID: 21, Event: "action_clear", Owner: "ivan", When: startTime.Add(-time.Minute)},
 				{EventLogID: 20, Event: "action_clear", Owner: "judy", When: startTime.Add(-2 * time.Minute)},
+			}, nil)
+
+			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
+				new(mockBackfillAttributionGetter), auditGetter)
+			done := svc.WaitGroupForTest()
+
+			in := baseInput()
+			in.SchedulerRunID = "scheduled__2026-07-20T12:00:00+00:00"
+			in.PreviousRun = &scheduler.OperatorRun{Status: scheduler.StateSuccess}
+			assert.NoError(t, svc.Record(ctx, in, operatorRunID, svc.Classify(ctx, in)))
+
+			done.Wait()
+			repo.AssertExpectations(t)
+		})
+
+		t.Run("never blames a bulk clear for a manual trigger it cannot explain", func(t *testing.T) {
+			// A manual__ dag run came from the Trigger DAG view, which always records dag_id. So if
+			// the exact query misses — audit lag, log retention, a trigger older than the window —
+			// time correlation cannot legitimately explain it, and must not name whoever happened to
+			// bulk-clear an unrelated DAG in the same window.
+			operatorRunID := uuid.New()
+			triggerSourceID := uuid.New()
+
+			repo := new(mockRunAttributionRepository)
+			repo.On("InsertTriggerSource", mock.Anything, mock.Anything).Return(triggerSourceID, nil)
+			repo.On("UpdateTriggerSourceResolution", mock.Anything, triggerSourceID, mock.Anything, mock.Anything,
+				mock.MatchedBy(func(a scheduler.RunAttribution) bool {
+					return a.TriggeredBy == scheduler.TriggeredByUnidentified &&
+						a.Attribution == scheduler.AttributionUnidentified
+				}), mock.Anything).Return(nil)
+
+			auditGetter := new(mockAuditLogGetter)
+			// The exact query finds nothing for this dag run...
+			auditGetter.On("GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
+				return f.DagID != ""
+			})).Return([]*scheduler.AuditEvent{}, nil)
+			// ...and the time-correlated query must never be issued at all. An expectation is set so
+			// that if it is, the returned actor would be "mallory" and the assertion above fails.
+			auditGetter.On("GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
+				return f.DagID == ""
+			})).Return([]*scheduler.AuditEvent{
+				{EventLogID: 99, Event: "action_clear", Owner: "mallory", When: startTime.Add(-time.Minute)},
+			}, nil).Maybe()
+
+			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
+				new(mockBackfillAttributionGetter), auditGetter)
+			done := svc.WaitGroupForTest()
+
+			in := baseInput()
+			in.SchedulerRunID = "manual__2026-07-20T13:00:00+00:00" // first attempt, no PreviousRun
+			assert.NoError(t, svc.Record(ctx, in, operatorRunID, svc.Classify(ctx, in)))
+
+			done.Wait()
+			repo.AssertExpectations(t)
+			auditGetter.AssertNotCalled(t, "GetEventLogs", mock.Anything, mock.MatchedBy(func(f scheduler.AuditEventFilter) bool {
+				return f.DagID == ""
+			}))
+		})
+
+		t.Run("attributes a plain trigger whose audit row carries no run id", func(t *testing.T) {
+			// The Trigger DAG form's Run Id field is optional, so the common case logs dag_id with
+			// run_id NULL. Filtering the query on run_id dropped exactly these rows, which left the
+			// most frequent manual action unattributed.
+			operatorRunID := uuid.New()
+			triggerSourceID := uuid.New()
+
+			repo := new(mockRunAttributionRepository)
+			repo.On("InsertTriggerSource", mock.Anything, mock.Anything).Return(triggerSourceID, nil)
+			repo.On("UpdateTriggerSourceResolution", mock.Anything, triggerSourceID, mock.Anything, mock.Anything,
+				mock.MatchedBy(func(a scheduler.RunAttribution) bool {
+					return a.TriggeredBy == "nina" && a.Attribution == scheduler.AttributionAuditDagID
+				}), mock.Anything).Return(nil)
+
+			auditGetter := new(mockAuditLogGetter)
+			auditGetter.On("GetEventLogs", mock.Anything, mock.Anything).Return([]*scheduler.AuditEvent{
+				// Names the DAG, no run id — and a row about a different run of the same DAG that
+				// must be discarded rather than picked as the newest.
+				{
+					EventLogID: 31, Event: "trigger", Owner: "nina", DagID: jobName.String(),
+					When: startTime.Add(-2 * time.Minute),
+				},
+				{
+					EventLogID: 30, Event: "dagrun_clear", Owner: "otto", DagID: jobName.String(),
+					RunID: "scheduled__2020-01-01T00:00:00+00:00", When: startTime.Add(-time.Minute),
+				},
 			}, nil)
 
 			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
@@ -433,6 +609,85 @@ func TestRunAttributionService(t *testing.T) {
 			assert.NoError(t, svc.Record(ctx, in, operatorRunID, svc.Classify(ctx, in)))
 
 			done.Wait()
+			repo.AssertExpectations(t)
+		})
+
+		t.Run("ignores a run-agnostic row that is older than the correlation window", func(t *testing.T) {
+			// A row naming the DAG but not the run is only tied to this attempt by timing, so an old
+			// one must not be accepted the way an exact run_id match is.
+			operatorRunID := uuid.New()
+			triggerSourceID := uuid.New()
+
+			repo := new(mockRunAttributionRepository)
+			repo.On("InsertTriggerSource", mock.Anything, mock.Anything).Return(triggerSourceID, nil)
+			repo.On("UpdateTriggerSourceResolution", mock.Anything, triggerSourceID, mock.Anything, mock.Anything,
+				mock.MatchedBy(func(a scheduler.RunAttribution) bool {
+					return a.Attribution == scheduler.AttributionUnidentified
+				}), mock.Anything).Return(nil)
+
+			auditGetter := new(mockAuditLogGetter)
+			auditGetter.On("GetEventLogs", mock.Anything, mock.Anything).Return([]*scheduler.AuditEvent{
+				// Inside identify_lookback_hours (24h) so the query returns it, but well outside
+				// audit_lookback_minutes (30m) so it cannot be tied to this attempt.
+				{
+					EventLogID: 41, Event: "trigger", Owner: "pete", DagID: jobName.String(),
+					When: startTime.Add(-6 * time.Hour),
+				},
+			}, nil)
+
+			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
+				new(mockBackfillAttributionGetter), auditGetter)
+			done := svc.WaitGroupForTest()
+
+			in := baseInput()
+			in.SchedulerRunID = "manual__2026-07-20T13:00:00+00:00"
+			assert.NoError(t, svc.Record(ctx, in, operatorRunID, svc.Classify(ctx, in)))
+
+			done.Wait()
+			repo.AssertExpectations(t)
+		})
+
+		t.Run("still matches a trigger far older than the correlation window", func(t *testing.T) {
+			// A Trigger DAG action can precede its tasks by a long queue wait. The dag-scoped query
+			// is windowed generously so the row is still returned, and a row naming this exact dag
+			// run is then accepted regardless of age. Narrowing to the correlation window would hide
+			// it and let a weaker guess win instead.
+			operatorRunID := uuid.New()
+			triggerSourceID := uuid.New()
+
+			repo := new(mockRunAttributionRepository)
+			repo.On("InsertTriggerSource", mock.Anything, mock.Anything).Return(triggerSourceID, nil)
+			repo.On("UpdateTriggerSourceResolution", mock.Anything, triggerSourceID, mock.Anything, mock.Anything,
+				mock.MatchedBy(func(a scheduler.RunAttribution) bool {
+					return a.TriggeredBy == "dave" && a.Attribution == scheduler.AttributionAuditRunID
+				}), mock.Anything).Return(nil)
+
+			var exactFilter scheduler.AuditEventFilter
+			auditGetter := new(mockAuditLogGetter)
+			auditGetter.On("GetEventLogs", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) { exactFilter, _ = args.Get(1).(scheduler.AuditEventFilter) }).
+				Return([]*scheduler.AuditEvent{{
+					EventLogID: 7, Event: "trigger", Owner: "dave",
+					DagID: jobName.String(), RunID: "manual__2026-07-20T13:00:00+00:00",
+					// Far older than audit_lookback_minutes (30m), inside identify_lookback_hours (24h).
+					When: startTime.Add(-6 * time.Hour),
+				}}, nil)
+
+			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
+				new(mockBackfillAttributionGetter), auditGetter)
+			done := svc.WaitGroupForTest()
+
+			in := baseInput()
+			in.SchedulerRunID = "manual__2026-07-20T13:00:00+00:00"
+			assert.NoError(t, svc.Record(ctx, in, operatorRunID, svc.Classify(ctx, in)))
+
+			done.Wait()
+			// Bounded, so the query stays indexed on the log table's timestamp, but far wider than
+			// the correlation window that decides which run a run-agnostic row belongs to.
+			assert.Equal(t, startTime.Add(-24*time.Hour), exactFilter.After)
+			assert.Equal(t, startTime, exactFilter.Before)
+			assert.Equal(t, jobName.String(), exactFilter.DagID, "dag_id is always supplied when we have one")
+			assert.Empty(t, exactFilter.RunID, "run_id is a discriminator applied in code, not a filter")
 			repo.AssertExpectations(t)
 		})
 
@@ -472,35 +727,28 @@ func TestRunAttributionService(t *testing.T) {
 			const shedRunID = "manual__2026-07-20T14:00:00+00:00"
 
 			var (
-				mu         sync.Mutex
-				queriedFor []string
-				block      = make(chan struct{})
+				mu        sync.Mutex
+				callCount int
+				block     = make(chan struct{})
 			)
 			auditGetter := new(mockAuditLogGetter)
 			auditGetter.On("GetEventLogs", mock.Anything, mock.Anything).
-				Run(func(args mock.Arguments) {
-					filter, _ := args.Get(1).(scheduler.AuditEventFilter)
+				Run(func(mock.Arguments) {
 					mu.Lock()
-					queriedFor = append(queriedFor, filter.RunID)
+					callCount++
 					mu.Unlock()
 					<-block
 				}).
 				Return([]*scheduler.AuditEvent{}, nil)
-			// A single resolution issues two queries, an exact one on the dag run then a
-			// time-correlated one, so count dag runs asked about rather than calls made.
-			askedAbout := func(runID string) bool {
+			calls := func() int {
 				mu.Lock()
 				defer mu.Unlock()
-				for _, seen := range queriedFor {
-					if seen == runID {
-						return true
-					}
-				}
-				return false
+				return callCount
 			}
 
+			// One resolver goroutine allowed, so the second Record must shed rather than wait.
 			conf := conf
-			conf.MaxConcurrentResolves = 1
+			conf.MaxPendingResolves = 1
 			svc := service.NewRunAttributionService(logger, conf, repo, noReplayMatch(),
 				new(mockBackfillAttributionGetter), auditGetter)
 			done := svc.WaitGroupForTest()
@@ -509,7 +757,7 @@ func TestRunAttributionService(t *testing.T) {
 			first := baseInput()
 			first.SchedulerRunID = occupyingRunID
 			assert.NoError(t, svc.Record(ctx, first, uuid.New(), svc.Classify(ctx, first)))
-			assert.Eventually(t, func() bool { return askedAbout(occupyingRunID) }, 2*time.Second, 10*time.Millisecond)
+			assert.Eventually(t, func() bool { return calls() == 1 }, 2*time.Second, 10*time.Millisecond)
 
 			// This one must return immediately rather than waiting for the slot.
 			returned := make(chan struct{})
@@ -528,7 +776,9 @@ func TestRunAttributionService(t *testing.T) {
 
 			close(block)
 			done.Wait()
-			assert.False(t, askedAbout(shedRunID), "the shed resolution should not have queried airflow")
+			// The two Records use different dag run ids, so singleflight would not merge them: a
+			// second query would mean the second resolution ran instead of being shed.
+			assert.Equal(t, 1, calls(), "the shed resolution should not have queried airflow")
 		})
 
 		t.Run("survives a panic in the resolver", func(t *testing.T) {
@@ -584,6 +834,21 @@ func (m *mockRunAttributionRepository) InsertTriggerSource(ctx context.Context, 
 		return uuid.Nil, args.Error(1)
 	}
 	return args.Get(0).(uuid.UUID), args.Error(1)
+}
+
+// GetTriggerSourceByOperatorRunID is only consulted on the scheduler-retry path, so tests that
+// do not exercise inheritance are not obliged to expect it.
+func (m *mockRunAttributionRepository) GetTriggerSourceByOperatorRunID(ctx context.Context, operatorRunID uuid.UUID) (*scheduler.TriggerSource, error) {
+	for _, expected := range m.ExpectedCalls {
+		if expected.Method == "GetTriggerSourceByOperatorRunID" {
+			args := m.Called(ctx, operatorRunID)
+			if args.Get(0) == nil {
+				return nil, args.Error(1)
+			}
+			return args.Get(0).(*scheduler.TriggerSource), args.Error(1)
+		}
+	}
+	return nil, errors.NotFound(scheduler.EntityRunAttribution, "no trigger source")
 }
 
 func (m *mockRunAttributionRepository) UpdateTriggerSourceResolution(ctx context.Context, triggerSourceID uuid.UUID,

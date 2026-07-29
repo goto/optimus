@@ -23,6 +23,10 @@ import (
 
 const (
 	pageLimit = 99999
+
+	// requestTimeout bounds a single Airflow API call. Without it the shared http.Client has
+	// no timeout at all, so an unresponsive webserver holds the calling goroutine forever.
+	requestTimeout = 30 * time.Second
 )
 
 type airflowRequest struct {
@@ -52,6 +56,53 @@ type DagRun struct {
 	RunType                string    `json:"run_type"`
 }
 
+// EventLogListResponse and EventLog mirror Airflow's /eventLogs collection, which is its
+// record of user actions taken through the UI or the REST API.
+//
+// DagID, TaskID and RunID are nullable: Airflow fills them from the originating request's
+// query and form parameters only, so bulk actions taken from the /dagrun/list/ and
+// /taskinstance/list/ pages, and REST calls that pass arguments in a JSON body, leave them
+// unset. Extra holds whatever other request parameters were logged.
+type EventLogListResponse struct {
+	EventLogs    []EventLog `json:"event_logs"`
+	TotalEntries int        `json:"total_entries"`
+}
+
+type EventLog struct {
+	EventLogID    int64      `json:"event_log_id"`
+	When          time.Time  `json:"when"`
+	Event         string     `json:"event"`
+	Owner         string     `json:"owner"`
+	DagID         *string    `json:"dag_id"`
+	TaskID        *string    `json:"task_id"`
+	RunID         *string    `json:"run_id"`
+	ExecutionDate *time.Time `json:"execution_date"`
+	Extra         *string    `json:"extra"`
+}
+
+func (e EventLog) toAuditEvent() *scheduler.AuditEvent {
+	event := &scheduler.AuditEvent{
+		EventLogID:    e.EventLogID,
+		When:          e.When,
+		Event:         e.Event,
+		Owner:         e.Owner,
+		ExecutionDate: e.ExecutionDate,
+	}
+	if e.DagID != nil {
+		event.DagID = *e.DagID
+	}
+	if e.TaskID != nil {
+		event.TaskID = *e.TaskID
+	}
+	if e.RunID != nil {
+		event.RunID = *e.RunID
+	}
+	if e.Extra != nil {
+		event.Extra = *e.Extra
+	}
+	return event
+}
+
 type DagRunRequest struct {
 	OrderBy          string   `json:"order_by"`
 	PageOffset       int      `json:"page_offset"`
@@ -75,7 +126,7 @@ var airflowAPIMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
 }, []string{"api_name", "status", "error"})
 
 func NewAirflowClient() *ClientAirflow {
-	return &ClientAirflow{client: &http.Client{}}
+	return &ClientAirflow{client: &http.Client{Timeout: requestTimeout}}
 }
 
 func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth SchedulerAuth) ([]byte, error) {

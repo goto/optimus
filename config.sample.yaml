@@ -78,3 +78,27 @@ log:
 #     bq2api: EXECUTION_PROJECT
 #     clevertap: EXECUTION_PROJECT
 #     transporterTask: EXECUTION_PROJECT
+
+# run_attribution:
+#   # Kill switch for the Airflow dependency only. Off by default: turn on per environment once
+#   # the SCHEDULER_AUTH credential has `can_read on Audit Logs`. Attributing runs to Optimus's
+#   # own replay and backfill requests is a local DB lookup and is always active; with this off a
+#   # manual run is still recorded as manual, its actor is just left unidentified.
+#   audit_resolution_enabled: false
+#   # Airflow audit log owners that are Optimus itself. Optimus's own replay and backfill calls
+#   # into Airflow are audited too, so leaving this unset would attribute every replay to the
+#   # service account instead of the requesting user. Must match the SCHEDULER_AUTH username.
+#   service_account_owners:
+#     - optimus
+#   # How far before a run's start time to search Airflow's audit log. Needs to cover the gap
+#   # between a user clicking Clear and the task actually starting: a scheduler loop plus queue
+#   # and pool wait.
+#   audit_lookback_minutes: 30
+#   audit_page_limit: 100
+#   # Attribution is resolved in detached goroutines, never on the event ingestion path. When all
+#   # slots are busy the run is still recorded as manual, with the actor left unidentified,
+#   # rather than blocking event ingestion or queueing unbounded work.
+#   max_concurrent_resolves: 16
+#   resolve_timeout_seconds: 30
+#   resolve_retry_max: 3
+#   resolve_retry_backoff_ms: 500

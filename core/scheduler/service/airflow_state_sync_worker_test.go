@@ -39,11 +39,11 @@ type concurrencyTrackingSyncStateRepo struct {
 	calls   int32
 }
 
-func (r *concurrencyTrackingSyncStateRepo) GetWatermark(context.Context, tenant.ProjectName) (*time.Time, error) {
+func (*concurrencyTrackingSyncStateRepo) GetWatermark(context.Context, tenant.ProjectName) (*time.Time, error) {
 	return nil, nil //nolint:nilnil
 }
 
-func (r *concurrencyTrackingSyncStateRepo) ClaimWindow(context.Context, tenant.ProjectName, time.Time, time.Time, uuid.UUID, time.Duration) (uuid.UUID, bool, error) {
+func (*concurrencyTrackingSyncStateRepo) ClaimWindow(context.Context, tenant.ProjectName, time.Time, time.Time, uuid.UUID, time.Duration) (uuid.UUID, bool, error) {
 	return uuid.Nil, false, nil
 }
 
@@ -61,15 +61,15 @@ func (r *concurrencyTrackingSyncStateRepo) ReclaimStaleWindow(_ context.Context,
 	return nil, nil //nolint:nilnil
 }
 
-func (r *concurrencyTrackingSyncStateRepo) FailExhaustedWindows(context.Context, tenant.ProjectName, int, string) (int64, error) {
+func (*concurrencyTrackingSyncStateRepo) FailExhaustedWindows(context.Context, tenant.ProjectName, int, string) (int64, error) {
 	return 0, nil
 }
 
-func (r *concurrencyTrackingSyncStateRepo) CompleteWindow(context.Context, uuid.UUID, uuid.UUID, *int64, int, int) (bool, error) {
+func (*concurrencyTrackingSyncStateRepo) CompleteWindow(context.Context, uuid.UUID, uuid.UUID, *int64, int, int) (bool, error) {
 	return true, nil
 }
 
-func (r *concurrencyTrackingSyncStateRepo) RecordAttemptError(context.Context, uuid.UUID, uuid.UUID, string) error {
+func (*concurrencyTrackingSyncStateRepo) RecordAttemptError(context.Context, uuid.UUID, uuid.UUID, string) error {
 	return nil
 }
 

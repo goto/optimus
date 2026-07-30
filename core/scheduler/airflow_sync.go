@@ -40,7 +40,7 @@ const (
 var runIDPrefixes = []string{RunIDScheduledPrefix, RunIDManualPrefix, RunIDReplayedPrefix, RunIDCustomBackfillPrefix}
 
 // HasRecognisedRunIDPrefix reports whether RunID matches one of the run_id conventions this
-// reconciler knows how to parse. Callers (ext/scheduler/airflow's GetEventLogs) should skip
+// reconciler knows how to parse. Callers (ext/scheduler/airflow's GetManualEventLogs) should skip
 // and count anything that doesn't match, rather than attempt ExecutionDate on it.
 func (m ManualOverrideEvent) HasRecognisedRunIDPrefix() bool {
 	for _, p := range runIDPrefixes {
@@ -98,9 +98,6 @@ type AirflowSyncWindow struct {
 // ManualOverrideEvent is a single Airflow `log` row identified as a human-driven state
 // change: a bare success/failed/dagrun_success/dagrun_failed event (the legacy `www` mark
 // endpoints the Airflow 2.9 grid UI posts to) with the confirmed=true extra JSON.
-// See the RFC for why this is sufficient to distinguish it from an ordinary worker
-// transition (which never has extra populated at all) without needing owner_display_name,
-// which the eventLogs REST API does not expose.
 type ManualOverrideEvent struct {
 	LogID int64
 	Event string // one of: success, failed, dagrun_success, dagrun_failed
@@ -120,7 +117,7 @@ func (m ManualOverrideEvent) IsDagRunLevel() bool {
 }
 
 // ExecutionDate parses the Airflow execution_date embedded in RunID. RunID is expected to
-// carry one of runIDPrefixes already -- ext/scheduler/airflow's GetEventLogs only returns
+// carry one of runIDPrefixes already -- ext/scheduler/airflow's GetManualEventLogs only returns
 // events matching HasRecognisedRunIDPrefix -- so this only needs to strip the prefix and
 // parse the remaining timestamp.
 //

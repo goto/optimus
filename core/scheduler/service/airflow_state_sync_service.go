@@ -21,7 +21,7 @@ import (
 // interfaces where they're used (see JobRepository/JobRunRepository above in
 // job_run_service.go).
 type AirflowEventLogFetcher interface {
-	GetEventLogs(ctx context.Context, projectName tenant.ProjectName, after, before time.Time) ([]scheduler.ManualOverrideEvent, error)
+	GetManualEventLogs(ctx context.Context, projectName tenant.ProjectName, after, before time.Time) ([]scheduler.ManualOverrideEvent, error)
 }
 
 // AirflowSyncJobRepository is the subset of the wider JobRepository the reconciler needs.
@@ -100,7 +100,7 @@ type ReconcileWindowResult struct {
 // logged and skipped rather than aborting the whole window, since one bad row should not
 // block every other row in the same window from being reconciled.
 func (s *AirflowStateSyncService) ReconcileWindow(ctx context.Context, projectName tenant.ProjectName, startTime, endTime time.Time) (ReconcileWindowResult, error) {
-	events, err := s.eventLogFetcher.GetEventLogs(ctx, projectName, startTime, endTime)
+	events, err := s.eventLogFetcher.GetManualEventLogs(ctx, projectName, startTime, endTime)
 	if err != nil {
 		return ReconcileWindowResult{}, errors.Wrap(scheduler.EntityAirflowSync, "error fetching airflow event logs", err)
 	}

@@ -14,9 +14,8 @@ import (
 )
 
 // AirflowSyncStateRepository backs the per-project window claim used by the
-// manual-state-override reconciliation worker. See
-// docs/docs/rfcs/20260727_manual_state_override_reconciliation.md for the design this
-// implements: a claimed window row is the mutex (no advisory locks), fenced by
+// manual-state-override reconciliation worker.
+// A claimed window row is the mutex (no advisory locks), fenced by
 // worker_id + locked_until so a crashed worker's window becomes re-claimable rather than
 // wedging the project's sync forever.
 type AirflowSyncStateRepository struct {

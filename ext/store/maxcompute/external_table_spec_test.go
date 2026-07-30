@@ -99,7 +99,7 @@ func TestExternalSourceValidate(t *testing.T) {
 		//	assert.NotNil(t, err)
 		//	assert.ErrorContains(t, err, "source uri list is empty")
 		// })
-		//t.Run("returns error when uri is invalid", func(t *testing.T) {
+		// t.Run("returns error when uri is invalid", func(t *testing.T) {
 		//	es := maxcompute.ExternalSource{
 		//		SourceType: "GOOGLE_SHEETS",
 		//		SourceURIs: []string{""},

@@ -160,6 +160,7 @@ type AirflowSyncConfig struct {
 	OverlapEpsilonInSeconds  int `mapstructure:"overlap_epsilon_in_seconds" default:"2"`
 	MaxAttempts              int `mapstructure:"max_attempts" default:"3"`
 	MaxWindowsPerTick        int `mapstructure:"max_windows_per_tick" default:"6"`
+	MaxConcurrentProjects    int `mapstructure:"max_concurrent_projects" default:"5"`
 }
 
 type Publisher struct {

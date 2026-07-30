@@ -56,6 +56,7 @@ configYaml: |-
     overlap_epsilon_in_seconds: 2
     max_attempts: 3
     max_windows_per_tick: 6
+    max_concurrent_projects: 5
   plugins:
     location: /app/plugins
   telemetry:

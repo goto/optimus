@@ -2,19 +2,31 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 )
 
-// AirflowSyncProjectRepository lists every project the reconciler should sweep. In this
-// deployment there is exactly one, but the worker fans out generically so other
-// deployments with several projects (and therefore several independent Airflow instances,
-// since SCHEDULER_HOST is per-project config) get isolated, parallel sync per project.
+// airflowSyncWindowsFailedTotal counts windows a project gave up on after exhausting
+// MaxAttempts -- each one is a span of time whose manual overrides were never reconciled
+// and, unlike a single skipped event, isn't visible anywhere else (FailExhaustedWindows was
+// previously only a log line). With multiple independent projects/Airflow instances, the
+// project label is what lets on-call tell which one needs attention.
+var airflowSyncWindowsFailedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "airflow_sync_windows_failed_total",
+	Help: "airflow-sync windows marked failed after exhausting retries, by project",
+}, []string{"project"})
+
+// AirflowSyncProjectRepository lists every project the reconciler should sweep. Production
+// has multiple projects, each with its own Airflow instance (SCHEDULER_HOST is per-project
+// config), so this fans out to isolated, parallel sync per project rather than assuming one.
 type AirflowSyncProjectRepository interface {
 	GetAll(ctx context.Context) ([]*tenant.Project, error)
 }
@@ -69,6 +81,10 @@ type AirflowStateSyncConfig struct {
 	// project, so a project catching up after downtime does not turn one tick into
 	// unbounded work.
 	MaxWindowsPerTick int
+	// MaxConcurrentProjects bounds how many projects one pod processes at once per tick.
+	// One project whose Airflow instance is slow or unreachable would otherwise delay every project listed
+	// after it in that same pod's tick, for up to LockDuration, before this was added.
+	MaxConcurrentProjects int
 }
 
 type AirflowStateSyncWorker struct {
@@ -111,18 +127,34 @@ func (w *AirflowStateSyncWorker) ScheduleAirflowStateSync(ctx context.Context) {
 	}()
 }
 
+// tick fans out across projects with bounded concurrency, rather than processing them one
+// at a time: a project whose Airflow instance is slow or unreachable is bounded to a
+// LockDuration-long stall (see processWindow's timeout) on whichever goroutine claimed it,
+// but no longer blocks this pod from starting every other project's turn until it's done.
 func (w *AirflowStateSyncWorker) tick(ctx context.Context) {
 	projects, err := w.projectRepo.GetAll(ctx)
 	if err != nil {
 		w.l.Error("[airflowStateSync] failed to list projects: %s", err)
 		return
 	}
+
+	sem := make(chan struct{}, w.config.MaxConcurrentProjects)
+	var wg sync.WaitGroup
 	for _, p := range projects {
 		if ctx.Err() != nil {
-			return
+			break
 		}
-		w.processProject(ctx, p.Name())
+		projectName := p.Name()
+
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			w.processProject(ctx, projectName)
+		}()
 	}
+	wg.Wait()
 }
 
 func (w *AirflowStateSyncWorker) processProject(ctx context.Context, projectName tenant.ProjectName) {
@@ -140,6 +172,7 @@ func (w *AirflowStateSyncWorker) processProject(ctx context.Context, projectName
 	if failedCount, err := w.syncStateRepo.FailExhaustedWindows(ctx, projectName, w.config.MaxAttempts, "max attempts exceeded"); err != nil {
 		w.l.Error("[airflowStateSync] project [%s] failed to fail exhausted windows: %s", projectName, err)
 	} else if failedCount > 0 {
+		airflowSyncWindowsFailedTotal.WithLabelValues(projectName.String()).Add(float64(failedCount))
 		w.l.Error("[airflowStateSync] project [%s] gave up on %d window(s) after exhausting retries -- manual overrides in that span went unreconciled, investigate and consider re-running", projectName, failedCount)
 	}
 
@@ -190,7 +223,16 @@ func (w *AirflowStateSyncWorker) claimAndProcessNextWindow(ctx context.Context, 
 }
 
 func (w *AirflowStateSyncWorker) processWindow(ctx context.Context, win *scheduler.AirflowSyncWindow) {
-	result, err := w.reconciler.ReconcileWindow(ctx, win.ProjectName, win.StartTime.Add(-w.config.OverlapEpsilon), win.EndTime)
+	// The Airflow HTTP client has no request timeout of its own (&http.Client{}, see
+	// ext/scheduler/airflow/client.go), so a hung request would otherwise block this
+	// goroutine forever instead of surfacing as an attempt error. Bound it to LockDuration:
+	// that's already the point at which another replica is allowed to reclaim this window,
+	// so a stuck call gets cancelled in line with when its lease would lapse anyway, rather
+	// than leaking a goroutine that outlives the window it was ever allowed to hold.
+	reconcileCtx, cancel := context.WithTimeout(ctx, w.config.LockDuration)
+	defer cancel()
+
+	result, err := w.reconciler.ReconcileWindow(reconcileCtx, win.ProjectName, win.StartTime.Add(-w.config.OverlapEpsilon), win.EndTime)
 	if err != nil {
 		w.l.Error("[airflowStateSync] project [%s] failed reconciling window [%s, %s): %s", win.ProjectName, win.StartTime, win.EndTime, err)
 		if err := w.syncStateRepo.RecordAttemptError(ctx, win.ID, win.WorkerID, err.Error()); err != nil {

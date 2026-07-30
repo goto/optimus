@@ -337,6 +337,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		OverlapEpsilonInSeconds:  2,
 		MaxAttempts:              3,
 		MaxWindowsPerTick:        6,
+		MaxConcurrentProjects:    5,
 	}
 }
 

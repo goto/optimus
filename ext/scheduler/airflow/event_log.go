@@ -32,9 +32,7 @@ const (
 
 // manualOverrideEventNames is pushed down to Airflow via included_events so the server does
 // as much of the filtering as it can; extra/confirmed/run_id filtering still has to happen
-// client-side (see the RFC's "Volume" section for why: Airflow does not expose an
-// extra-is-not-null filter, so this still returns worker-written rows for these same event
-// names and callers must not assume every returned row is a manual override).
+// client-side
 var manualOverrideEventNames = []string{eventTaskSuccess, eventTaskFailed, eventDagRunSuccess, eventDagRunFailed}
 
 type eventLogListResponse struct {
@@ -55,17 +53,16 @@ type eventLogEntry struct {
 	When  string  `json:"when"`
 }
 
-// GetEventLogs fetches every manual state override recorded in this project's Airflow audit
+// GetManualEventLogs fetches every manual state override recorded in this project's Airflow audit
 // log within [after, before), paginating until Airflow's own total_entries is exhausted. Both
 // bounds are strict on the Airflow side (dttm < before, dttm > after); callers doing windowed
 // polling are responsible for any overlap/de-duplication across adjacent windows -- this
 // method just reports what a single [after, before) query returns.
 //
-// See docs/docs/rfcs/20260727_manual_state_override_reconciliation.md for why the four bare
-// event names plus a populated `extra` (and, for dagrun_* events, extra["confirmed"]=="true")
+// Four bare event names plus a populated `extra` (and, for dagrun_* events, extra["confirmed"]=="true")
 // are what identify a manual override, as opposed to an ordinary worker-driven transition.
-func (s *Scheduler) GetEventLogs(ctx context.Context, projectName tenant.ProjectName, after, before time.Time) ([]scheduler.ManualOverrideEvent, error) {
-	spanCtx, span := startChildSpan(ctx, "GetEventLogs")
+func (s *Scheduler) GetManualEventLogs(ctx context.Context, projectName tenant.ProjectName, after, before time.Time) ([]scheduler.ManualOverrideEvent, error) {
+	spanCtx, span := startChildSpan(ctx, "GetManualEventLogs")
 	defer span.End()
 
 	schdAuth, err := s.getSchedulerAuth(spanCtx, projectName)
@@ -142,9 +139,7 @@ func toManualOverrideEvent(e eventLogEntry) (event scheduler.ManualOverrideEvent
 	isDagRunEvent := e.Event == eventDagRunSuccess || e.Event == eventDagRunFailed
 	if isDagRunEvent {
 		// _mark_dagrun_state_as_success/failed pass commit=confirmed, so a confirmed=false
-		// row is a preview that changed nothing in Airflow -- logged, but nothing to
-		// reconcile. Task-level success/failed ignore `confirmed` entirely in 2.9.3 and
-		// always apply, so this check must not be applied to those two events.
+		// row is a preview that changed nothing in Airflow -- logged, but nothing to reconcile.
 		if extraFields["confirmed"] != "true" {
 			return scheduler.ManualOverrideEvent{}, false, nil
 		}
@@ -177,7 +172,7 @@ func toManualOverrideEvent(e eventLogEntry) (event scheduler.ManualOverrideEvent
 		When:   when,
 	}
 
-	// Allow-list, not deny-list: an unrecognised run_id prefix is skipped rather than
+	// Allow-list, not deny-list: an unrecognized run_id prefix is skipped rather than
 	// guessed at, so an Airflow run-id convention we haven't seen gets noticed (via the
 	// service layer's skip metric) instead of mis-parsed.
 	if !manualOverride.HasRecognisedRunIDPrefix() {

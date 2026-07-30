@@ -455,6 +455,32 @@ projects are independent rows, so they proceed in parallel naturally.
 With one project and 5 pods, 4 will no-op each tick. That is fine — the wasted work is a single
 failed insert.
 
+**Confirmed against production topology: there are multiple projects, not one**, and the skew
+across them is large — one project accounts for the large majority of active jobs, with the rest
+ranging down to a small handful each, several of them non-production variants. This matters
+because `AirflowSyncConfig` is one global struct applied identically to every project's ticker
+cycle — there is no per-project override — so any window/lock/concurrency sizing decision has to
+be checked against the *busiest* project, not an average.
+
+It also means the "serial within a project, parallel across projects" property above needed one
+more piece to hold up in practice: `tick()` originally iterated every project sequentially in a
+single goroutine per pod. With one project this cost nothing; with many, a project whose Airflow
+instance was slow or unreachable delayed every project listed after it in that same pod's tick —
+for up to `LockDuration` — before the rest even got a chance to run that tick. Fixed by fanning
+`tick()` out with a bounded worker pool (new config field `MaxConcurrentProjects`, default 5): the
+unique-constraint claim already made cross-project processing *safe* to parallelize, this closes
+the gap where one pod's own sequential loop was the actual bottleneck. Verified with a unit test
+asserting concurrency stays bounded by `MaxConcurrentProjects` and every project is still
+processed exactly once per tick (`core/scheduler/service/airflow_state_sync_worker_test.go`).
+
+A related gap surfaced at the same time: the Airflow HTTP client
+(`ext/scheduler/airflow/client.go`) has no request timeout of its own (`&http.Client{}`). A
+genuinely hung request would have blocked that window's goroutine forever rather than surfacing
+as an attempt error — the lease would still eventually expire and get reclaimed by another
+replica, but the original goroutine would leak. `processWindow` now wraps the reconcile call in
+`context.WithTimeout(ctx, LockDuration)`, so a stuck call is cancelled in line with when its lease
+would lapse anyway.
+
 ### Volume: ~99% of fetched rows are discarded, so window size decides feasibility
 
 A production `eventLogs` call filtered to the four events reported `total_entries: 107737`, against
@@ -486,13 +512,30 @@ raising `maximum_page_limit` on the Airflow side (affects all API consumers), or
 server-side to `dagrun_success,dagrun_failed` only — those have **no** worker writer at all, so
 they need no client-side discard, at the cost of missing task-level marks.
 
-**Keying: per project or per scheduler host?** `eventLogs` only filters a **single** `dag_id`
-(V6), so a per-project worker must fetch the whole window and map `dag_id` → project client-side.
-Where several Optimus projects share one `SCHEDULER_HOST` that means each project re-fetches the
-same rows. Options: key by `scheduler_host` and fan out to projects after fetching, or keep
-per-project keying and accept the duplication. Per-project is simpler and isolates failures; it is
-the right call **if hosts are effectively 1:1 with projects** in this deployment — worth
-confirming, since it is cheap now and awkward to change later.
+**Measured against the busiest project in this deployment:**
+
+```
+          hour          | count
+------------------------+-------
+ 2026-07-28 03:00:00+07 |  2611
+ 2026-07-29 03:00:00+07 |  2606
+ 2026-07-25 03:00:00+07 |  2496
+ 2026-07-28 12:00:00+07 |  2447
+ 2026-07-27 03:00:00+07 |  2440
+```
+
+≈2,611 rows/hour peak ÷ 6 ≈ 435 rows in the worst 10-minute window ≈ 5 pages at the 100-row page
+cap. That confirms the originally-proposed 10-minute window remains safe without shrinking it,
+even against the largest project in this deployment — no further tuning needed on window size
+itself.
+
+**Keying: per project or per scheduler host? Resolved: per project, confirmed against production.**
+`eventLogs` only filters a **single** `dag_id` (V6), so a per-project worker must fetch the whole
+window and map `dag_id` → project client-side; where several Optimus projects share one
+`SCHEDULER_HOST` that would mean each project re-fetches the same rows. Production confirms
+`SCHEDULER_HOST` is 1:1 with project — many independent projects, each with its own independent
+Airflow instance — so per-project keying has no duplication cost here and is the simpler,
+failure-isolating choice kept in the final design.
 
 ## Point 5 — synchronisation between replicas (revised)
 
@@ -543,7 +586,7 @@ waiting, so check `ctx.Err()` between pages or every shutdown logs spurious clos
 |---|---|
 | `migrations/000NNN_create_airflow_sync_state.{up,down}.sql` | see the DDL in "`airflow_sync_state` design" |
 | `internal/store/postgres/scheduler/airflow_sync_state_repository.go` | new: `GetWatermark`, `ClaimWindow` (insert/on-conflict), `ReclaimStaleWindow`, `CompleteWindow` (fenced), `FailWindow` |
-| `ext/scheduler/airflow/airflow.go` + `client.go` | add `GetEventLogs(ctx, tnnt, window, includedEvents, limit, offset)` using the existing `airflowRequest` + `unmarshalAs[T]` style. Must live in `package airflow` (`Client.Invoke` takes the unexported request type). Add a client timeout — the shared `&http.Client{}` has none |
+| `ext/scheduler/airflow/airflow.go` + `client.go` | add `GetManualEventLogs(ctx, tnnt, window, includedEvents, limit, offset)` using the existing `airflowRequest` + `unmarshalAs[T]` style. Must live in `package airflow` (`Client.Invoke` takes the unexported request type). Add a client timeout — the shared `&http.Client{}` has none |
 | `ext/scheduler/airflow/model.go` | `EventLog` response struct + `extra` double-unmarshal helper + `toManualOverride()` mapper |
 | `internal/store/postgres/scheduler/job_run_repository.go` | additive: lookup by `(project, job_name, scheduled_at)` in batch; batch state update |
 | `internal/store/postgres/scheduler/job_operator_repository.go` | additive: fetch/update newest child by `(job_run_id, name)`. Keep the `operatorTypeToTableName` seam |
@@ -791,6 +834,18 @@ Siren's resolve semantics wired up, so treat it as a follow-up rather than v1.
   mean many changed task instances, possibly in other DAG runs, which the audit log cannot
   enumerate — attempting to apply it risks acting on an incomplete/wrong picture, so skip-and-count
   is the safe default. Re-visit only if the metric shows material volume.
+- **Bounded per-tick project concurrency.** Production has many projects, not the one assumed while
+  reasoning about "serial within a project, parallel across projects" above — `tick()` now fans out
+  across projects with a bounded worker pool (`MaxConcurrentProjects`, default 5) instead of a
+  single sequential loop, so one slow/unreachable project's Airflow instance no longer delays every
+  project listed after it within the same pod's tick.
+- **Per-window reconcile timeout.** `processWindow` bounds the reconcile call to
+  `context.WithTimeout(ctx, LockDuration)`, since the Airflow HTTP client has no timeout of its own
+  and would otherwise leak a goroutine per genuinely-hung request instead of surfacing as a
+  retryable attempt error.
+- New metric `airflow_sync_windows_failed_total{project}`: `FailExhaustedWindows` giving up on a
+  window was previously only a log line — with 19 independent projects/Airflow instances as
+  separate failure domains, that needed to be alertable per project, not just grep-able.
 
 All items in this section are now decided; nothing left blocking implementation.
 
@@ -798,6 +853,4 @@ All items in this section are now decided; nothing left blocking implementation.
 
 1. REST-driven (`api.*`) overrides from non-Optimus tooling — in scope? Not blocking v1 (the filter
    already excludes them by construction); revisit if a real need surfaces.
-2. Window interval, settling delay and initial-lookback defaults (10 min proposed for the window),
-   informed by the measured peak rows/window — tune during implementation, not a design blocker.
-3. Follow-up: should `failed`→`success` *resolve* an existing Siren alert rather than being silent?
+2. Follow-up: should `failed`→`success` *resolve* an existing Siren alert rather than being silent?

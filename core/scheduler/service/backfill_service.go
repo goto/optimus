@@ -19,6 +19,11 @@ import (
 
 const (
 	CustomBackfillPrefix = "custom-backfill"
+
+	configLoadMethod               = "LOAD_METHOD"
+	configDisableMultiQueryGen     = "DISABLE_MULTI_QUERY_GENERATION"
+	loadMethodReplace              = "REPLACE"
+	disableMultiQueryGenEnabledVal = "true"
 )
 
 var jobBackfillMetric = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -81,6 +86,7 @@ func (b *BackfillService) BackfillDryRun(ctx context.Context, backfillReq *sched
 	}
 
 	cfg := injectJobConfigWithTenantConfigs(backfillReq.Config().JobConfig, tenantWithDetails.GetConfigs(), jobWithDetails.Job.Task.Name, b.pluginToExecutionProjectKeyMap)
+	setDisableMultiQueryForReplace(cfg, jobWithDetails.Job.Task.Config)
 	backfillReq.SetJobConfig(cfg)
 
 	if err := b.validator.ValidateBackfill(ctx, backfillReq, jobCron); err != nil {
@@ -140,6 +146,7 @@ func (b *BackfillService) CreateBackfill(ctx context.Context, backfillReq *sched
 	}
 
 	cfg := injectJobConfigWithTenantConfigs(backfillReq.Config().JobConfig, tenantWithDetails.GetConfigs(), jobWithDetails.Job.Task.Name, b.pluginToExecutionProjectKeyMap)
+	setDisableMultiQueryForReplace(cfg, jobWithDetails.Job.Task.Config)
 	backfillReq.SetJobConfig(cfg)
 
 	if err := b.validator.ValidateBackfill(ctx, backfillReq, jobCron); err != nil {
@@ -202,6 +209,30 @@ func (b *BackfillService) CancelBackfill(ctx context.Context, backfillID uuid.UU
 	}
 
 	return b.backfillRepo.CancelBackfill(ctx, backfillID, canceledBy)
+}
+
+// setDisableMultiQueryForReplace forces single-query compilation for a REPLACE backfill by
+// setting DISABLE_MULTI_QUERY_GENERATION on the backfill's job config.
+//
+// The effective load method is the backfill override if it carries one, otherwise the job's own
+// value. The flag is left untouched when either the backfill request or the job already sets it,
+// so an explicit choice still wins. Only mc2mc reads the flag (see CompileJobRunAssets); it is a
+// harmless no-op for other plugins, which is why it is applied regardless of task name.
+func setDisableMultiQueryForReplace(backfillConfig, jobTaskConfig map[string]string) {
+	if _, ok := backfillConfig[configDisableMultiQueryGen]; ok {
+		return
+	}
+	if _, ok := jobTaskConfig[configDisableMultiQueryGen]; ok {
+		return
+	}
+
+	method, ok := backfillConfig[configLoadMethod]
+	if !ok {
+		method = jobTaskConfig[configLoadMethod]
+	}
+	if method == loadMethodReplace {
+		backfillConfig[configDisableMultiQueryGen] = disableMultiQueryGenEnabledVal
+	}
 }
 
 func injectJobConfigWithTenantConfigs(backfillConfig, tenantConfig map[string]string, operatorName string, pluginToExecutionProjectKeyMap map[string]string) map[string]string {

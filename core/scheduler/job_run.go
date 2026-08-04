@@ -47,6 +47,9 @@ type JobRun struct {
 	WindowEnd     *time.Time
 	SLADefinition int64
 
+	// SchedulerRunID is Airflow's dag run id for this run, e.g. scheduled__2024-01-01T00:00:00+00:00.
+	SchedulerRunID string
+
 	Monitoring map[string]any
 }
 
@@ -70,6 +73,13 @@ type OperatorRun struct {
 	Status       State
 	StartTime    time.Time
 	EndTime      *time.Time
+
+	// RunType and TriggeredBy record why this attempt ran and who is answerable for it.
+	RunType     RunType
+	TriggeredBy string
+	// Attempt is Airflow's task instance try_number. It increases monotonically across both
+	// scheduler retries and manual clears, so it cannot on its own distinguish the two.
+	Attempt int
 }
 
 type AlertAttrs struct {

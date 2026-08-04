@@ -329,6 +329,17 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		},
 	}
 	s.expectedServerConfig.Backfill.ExecutionIntervalInSeconds = 300
+	s.expectedServerConfig.RunAttribution = config.RunAttributionConfig{
+		AuditResolutionEnabled: false,
+		ResolveTimeoutSeconds:  30,
+		MaxConcurrentResolves:  16,
+		MaxPendingResolves:     512,
+		ResolveRetryMax:        3,
+		ResolveRetryBackoffMs:  500,
+		AuditLookbackMinutes:   30,
+		IdentifyLookbackHours:  24,
+		AuditPageLimit:         100,
+	}
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

@@ -376,10 +376,18 @@ func (s *OptimusServer) setupHandlers() error {
 	s.cleanupFn = append(s.cleanupFn, closeBackfillScan)
 	go backfillWorker.ScanBackfillRequest(backfillScanContext)
 
+	// Decides why a task or hook run is executing and who is answerable for it. Attribution to
+	// Optimus's own replay and backfill requests is always active; the part that reads Airflow's
+	// audit log to attribute manual clears and triggers is gated by run_attribution.enabled.
+	runAttributionService := schedulerService.NewRunAttributionService(
+		s.logger, s.conf.RunAttribution, operatorRunRepository, replayRepository,
+		backfillRepo, newScheduler,
+	)
+
 	newJobRunService := schedulerService.NewJobRunService(
 		s.logger, jobProviderRepo, jobRunRepo, replayRepository, operatorRunRepository, slaRepository,
 		newScheduler, newPriorityResolver, jobInputCompiler, s.eventHandler, tProjectService,
-		s.conf.Features, autoSLADurationEstimatorService, backfillRepo,
+		s.conf.Features, autoSLADurationEstimatorService, backfillRepo, runAttributionService,
 	)
 
 	newSchedulerService := schedulerService.NewSchedulerService(newScheduler)

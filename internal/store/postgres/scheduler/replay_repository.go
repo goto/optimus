@@ -266,6 +266,45 @@ func (r ReplayRepository) GetReplayJobConfig(ctx context.Context, jobTenant tena
 	return configs, nil
 }
 
+// GetReplayAttributionByScheduledAt finds the in-flight replay request, if any, responsible for
+// a run at the given scheduled time, and returns its id and the user who asked for it.
+//
+// Matching is on the replay's time window rather than on replay_run rows because a replay of an
+// already existing run clears it in place, leaving Airflow's dag run id untouched, so the run
+// id carries no evidence of the replay.
+//
+// Only non-terminal replays are considered, which is what stops an ordinary scheduled run from
+// being blamed on a long-finished replay whose window happens to contain its scheduled time.
+// This is safe against both ends of the replay lifecycle: ReplayWorker marks the request
+// 'in progress' at the top of its execution loop, before it issues any Airflow clear, and it
+// only marks the request terminal once every run has reached a terminal state. A scheduler
+// retry arriving after the replay has finished is still attributed correctly, by inheriting
+// from the previous attempt.
+func (r ReplayRepository) GetReplayAttributionByScheduledAt(ctx context.Context, jobTenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (uuid.UUID, string, error) {
+	getReplay := `SELECT id, user_id FROM replay_request
+		WHERE job_name=$1 AND namespace_name=$2 AND project_name=$3
+			AND start_time<=$4 AND $4<=end_time
+			AND status = ANY($5)
+		ORDER BY created_at DESC LIMIT 1`
+	var (
+		replayID uuid.UUID
+		userID   string
+	)
+	nonTerminal := make([]string, 0, len(scheduler.ReplayNonTerminalStates))
+	for _, state := range scheduler.ReplayNonTerminalStates {
+		nonTerminal = append(nonTerminal, state.String())
+	}
+	err := r.db.QueryRow(ctx, getReplay, jobName, jobTenant.NamespaceName(), jobTenant.ProjectName(), scheduledAt, nonTerminal).
+		Scan(&replayID, &userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, "", errors.NotFound(scheduler.EntityReplay, "no in-flight replay covering scheduled time "+scheduledAt.String()+" for job "+jobName.String())
+		}
+		return uuid.Nil, "", errors.Wrap(scheduler.EntityReplay, "unable to get replay attribution", err)
+	}
+	return replayID, userID, nil
+}
+
 func (r ReplayRepository) GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error) {
 	getReplayRunRequest := `
 	select rq.id, rq.job_name, rq.namespace_name, rq.project_name, rq.start_time,

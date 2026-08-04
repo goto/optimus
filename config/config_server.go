@@ -19,6 +19,7 @@ type ServerConfig struct {
 	UpstreamResolvers         []UpstreamResolver        `mapstructure:"upstream_resolvers"`
 	Replay                    ReplayConfig              `mapstructure:"replay"`
 	Backfill                  BackfillConfig            `mapstructure:"backfill"`
+	RunAttribution            RunAttributionConfig      `mapstructure:"run_attribution"`
 	Publisher                 *Publisher                `mapstructure:"publisher"`
 	JobSyncIntervalMinutes    int                       `mapstructure:"job_sync_interval_minutes"`
 	ExternalTables            ExternalTablesConfig      `mapstructure:"external_tables"`
@@ -145,6 +146,53 @@ type ReplayConfig struct {
 
 type BackfillConfig struct {
 	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"300"`
+}
+
+// RunAttributionConfig governs how Optimus decides why a task or hook run is executing and
+// who is answerable for it.
+//
+// The Airflow audit event names this relies on are not configurable: they are properties of a
+// given Airflow version, established by reading its source, and a wrong value here would
+// silently produce unattributed runs rather than an error.
+type RunAttributionConfig struct {
+	// AuditResolutionEnabled gates only the part that calls Airflow's audit log to find out who
+	// triggered or cleared a run by hand. Off by default so the Airflow dependency can be turned
+	// on per environment once the credential has `can_read on Audit Logs`.
+	//
+	// Attributing runs to Optimus's own replay and backfill requests is unaffected: that is a
+	// local database lookup and is always active. With this off, a manual run is still recorded
+	// as manual, only its actor is left unidentified.
+	AuditResolutionEnabled bool `mapstructure:"audit_resolution_enabled" default:"false"`
+
+	// ResolveTimeoutSeconds bounds one audit resolution, including its retries. The resolver
+	// runs detached from the request that triggered it, so this is the only thing that ends it.
+	ResolveTimeoutSeconds int `mapstructure:"resolve_timeout_seconds" default:"30"`
+	// MaxConcurrentResolves caps concurrent calls *into Airflow*. Resolutions collapsed by
+	// singleflight — every task of one cleared dag run shares a single lookup — do not consume a
+	// slot, so this bounds load on the Airflow webserver rather than counting waiters.
+	MaxConcurrentResolves int `mapstructure:"max_concurrent_resolves" default:"16"`
+	// MaxPendingResolves caps in-flight resolver goroutines. Most are cheap waiters, so this
+	// exists only so a prolonged Airflow outage cannot grow memory without bound. Beyond it a run
+	// is still recorded as manual, with the actor left unidentified.
+	MaxPendingResolves    int `mapstructure:"max_pending_resolves" default:"512"`
+	ResolveRetryMax       int `mapstructure:"resolve_retry_max" default:"3"`
+	ResolveRetryBackoffMs int `mapstructure:"resolve_retry_backoff_ms" default:"500"`
+
+	// AuditLookbackMinutes is how far before a run's start time to search the audit log. It
+	// must cover the delay between a user's click and the task actually starting, which
+	// includes a scheduler loop plus queue and pool wait.
+	AuditLookbackMinutes int `mapstructure:"audit_lookback_minutes" default:"30"`
+	// IdentifyLookbackHours bounds the dag-scoped audit query so it stays indexed on the log
+	// table's timestamp. Generous by design: it exists for query efficiency, not to decide which
+	// run an event belongs to — AuditLookbackMinutes does that.
+	IdentifyLookbackHours int `mapstructure:"identify_lookback_hours" default:"24"`
+	// AuditPageLimit caps rows fetched per audit query.
+	AuditPageLimit int `mapstructure:"audit_page_limit" default:"100"`
+
+	// ServiceAccountOwners are audit log owners that are Optimus itself. Optimus's own replay
+	// and backfill calls into Airflow are audited too, so without this every replay would be
+	// attributed to the service account. Deployment specific, hence configurable.
+	ServiceAccountOwners []string `mapstructure:"service_account_owners"`
 }
 
 type Publisher struct {

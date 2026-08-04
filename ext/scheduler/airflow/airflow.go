@@ -43,6 +43,7 @@ const (
 	dagRunCreateURL    = "api/v1/dags/%s/dagRuns"
 	getTaskInstanceURL = "api/v1/dags/%s/dagRuns/%s/taskInstances/%s"
 	dagRunIDURL        = "api/v1/dags/%s/dagRuns/%s"
+	eventLogsURL       = "api/v1/eventLogs"
 	airflowDateFormat  = "2006-01-02T15:04:05+00:00"
 
 	schedulerHostKey = "SCHEDULER_HOST"
@@ -820,6 +821,73 @@ func (s *Scheduler) GetOperatorInstance(ctx context.Context, tnnt tenant.Tenant,
 	}
 
 	return taskInstance.toSchedulerOperatorRunInstance()
+}
+
+// GetEventLogs reads Airflow's audit log, which is how Optimus finds out who cleared or
+// triggered a run from outside Optimus. Requires the scheduler credential to hold `can_read`
+// on `Audit Logs`; without it Airflow answers 403 and Invoke surfaces that as an error.
+//
+// The filter's included/excluded event names rely on Airflow 2.9.0 or later.
+func (s *Scheduler) GetEventLogs(ctx context.Context, filter scheduler.AuditEventFilter) ([]*scheduler.AuditEvent, error) {
+	spanCtx, span := startChildSpan(ctx, "GetEventLogs")
+	defer span.End()
+
+	req := airflowRequest{
+		// The query is kept out of path on purpose: Invoke uses path as a Prometheus label,
+		// so folding per-request values into it would make the metric unbounded.
+		path:   eventLogsURL,
+		method: http.MethodGet,
+		query:  buildEventLogQuery(filter),
+	}
+	schdAuth, err := s.getSchedulerAuth(ctx, filter.Tenant.ProjectName())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.client.Invoke(spanCtx, req, schdAuth)
+	if err != nil {
+		return nil, errors.Wrap(EntityAirflow, "failure while getting airflow event logs", err)
+	}
+	eventLogs, err := unmarshalAs[EventLogListResponse](resp)
+	if err != nil {
+		return nil, errors.Wrap(EntityAirflow, "failure while unmarshalling airflow event logs", err)
+	}
+
+	auditEvents := make([]*scheduler.AuditEvent, 0, len(eventLogs.EventLogs))
+	for _, eventLog := range eventLogs.EventLogs {
+		auditEvents = append(auditEvents, eventLog.toAuditEvent())
+	}
+	return auditEvents, nil
+}
+
+func buildEventLogQuery(filter scheduler.AuditEventFilter) string {
+	query := url.Values{}
+	// Newest first, so callers can stop at the first row at or before the run's start time.
+	query.Set("order_by", "-when")
+	if filter.Limit > 0 {
+		query.Set("limit", strconv.Itoa(filter.Limit))
+	}
+	if filter.DagID != "" {
+		query.Set("dag_id", filter.DagID)
+	}
+	if filter.RunID != "" {
+		query.Set("run_id", filter.RunID)
+	}
+	if filter.TaskID != "" {
+		query.Set("task_id", filter.TaskID)
+	}
+	if !filter.After.IsZero() {
+		query.Set("after", filter.After.UTC().Format(time.RFC3339))
+	}
+	if !filter.Before.IsZero() {
+		query.Set("before", filter.Before.UTC().Format(time.RFC3339))
+	}
+	if len(filter.IncludedEvents) > 0 {
+		query.Set("included_events", strings.Join(filter.IncludedEvents, ","))
+	}
+	if len(filter.ExcludedEvents) > 0 {
+		query.Set("excluded_events", strings.Join(filter.ExcludedEvents, ","))
+	}
+	return query.Encode()
 }
 
 func NewScheduler(l log.Logger, bucketFac BucketFactory, client Client, compiler DagCompiler, projectGetter ProjectGetter, secretGetter SecretGetter) *Scheduler {

@@ -78,6 +78,7 @@ type JobRunRepository interface {
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
 	UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error
 	UpdateMonitoring(ctx context.Context, jobRunID uuid.UUID, monitoring map[string]any) error
+	UpdateSchedulerRunID(ctx context.Context, jobRunID uuid.UUID, schedulerRunID string) error
 	GetRunSummaryByIdentifiers(ctx context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error)
 }
 
@@ -88,7 +89,7 @@ type JobReplayRepository interface {
 
 type OperatorRunRepository interface {
 	GetOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error)
-	CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error
+	CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time, attribution scheduler.RunAttribution, attempt int) (uuid.UUID, error)
 	UpdateOperatorRun(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID, eventTime time.Time, state scheduler.State) error
 }
 
@@ -141,6 +142,14 @@ type JobRunService struct {
 	features         config.FeaturesConfig
 
 	durationEstimatorService DurationEstimator
+	// runAttributionService may be nil, in which case every run is recorded as scheduled.
+	runAttributionService RunAttributor
+}
+
+// RunAttributor decides why an operator run is executing and records the answer.
+type RunAttributor interface {
+	Classify(ctx context.Context, in AttributionInput) scheduler.RunAttribution
+	Record(ctx context.Context, in AttributionInput, operatorRunID uuid.UUID, attribution scheduler.RunAttribution) error
 }
 
 var DagRunIDRegex = regexp.MustCompile(`(.*?)(_(.+))?__(.+)`)
@@ -850,6 +859,8 @@ func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event
 		s.l.Error("error updating job run with id [%s]: %s", jobRun.ID, err)
 		return err
 	}
+	// Also recorded here so that jobs whose only events are dag level still get a dag run id.
+	s.syncSchedulerRunID(ctx, jobRun, event)
 	jobRun.State = event.Status
 	s.raiseJobRunStateChangeEvent(jobRun)
 	monitoringValues := s.getMonitoringValues(event)
@@ -1075,7 +1086,7 @@ func (s *JobRunService) getExistingOperatorRun(ctx context.Context, event *sched
 	return existingOperatorRun, nil
 }
 
-func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {
+func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType, previousRun *scheduler.OperatorRun) error {
 	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt)
 	if err != nil {
 		s.l.Error("error getting job run by scheduled time [%s]: %s", event.JobScheduledAt, err)
@@ -1096,13 +1107,93 @@ func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.
 		s.raiseJobRunStateChangeEvent(jobRun)
 	}
 
-	err = s.operatorRunRepo.CreateOperatorRun(ctx, event.OperatorName, operatorType, jobRun.ID, event.EventTime)
+	s.syncSchedulerRunID(ctx, jobRun, event)
+
+	attributionInput := s.attributionInputFrom(event, operatorType, jobRun, previousRun)
+	attribution := s.classifyRun(ctx, attributionInput)
+
+	operatorRunID, err := s.operatorRunRepo.CreateOperatorRun(ctx, event.OperatorName, operatorType, jobRun.ID,
+		event.EventTime, attribution, attributionInput.Attempt)
 	if err != nil {
 		s.l.Error("error registering operator run job [%s], type [%s], operator [%s] : %s", event.JobName, operatorType, event.OperatorName, err)
 		return err
 	}
 
-	return err
+	s.recordRunAttribution(ctx, attributionInput, operatorRunID, attribution)
+
+	return nil
+}
+
+// syncSchedulerRunID keeps job_run.scheduler_run_id in step with Airflow's dag run id.
+//
+// It is written here rather than at Create time because job_run rows are created lazily and
+// keyed on (project, job, scheduled_at), so a row can outlive a dag run that is deleted and
+// recreated. Only writes when the value actually changed, and never fails the event: losing
+// the dag run id costs some attribution precision, not the run record itself.
+func (s *JobRunService) syncSchedulerRunID(ctx context.Context, jobRun *scheduler.JobRun, event *scheduler.Event) {
+	schedulerRunID := schedulerRunIDFrom(event)
+	if schedulerRunID == "" || jobRun.SchedulerRunID == schedulerRunID {
+		return
+	}
+	if err := s.repo.UpdateSchedulerRunID(ctx, jobRun.ID, schedulerRunID); err != nil {
+		s.l.Error("error recording scheduler run id [%s] on job run [%s]: %s", schedulerRunID, jobRun.ID, err)
+		return
+	}
+	jobRun.SchedulerRunID = schedulerRunID
+}
+
+// schedulerRunIDFrom reads Airflow's dag run id out of the event payload. Absent on SLA miss
+// and on any hand-crafted event that omits the event context.
+func schedulerRunIDFrom(event *scheduler.Event) string {
+	if event.EventContext == nil {
+		return ""
+	}
+	return event.EventContext.DagRun.RunID
+}
+
+// attemptFrom reads Airflow's task instance try_number. It rises across both scheduler retries
+// and manual clears, so it records which attempt this is without saying who caused it.
+func attemptFrom(event *scheduler.Event) int {
+	if event.EventContext == nil {
+		return 1
+	}
+	if attempt := event.EventContext.OperatorRunInstance.TryNumber; attempt > 0 {
+		return attempt
+	}
+	return 1
+}
+
+func (*JobRunService) attributionInputFrom(event *scheduler.Event, operatorType scheduler.OperatorType, jobRun *scheduler.JobRun, previousRun *scheduler.OperatorRun) AttributionInput {
+	return AttributionInput{
+		Tenant:         event.Tenant,
+		JobName:        event.JobName,
+		OperatorName:   event.OperatorName,
+		OperatorType:   operatorType,
+		JobRunID:       jobRun.ID,
+		ScheduledAt:    event.JobScheduledAt,
+		SchedulerRunID: schedulerRunIDFrom(event),
+		Attempt:        attemptFrom(event),
+		StartTime:      event.EventTime,
+		PreviousRun:    previousRun,
+	}
+}
+
+// classifyRun decides why a run is executing. Attribution is best effort by nature, so a
+// failure to classify degrades to 'scheduled' rather than rejecting the event.
+func (s *JobRunService) classifyRun(ctx context.Context, in AttributionInput) scheduler.RunAttribution {
+	if s.runAttributionService == nil || in.OperatorType == scheduler.OperatorSensor {
+		return scheduler.ScheduledAttribution()
+	}
+	return s.runAttributionService.Classify(ctx, in)
+}
+
+func (s *JobRunService) recordRunAttribution(ctx context.Context, in AttributionInput, operatorRunID uuid.UUID, attribution scheduler.RunAttribution) {
+	if s.runAttributionService == nil || attribution.IsScheduled() {
+		return
+	}
+	if err := s.runAttributionService.Record(ctx, in, operatorRunID, attribution); err != nil {
+		s.l.Error("error recording trigger source for operator run [%s]: %s", operatorRunID, err)
+	}
 }
 
 func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error) {
@@ -1116,7 +1207,9 @@ func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Eve
 		s.l.Warn("operator is not found, creating it")
 
 		// TODO: consider moving below call outside as the caller is a 'getter'
-		err = s.createOperatorRun(ctx, event, operatorType)
+		// No previous run to inherit from: this path is reached when a terminal event arrives
+		// for an operator whose start event Optimus never saw.
+		err = s.createOperatorRun(ctx, event, operatorType, nil)
 		if err != nil {
 			s.l.Error("error creating operator run: %s", err)
 			return nil, err
@@ -1200,16 +1293,17 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	case scheduler.JobSuccessEvent, scheduler.JobFailureEvent:
 		return s.updateJobRun(ctx, event)
 	case scheduler.SensorStartEvent:
-		return s.createOperatorRun(ctx, event, scheduler.OperatorSensor)
+		return s.createOperatorRun(ctx, event, scheduler.OperatorSensor, nil)
 	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
 		return s.updateOperatorRun(ctx, event, scheduler.OperatorSensor)
 	case scheduler.TaskStartEvent, scheduler.HookStartEvent:
-
+		// Read the previous attempt before inserting this one. Its status is what distinguishes
+		// a scheduler retry from a run somebody cleared by hand in Airflow.
 		existingOperatorRun, err := s.getExistingOperatorRun(ctx, event)
 		if err != nil {
 			return err
 		}
-		err = s.createOperatorRun(ctx, event, event.EventContext.OperatorType)
+		err = s.createOperatorRun(ctx, event, event.EventContext.OperatorType, existingOperatorRun)
 		if err != nil {
 			return err
 		}
@@ -1273,6 +1367,7 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 	operatorRunRepo OperatorRunRepository, slaRepo SLARepository, scheduler Scheduler, resolver PriorityResolver,
 	compiler JobInputCompiler, eventHandler EventHandler, projectGetter ProjectGetter, features config.FeaturesConfig,
 	durationEstimatorService DurationEstimator, backfillRepo BackfillRepository,
+	runAttributionService RunAttributor,
 ) *JobRunService {
 	return &JobRunService{
 		l:                        logger,
@@ -1289,6 +1384,7 @@ func NewJobRunService(logger log.Logger, jobRepo JobRepository, jobRunRepo JobRu
 		features:                 features,
 		durationEstimatorService: durationEstimatorService,
 		backfillRepo:             backfillRepo,
+		runAttributionService:    runAttributionService,
 	}
 }
 

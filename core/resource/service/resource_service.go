@@ -353,7 +353,7 @@ func (rs ResourceService) Delete(ctx context.Context, req *resource.DeleteReques
 	if len(downstreamList) > 0 {
 		jobNames = downstreamList.GetDownstreamFullNames().String()
 		if !req.Force {
-			msg := fmt.Sprintf("there are still resource using %s, jobs: [%s]", existing.FullName(), jobNames)
+			msg := fmt.Sprintf("there are still jobs using resource: %s, jobs names list : [%s]", existing.FullName(), jobNames)
 			return nil, errors.NewError(errors.ErrFailedPrecond, resource.EntityResource, msg)
 		}
 		rs.logger.Info(fmt.Sprintf("attempt to delete resource %s with downstreamJobs: [%s]", existing.FullName(), jobNames))

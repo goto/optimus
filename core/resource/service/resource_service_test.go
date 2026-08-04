@@ -1671,7 +1671,7 @@ func TestResourceService(t *testing.T) {
 
 			actual, err := rscService.Delete(ctx, req)
 			assert.Error(t, err)
-			assert.ErrorContains(t, err, "failed precondition for entity resource: there are still resource using dataset.table_test, jobs: [project_test/projA/JobA]")
+			assert.ErrorContains(t, err, "failed precondition for entity resource: there are still jobs using resource: dataset.table_test, jobs names list : [project_test/projA/JobA]")
 			assert.Nil(t, actual)
 		})
 

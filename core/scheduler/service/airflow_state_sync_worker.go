@@ -15,18 +15,15 @@ import (
 )
 
 // airflowSyncWindowsFailedTotal counts windows a project gave up on after exhausting
-// MaxAttempts -- each one is a span of time whose manual overrides were never reconciled
-// and, unlike a single skipped event, isn't visible anywhere else (FailExhaustedWindows was
-// previously only a log line). With multiple independent projects/Airflow instances, the
-// project label is what lets on-call tell which one needs attention.
+// MaxAttempts -- each one is a span of time whose manual overrides were never reconciled.
 var airflowSyncWindowsFailedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "airflow_sync_windows_failed_total",
 	Help: "airflow-sync windows marked failed after exhausting retries, by project",
 }, []string{"project"})
 
-// AirflowSyncProjectRepository lists every project the reconciler should sweep. Production
-// has multiple projects, each with its own Airflow instance (SCHEDULER_HOST is per-project
-// config), so this fans out to isolated, parallel sync per project rather than assuming one.
+// AirflowSyncProjectRepository lists every project the reconciler should sweep. Each project
+// has its own Airflow instance (SCHEDULER_HOST is per-project config), so sync runs
+// independently per project.
 type AirflowSyncProjectRepository interface {
 	GetAll(ctx context.Context) ([]*tenant.Project, error)
 }
@@ -49,42 +46,41 @@ type WindowReconciler interface {
 	ReconcileWindow(ctx context.Context, projectName tenant.ProjectName, startTime, endTime time.Time) (ReconcileWindowResult, error)
 }
 
+const (
+	// settlingDelay keeps a window's end_time from being claimed until it is this far in the
+	// past, so a row whose transaction hadn't committed yet when queried isn't permanently
+	// skipped.
+	settlingDelay = 60 * time.Second
+	// overlapEpsilon is subtracted from every window's start when querying Airflow: the
+	// eventLogs `after`/`before` bounds are both strict, so without an overlap a row landing
+	// exactly on a boundary is excluded by both the window before and the window after it.
+	// Re-fetching a couple of already-processed rows is harmless since reconciliation is
+	// idempotent.
+	overlapEpsilon = 2 * time.Second
+	// maxWindowsPerTick bounds how many windows a single tick claims and processes for one
+	// project, so catching up after downtime doesn't turn one tick into unbounded work.
+	maxWindowsPerTick = 12
+)
+
 type AirflowStateSyncConfig struct {
-	// WindowInterval is both the ticker cadence and the size of each claimed window: every
-	// tick, the worker advances each project's watermark by one window of this length
-	// (more, if catching up -- see MaxWindowsPerTick).
+	// WindowInterval is both the ticker cadence and the size of each claimed window. A zero
+	// value disables the worker entirely (see server/optimus.go).
 	WindowInterval time.Duration
-	// SettlingDelay keeps a window's end_time from being claimed until it is this far in
-	// the past, so a row whose transaction had not committed yet when queried is not
-	// permanently skipped (see the RFC's "windowing" section).
-	SettlingDelay time.Duration
 	// LockDuration bounds how long a claimed window may stay `in_progress` before another
-	// replica is allowed to treat it as crashed and re-claim it.
+	// replica may treat it as crashed and re-claim it. Also bounds how long a single window's
+	// reconcile call is allowed to run (see processWindow).
 	LockDuration time.Duration
-	// InitialLookback caps how far back the very first window goes for a project with no
-	// prior sync history, so a fresh deployment does not try to ingest all of history.
-	InitialLookback time.Duration
-	// OverlapEpsilon is subtracted from every window's start when querying Airflow, because
-	// eventLogs' `after`/`before` bounds are both strict: without an overlap, a row whose
-	// dttm exactly equals a window boundary is excluded by both the window that ends there
-	// and the one that begins there. The resulting re-fetch of a few already-processed rows
-	// is harmless: reconciliation is idempotent (it checks current-state-equals-target-state
-	// before writing anything).
-	OverlapEpsilon time.Duration
-	// MaxAttempts is how many times a crashed/failed window is retried (via
-	// ReclaimStaleWindow) before it is marked `failed` and the watermark advances past it
-	// anyway -- see the RFC on why a `failed` window still counts towards the watermark:
-	// excluding it would let one permanently-broken window block every later window for the
-	// project from ever being attempted.
-	MaxAttempts int
-	// MaxWindowsPerTick bounds how many windows a single tick will claim and process for one
-	// project, so a project catching up after downtime does not turn one tick into
-	// unbounded work.
-	MaxWindowsPerTick int
-	// MaxConcurrentProjects bounds how many projects one pod processes at once per tick.
-	// One project whose Airflow instance is slow or unreachable would otherwise delay every project listed
-	// after it in that same pod's tick, for up to LockDuration, before this was added.
+	// MaxConcurrentProjects bounds how many projects one pod processes at once per tick, so a
+	// project whose Airflow instance is slow or unreachable doesn't delay every project listed
+	// after it in the same tick.
 	MaxConcurrentProjects int
+	// MaxAttempts is how many times a crashed/failed window is retried before it's marked
+	// `failed` and the watermark advances past it anyway, so one broken window can't block a
+	// project's sync forever.
+	MaxAttempts int
+	// ExcludeProjects lists project names to skip syncing entirely -- e.g. an unstable
+	// instance, or a project not yet rolled out. Every project syncs by default.
+	ExcludeProjects []string
 }
 
 type AirflowStateSyncWorker struct {
@@ -94,19 +90,31 @@ type AirflowStateSyncWorker struct {
 	syncStateRepo AirflowSyncStateRepository
 	reconciler    WindowReconciler
 
-	config AirflowStateSyncConfig
+	config          AirflowStateSyncConfig
+	excludedProject map[string]struct{}
 }
 
 func NewAirflowStateSyncWorker(l log.Logger, projectRepo AirflowSyncProjectRepository, syncStateRepo AirflowSyncStateRepository,
 	reconciler WindowReconciler, config AirflowStateSyncConfig,
 ) *AirflowStateSyncWorker {
-	return &AirflowStateSyncWorker{
-		l:             l,
-		projectRepo:   projectRepo,
-		syncStateRepo: syncStateRepo,
-		reconciler:    reconciler,
-		config:        config,
+	excludedProject := make(map[string]struct{}, len(config.ExcludeProjects))
+	for _, name := range config.ExcludeProjects {
+		excludedProject[name] = struct{}{}
 	}
+	return &AirflowStateSyncWorker{
+		l:               l,
+		projectRepo:     projectRepo,
+		syncStateRepo:   syncStateRepo,
+		reconciler:      reconciler,
+		config:          config,
+		excludedProject: excludedProject,
+	}
+}
+
+// initialLookback caps how far back the very first window goes for a project with no prior
+// sync history, so a fresh project doesn't try to ingest all of history.
+func (w *AirflowStateSyncWorker) initialLookback() time.Duration {
+	return w.config.WindowInterval * time.Duration(maxWindowsPerTick)
 }
 
 // ScheduleAirflowStateSync starts the ticker loop. Modeled on SLAWorker.ScheduleSLAHandling:
@@ -127,10 +135,8 @@ func (w *AirflowStateSyncWorker) ScheduleAirflowStateSync(ctx context.Context) {
 	}()
 }
 
-// tick fans out across projects with bounded concurrency, rather than processing them one
-// at a time: a project whose Airflow instance is slow or unreachable is bounded to a
-// LockDuration-long stall (see processWindow's timeout) on whichever goroutine claimed it,
-// but no longer blocks this pod from starting every other project's turn until it's done.
+// tick processes projects concurrently, up to MaxConcurrentProjects at a time, so a slow or
+// unreachable project doesn't hold up the rest.
 func (w *AirflowStateSyncWorker) tick(ctx context.Context) {
 	projects, err := w.projectRepo.GetAll(ctx)
 	if err != nil {
@@ -145,6 +151,9 @@ func (w *AirflowStateSyncWorker) tick(ctx context.Context) {
 			break
 		}
 		projectName := p.Name()
+		if _, excluded := w.excludedProject[projectName.String()]; excluded {
+			continue
+		}
 
 		sem <- struct{}{}
 		wg.Add(1)
@@ -160,9 +169,7 @@ func (w *AirflowStateSyncWorker) tick(ctx context.Context) {
 func (w *AirflowStateSyncWorker) processProject(ctx context.Context, projectName tenant.ProjectName) {
 	workerID := uuid.New()
 
-	// A worker that died mid-window gets priority: make progress on it (or fail it out once
-	// attempts are exhausted) before claiming anything new, so a wedged window doesn't
-	// starve forever behind an ever-advancing watermark.
+	// Reclaim any window a crashed worker left stuck, before claiming anything new.
 	if reclaimed, err := w.syncStateRepo.ReclaimStaleWindow(ctx, projectName, workerID, w.config.LockDuration, w.config.MaxAttempts); err != nil {
 		w.l.Error("[airflowStateSync] project [%s] failed to reclaim stale window: %s", projectName, err)
 	} else if reclaimed != nil {
@@ -176,7 +183,7 @@ func (w *AirflowStateSyncWorker) processProject(ctx context.Context, projectName
 		w.l.Error("[airflowStateSync] project [%s] gave up on %d window(s) after exhausting retries -- manual overrides in that span went unreconciled, investigate and consider re-running", projectName, failedCount)
 	}
 
-	for i := 0; i < w.config.MaxWindowsPerTick; i++ {
+	for i := 0; i < maxWindowsPerTick; i++ {
 		if ctx.Err() != nil {
 			return
 		}
@@ -187,9 +194,8 @@ func (w *AirflowStateSyncWorker) processProject(ctx context.Context, projectName
 }
 
 // claimAndProcessNextWindow claims and processes exactly one window, returning false when
-// there is nothing to do this tick (either nothing due yet, per SettlingDelay, or another
-// replica already claimed it) so processProject's catch-up loop knows to stop early rather
-// than spinning through MaxWindowsPerTick iterations for nothing.
+// there's nothing to do (nothing due yet, or another replica already claimed it) so the
+// caller's catch-up loop can stop early.
 func (w *AirflowStateSyncWorker) claimAndProcessNextWindow(ctx context.Context, projectName tenant.ProjectName, workerID uuid.UUID) bool {
 	watermark, err := w.syncStateRepo.GetWatermark(ctx, projectName)
 	if err != nil {
@@ -197,13 +203,13 @@ func (w *AirflowStateSyncWorker) claimAndProcessNextWindow(ctx context.Context, 
 		return false
 	}
 
-	start := time.Now().Add(-w.config.InitialLookback)
+	start := time.Now().Add(-w.initialLookback())
 	if watermark != nil {
 		start = *watermark
 	}
 	end := start.Add(w.config.WindowInterval)
 
-	settleBoundary := time.Now().Add(-w.config.SettlingDelay)
+	settleBoundary := time.Now().Add(-settlingDelay)
 	if end.After(settleBoundary) {
 		return false // nothing due yet
 	}
@@ -223,16 +229,12 @@ func (w *AirflowStateSyncWorker) claimAndProcessNextWindow(ctx context.Context, 
 }
 
 func (w *AirflowStateSyncWorker) processWindow(ctx context.Context, win *scheduler.AirflowSyncWindow) {
-	// The Airflow HTTP client has no request timeout of its own (&http.Client{}, see
-	// ext/scheduler/airflow/client.go), so a hung request would otherwise block this
-	// goroutine forever instead of surfacing as an attempt error. Bound it to LockDuration:
-	// that's already the point at which another replica is allowed to reclaim this window,
-	// so a stuck call gets cancelled in line with when its lease would lapse anyway, rather
-	// than leaking a goroutine that outlives the window it was ever allowed to hold.
+	// The Airflow HTTP client has no request timeout of its own, so bound the reconcile call
+	// to LockDuration -- otherwise a hung request blocks this goroutine indefinitely.
 	reconcileCtx, cancel := context.WithTimeout(ctx, w.config.LockDuration)
 	defer cancel()
 
-	result, err := w.reconciler.ReconcileWindow(reconcileCtx, win.ProjectName, win.StartTime.Add(-w.config.OverlapEpsilon), win.EndTime)
+	result, err := w.reconciler.ReconcileWindow(reconcileCtx, win.ProjectName, win.StartTime.Add(-overlapEpsilon), win.EndTime)
 	if err != nil {
 		w.l.Error("[airflowStateSync] project [%s] failed reconciling window [%s, %s): %s", win.ProjectName, win.StartTime, win.EndTime, err)
 		if err := w.syncStateRepo.RecordAttemptError(ctx, win.ID, win.WorkerID, err.Error()); err != nil {

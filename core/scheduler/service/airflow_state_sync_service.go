@@ -214,24 +214,24 @@ func (s *AirflowStateSyncService) reconcileDagRun(ctx context.Context, projectNa
 	}
 
 	for _, operatorType := range []scheduler.OperatorType{scheduler.OperatorTask, scheduler.OperatorSensor, scheduler.OperatorHook} {
-		children, err := s.operatorRunRepo.ListLatestOperatorRunsByJobRunID(ctx, operatorType, jobRun.ID)
+		operators, err := s.operatorRunRepo.ListLatestOperatorRunsByJobRunID(ctx, operatorType, jobRun.ID)
 		if err != nil {
 			s.l.Warn("error listing %s runs for job run [%s] dagrun cascade: %s", operatorType, jobRun.ID, err)
 			continue
 		}
-		for _, child := range children {
-			if child.Status == targetState {
+		for _, operator := range operators {
+			if operator.Status == targetState {
 				continue
 			}
-			if targetState == scheduler.StateFailed && child.Status.IsTerminal() {
+			if targetState == scheduler.StateFailed && operator.Status.IsTerminal() {
 				// leaves already-terminal tasks alone, matching set_dag_run_state_to_failed
 				continue
 			}
-			if !child.UpdatedAt.IsZero() && child.UpdatedAt.After(evt.When) {
+			if !operator.UpdatedAt.IsZero() && operator.UpdatedAt.After(evt.When) {
 				continue
 			}
-			if err := s.operatorRunRepo.UpdateOperatorRun(ctx, operatorType, child.ID, evt.When, targetState); err != nil {
-				s.l.Warn("error cascading dagrun state to %s run [%s]: %s", operatorType, child.ID, err)
+			if err := s.operatorRunRepo.UpdateOperatorRun(ctx, operatorType, operator.ID, evt.When, targetState); err != nil {
+				s.l.Warn("error cascading dagrun state to %s run [%s]: %s", operatorType, operator.ID, err)
 				continue
 			}
 			anyChanged = true

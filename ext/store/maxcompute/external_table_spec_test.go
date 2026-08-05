@@ -108,7 +108,7 @@ func TestExternalSourceValidate(t *testing.T) {
 		//	err := es.Validate()
 		//	assert.NotNil(t, err)
 		//	assert.ErrorContains(t, err, "uri is empty")
-		//})
+		// })
 	})
 	t.Run("returns no error when valid", func(t *testing.T) {
 		es := maxcompute.ExternalSource{

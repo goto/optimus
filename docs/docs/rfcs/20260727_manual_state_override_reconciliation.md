@@ -317,7 +317,10 @@ and pagination stable (V6). Four things it needs to be correct:
    short-lived seen-set) to drop the re-delivered rows.
 3. **Catch-up loop.** After downtime, one window per tick falls permanently behind. Process
    windows in a bounded loop per tick until caught up, and cap the very first window's lookback so
-   a fresh deployment doesn't try to ingest all of history.
+   a fresh deployment doesn't try to ingest all of history. **Revised:** the lookback cap is not a
+   separate config value — it's derived as `WindowInterval × MaxWindowsPerTick`, so a fresh
+   project's entire backlog always fits inside one tick's catch-up budget by construction, rather
+   than risking a lookback that's set larger than what the per-tick loop can actually drain.
 4. **Crash recovery** — see the table design below.
 
 ## `airflow_sync_state` design
@@ -529,6 +532,15 @@ cap. That confirms the originally-proposed 10-minute window remains safe without
 even against the largest project in this deployment — no further tuning needed on window size
 itself.
 
+**Indexes.** Confirmed present on this deployment's `log` table: `idx_log_dttm`, `idx_log_event`,
+`idx_log_dag` — standard Airflow indexes, not anything added for this feature. No composite
+`(dttm, event)` index exists or is recommended: at ~0.02% selectivity (435 of ~2M rows in a
+30-day table), the `dttm` range predicate alone is already enough for the planner to pick a cheap
+plan (an index scan on `idx_log_dttm`, or a bitmap AND with `idx_log_event`) and filter the
+remainder in memory. A composite index would only save filtering a few hundred rows — not worth
+adding write overhead to Airflow's own hottest table, or drift outside Airflow's managed schema,
+for that. Revisit only if `EXPLAIN ANALYZE` on the real query ever shows a sequential scan.
+
 **Keying: per project or per scheduler host? Resolved: per project, confirmed against production.**
 `eventLogs` only filters a **single** `dag_id` (V6), so a per-project worker must fetch the whole
 window and map `dag_id` → project client-side; where several Optimus projects share one
@@ -594,7 +606,7 @@ waiting, so check `ctx.Err()` between pages or every shutdown logs spurious clos
 | `core/scheduler/service/airflow_state_sync_worker.go` | new: ticker + lease + per-host fan-out, modelled on `sla_worker.go:54` |
 | `core/scheduler/job_run.go` | shared domain types (`scheduler` cannot import `service`) |
 | `core/scheduler/status.go` | Airflow→Optimus state map + ignore-list (see below) |
-| `config/config_server.go` | `AirflowSyncConfig`: window interval, settling delay, lock duration, initial lookback cap, page size, max windows per tick, optional owner deny-list. `mapstructure` + `default:` tags on every field (a zero interval panics `NewTicker`) |
+| `config/config_server.go` | `AirflowSyncConfig`: window interval, lock duration, max concurrent projects, max attempts, exclude-project list. `mapstructure` + `default:` tags (a zero window interval panics `NewTicker`, so it deliberately has none and doubles as the on/off switch). Settling delay, overlap epsilon and max-windows-per-tick are fixed constants in the worker, not config — see "Config surface" below |
 | `server/optimus.go` | wire next to the SLA worker (~line 479), guarded by `interval > 0` |
 | `config.sample.yaml`, `dev/optimus.values.yaml` | document new keys |
 
@@ -604,6 +616,33 @@ read is REST and belongs in `client.go`/`airflow.go` after all.
 
 **Unresolved questions 3, 5 and 7 from the first draft are now closed:** fetch is via REST, so
 there is no Airflow DSN to supply or rotate, and no second connection pool.
+
+### Config surface (revised)
+
+The first implementation exposed eight tunable fields. In practice most of them were either a
+fixed correctness margin (an order of magnitude larger than what it protects against) or a value
+that could silently contradict another field (an initial lookback set smaller than
+`WindowInterval × MaxWindowsPerTick` would never fully apply). Reduced to five:
+
+| Field | Configurable? |
+|---|---|
+| `window_interval_in_seconds` | yes — also the on/off switch (0 disables the worker) |
+| `lock_duration_in_seconds` | yes — depends on this deployment's Airflow latency and event volume |
+| `max_concurrent_projects` | yes — depends on project count and pod resources |
+| `max_attempts` | yes — how tolerant to be of a flaky Airflow instance is a deployment judgment call |
+| `exclude_projects` | yes — see below |
+| settling delay | no — fixed at 60s, roughly three orders of magnitude above typical commit latency |
+| overlap epsilon | no — fixed at 2s; only needs to cover a boundary tie, not clock skew (settling delay covers that) |
+| max windows per tick | no — fixed at 12; a catch-up throttle, not a deployment property |
+| initial lookback | not separate — derived as `window_interval × max_windows_per_tick` |
+
+**`exclude_projects`** is new: a list of project names to skip syncing entirely (an unstable
+instance, or a project not yet rolled out to this feature). Every project syncs by default —
+this is an exclude-list, not an allow-list. Excluding a project simply stops processing it and
+freezes its watermark; there's no separate staleness handling for re-inclusion after a long
+exclusion — a re-included project's backlog catches up the same way any post-downtime backlog
+does, bounded by `max_windows_per_tick` per tick. Kept deliberately simple over a staleness-clamp
+alternative.
 
 ## Entity resolution
 
@@ -780,8 +819,13 @@ Siren's resolve semantics wired up, so treat it as a follow-up rather than v1.
 **Operational**
 9. One unreachable Airflow DB must not starve other projects — isolate per host and still advance
    the others.
-10. First run against a long backlog could be enormous — cap the initial lookback and batch size.
-11. Skip projects with `DISABLE_JOB_SCHEDULING`.
+10. First run against a long backlog could be enormous — mitigated by deriving the initial
+    lookback from `window_interval × max_windows_per_tick` (see "Config surface"), so it can never
+    exceed one tick's catch-up budget.
+11. **Skipping a project.** Not wired to `DISABLE_JOB_SCHEDULING` — that remains unimplemented.
+    Instead, `exclude_projects` (see "Config surface") is an explicit, manually-maintained
+    exclude-list. Revisit tying it to `DISABLE_JOB_SCHEDULING` if manual maintenance proves to be
+    a real operational burden.
 12. Emit `airflow_state_reconciled_total{reason,result}` so divergence stays visible. A reconciler
     silently repairing a broken callback path is a monitoring blind spot.
 
@@ -844,8 +888,12 @@ Siren's resolve semantics wired up, so treat it as a follow-up rather than v1.
   and would otherwise leak a goroutine per genuinely-hung request instead of surfacing as a
   retryable attempt error.
 - New metric `airflow_sync_windows_failed_total{project}`: `FailExhaustedWindows` giving up on a
-  window was previously only a log line — with 19 independent projects/Airflow instances as
+  window was previously only a log line — with many independent projects/Airflow instances as
   separate failure domains, that needed to be alertable per project, not just grep-able.
+- **Config surface reduced from eight fields to five** (see "Config surface" above): settling
+  delay, overlap epsilon and max-windows-per-tick are now fixed constants, and initial lookback is
+  derived rather than separately set. Added `exclude_projects`, a manual exclude-list for projects
+  that shouldn't sync (unstable instance, not yet rolled out).
 
 All items in this section are now decided; nothing left blocking implementation.
 

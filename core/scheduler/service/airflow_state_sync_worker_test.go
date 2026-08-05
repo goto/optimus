@@ -3,6 +3,7 @@ package service // nolint:testpackage
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -100,7 +101,6 @@ func TestAirflowStateSyncWorkerTickConcurrency(t *testing.T) {
 	stateRepo := &concurrencyTrackingSyncStateRepo{}
 
 	worker := NewAirflowStateSyncWorker(log.NewNoop(), projectRepo, stateRepo, noopWindowReconciler{}, AirflowStateSyncConfig{
-		MaxAttempts:           3,
 		MaxConcurrentProjects: maxConcurrent,
 	})
 
@@ -109,4 +109,64 @@ func TestAirflowStateSyncWorkerTickConcurrency(t *testing.T) {
 	assert.EqualValues(t, numProjects, atomic.LoadInt32(&stateRepo.calls), "every project should be processed exactly once")
 	assert.LessOrEqual(t, int(atomic.LoadInt32(&stateRepo.max)), maxConcurrent, "concurrency must not exceed MaxConcurrentProjects")
 	assert.Greater(t, int(atomic.LoadInt32(&stateRepo.max)), 1, "tick should actually run projects concurrently, not serially")
+}
+
+// recordingSyncStateRepo records which project each call was made for, so
+// TestAirflowStateSyncWorkerTickExcludesProjects can assert an excluded project's Airflow
+// instance is never touched at all -- not claimed, not even reclaimed-from.
+type recordingSyncStateRepo struct {
+	mu       sync.Mutex
+	projects []string
+}
+
+func (*recordingSyncStateRepo) GetWatermark(context.Context, tenant.ProjectName) (*time.Time, error) {
+	return nil, nil //nolint:nilnil
+}
+
+func (*recordingSyncStateRepo) ClaimWindow(context.Context, tenant.ProjectName, time.Time, time.Time, uuid.UUID, time.Duration) (uuid.UUID, bool, error) {
+	return uuid.Nil, false, nil
+}
+
+func (r *recordingSyncStateRepo) ReclaimStaleWindow(_ context.Context, projectName tenant.ProjectName, _ uuid.UUID, _ time.Duration, _ int) (*scheduler.AirflowSyncWindow, error) {
+	r.mu.Lock()
+	r.projects = append(r.projects, projectName.String())
+	r.mu.Unlock()
+	return nil, nil //nolint:nilnil
+}
+
+func (*recordingSyncStateRepo) FailExhaustedWindows(context.Context, tenant.ProjectName, int, string) (int64, error) {
+	return 0, nil
+}
+
+func (*recordingSyncStateRepo) CompleteWindow(context.Context, uuid.UUID, uuid.UUID, *int64, int, int) (bool, error) {
+	return true, nil
+}
+
+func (*recordingSyncStateRepo) RecordAttemptError(context.Context, uuid.UUID, uuid.UUID, string) error {
+	return nil
+}
+
+func TestAirflowStateSyncWorkerTickExcludesProjects(t *testing.T) {
+	conf := map[string]string{
+		tenant.ProjectSchedulerHost:  "https://scheduler.example.com",
+		tenant.ProjectStoragePathKey: "fs://bucket",
+	}
+	included, err := tenant.NewProject("proj-included", conf, nil)
+	assert.NoError(t, err)
+	excluded, err := tenant.NewProject("proj-excluded", conf, nil)
+	assert.NoError(t, err)
+
+	projectRepo := &mockAirflowSyncProjectRepo{}
+	projectRepo.On("GetAll", mock.Anything).Return([]*tenant.Project{included, excluded}, nil)
+
+	stateRepo := &recordingSyncStateRepo{}
+
+	worker := NewAirflowStateSyncWorker(log.NewNoop(), projectRepo, stateRepo, noopWindowReconciler{}, AirflowStateSyncConfig{
+		MaxConcurrentProjects: 5,
+		ExcludeProjects:       []string{"proj-excluded"},
+	})
+
+	worker.tick(context.Background())
+
+	assert.Equal(t, []string{"proj-included"}, stateRepo.projects)
 }

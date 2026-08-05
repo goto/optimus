@@ -494,13 +494,10 @@ func (s *OptimusServer) setupHandlers() error {
 		airflowStateSyncWorker := schedulerService.NewAirflowStateSyncWorker(s.logger, tProjectService, airflowSyncStateRepo, airflowStateSyncService,
 			schedulerService.AirflowStateSyncConfig{
 				WindowInterval:        time.Second * time.Duration(s.conf.AirflowSync.WindowIntervalInSeconds),
-				SettlingDelay:         time.Second * time.Duration(s.conf.AirflowSync.SettlingDelayInSeconds),
 				LockDuration:          time.Second * time.Duration(s.conf.AirflowSync.LockDurationInSeconds),
-				InitialLookback:       time.Second * time.Duration(s.conf.AirflowSync.InitialLookbackInSeconds),
-				OverlapEpsilon:        time.Second * time.Duration(s.conf.AirflowSync.OverlapEpsilonInSeconds),
-				MaxAttempts:           s.conf.AirflowSync.MaxAttempts,
-				MaxWindowsPerTick:     s.conf.AirflowSync.MaxWindowsPerTick,
 				MaxConcurrentProjects: s.conf.AirflowSync.MaxConcurrentProjects,
+				MaxAttempts:           s.conf.AirflowSync.MaxAttempts,
+				ExcludeProjects:       s.conf.AirflowSync.ExcludeProjects,
 			})
 		airflowSyncWorkerCtx, closeAirflowSyncWorker := context.WithCancel(context.Background())
 		s.cleanupFn = append(s.cleanupFn, closeAirflowSyncWorker)

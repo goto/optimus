@@ -50,13 +50,10 @@ configYaml: |-
     worker_lock_duration_minutes: 120
   airflow_sync:
     window_interval_in_seconds: 30
-    settling_delay_in_seconds: 5
     lock_duration_in_seconds: 60
-    initial_lookback_in_seconds: 60
-    overlap_epsilon_in_seconds: 2
-    max_attempts: 3
-    max_windows_per_tick: 6
     max_concurrent_projects: 5
+    max_attempts: 3
+    # exclude_projects: []
   plugins:
     location: /app/plugins
   telemetry:

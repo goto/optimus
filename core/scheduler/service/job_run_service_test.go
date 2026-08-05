@@ -2783,6 +2783,14 @@ func (m *mockOperatorRunRepository) GetOperatorRun(ctx context.Context, operator
 	return args.Get(0).(*scheduler.OperatorRun), args.Error(1)
 }
 
+func (m *mockOperatorRunRepository) ListLatestOperatorRunsByJobRunID(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID) ([]*scheduler.OperatorRun, error) {
+	args := m.Called(ctx, operator, jobRunID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.OperatorRun), args.Error(1)
+}
+
 func (m *mockOperatorRunRepository) CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error {
 	args := m.Called(ctx, operatorName, operator, jobRunID, startTime)
 	return args.Error(0)

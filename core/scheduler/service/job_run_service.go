@@ -88,6 +88,10 @@ type JobReplayRepository interface {
 
 type OperatorRunRepository interface {
 	GetOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error)
+	// ListLatestOperatorRunsByJobRunID returns the newest row per distinct operator name for a
+	// job run -- used by the airflow-sync reconciler to see every child's current status before
+	// deciding what to touch (unlike GetOperatorRun, which only looks up one known name).
+	ListLatestOperatorRunsByJobRunID(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID) ([]*scheduler.OperatorRun, error)
 	CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error
 	UpdateOperatorRun(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID, eventTime time.Time, state scheduler.State) error
 }

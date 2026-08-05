@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -18,32 +17,9 @@ import (
 
 // AirflowEventLogFetcher is satisfied by *ext/scheduler/airflow.Scheduler. Declared here
 // rather than imported, matching this package's existing convention of declaring narrow
-// interfaces where they're used (see JobRepository/JobRunRepository above in
-// job_run_service.go).
+// interfaces where they're used.
 type AirflowEventLogFetcher interface {
 	GetManualEventLogs(ctx context.Context, projectName tenant.ProjectName, after, before time.Time) ([]scheduler.ManualOverrideEvent, error)
-}
-
-// AirflowSyncJobRepository is the subset of the wider JobRepository the reconciler needs.
-type AirflowSyncJobRepository interface {
-	GetJobDetails(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.JobWithDetails, error)
-}
-
-// AirflowSyncJobRunRepository is deliberately narrower than JobRunRepository: reconciliation
-// never creates a job_run row (see the RFC's write-scope rules -- v1 does not fabricate rows
-// or timing for runs Optimus never saw), so only GetByScheduledAt/Update are needed.
-type AirflowSyncJobRunRepository interface {
-	GetByScheduledAt(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
-	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, status scheduler.State) error
-}
-
-// AirflowSyncOperatorRunRepository mirrors the same non-creating restriction as
-// AirflowSyncJobRunRepository, plus ListLatestOperatorRunsByJobRunID which the dagrun-level
-// cascade needs to see every child's current status before deciding what to touch.
-type AirflowSyncOperatorRunRepository interface {
-	GetOperatorRun(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error)
-	ListLatestOperatorRunsByJobRunID(ctx context.Context, operatorType scheduler.OperatorType, jobRunID uuid.UUID) ([]*scheduler.OperatorRun, error)
-	UpdateOperatorRun(ctx context.Context, operatorType scheduler.OperatorType, operatorRunID uuid.UUID, eventTime time.Time, state scheduler.State) error
 }
 
 var (
@@ -66,14 +42,14 @@ type AirflowStateSyncService struct {
 	l log.Logger
 
 	eventLogFetcher AirflowEventLogFetcher
-	jobRepo         AirflowSyncJobRepository
-	jobRunRepo      AirflowSyncJobRunRepository
-	operatorRunRepo AirflowSyncOperatorRunRepository
+	jobRepo         JobRepository
+	jobRunRepo      JobRunRepository
+	operatorRunRepo OperatorRunRepository
 	eventHandler    EventHandler
 }
 
-func NewAirflowStateSyncService(l log.Logger, eventLogFetcher AirflowEventLogFetcher, jobRepo AirflowSyncJobRepository,
-	jobRunRepo AirflowSyncJobRunRepository, operatorRunRepo AirflowSyncOperatorRunRepository, eventHandler EventHandler,
+func NewAirflowStateSyncService(l log.Logger, eventLogFetcher AirflowEventLogFetcher, jobRepo JobRepository,
+	jobRunRepo JobRunRepository, operatorRunRepo OperatorRunRepository, eventHandler EventHandler,
 ) *AirflowStateSyncService {
 	return &AirflowStateSyncService{
 		l:               l,

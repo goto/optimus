@@ -27,6 +27,7 @@ type ServerConfig struct {
 	JobValidationConfig       JobValidationConfig       `mapstructure:"job_validation"`
 	JobExpectatorConfig       JobExpectatorConfig       `mapstructure:"job_expectator"`
 	JobExecutionSummaryConfig JobExecutionSummaryConfig `mapstructure:"job_execution_summary"`
+	AirflowSync               AirflowSyncConfig         `mapstructure:"airflow_sync"`
 }
 
 type UpstreamResolver struct {
@@ -145,6 +146,23 @@ type ReplayConfig struct {
 
 type BackfillConfig struct {
 	ExecutionIntervalInSeconds int `mapstructure:"execution_interval_in_seconds" default:"300"`
+}
+
+// AirflowSyncConfig drives the manual-state-override reconciliation worker -- see
+// docs/docs/rfcs/20260727_manual_state_override_reconciliation.md. A zero
+// WindowIntervalInSeconds disables the worker entirely (see server/optimus.go), so unlike
+// most fields here it deliberately has no `default` tag: the feature must be opted into.
+// Retry policy, catch-up throttling, and boundary/commit-lag margins are fixed constants in
+// core/scheduler/service/airflow_state_sync_worker.go rather than config here -- they are not
+// properties of a particular deployment, only WindowInterval/LockDuration/concurrency/scope
+// are.
+type AirflowSyncConfig struct {
+	WindowIntervalInSeconds int `mapstructure:"window_interval_in_seconds"`
+	LockDurationInSeconds   int `mapstructure:"lock_duration_in_seconds" default:"300"`
+	MaxConcurrentProjects   int `mapstructure:"max_concurrent_projects" default:"5"`
+	MaxAttempts             int `mapstructure:"max_attempts" default:"3"`
+	// ExcludeProjects lists project names to never sync. Every project is synced by default.
+	ExcludeProjects []string `mapstructure:"exclude_projects"`
 }
 
 type Publisher struct {

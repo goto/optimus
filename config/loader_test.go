@@ -329,6 +329,12 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		},
 	}
 	s.expectedServerConfig.Backfill.ExecutionIntervalInSeconds = 300
+
+	s.expectedServerConfig.AirflowSync = config.AirflowSyncConfig{
+		LockDurationInSeconds: 300,
+		MaxConcurrentProjects: 5,
+		MaxAttempts:           3,
+	}
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

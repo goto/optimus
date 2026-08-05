@@ -69,6 +69,7 @@ func (o *operatorRun) toOperatorRun() (*scheduler.OperatorRun, error) {
 		Status:       status,
 		StartTime:    o.StartTime,
 		EndTime:      o.EndTime,
+		UpdatedAt:    o.UpdatedAt,
 	}, nil
 }
 
@@ -78,9 +79,9 @@ func (o *OperatorRunRepository) GetOperatorRun(ctx context.Context, name string,
 	if err != nil {
 		return nil, err
 	}
-	getJobRunByID := "SELECT " + jobOperatorColumns + " FROM " + operatorTableName + " j where job_run_id = $1 and name = $2 order by created_at desc limit 1"
+	getJobRunByID := "SELECT " + jobOperatorColumns + ", updated_at FROM " + operatorTableName + " j where job_run_id = $1 and name = $2 order by created_at desc limit 1"
 	err = o.db.QueryRow(ctx, getJobRunByID, jobRunID, name).
-		Scan(&opRun.ID, &opRun.Name, &opRun.JobRunID, &opRun.Status, &opRun.StartTime, &opRun.EndTime)
+		Scan(&opRun.ID, &opRun.Name, &opRun.JobRunID, &opRun.Status, &opRun.StartTime, &opRun.EndTime, &opRun.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.NotFound(scheduler.EntityJobRun, "no record for "+operatorType.String()+"/"+name+" for job_run ID: "+jobRunID.String())
@@ -88,6 +89,39 @@ func (o *OperatorRunRepository) GetOperatorRun(ctx context.Context, name string,
 		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting operator run", err)
 	}
 	return opRun.toOperatorRun()
+}
+
+// ListLatestOperatorRunsByJobRunID returns the newest row per distinct operator name for the
+// given job_run_id and operator type. Used by the airflow-sync reconciler to mirror
+// Airflow's own dagrun-level cascade (only non-terminal children get overwritten), which
+// needs to see every child's *current* status first -- unlike GetOperatorRun, which only
+// looks up one already-known name.
+func (o *OperatorRunRepository) ListLatestOperatorRunsByJobRunID(ctx context.Context, operatorType scheduler.OperatorType, jobRunID uuid.UUID) ([]*scheduler.OperatorRun, error) {
+	operatorTableName, err := operatorTypeToTableName(operatorType)
+	if err != nil {
+		return nil, err
+	}
+	query := "SELECT DISTINCT ON (name) " + jobOperatorColumns + ", updated_at FROM " + operatorTableName + " WHERE job_run_id = $1 ORDER BY name, created_at DESC"
+	rows, err := o.db.Query(ctx, query, jobRunID)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while listing operator runs", err)
+	}
+	defer rows.Close()
+
+	var operatorRuns []*scheduler.OperatorRun
+	for rows.Next() {
+		var opRun operatorRun
+		if err := rows.Scan(&opRun.ID, &opRun.Name, &opRun.JobRunID, &opRun.Status, &opRun.StartTime, &opRun.EndTime, &opRun.UpdatedAt); err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning operator run", err)
+		}
+		opRun.OperatorType = operatorType.String()
+		schedulerOpRun, err := opRun.toOperatorRun()
+		if err != nil {
+			return nil, err
+		}
+		operatorRuns = append(operatorRuns, schedulerOpRun)
+	}
+	return operatorRuns, nil
 }
 
 func (o *OperatorRunRepository) CreateOperatorRun(ctx context.Context, name string, operatorType scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error {

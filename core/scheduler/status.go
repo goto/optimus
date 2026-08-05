@@ -64,6 +64,13 @@ func (j State) String() string {
 	return string(j)
 }
 
+// IsTerminal reports whether the run has reached success or failed. Used by the
+// airflow-sync reconciler when mirroring Airflow's own dagrun-level cascade, which only
+// touches non-terminal task instances and leaves already-finished ones alone.
+func (j State) IsTerminal() bool {
+	return j == StateSuccess || j == StateFailed
+}
+
 type DataCompletenessStatus struct {
 	IsComplete             bool
 	DataCompletenessByDate []*DataCompletenessByDate

@@ -7,6 +7,8 @@ from dataclasses import dataclass, asdict
 
 import pendulum
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from airflow.configuration import conf
 from airflow.hooks.base import BaseHook
 from airflow.models import (Variable, XCom, TaskReschedule )
@@ -40,6 +42,9 @@ TIMESTAMP_MS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 SCHEDULER_ERR_MSG = "scheduler_error"
 STARTUP_TIMEOUT_IN_SECS = int(Variable.get("startup_timeout_in_secs", default_var=2 * 60))
 OPTIMUS_REQUEST_TIMEOUT_IN_SECS = int(Variable.get("optimus_request_timeout_in_secs", default_var=5 * 60))
+
+OPTIMUS_REQUEST_RETRY_TOTAL = int(Variable.get("optimus_request_retry_total", default_var=3))
+OPTIMUS_REQUEST_RETRY_BACKOFF_FACTOR = float(Variable.get("optimus_request_retry_backoff_factor", default_var=2))
 
 # --- EVENT TYPES -----------------------------------
 OPERATOR_START_EVENT      = "operator_start"
@@ -156,6 +161,20 @@ def _raise_error_if_request_failed(response=None, method=None, url=None, body=No
 class OptimusAPIClient:
     def __init__(self, optimus_host):
         self.host = self._add_connection_adapter_if_absent(optimus_host)
+        self._session = self._build_session()
+
+    def _build_session(self):
+        retry = Retry(
+            total=OPTIMUS_REQUEST_RETRY_TOTAL,
+            backoff_factor=OPTIMUS_REQUEST_RETRY_BACKOFF_FACTOR,
+            status_forcelist=list(range(500, 600)),
+            allowed_methods=frozenset(["GET", "POST", "PUT"]),
+        )
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        return session
 
     def _add_connection_adapter_if_absent(self, host):
         if host.startswith("http://") or host.startswith("https://"):
@@ -169,7 +188,7 @@ class OptimusAPIClient:
             optimus_host=self.host,
             optimus_project=project_name,
         )
-        response = requests.get(url, params={
+        response = self._session.get(url, params={
             'scheduled_at': scheduled_at_str,
             'job_names':    job_name,
             'status':       "in progress",
@@ -199,7 +218,7 @@ class OptimusAPIClient:
             optimus_project=project_name,
             optimus_job=job_name,
         )
-        response = requests.get(url, params={
+        response = self._session.get(url, params={
             'start_date': start_date,
             'end_date': end_date,
             'downstream_project_name': downstream_project_name,
@@ -225,7 +244,7 @@ class OptimusAPIClient:
             }
 
         try:
-            response = requests.put(url, json=payload,
+            response = self._session.put(url, json=payload,
                                     timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
             _raise_error_if_request_failed(response)
             return response.json()
@@ -246,13 +265,13 @@ class OptimusAPIClient:
             job_name=job_name,
             reference_time=scheduled_at,
         )
-        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        response = self._session.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         _raise_error_if_request_failed(response)
         return response.json()
 
 
     def get_job_run_input(self, execution_date: str, project_name: str, job_name: str, job_type: str, instance_name: str) -> dict:
-        response = requests.post(url="{}/api/v1beta1/project/{}/job/{}/run_input".format(self.host, project_name, job_name),
+        response = self._session.post(url="{}/api/v1beta1/project/{}/job/{}/run_input".format(self.host, project_name, job_name),
                       json={'scheduled_at': execution_date,
                             'instance_name': instance_name,
                             'instance_type': "TYPE_" + job_type.upper()}, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
@@ -265,7 +284,7 @@ class OptimusAPIClient:
             optimus_host=self.host,
             project_name=project,
             job_name=job)
-        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        response = self._session.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         _raise_error_if_request_failed(response)
         return response.json()
 
@@ -275,7 +294,7 @@ class OptimusAPIClient:
             namespace_name=namespace,
             project_name=project,
             job_name=job)
-        response = requests.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        response = self._session.get(url, timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         _raise_error_if_request_failed(response)
         return response.json()
 
@@ -289,7 +308,7 @@ class OptimusAPIClient:
         request_data = {
             "event": event
         }
-        response = requests.post(url, data=json.dumps(request_data), timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
+        response = self._session.post(url, data=json.dumps(request_data), timeout=OPTIMUS_REQUEST_TIMEOUT_IN_SECS)
         _raise_error_if_request_failed(response)
         return response.json()
 

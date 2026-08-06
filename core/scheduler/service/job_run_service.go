@@ -1109,6 +1109,19 @@ func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.
 	return err
 }
 
+// createOperatorRunIfAbsent skips a duplicate create on a redelivered start event -- same
+// reasoning as the TaskStartEvent/HookStartEvent case in UpdateJobState.
+func (s *JobRunService) createOperatorRunIfAbsent(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {
+	existingOperatorRun, err := s.getExistingOperatorRun(ctx, event)
+	if err != nil {
+		return err
+	}
+	if existingOperatorRun != nil && existingOperatorRun.Status != scheduler.StateRetry {
+		return nil
+	}
+	return s.createOperatorRun(ctx, event, operatorType)
+}
+
 func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error) {
 	var operatorRun *scheduler.OperatorRun
 	operatorRun, err := s.operatorRunRepo.GetOperatorRun(ctx, event.OperatorName, operatorType, jobRunID)
@@ -1204,7 +1217,7 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	case scheduler.JobSuccessEvent, scheduler.JobFailureEvent:
 		return s.updateJobRun(ctx, event)
 	case scheduler.SensorStartEvent:
-		return s.createOperatorRun(ctx, event, scheduler.OperatorSensor)
+		return s.createOperatorRunIfAbsent(ctx, event, scheduler.OperatorSensor)
 	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
 		return s.updateOperatorRun(ctx, event, scheduler.OperatorSensor)
 	case scheduler.TaskStartEvent, scheduler.HookStartEvent:
@@ -1213,9 +1226,13 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 		if err != nil {
 			return err
 		}
-		err = s.createOperatorRun(ctx, event, event.EventContext.OperatorType)
-		if err != nil {
-			return err
+		// No row, or a retry-transitioned row, means a genuinely new try_number; anything else
+		// non-nil is a redelivered start event and must not create a duplicate row.
+		isNewAttempt := existingOperatorRun == nil || existingOperatorRun.Status == scheduler.StateRetry
+		if isNewAttempt {
+			if err := s.createOperatorRun(ctx, event, event.EventContext.OperatorType); err != nil {
+				return err
+			}
 		}
 		if existingOperatorRun != nil && existingOperatorRun.Status == scheduler.StateRetry {
 			return nil

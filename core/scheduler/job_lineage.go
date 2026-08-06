@@ -472,6 +472,40 @@ func (j *JobRunSummary) GetActualEndTime() *time.Time {
 	return j.TaskEndTime
 }
 
+func (j *JobRunSummary) IsFinished() bool {
+	if j == nil {
+		return false
+	}
+
+	if j.HookStartTime != nil && j.HookEndTime == nil {
+		return false
+	}
+
+	return j.GetActualEndTime() != nil
+}
+
+func (j *JobRunSummary) GetState() State {
+	if j == nil || j.JobStatus == "" {
+		return StateNotScheduled
+	}
+
+	if j.IsFinished() {
+		if state, err := StateFromString(j.JobStatus); err == nil && state.IsTerminal() {
+			return state
+		}
+		return StateSuccess
+	}
+
+	switch {
+	case j.TaskStartTime != nil:
+		return StateRunning
+	case j.WaitStartTime != nil:
+		return StateWaitUpstream
+	default:
+		return StateNotScheduled
+	}
+}
+
 func (j *JobRunSummary) GetTaskDuration() time.Duration {
 	if j.TaskStartTime == nil || j.TaskEndTime == nil {
 		return 0

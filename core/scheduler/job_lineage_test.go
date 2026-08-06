@@ -407,3 +407,175 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 		}
 	})
 }
+
+func TestJobRunSummary_IsFinished(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	taskStart := baseTime.Add(5 * time.Minute)
+	taskEnd := baseTime.Add(20 * time.Minute)
+	hookStart := baseTime.Add(21 * time.Minute)
+	hookEnd := baseTime.Add(30 * time.Minute)
+
+	t.Run("should report not finished for a nil run", func(t *testing.T) {
+		var run *scheduler.JobRunSummary
+		assert.False(t, run.IsFinished())
+	})
+
+	t.Run("should report not finished when the run has no recorded times", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{ScheduledAt: baseTime}
+		assert.False(t, run.IsFinished())
+	})
+
+	t.Run("should report not finished while the task is still running", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{ScheduledAt: baseTime, TaskStartTime: &taskStart}
+		assert.False(t, run.IsFinished())
+	})
+
+	t.Run("should report finished when the task ended and the run has no hooks", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{ScheduledAt: baseTime, TaskStartTime: &taskStart, TaskEndTime: &taskEnd}
+		assert.True(t, run.IsFinished())
+	})
+
+	t.Run("should report not finished when a hook is still running despite a populated task end", func(t *testing.T) {
+		// hook_end_time is NULL while any hook is unfinished, so GetActualEndTime falls back
+		// to the task end and would otherwise make the run look complete
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+			HookStartTime: &hookStart,
+		}
+		assert.Nil(t, run.HookEndTime)
+		assert.NotNil(t, run.GetActualEndTime())
+		assert.False(t, run.IsFinished())
+	})
+
+	t.Run("should report finished once every hook has ended", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+			HookStartTime: &hookStart,
+			HookEndTime:   &hookEnd,
+		}
+		assert.True(t, run.IsFinished())
+	})
+
+	t.Run("should report finished when only the hook end is known", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{ScheduledAt: baseTime, HookEndTime: &hookEnd}
+		assert.True(t, run.IsFinished())
+	})
+}
+
+func TestJobRunSummary_GetState(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	sensorStart := baseTime.Add(1 * time.Minute)
+	taskStart := baseTime.Add(5 * time.Minute)
+	taskEnd := baseTime.Add(20 * time.Minute)
+	hookStart := baseTime.Add(21 * time.Minute)
+	hookEnd := baseTime.Add(30 * time.Minute)
+
+	t.Run("should report not scheduled for a nil run", func(t *testing.T) {
+		var run *scheduler.JobRunSummary
+		assert.Equal(t, scheduler.StateNotScheduled, run.GetState())
+	})
+
+	t.Run("should report not scheduled for a run the lineage expected but which has no job run row", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{ScheduledAt: baseTime}
+		assert.Equal(t, scheduler.StateNotScheduled, run.GetState())
+	})
+
+	t.Run("should report not scheduled when the run exists but nothing has started", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{ScheduledAt: baseTime, JobStatus: scheduler.StateQueued.String()}
+		assert.Equal(t, scheduler.StateNotScheduled, run.GetState())
+	})
+
+	t.Run("should report waiting upstream while only the sensor has started", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateRunning.String(),
+			WaitStartTime: &sensorStart,
+		}
+		assert.Equal(t, scheduler.StateWaitUpstream, run.GetState())
+	})
+
+	t.Run("should report running once the task has started", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateRunning.String(),
+			WaitStartTime: &sensorStart,
+			TaskStartTime: &taskStart,
+		}
+		assert.Equal(t, scheduler.StateRunning, run.GetState())
+	})
+
+	t.Run("should report running while a retry is in flight and the task end is unknown", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateUpForRetry.String(),
+			TaskStartTime: &taskStart,
+		}
+		assert.Equal(t, scheduler.StateRunning, run.GetState())
+	})
+
+	t.Run("should report success when the run finished successfully", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateSuccess.String(),
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+			HookStartTime: &hookStart,
+			HookEndTime:   &hookEnd,
+		}
+		assert.Equal(t, scheduler.StateSuccess, run.GetState())
+	})
+
+	t.Run("should report failed when the run finished unsuccessfully", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateFailed.String(),
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+		}
+		assert.Equal(t, scheduler.StateFailed, run.GetState())
+	})
+
+	t.Run("should report running when the status is terminal but a hook is still executing", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateFailed.String(),
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+			HookStartTime: &hookStart,
+		}
+		assert.Equal(t, scheduler.StateRunning, run.GetState())
+	})
+
+	t.Run("should report success when the timestamps show completion before the status catches up", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateRunning.String(),
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+		}
+		assert.Equal(t, scheduler.StateSuccess, run.GetState())
+	})
+
+	t.Run("should report success when the run completed under an unrecognised status", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     "some_unknown_status",
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+		}
+		assert.Equal(t, scheduler.StateSuccess, run.GetState())
+	})
+
+	t.Run("should report running when an unrecognised status is still in flight", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     "some_unknown_status",
+			TaskStartTime: &taskStart,
+		}
+		assert.Equal(t, scheduler.StateRunning, run.GetState())
+	})
+}

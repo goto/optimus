@@ -750,7 +750,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -887,6 +887,16 @@
         "numberOfUpstreamPerLevel": {
           "type": "integer",
           "format": "int32"
+        },
+        "maxNodes": {
+          "type": "integer",
+          "format": "int32",
+          "description": "caps the total number of runs returned, keeping those closest to the target. Zero asks\nfor the whole lineage."
+        },
+        "lineageWindowHours": {
+          "type": "integer",
+          "format": "int32",
+          "description": "leaves out any upstream run scheduled more than this many hours before the target's own\nschedule, along with everything above it on that branch. Zero uses the server default."
         }
       }
     },
@@ -1083,13 +1093,28 @@
           "$ref": "#/definitions/v1beta1JobRunSummary"
         },
         "downstreamPathName": {
-          "type": "string"
+          "type": "string",
+          "title": "deprecated in favor of downstream_refs"
         },
         "delaySummary": {
           "$ref": "#/definitions/v1beta1JobRunDelaySummary"
         },
         "historicalDurationTrend": {
           "$ref": "#/definitions/v1beta1HistoricalDurationTrend"
+        },
+        "runState": {
+          "$ref": "#/definitions/v1beta1JobRunState"
+        },
+        "isBlocking": {
+          "type": "boolean",
+          "title": "true when the lineage is actively waiting on this run: it has not finished, and its own"
+        },
+        "downstreamRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobRunRef"
+          },
+          "title": "the runs that depend on this one"
         }
       }
     },
@@ -1162,6 +1187,18 @@
         }
       }
     },
+    "v1beta1JobRunRef": {
+      "type": "object",
+      "properties": {
+        "jobName": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1beta1JobRunResponse": {
       "type": "object",
       "properties": {
@@ -1175,6 +1212,19 @@
           "type": "string"
         }
       }
+    },
+    "v1beta1JobRunState": {
+      "type": "string",
+      "enum": [
+        "JOB_RUN_STATE_UNSPECIFIED",
+        "JOB_RUN_STATE_NOT_SCHEDULED",
+        "JOB_RUN_STATE_WAIT_UPSTREAM",
+        "JOB_RUN_STATE_RUNNING",
+        "JOB_RUN_STATE_SUCCESS",
+        "JOB_RUN_STATE_FAILED"
+      ],
+      "default": "JOB_RUN_STATE_UNSPECIFIED",
+      "description": "JobRunState is the position a run is currently in. Derived from the scheduler status\ntogether with which operator timestamps are populated, so it stays meaningful for a run\nthat is still executing."
     },
     "v1beta1JobRunSummary": {
       "type": "object",

@@ -18,30 +18,52 @@ type LineageBuilder interface {
 	BuildLineage(context.Context, []*scheduler.JobSchedule, int) (map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, error)
 }
 
+const DefaultLineageWindowHours = 24
+
 type JobLineageService struct {
 	l                            log.Logger
 	lineageBuilder               LineageBuilder
 	durationEstimator            DurationEstimatorRepo
 	maxLineageDepth              int
+	lineageWindowHours           int
 	historicalDurationLastNRuns  int
 	historicalDurationPercentile int
 }
 
-func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error) {
-	downstreamLineages, err := j.lineageBuilder.BuildLineage(ctx, jobSchedules, 24)
+// GetJobExecutionSummary returns the upstream lineage of each target run, deduplicated per
+// (job, schedule).
+//
+// maxNodes caps how many runs a single lineage returns, keeping the ones closest to the
+// target; zero asks for the whole lineage, bounded only by scheduler.DefaultMaxLineageNodes.
+//
+// windowHours leaves out any upstream run scheduled more than that many hours before the
+// target's own schedule; zero uses the server's configured window.
+func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, maxNodes, windowHours int) ([]*scheduler.JobRunLineage, error) {
+	if windowHours <= 0 {
+		windowHours = j.lineageWindowHours
+	}
+
+	downstreamLineages, err := j.lineageBuilder.BuildLineage(ctx, jobSchedules, windowHours)
 	if err != nil {
 		j.l.Error("failed to get job lineage", "error", err)
 		return nil, err
 	}
 
-	return j.generateLineageExecutionSummary(ctx, downstreamLineages, numberOfUpstreamPerLevel)
+	return j.generateLineageExecutionSummary(ctx, downstreamLineages, maxNodes)
 }
 
-func (j *JobLineageService) generateLineageExecutionSummary(ctx context.Context, lineagesMap map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error) {
+func (j *JobLineageService) generateLineageExecutionSummary(ctx context.Context, lineagesMap map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, maxNodes int) ([]*scheduler.JobRunLineage, error) {
 	var result []*scheduler.JobRunLineage
 	for _, lineage := range lineagesMap {
 		newDownstreamLineage := lineage
-		jobRunLineage := newDownstreamLineage.GenerateLineageExecutionSummary(numberOfUpstreamPerLevel, j.maxLineageDepth)
+		jobRunLineage := newDownstreamLineage.GenerateLineageExecutionSummary(maxNodes, j.maxLineageDepth)
+		if jobRunLineage.Truncated {
+			// the deepest runs were dropped, so the delay attribution below only covers the
+			// part of the lineage that was kept. The response carries no truncation flag yet.
+			j.l.Warn("lineage truncated by the node budget",
+				"job", jobRunLineage.JobName, "scheduled_at", jobRunLineage.ScheduledAt,
+				"returned_nodes", jobRunLineage.TotalNodes, "max_nodes", maxNodes)
+		}
 		if err := j.enrichWithHistoricalDurations(ctx, jobRunLineage); err != nil {
 			j.l.Error("failed to enrich job run lineage with historical durations", "error", err)
 			// prioritize returning the lineage information even if the enrichment fails
@@ -122,7 +144,12 @@ func NewJobLineageService(
 	historicalDurationLastNRuns int,
 	historicalDurationPercentile int,
 	maxLineageDepth int,
+	lineageWindowHours int,
 ) *JobLineageService {
+	if lineageWindowHours <= 0 {
+		lineageWindowHours = DefaultLineageWindowHours
+	}
+
 	return &JobLineageService{
 		l:                            l,
 		lineageBuilder:               lineageBuilder,
@@ -130,5 +157,6 @@ func NewJobLineageService(
 		historicalDurationLastNRuns:  historicalDurationLastNRuns,
 		historicalDurationPercentile: historicalDurationPercentile,
 		maxLineageDepth:              maxLineageDepth,
+		lineageWindowHours:           lineageWindowHours,
 	}
 }

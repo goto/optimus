@@ -322,7 +322,8 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		},
 	}
 	s.expectedServerConfig.JobExecutionSummaryConfig = config.JobExecutionSummaryConfig{
-		MaxLineageDepth: 25,
+		MaxLineageDepth:    25,
+		LineageWindowHours: 24,
 		HistoricalDuration: config.HistoricalDurationConfig{
 			LastNRuns:  7,
 			Percentile: 95,

@@ -443,7 +443,8 @@ func (s *OptimusServer) setupHandlers() error {
 	lineageBuilder := schedulerResolver.NewLineageResolver(jobProviderRepo, jobProviderRepo, newJobRunService, tProjectService, s.logger)
 	// TODO: since no service consume this yet, we can wait to initialize this when needed
 	jobLineageService := schedulerService.NewJobLineageService(s.logger, lineageBuilder, jobRunRepo,
-		s.conf.JobExecutionSummaryConfig.HistoricalDuration.LastNRuns, s.conf.JobExecutionSummaryConfig.HistoricalDuration.Percentile, s.conf.JobExecutionSummaryConfig.MaxLineageDepth)
+		s.conf.JobExecutionSummaryConfig.HistoricalDuration.LastNRuns, s.conf.JobExecutionSummaryConfig.HistoricalDuration.Percentile,
+		s.conf.JobExecutionSummaryConfig.MaxLineageDepth, s.conf.JobExecutionSummaryConfig.LineageWindowHours)
 
 	// SLA Predictor Service
 	newDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,

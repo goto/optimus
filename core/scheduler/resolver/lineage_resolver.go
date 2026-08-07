@@ -199,6 +199,8 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 		return nil, err
 	}
 
+	r.logLineageSize(lineage.JobName, scheduledAt, allJobRunsMap)
+
 	jobRunDetails, err := r.fetchJobRunDetails(ctx, allJobRunsMap)
 	if err != nil {
 		return nil, err
@@ -295,6 +297,34 @@ func (r *LineageResolver) getLatestUpstreamRun(ctx context.Context, sourceJob, u
 
 	// assumption: only fetch the latest schedule from the interval
 	return schedules[len(schedules)-1], nil
+}
+
+// logLineageSize records how far a lineage actually fans out, keyed by the same
+// (job name, scheduled at) pair the traversal dedups on. It measures what a deduped walk
+// would have to return, and how many bind parameters GetRunSummaryByIdentifiers is about
+// to generate - two per run, against Postgres' 65535 ceiling.
+//
+// TEMPORARY: this exists to size the node budget from real traffic rather than guesswork.
+// Remove it once that budget is chosen.
+func (r *LineageResolver) logLineageSize(targetJob scheduler.JobName, scheduledAt time.Time, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary) {
+	totalRuns := 0
+	widestJob, widestRuns := scheduler.JobName(""), 0
+	for jobName, runs := range allJobRunsMap {
+		totalRuns += len(runs)
+		if len(runs) > widestRuns {
+			widestJob, widestRuns = jobName, len(runs)
+		}
+	}
+
+	r.logger.Info("lineage sizing",
+		"target_job", targetJob.String(),
+		"scheduled_at", scheduledAt.UTC().Format(time.RFC3339),
+		"distinct_jobs", len(allJobRunsMap),
+		"distinct_runs", totalRuns,
+		"bind_params", totalRuns*2,
+		"most_runs_job", widestJob.String(),
+		"most_runs_count", widestRuns,
+	)
 }
 
 func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary) (map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary, error) {

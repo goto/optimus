@@ -234,7 +234,43 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 	})
 }
 
-func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
+func createRunningJobRun(jobName string, scheduledAt, startTime time.Time) *scheduler.JobRunSummary {
+	return &scheduler.JobRunSummary{
+		JobName:       scheduler.JobName(jobName),
+		ScheduledAt:   scheduledAt,
+		JobStatus:     scheduler.StateRunning.String(),
+		JobStartTime:  &startTime,
+		TaskStartTime: &startTime,
+	}
+}
+
+func createRunningJobRunPair(downstreamJobName, jobName string, scheduledAt, startTime time.Time) downstreamJobNameAndRunPair {
+	return downstreamJobNameAndRunPair{
+		JobName:   scheduler.JobName(downstreamJobName),
+		JobRunSum: createRunningJobRun(jobName, scheduledAt, startTime),
+	}
+}
+
+func findNode(nodes []*scheduler.JobExecutionSummary, jobName string) *scheduler.JobExecutionSummary {
+	for _, node := range nodes {
+		if node.JobName == scheduler.JobName(jobName) {
+			return node
+		}
+	}
+	return nil
+}
+
+func countNodes(nodes []*scheduler.JobExecutionSummary, jobName string) int {
+	count := 0
+	for _, node := range nodes {
+		if node.JobName == scheduler.JobName(jobName) {
+			count++
+		}
+	}
+	return count
+}
+
+func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 	projName := tenant.ProjectName("proj")
 	namespaceName := tenant.ProjectName("ns1")
 	tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
@@ -242,18 +278,28 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 	baseTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
 	windowConfig, _ := window.NewPresetConfig("yesterday")
 
+	t.Run("should return an empty result for a nil lineage", func(t *testing.T) {
+		var jobLineage *scheduler.JobLineageSummary
+
+		result := jobLineage.GetLineageNodes(0, 5)
+
+		assert.Empty(t, result.Nodes)
+		assert.False(t, result.Truncated)
+	})
+
 	t.Run("should return single job when no upstreams", func(t *testing.T) {
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, nil,
 			createJobRunPair("root", "root", baseTime, baseTime.Add(10*time.Minute), baseTime.Add(20*time.Minute)))
 
-		summaries := jobLineage.GetFlattenedSummaries(10, 5)
+		result := jobLineage.GetLineageNodes(0, 5)
 
-		assert.Len(t, summaries, 1)
-		assert.Equal(t, scheduler.JobName("root"), summaries[0].JobName)
-		assert.Equal(t, 0, summaries[0].Level)
+		assert.Len(t, result.Nodes, 1)
+		assert.Equal(t, scheduler.JobName("root"), result.Nodes[0].JobName)
+		assert.Equal(t, 0, result.Nodes[0].Level)
+		assert.Equal(t, 1, result.TotalNodes)
 	})
 
-	t.Run("should respect max upstreams per level", func(t *testing.T) {
+	t.Run("should return every upstream on a level rather than trimming to a ranked few", func(t *testing.T) {
 		var upstreams []*scheduler.JobLineageSummary
 		for i := 1; i <= 5; i++ {
 			upstream := createJobLineage(fmt.Sprintf("upstream%d", i), tnnt, &windowConfig, nil,
@@ -264,70 +310,89 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, upstreams,
 			createJobRunPair("root", "root", baseTime, baseTime.Add(30*time.Minute), baseTime.Add(40*time.Minute)))
 
-		summaries := jobLineage.GetFlattenedSummaries(3, 5)
+		result := jobLineage.GetLineageNodes(0, 5)
 
 		level1Count := 0
-		for _, summary := range summaries {
-			if summary.Level == 1 {
+		for _, node := range result.Nodes {
+			if node.Level == 1 {
 				level1Count++
 			}
 		}
-		assert.LessOrEqual(t, level1Count, 3)
+		assert.Equal(t, 5, level1Count)
 	})
 
 	t.Run("should respect max depth", func(t *testing.T) {
 		level3 := createJobLineage("level3", tnnt, &windowConfig, nil,
-			createJobRunPair("root", "level3", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
+			createJobRunPair("level2", "level3", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
 		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3},
-			createJobRunPair("root", "level2", baseTime, baseTime.Add(15*time.Minute), baseTime.Add(20*time.Minute)))
+			createJobRunPair("level1", "level2", baseTime, baseTime.Add(15*time.Minute), baseTime.Add(20*time.Minute)))
 		level1 := createJobLineage("level1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2},
 			createJobRunPair("root", "level1", baseTime, baseTime.Add(25*time.Minute), baseTime.Add(30*time.Minute)))
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1},
 			createJobRunPair("root", "root", baseTime, baseTime.Add(35*time.Minute), baseTime.Add(40*time.Minute)))
 
-		summaries := root.GetFlattenedSummaries(10, 2)
+		result := root.GetLineageNodes(0, 2)
 
 		maxLevel := 0
-		for _, summary := range summaries {
-			if summary.Level > maxLevel {
-				maxLevel = summary.Level
+		for _, node := range result.Nodes {
+			if node.Level > maxLevel {
+				maxLevel = node.Level
 			}
 		}
-		assert.LessOrEqual(t, maxLevel, 2)
+		assert.Equal(t, 2, maxLevel)
+		assert.Nil(t, findNode(result.Nodes, "level3"))
 	})
 
-	t.Run("should use default max upstreams when zero provided", func(t *testing.T) {
+	t.Run("should walk the whole lineage when no node budget is given", func(t *testing.T) {
 		upstream := createJobLineage("upstream", tnnt, &windowConfig, nil,
 			createJobRunPair("root", "upstream", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
 			createJobRunPair("root", "root", baseTime, baseTime.Add(15*time.Minute), baseTime.Add(20*time.Minute)))
 
-		summaries := jobLineage.GetFlattenedSummaries(0, 5)
+		result := jobLineage.GetLineageNodes(0, 5)
 
-		assert.Len(t, summaries, 2)
+		assert.Len(t, result.Nodes, 2)
+		assert.False(t, result.Truncated)
 	})
 
-	t.Run("should sort upstreams by end time and scheduled time", func(t *testing.T) {
-		upstream1 := createJobLineage("upstream1", tnnt, &windowConfig, nil,
-			createJobRunPair("root", "upstream1", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
-		upstream2 := createJobLineage("upstream2", tnnt, &windowConfig, nil,
-			createJobRunPair("root", "upstream2", baseTime, baseTime.Add(7*time.Minute), baseTime.Add(15*time.Minute)))
-		upstream3 := createJobLineage("upstream3", tnnt, &windowConfig, nil,
-			createJobRunPair("root", "upstream3", baseTime, baseTime.Add(3*time.Minute), baseTime.Add(8*time.Minute)))
-
-		jobLineage := createJobLineage("root", tnnt, &windowConfig,
-			[]*scheduler.JobLineageSummary{upstream1, upstream2, upstream3},
-			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(30*time.Minute)))
-
-		summaries := jobLineage.GetFlattenedSummaries(2, 5)
-
-		level1Jobs := make([]string, 0)
-		for _, summary := range summaries {
-			if summary.Level == 1 {
-				level1Jobs = append(level1Jobs, summary.JobName.String())
-			}
+	t.Run("should stop at the node budget and flag the result as truncated", func(t *testing.T) {
+		var upstreams []*scheduler.JobLineageSummary
+		for i := 1; i <= 5; i++ {
+			upstream := createJobLineage(fmt.Sprintf("upstream%d", i), tnnt, &windowConfig, nil,
+				createJobRunPair("root", fmt.Sprintf("upstream%d", i), baseTime, baseTime.Add(time.Duration(i)*time.Minute), baseTime.Add(time.Duration(i+10)*time.Minute)))
+			upstreams = append(upstreams, upstream)
 		}
-		assert.Len(t, level1Jobs, 2)
+		jobLineage := createJobLineage("root", tnnt, &windowConfig, upstreams,
+			createJobRunPair("root", "root", baseTime, baseTime.Add(30*time.Minute), baseTime.Add(40*time.Minute)))
+
+		result := jobLineage.GetLineageNodes(3, 5)
+
+		assert.Len(t, result.Nodes, 3)
+		assert.Equal(t, 3, result.TotalNodes)
+		assert.True(t, result.Truncated)
+	})
+
+	t.Run("should keep the nodes closest to the target when the budget cuts the walk short", func(t *testing.T) {
+		// breadth-first order means a budget drops the deepest runs, so a caller asking for a
+		// smaller retrospective view gets the levels nearest the target rather than an
+		// arbitrary slice
+		level3 := createJobLineage("level3", tnnt, &windowConfig, nil,
+			createJobRunPair("level2", "level3", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
+		level2 := createJobLineage("level2", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level3},
+			createJobRunPair("level1", "level2", baseTime, baseTime.Add(15*time.Minute), baseTime.Add(20*time.Minute)))
+		level1 := createJobLineage("level1", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level2},
+			createJobRunPair("root", "level1", baseTime, baseTime.Add(25*time.Minute), baseTime.Add(30*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(35*time.Minute), baseTime.Add(40*time.Minute)))
+
+		result := root.GetLineageNodes(2, 10)
+
+		assert.Len(t, result.Nodes, 2)
+		assert.True(t, result.Truncated)
+		assert.NotNil(t, findNode(result.Nodes, "root"))
+		assert.NotNil(t, findNode(result.Nodes, "level1"))
+		assert.Nil(t, findNode(result.Nodes, "level2"))
+		assert.Nil(t, findNode(result.Nodes, "level3"))
 	})
 
 	t.Run("should skip upstreams without job runs", func(t *testing.T) {
@@ -342,15 +407,11 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 		jobLineage := createJobLineage("root", tnnt, &windowConfig,
 			[]*scheduler.JobLineageSummary{upstreamWithRun, upstreamWithoutRun},
 			createJobRunPair("root", "root", baseTime, baseTime.Add(15*time.Minute), baseTime.Add(20*time.Minute)))
-		summaries := jobLineage.GetFlattenedSummaries(10, 5)
 
-		level1Count := 0
-		for _, summary := range summaries {
-			if summary.Level == 1 {
-				level1Count++
-			}
-		}
-		assert.Equal(t, 1, level1Count)
+		result := jobLineage.GetLineageNodes(0, 5)
+
+		assert.Len(t, result.Nodes, 2)
+		assert.Nil(t, findNode(result.Nodes, "without_run"))
 	})
 
 	t.Run("should look up a run beyond the first level by its immediate parent, not the tree root", func(t *testing.T) {
@@ -364,23 +425,128 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{level1},
 			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(25*time.Minute)))
 
-		summaries := root.GetFlattenedSummaries(10, 5)
+		result := root.GetLineageNodes(0, 5)
 
-		var foundLevel2 bool
-		for _, summary := range summaries {
-			if summary.JobName == "level2" {
-				foundLevel2 = true
-				assert.Equal(t, baseTime.Add(1*time.Minute), *summary.JobRunSummary.TaskStartTime)
-			}
+		level2Node := findNode(result.Nodes, "level2")
+		if assert.NotNil(t, level2Node, "level2 should be found via its immediate parent's key") {
+			assert.Equal(t, baseTime.Add(1*time.Minute), *level2Node.JobRunSummary.TaskStartTime)
+			assert.Equal(t, 2, level2Node.Level)
 		}
-		assert.True(t, foundLevel2, "level2 should be found via its immediate parent's key")
 	})
 
-	t.Run("diamond shared upstream is resolved with the run belonging to the traversed path", func(t *testing.T) {
-		// topology: root -> {B, C}, both B and C -> D. D is the same shared node, but carries two
-		// distinct runs - one per downstream path. B is crafted to rank ahead of C so the
-		// traversal continues through B into D; D's run must then be the one keyed by "B", not
-		// "C" or the tree root.
+	t.Run("should include an upstream that has not finished yet", func(t *testing.T) {
+		running := createJobLineage("running", tnnt, &windowConfig, nil,
+			createRunningJobRunPair("root", "running", baseTime, baseTime.Add(5*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{running},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		runningNode := findNode(result.Nodes, "running")
+		if assert.NotNil(t, runningNode, "an unfinished upstream must not be dropped") {
+			assert.Equal(t, scheduler.StateRunning, runningNode.State)
+		}
+	})
+
+	t.Run("should keep walking past an unfinished upstream into its own upstreams", func(t *testing.T) {
+		// the upstream of an in-flight job is exactly what an operator needs to see, so an
+		// unfinished node must not cut its branch short
+		grandparent := createJobLineage("grandparent", tnnt, &windowConfig, nil,
+			createJobRunPair("running", "grandparent", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(3*time.Minute)))
+		running := createJobLineage("running", tnnt, &windowConfig, []*scheduler.JobLineageSummary{grandparent},
+			createRunningJobRunPair("root", "running", baseTime, baseTime.Add(5*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{running},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		grandparentNode := findNode(result.Nodes, "grandparent")
+		if assert.NotNil(t, grandparentNode, "upstreams of an unfinished job must still be reachable") {
+			assert.Equal(t, 2, grandparentNode.Level)
+		}
+	})
+
+	t.Run("should keep walking when every upstream of a job is unfinished", func(t *testing.T) {
+		grandparent := createJobLineage("grandparent", tnnt, &windowConfig, nil,
+			createRunningJobRunPair("runningA", "grandparent", baseTime, baseTime.Add(1*time.Minute)))
+		runningA := createJobLineage("runningA", tnnt, &windowConfig, []*scheduler.JobLineageSummary{grandparent},
+			createRunningJobRunPair("root", "runningA", baseTime, baseTime.Add(5*time.Minute)))
+		runningB := createJobLineage("runningB", tnnt, &windowConfig, nil,
+			createRunningJobRunPair("root", "runningB", baseTime, baseTime.Add(6*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{runningA, runningB},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		assert.Len(t, result.Nodes, 4)
+		assert.NotNil(t, findNode(result.Nodes, "grandparent"))
+	})
+
+	t.Run("should return a shared upstream once with an edge to each downstream", func(t *testing.T) {
+		// topology: root -> {B, C}, both B and C -> D, and both paths resolve to the same run of
+		// D. D must appear once, carrying both downstreams, rather than once per path.
+		sharedRun := createJobRun("D", baseTime.Add(-1*time.Hour), baseTime.Add(-55*time.Minute), baseTime.Add(-50*time.Minute))
+		d := &scheduler.JobLineageSummary{
+			JobName:   scheduler.JobName("D"),
+			Tenant:    tnnt,
+			SLA:       scheduler.SLAConfig{Duration: time.Hour},
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				scheduler.JobName("B"): sharedRun,
+				scheduler.JobName("C"): sharedRun,
+			},
+		}
+		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
+			createJobRunPair("root", "B", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
+		c := createJobLineage("C", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
+			createJobRunPair("root", "C", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(2*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{b, c},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(25*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		assert.Equal(t, 1, countNodes(result.Nodes, "D"), "a shared run must be deduplicated")
+		dNode := findNode(result.Nodes, "D")
+		if assert.NotNil(t, dNode) {
+			assert.Len(t, dNode.DownstreamRefs, 2)
+			downstreams := []scheduler.JobName{dNode.DownstreamRefs[0].JobName, dNode.DownstreamRefs[1].JobName}
+			assert.Contains(t, downstreams, scheduler.JobName("B"))
+			assert.Contains(t, downstreams, scheduler.JobName("C"))
+		}
+	})
+
+	t.Run("should deduplicate a shared run whose schedules carry different locations", func(t *testing.T) {
+		// Go compares time.Time by wall clock, monotonic reading and location, so the same
+		// instant in two locations is two different map keys unless the key normalises to UTC
+		jakarta := time.FixedZone("WIB", 7*60*60)
+		sharedSchedule := baseTime.Add(-1 * time.Hour)
+
+		runViaB := createJobRun("D", sharedSchedule, sharedSchedule.Add(5*time.Minute), sharedSchedule.Add(10*time.Minute))
+		runViaC := createJobRun("D", sharedSchedule.In(jakarta), sharedSchedule.Add(5*time.Minute), sharedSchedule.Add(10*time.Minute))
+
+		d := &scheduler.JobLineageSummary{
+			JobName: scheduler.JobName("D"),
+			Tenant:  tnnt,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				scheduler.JobName("B"): runViaB,
+				scheduler.JobName("C"): runViaC,
+			},
+		}
+		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
+			createJobRunPair("root", "B", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
+		c := createJobLineage("C", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
+			createJobRunPair("root", "C", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(2*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{b, c},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(25*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		assert.Equal(t, 1, countNodes(result.Nodes, "D"), "the same instant in another location is the same run")
+	})
+
+	t.Run("should keep a shared upstream's runs apart when the paths resolve to different schedules", func(t *testing.T) {
+		// same topology, but B and C pull different runs of D. Those are distinct runs, so they
+		// must stay distinct nodes - deduplicating on job name alone would lose one of them.
 		d := createJobLineage("D", tnnt, &windowConfig, nil,
 			createJobRunPair("B", "D", baseTime.Add(-1*time.Hour), baseTime.Add(-55*time.Minute), baseTime.Add(-50*time.Minute)),
 			createJobRunPair("C", "D", baseTime.Add(-2*time.Hour), baseTime.Add(-115*time.Minute), baseTime.Add(-110*time.Minute)),
@@ -392,19 +558,191 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{b, c},
 			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(25*time.Minute)))
 
-		summaries := root.GetFlattenedSummaries(10, 5)
+		result := root.GetLineageNodes(0, 5)
 
-		var dSummary *scheduler.JobExecutionSummary
-		for _, summary := range summaries {
-			if summary.JobName == "D" {
-				dSummary = summary
+		assert.Equal(t, 2, countNodes(result.Nodes, "D"), "distinct runs of a shared job are distinct nodes")
+
+		var schedules []time.Time
+		for _, node := range result.Nodes {
+			if node.JobName == "D" {
+				schedules = append(schedules, node.JobRunSummary.ScheduledAt)
+				assert.Len(t, node.DownstreamRefs, 1)
 			}
 		}
+		assert.Contains(t, schedules, baseTime.Add(-1*time.Hour))
+		assert.Contains(t, schedules, baseTime.Add(-2*time.Hour))
+	})
 
-		if assert.NotNil(t, dSummary, "D should be reachable via B, the higher-ranked path") {
-			assert.Equal(t, baseTime.Add(-1*time.Hour), dSummary.JobRunSummary.ScheduledAt)
-			assert.Equal(t, "B", dSummary.DownstreamPathName)
+	t.Run("should assign the shortest level to a job reachable by paths of different lengths", func(t *testing.T) {
+		// root -> shared directly, and root -> mid -> shared. The direct edge is shorter, and
+		// breadth-first order must settle the level at 1 rather than 2.
+		sharedRun := createJobRun("shared", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(2*time.Minute))
+		shared := &scheduler.JobLineageSummary{
+			JobName: scheduler.JobName("shared"),
+			Tenant:  tnnt,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				scheduler.JobName("root"): sharedRun,
+				scheduler.JobName("mid"):  sharedRun,
+			},
 		}
+		mid := createJobLineage("mid", tnnt, &windowConfig, []*scheduler.JobLineageSummary{shared},
+			createJobRunPair("root", "mid", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(8*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{mid, shared},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(25*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		sharedNode := findNode(result.Nodes, "shared")
+		if assert.NotNil(t, sharedNode) {
+			assert.Equal(t, 1, sharedNode.Level, "level should be the shortest distance from the target")
+			assert.Len(t, sharedNode.DownstreamRefs, 2)
+		}
+	})
+
+	t.Run("should mark only the unfinished runs whose own upstreams have all finished", func(t *testing.T) {
+		// finished <- blocking(running) <- blocked(running) : the lineage is waiting on
+		// "blocking", while "blocked" is itself waiting on it
+		blocking := createJobLineage("blocking", tnnt, &windowConfig, nil,
+			createRunningJobRunPair("blocked", "blocking", baseTime, baseTime.Add(2*time.Minute)))
+		blocked := createJobLineage("blocked", tnnt, &windowConfig, []*scheduler.JobLineageSummary{blocking},
+			createRunningJobRunPair("root", "blocked", baseTime, baseTime.Add(5*time.Minute)))
+		finished := createJobLineage("finished", tnnt, &windowConfig, nil,
+			createJobRunPair("root", "finished", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(4*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{blocked, finished},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		assert.True(t, findNode(result.Nodes, "blocking").IsBlocking, "its upstreams have all finished")
+		assert.False(t, findNode(result.Nodes, "blocked").IsBlocking, "it is waiting on an unfinished upstream")
+		assert.False(t, findNode(result.Nodes, "finished").IsBlocking, "a finished run blocks nothing")
+		assert.False(t, findNode(result.Nodes, "root").IsBlocking, "the target is waiting on its upstream")
+	})
+
+	t.Run("should mark a leaf that has not started as blocking", func(t *testing.T) {
+		notStarted := &scheduler.JobLineageSummary{
+			JobName: scheduler.JobName("not_started"),
+			Tenant:  tnnt,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				scheduler.JobName("root"): {
+					JobName:     scheduler.JobName("not_started"),
+					ScheduledAt: baseTime,
+				},
+			},
+		}
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{notStarted},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		notStartedNode := findNode(result.Nodes, "not_started")
+		if assert.NotNil(t, notStartedNode) {
+			assert.Equal(t, scheduler.StateNotScheduled, notStartedNode.State)
+			assert.True(t, notStartedNode.IsBlocking)
+		}
+	})
+
+	t.Run("should order nodes by level, then by the state most worth attention", func(t *testing.T) {
+		succeeded := createJobLineage("succeeded", tnnt, &windowConfig, nil,
+			createJobRunPair("root", "succeeded", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(4*time.Minute)))
+		running := createJobLineage("running", tnnt, &windowConfig, nil,
+			createRunningJobRunPair("root", "running", baseTime, baseTime.Add(5*time.Minute)))
+		failedRun := createJobRun("failed", baseTime, baseTime.Add(2*time.Minute), baseTime.Add(3*time.Minute))
+		failedRun.JobStatus = scheduler.StateFailed.String()
+		failed := createJobLineage("failed", tnnt, &windowConfig, nil,
+			downstreamJobNameAndRunPair{JobName: scheduler.JobName("root"), JobRunSum: failedRun})
+		root := createJobLineage("root", tnnt, &windowConfig,
+			[]*scheduler.JobLineageSummary{succeeded, running, failed},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		result := root.GetLineageNodes(0, 5)
+
+		assert.Equal(t, scheduler.JobName("root"), result.Nodes[0].JobName, "the target comes first")
+		assert.Equal(t, scheduler.JobName("failed"), result.Nodes[1].JobName)
+		assert.Equal(t, scheduler.JobName("running"), result.Nodes[2].JobName)
+		assert.Equal(t, scheduler.JobName("succeeded"), result.Nodes[3].JobName)
+	})
+}
+
+func TestLineageWalkResult_GatingPath(t *testing.T) {
+	projName := tenant.ProjectName("proj")
+	namespaceName := tenant.ProjectName("ns1")
+	tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
+
+	baseTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
+	windowConfig, _ := window.NewPresetConfig("yesterday")
+
+	pathNames := func(path []*scheduler.JobExecutionSummary) []string {
+		names := make([]string, 0, len(path))
+		for _, node := range path {
+			names = append(names, node.JobName.String())
+		}
+		return names
+	}
+
+	t.Run("should follow real edges rather than pairing the latest finisher of each level", func(t *testing.T) {
+		// root -> {A, B}; A -> C, B -> D. B finishes last at level 1 and C last at level 2, but
+		// C is on A's branch. Pairing by level would report C as the run that gated B, which
+		// never waited on it.
+		c := createJobLineage("C", tnnt, &windowConfig, nil,
+			createJobRunPair("A", "C", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(9*time.Minute)))
+		d := createJobLineage("D", tnnt, &windowConfig, nil,
+			createJobRunPair("B", "D", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(4*time.Minute)))
+		a := createJobLineage("A", tnnt, &windowConfig, []*scheduler.JobLineageSummary{c},
+			createJobRunPair("root", "A", baseTime, baseTime.Add(10*time.Minute), baseTime.Add(12*time.Minute)))
+		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
+			createJobRunPair("root", "B", baseTime, baseTime.Add(10*time.Minute), baseTime.Add(20*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{a, b},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(25*time.Minute), baseTime.Add(30*time.Minute)))
+
+		path := root.GetLineageNodes(0, 5).GatingPath()
+
+		assert.Equal(t, []string{"root", "B", "D"}, pathNames(path),
+			"the chain must stay on B's branch once B is chosen")
+	})
+
+	t.Run("should stop at the run the lineage is currently waiting on", func(t *testing.T) {
+		blocking := createJobLineage("blocking", tnnt, &windowConfig, nil,
+			createRunningJobRunPair("root", "blocking", baseTime, baseTime.Add(2*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{blocking},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		path := root.GetLineageNodes(0, 5).GatingPath()
+
+		assert.Equal(t, []string{"root"}, pathNames(path),
+			"an unfinished upstream ends the chain rather than being walked through")
+	})
+
+	t.Run("should include an unfinished target as the head of the chain", func(t *testing.T) {
+		finished := createJobLineage("finished", tnnt, &windowConfig, nil,
+			createJobRunPair("root", "finished", baseTime, baseTime.Add(1*time.Minute), baseTime.Add(5*time.Minute)))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{finished},
+			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
+
+		path := root.GetLineageNodes(0, 5).GatingPath()
+
+		assert.Equal(t, []string{"root", "finished"}, pathNames(path))
+	})
+
+	t.Run("should break ties on job name so the chain does not vary between requests", func(t *testing.T) {
+		sameEnd := baseTime.Add(5 * time.Minute)
+		zebra := createJobLineage("zebra", tnnt, &windowConfig, nil,
+			createJobRunPair("root", "zebra", baseTime, baseTime.Add(1*time.Minute), sameEnd))
+		alpha := createJobLineage("alpha", tnnt, &windowConfig, nil,
+			createJobRunPair("root", "alpha", baseTime, baseTime.Add(1*time.Minute), sameEnd))
+		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{zebra, alpha},
+			createJobRunPair("root", "root", baseTime, baseTime.Add(25*time.Minute), baseTime.Add(30*time.Minute)))
+
+		for i := 0; i < 5; i++ {
+			path := root.GetLineageNodes(0, 5).GatingPath()
+			assert.Equal(t, []string{"root", "alpha"}, pathNames(path))
+		}
+	})
+
+	t.Run("should return an empty path for an empty walk", func(t *testing.T) {
+		var jobLineage *scheduler.JobLineageSummary
+
+		assert.Nil(t, jobLineage.GetLineageNodes(0, 5).GatingPath())
 	})
 }
 

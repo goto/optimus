@@ -199,6 +199,7 @@ type JobExpectatorConfig struct {
 
 type JobExecutionSummaryConfig struct {
 	MaxLineageDepth    int                      `mapstructure:"max_lineage_depth" default:"25"`
+	LineageWindowHours int                      `mapstructure:"lineage_window_hours" default:"24"`
 	HistoricalDuration HistoricalDurationConfig `mapstructure:"historical_duration"`
 }
 

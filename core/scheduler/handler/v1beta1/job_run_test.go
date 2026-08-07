@@ -991,7 +991,7 @@ func TestJobRunHandler(t *testing.T) {
 				NumberOfUpstreamPerLevel: 5,
 			}
 
-			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 5).
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 5, 0).
 				Return(nil, errors.New("service error"))
 
 			resp, err := handler.GetJobRunLineageSummary(ctx, req)
@@ -1036,13 +1036,82 @@ func TestJobRunHandler(t *testing.T) {
 				},
 			}
 
-			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 5).
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 5, 0).
 				Return(mockLineages, nil)
 
 			resp, err := handler.GetJobRunLineageSummary(ctx, req)
 			assert.Nil(t, err)
 			assert.NotNil(t, resp)
 			assert.Equal(t, len(mockLineages), len(resp.Jobs))
+		})
+
+		t.Run("should prefer max_nodes over the deprecated per-level field and pass the window", func(t *testing.T) {
+			jobRunService := new(mockJobRunService)
+			jobLineageService := new(mockJobLineageService)
+			defer jobLineageService.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil)
+
+			req := &pb.GetJobRunLineageSummaryRequest{
+				TargetJobs:               []*pb.TargetJobRunIdentifier{{JobName: "test-job", ScheduledAt: timestamppb.Now()}},
+				NumberOfUpstreamPerLevel: 5,
+				MaxNodes:                 40,
+				LineageWindowHours:       10,
+			}
+
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 40, 10).
+				Return([]*scheduler.JobRunLineage{}, nil)
+
+			_, err := handler.GetJobRunLineageSummary(ctx, req)
+			assert.Nil(t, err)
+		})
+
+		t.Run("should map run state, blocking flag and downstream refs onto the response", func(t *testing.T) {
+			jobRunService := new(mockJobRunService)
+			jobLineageService := new(mockJobLineageService)
+			defer jobLineageService.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil)
+
+			scheduledAt := timestamppb.Now()
+			upstreamScheduledAt := scheduledAt.AsTime().Add(-1 * time.Hour)
+			req := &pb.GetJobRunLineageSummaryRequest{
+				TargetJobs: []*pb.TargetJobRunIdentifier{{JobName: "test-job", ScheduledAt: scheduledAt}},
+			}
+
+			mockLineages := []*scheduler.JobRunLineage{
+				{
+					JobName:     "test-job",
+					ScheduledAt: scheduledAt.AsTime(),
+					JobRuns: []*scheduler.JobExecutionSummary{
+						{
+							JobName:    "upstream-job",
+							State:      scheduler.StateRunning,
+							IsBlocking: true,
+							DownstreamRefs: []scheduler.JobRunKey{
+								{JobName: "test-job", ScheduledAt: upstreamScheduledAt},
+							},
+							JobRunSummary: &scheduler.JobRunSummary{
+								JobName:     "upstream-job",
+								ScheduledAt: upstreamScheduledAt,
+							},
+						},
+					},
+					ExecutionSummary: &scheduler.LineageExecutionSummary{},
+				},
+			}
+
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 0, 0).Return(mockLineages, nil)
+
+			resp, err := handler.GetJobRunLineageSummary(ctx, req)
+			assert.Nil(t, err)
+
+			pbRun := resp.Jobs[0].JobRuns[0]
+			assert.Equal(t, pb.JobRunState_JOB_RUN_STATE_RUNNING, pbRun.RunState)
+			assert.True(t, pbRun.IsBlocking)
+			assert.Len(t, pbRun.DownstreamRefs, 1)
+			assert.Equal(t, "test-job", pbRun.DownstreamRefs[0].JobName)
+			assert.Equal(t, upstreamScheduledAt.UTC(), pbRun.DownstreamRefs[0].ScheduledAt.AsTime().UTC())
 		})
 	})
 
@@ -1135,8 +1204,8 @@ type mockJobLineageService struct {
 	mock.Mock
 }
 
-func (m *mockJobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error) {
-	args := m.Called(ctx, jobSchedules, numberOfUpstreamPerLevel)
+func (m *mockJobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, maxNodes, windowHours int) ([]*scheduler.JobRunLineage, error) {
+	args := m.Called(ctx, jobSchedules, maxNodes, windowHours)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

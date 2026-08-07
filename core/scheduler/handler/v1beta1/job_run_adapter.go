@@ -14,6 +14,14 @@ import (
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
 
+var jobRunStateToProto = map[scheduler.State]pb.JobRunState{
+	scheduler.StateNotScheduled: pb.JobRunState_JOB_RUN_STATE_NOT_SCHEDULED,
+	scheduler.StateWaitUpstream: pb.JobRunState_JOB_RUN_STATE_WAIT_UPSTREAM,
+	scheduler.StateRunning:      pb.JobRunState_JOB_RUN_STATE_RUNNING,
+	scheduler.StateSuccess:      pb.JobRunState_JOB_RUN_STATE_SUCCESS,
+	scheduler.StateFailed:       pb.JobRunState_JOB_RUN_STATE_FAILED,
+}
+
 // buildIdentifySLABreachInputs resolves an IdentifyPotentialSLABreachRequest into
 // the combos (cross product of projects x label groups) to evaluate and the
 // shared predictor config. job_names only applies in legacy single-project mode,
@@ -137,6 +145,30 @@ func fromJobRunLineageSummaryRequest(req *pb.GetJobRunLineageSummaryRequest) ([]
 	return targetJobSchedules, nil
 }
 
+func toJobRunStateProto(state scheduler.State) pb.JobRunState {
+	if pbState, ok := jobRunStateToProto[state]; ok {
+		return pbState
+	}
+
+	return pb.JobRunState_JOB_RUN_STATE_UNSPECIFIED
+}
+
+func toJobRunRefsProto(refs []scheduler.JobRunKey) []*pb.JobRunRef {
+	if len(refs) == 0 {
+		return nil
+	}
+
+	pbRefs := make([]*pb.JobRunRef, 0, len(refs))
+	for _, ref := range refs {
+		pbRefs = append(pbRefs, &pb.JobRunRef{
+			JobName:     ref.JobName.String(),
+			ScheduledAt: timestamppb.New(ref.ScheduledAt),
+		})
+	}
+
+	return pbRefs
+}
+
 func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *pb.GetJobRunLineageSummaryResponse {
 	var pbJobRunLineages []*pb.JobRunLineageSummary
 	for _, lineage := range jobRunLineages {
@@ -224,6 +256,9 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				},
 				Level:              int32(run.Level),
 				DownstreamPathName: run.DownstreamPathName,
+				RunState:           toJobRunStateProto(run.State),
+				IsBlocking:         run.IsBlocking,
+				DownstreamRefs:     toJobRunRefsProto(run.DownstreamRefs),
 			}
 			if run.DelaySummary != nil {
 				pbJobRun.DelaySummary = &pb.JobRunDelaySummary{

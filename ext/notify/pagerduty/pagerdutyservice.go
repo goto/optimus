@@ -16,6 +16,7 @@ type PagerDutyServiceImpl struct{}
 type customDetails struct {
 	Owner     string `json:"owner"`
 	Namespace string `json:"namespace"`
+	TaskID    string `json:"task_id"`
 	LogURL    string `json:"log_url"`
 	JobURL    string `json:"job_url"`
 	Exception string `json:"exception"`
@@ -23,7 +24,12 @@ type customDetails struct {
 }
 
 func buildPayloadCustomDetails(evt Event) (string, error) {
-	details := &customDetails{Owner: evt.owner, Namespace: evt.meta.Tenant.NamespaceName().String()}
+	// OperatorName is the failing task_id for a job-level failure event
+	details := &customDetails{
+		Owner:     evt.owner,
+		Namespace: evt.meta.Tenant.NamespaceName().String(),
+		TaskID:    evt.meta.OperatorName,
+	}
 	if logURL, ok := evt.meta.Values["log_url"]; ok && logURL.(string) != "" {
 		details.LogURL = logURL.(string)
 	}

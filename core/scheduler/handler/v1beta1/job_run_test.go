@@ -991,7 +991,7 @@ func TestJobRunHandler(t *testing.T) {
 				NumberOfUpstreamPerLevel: 5,
 			}
 
-			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 5, 0).
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, scheduler.LineageSummaryOptions{TopUpstreamsPerJob: 5}).
 				Return(nil, errors.New("service error"))
 
 			resp, err := handler.GetJobRunLineageSummary(ctx, req)
@@ -1036,7 +1036,7 @@ func TestJobRunHandler(t *testing.T) {
 				},
 			}
 
-			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 5, 0).
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, scheduler.LineageSummaryOptions{TopUpstreamsPerJob: 5}).
 				Return(mockLineages, nil)
 
 			resp, err := handler.GetJobRunLineageSummary(ctx, req)
@@ -1059,7 +1059,7 @@ func TestJobRunHandler(t *testing.T) {
 				LineageWindowHours:       10,
 			}
 
-			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 40, 10).
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, scheduler.LineageSummaryOptions{MaxNodes: 40, TopUpstreamsPerJob: 5, WindowHours: 10}).
 				Return([]*scheduler.JobRunLineage{}, nil)
 
 			_, err := handler.GetJobRunLineageSummary(ctx, req)
@@ -1101,7 +1101,7 @@ func TestJobRunHandler(t *testing.T) {
 				},
 			}
 
-			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, 0, 0).Return(mockLineages, nil)
+			jobLineageService.On("GetJobExecutionSummary", ctx, mock.Anything, scheduler.LineageSummaryOptions{}).Return(mockLineages, nil)
 
 			resp, err := handler.GetJobRunLineageSummary(ctx, req)
 			assert.Nil(t, err)
@@ -1204,8 +1204,8 @@ type mockJobLineageService struct {
 	mock.Mock
 }
 
-func (m *mockJobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, maxNodes, windowHours int) ([]*scheduler.JobRunLineage, error) {
-	args := m.Called(ctx, jobSchedules, maxNodes, windowHours)
+func (m *mockJobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, opts scheduler.LineageSummaryOptions) ([]*scheduler.JobRunLineage, error) {
+	args := m.Called(ctx, jobSchedules, opts)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

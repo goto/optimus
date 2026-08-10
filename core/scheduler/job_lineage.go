@@ -20,19 +20,41 @@ const (
 	DefaultMaxLineageNodes = 5000
 )
 
-// JobRunKey identifies one run within a lineage. A job legitimately appears at more than one
-// scheduled time in the same lineage - downstreams with different windows or frequencies pull
-// different runs of the same upstream - so the schedule is part of the identity.
 type JobRunKey struct {
 	JobName     JobName
 	ScheduledAt time.Time
 }
 
-// NewJobRunKey normalises the schedule to UTC. Go compares time.Time by wall clock, monotonic
-// reading and location, so two values for the same instant in different locations are
-// different map keys and would silently fail to deduplicate.
 func NewJobRunKey(jobName JobName, scheduledAt time.Time) JobRunKey {
 	return JobRunKey{JobName: jobName, ScheduledAt: scheduledAt.UTC()}
+}
+
+// LineageWalkOptions bounds a lineage walk.
+type LineageWalkOptions struct {
+	// MaxNodes caps the total runs returned, keeping those closest to the target. Zero uses
+	// DefaultMaxLineageNodes.
+	MaxNodes int
+	// MaxDepth caps how many levels above the target the walk reaches. Zero uses
+	// MaxLineageDepth.
+	MaxDepth int
+	// TopUpstreamsPerJob, when positive, follows only the N latest-finishing direct upstreams
+	// of each job, all the way to the root. Zero follows every upstream.
+	//
+	// This is meant for retrospective analysis of a lineage that has already completed, where
+	// ranking on finish time identifies the runs that actually held things up. On a lineage
+	// still in flight it is the wrong tool: runs that have not finished have no finish time to
+	// rank on, so they sort last and can fall outside the top N - which is exactly how a
+	// running blocker ends up hidden. Leave it at zero for anything live.
+	TopUpstreamsPerJob int
+}
+
+// LineageSummaryOptions is what a caller asks the lineage summary for. It differs from
+// LineageWalkOptions in carrying the window, which prunes inside the resolver before any runs
+// are fetched, rather than in the walk.
+type LineageSummaryOptions struct {
+	MaxNodes           int
+	TopUpstreamsPerJob int
+	WindowHours        int
 }
 
 // LineageWalkResult is the deduplicated set of runs reachable from a target, together with
@@ -42,9 +64,6 @@ type LineageWalkResult struct {
 	TotalNodes int
 	Truncated  bool
 
-	// NodesByKey indexes Nodes, and UpstreamsByKey holds the lineage's edges pointing away
-	// from the target. Together they let callers follow the graph rather than guess at it
-	// from Level alone.
 	NodesByKey     map[JobRunKey]*JobExecutionSummary
 	UpstreamsByKey map[JobRunKey][]JobRunKey
 }
@@ -130,12 +149,12 @@ func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSu
 	return nil
 }
 
-func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxNodes, maxDepth int) *JobRunLineage {
+func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOptions) *JobRunLineage {
 	if j == nil {
 		return nil
 	}
 
-	walk := j.GetLineageNodes(maxNodes, maxDepth)
+	walk := j.GetLineageNodes(opts)
 	executionSummaries := walk.Nodes
 	lineageSummary := &LineageExecutionSummary{}
 	var largestScheduledWayTooLate, largestSystemSchedulingDelay *JobExecutionSummary
@@ -299,10 +318,12 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(maxNodes, maxDepth i
 // at all, is returned with the state it is currently in. Breadth-first order means the first
 // visit to a node is necessarily via a shortest path, so Level is correct when assigned and
 // never needs revising.
-func (j *JobLineageSummary) GetLineageNodes(maxNodes, maxDepth int) *LineageWalkResult {
+func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWalkResult {
 	if j == nil {
 		return &LineageWalkResult{}
 	}
+
+	maxNodes, maxDepth := opts.MaxNodes, opts.MaxDepth
 	if maxNodes <= 0 {
 		maxNodes = DefaultMaxLineageNodes
 	}
@@ -317,12 +338,9 @@ func (j *JobLineageSummary) GetLineageNodes(maxNodes, maxDepth int) *LineageWalk
 
 	type queueItem struct {
 		lineage *JobLineageSummary
-		// parent is the immediate downstream job that led to lineage in this traversal -
-		// lineage's own run is keyed by this name.
-		parent JobName
-		// from is the key of that downstream node, nil for the target itself.
-		from  *JobRunKey
-		depth int
+		parent  JobName
+		from    *JobRunKey
+		depth   int
 	}
 
 	queue := []queueItem{{lineage: j, parent: j.JobName, depth: 0}}
@@ -371,7 +389,7 @@ func (j *JobLineageSummary) GetLineageNodes(maxNodes, maxDepth int) *LineageWalk
 			continue
 		}
 
-		for _, upstream := range current.lineage.Upstreams {
+		for _, upstream := range selectUpstreams(current.lineage, opts.TopUpstreamsPerJob) {
 			queue = append(queue, queueItem{
 				lineage: upstream,
 				parent:  current.lineage.JobName,
@@ -391,6 +409,48 @@ func (j *JobLineageSummary) GetLineageNodes(maxNodes, maxDepth int) *LineageWalk
 		NodesByKey:     nodesByKey,
 		UpstreamsByKey: upstreamsByKey,
 	}
+}
+
+// selectUpstreams returns the upstreams of job to follow. With topN at zero that is all of
+// them; otherwise it is the N that finished last, which for a completed lineage are the runs
+// that actually held the job up
+func selectUpstreams(job *JobLineageSummary, topN int) []*JobLineageSummary {
+	if topN <= 0 || len(job.Upstreams) <= topN {
+		return job.Upstreams
+	}
+
+	ranked := make([]*JobLineageSummary, len(job.Upstreams))
+	copy(ranked, job.Upstreams)
+
+	sort.SliceStable(ranked, func(i, k int) bool {
+		iRun, kRun := ranked[i].GetRunForJob(job.JobName), ranked[k].GetRunForJob(job.JobName)
+
+		// runs with no finish time cannot be ranked on one, so they sort after those that have
+		// one, newest first
+		iEnd, kEnd := finishTimeForRanking(iRun), finishTimeForRanking(kRun)
+		switch {
+		case iEnd == nil && kEnd == nil:
+			return ranked[i].JobName < ranked[k].JobName
+		case iEnd == nil:
+			return false
+		case kEnd == nil:
+			return true
+		case !iEnd.Equal(*kEnd):
+			return iEnd.After(*kEnd)
+		default:
+			return ranked[i].JobName < ranked[k].JobName
+		}
+	})
+
+	return ranked[:topN]
+}
+
+func finishTimeForRanking(run *JobRunSummary) *time.Time {
+	if !run.IsFinished() {
+		return nil
+	}
+
+	return run.GetActualEndTime()
 }
 
 // markBlockingNodes flags the runs the lineage is currently waiting on: those that have not
@@ -458,31 +518,6 @@ type JobRunLineage struct {
 	// stopped it short of the full lineage.
 	TotalNodes int
 	Truncated  bool
-}
-
-func (j *JobRunLineage) GetAllJobNames() []JobName {
-	jobNamesMap := make(map[JobName]struct{})
-	for _, jobRun := range j.JobRuns {
-		jobNamesMap[jobRun.JobName] = struct{}{}
-	}
-
-	var jobNames []JobName
-	for jobName := range jobNamesMap {
-		jobNames = append(jobNames, jobName)
-	}
-	return jobNames
-}
-
-func (j *JobRunLineage) GroupJobsInLineageByHookNames() map[string][]JobName {
-	hookNames := make(map[string][]JobName)
-	for _, jobRun := range j.JobRuns {
-		if jobRun.JobRunSummary.HookName != nil {
-			hookName := *jobRun.JobRunSummary.HookName
-			hookNames[hookName] = append(hookNames[hookName], jobRun.JobName)
-		}
-	}
-
-	return hookNames
 }
 
 type LineageExecutionSummary struct {

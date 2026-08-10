@@ -68,7 +68,7 @@ type JobRunService interface {
 }
 
 type JobLineageService interface {
-	GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, maxNodes, windowHours int) ([]*scheduler.JobRunLineage, error)
+	GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, opts scheduler.LineageSummaryOptions) ([]*scheduler.JobRunLineage, error)
 }
 
 type ThirdPartySensorService interface {
@@ -590,15 +590,11 @@ func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJ
 		h.l.Error("error parsing job schedules from request: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse job schedules from request")
 	}
-	maxNodes := int(req.GetMaxNodes())
-	if maxNodes == 0 {
-		// the lineage is walked in full and deduplicated per (job, schedule), so there is no
-		// per-level trimming left for the deprecated field to control. Callers still sending it
-		// get it read as a cap on the total number of runs returned.
-		maxNodes = int(req.GetNumberOfUpstreamPerLevel())
-	}
-
-	jobRunLineages, err := h.jobLineageService.GetJobExecutionSummary(ctx, targetJobSchedules, maxNodes, int(req.GetLineageWindowHours()))
+	jobRunLineages, err := h.jobLineageService.GetJobExecutionSummary(ctx, targetJobSchedules, scheduler.LineageSummaryOptions{
+		MaxNodes:           int(req.GetMaxNodes()),
+		TopUpstreamsPerJob: int(req.GetNumberOfUpstreamPerLevel()),
+		WindowHours:        int(req.GetLineageWindowHours()),
+	})
 	if err != nil {
 		h.l.Error("error getting job run lineage summary: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run lineage summary")

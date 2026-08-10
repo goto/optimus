@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -38,7 +39,8 @@ type JobLineageService struct {
 //
 // windowHours leaves out any upstream run scheduled more than that many hours before the
 // target's own schedule; zero uses the server's configured window.
-func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, maxNodes, windowHours int) ([]*scheduler.JobRunLineage, error) {
+func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, opts scheduler.LineageSummaryOptions) ([]*scheduler.JobRunLineage, error) {
+	windowHours := opts.WindowHours
 	if windowHours <= 0 {
 		windowHours = j.lineageWindowHours
 	}
@@ -49,73 +51,120 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 		return nil, err
 	}
 
-	return j.generateLineageExecutionSummary(ctx, downstreamLineages, maxNodes)
+	return j.generateLineageExecutionSummary(ctx, downstreamLineages, scheduler.LineageWalkOptions{
+		MaxNodes:           opts.MaxNodes,
+		MaxDepth:           j.maxLineageDepth,
+		TopUpstreamsPerJob: opts.TopUpstreamsPerJob,
+	})
 }
 
-func (j *JobLineageService) generateLineageExecutionSummary(ctx context.Context, lineagesMap map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, maxNodes int) ([]*scheduler.JobRunLineage, error) {
+func (j *JobLineageService) generateLineageExecutionSummary(ctx context.Context, lineagesMap map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, walkOpts scheduler.LineageWalkOptions) ([]*scheduler.JobRunLineage, error) {
 	var result []*scheduler.JobRunLineage
 	for _, lineage := range lineagesMap {
 		newDownstreamLineage := lineage
-		jobRunLineage := newDownstreamLineage.GenerateLineageExecutionSummary(maxNodes, j.maxLineageDepth)
-		if jobRunLineage.Truncated {
-			// the deepest runs were dropped, so the delay attribution below only covers the
-			// part of the lineage that was kept. The response carries no truncation flag yet.
-			j.l.Warn("lineage truncated by the node budget",
-				"job", jobRunLineage.JobName, "scheduled_at", jobRunLineage.ScheduledAt,
-				"returned_nodes", jobRunLineage.TotalNodes, "max_nodes", maxNodes)
-		}
-		if err := j.enrichWithHistoricalDurations(ctx, jobRunLineage); err != nil {
-			j.l.Error("failed to enrich job run lineage with historical durations", "error", err)
-			// prioritize returning the lineage information even if the enrichment fails
-		}
-
+		jobRunLineage := newDownstreamLineage.GenerateLineageExecutionSummary(walkOpts)
 		result = append(result, jobRunLineage)
+	}
+
+	if err := j.enrichWithHistoricalDurations(ctx, result); err != nil {
+		j.l.Error("failed to enrich job run lineage with historical durations", "error", err)
+		// prioritize returning the lineage information even if the enrichment fails
 	}
 
 	return result, nil
 }
 
-func (j *JobLineageService) enrichWithHistoricalDurations(ctx context.Context, jobRunLineage *scheduler.JobRunLineage) error {
-	// fetch historical task durations
-	jobNames := jobRunLineage.GetAllJobNames()
-	historicalTaskDurations, err := j.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, map[string][]string{"task": {}},
-		jobRunLineage.ScheduledAt, j.historicalDurationLastNRuns, j.historicalDurationPercentile)
-	if err != nil {
-		j.l.Error("failed to get task historical durations", "error", err)
-		return err
+type durationLookup struct {
+	referenceTime time.Time
+	hookName      string // empty for a task lookup
+}
+
+func (d durationLookup) operators() map[string][]string {
+	if d.hookName == "" {
+		return map[string][]string{"task": {}}
 	}
 
-	// fetch historical hook durations:
-	// from the lineage job run summary, get the highlighted hooks and fetch their historical durations
-	// ensuring that if there are multiple hooks registered for a job, it will only fetch the ones highlighted in the lineage
-	jobNamesByHook := jobRunLineage.GroupJobsInLineageByHookNames()
-	hookDurationsByHookName := make(map[string]map[scheduler.JobName]*time.Duration)
-	for hookName, jobNames := range jobNamesByHook {
-		historicalHookDurations, err := j.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, map[string][]string{"hook": {hookName}},
-			jobRunLineage.ScheduledAt, j.historicalDurationLastNRuns, j.historicalDurationPercentile)
+	return map[string][]string{"hook": {d.hookName}}
+}
+
+// enrichWithHistoricalDurations fills in each run's historical task and hook durations for
+// every lineage at once
+func (j *JobLineageService) enrichWithHistoricalDurations(ctx context.Context, lineages []*scheduler.JobRunLineage) error {
+	wanted := collectDurationLookups(lineages)
+	if len(wanted) == 0 {
+		return nil
+	}
+
+	var firstErr error
+	fetched := make(map[durationLookup]map[scheduler.JobName]*time.Duration, len(wanted))
+	for lookup, jobNames := range wanted {
+		durations, err := j.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, lookup.operators(),
+			lookup.referenceTime, j.historicalDurationLastNRuns, j.historicalDurationPercentile)
 		if err != nil {
-			j.l.Error("failed to get hook historical durations", "error", err)
-			return err
+			j.l.Error("failed to get historical durations",
+				"hook", lookup.hookName, "reference_time", lookup.referenceTime, "error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
-		hookDurationsByHookName[hookName] = historicalHookDurations
+		fetched[lookup] = durations
 	}
 
-	// populate the historical summary for each job run in the lineage with the fetched historical durations
-	for i := range jobRunLineage.JobRuns {
-		jobRunLineage.JobRuns[i].HistoricalSummary = scheduler.JobHistoricalDuration{}
-		if duration, ok := historicalTaskDurations[jobRunLineage.JobRuns[i].JobName]; ok && duration != nil {
-			jobRunLineage.JobRuns[i].HistoricalSummary.TaskDuration = *duration
-		}
-		if jobRunLineage.JobRuns[i].JobRunSummary.HookName != nil {
-			if hookDurations, ok := hookDurationsByHookName[*jobRunLineage.JobRuns[i].JobRunSummary.HookName]; ok {
-				if duration, ok := hookDurations[jobRunLineage.JobRuns[i].JobName]; ok && duration != nil {
-					jobRunLineage.JobRuns[i].HistoricalSummary.HookDuration = *duration
-				}
+	for _, lineage := range lineages {
+		referenceTime := lineage.ScheduledAt.UTC()
+		for _, run := range lineage.JobRuns {
+			run.HistoricalSummary = scheduler.JobHistoricalDuration{}
+
+			if duration, ok := fetched[durationLookup{referenceTime: referenceTime}][run.JobName]; ok && duration != nil {
+				run.HistoricalSummary.TaskDuration = *duration
+			}
+
+			if run.JobRunSummary.HookName == nil {
+				continue
+			}
+			hookLookup := durationLookup{referenceTime: referenceTime, hookName: *run.JobRunSummary.HookName}
+			if duration, ok := fetched[hookLookup][run.JobName]; ok && duration != nil {
+				run.HistoricalSummary.HookDuration = *duration
 			}
 		}
 	}
 
-	return nil
+	return firstErr
+}
+
+// collectDurationLookups gathers the unique job names each batch needs. Job names are sorted so
+// that repeated requests issue identical queries.
+func collectDurationLookups(lineages []*scheduler.JobRunLineage) map[durationLookup][]scheduler.JobName {
+	seen := map[durationLookup]map[scheduler.JobName]struct{}{}
+	add := func(lookup durationLookup, jobName scheduler.JobName) {
+		if _, ok := seen[lookup]; !ok {
+			seen[lookup] = map[scheduler.JobName]struct{}{}
+		}
+		seen[lookup][jobName] = struct{}{}
+	}
+
+	for _, lineage := range lineages {
+		referenceTime := lineage.ScheduledAt.UTC()
+		for _, run := range lineage.JobRuns {
+			add(durationLookup{referenceTime: referenceTime}, run.JobName)
+			if run.JobRunSummary.HookName != nil {
+				add(durationLookup{referenceTime: referenceTime, hookName: *run.JobRunSummary.HookName}, run.JobName)
+			}
+		}
+	}
+
+	lookups := make(map[durationLookup][]scheduler.JobName, len(seen))
+	for lookup, jobNameSet := range seen {
+		jobNames := make([]scheduler.JobName, 0, len(jobNameSet))
+		for jobName := range jobNameSet {
+			jobNames = append(jobNames, jobName)
+		}
+		sort.Slice(jobNames, func(i, k int) bool { return jobNames[i] < jobNames[k] })
+		lookups[lookup] = jobNames
+	}
+
+	return lookups
 }
 
 func (j *JobLineageService) GetJobLineage(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule, validLineageIntervalInHours int) (map[scheduler.JobName]*scheduler.JobLineageSummary, error) {

@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -90,14 +90,14 @@ func (d durationLookup) operators() map[string][]string {
 // enrichWithHistoricalDurations fills in each run's historical task and hook durations for
 // every lineage at once
 func (j *JobLineageService) enrichWithHistoricalDurations(ctx context.Context, lineages []*scheduler.JobRunLineage) error {
-	wanted := collectDurationLookups(lineages)
-	if len(wanted) == 0 {
+	durationLookupMap := collectDurationLookups(lineages)
+	if len(durationLookupMap) == 0 {
 		return nil
 	}
 
 	var firstErr error
-	fetched := make(map[durationLookup]map[scheduler.JobName]*time.Duration, len(wanted))
-	for lookup, jobNames := range wanted {
+	fetched := make(map[durationLookup]map[scheduler.JobName]*time.Duration, len(durationLookupMap))
+	for lookup, jobNames := range durationLookupMap {
 		durations, err := j.durationEstimator.GetPercentileDurationByJobNames(ctx, jobNames, lookup.operators(),
 			lookup.referenceTime, j.historicalDurationLastNRuns, j.historicalDurationPercentile)
 		if err != nil {
@@ -160,7 +160,8 @@ func collectDurationLookups(lineages []*scheduler.JobRunLineage) map[durationLoo
 		for jobName := range jobNameSet {
 			jobNames = append(jobNames, jobName)
 		}
-		sort.Slice(jobNames, func(i, k int) bool { return jobNames[i] < jobNames[k] })
+		// sorting is here to avoid flakiness behavior only
+		slices.Sort(jobNames)
 		lookups[lookup] = jobNames
 	}
 

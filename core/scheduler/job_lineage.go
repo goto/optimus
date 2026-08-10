@@ -29,22 +29,13 @@ func NewJobRunKey(jobName JobName, scheduledAt time.Time) JobRunKey {
 	return JobRunKey{JobName: jobName, ScheduledAt: scheduledAt.UTC()}
 }
 
-// LineageWalkOptions bounds a lineage walk.
 type LineageWalkOptions struct {
-	// MaxNodes caps the total runs returned, keeping those closest to the target. Zero uses
-	// DefaultMaxLineageNodes.
 	MaxNodes int
-	// MaxDepth caps how many levels above the target the walk reaches. Zero uses
-	// MaxLineageDepth.
 	MaxDepth int
 	// TopUpstreamsPerJob, when positive, follows only the N latest-finishing direct upstreams
 	// of each job, all the way to the root. Zero follows every upstream.
-	//
-	// This is meant for retrospective analysis of a lineage that has already completed, where
-	// ranking on finish time identifies the runs that actually held things up. On a lineage
-	// still in flight it is the wrong tool: runs that have not finished have no finish time to
-	// rank on, so they sort last and can fall outside the top N - which is exactly how a
-	// running blocker ends up hidden. Leave it at zero for anything live.
+	// For lineage evaluation of finished jobs, having a low number is best
+	// so the walk only consider last finishing upstream for each level
 	TopUpstreamsPerJob int
 }
 
@@ -71,7 +62,6 @@ type LineageWalkResult struct {
 // GatingPath returns the chain of runs the target actually waited on: from the target, each
 // step is the direct upstream that finished last. It follows real edges, so consecutive
 // entries are always genuinely adjacent.
-//
 // The walk stops at the first step with no finished upstream. For a target whose lineage has
 // completed that is the deepest run on the critical path; for one still in flight it is the
 // point where the lineage is currently blocked.

@@ -886,7 +886,8 @@
         },
         "numberOfUpstreamPerLevel": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "title": "limit each level to top N upstreams causing the bottleneck"
         },
         "maxNodes": {
           "type": "integer",
@@ -1184,6 +1185,15 @@
         },
         "executionSummary": {
           "$ref": "#/definitions/v1beta1LineageExecutionSummary"
+        },
+        "totalNodes": {
+          "type": "integer",
+          "format": "int32",
+          "title": "how many nodes are returned, including downstream"
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "truncated means the returned tree is not the full lineage."
         }
       }
     },

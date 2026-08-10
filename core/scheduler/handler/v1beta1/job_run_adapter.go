@@ -296,6 +296,8 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 			JobName:     lineage.JobName.String(),
 			ScheduledAt: timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
 			JobRuns:     pbJobRuns,
+			TotalNodes:  int32(lineage.TotalNodes),
+			Truncated:   lineage.Truncated,
 			ExecutionSummary: &pb.LineageExecutionSummary{
 				TotalScheduledWayTooLateSeconds:     int32(lineage.ExecutionSummary.TotalScheduledWayTooLateSeconds),
 				TotalSystemSchedulingDelaySeconds:   int32(lineage.ExecutionSummary.TotalSystemSchedulingDelaySeconds),

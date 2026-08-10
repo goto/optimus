@@ -1123,7 +1123,7 @@ func (s *JobRunService) createOperatorRunIfAbsent(ctx context.Context, event *sc
 	}
 
 	isRetry := existingOperatorRun != nil && existingOperatorRun.Status == scheduler.StateRetry
-	if err = s.createOperatorRun(ctx, event, operatorType); err != nil {
+	if err := s.createOperatorRun(ctx, event, operatorType); err != nil {
 		return isRetry, err
 	}
 	return isRetry, nil

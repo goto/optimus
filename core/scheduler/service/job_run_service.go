@@ -1109,6 +1109,26 @@ func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.
 	return err
 }
 
+// createOperatorRunIfAbsent skips a duplicate create on a redelivered start event -- same
+// reasoning as the TaskStartEvent/HookStartEvent case in UpdateJobState.
+// Return isRetry (bool) and error
+func (s *JobRunService) createOperatorRunIfAbsent(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) (bool, error) {
+	existingOperatorRun, err := s.getExistingOperatorRun(ctx, event)
+	if err != nil {
+		return false, err
+	}
+	// If neither a new run nor a retry, treat as a duplicate event (skipped)
+	if existingOperatorRun != nil && existingOperatorRun.Status != scheduler.StateRetry {
+		return false, nil
+	}
+
+	isRetry := existingOperatorRun != nil && existingOperatorRun.Status == scheduler.StateRetry
+	if err := s.createOperatorRun(ctx, event, operatorType); err != nil {
+		return isRetry, err
+	}
+	return isRetry, nil
+}
+
 func (s *JobRunService) getOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType, jobRunID uuid.UUID) (*scheduler.OperatorRun, error) {
 	var operatorRun *scheduler.OperatorRun
 	operatorRun, err := s.operatorRunRepo.GetOperatorRun(ctx, event.OperatorName, operatorType, jobRunID)
@@ -1204,20 +1224,17 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	case scheduler.JobSuccessEvent, scheduler.JobFailureEvent:
 		return s.updateJobRun(ctx, event)
 	case scheduler.SensorStartEvent:
-		return s.createOperatorRun(ctx, event, scheduler.OperatorSensor)
+		_, err := s.createOperatorRunIfAbsent(ctx, event, scheduler.OperatorSensor)
+		return err
 	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
 		return s.updateOperatorRun(ctx, event, scheduler.OperatorSensor)
 	case scheduler.TaskStartEvent, scheduler.HookStartEvent:
 
-		existingOperatorRun, err := s.getExistingOperatorRun(ctx, event)
+		isRetry, err := s.createOperatorRunIfAbsent(ctx, event, event.EventContext.OperatorType)
 		if err != nil {
 			return err
 		}
-		err = s.createOperatorRun(ctx, event, event.EventContext.OperatorType)
-		if err != nil {
-			return err
-		}
-		if existingOperatorRun != nil && existingOperatorRun.Status == scheduler.StateRetry {
+		if isRetry {
 			return nil
 		}
 		return s.registerConfiguredSLA(ctx, event)

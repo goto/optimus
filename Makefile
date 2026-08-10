@@ -54,7 +54,7 @@ coverage: ## print code coverage
 	go test -race -coverprofile coverage.txt -covermode=atomic ./... -tags=unit_test && go tool cover -html=coverage.txt
 
 lint:
-	golangci-lint run --fix
+	golangci-lint run --fix --config=".golangci.yml" --new-from-rev=HEAD~1 --max-same-issues=0 --max-issues-per-linter=0
 
 install: ## install required dependencies
 	@echo "> installing dependencies"

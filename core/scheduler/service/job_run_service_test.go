@@ -523,23 +523,30 @@ func TestJobRunService(t *testing.T) {
 					},
 				}
 
-				jobRun := scheduler.JobRun{
-					ID:        uuid.New(),
-					JobName:   jobName,
-					Tenant:    tnnt,
-					StartTime: time.Now(),
+				// each subtest gets its own jobRun/jobRunRepo -- createOperatorRun mutates
+				// jobRun.State in place, so a shared pointer would make subtests order-dependent
+				newJobRunFixture := func() (*scheduler.JobRun, *mockJobRunRepository) {
+					jobRun := &scheduler.JobRun{
+						ID:        uuid.New(),
+						JobName:   jobName,
+						Tenant:    tnnt,
+						StartTime: time.Now(),
+					}
+					jobRunRepo := new(mockJobRunRepository)
+					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(jobRun, nil)
+					jobRunRepo.On("UpdateState", ctx, jobRun.ID, scheduler.StateInProgress).Return(nil)
+					return jobRun, jobRunRepo
 				}
 
-				jobRunRepo := new(mockJobRunRepository)
-				jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(&jobRun, nil)
-				jobRunRepo.On("UpdateState", ctx, jobRun.ID, scheduler.StateInProgress).Return(nil)
-				defer jobRunRepo.AssertExpectations(t)
+				t.Run("should create a new operator run when none exists yet", func(t *testing.T) {
+					jobRun, jobRunRepo := newJobRunFixture()
+					defer jobRunRepo.AssertExpectations(t)
 
-				t.Run("should pass creating new operator run ", func(t *testing.T) {
 					operatorRunRepository := new(mockOperatorRunRepository)
 					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(nil)
 
-					operatorRunRepository.On("GetOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).Return(&scheduler.OperatorRun{}, nil)
+					operatorRunRepository.On("GetOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).
+						Return(nil, errors.NotFound(scheduler.EntityEvent, "operator not found in db"))
 
 					defer operatorRunRepository.AssertExpectations(t)
 
@@ -561,6 +568,67 @@ func TestJobRunService(t *testing.T) {
 
 					runService := service.NewJobRunService(logger,
 						jobRepo, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats, nil, nil)
+
+					err := runService.UpdateJobState(ctx, event)
+					assert.Nil(t, err)
+				})
+
+				// no CreateOperatorRun/HandleEvent/UpdateState mock -- an unexpected call fails loudly
+				t.Run("should skip creating a duplicate operator run when one already exists", func(t *testing.T) {
+					jobRun := &scheduler.JobRun{
+						ID:        uuid.New(),
+						JobName:   jobName,
+						Tenant:    tnnt,
+						StartTime: time.Now(),
+					}
+					jobRunRepo := new(mockJobRunRepository)
+					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(jobRun, nil)
+					defer jobRunRepo.AssertExpectations(t)
+
+					operatorRunRepository := new(mockOperatorRunRepository)
+					operatorRunRepository.On("GetOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).
+						Return(&scheduler.OperatorRun{Status: scheduler.StateRunning}, nil)
+					defer operatorRunRepository.AssertExpectations(t)
+
+					eventHandler := newEventHandler(t)
+
+					job := scheduler.Job{
+						Name:   jobName,
+						Tenant: tnnt,
+						Task: &scheduler.Task{
+							Config: map[string]string{},
+						},
+					}
+
+					jobRepo := new(JobRepository)
+					jobRepo.On("GetJob", ctx, projName, jobName).
+						Return(&job, nil)
+
+					runService := service.NewJobRunService(logger,
+						jobRepo, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats, nil, nil)
+
+					err := runService.UpdateJobState(ctx, event)
+					assert.Nil(t, err)
+				})
+
+				// a StateRetry row means a genuinely new try_number, and must still get a new row
+				t.Run("should still create a new operator run for a genuine retry attempt", func(t *testing.T) {
+					jobRun, jobRunRepo := newJobRunFixture()
+					defer jobRunRepo.AssertExpectations(t)
+
+					operatorRunRepository := new(mockOperatorRunRepository)
+					operatorRunRepository.On("GetOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID).
+						Return(&scheduler.OperatorRun{Status: scheduler.StateRetry}, nil)
+					operatorRunRepository.On("CreateOperatorRun", ctx, event.OperatorName, scheduler.OperatorTask, jobRun.ID, eventTime).Return(nil)
+					defer operatorRunRepository.AssertExpectations(t)
+
+					eventHandler := newEventHandler(t)
+					eventHandler.On("HandleEvent", mock.Anything).Times(1)
+					defer eventHandler.AssertExpectations(t)
+
+					// nil jobRepo: SLA registration is skipped for a retry, so GetJob must not be called
+					runService := service.NewJobRunService(logger,
+						nil, jobRunRepo, nil, operatorRunRepository, nil, nil, nil, nil, eventHandler, nil, feats, nil, nil)
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.Nil(t, err)

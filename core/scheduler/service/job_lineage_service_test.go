@@ -23,16 +23,17 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 	defaultHistoricalDurationLastNRuns := 10
 	defaultHistoricalDurationPercentile := 50
 	defaultMaxLineageDepth := 5
+	defaultLineageWindowHours := 24
 
 	t.Run("when lineage builder returns error, propagate error", func(t *testing.T) {
 		lineageBuilder := NewMockLineageBuilder(t)
 		durationEstimator := NewMockDurationEstimatorRepo(t)
-		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
 
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: time.Now().UTC()}
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(nil, assert.AnError).Once()
 
-		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, 1)
+		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{MaxNodes: 1, WindowHours: 0})
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -43,14 +44,57 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		defer lineageBuilder.AssertExpectations(t)
 		durationEstimator := NewMockDurationEstimatorRepo(t)
 		defer durationEstimator.AssertExpectations(t)
-		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{}, 24).Return(map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{}, nil).Once()
 
-		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{}, 1)
+		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{}, scheduler.LineageSummaryOptions{MaxNodes: 1, WindowHours: 0})
 
 		assert.NoError(t, err)
 		assert.Nil(t, result)
+	})
+
+	t.Run("when a lineage window is configured, use it instead of the previously hard-coded 24 hours", func(t *testing.T) {
+		lineageBuilder := NewMockLineageBuilder(t)
+		defer lineageBuilder.AssertExpectations(t)
+		durationEstimator := NewMockDurationEstimatorRepo(t)
+		defer durationEstimator.AssertExpectations(t)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, 10)
+
+		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{}, 10).Return(map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{}, nil).Once()
+
+		_, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{}, scheduler.LineageSummaryOptions{MaxNodes: 0, WindowHours: 0})
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("when the request carries a lineage window, it overrides the configured one", func(t *testing.T) {
+		lineageBuilder := NewMockLineageBuilder(t)
+		defer lineageBuilder.AssertExpectations(t)
+		durationEstimator := NewMockDurationEstimatorRepo(t)
+		defer durationEstimator.AssertExpectations(t)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, 24)
+
+		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{}, 6).Return(map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{}, nil).Once()
+
+		_, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{}, scheduler.LineageSummaryOptions{MaxNodes: 0, WindowHours: 6})
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("when no lineage window is configured, fall back to the default", func(t *testing.T) {
+		lineageBuilder := NewMockLineageBuilder(t)
+		defer lineageBuilder.AssertExpectations(t)
+		durationEstimator := NewMockDurationEstimatorRepo(t)
+		defer durationEstimator.AssertExpectations(t)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, 0)
+
+		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{}, service.DefaultLineageWindowHours).
+			Return(map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{}, nil).Once()
+
+		_, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{}, scheduler.LineageSummaryOptions{MaxNodes: 0, WindowHours: 0})
+
+		assert.NoError(t, err)
 	})
 
 	t.Run("when lineage and duration estimation succeed, return enriched job run lineages", func(t *testing.T) {
@@ -58,7 +102,7 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		defer lineageBuilder.AssertExpectations(t)
 		durationEstimator := NewMockDurationEstimatorRepo(t)
 		defer durationEstimator.AssertExpectations(t)
-		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
 
 		scheduledAt := time.Now().UTC().Truncate(time.Second)
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
@@ -83,7 +127,7 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 			scheduler.JobName("job-A"): ptr(30 * time.Second),
 		}, nil).Once()
 
-		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, 1)
+		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{MaxNodes: 1, WindowHours: 0})
 
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
@@ -96,7 +140,7 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		defer lineageBuilder.AssertExpectations(t)
 		durationEstimator := NewMockDurationEstimatorRepo(t)
 		defer durationEstimator.AssertExpectations(t)
-		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
 
 		scheduledAt := time.Now().UTC().Truncate(time.Second)
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
@@ -116,7 +160,7 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 			ctx, mock.Anything, map[string][]string{"task": {}}, scheduledAt, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile,
 		).Return(nil, assert.AnError).Once()
 
-		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, 5)
+		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{MaxNodes: 5, WindowHours: 0})
 
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
@@ -129,7 +173,7 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		defer lineageBuilder.AssertExpectations(t)
 		durationEstimator := NewMockDurationEstimatorRepo(t)
 		defer durationEstimator.AssertExpectations(t)
-		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
 
 		scheduledAt := time.Now().UTC().Truncate(time.Second)
 		hookName := "my-hook"
@@ -167,13 +211,112 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 			scheduler.JobName("job-A"): ptr(10 * time.Second),
 		}, nil).Once()
 
-		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, 5)
+		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{MaxNodes: 5, WindowHours: 0})
 
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.Equal(t, scheduler.JobName("job-A"), result[0].JobName)
 		assert.Equal(t, 30*time.Second, result[0].JobRuns[0].HistoricalSummary.TaskDuration)
 		assert.Equal(t, 10*time.Second, result[0].JobRuns[0].HistoricalSummary.HookDuration)
+	})
+
+	t.Run("should fetch durations once for a job shared by several targets", func(t *testing.T) {
+		lineageBuilder := NewMockLineageBuilder(t)
+		defer lineageBuilder.AssertExpectations(t)
+		durationEstimator := NewMockDurationEstimatorRepo(t)
+		defer durationEstimator.AssertExpectations(t)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
+
+		scheduledAt := time.Now().UTC().Truncate(time.Second)
+		scheduleA := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
+		scheduleB := &scheduler.JobSchedule{JobName: "job-B", ScheduledAt: scheduledAt}
+
+		// both targets depend on the same upstream, at the same schedule
+		sharedRun := func(downstream scheduler.JobName) *scheduler.JobLineageSummary {
+			return &scheduler.JobLineageSummary{
+				JobName:   "shared-upstream",
+				IsEnabled: true,
+				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+					downstream: {JobName: "shared-upstream", ScheduledAt: scheduledAt},
+				},
+			}
+		}
+		lineageA := &scheduler.JobLineageSummary{
+			JobName: "job-A", IsEnabled: true,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {JobName: "job-A", ScheduledAt: scheduledAt}},
+			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-A")},
+		}
+		lineageB := &scheduler.JobLineageSummary{
+			JobName: "job-B", IsEnabled: true,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": {JobName: "job-B", ScheduledAt: scheduledAt}},
+			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-B")},
+		}
+
+		schedules := []*scheduler.JobSchedule{scheduleA, scheduleB}
+		lineageBuilder.On("BuildLineage", ctx, schedules, 24).Return(
+			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{scheduleA: lineageA, scheduleB: lineageB}, nil,
+		).Once()
+
+		// a single task batch covering both targets and the upstream they share, deduplicated
+		// and sorted - not one call per target
+		durationEstimator.On("GetPercentileDurationByJobNames",
+			ctx,
+			[]scheduler.JobName{"job-A", "job-B", "shared-upstream"},
+			map[string][]string{"task": {}},
+			scheduledAt, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile,
+		).Return(map[scheduler.JobName]*time.Duration{
+			scheduler.JobName("shared-upstream"): ptr(45 * time.Second),
+		}, nil).Once()
+
+		result, err := svc.GetJobExecutionSummary(ctx, schedules, scheduler.LineageSummaryOptions{})
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 2)
+		for _, lineage := range result {
+			for _, run := range lineage.JobRuns {
+				if run.JobName == "shared-upstream" {
+					assert.Equal(t, 45*time.Second, run.HistoricalSummary.TaskDuration)
+				}
+			}
+		}
+	})
+
+	t.Run("should keep applying the batches that succeeded when one fails", func(t *testing.T) {
+		lineageBuilder := NewMockLineageBuilder(t)
+		defer lineageBuilder.AssertExpectations(t)
+		durationEstimator := NewMockDurationEstimatorRepo(t)
+		defer durationEstimator.AssertExpectations(t)
+		svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
+
+		scheduledAt := time.Now().UTC().Truncate(time.Second)
+		hookName := "my-hook"
+		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
+		lineageSummary := &scheduler.JobLineageSummary{
+			JobName: "job-A", IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
+			},
+		}
+
+		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
+			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,
+		).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames",
+			ctx, mock.Anything, map[string][]string{"task": {}}, scheduledAt,
+			defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile,
+		).Return(map[scheduler.JobName]*time.Duration{scheduler.JobName("job-A"): ptr(30 * time.Second)}, nil).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames",
+			ctx, mock.Anything, map[string][]string{"hook": {hookName}}, scheduledAt,
+			defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile,
+		).Return(nil, assert.AnError).Once()
+
+		result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{})
+
+		assert.NoError(t, err) // enrichment is best effort
+		assert.Len(t, result, 1)
+		assert.Equal(t, 30*time.Second, result[0].JobRuns[0].HistoricalSummary.TaskDuration,
+			"the task batch still lands even though the hook batch failed")
+		assert.Equal(t, time.Duration(0), result[0].JobRuns[0].HistoricalSummary.HookDuration)
 	})
 }
 

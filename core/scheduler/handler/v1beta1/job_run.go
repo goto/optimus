@@ -68,7 +68,7 @@ type JobRunService interface {
 }
 
 type JobLineageService interface {
-	GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, numberOfUpstreamPerLevel int) ([]*scheduler.JobRunLineage, error)
+	GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, opts scheduler.LineageSummaryOptions) ([]*scheduler.JobRunLineage, error)
 }
 
 type ThirdPartySensorService interface {
@@ -590,7 +590,11 @@ func (h JobRunHandler) GetJobRunLineageSummary(ctx context.Context, req *pb.GetJ
 		h.l.Error("error parsing job schedules from request: %s", err)
 		return nil, errors.GRPCErr(err, "unable to parse job schedules from request")
 	}
-	jobRunLineages, err := h.jobLineageService.GetJobExecutionSummary(ctx, targetJobSchedules, int(req.GetNumberOfUpstreamPerLevel()))
+	jobRunLineages, err := h.jobLineageService.GetJobExecutionSummary(ctx, targetJobSchedules, scheduler.LineageSummaryOptions{
+		MaxNodes:           int(req.GetMaxNodes()),
+		TopUpstreamsPerJob: int(req.GetNumberOfUpstreamPerLevel()),
+		WindowHours:        int(req.GetLineageWindowHours()),
+	})
 	if err != nil {
 		h.l.Error("error getting job run lineage summary: %s", err)
 		return nil, errors.GRPCErr(err, "unable to get job run lineage summary")

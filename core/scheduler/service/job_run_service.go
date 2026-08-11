@@ -1109,17 +1109,19 @@ func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.
 	return err
 }
 
-// createOperatorRunIfAbsent skips a duplicate create on a redelivered start event -- same
-// reasoning as the TaskStartEvent/HookStartEvent case in UpdateJobState.
-// Return isRetry (bool) and error
-func (s *JobRunService) createOperatorRunIfAbsent(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) (bool, error) {
+// createOperatorRunForStartEvent records a new attempt for a start event and reports
+// whether it continues an Airflow auto-retry, which the caller uses to skip re-registering
+// SLA (the SLA from the first attempt still stands).
+//
+// A start event always creates a row. Airflow sends one for a manual clear/retry too, and
+// the predecessor is then in whatever state it terminated in -- gating creation on that
+// state drops the attempt entirely. The child tables carry one row per attempt by design
+// (no unique key; reads take the latest by created_at), so an extra row from a redelivered
+// callback is harmless, whereas a missing row is not.
+func (s *JobRunService) createOperatorRunForStartEvent(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) (bool, error) {
 	existingOperatorRun, err := s.getExistingOperatorRun(ctx, event)
 	if err != nil {
 		return false, err
-	}
-	// If neither a new run nor a retry, treat as a duplicate event (skipped)
-	if existingOperatorRun != nil && existingOperatorRun.Status != scheduler.StateRetry {
-		return false, nil
 	}
 
 	isRetry := existingOperatorRun != nil && existingOperatorRun.Status == scheduler.StateRetry
@@ -1224,13 +1226,12 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	case scheduler.JobSuccessEvent, scheduler.JobFailureEvent:
 		return s.updateJobRun(ctx, event)
 	case scheduler.SensorStartEvent:
-		_, err := s.createOperatorRunIfAbsent(ctx, event, scheduler.OperatorSensor)
-		return err
+		return s.createOperatorRun(ctx, event, scheduler.OperatorSensor)
 	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
 		return s.updateOperatorRun(ctx, event, scheduler.OperatorSensor)
 	case scheduler.TaskStartEvent, scheduler.HookStartEvent:
 
-		isRetry, err := s.createOperatorRunIfAbsent(ctx, event, event.EventContext.OperatorType)
+		isRetry, err := s.createOperatorRunForStartEvent(ctx, event, event.EventContext.OperatorType)
 		if err != nil {
 			return err
 		}

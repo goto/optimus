@@ -1,6 +1,7 @@
 package scheduler_test
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -845,6 +846,171 @@ func TestLineageWalkResult_GatingPath(t *testing.T) {
 		var jobLineage *scheduler.JobLineageSummary
 
 		assert.Nil(t, jobLineage.GetLineageNodes(scheduler.LineageWalkOptions{MaxNodes: 0, MaxDepth: 5}).GatingPath())
+	})
+}
+
+func makeExecutionSummaries(names ...string) []*scheduler.JobExecutionSummary {
+	nodes := make([]*scheduler.JobExecutionSummary, 0, len(names))
+	for _, name := range names {
+		nodes = append(nodes, &scheduler.JobExecutionSummary{JobName: scheduler.JobName(name)})
+	}
+	return nodes
+}
+
+func jobNamesOf(nodes []*scheduler.JobExecutionSummary) []string {
+	names := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		names = append(names, n.JobName.String())
+	}
+	return names
+}
+
+func TestPaginateNodes(t *testing.T) {
+	nodes := makeExecutionSummaries("a", "b", "c", "d", "e")
+	const fingerprint = "fp-1"
+
+	t.Run("should return the first page and a cursor for the rest when more nodes remain", func(t *testing.T) {
+		page, next, err := scheduler.PaginateNodes(nodes, nil, 2, fingerprint)
+
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"a", "b"}, jobNamesOf(page))
+		if assert.NotNil(t, next) {
+			assert.Equal(t, 2, next.NodeOffset)
+			assert.Equal(t, fingerprint, next.Fingerprint)
+		}
+	})
+
+	t.Run("should reconstruct the full list by following cursors to the end", func(t *testing.T) {
+		var got []string
+		var cursor *scheduler.LineagePageCursor
+		for {
+			page, next, err := scheduler.PaginateNodes(nodes, cursor, 2, fingerprint)
+			assert.NoError(t, err)
+			got = append(got, jobNamesOf(page)...)
+			if next == nil {
+				break
+			}
+			cursor = next
+		}
+
+		assert.Equal(t, jobNamesOf(nodes), got, "paging to the end must reconstruct the original list with no gaps or duplicates")
+	})
+
+	t.Run("should return a nil cursor on the last page", func(t *testing.T) {
+		_, next, err := scheduler.PaginateNodes(nodes, &scheduler.LineagePageCursor{NodeOffset: 4, Fingerprint: fingerprint}, 2, fingerprint)
+
+		assert.NoError(t, err)
+		assert.Nil(t, next)
+	})
+
+	t.Run("should return an empty page rather than erroring once the cursor is past the end", func(t *testing.T) {
+		page, next, err := scheduler.PaginateNodes(nodes, &scheduler.LineagePageCursor{NodeOffset: 5, Fingerprint: fingerprint}, 2, fingerprint)
+
+		assert.NoError(t, err)
+		assert.Empty(t, page)
+		assert.Nil(t, next)
+	})
+
+	t.Run("should reject a cursor produced by a different query", func(t *testing.T) {
+		mismatched := &scheduler.LineagePageCursor{NodeOffset: 2, Fingerprint: "a-different-query"}
+		_, _, err := scheduler.PaginateNodes(nodes, mismatched, 2, fingerprint)
+
+		assert.ErrorContains(t, err, "does not match")
+	})
+
+	t.Run("should reject a non-positive page size", func(t *testing.T) {
+		_, _, err := scheduler.PaginateNodes(nodes, nil, 0, fingerprint)
+
+		assert.ErrorContains(t, err, "page size")
+	})
+}
+
+func TestLineagePageCursor_EncodeDecode(t *testing.T) {
+	t.Run("should round-trip a cursor through encode and decode", func(t *testing.T) {
+		cursor := &scheduler.LineagePageCursor{NodeOffset: 42, Fingerprint: "job-A|123|10|5|2|24"}
+
+		token := scheduler.EncodeLineagePageCursor(cursor)
+		decoded, err := scheduler.DecodeLineagePageCursor(token)
+
+		assert.NoError(t, err)
+		assert.Equal(t, cursor, decoded)
+	})
+
+	t.Run("should decode an empty token to a nil cursor", func(t *testing.T) {
+		decoded, err := scheduler.DecodeLineagePageCursor("")
+
+		assert.NoError(t, err)
+		assert.Nil(t, decoded)
+	})
+
+	t.Run("should encode a nil cursor to an empty token", func(t *testing.T) {
+		assert.Empty(t, scheduler.EncodeLineagePageCursor(nil))
+	})
+
+	t.Run("should reject a malformed token", func(t *testing.T) {
+		_, err := scheduler.DecodeLineagePageCursor("not valid base64 !!!")
+
+		assert.Error(t, err)
+	})
+
+	t.Run("should reject a token that decodes but carries no offset separator", func(t *testing.T) {
+		token := base64.URLEncoding.EncodeToString([]byte("no-separator-here"))
+
+		_, err := scheduler.DecodeLineagePageCursor(token)
+
+		assert.Error(t, err)
+	})
+
+	t.Run("should reject a token whose offset is not a number", func(t *testing.T) {
+		token := base64.URLEncoding.EncodeToString([]byte("abc|fingerprint"))
+
+		_, err := scheduler.DecodeLineagePageCursor(token)
+
+		assert.Error(t, err)
+	})
+
+	t.Run("should reject a negative offset", func(t *testing.T) {
+		token := base64.URLEncoding.EncodeToString([]byte("-1|fingerprint"))
+
+		_, err := scheduler.DecodeLineagePageCursor(token)
+
+		assert.Error(t, err)
+	})
+}
+
+func TestLineagePageFingerprint(t *testing.T) {
+	baseTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
+	opts := scheduler.LineageWalkOptions{MaxNodes: 100, MaxDepth: 5, TopUpstreamsPerJob: 2}
+
+	t.Run("should produce the same fingerprint for identical inputs", func(t *testing.T) {
+		a := scheduler.LineagePageFingerprint("job-A", baseTime, opts, 24)
+		b := scheduler.LineagePageFingerprint("job-A", baseTime, opts, 24)
+
+		assert.Equal(t, a, b)
+	})
+
+	t.Run("should change when the target job differs", func(t *testing.T) {
+		a := scheduler.LineagePageFingerprint("job-A", baseTime, opts, 24)
+		b := scheduler.LineagePageFingerprint("job-B", baseTime, opts, 24)
+
+		assert.NotEqual(t, a, b)
+	})
+
+	t.Run("should change when the resolved window hours differ", func(t *testing.T) {
+		a := scheduler.LineagePageFingerprint("job-A", baseTime, opts, 24)
+		b := scheduler.LineagePageFingerprint("job-A", baseTime, opts, 10)
+
+		assert.NotEqual(t, a, b)
+	})
+
+	t.Run("should change when top upstreams per job differs", func(t *testing.T) {
+		optsWithTop3 := opts
+		optsWithTop3.TopUpstreamsPerJob = 3
+
+		a := scheduler.LineagePageFingerprint("job-A", baseTime, opts, 24)
+		b := scheduler.LineagePageFingerprint("job-A", baseTime, optsWithTop3, 24)
+
+		assert.NotEqual(t, a, b)
 	})
 }
 

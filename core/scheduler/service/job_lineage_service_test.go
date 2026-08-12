@@ -318,6 +318,141 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 			"the task batch still lands even though the hook batch failed")
 		assert.Equal(t, time.Duration(0), result[0].JobRuns[0].HistoricalSummary.HookDuration)
 	})
+
+	t.Run("pagination", func(t *testing.T) {
+		scheduledAt := time.Now().UTC().Truncate(time.Second)
+		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
+
+		makeUpstream := func(name string, endOffset time.Duration) *scheduler.JobLineageSummary {
+			end := scheduledAt.Add(endOffset)
+			start := end.Add(-5 * time.Minute)
+			return &scheduler.JobLineageSummary{
+				JobName: scheduler.JobName(name),
+				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+					"job-A": {JobName: scheduler.JobName(name), ScheduledAt: scheduledAt, TaskStartTime: &start, TaskEndTime: &end},
+				},
+			}
+		}
+		// target job-A plus 3 finished upstreams: 4 nodes total, enough to span two pages of 2
+		lineageSummary := func() *scheduler.JobLineageSummary {
+			return &scheduler.JobLineageSummary{
+				JobName: "job-A", IsEnabled: true,
+				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {JobName: "job-A", ScheduledAt: scheduledAt}},
+				Upstreams: []*scheduler.JobLineageSummary{
+					makeUpstream("job-B", 12*time.Minute),
+					makeUpstream("job-C", 8*time.Minute),
+					makeUpstream("job-D", 6*time.Minute),
+				},
+			}
+		}
+		allJobNames := []scheduler.JobName{"job-A", "job-B", "job-C", "job-D"}
+
+		newSvcWithNoDurations := func(lineageBuilder *MockLineageBuilder, durationEstimator *MockDurationEstimatorRepo, calls int) *service.JobLineageService {
+			for i := 0; i < calls; i++ {
+				lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
+					map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary()}, nil,
+				).Once()
+				durationEstimator.On("GetPercentileDurationByJobNames",
+					ctx, allJobNames, map[string][]string{"task": {}}, scheduledAt,
+					defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile,
+				).Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
+			}
+			return service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
+		}
+
+		t.Run("should return a page and a cursor for the rest when the lineage is larger than page_size", func(t *testing.T) {
+			lineageBuilder := NewMockLineageBuilder(t)
+			defer lineageBuilder.AssertExpectations(t)
+			durationEstimator := NewMockDurationEstimatorRepo(t)
+			defer durationEstimator.AssertExpectations(t)
+			svc := newSvcWithNoDurations(lineageBuilder, durationEstimator, 1)
+
+			result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{PageSize: 2})
+
+			assert.NoError(t, err)
+			assert.Len(t, result, 1)
+			assert.Len(t, result[0].JobRuns, 2)
+			if assert.NotNil(t, result[0].NextPageCursor) {
+				assert.Equal(t, 2, result[0].NextPageCursor.NodeOffset)
+			}
+		})
+
+		t.Run("should follow the cursor across two calls and reach every node with no gaps or duplicates", func(t *testing.T) {
+			lineageBuilder := NewMockLineageBuilder(t)
+			defer lineageBuilder.AssertExpectations(t)
+			durationEstimator := NewMockDurationEstimatorRepo(t)
+			defer durationEstimator.AssertExpectations(t)
+			// approach A re-walks the full lineage on every page, so the fixture must be primed
+			// for two identical calls to BuildLineage and to the duration estimator
+			svc := newSvcWithNoDurations(lineageBuilder, durationEstimator, 2)
+
+			firstPage, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{PageSize: 2})
+			assert.NoError(t, err)
+			cursor := firstPage[0].NextPageCursor
+			if !assert.NotNil(t, cursor, "the fixture has 4 nodes, so the first page of 2 must not be the last") {
+				return
+			}
+
+			secondPage, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule},
+				scheduler.LineageSummaryOptions{PageSize: 2, PageCursor: cursor})
+			assert.NoError(t, err)
+
+			assert.Nil(t, secondPage[0].NextPageCursor, "the fixture has exactly 4 nodes, so the second page must be the last")
+			var seen []scheduler.JobName
+			for _, run := range append(firstPage[0].JobRuns, secondPage[0].JobRuns...) {
+				seen = append(seen, run.JobName)
+			}
+			assert.ElementsMatch(t, allJobNames, seen)
+		})
+
+		t.Run("should reject page_size when more than one target job is requested", func(t *testing.T) {
+			lineageBuilder := NewMockLineageBuilder(t)
+			defer lineageBuilder.AssertExpectations(t)
+			durationEstimator := NewMockDurationEstimatorRepo(t)
+			defer durationEstimator.AssertExpectations(t)
+			svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
+
+			other := &scheduler.JobSchedule{JobName: "job-B", ScheduledAt: scheduledAt}
+			result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule, other}, scheduler.LineageSummaryOptions{PageSize: 2})
+
+			assert.ErrorContains(t, err, "single target")
+			assert.Nil(t, result)
+			// the request is rejected before the lineage is ever fetched
+			lineageBuilder.AssertNotCalled(t, "BuildLineage")
+		})
+
+		t.Run("should reject a page cursor given without a page size", func(t *testing.T) {
+			lineageBuilder := NewMockLineageBuilder(t)
+			defer lineageBuilder.AssertExpectations(t)
+			durationEstimator := NewMockDurationEstimatorRepo(t)
+			defer durationEstimator.AssertExpectations(t)
+			svc := service.NewJobLineageService(l, lineageBuilder, durationEstimator, defaultHistoricalDurationLastNRuns, defaultHistoricalDurationPercentile, defaultMaxLineageDepth, defaultLineageWindowHours)
+
+			cursor := &scheduler.LineagePageCursor{NodeOffset: 2, Fingerprint: "whatever"}
+			result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule}, scheduler.LineageSummaryOptions{PageCursor: cursor})
+
+			assert.ErrorContains(t, err, "page_size")
+			assert.Nil(t, result)
+			lineageBuilder.AssertNotCalled(t, "BuildLineage")
+		})
+
+		t.Run("should reject a cursor produced under different lineage options", func(t *testing.T) {
+			lineageBuilder := NewMockLineageBuilder(t)
+			defer lineageBuilder.AssertExpectations(t)
+			durationEstimator := NewMockDurationEstimatorRepo(t)
+			defer durationEstimator.AssertExpectations(t)
+			// the mismatch is only discovered after the lineage is re-walked and re-enriched -
+			// there is no cache to short-circuit it earlier
+			svc := newSvcWithNoDurations(lineageBuilder, durationEstimator, 1)
+
+			staleCursor := &scheduler.LineagePageCursor{NodeOffset: 2, Fingerprint: "a-cursor-from-a-different-query"}
+			result, err := svc.GetJobExecutionSummary(ctx, []*scheduler.JobSchedule{jobSchedule},
+				scheduler.LineageSummaryOptions{PageSize: 2, PageCursor: staleCursor})
+
+			assert.ErrorContains(t, err, "does not match")
+			assert.Nil(t, result)
+		})
+	})
 }
 
 // MockLineageBuilder is a mock for the LineageBuilder interface.

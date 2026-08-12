@@ -8,6 +8,7 @@ import (
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/internal/errors"
 )
 
 // Contract that can be used by other callers to fetch job lineage information
@@ -39,7 +40,20 @@ type JobLineageService struct {
 //
 // windowHours leaves out any upstream run scheduled more than that many hours before the
 // target's own schedule; zero uses the server's configured window.
+//
+// opts.PageSize, when positive, returns at most that many nodes for the single target
+// requested, plus a scheduler.LineagePageCursor for the next page. Pagination re-walks the
+// full lineage on every call rather than reading from a cache - see PaginateNodes - so it is
+// only offered for a single job schedule at a time, and is meant for a completed lineage
+// rather than one still in flight.
 func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSchedules []*scheduler.JobSchedule, opts scheduler.LineageSummaryOptions) ([]*scheduler.JobRunLineage, error) {
+	if opts.PageSize > 0 && len(jobSchedules) > 1 {
+		return nil, errors.InvalidArgument(scheduler.EntityJobRun, "page_size is only supported for a single target job")
+	}
+	if opts.PageCursor != nil && opts.PageSize <= 0 {
+		return nil, errors.InvalidArgument(scheduler.EntityJobRun, "a page cursor requires page_size to be set")
+	}
+
 	windowHours := opts.WindowHours
 	if windowHours <= 0 {
 		windowHours = j.lineageWindowHours
@@ -51,11 +65,30 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 		return nil, err
 	}
 
-	return j.generateLineageExecutionSummary(ctx, downstreamLineages, scheduler.LineageWalkOptions{
+	walkOpts := scheduler.LineageWalkOptions{
 		MaxNodes:           opts.MaxNodes,
 		MaxDepth:           j.maxLineageDepth,
 		TopUpstreamsPerJob: opts.TopUpstreamsPerJob,
-	})
+	}
+
+	result, err := j.generateLineageExecutionSummary(ctx, downstreamLineages, walkOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	if opts.PageSize > 0 && len(result) > 0 {
+		lineage := result[0]
+		fingerprint := scheduler.LineagePageFingerprint(lineage.JobName, lineage.ScheduledAt, walkOpts, windowHours)
+
+		page, next, err := scheduler.PaginateNodes(lineage.JobRuns, opts.PageCursor, opts.PageSize, fingerprint)
+		if err != nil {
+			return nil, err
+		}
+		lineage.JobRuns = page
+		lineage.NextPageCursor = next
+	}
+
+	return result, nil
 }
 
 func (j *JobLineageService) generateLineageExecutionSummary(ctx context.Context, lineagesMap map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, walkOpts scheduler.LineageWalkOptions) ([]*scheduler.JobRunLineage, error) {

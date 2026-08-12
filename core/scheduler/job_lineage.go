@@ -1,10 +1,15 @@
 package scheduler
 
 import (
+	"encoding/base64"
+	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/window"
 )
 
@@ -46,6 +51,11 @@ type LineageSummaryOptions struct {
 	MaxNodes           int
 	TopUpstreamsPerJob int
 	WindowHours        int
+	// PageSize, when positive, returns at most that many nodes for the single target
+	// requested, plus a cursor for the next page. See PaginateNodes for what this trades away.
+	PageSize int
+	// PageCursor resumes a previous page. Nil starts from the beginning.
+	PageCursor *LineagePageCursor
 }
 
 // LineageWalkResult is the deduplicated set of runs reachable from a target, together with
@@ -106,6 +116,85 @@ func isLaterFinisher(candidate, best *JobExecutionSummary) bool {
 	}
 
 	return candidate.JobName < best.JobName
+}
+
+// LineagePageCursor is the resume position for a paginated lineage listing.
+type LineagePageCursor struct {
+	NodeOffset int
+	// Fingerprint ties the cursor to the query that produced it
+	Fingerprint string
+}
+
+const lineagePageCursorSep = "|"
+
+// EncodeLineagePageCursor renders a cursor as an opaque token. A nil cursor encodes to "".
+func EncodeLineagePageCursor(cursor *LineagePageCursor) string {
+	if cursor == nil {
+		return ""
+	}
+
+	raw := strconv.Itoa(cursor.NodeOffset) + lineagePageCursorSep + cursor.Fingerprint
+	return base64.URLEncoding.EncodeToString([]byte(raw))
+}
+
+// DecodeLineagePageCursor reverses EncodeLineagePageCursor. An empty token decodes to a nil
+// cursor, meaning "start from the beginning".
+func DecodeLineagePageCursor(token string) (*LineagePageCursor, error) {
+	if token == "" {
+		return nil, nil //nolint:nilnil // an empty token intentionally means "no cursor", not an error
+	}
+
+	raw, err := base64.URLEncoding.DecodeString(token)
+	if err != nil {
+		return nil, errors.InvalidArgument(EntityJobRun, "invalid page token")
+	}
+
+	offsetPart, fingerprint, ok := strings.Cut(string(raw), lineagePageCursorSep)
+	if !ok {
+		return nil, errors.InvalidArgument(EntityJobRun, "invalid page token")
+	}
+
+	offset, err := strconv.Atoi(offsetPart)
+	if err != nil || offset < 0 {
+		return nil, errors.InvalidArgument(EntityJobRun, "invalid page token")
+	}
+
+	return &LineagePageCursor{NodeOffset: offset, Fingerprint: fingerprint}, nil
+}
+
+// LineagePageFingerprint identifies the query a page of lineage nodes was drawn from: the
+// target run and the options that shaped the walk.
+func LineagePageFingerprint(jobName JobName, scheduledAt time.Time, opts LineageWalkOptions, windowHours int) string {
+	return fmt.Sprintf("%s|%d|%d|%d|%d|%d",
+		jobName, scheduledAt.UTC().UnixNano(), opts.MaxNodes, opts.MaxDepth, opts.TopUpstreamsPerJob, windowHours)
+}
+
+// PaginateNodes slices one page out of an already-walked, already-sorted node list.
+func PaginateNodes(nodes []*JobExecutionSummary, cursor *LineagePageCursor, pageSize int, fingerprint string) ([]*JobExecutionSummary, *LineagePageCursor, error) {
+	if pageSize <= 0 {
+		return nil, nil, errors.InvalidArgument(EntityJobRun, "page size must be positive")
+	}
+
+	offset := 0
+	if cursor != nil {
+		if cursor.Fingerprint != fingerprint {
+			return nil, nil, errors.InvalidArgument(EntityJobRun, "page token does not match this query")
+		}
+		offset = cursor.NodeOffset
+	}
+
+	if offset >= len(nodes) {
+		return nil, nil, nil
+	}
+
+	end := min(offset+pageSize, len(nodes))
+
+	var next *LineagePageCursor
+	if end < len(nodes) {
+		next = &LineagePageCursor{NodeOffset: end, Fingerprint: fingerprint}
+	}
+
+	return nodes[offset:end], next, nil
 }
 
 type JobSchedule struct {
@@ -504,10 +593,9 @@ type JobRunLineage struct {
 	ScheduledAt      time.Time
 	JobRuns          []*JobExecutionSummary
 	ExecutionSummary *LineageExecutionSummary
-	// TotalNodes is how many runs the walk returned, and Truncated whether the node budget
-	// stopped it short of the full lineage.
-	TotalNodes int
-	Truncated  bool
+	TotalNodes       int
+	Truncated        bool
+	NextPageCursor   *LineagePageCursor
 }
 
 type LineageExecutionSummary struct {

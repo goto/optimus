@@ -163,8 +163,14 @@ func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
 
 func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jobDetails *scheduler.JobWithDetails, scheme string) (uuid.UUID, error) {
 	scheduledAt := event.JobScheduledAt
+	taskID := event.OperatorName
+	taskType := ""
+	if taskID != "" {
+		taskType = scheduler.OperatorTypeFromTaskID(taskID).String()
+	}
 	if event.Type.IsOfType(scheduler.EventCategorySLAMiss) && len(event.SLAObjectList) > 0 {
 		scheduledAt = event.SLAObjectList[0].JobScheduledAt
+		taskID, taskType = e.slaMissedTasks(event.SLAObjectList, scheduledAt)
 	}
 	return e.alertRepo.Insert(ctx, &alertmanager.AlertPayload{
 		Project:           event.Tenant.ProjectName().String(),
@@ -176,10 +182,44 @@ func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jo
 			"namespace":    jobDetails.Job.Tenant.NamespaceName().String(),
 			"scheduled_at": scheduledAt,
 			"event_type":   event.Type.String(),
-			"task_id":      event.OperatorName,
+			"task_id":      taskID,
+			"task_type":    taskType,
 		},
 		Template: scheme,
 	})
+}
+
+// slaMissedTasks returns the distinct task names and their operator types (task/hook/sensor,
+// classified from the task_id naming convention via scheduler.OperatorTypeFromTaskID) that
+// missed their SLA for the given scheduled_at, since a single SLA-miss event can bundle
+// multiple tasks. The two returned strings are comma-separated and index-aligned. A missing
+// task_id (not expected from Airflow, whose SlaMiss rows always carry one, but possible via a
+// malformed direct RegisterJobEvent call) is logged and defaulted to "unknown" rather than
+// dropped, so the alert still fires.
+func (e *EventsService) slaMissedTasks(slaObjects []*scheduler.SLAObject, scheduledAt time.Time) (names, types string) {
+	seen := make(map[string]bool)
+	var nameList, typeList []string
+	for _, s := range slaObjects {
+		if !s.JobScheduledAt.Equal(scheduledAt) {
+			continue
+		}
+		name := s.TaskName
+		taskType := ""
+		if name == "" {
+			e.l.Warn("alert-manager: sla miss event for job [%s] scheduled at [%s] is missing task_id, defaulting to \"unknown\"", s.JobName, s.JobScheduledAt)
+			name = "unknown"
+			taskType = "unknown"
+		} else {
+			taskType = scheduler.OperatorTypeFromTaskID(name).String()
+		}
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		nameList = append(nameList, name)
+		typeList = append(typeList, taskType)
+	}
+	return strings.Join(nameList, ","), strings.Join(typeList, ",")
 }
 
 func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {

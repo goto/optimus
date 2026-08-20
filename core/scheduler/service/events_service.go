@@ -176,6 +176,7 @@ func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jo
 			"namespace":    jobDetails.Job.Tenant.NamespaceName().String(),
 			"scheduled_at": scheduledAt,
 			"event_type":   event.Type.String(),
+			"task_id":      event.OperatorName,
 		},
 		Template: scheme,
 	})

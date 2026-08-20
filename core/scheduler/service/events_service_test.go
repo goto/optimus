@@ -247,6 +247,7 @@ func TestNotificationService(t *testing.T) {
 						"namespace":    tnnt.NamespaceName().String(),
 						"scheduled_at": scheduledAt,
 						"event_type":   event.Type.String(),
+						"task_id":      event.OperatorName,
 					},
 					Template: "slack",
 				}
@@ -331,6 +332,7 @@ func TestNotificationService(t *testing.T) {
 					"namespace":    tnnt.NamespaceName().String(),
 					"scheduled_at": scheduledAt,
 					"event_type":   event.Type.String(),
+					"task_id":      event.OperatorName,
 				},
 				Template: "pagerduty",
 			}
@@ -414,6 +416,7 @@ func TestNotificationService(t *testing.T) {
 					"namespace":    tnnt.NamespaceName().String(),
 					"scheduled_at": scheduledAt,
 					"event_type":   event.Type.String(),
+					"task_id":      event.OperatorName,
 				},
 				Template: "pagerduty",
 			}

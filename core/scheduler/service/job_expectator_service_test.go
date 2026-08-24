@@ -429,7 +429,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -477,7 +477,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -523,7 +523,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		// no duration estimation added
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -575,7 +575,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		}
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 		// then
 		assert.NoError(t, err)
 		// should not be updated
@@ -623,7 +623,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -672,7 +672,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -719,7 +719,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -781,7 +781,7 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobUpstreamWithLineage.JobName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
@@ -848,12 +848,190 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobDurationEstimation[jobUpstreamWithLineage.JobName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
 
 		// when
-		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
 
 		// then
 		assert.NoError(t, err)
 		expectedExpectedFinishTime := referenceTime.Add(10 * time.Minute).Add(30 * time.Minute)
 		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
+	})
+
+	t.Run("when upstream chain is 2 levels deep, should propagate expected finish time through the full chain", func(t *testing.T) {
+		// given
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+
+		jobExpectatorService := service.NewJobExpectatorService(
+			l,
+			10,
+			jobRunExpectationDetailsRepo,
+			jobDetailsGetter,
+			jobLineageFetcher,
+			durationEstimator,
+		)
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
+		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
+
+		scheduledAtA := referenceTime.Add(10 * time.Minute)
+		scheduledAtB := referenceTime.Add(1 * time.Hour)
+		scheduledAtC := referenceTime.Add(-2 * time.Hour)
+		jobCEndTime := referenceTime.Add(90 * time.Minute) // job-C finished after job-B's own scheduled_at
+
+		jobTarget := &scheduler.JobSchedule{
+			JobName:     scheduler.JobName("job-A"),
+			ScheduledAt: scheduledAtA,
+		}
+		jobBName := scheduler.JobName("job-B")
+		jobCName := scheduler.JobName("job-C")
+
+		// job-C's run is keyed by job-B (its immediate downstream), not by the root job-A,
+		// matching LineageResolver.BuildLineage's diamond-safe keying convention.
+		jobCWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobCName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobBName: {
+					JobName:     jobCName,
+					ScheduledAt: scheduledAtC,
+					JobEndTime:  &jobCEndTime,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobBWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobBName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobTarget.JobName: {
+					JobName:     jobBName,
+					ScheduledAt: scheduledAtB,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{jobCWithLineage},
+		}
+		currentJobWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobTarget.JobName: {
+					JobName:     jobTarget.JobName,
+					ScheduledAt: scheduledAtA,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{jobBWithLineage},
+		}
+
+		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
+		jobDurationEstimation[jobBName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
+
+		// when
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+
+		// then
+		assert.NoError(t, err)
+		// job-C already finished; its finish time is its own end time
+		assert.Equal(t, jobCEndTime, jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: jobCName, ScheduledAt: scheduledAtC}].FinishTime)
+		// job-B hasn't started; its expected finish time is max(its own scheduled_at, job-C's finish time) + job-B duration
+		expectedBFinish := jobCEndTime.Add(45 * time.Minute)
+		assert.Equal(t, expectedBFinish, jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: jobBName, ScheduledAt: scheduledAtB}].FinishTime)
+		// job-A hasn't started; its expected finish time is max(its own scheduled_at, job-B's finish time) + job-A duration,
+		// proving job-C's contribution propagated two levels up through job-B
+		expectedAFinish := expectedBFinish.Add(30 * time.Minute)
+		assert.Equal(t, expectedAFinish, jobRunExpectedFinishTime[*jobTarget].FinishTime)
+	})
+
+	t.Run("when an upstream job occurs twice in the lineage, once shallow and once deep (diamond), should reuse the shared node's cached finish time instead of recomputing or conflicting", func(t *testing.T) {
+		// given
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+
+		jobExpectatorService := service.NewJobExpectatorService(
+			l,
+			10,
+			jobRunExpectationDetailsRepo,
+			jobDetailsGetter,
+			jobLineageFetcher,
+			durationEstimator,
+		)
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
+		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
+
+		scheduledAtA := referenceTime.Add(30 * time.Minute)
+		scheduledAtB := referenceTime.Add(1 * time.Hour)
+		scheduledAtX := referenceTime.Add(-3 * time.Hour)
+		jobXEndTime := referenceTime.Add(3 * time.Hour)
+
+		jobTarget := &scheduler.JobSchedule{
+			JobName:     scheduler.JobName("job-A"),
+			ScheduledAt: scheduledAtA,
+		}
+		jobBName := scheduler.JobName("job-B")
+		jobXName := scheduler.JobName("job-X")
+
+		// job-X is a diamond: it is job-A's DIRECT upstream (shallow) and also job-B's upstream
+		// (deep, via job-A -> job-B -> job-X). LineageResolver.BuildLineage's buildLineageTree
+		// memoizes by job name, so both edges point at the very same *JobLineageSummary object,
+		// and calculateAllUpstreamRuns adds one JobRuns entry per immediate-downstream path -
+		// here both paths resolve to the same actual run, so both keys share the same run pointer.
+		jobXRun := &scheduler.JobRunSummary{
+			JobName:     jobXName,
+			ScheduledAt: scheduledAtX,
+			JobEndTime:  &jobXEndTime,
+		}
+		jobXWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobXName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobTarget.JobName: jobXRun, // shallow path: job-A -> job-X
+				jobBName:          jobXRun, // deep path: job-A -> job-B -> job-X (same run)
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobBWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobBName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobTarget.JobName: {
+					JobName:     jobBName,
+					ScheduledAt: scheduledAtB,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{jobXWithLineage},
+		}
+		currentJobWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobTarget.JobName: {
+					JobName:     jobTarget.JobName,
+					ScheduledAt: scheduledAtA,
+				},
+			},
+			// job-X listed before job-B, so the shallow edge is visited first
+			Upstreams: []*scheduler.JobLineageSummary{jobXWithLineage, jobBWithLineage},
+		}
+
+		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
+		jobDurationEstimation[jobBName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
+
+		// when
+		err := jobExpectatorService.PopulateExpectedFinishTime(jobTarget.JobName, currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+
+		// then
+		assert.NoError(t, err)
+		// job-X's finish time is computed once (from whichever path is visited first) and shared
+		assert.Equal(t, jobXEndTime, jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: jobXName, ScheduledAt: scheduledAtX}].FinishTime)
+		// job-B's expected finish incorporates job-X's finish time via the deep path
+		expectedBFinish := jobXEndTime.Add(45 * time.Minute)
+		assert.Equal(t, expectedBFinish, jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: jobBName, ScheduledAt: scheduledAtB}].FinishTime)
+		// job-A's expected finish is max(its own scheduled_at, job-X's direct finish, job-B's finish) + job-A duration;
+		// job-B's finish (which itself folds in job-X) dominates, proving the diamond didn't get double-counted or dropped
+		expectedAFinish := expectedBFinish.Add(30 * time.Minute)
+		assert.Equal(t, expectedAFinish, jobRunExpectedFinishTime[*jobTarget].FinishTime)
 	})
 }
 

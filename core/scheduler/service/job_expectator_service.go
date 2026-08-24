@@ -109,7 +109,7 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 			continue
 		}
 		s.l.Debug("calculating expected finish time for job", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt)
-		err := s.PopulateExpectedFinishTime(jobSchedule, jobsWithLineageMap[jobSchedule.JobName], jobRunExpectedFinishTimeDetail, jobDurationsEstimation, referenceTime)
+		err := s.PopulateExpectedFinishTime(jobSchedule.JobName, jobsWithLineageMap[jobSchedule.JobName], jobRunExpectedFinishTimeDetail, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			s.l.Error(fmt.Sprintf("failed to populate expected finish time for job [%s]: %s", jobSchedule.JobName, err.Error()))
 			return nil, err
@@ -150,9 +150,13 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 	return finalJobRunExpectedFinishTimes, nil
 }
 
-func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.JobSchedule, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
+// selfParent is the immediate downstream job that led to currentJobWithLineage in the current
+// traversal - currentJobWithLineage's own run is keyed by that name in JobRuns, since
+// LineageResolver.BuildLineage keys a node's JobRuns by its immediate downstream
+// to support lineages where a shared upstream carries a distinct run per downstream path.
+func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.JobName, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
 	// pre condition check
-	if currentJobWithLineage == nil || currentJobWithLineage.JobRuns[jobTarget.JobName] == nil {
+	if currentJobWithLineage == nil || currentJobWithLineage.GetRunForJob(selfParent) == nil {
 		// TODO: add metric to track how many times this happens
 		s.l.Error(fmt.Sprintf("[critical] no job run found for job [%s], skipping expected finish time calculation", currentJobWithLineage.JobName))
 		return nil
@@ -162,7 +166,7 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		return nil
 	}
 
-	currentJobRun := currentJobWithLineage.JobRuns[jobTarget.JobName]
+	currentJobRun := currentJobWithLineage.GetRunForJob(selfParent)
 	currentJobScheduleKey := scheduler.JobSchedule{
 		// TODO: add project name as well, PR: https://github.com/goto/optimus/pull/501
 		JobName:     currentJobWithLineage.JobName,
@@ -231,17 +235,18 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		FinishTime: maxUpstreamExpectedFinishTime.Add(*estimatedDuration),
 	}
 	for _, upstream := range currentJobWithLineage.Upstreams {
-		err := s.PopulateExpectedFinishTime(jobTarget, upstream, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
+		err := s.PopulateExpectedFinishTime(currentJobWithLineage.JobName, upstream, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			return err
 		}
-		if upstream.JobRuns[jobTarget.JobName] == nil {
+		upstreamJobRun := upstream.GetRunForJob(currentJobWithLineage.JobName)
+		if upstream.JobRuns[currentJobWithLineage.JobName] == nil {
 			s.l.Debug(fmt.Sprintf("no upstream job run found for job, skipping upstream in expected finish time calculation [job: %s, upstream_job: %s]", currentJobWithLineage.JobName, upstream.JobName))
 			continue
 		}
 		upstreamScheduleKey := scheduler.JobSchedule{
 			JobName:     upstream.JobName,
-			ScheduledAt: upstream.JobRuns[jobTarget.JobName].ScheduledAt,
+			ScheduledAt: upstreamJobRun.ScheduledAt,
 		}
 		upstreamExpectedFinishTime, ok := jobRunExpectedFinishTimes[upstreamScheduleKey]
 		if !ok {

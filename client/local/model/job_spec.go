@@ -545,19 +545,40 @@ func (j *JobSpec) MergeFrom(anotherJobSpec *JobSpec) {
 	}
 
 	if metadata := anotherJobSpec.Metadata; metadata != nil {
+		if j.Metadata == nil {
+			j.Metadata = &JobSpecMetadata{}
+		}
 		if resource := metadata.Resource; resource != nil {
+			if j.Metadata.Resource == nil {
+				j.Metadata.Resource = &JobSpecMetadataResource{}
+			}
 			if request := resource.Request; request != nil {
+				if j.Metadata.Resource.Request == nil {
+					j.Metadata.Resource.Request = &JobSpecMetadataResourceConfig{}
+				}
 				j.Metadata.Resource.Request.CPU = getValue(j.Metadata.Resource.Request.CPU, request.CPU)
 				j.Metadata.Resource.Request.Memory = getValue(j.Metadata.Resource.Request.Memory, request.Memory)
 			}
 			if limit := resource.Limit; limit != nil {
+				if j.Metadata.Resource.Limit == nil {
+					j.Metadata.Resource.Limit = &JobSpecMetadataResourceConfig{}
+				}
 				j.Metadata.Resource.Limit.CPU = getValue(j.Metadata.Resource.Limit.CPU, limit.CPU)
 				j.Metadata.Resource.Limit.Memory = getValue(j.Metadata.Resource.Limit.Memory, limit.Memory)
 			}
 		}
 		if airflow := metadata.Airflow; airflow != nil {
+			if j.Metadata.Airflow == nil {
+				j.Metadata.Airflow = &JobSpecMetadataAirflow{}
+			}
 			j.Metadata.Airflow.Pool = getValue(j.Metadata.Airflow.Pool, airflow.Pool)
 			j.Metadata.Airflow.Queue = getValue(j.Metadata.Airflow.Queue, airflow.Queue)
+		}
+		if kubernetes := metadata.Kubernetes; kubernetes != nil {
+			if j.Metadata.Kubernetes == nil {
+				j.Metadata.Kubernetes = &JobSpecMetadataKubernetes{}
+			}
+			j.Metadata.Kubernetes.ServiceAccount = getValue(j.Metadata.Kubernetes.ServiceAccount, kubernetes.ServiceAccount)
 		}
 	}
 }

@@ -27,6 +27,7 @@ const (
 type ResourceHandle interface {
 	Create(res *resource.Resource) error
 	Update(res *resource.Resource) error
+	Delete(res *resource.Resource) error
 	Exists(tableName string) bool
 }
 
@@ -71,6 +72,35 @@ type MaxCompute struct {
 	driveFileCleanupSizeLimit int
 	maxSyncDelayTolerance     time.Duration
 	features                  config.FeaturesConfig
+}
+
+func (m MaxCompute) Delete(ctx context.Context, res *resource.Resource) error {
+	spanCtx, span := startChildSpan(ctx, "maxcompute/CreateResource")
+	defer span.End()
+
+	odpsClient, err := m.initializeClient(spanCtx, res.Tenant(), accountKey)
+	if err != nil {
+		return err
+	}
+
+	projectSchema, _, err := getCompleteComponentName(res)
+	if err != nil {
+		return err
+	}
+
+	switch res.Kind() {
+	case KindExternalTable:
+		maskingPolicyClient, err := m.initializeClient(spanCtx, res.Tenant(), accountMaskPolicyKey)
+		if err != nil {
+			maskingPolicyClient = odpsClient
+		}
+		maskingPolicyHandle := maskingPolicyClient.TableMaskingPolicyHandleFrom(projectSchema)
+
+		handle := odpsClient.ExternalTableHandleFrom(projectSchema, m.tenantGetter, maskingPolicyHandle)
+		return handle.Delete(res)
+	default:
+		return errors.InvalidArgument(store, "invalid kind for maxcompute resource deletion "+res.Kind())
+	}
 }
 
 func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {

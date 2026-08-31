@@ -2028,6 +2028,12 @@ func (_m *ResourceManager) UpdateResource(ctx context.Context, res *resource.Res
 	return r0
 }
 
+// DeleteResource provides a mock function with given fields: ctx, res
+func (_m *ResourceManager) DeleteResource(ctx context.Context, res *resource.Resource) error {
+	ret := _m.Called(ctx, res)
+	return ret.Error(0)
+}
+
 // Validate provides a mock function with given fields: res
 func (_m *ResourceManager) Validate(res *resource.Resource) error {
 	ret := _m.Called(res)

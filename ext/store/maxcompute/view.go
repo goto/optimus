@@ -30,6 +30,10 @@ type ViewHandle struct {
 	tableCommentWithMetadata bool
 }
 
+func (v ViewHandle) Delete(res *resource.Resource) error {
+	return nil
+}
+
 func (v ViewHandle) Create(res *resource.Resource) error {
 	view, err := ConvertSpecTo[View](res)
 	if err != nil {

@@ -730,6 +730,12 @@ func (_m *DataStore) Update(_a0 context.Context, _a1 *resource.Resource) error {
 	return r0
 }
 
+// Delete provides a mock function with given fields: _a0, _a1
+func (_m *DataStore) Delete(_a0 context.Context, _a1 *resource.Resource) error {
+	ret := _m.Called(_a0, _a1)
+	return ret.Error(0)
+}
+
 // Validate provides a mock function with given fields: _a0
 func (_m *DataStore) Validate(_a0 *resource.Resource) error {
 	ret := _m.Called(_a0)

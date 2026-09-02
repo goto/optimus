@@ -18,6 +18,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/goto/optimus/config"
+	completenessHandler "github.com/goto/optimus/core/completeness/handler/v1beta1"
+	completenessService "github.com/goto/optimus/core/completeness/service"
 	"github.com/goto/optimus/core/event/moderator"
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
 	jResolver "github.com/goto/optimus/core/job/resolver"
@@ -28,6 +30,7 @@ import (
 	schedulerHandler "github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	schedulerResolver "github.com/goto/optimus/core/scheduler/resolver"
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
+	coreTenant "github.com/goto/optimus/core/tenant"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/alertmanager"
@@ -526,6 +529,41 @@ func (s *OptimusServer) setupHandlers() error {
 
 	sensorService := schedulerService.NewSensorService(s.logger, s.conf.UpstreamResolvers...)
 	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService))
+
+	// Completeness Handler
+	var maxcomputeCredentialSecret string
+	if s.conf.Completeness.MaxcomputeCredentialProjectName != "" && s.conf.Completeness.MaxcomputeCredentialNamespaceName != "" {
+		credProjectName, err := coreTenant.ProjectNameFrom(s.conf.Completeness.MaxcomputeCredentialProjectName)
+		if err != nil {
+			return err
+		}
+		// The maxcompute access_id/access_key value is identical across projects --
+		// only the secret storage happens to be split per-project -- so any
+		// already-configured project's DATASTORE_MAXCOMPUTE secret works here.
+		secret, err := tSecretService.Get(context.Background(), credProjectName, s.conf.Completeness.MaxcomputeCredentialNamespaceName, "DATASTORE_MAXCOMPUTE")
+		if err != nil {
+			s.logger.Warn("completeness: unable to fetch maxcompute credential, ad hoc queries against maxcompute will fail: " + err.Error())
+		} else {
+			maxcomputeCredentialSecret = secret.Value()
+		}
+	} else {
+		s.logger.Warn("completeness: serve.completeness.maxcompute_credential_project_name/namespace_name not configured, ad hoc queries against maxcompute will fail")
+	}
+
+	// nil if no third-party resolver is configured for this deployment -- Service
+	// treats a nil ThirdPartyClient as "not managed" rather than failing.
+	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver)
+
+	newCompletenessService := completenessService.NewService(
+		pluginService,
+		jJobRepo,
+		jobRunRepo,
+		dexClient,
+		completenessService.Config{
+			MaxcomputeServiceAccount: maxcomputeCredentialSecret,
+		},
+	)
+	pb.RegisterCompletenessServiceServer(s.grpcServer, completenessHandler.NewCompletenessHandler(newCompletenessService, s.logger))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

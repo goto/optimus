@@ -28,6 +28,17 @@ type ServerConfig struct {
 	JobExpectatorConfig       JobExpectatorConfig       `mapstructure:"job_expectator"`
 	JobExecutionSummaryConfig JobExecutionSummaryConfig `mapstructure:"job_execution_summary"`
 	AirflowSync               AirflowSyncConfig         `mapstructure:"airflow_sync"`
+	Completeness              CompletenessConfig        `mapstructure:"completeness"`
+}
+
+// CompletenessConfig names an existing project/namespace whose DATASTORE_MAXCOMPUTE
+// secret the completeness-check feature reuses to fetch view DDL for ad hoc queries
+// that have no job/task context of their own to source a secret from. Any
+// already-configured project works -- the maxcompute access_id/access_key value is
+// the same across projects, only the secret storage is split per-project.
+type CompletenessConfig struct {
+	MaxcomputeCredentialProjectName   string `mapstructure:"maxcompute_credential_project_name"`
+	MaxcomputeCredentialNamespaceName string `mapstructure:"maxcompute_credential_namespace_name"`
 }
 
 type UpstreamResolver struct {

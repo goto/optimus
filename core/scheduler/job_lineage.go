@@ -139,6 +139,50 @@ func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSu
 	return nil
 }
 
+// ClipLineageRunsToReferenceTime walks the lineage and hides any observed run timestamp that
+// falls at or after referenceTime
+func ClipLineageRunsToReferenceTime(lineages map[JobName]*JobLineageSummary, referenceTime time.Time) {
+	visited := map[*JobLineageSummary]bool{}
+	for _, lineage := range lineages {
+		clipLineageNode(lineage, referenceTime, visited)
+	}
+}
+
+func clipLineageNode(node *JobLineageSummary, referenceTime time.Time, visited map[*JobLineageSummary]bool) {
+	if node == nil || visited[node] {
+		return
+	}
+	visited[node] = true
+
+	for _, run := range node.JobRuns {
+		clipJobRunToReferenceTime(run, referenceTime)
+	}
+	for _, upstream := range node.Upstreams {
+		clipLineageNode(upstream, referenceTime, visited)
+	}
+}
+
+func clipJobRunToReferenceTime(run *JobRunSummary, referenceTime time.Time) {
+	if run == nil {
+		return
+	}
+
+	clipped := false
+	for _, field := range []**time.Time{
+		&run.JobStartTime, &run.JobEndTime, &run.WaitStartTime, &run.WaitEndTime,
+		&run.TaskStartTime, &run.TaskEndTime, &run.HookStartTime, &run.HookEndTime,
+	} {
+		if *field != nil && !(*field).Before(referenceTime) {
+			*field = nil
+			clipped = true
+		}
+	}
+
+	if clipped {
+		run.JobStatus = ""
+	}
+}
+
 func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOptions) *JobRunLineage {
 	if j == nil {
 		return nil

@@ -1035,6 +1035,408 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 	})
 }
 
+func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
+	ctx := context.Background()
+	referenceTime := time.Now().UTC()
+	scheduleRangeInHours := 10 * time.Hour
+	l := log.NewNoop()
+
+	newService := func() (*service.JobExpectatorService, *JobRunExpectationDetailsRepository, *JobDetailsGetter, *JobLineageFetcher, *DurationEstimator) {
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+		svc := service.NewJobExpectatorService(l, 10, jobRunExpectationDetailsRepo, jobDetailsGetter, jobLineageFetcher, durationEstimator)
+		return svc, jobRunExpectationDetailsRepo, jobDetailsGetter, jobLineageFetcher, durationEstimator
+	}
+
+	makeJobWithDetails := func(projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) *scheduler.JobWithDetails {
+		tnnt, _ := tenant.NewTenant(projectName.String(), "team-a")
+		startDate := scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour())
+		return &scheduler.JobWithDetails{
+			Name: jobName,
+			Job: &scheduler.Job{
+				Tenant: tnnt,
+				Name:   jobName,
+			},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+		}
+	}
+
+	t.Run("given no combos, should return empty report with nil MeanDelay", func(t *testing.T) {
+		svc, _, _, _, _ := newService()
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		assert.Empty(t, summary.Reports)
+		assert.Nil(t, summary.MeanDelay)
+	})
+
+	t.Run("given a single combo with a mix of finished and in-progress jobs, should populate all three fields per job", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A") // not started yet
+		jobBName := scheduler.JobName("job-B") // started, not finished, not late
+		scheduledAt := referenceTime.Add(scheduleRangeInHours - 1*time.Hour).Truncate(time.Hour)
+
+		jobA := makeJobWithDetails(projectName, jobAName, scheduledAt)
+		jobB := makeJobWithDetails(projectName, jobBName, scheduledAt)
+
+		lineageA := &scheduler.JobLineageSummary{
+			JobName:   jobAName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobAName: {JobName: jobAName, ScheduledAt: scheduledAt},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		lineageB := &scheduler.JobLineageSummary{
+			JobName:   jobBName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobBName: {JobName: jobBName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String(), jobBName.String()}).
+			Return([]*scheduler.JobWithDetails{jobA, jobB}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobAName: {JobName: jobAName, ScheduledAt: scheduledAt},
+			jobBName: {JobName: jobBName, ScheduledAt: scheduledAt},
+		}, int(scheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA, jobBName: lineageB}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(map[scheduler.JobName]*time.Duration{
+				jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }(),
+				jobBName: func() *time.Duration { d := 45 * time.Minute; return &d }(),
+			}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName, jobBName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		assert.Len(t, summary.Reports, 2)
+
+		byJob := map[scheduler.JobName]scheduler.JobCompletionTimeReport{}
+		for _, r := range summary.Reports {
+			byJob[r.JobName] = r
+		}
+
+		assert.Equal(t, scheduledAt.Add(30*time.Minute), byJob[jobAName].ExpectedFinishTime)
+		assert.Nil(t, byJob[jobAName].ActualFinishTime)
+		assert.Equal(t, scheduledAt.Add(45*time.Minute), byJob[jobBName].ExpectedFinishTime)
+		assert.Nil(t, byJob[jobBName].ActualFinishTime)
+	})
+
+	t.Run("given combos across multiple projects, should isolate lineage fetches per project and tag results correctly", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectA := tenant.ProjectName("project-a")
+		projectB := tenant.ProjectName("project-b")
+		jobAName := scheduler.JobName("job-A")
+		jobBName := scheduler.JobName("job-B")
+		scheduledAt := referenceTime.Add(scheduleRangeInHours - 1*time.Hour).Truncate(time.Hour)
+
+		jobA := makeJobWithDetails(projectA, jobAName, scheduledAt)
+		jobB := makeJobWithDetails(projectB, jobBName, scheduledAt)
+		lineageA := &scheduler.JobLineageSummary{
+			JobName: jobAName, IsEnabled: true,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		lineageB := &scheduler.JobLineageSummary{
+			JobName: jobBName, IsEnabled: true,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobBName: {JobName: jobBName, ScheduledAt: scheduledAt}},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectA, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
+		jobDetailsGetter.On("GetJobs", ctx, projectB, []string{jobBName.String()}).Return([]*scheduler.JobWithDetails{jobB}, nil).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobBName: {JobName: jobBName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobBName: lineageB}, nil).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
+			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobBName}).
+			Return(map[scheduler.JobName]*time.Duration{jobBName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil).Once()
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectA, JobNames: []scheduler.JobName{jobAName}},
+			{ProjectName: projectB, JobNames: []scheduler.JobName{jobBName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		assert.Len(t, summary.Reports, 2)
+		for _, r := range summary.Reports {
+			if r.JobName == jobAName {
+				assert.Equal(t, projectA, r.ProjectName)
+			} else {
+				assert.Equal(t, projectB, r.ProjectName)
+			}
+		}
+	})
+
+	t.Run("given a run that finishes after referenceTime, should hide it from ExpectedFinishTime but still report the real ActualFinishTime", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A")
+		scheduledAt := referenceTime.Add(-2 * time.Hour).Truncate(time.Hour)
+		startDate := scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour())
+		tnnt, _ := tenant.NewTenant(projectName.String(), "team-a")
+		jobA := &scheduler.JobWithDetails{
+			Name: jobAName,
+			Job:  &scheduler.Job{Tenant: tnnt, Name: jobAName},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+		}
+
+		realHookEndTime := referenceTime.Add(1 * time.Hour) // finished, but only AFTER referenceTime
+		realJobEndTime := realHookEndTime
+		lineageA := &scheduler.JobLineageSummary{
+			JobName:   jobAName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobAName: {
+					JobName:       jobAName,
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &scheduledAt,
+					JobEndTime:    &realJobEndTime,
+					HookEndTime:   &realHookEndTime,
+					JobStatus:     "success",
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
+			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		assert.Len(t, summary.Reports, 1)
+		report := summary.Reports[0]
+
+		// taskStartTime (scheduledAt) + 30m duration is before referenceTime -> "running late" branch
+		assert.Equal(t, referenceTime.Add(10*time.Minute), report.ExpectedFinishTime)
+		// the real end time, hidden from the expected-finish-time calculation, is still reported as-is
+		assert.NotNil(t, report.ActualFinishTime)
+		assert.Equal(t, realHookEndTime, *report.ActualFinishTime)
+		assert.NotEqual(t, report.ExpectedFinishTime, *report.ActualFinishTime)
+	})
+
+	t.Run("given a run that finished strictly before referenceTime, ExpectedFinishTime and ActualFinishTime should agree", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A")
+		scheduledAt := referenceTime.Add(-3 * time.Hour).Truncate(time.Hour)
+		startDate := scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour())
+		tnnt, _ := tenant.NewTenant(projectName.String(), "team-a")
+		jobA := &scheduler.JobWithDetails{
+			Name: jobAName,
+			Job:  &scheduler.Job{Tenant: tnnt, Name: jobAName},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+		}
+
+		endTime := referenceTime.Add(-1 * time.Hour) // finished before referenceTime, so nothing is clipped
+		lineageA := &scheduler.JobLineageSummary{
+			JobName:   jobAName,
+			IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobAName: {
+					JobName:       jobAName,
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &scheduledAt,
+					TaskEndTime:   &endTime,
+					JobEndTime:    &endTime,
+					JobStatus:     "success",
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
+			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		assert.Len(t, summary.Reports, 1)
+		report := summary.Reports[0]
+		assert.Equal(t, endTime, report.ExpectedFinishTime)
+		assert.NotNil(t, report.ActualFinishTime)
+		assert.Equal(t, endTime, *report.ActualFinishTime)
+	})
+
+	t.Run("MeanDelay should average only jobs with an ActualFinishTime, not divided by total report count", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A") // finishes 30m later than expected
+		jobBName := scheduler.JobName("job-B") // finishes 8m earlier than expected
+		scheduledAt := referenceTime.Add(-2 * time.Hour).Truncate(time.Hour)
+		startDate := scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour())
+		tnnt, _ := tenant.NewTenant(projectName.String(), "team-a")
+
+		makeJob := func(name scheduler.JobName) *scheduler.JobWithDetails {
+			return &scheduler.JobWithDetails{
+				Name:     name,
+				Job:      &scheduler.Job{Tenant: tnnt, Name: name},
+				Schedule: &scheduler.Schedule{StartDate: startDate, Interval: interval},
+			}
+		}
+		jobA := makeJob(jobAName)
+		jobB := makeJob(jobBName)
+
+		hookEndA := referenceTime.Add(40 * time.Minute) // expected = referenceTime+10m -> delay +30m
+		hookEndB := referenceTime.Add(2 * time.Minute)  // expected = referenceTime+10m -> delay -8m
+		lineageA := &scheduler.JobLineageSummary{
+			JobName: jobAName, IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobAName: {JobName: jobAName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt, HookEndTime: &hookEndA, JobStatus: "success"},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		lineageB := &scheduler.JobLineageSummary{
+			JobName: jobBName, IsEnabled: true,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				jobBName: {JobName: jobBName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt, HookEndTime: &hookEndB, JobStatus: "success"},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String(), jobBName.String()}).
+			Return([]*scheduler.JobWithDetails{jobA, jobB}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
+			jobAName: {JobName: jobAName, ScheduledAt: scheduledAt},
+			jobBName: {JobName: jobBName, ScheduledAt: scheduledAt},
+		}, int(scheduleRangeInHours.Hours())).Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA, jobBName: lineageB}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(map[scheduler.JobName]*time.Duration{
+				jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }(),
+				jobBName: func() *time.Duration { d := 30 * time.Minute; return &d }(),
+			}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName, jobBName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		assert.Len(t, summary.Reports, 2)
+		if assert.NotNil(t, summary.MeanDelay) {
+			assert.Equal(t, 11*time.Minute, *summary.MeanDelay)
+		}
+	})
+
+	t.Run("MeanDelay should be nil when no job has an ActualFinishTime yet", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A")
+		scheduledAt := referenceTime.Add(scheduleRangeInHours - 1*time.Hour).Truncate(time.Hour)
+		jobA := makeJobWithDetails(projectName, jobAName, scheduledAt)
+		lineageA := &scheduler.JobLineageSummary{
+			JobName: jobAName, IsEnabled: true,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
+			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		assert.Nil(t, summary.Reports[0].ActualFinishTime)
+		assert.Nil(t, summary.MeanDelay)
+	})
+
+	t.Run("a failing combo is skipped without discarding the succeeding combo's reports, but errors when nothing succeeds", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectA := tenant.ProjectName("project-a")
+		projectB := tenant.ProjectName("project-b")
+		jobAName := scheduler.JobName("job-A")
+		jobBName := scheduler.JobName("job-B")
+		scheduledAt := referenceTime.Add(scheduleRangeInHours - 1*time.Hour).Truncate(time.Hour)
+
+		jobA := makeJobWithDetails(projectA, jobAName, scheduledAt)
+		jobB := makeJobWithDetails(projectB, jobBName, scheduledAt)
+		lineageA := &scheduler.JobLineageSummary{
+			JobName: jobAName, IsEnabled: true,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectA, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
+		jobDetailsGetter.On("GetJobs", ctx, projectB, []string{jobBName.String()}).Return([]*scheduler.JobWithDetails{jobB}, nil).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil).Once()
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobBName: {JobName: jobBName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(nil, errors.New("lineage service unavailable")).Once()
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
+			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil).Once()
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectA, JobNames: []scheduler.JobName{jobAName}},
+			{ProjectName: projectB, JobNames: []scheduler.JobName{jobBName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err, "partial success should not surface an error")
+		assert.Len(t, summary.Reports, 1)
+		assert.Equal(t, jobAName, summary.Reports[0].JobName)
+	})
+
+	t.Run("all combos failing returns an error with an empty report", func(t *testing.T) {
+		svc, _, jobDetailsGetter, _, _ := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A")
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return(nil, errors.New("service unavailable"))
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.Error(t, err)
+		assert.Empty(t, summary.Reports)
+	})
+}
+
 // jobRunExpectationDetailsRepository is an autogenerated mock type for the jobRunExpectationDetailsRepository type
 type JobRunExpectationDetailsRepository struct {
 	mock.Mock

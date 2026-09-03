@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -761,6 +762,82 @@ func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.
 	jobsMap := map[string]*scheduler.JobWithDetails{}
 	var jobNameList []string
 	multiError := errors.NewMultiError("errorInGetJobsByLabels")
+
+	for rows.Next() {
+		spec, err := FromRow(rows)
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job:"+spec.Name, err))
+			continue
+		}
+
+		job, err := spec.toJobWithDetails()
+		if err != nil {
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job:"+spec.Name, err))
+			continue
+		}
+
+		jobNameList = append(jobNameList, job.GetName())
+		jobsMap[job.GetName()] = job
+	}
+
+	// Load upstreams for the filtered jobs
+	if len(jobNameList) > 0 {
+		jobUpstreamGroupedByName, err := j.getJobsUpstreams(ctx, projectName, jobNameList)
+		multiError.Append(err)
+
+		thirdPartyUpstreamGroupedByName, err := j.getThirdPartyUpstreams(ctx, projectName, jobNameList)
+		multiError.Append(err)
+
+		for jobName := range jobsMap {
+			if upstreamList, ok := jobUpstreamGroupedByName[jobName]; ok {
+				jobsMap[jobName].Upstreams.UpstreamJobs = upstreamList
+			}
+			if thirdPartyList, ok := thirdPartyUpstreamGroupedByName[jobName]; ok {
+				jobsMap[jobName].Upstreams.ThirdParty = thirdPartyList
+			}
+		}
+	}
+
+	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
+}
+
+// GetJobsByLabelsMultiValue is like GetJobsByLabels but each key may match any of several
+// values (OR'd within a key, AND'd across keys), e.g. {"category_table_tag": ["business-critical",
+// "ssot"]} matches jobs tagged with either value. GetJobsByLabels' single-value @> containment
+// operator can't express this, so each key becomes its own labels->>'key' = ANY(...) clause.
+func (j *JobRepository) GetJobsByLabelsMultiValue(ctx context.Context, projectName tenant.ProjectName, labels map[string][]string) ([]*scheduler.JobWithDetails, error) {
+	if len(labels) == 0 {
+		return []*scheduler.JobWithDetails{}, nil
+	}
+
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	args := []interface{}{projectName}
+	clauses := make([]string, 0, len(keys))
+	for _, k := range keys {
+		args = append(args, labels[k])
+		clauses = append(clauses, fmt.Sprintf("labels->>'%s' = ANY($%d)", k, len(args)))
+	}
+
+	query := `SELECT ` + jobColumns + `
+		FROM job
+		WHERE project_name = $1
+		AND deleted_at IS NULL
+		AND ` + strings.Join(clauses, " AND ")
+
+	rows, err := j.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while querying jobs by multi-value labels", err)
+	}
+	defer rows.Close()
+
+	jobsMap := map[string]*scheduler.JobWithDetails{}
+	var jobNameList []string
+	multiError := errors.NewMultiError("errorInGetJobsByLabelsMultiValue")
 
 	for rows.Next() {
 		spec, err := FromRow(rows)

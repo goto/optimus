@@ -2220,6 +2220,36 @@ func (_m *JobDetailsGetter) GetJobsByLabels(ctx context.Context, projectName ten
 	return r0, r1
 }
 
+// GetJobsByLabelsMultiValue provides a mock function with given fields: ctx, projectName, labels
+func (_m *JobDetailsGetter) GetJobsByLabelsMultiValue(ctx context.Context, projectName tenant.ProjectName, labels map[string][]string) ([]*scheduler.JobWithDetails, error) {
+	ret := _m.Called(ctx, projectName, labels)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetJobsByLabelsMultiValue")
+	}
+
+	var r0 []*scheduler.JobWithDetails
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, map[string][]string) ([]*scheduler.JobWithDetails, error)); ok {
+		return rf(ctx, projectName, labels)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.ProjectName, map[string][]string) []*scheduler.JobWithDetails); ok {
+		r0 = rf(ctx, projectName, labels)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*scheduler.JobWithDetails)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, map[string][]string) error); ok {
+		r1 = rf(ctx, projectName, labels)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // NewJobDetailsGetter creates a new instance of JobDetailsGetter. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewJobDetailsGetter(t interface {

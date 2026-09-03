@@ -9,6 +9,7 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/config"
@@ -54,6 +55,7 @@ type JobSLAPredictorService interface {
 
 type JobExpectatorService interface {
 	GenerateExpectedFinishTimes(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, referenceTime time.Time, scheduleRangeInHours time.Duration) (map[scheduler.JobSchedule]service.FinishTimeDetail, error)
+	GenerateJobExpectedCompletionTimeReport(ctx context.Context, reqs []scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) (*scheduler.JobCompletionTimeSummary, error)
 }
 
 type JobRunService interface {
@@ -650,6 +652,47 @@ func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.G
 			finishTimeDetail.FinishTime = &pb.FinishTimeDetailResponse_ExpectedFinishTime{ExpectedFinishTime: timestamppb.New(jobWithFinishTime.FinishTime)}
 			response.InprogressJobs[jobSchedule.JobName.String()] = finishTimeDetail
 		}
+	}
+
+	return response, nil
+}
+
+func (h JobRunHandler) GetJobExpectedCompletionTimeReport(ctx context.Context, req *pb.JobExpectedCompletionTimeReportRequest) (*pb.JobExpectedCompletionTimeReportResponse, error) {
+	filters, err := buildJobFilter(req)
+	if err != nil {
+		return nil, errors.GRPCErr(err, "unable to adapt request")
+	}
+
+	referenceTime := time.Now().UTC()
+	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
+		referenceTime = req.GetReferenceTime().AsTime().UTC()
+	}
+	scheduleRangeInHours := time.Duration(req.GetScheduledRangeInHours()) * time.Hour
+
+	summary, err := h.jobExpectatorService.GenerateJobExpectedCompletionTimeReport(ctx, filters, referenceTime, scheduleRangeInHours)
+	if err != nil {
+		h.l.Error(fmt.Sprintf("error generating job expected completion time report: %s", err.Error()))
+		return nil, errors.GRPCErr(err, "unable to generate job expected completion time report")
+	}
+
+	response := &pb.JobExpectedCompletionTimeReportResponse{
+		Reports: make([]*pb.JobCompletionTimeReport, 0, len(summary.Reports)),
+	}
+	for _, r := range summary.Reports {
+		report := &pb.JobCompletionTimeReport{
+			ProjectName:        r.ProjectName.String(),
+			JobName:            r.JobName.String(),
+			ScheduledAt:        timestamppb.New(r.ScheduledAt),
+			ExpectedFinishTime: timestamppb.New(r.ExpectedFinishTime),
+		}
+		if r.ActualFinishTime != nil {
+			report.ActualFinishTime = timestamppb.New(*r.ActualFinishTime)
+		}
+		response.Reports = append(response.Reports, report)
+	}
+	if summary.MeanDelay != nil {
+		response.MeanDelay = durationpb.New(*summary.MeanDelay)
+		response.HasMeanDelay = true
 	}
 
 	return response, nil

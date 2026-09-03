@@ -328,3 +328,23 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 		Jobs: pbJobRunLineages,
 	}
 }
+
+func buildJobFilter(req *pb.JobExpectedCompletionTimeReportRequest) ([]scheduler.JobFilterRequest, error) {
+	labels := make(map[string][]string, len(req.GetJobLabels()))
+	for key, values := range req.GetJobLabels() {
+		labels[key] = values.GetValues()
+	}
+
+	combos := make([]scheduler.JobFilterRequest, 0, len(req.GetProjectNames()))
+	for _, projectNameStr := range req.GetProjectNames() {
+		projectName, err := tenant.ProjectNameFrom(projectNameStr)
+		if err != nil {
+			return nil, err
+		}
+		combos = append(combos, scheduler.JobFilterRequest{
+			ProjectName: projectName,
+			Labels:      labels,
+		})
+	}
+	return combos, nil
+}

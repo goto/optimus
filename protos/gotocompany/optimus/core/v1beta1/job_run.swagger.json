@@ -54,6 +54,39 @@
         ]
       }
     },
+    "/v1beta1/job_expected_completion_time_report": {
+      "post": {
+        "summary": "GetJobExpectedCompletionTimeReport will provide a report on the selected jobs' completion time (actual \u0026 expected)\non a given point of time, and get the mean delay between those times",
+        "operationId": "JobRunService_GetJobExpectedCompletionTimeReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1JobExpectedCompletionTimeReportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1JobExpectedCompletionTimeReportRequest"
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/potential_sla_breach/identify": {
       "post": {
         "summary": "IdentifyPotentialSLABreach notifies optimus service about potential SLA breach for given job(s)",
@@ -1043,6 +1076,29 @@
       ],
       "default": "TYPE_UNSPECIFIED"
     },
+    "v1beta1JobCompletionTimeReport": {
+      "type": "object",
+      "properties": {
+        "projectName": {
+          "type": "string"
+        },
+        "jobName": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expectedFinishTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actualFinishTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1beta1JobEvent": {
       "type": "object",
       "properties": {
@@ -1116,6 +1172,48 @@
             "$ref": "#/definitions/v1beta1JobRunRef"
           },
           "title": "the runs that depend on this one"
+        }
+      }
+    },
+    "v1beta1JobExpectedCompletionTimeReportRequest": {
+      "type": "object",
+      "properties": {
+        "projectNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "jobLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1beta1LabelValues"
+          }
+        },
+        "scheduledRangeInHours": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "referenceTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1beta1JobExpectedCompletionTimeReportResponse": {
+      "type": "object",
+      "properties": {
+        "reports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1JobCompletionTimeReport"
+          }
+        },
+        "meanDelay": {
+          "type": "string"
+        },
+        "hasMeanDelay": {
+          "type": "boolean"
         }
       }
     },
@@ -1323,6 +1421,17 @@
         "level": {
           "type": "integer",
           "format": "int32"
+        }
+      }
+    },
+    "v1beta1LabelValues": {
+      "type": "object",
+      "properties": {
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

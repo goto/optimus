@@ -58,6 +58,8 @@ import (
 )
 
 const keyLength = 32
+const maxcomputeAccountKey = "DATASTORE_MAXCOMPUTE" // matches ext/store/maxcompute.accountKey
+const bigqueryAccountKey = "DATASTORE_BIGQUERY"     // matches ext/store/bigquery.accountKey
 
 type setupFn func() error
 
@@ -532,29 +534,30 @@ func (s *OptimusServer) setupHandlers() error {
 
 	// Completeness Handler
 	var maxcomputeCredentialSecret string
-	globalMcServiceAccount := s.conf.GlobalMcServiceAccount
-	if globalMcServiceAccount.ProjectName != "" && globalMcServiceAccount.SecretName != "" {
-		credProjectName, err := coreTenant.ProjectNameFrom(globalMcServiceAccount.ProjectName)
+	if datastoreProject := s.conf.Completeness.DatastoreProject; datastoreProject != "" {
+		credProjectName, err := coreTenant.ProjectNameFrom(datastoreProject)
 		if err != nil {
 			return err
 		}
-		// The maxcompute access_id/access_key value is identical across projects --
-		// only the secret storage happens to be split per-project -- so any
-		// already-configured project's secret works here. No namespace scoping: this
-		// is a project-level secret.
-		secret, err := tSecretService.Get(context.Background(), credProjectName, "", globalMcServiceAccount.SecretName)
+
+		datastoreType := s.conf.Completeness.DatastoreType
+		var accKey string
+		if datastoreType == "maxcompute" || datastoreType == "" {
+			accKey = maxcomputeAccountKey
+		} else {
+			accKey = bigqueryAccountKey
+		}
+		secret, err := tSecretService.Get(context.Background(), credProjectName, "", accKey)
 		if err != nil {
 			s.logger.Warn("completeness: unable to fetch maxcompute credential, ad hoc queries against maxcompute will fail: " + err.Error())
 		} else {
 			maxcomputeCredentialSecret = secret.Value()
 		}
 	} else {
-		s.logger.Warn("completeness: serve.global_mc_service_account.project_name/secret_name not configured, ad hoc queries against maxcompute will fail")
+		s.logger.Warn("completeness: completeness.datastore_project not configured, ad hoc queries against maxcompute will fail")
 	}
 
-	// nil if no third-party resolver is configured for this deployment -- Service
-	// treats a nil ThirdPartyClient as "not managed" rather than failing.
-	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver)
+	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver) // nil if not configured; Service treats nil as "not managed"
 
 	newCompletenessService := completenessService.NewService(
 		pluginService,

@@ -175,12 +175,9 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	return filteredResourceURNs, me.ToErr()
 }
 
-// IdentifyUpstreamsFromQuery resolves the tables/views referenced by an ad hoc SQL
-// query, recursively through views down to base tables, using the same identifiers
-// job compilation uses via IdentifyUpstreams. Unlike IdentifyUpstreams, it does not
-// require a registered task/plugin (there is no job/task backing an ad hoc query) —
-// it dispatches directly to the requested datastore's identifier instead of looking
-// one up by task name.
+// IdentifyUpstreamsFromQuery is like IdentifyUpstreams but for an ad hoc query with no
+// registered task/plugin: it dispatches directly to the requested datastore's
+// identifier instead of looking one up by task name.
 func (s PluginService) IdentifyUpstreamsFromQuery(ctx context.Context, datastoreName, svcAcc, query string) ([]resource.URN, error) {
 	queryEvaluator, evaluatorErr := s.evaluatorFactory.GetStaticQueryEvaluator(query)
 	if evaluatorErr != nil {

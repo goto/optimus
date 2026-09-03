@@ -15,8 +15,7 @@ serve:
   port: 9100
   port_grpc: 9101
 
-  # this gets injected in compiled dags to reach back out to optimus service
-  # when they run
+  # injected into compiled dags so they can call back to optimus
   ingress_host: optimus.example.io:80
   ingress_host_grpc: optimus-grpc.example.io:80
 
@@ -32,32 +31,17 @@ serve:
     min_open_connection: 5
     max_open_connection: 20
 
-# names an existing project's secret to reuse for fetching MaxCompute view DDL when
-# checking completeness for an ad hoc query -- those queries have no job/task context
-# of their own to source a secret from. Any already-configured project works: the
-# maxcompute access_id/access_key value is the same across projects, only the secret
-# storage happens to be split per-project.
-global_mc_service_account:
-  secret_name: DATASTORE_MAXCOMPUTE
-  project_name: my-existing-project
-
-# tunes the two in-memory caches the completeness-check API (CheckQueryCompleteness)
-# uses to absorb bursts of concurrent requests that reference overlapping tables.
-# a ttl of 0 disables that particular cache entirely rather than erroring.
+# completeness-check API (CheckQueryCompleteness)
 completeness:
-  # how long "which job/project/namespace owns this table" is cached. this only
-  # changes on deploy, so a long ttl is fine.
+  # existing project whose DATASTORE_MAXCOMPUTE secret to reuse for ad hoc queries
+  datastore_type: maxcompute
+  datastore_project: my-existing-project
   resolution_cache_ttl_minutes: 45
-  # how long one job's selected-run status is cached. keep this comfortably under the
-  # polling interval of whatever worker calls this API repeatedly, so consecutive
-  # polls never see the same stale answer twice.
   run_status_cache_ttl_minutes: 5
 
 # application telemetry
 telemetry:
-  # configure the host:port used for
-  # - exposing profiling metrics via pprof over /debug
-  # - prometheus stats over /metrics
+  # pprof (/debug) and prometheus (/metrics) listen address
   profile_addr: ":9110"
 
   # jaeger collector address to send application traces
@@ -108,8 +92,7 @@ resource_managers:
     host: # host of other optimus server
     headers: # might necessary for authorization
 
-# third-party upstream resolvers, for resources Optimus doesn't manage itself
-# (e.g. Dex-managed firehose sources -- see core/job/resolver/dex_upstream_resolver.go)
+# third-party resolvers for resources Optimus doesn't manage itself (e.g. Dex firehoses)
 upstream_resolvers:
 - type: dex
   config:
@@ -189,9 +172,7 @@ job_execution_summary:
     last_n_runs: 7
     percentile: 95
 
-# manual-state-override reconciliation worker (compares Optimus run state against
-# Airflow's audit log to detect out-of-band changes). window_interval_in_seconds is 0
-# (disabled) by default -- this feature must be explicitly opted into.
+# manual-state-override reconciliation worker; window_interval_in_seconds: 0 disables it
 airflow_sync:
   window_interval_in_seconds: 0
   lock_duration_in_seconds: 300

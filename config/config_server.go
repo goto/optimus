@@ -28,7 +28,6 @@ type ServerConfig struct {
 	JobExpectatorConfig       JobExpectatorConfig       `mapstructure:"job_expectator"`
 	JobExecutionSummaryConfig JobExecutionSummaryConfig `mapstructure:"job_execution_summary"`
 	AirflowSync               AirflowSyncConfig         `mapstructure:"airflow_sync"`
-	GlobalMcServiceAccount    GlobalMcServiceAccount    `mapstructure:"global_mc_service_account"`
 	Completeness              CompletenessConfig        `mapstructure:"completeness"`
 }
 
@@ -63,28 +62,13 @@ type Serve struct {
 	DB              DBConfig `mapstructure:"db"`
 }
 
-// CompletenessConfig tunes the two in-memory caches CheckQueryCompleteness uses to
-// absorb bursts of concurrent requests that reference overlapping tables. A ttl of 0
-// disables that cache entirely (see internal/lib/cache.New) rather than erroring, so
-// leaving these unset is safe, just uncached.
 type CompletenessConfig struct {
-	// ResolutionCacheTTLMinutes controls how long "which job/project/namespace owns
-	// this table" is cached. This only changes on deploy, so a long TTL is fine.
-	ResolutionCacheTTLMinutes int `mapstructure:"resolution_cache_ttl_minutes" default:"45"`
-	// RunStatusCacheTTLMinutes controls how long one selected run's status is cached.
-	// This should stay well under the polling interval of whatever worker calls this
-	// API repeatedly, so consecutive polls never see the same stale answer twice.
-	RunStatusCacheTTLMinutes int `mapstructure:"run_status_cache_ttl_minutes" default:"5"`
-}
+	DatastoreType    string `mapstructure:"datastore_type"` // maxcompute or bigquery
+	DatastoreProject string `mapstructure:"datastore_project"`
 
-// GlobalMcServiceAccount names an existing project's secret to reuse for fetching
-// MaxCompute view DDL on ad hoc queries that have no job/task context of their own to
-// source a secret from (used by the completeness-check feature). Any already-configured
-// project works -- the maxcompute access_id/access_key value is the same across
-// projects, only the secret storage happens to be split per-project.
-type GlobalMcServiceAccount struct {
-	SecretName  string `mapstructure:"secret_name"`  // e.g. DATASTORE_MAXCOMPUTE
-	ProjectName string `mapstructure:"project_name"` // any existing project that has this secret configured
+	// A cache ttl of 0 disables that cache rather than erroring.
+	ResolutionCacheTTLMinutes int `mapstructure:"resolution_cache_ttl_minutes" default:"45"`
+	RunStatusCacheTTLMinutes  int `mapstructure:"run_status_cache_ttl_minutes" default:"5"`
 }
 
 type DBConfig struct {

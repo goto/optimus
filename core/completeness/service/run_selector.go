@@ -17,10 +17,9 @@ var JKT = time.FixedZone("JKT", 7*60*60) //nolint:gochecknoglobals
 //
 // Two cadence buckets:
 //
-//   - Sub-daily (runs more than once a day): always the occurrence *before* the most
-//     recently fired one. A currently in-flight run never blocks completeness on its
-//     own -- the last settled run does. E.g. an hourly job checked anytime in the
-//     2:00-2:59 window reports the 1:00 run, not the (possibly still running) 2:00 run.
+//   - Sub-daily (runs more than once a day): the most recently fired occurrence,
+//     whatever its current state -- including still-running. E.g. an hourly job
+//     checked anytime in the 2:00-2:59 window reports the 2:00 run.
 //
 //   - Daily and slower (daily, weekly, monthly, irregular/weekday-only): if today has
 //     a scheduled occurrence and its time hasn't arrived yet, there is nothing to
@@ -32,8 +31,7 @@ var JKT = time.FixedZone("JKT", 7*60*60) //nolint:gochecknoglobals
 //     of this same logic automatically.
 func SelectScheduledAt(jobCron *cron.ScheduleSpec, nowJKT time.Time) (scheduledAt time.Time, hasSchedule bool) {
 	if jobCron.IsSubDaily() {
-		lastFired := jobCron.Prev(nowJKT)
-		return jobCron.Prev(lastFired), true
+		return jobCron.Prev(nowJKT), true
 	}
 
 	todayStart := time.Date(nowJKT.Year(), nowJKT.Month(), nowJKT.Day(), 0, 0, 0, 0, nowJKT.Location())

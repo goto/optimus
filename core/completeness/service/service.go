@@ -13,6 +13,7 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
+	"github.com/goto/optimus/internal/lib/cache"
 	"github.com/goto/optimus/internal/lib/cron"
 )
 
@@ -58,41 +59,95 @@ type JobRunRepository interface {
 type ThirdPartyClient = schedulerService.ThirdPartyClient
 
 // Config holds the credentials the upstream identifiers need to fetch view DDL for an
-// ad hoc query that has no job/task context to source a per-job secret from.
+// ad hoc query that has no job/task context to source a per-job secret from, plus the
+// two cache TTLs (see resolutionCache/runStatusCache on Service below).
 //
-// TODO: neither field has a confirmed source yet. Every other caller of the upstream
-// identifiers (job compilation) sources this from per-job compiled secrets
-// (plugin/plugin_service.go:112,126) -- there is no existing global/admin service
-// account in this repo's config today (checked config/config_server.go). Wire in
-// whatever credential your team confirms is appropriate before this goes live; do not
-// ship with a placeholder value.
+// MaxcomputeServiceAccount is sourced from serve.global_mc_service_account (see
+// config.GlobalMcServiceAccount). BigqueryServiceAccount has no confirmed source yet --
+// every other caller of the upstream identifiers (job compilation) sources it from
+// per-job compiled secrets (plugin/plugin_service.go), and there is no global BQ
+// credential equivalent to the MC one today. Wire it in once confirmed; do not ship
+// with a placeholder value.
 type Config struct {
 	MaxcomputeServiceAccount string
 	BigqueryServiceAccount   string
+
+	// ResolutionCacheTTL and RunStatusCacheTTL come from
+	// serve.completeness.{resolution_cache_ttl,run_status_cache_ttl}
+	// (config.CompletenessConfig). A zero value disables that cache entirely
+	// (cache.New's documented behavior) rather than crashing, so this is safe to leave
+	// unset, just uncached.
+	ResolutionCacheTTL time.Duration
+	RunStatusCacheTTL  time.Duration
+}
+
+// managedJobRef is the destination-resolution outcome for one job producing a table --
+// everything needed to build a ManagedTable except its live run status, which is
+// looked up separately (and cached with a much shorter TTL) since it changes far more
+// often than which job owns a table.
+type managedJobRef struct {
+	tableName        string
+	optimusProject   string
+	optimusNamespace string
+	jobName          string
+	tenant           tenant.Tenant
+	cronInterval     string
+}
+
+// resolutionEntry is what resolutionCache stores per resource URN: either the job(s)
+// that produce it, or (when unmanaged) whether Dex manages it instead.
+type resolutionEntry struct {
+	managed      []managedJobRef
+	managedByDex bool
+}
+
+// runStatusKey identifies exactly one selected scheduled run. ScheduledAt is part of
+// the key so that a cadence rollover to a new slot (SelectScheduledAt returning a
+// different time) is automatically a cache miss on a fresh key, rather than needing
+// explicit invalidation when the relevant slot changes.
+type runStatusKey struct {
+	ProjectName string
+	JobName     string
+	ScheduledAt time.Time
 }
 
 type Service struct {
 	upstreamIdentifier UpstreamIdentifier
-	jobDestinationRepo JobDestinationRepository
+	jobRepository      JobDestinationRepository
 	jobRunRepo         JobRunRepository
 	thirdPartyClient   ThirdPartyClient // nil if no third-party resolver is configured
 	conf               Config
+
+	// resolutionCache holds "who owns this table" (job/project/namespace, or
+	// Dex-managed) -- long TTL, since this only changes on deploy.
+	resolutionCache *cache.Cache[resource.URN, resolutionEntry]
+	// runStatusCache holds the run state for one exact scheduled_at -- short TTL,
+	// since this is the part callers need close to live.
+	runStatusCache *cache.Cache[runStatusKey, *scheduler.JobRun]
 }
 
 func NewService(
 	upstreamIdentifier UpstreamIdentifier,
-	jobDestinationRepo JobDestinationRepository,
+	jobRepository JobDestinationRepository,
 	jobRunRepo JobRunRepository,
 	thirdPartyClient ThirdPartyClient,
 	conf Config,
 ) *Service {
 	return &Service{
 		upstreamIdentifier: upstreamIdentifier,
-		jobDestinationRepo: jobDestinationRepo,
+		jobRepository:      jobRepository,
 		jobRunRepo:         jobRunRepo,
 		thirdPartyClient:   thirdPartyClient,
 		conf:               conf,
+		resolutionCache:    cache.New[resource.URN, resolutionEntry](conf.ResolutionCacheTTL),
+		runStatusCache:     cache.New[runStatusKey, *scheduler.JobRun](conf.RunStatusCacheTTL),
 	}
+}
+
+// Close stops both caches' background janitors. Call it once, at server shutdown.
+func (s *Service) Close() {
+	s.resolutionCache.Close()
+	s.runStatusCache.Close()
 }
 
 // OverallStatus mirrors the eventual proto enum without depending on the generated
@@ -166,15 +221,17 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 	for _, urn := range urns {
 		urn := urn
 		runner.Add(func() (interface{}, error) {
-			jobs, err := s.jobDestinationRepo.GetAllByResourceDestination(ctx, urn)
+			res, err := s.resolutionCache.GetOrLoad(ctx, urn, func(ctx context.Context) (resolutionEntry, error) {
+				return s.resolveDestination(ctx, urn)
+			})
 			if err != nil {
-				return nil, errors.Wrap(EntityCompleteness, "resolving destination for "+urn.String(), err)
+				return nil, err
 			}
 
-			if len(jobs) == 0 {
+			if len(res.managed) == 0 {
 				return &perURNResult{unmanaged: &UnmanagedTable{
 					TableName:    urn.GetName(),
-					ManagedByDex: s.checkManagedByDex(ctx, urn),
+					ManagedByDex: res.managedByDex,
 				}}, nil
 			}
 
@@ -184,12 +241,18 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 			// of them rather than silently picking one, unlike
 			// internal_upstream_resolver.go's resolveInferredUpstream which takes [0].
 			result := &perURNResult{}
-			for _, j := range jobs {
-				managed, err := s.resolveManagedTable(ctx, urn, j)
+			for _, ref := range res.managed {
+				run, err := s.getRunStatus(ctx, ref)
 				if err != nil {
 					return nil, err
 				}
-				result.managedTables = append(result.managedTables, *managed)
+				result.managedTables = append(result.managedTables, ManagedTable{
+					TableName:        ref.tableName,
+					OptimusProject:   ref.optimusProject,
+					OptimusNamespace: ref.optimusNamespace,
+					JobName:          ref.jobName,
+					Run:              run,
+				})
 			}
 			return result, nil
 		})
@@ -245,47 +308,79 @@ func (s *Service) checkManagedByDex(ctx context.Context, urn resource.URN) bool 
 	return managed
 }
 
-func (s *Service) resolveManagedTable(ctx context.Context, urn resource.URN, j *job.Job) (*ManagedTable, error) {
-	managed := &ManagedTable{
-		TableName:        urn.GetName(),
-		OptimusProject:   j.Tenant().ProjectName().String(),
-		OptimusNamespace: j.Tenant().NamespaceName().String(),
-		JobName:          j.GetName(),
-	}
-
-	interval := j.Spec().Schedule().Interval()
-	if interval == "" {
-		return managed, nil // no schedule to evaluate against, report as never-run
-	}
-
-	jobCron, err := cron.ParseCronSchedule(interval)
+// resolveDestination is the loader behind resolutionCache: which job(s), if any,
+// produce urn, or (if none) whether Dex manages it instead.
+func (s *Service) resolveDestination(ctx context.Context, urn resource.URN) (resolutionEntry, error) {
+	jobs, err := s.jobRepository.GetAllByResourceDestination(ctx, urn)
 	if err != nil {
-		return nil, errors.InternalError(EntityCompleteness, "unable to parse cron interval for job "+j.GetName(), err)
+		return resolutionEntry{}, errors.Wrap(EntityCompleteness, "resolving destination for "+urn.String(), err)
+	}
+
+	if len(jobs) == 0 {
+		return resolutionEntry{managedByDex: s.checkManagedByDex(ctx, urn)}, nil
+	}
+
+	refs := make([]managedJobRef, 0, len(jobs))
+	for _, j := range jobs {
+		refs = append(refs, managedJobRef{
+			tableName:        urn.GetName(),
+			optimusProject:   j.Tenant().ProjectName().String(),
+			optimusNamespace: j.Tenant().NamespaceName().String(),
+			jobName:          j.GetName(),
+			tenant:           j.Tenant(),
+			cronInterval:     j.Spec().Schedule().Interval(),
+		})
+	}
+	return resolutionEntry{managed: refs}, nil
+}
+
+// getRunStatus computes the currently-relevant scheduled_at for ref (fresh on every
+// call -- this is cheap and depends on "now", so it's never itself cached) and looks up
+// that run through runStatusCache. A nil *RunStatus means either the job hasn't reached
+// its relevant scheduled occurrence yet, or no run was recorded for it -- both map to
+// NOT_COMPLETE at the aggregation layer.
+func (s *Service) getRunStatus(ctx context.Context, ref managedJobRef) (*RunStatus, error) {
+	if ref.cronInterval == "" {
+		return nil, nil //nolint:nilnil // no schedule to evaluate against, report as never-run
+	}
+
+	jobCron, err := cron.ParseCronSchedule(ref.cronInterval)
+	if err != nil {
+		return nil, errors.InternalError(EntityCompleteness, "unable to parse cron interval for job "+ref.jobName, err)
 	}
 
 	scheduledAt, hasSchedule := SelectScheduledAt(jobCron, time.Now().In(JKT))
 	if !hasSchedule {
-		return managed, nil // scheduled today but hasn't fired yet -> NOT_COMPLETE via nil Run
+		return nil, nil //nolint:nilnil // scheduled today but hasn't fired yet -> NOT_COMPLETE via nil Run
 	}
 
-	jobName, err := scheduler.JobNameFrom(j.GetName())
+	jobName, err := scheduler.JobNameFrom(ref.jobName)
 	if err != nil {
-		return nil, errors.InternalError(EntityCompleteness, "invalid job name "+j.GetName(), err)
+		return nil, errors.InternalError(EntityCompleteness, "invalid job name "+ref.jobName, err)
 	}
 
-	run, err := s.jobRunRepo.GetByScheduledAt(ctx, j.Tenant(), jobName, scheduledAt)
-	if err != nil {
-		if errors.IsErrorType(err, errors.ErrNotFound) {
-			return managed, nil // no run recorded yet at that scheduled_at -> NOT_COMPLETE via nil Run
+	key := runStatusKey{ProjectName: ref.optimusProject, JobName: ref.jobName, ScheduledAt: scheduledAt}
+	run, err := s.runStatusCache.GetOrLoad(ctx, key, func(ctx context.Context) (*scheduler.JobRun, error) {
+		run, err := s.jobRunRepo.GetByScheduledAt(ctx, ref.tenant, jobName, scheduledAt)
+		if err != nil {
+			if errors.IsErrorType(err, errors.ErrNotFound) {
+				return nil, nil //nolint:nilnil // cache "no run yet" too -- avoids repeated misses during a burst
+			}
+			return nil, err
 		}
-		return nil, errors.Wrap(EntityCompleteness, "fetching run for job "+j.GetName(), err)
+		return run, nil
+	})
+	if err != nil {
+		return nil, errors.Wrap(EntityCompleteness, "fetching run for job "+ref.jobName, err)
+	}
+	if run == nil {
+		return nil, nil //nolint:nilnil // no run recorded for the selected scheduled_at -> NOT_COMPLETE via nil Run
 	}
 
-	managed.Run = &RunStatus{
+	return &RunStatus{
 		State:       run.State,
 		ScheduledAt: run.ScheduledAt,
 		StartTime:   run.StartTime,
 		EndTime:     run.EndTime,
-	}
-	return managed, nil
+	}, nil
 }

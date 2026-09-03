@@ -26,31 +26,31 @@ func atJKT(t *testing.T, s string) time.Time {
 }
 
 func TestSelectScheduledAt(t *testing.T) {
-	t.Run("sub-daily: mid-slot reports the previous settled run, not the in-flight one", func(t *testing.T) {
+	t.Run("sub-daily: mid-slot reports the most recently fired occurrence, even if still running", func(t *testing.T) {
 		hourly := mustParseCron(t, "0 * * * *")
 		now := atJKT(t, "2026-09-02 02:30:00")
 
 		got, hasSchedule := service.SelectScheduledAt(hourly, now)
 
 		assert.True(t, hasSchedule)
-		assert.Equal(t, atJKT(t, "2026-09-02 01:00:00"), got)
+		assert.Equal(t, atJKT(t, "2026-09-02 02:00:00"), got)
 	})
 
 	t.Run("sub-daily: exactly on the hour boundary follows cron.Prev's strict semantics", func(t *testing.T) {
 		// cron.ScheduleSpec.Prev is strict (occurrence *before* the given instant, never
 		// equal to it -- see internal/lib/cron/cron.go), consistent with how the rest of
 		// this codebase already uses it (Schedule.GetPreviousSchedule etc.). At the exact
-		// boundary this means the slot that "just fired" isn't counted as fired yet, so
-		// double-Prev lands one slot earlier than the mid-slot case below. Real request
-		// timestamps are never exactly on a cron boundary to the nanosecond, so this is a
-		// documented edge case, not a behavior anyone is expected to rely on.
+		// boundary the slot that "just fired" isn't counted as fired yet, so this lands
+		// one slot earlier than the mid-slot case above. Real request timestamps are
+		// never exactly on a cron boundary to the nanosecond, so this is a documented
+		// edge case, not a behavior anyone is expected to rely on.
 		hourly := mustParseCron(t, "0 * * * *")
 		now := atJKT(t, "2026-09-02 02:00:00")
 
 		got, hasSchedule := service.SelectScheduledAt(hourly, now)
 
 		assert.True(t, hasSchedule)
-		assert.Equal(t, atJKT(t, "2026-09-02 00:00:00"), got)
+		assert.Equal(t, atJKT(t, "2026-09-02 01:00:00"), got)
 	})
 
 	t.Run("sub-daily: every 6 hours behaves the same as hourly", func(t *testing.T) {
@@ -60,7 +60,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		got, hasSchedule := service.SelectScheduledAt(every6h, now)
 
 		assert.True(t, hasSchedule)
-		assert.Equal(t, atJKT(t, "2026-09-02 06:00:00"), got)
+		assert.Equal(t, atJKT(t, "2026-09-02 12:00:00"), got)
 	})
 
 	t.Run("daily: before today's scheduled time reports no schedule yet", func(t *testing.T) {

@@ -532,22 +532,24 @@ func (s *OptimusServer) setupHandlers() error {
 
 	// Completeness Handler
 	var maxcomputeCredentialSecret string
-	if s.conf.Completeness.MaxcomputeCredentialProjectName != "" && s.conf.Completeness.MaxcomputeCredentialNamespaceName != "" {
-		credProjectName, err := coreTenant.ProjectNameFrom(s.conf.Completeness.MaxcomputeCredentialProjectName)
+	globalMcServiceAccount := s.conf.GlobalMcServiceAccount
+	if globalMcServiceAccount.ProjectName != "" && globalMcServiceAccount.SecretName != "" {
+		credProjectName, err := coreTenant.ProjectNameFrom(globalMcServiceAccount.ProjectName)
 		if err != nil {
 			return err
 		}
 		// The maxcompute access_id/access_key value is identical across projects --
 		// only the secret storage happens to be split per-project -- so any
-		// already-configured project's DATASTORE_MAXCOMPUTE secret works here.
-		secret, err := tSecretService.Get(context.Background(), credProjectName, s.conf.Completeness.MaxcomputeCredentialNamespaceName, "DATASTORE_MAXCOMPUTE")
+		// already-configured project's secret works here. No namespace scoping: this
+		// is a project-level secret.
+		secret, err := tSecretService.Get(context.Background(), credProjectName, "", globalMcServiceAccount.SecretName)
 		if err != nil {
 			s.logger.Warn("completeness: unable to fetch maxcompute credential, ad hoc queries against maxcompute will fail: " + err.Error())
 		} else {
 			maxcomputeCredentialSecret = secret.Value()
 		}
 	} else {
-		s.logger.Warn("completeness: serve.completeness.maxcompute_credential_project_name/namespace_name not configured, ad hoc queries against maxcompute will fail")
+		s.logger.Warn("completeness: serve.global_mc_service_account.project_name/secret_name not configured, ad hoc queries against maxcompute will fail")
 	}
 
 	// nil if no third-party resolver is configured for this deployment -- Service
@@ -561,8 +563,11 @@ func (s *OptimusServer) setupHandlers() error {
 		dexClient,
 		completenessService.Config{
 			MaxcomputeServiceAccount: maxcomputeCredentialSecret,
+			ResolutionCacheTTL:       time.Duration(s.conf.Completeness.ResolutionCacheTTLMinutes) * time.Minute,
+			RunStatusCacheTTL:        time.Duration(s.conf.Completeness.RunStatusCacheTTLMinutes) * time.Minute,
 		},
 	)
+	s.cleanupFn = append(s.cleanupFn, newCompletenessService.Close)
 	pb.RegisterCompletenessServiceServer(s.grpcServer, completenessHandler.NewCompletenessHandler(newCompletenessService, s.logger))
 
 	// backup service

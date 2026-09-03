@@ -552,6 +552,36 @@ func (_m *EvaluatorFactory) GetEnvEvaluator(env string) (evaluator.Evaluator, er
 	return r0, r1
 }
 
+// GetStaticQueryEvaluator provides a mock function with given fields: env
+func (_m *EvaluatorFactory) GetStaticQueryEvaluator(env string) (evaluator.Evaluator, error) {
+	ret := _m.Called(env)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetStaticQueryEvaluator")
+	}
+
+	var r0 evaluator.Evaluator
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) (evaluator.Evaluator, error)); ok {
+		return rf(env)
+	}
+	if rf, ok := ret.Get(0).(func(string) evaluator.Evaluator); ok {
+		r0 = rf(env)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(evaluator.Evaluator)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(env)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetFileEvaluator provides a mock function with given fields: filepath
 func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (evaluator.Evaluator, error) {
 	ret := _m.Called(filepath)

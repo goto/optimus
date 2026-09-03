@@ -38,6 +38,7 @@ type EvaluatorFactory interface {
 	GetFileEvaluator(filepath string) (evaluator.Evaluator, error)
 	GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
 	GetEnvEvaluator(env string) (evaluator.Evaluator, error)
+	GetStaticQueryEvaluator(env string) (evaluator.Evaluator, error)
 }
 
 type UpstreamIdentifierFactory interface {
@@ -174,17 +175,6 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	return filteredResourceURNs, me.ToErr()
 }
 
-// staticQueryEvaluator feeds a fixed raw query string to an upstream identifier,
-// regardless of the assets/config passed to Evaluate. Used when the query text is
-// already known up front (no job asset file to read it from).
-type staticQueryEvaluator struct {
-	query string
-}
-
-func (e staticQueryEvaluator) Evaluate(_, _ map[string]string) string {
-	return e.query
-}
-
 // IdentifyUpstreamsFromQuery resolves the tables/views referenced by an ad hoc SQL
 // query, recursively through views down to base tables, using the same identifiers
 // job compilation uses via IdentifyUpstreams. Unlike IdentifyUpstreams, it does not
@@ -192,7 +182,11 @@ func (e staticQueryEvaluator) Evaluate(_, _ map[string]string) string {
 // it dispatches directly to the requested datastore's identifier instead of looking
 // one up by task name.
 func (s PluginService) IdentifyUpstreamsFromQuery(ctx context.Context, datastoreName, svcAcc, query string) ([]resource.URN, error) {
-	evaluators := []evaluator.Evaluator{staticQueryEvaluator{query: query}}
+	queryEvaluator, evaluatorErr := s.evaluatorFactory.GetStaticQueryEvaluator(query)
+	if evaluatorErr != nil {
+		return nil, fmt.Errorf("get static query evaluator: %w", evaluatorErr)
+	}
+	evaluators := []evaluator.Evaluator{queryEvaluator}
 
 	var upstreamIdentifier upstreamidentifier.UpstreamIdentifier
 	var err error

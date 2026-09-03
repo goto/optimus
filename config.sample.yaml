@@ -1,3 +1,7 @@
+########################################
+# SERVER CONFIG
+########################################
+
 version: 1
 
 # logging configuration
@@ -5,76 +9,193 @@ log:
   # debug, info, warning, error, fatal - default 'info'
   level: info
 
-########################################
-# SERVER CONFIG
-########################################
-
 # for configuring optimus service
-#serve:
-#  # port to listen on
-#  port: 9100
-#  port_grpc: 9101
-#
-#  # host to listen on
-#  host: localhost
-#
-#  # this gets injected in compiled dags to reach back out to optimus service
-#  # when they run
-#  ingress_host: optimus.example.io:80
-#  ingress_host_grpc: optimus-grpc.example.io:80
-#
-#  # 32 char hash used for encrypting secrets
-#  # note: use a different one in production please
-#  app_key: Yjo4a0jn1NvYdq79SADC/KaVv9Wu0Ffc
-#
-#  # database configurations
-#  db:
-#    # database connection string
-#    dsn: postgres://user:password@localhost:5432/database?sslmode=disable
-#
-#    min_open_connection: 5
-#    max_open_connection: 10
+serve:
+  # port to listen on
+  port: 9100
+  port_grpc: 9101
+
+  # this gets injected in compiled dags to reach back out to optimus service
+  # when they run
+  ingress_host: optimus.example.io:80
+  ingress_host_grpc: optimus-grpc.example.io:80
+
+  # 32 char hash used for encrypting secrets
+  # note: use a different one in production please
+  app_key: Yjo4a0jn1NvYdq79SADC/KaVv9Wu0Ffc
+
+  # database configurations
+  db:
+    # database connection string
+    dsn: postgres://user:password@localhost:5432/database?sslmode=disable
+
+    min_open_connection: 5
+    max_open_connection: 20
+
+# names an existing project's secret to reuse for fetching MaxCompute view DDL when
+# checking completeness for an ad hoc query -- those queries have no job/task context
+# of their own to source a secret from. Any already-configured project works: the
+# maxcompute access_id/access_key value is the same across projects, only the secret
+# storage happens to be split per-project.
+global_mc_service_account:
+  secret_name: DATASTORE_MAXCOMPUTE
+  project_name: my-existing-project
+
+# tunes the two in-memory caches the completeness-check API (CheckQueryCompleteness)
+# uses to absorb bursts of concurrent requests that reference overlapping tables.
+# a ttl of 0 disables that particular cache entirely rather than erroring.
+completeness:
+  # how long "which job/project/namespace owns this table" is cached. this only
+  # changes on deploy, so a long ttl is fine.
+  resolution_cache_ttl_minutes: 45
+  # how long one job's selected-run status is cached. keep this comfortably under the
+  # polling interval of whatever worker calls this API repeatedly, so consecutive
+  # polls never see the same stale answer twice.
+  run_status_cache_ttl_minutes: 5
 
 # application telemetry
-#telemetry:
-#
-#  # configure the host:port used for
-#  # - exposing profiling metrics via pprof over /debug
-#  # - prometheus stats over /metrics
-#  profile_addr: ":9110"
-#
-#  # jaeger collector address to send application traces
-#  jaeger_addr: "http://localhost:14268/api/traces"
+telemetry:
+  # configure the host:port used for
+  # - exposing profiling metrics via pprof over /debug
+  # - prometheus stats over /metrics
+  profile_addr: ":9110"
+
+  # jaeger collector address to send application traces
+  jaeger_addr: "http://localhost:14268/api/traces"
+
+  # telegraf/statsd address for metrics, if used instead of/alongside prometheus
+  telegraf_addr: ""
+
+# alerting (SLA breach notifications, etc.)
+alerting:
+  alert_manager:
+    host: ""
+    endpoint: ""
+    enabled: true
+  dashboard: ""
+  data_console: ""
+  enable_slack: false
+  enable_pager_duty: false
+  # estimator used for the "confirmed" SLA breach alert
+  auto_sla_breach_config:
+    last_n_runs: 7
+    percentile: 95
+    padding_percentage: 0
+    min_padding_minutes: 0
+    max_padding_minutes: 1000
+  # estimator used for the earlier "potential" SLA breach warning
+  potential_sla_breach_config:
+    damper_coeff: 1.0
+    enable_persistent_logging: false
+    duration_estimator_config:
+      last_n_runs: 7
+      percentile: 95
+      padding_percentage: 0
+      min_padding_minutes: 0
+      max_padding_minutes: 1000
+
+# SLA breach-detection background worker cadence
+sla:
+  worker_interval_minutes: 5
+  worker_lock_duration_minutes: 10
 
 # resource managers for job dependency enrichment
-#resource_managers:
-#- name: other_optimus_server
-#  type: optimus # currently, only support optimus type
-#  description: neighbor optimus server
-#  config:
-#    host: # host of other optimus server
-#    headers: # might necessary for authorization
-#
-# plugin:
-#   artifacts:
-#     # refer : https://github.com/hashicorp/go-getter
-#     - ../transformers/dist/transformers_0.1.0_macos_arm64.tar.gz
-#     - https://github.com/goto/optimus/releases/download/v0.2.5/optimus_0.2.5_linux_arm64.tar.gz
+resource_managers:
+- name: other_optimus_server
+  type: optimus # currently, only support optimus type
+  description: neighbor optimus server
+  config:
+    host: # host of other optimus server
+    headers: # might necessary for authorization
 
-# publisher:
-#   type: kafka
-#   buffer: 8
-#   config:
-#     topic: optimus-events
-#     batch_interval_second: 1
-#     broker_urls:
-#       - localhost:9092
+# third-party upstream resolvers, for resources Optimus doesn't manage itself
+# (e.g. Dex-managed firehose sources -- see core/job/resolver/dex_upstream_resolver.go)
+upstream_resolvers:
+- type: dex
+  config:
+    host: https://dex.example.io
+    auth_email: optimus@example.io
+    producer_type: firehose
 
-# replay:
-#   plugin_execution_project_config_names:
-#     bq2bq: EXECUTION_PROJECT
-#     bq2pg: BQ_EXECUTION_PROJECT
-#     pg2bq: BQ_EXECUTION_PROJECT
-#     bq2api: EXECUTION_PROJECT
-#     clevertap: EXECUTION_PROJECT
-#     transporterTask: EXECUTION_PROJECT
+# how job replays are executed
+replay:
+  replay_timeout_in_minutes: 180
+  execution_interval_in_seconds: 120
+  plugin_execution_project_config_names:
+    bq2bq: EXECUTION_PROJECT
+    bq2pg: BQ_EXECUTION_PROJECT
+    pg2bq: BQ_EXECUTION_PROJECT
+    bq2api: EXECUTION_PROJECT
+    clevertap: EXECUTION_PROJECT
+    transporterTask: EXECUTION_PROJECT
+
+# how job backfills are executed
+backfill:
+  execution_interval_in_seconds: 300
+
+# publishes events (e.g. job run state changes) to an external system
+publisher:
+  type: kafka
+  buffer: 8
+  config:
+    topic: optimus-events
+    batch_interval_second: 1
+    broker_urls:
+      - localhost:9092
+
+# how often (minutes) the background job-status sync worker runs; 0 disables it
+job_sync_interval_minutes: 0
+
+# syncing / access-issue handling for datastore "external tables" (e.g. Google Sheets)
+external_tables:
+  access_issues_retry_interval_minutes: 0
+  source_sync_interval_minutes: 0
+  max_drive_file_size_mb: 0
+  drive_file_cleanup_size_limit_mb: 0
+  max_sync_delay_tolerance_hours: 0
+
+# feature flags
+features:
+  enable_v2_sensor: false
+  enable_v3_sensor: false
+  enable_ignore_old_schedule_runs_sensor: false
+  enable_table_comment_with_metadata: false
+
+# where to load transformer/hook plugin binaries from
+plugins:
+  location: /path/to/plugins
+
+# job schedule validation
+job_validation:
+  validate_schedule:
+    # if empty, no reference timezone check is enforced
+    reference_timezone: ""
+
+# flags jobs stuck past their expected duration, estimated from run history
+job_expectator:
+  buffer_duration_in_minutes: 10
+  duration_estimator_config:
+    last_n_runs: 7
+    percentile: 95
+    padding_percentage: 0
+    min_padding_minutes: 0
+    max_padding_minutes: 1000
+
+# tuning for the job-run execution summary / lineage API
+job_execution_summary:
+  max_lineage_depth: 25
+  lineage_window_hours: 24
+  historical_duration:
+    last_n_runs: 7
+    percentile: 95
+
+# manual-state-override reconciliation worker (compares Optimus run state against
+# Airflow's audit log to detect out-of-band changes). window_interval_in_seconds is 0
+# (disabled) by default -- this feature must be explicitly opted into.
+airflow_sync:
+  window_interval_in_seconds: 0
+  lock_duration_in_seconds: 300
+  max_concurrent_projects: 5
+  max_attempts: 3
+  # every project is synced by default; list names here to exclude specific ones
+  exclude_projects: []

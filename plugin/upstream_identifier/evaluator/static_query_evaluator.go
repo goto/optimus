@@ -3,8 +3,9 @@ package evaluator
 import (
 	"fmt"
 
-	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/salt/log"
+
+	"github.com/goto/optimus/internal/errors"
 )
 
 // staticQueryEvaluator feeds a fixed raw query string to an upstream identifier,

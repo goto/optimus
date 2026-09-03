@@ -57,9 +57,11 @@ import (
 	oHandler "github.com/goto/optimus/server/handler/v1beta1"
 )
 
-const keyLength = 32
-const maxcomputeAccountKey = "DATASTORE_MAXCOMPUTE" // matches ext/store/maxcompute.accountKey
-const bigqueryAccountKey = "DATASTORE_BIGQUERY"     // matches ext/store/bigquery.accountKey
+const (
+	keyLength            = 32
+	maxcomputeAccountKey = "DATASTORE_MAXCOMPUTE" // matches ext/store/maxcompute.accountKey
+	bigqueryAccountKey   = "DATASTORE_BIGQUERY"   // matches ext/store/bigquery.accountKey
+)
 
 type setupFn func() error
 

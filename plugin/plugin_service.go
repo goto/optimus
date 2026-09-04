@@ -19,6 +19,11 @@ const (
 	bqSvcAccKey  = "BQ_SERVICE_ACCOUNT"
 	mcSvcAccKey  = "MC_SERVICE_ACCOUNT"
 	mcSvcAccKey2 = "MC__CREDENTIALS" // used for non mc2mc (TODO: svc account should be configurable in plugin spec)
+
+	queryAssetKey = "query.sql"
+
+	DatastoreNameMaxcompute = "maxcompute"
+	DatastoreNameBigquery   = "bigquery"
 )
 
 type (
@@ -33,6 +38,7 @@ type EvaluatorFactory interface {
 	GetFileEvaluator(filepath string) (evaluator.Evaluator, error)
 	GetYamlPathEvaluator(filepath, selector string) (evaluator.Evaluator, error)
 	GetEnvEvaluator(env string) (evaluator.Evaluator, error)
+	GetStaticQueryEvaluator(env string) (evaluator.Evaluator, error)
 }
 
 type UpstreamIdentifierFactory interface {
@@ -167,6 +173,37 @@ func (s PluginService) IdentifyUpstreams(ctx context.Context, taskName string, c
 	}
 
 	return filteredResourceURNs, me.ToErr()
+}
+
+// IdentifyUpstreamsFromQuery is like IdentifyUpstreams but for an ad hoc query with no
+// registered task/plugin: it dispatches directly to the requested datastore's
+// identifier instead of looking one up by task name.
+func (s PluginService) IdentifyUpstreamsFromQuery(ctx context.Context, datastoreName, svcAcc, query string) ([]resource.URN, error) {
+	queryEvaluator, evaluatorErr := s.evaluatorFactory.GetStaticQueryEvaluator(query)
+	if evaluatorErr != nil {
+		return nil, fmt.Errorf("get static query evaluator: %w", evaluatorErr)
+	}
+	evaluators := []evaluator.Evaluator{queryEvaluator}
+
+	var upstreamIdentifier upstreamidentifier.UpstreamIdentifier
+	var err error
+	switch datastoreName {
+	case "", DatastoreNameMaxcompute:
+		upstreamIdentifier, err = s.upstreamIdentifierFactory.GetMaxcomputeUpstreamIdentifier(ctx, svcAcc, evaluators...)
+	case DatastoreNameBigquery:
+		upstreamIdentifier, err = s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)
+	default:
+		return nil, fmt.Errorf("unsupported datastore_name %q, expected %q or %q", datastoreName, DatastoreNameMaxcompute, DatastoreNameBigquery)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	resourceURNs, err := upstreamIdentifier.IdentifyResources(ctx, map[string]string{queryAssetKey: query}, map[string]string{})
+	if err != nil {
+		return nil, fmt.Errorf("identify upstreams from query: %w", err)
+	}
+	return resourceURNs, nil
 }
 
 func (s PluginService) ConstructDestinationURN(_ context.Context, taskName string, compiledConfig map[string]string) (resource.URN, error) {

@@ -537,10 +537,36 @@ func (_m *EvaluatorFactory) GetEnvEvaluator(env string) (evaluator.Evaluator, er
 	}
 	if rf, ok := ret.Get(0).(func(string) evaluator.Evaluator); ok {
 		r0 = rf(env)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(evaluator.Evaluator)
+	}
+
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(env)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(evaluator.Evaluator)
-		}
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetStaticQueryEvaluator provides a mock function with given fields: env
+func (_m *EvaluatorFactory) GetStaticQueryEvaluator(env string) (evaluator.Evaluator, error) {
+	ret := _m.Called(env)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetStaticQueryEvaluator")
+	}
+
+	var r0 evaluator.Evaluator
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) (evaluator.Evaluator, error)); ok {
+		return rf(env)
+	}
+	if rf, ok := ret.Get(0).(func(string) evaluator.Evaluator); ok {
+		r0 = rf(env)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(evaluator.Evaluator)
 	}
 
 	if rf, ok := ret.Get(1).(func(string) error); ok {
@@ -567,10 +593,8 @@ func (_m *EvaluatorFactory) GetFileEvaluator(filepath string) (evaluator.Evaluat
 	}
 	if rf, ok := ret.Get(0).(func(string) evaluator.Evaluator); ok {
 		r0 = rf(filepath)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(evaluator.Evaluator)
-		}
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(evaluator.Evaluator)
 	}
 
 	if rf, ok := ret.Get(1).(func(string) error); ok {
@@ -597,10 +621,8 @@ func (_m *EvaluatorFactory) GetYamlPathEvaluator(filepath, selector string) (eva
 	}
 	if rf, ok := ret.Get(0).(func(string, string) evaluator.Evaluator); ok {
 		r0 = rf(filepath, selector)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(evaluator.Evaluator)
-		}
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(evaluator.Evaluator)
 	}
 
 	if rf, ok := ret.Get(1).(func(string, string) error); ok {
@@ -670,10 +692,8 @@ func (_m *UpstreamIdentifier) IdentifyResources(ctx context.Context, assets, con
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, map[string]string, map[string]string) []resource.URN); ok {
 		r0 = rf(ctx, assets, config)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]resource.URN)
-		}
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]resource.URN)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, map[string]string, map[string]string) error); ok {

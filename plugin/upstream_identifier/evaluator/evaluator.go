@@ -26,6 +26,10 @@ func (e EvaluatorFactory) GetEnvEvaluator(env string) (Evaluator, error) {
 	return newEnvEvaluator(e.logger, env)
 }
 
+func (e EvaluatorFactory) GetStaticQueryEvaluator(query string) (Evaluator, error) {
+	return newStaticQueryEvaluator(e.logger, query)
+}
+
 func NewEvaluatorFactory(logger log.Logger) (*EvaluatorFactory, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger is nil")

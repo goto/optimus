@@ -28,6 +28,7 @@ type ServerConfig struct {
 	JobExpectatorConfig       JobExpectatorConfig       `mapstructure:"job_expectator"`
 	JobExecutionSummaryConfig JobExecutionSummaryConfig `mapstructure:"job_execution_summary"`
 	AirflowSync               AirflowSyncConfig         `mapstructure:"airflow_sync"`
+	Completeness              CompletenessConfig        `mapstructure:"completeness"`
 }
 
 type UpstreamResolver struct {
@@ -59,6 +60,19 @@ type Serve struct {
 	IngressHostGRPC string   `mapstructure:"ingress_host_grpc"`
 	AppKey          string   `mapstructure:"app_key"` // random 32 character hash used for encrypting secrets
 	DB              DBConfig `mapstructure:"db"`
+}
+
+type CompletenessConfig struct {
+	DatastoreType    string `mapstructure:"datastore_type"` // maxcompute or bigquery
+	DatastoreProject string `mapstructure:"datastore_project"`
+
+	// A cache ttl of 0 disables that cache rather than erroring.
+	ResolutionCacheTTLMinutes int `mapstructure:"resolution_cache_ttl_minutes" default:"45"`
+	RunStatusCacheTTLMinutes  int `mapstructure:"run_status_cache_ttl_minutes" default:"5"`
+
+	// SchedulingTimezone is the IANA zone (e.g. "Asia/Jakarta") whose calendar day
+	// defines "today" when picking a job's relevant scheduled run.
+	SchedulingTimezone string `mapstructure:"scheduling_timezone" default:"Asia/Jakarta"`
 }
 
 type DBConfig struct {

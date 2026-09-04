@@ -18,6 +18,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/goto/optimus/config"
+	completenessHandler "github.com/goto/optimus/core/completeness/handler/v1beta1"
+	completenessService "github.com/goto/optimus/core/completeness/service"
 	"github.com/goto/optimus/core/event/moderator"
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
 	jResolver "github.com/goto/optimus/core/job/resolver"
@@ -28,6 +30,7 @@ import (
 	schedulerHandler "github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	schedulerResolver "github.com/goto/optimus/core/scheduler/resolver"
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
+	coreTenant "github.com/goto/optimus/core/tenant"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/alertmanager"
@@ -54,7 +57,11 @@ import (
 	oHandler "github.com/goto/optimus/server/handler/v1beta1"
 )
 
-const keyLength = 32
+const (
+	keyLength            = 32
+	maxcomputeAccountKey = "DATASTORE_MAXCOMPUTE" // matches ext/store/maxcompute.accountKey
+	bigqueryAccountKey   = "DATASTORE_BIGQUERY"   // matches ext/store/bigquery.accountKey
+)
 
 type setupFn func() error
 
@@ -526,6 +533,55 @@ func (s *OptimusServer) setupHandlers() error {
 
 	sensorService := schedulerService.NewSensorService(s.logger, s.conf.UpstreamResolvers...)
 	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService))
+
+	// Completeness Handler
+	var maxcomputeCredentialSecret string
+	if datastoreProject := s.conf.Completeness.DatastoreProject; datastoreProject != "" {
+		credProjectName, err := coreTenant.ProjectNameFrom(datastoreProject)
+		if err != nil {
+			return err
+		}
+
+		datastoreType := s.conf.Completeness.DatastoreType
+		var accKey string
+		if datastoreType == "maxcompute" || datastoreType == "" {
+			accKey = maxcomputeAccountKey
+		} else {
+			accKey = bigqueryAccountKey
+		}
+		secret, err := tSecretService.Get(context.Background(), credProjectName, "", accKey)
+		if err != nil {
+			s.logger.Warn("completeness: unable to fetch maxcompute credential, ad hoc queries against maxcompute will fail: " + err.Error())
+		} else {
+			maxcomputeCredentialSecret = secret.Value()
+		}
+	} else {
+		s.logger.Warn("completeness: completeness.datastore_project not configured, ad hoc queries against maxcompute will fail")
+	}
+
+	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver) // nil if not configured; Service treats nil as "not managed"
+
+	schedulingLocation, err := time.LoadLocation(s.conf.Completeness.SchedulingTimezone)
+	if err != nil {
+		s.logger.Warn(fmt.Sprintf("completeness: invalid completeness.scheduling_timezone %q, defaulting to %s: %s",
+			s.conf.Completeness.SchedulingTimezone, completenessService.JKT, err.Error()))
+		schedulingLocation = completenessService.JKT
+	}
+
+	newCompletenessService := completenessService.NewService(
+		pluginService,
+		jJobRepo,
+		jobRunRepo,
+		dexClient,
+		completenessService.Config{
+			MaxcomputeServiceAccount: maxcomputeCredentialSecret,
+			ResolutionCacheTTL:       time.Duration(s.conf.Completeness.ResolutionCacheTTLMinutes) * time.Minute,
+			RunStatusCacheTTL:        time.Duration(s.conf.Completeness.RunStatusCacheTTLMinutes) * time.Minute,
+			Location:                 schedulingLocation,
+		},
+	)
+	s.cleanupFn = append(s.cleanupFn, newCompletenessService.Close)
+	pb.RegisterCompletenessServiceServer(s.grpcServer, completenessHandler.NewCompletenessHandler(newCompletenessService, s.logger))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

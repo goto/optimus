@@ -1073,8 +1073,8 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err)
-		assert.Empty(t, summary.Reports)
-		assert.Nil(t, summary.MeanDelay)
+		assert.Empty(t, summary.Details)
+		assert.Nil(t, summary.Summary.MeanDelay)
 	})
 
 	t.Run("given a single combo with a mix of finished and in-progress jobs, should populate all three fields per job", func(t *testing.T) {
@@ -1122,10 +1122,10 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err)
-		assert.Len(t, summary.Reports, 2)
+		assert.Len(t, summary.Details, 2)
 
-		byJob := map[scheduler.JobName]scheduler.JobCompletionTimeReport{}
-		for _, r := range summary.Reports {
+		byJob := map[scheduler.JobName]scheduler.JobCompletionTimeDetail{}
+		for _, r := range summary.Details {
 			byJob[r.JobName] = r
 		}
 
@@ -1174,8 +1174,8 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err)
-		assert.Len(t, summary.Reports, 2)
-		for _, r := range summary.Reports {
+		assert.Len(t, summary.Details, 2)
+		for _, r := range summary.Details {
 			if r.JobName == jobAName {
 				assert.Equal(t, projectA, r.ProjectName)
 			} else {
@@ -1231,8 +1231,8 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err)
-		assert.Len(t, summary.Reports, 1)
-		report := summary.Reports[0]
+		assert.Len(t, summary.Details, 1)
+		report := summary.Details[0]
 
 		// taskStartTime (scheduledAt) + 30m duration is before referenceTime -> "running late" branch
 		assert.Equal(t, referenceTime.Add(10*time.Minute), report.ExpectedFinishTime)
@@ -1242,7 +1242,7 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		assert.NotEqual(t, report.ExpectedFinishTime, *report.ActualFinishTime)
 	})
 
-	t.Run("given a run that finished strictly before referenceTime, ExpectedFinishTime and ActualFinishTime should agree", func(t *testing.T) {
+	t.Run("given a run that finished strictly before referenceTime, it should be excluded from the report as already settled", func(t *testing.T) {
 		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
 
 		projectName := tenant.ProjectName("project-a")
@@ -1280,22 +1280,22 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil)
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
 			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil)
-		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
-			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
+		// job-A already finished before referenceTime, so it's filtered out before duration estimation is
+		// even attempted for it — the estimator is still called, but with no job names.
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{}).
+			Return(map[scheduler.JobName]*time.Duration{}, nil)
 
 		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
 			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err)
-		assert.Len(t, summary.Reports, 1)
-		report := summary.Reports[0]
-		assert.Equal(t, endTime, report.ExpectedFinishTime)
-		assert.NotNil(t, report.ActualFinishTime)
-		assert.Equal(t, endTime, *report.ActualFinishTime)
+		if assert.NotNil(t, summary) {
+			assert.Empty(t, summary.Details)
+		}
 	})
 
-	t.Run("MeanDelay should average only jobs with an ActualFinishTime, not divided by total report count", func(t *testing.T) {
+	t.Run("MeanDelay should average only jobs that actually finished later than expected, excluding early finishes", func(t *testing.T) {
 		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
 
 		projectName := tenant.ProjectName("project-a")
@@ -1350,9 +1350,10 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err)
-		assert.Len(t, summary.Reports, 2)
-		if assert.NotNil(t, summary.MeanDelay) {
-			assert.Equal(t, 11*time.Minute, *summary.MeanDelay)
+		assert.Len(t, summary.Details, 2)
+		// job-B finished early (not delayed), so it's excluded from the mean — only job-A's +30m counts.
+		if assert.NotNil(t, summary.Summary.MeanDelay) {
+			assert.Equal(t, 30*time.Minute, *summary.Summary.MeanDelay)
 		}
 	})
 
@@ -1380,8 +1381,8 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err)
-		assert.Nil(t, summary.Reports[0].ActualFinishTime)
-		assert.Nil(t, summary.MeanDelay)
+		assert.Nil(t, summary.Details[0].ActualFinishTime)
+		assert.Nil(t, summary.Summary.MeanDelay)
 	})
 
 	t.Run("a failing combo is skipped without discarding the succeeding combo's reports, but errors when nothing succeeds", func(t *testing.T) {
@@ -1416,8 +1417,8 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.NoError(t, err, "partial success should not surface an error")
-		assert.Len(t, summary.Reports, 1)
-		assert.Equal(t, jobAName, summary.Reports[0].JobName)
+		assert.Len(t, summary.Details, 1)
+		assert.Equal(t, jobAName, summary.Details[0].JobName)
 	})
 
 	t.Run("all combos failing returns an error with an empty report", func(t *testing.T) {
@@ -1433,7 +1434,7 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}, referenceTime, scheduleRangeInHours)
 
 		assert.Error(t, err)
-		assert.Empty(t, summary.Reports)
+		assert.Nil(t, summary)
 	})
 }
 

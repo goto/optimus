@@ -55,7 +55,7 @@ type JobSLAPredictorService interface {
 
 type JobExpectatorService interface {
 	GenerateExpectedFinishTimes(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, referenceTime time.Time, scheduleRangeInHours time.Duration) (map[scheduler.JobSchedule]service.FinishTimeDetail, error)
-	GenerateJobExpectedCompletionTimeReport(ctx context.Context, reqs []scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) (*scheduler.JobCompletionTimeSummary, error)
+	GenerateJobExpectedCompletionTimeReport(ctx context.Context, reqs []scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) (*scheduler.JobCompletionTimeReport, error)
 }
 
 type JobRunService interface {
@@ -669,30 +669,41 @@ func (h JobRunHandler) GetJobExpectedCompletionTimeReport(ctx context.Context, r
 	}
 	scheduleRangeInHours := time.Duration(req.GetScheduledRangeInHours()) * time.Hour
 
-	summary, err := h.jobExpectatorService.GenerateJobExpectedCompletionTimeReport(ctx, filters, referenceTime, scheduleRangeInHours)
+	report, err := h.jobExpectatorService.GenerateJobExpectedCompletionTimeReport(ctx, filters, referenceTime, scheduleRangeInHours)
 	if err != nil {
 		h.l.Error(fmt.Sprintf("error generating job expected completion time report: %s", err.Error()))
 		return nil, errors.GRPCErr(err, "unable to generate job expected completion time report")
 	}
 
 	response := &pb.JobExpectedCompletionTimeReportResponse{
-		Reports: make([]*pb.JobCompletionTimeReport, 0, len(summary.Reports)),
+		Details: make([]*pb.JobCompletionTimeDetail, 0, len(report.Details)),
+		Summary: &pb.JobCompletionTimeSummary{},
 	}
-	for _, r := range summary.Reports {
-		report := &pb.JobCompletionTimeReport{
-			ProjectName:        r.ProjectName.String(),
-			JobName:            r.JobName.String(),
-			ScheduledAt:        timestamppb.New(r.ScheduledAt),
-			ExpectedFinishTime: timestamppb.New(r.ExpectedFinishTime),
+	for _, d := range report.Details {
+		detail := &pb.JobCompletionTimeDetail{
+			ProjectName:        d.ProjectName.String(),
+			JobName:            d.JobName.String(),
+			ScheduledAt:        timestamppb.New(d.ScheduledAt),
+			ExpectedFinishTime: timestamppb.New(d.ExpectedFinishTime),
 		}
-		if r.ActualFinishTime != nil {
-			report.ActualFinishTime = timestamppb.New(*r.ActualFinishTime)
+		if d.ActualFinishTime != nil {
+			detail.ActualFinishTime = timestamppb.New(*d.ActualFinishTime)
 		}
-		response.Reports = append(response.Reports, report)
+		if d.Delay != nil {
+			detail.Delay = durationpb.New(*d.Delay)
+		}
+		response.Details = append(response.Details, detail)
 	}
-	if summary.MeanDelay != nil {
-		response.MeanDelay = durationpb.New(*summary.MeanDelay)
-		response.HasMeanDelay = true
+
+	response.Summary.MaxExpectedCompletionTime = timestamppb.New(report.Summary.MaxExpectedCompletionTime)
+	if report.Summary.MeanDelay != nil {
+		response.Summary.MeanDelay = durationpb.New(*report.Summary.MeanDelay)
+	}
+	if report.Summary.MaxDelay != nil {
+		response.Summary.MaxDelay = durationpb.New(*report.Summary.MaxDelay)
+	}
+	if report.Summary.MaxActualCompletionTime != nil {
+		response.Summary.MaxActualCompletionTime = timestamppb.New(*report.Summary.MaxActualCompletionTime)
 	}
 
 	return response, nil

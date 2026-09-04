@@ -12,34 +12,61 @@ type JobFilterRequest struct {
 	Labels      map[string][]string
 }
 
-type JobCompletionTimeReport struct {
+type JobCompletionTimeDetail struct {
 	ProjectName        tenant.ProjectName
 	JobName            JobName
 	ScheduledAt        time.Time
 	ExpectedFinishTime time.Time
 	ActualFinishTime   *time.Time
+	Delay              *time.Duration
 }
 
-type JobCompletionTimeReports []JobCompletionTimeReport
+type JobCompletionTimeDetails []JobCompletionTimeDetail
 
 type JobCompletionTimeSummary struct {
-	Reports   []JobCompletionTimeReport
-	MeanDelay *time.Duration
+	MeanDelay                 *time.Duration
+	MaxDelay                  *time.Duration
+	MaxExpectedCompletionTime time.Time
+	MaxActualCompletionTime   *time.Time
 }
 
-func (r JobCompletionTimeReports) ComputeMeanDelay() *time.Duration {
+type JobCompletionTimeReport struct {
+	Details []JobCompletionTimeDetail
+	Summary JobCompletionTimeSummary
+}
+
+func (r JobCompletionTimeDetails) GenerateSummary() JobCompletionTimeSummary {
+	var summary JobCompletionTimeSummary
 	var sum time.Duration
 	var count int
 	for _, rep := range r {
+		if summary.MaxExpectedCompletionTime.IsZero() || rep.ExpectedFinishTime.After(summary.MaxExpectedCompletionTime) {
+			summary.MaxExpectedCompletionTime = rep.ExpectedFinishTime
+		}
+		if rep.ActualFinishTime != nil && (summary.MaxActualCompletionTime == nil || rep.ActualFinishTime.After(*summary.MaxActualCompletionTime)) {
+			summary.MaxActualCompletionTime = rep.ActualFinishTime
+		}
+
 		if rep.ActualFinishTime == nil {
 			continue
 		}
-		sum += rep.ActualFinishTime.Sub(rep.ExpectedFinishTime)
+		// only consider delays from finish times which are delayed than expected
+		if rep.ActualFinishTime.Before(rep.ExpectedFinishTime) {
+			continue
+		}
+
+		delay := rep.ActualFinishTime.Sub(rep.ExpectedFinishTime)
+		sum += delay
 		count++
+
+		if summary.MaxDelay == nil || delay > *summary.MaxDelay {
+			summary.MaxDelay = &delay
+		}
 	}
 	if count == 0 {
-		return nil
+		return summary
 	}
 	mean := sum / time.Duration(count)
-	return &mean
+	summary.MeanDelay = &mean
+	return summary
 }

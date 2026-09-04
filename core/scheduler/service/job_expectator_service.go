@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -273,29 +274,33 @@ func maxTime(t1, t2 time.Time) time.Time {
 	return t2
 }
 
-func (s *JobExpectatorService) GenerateJobExpectedCompletionTimeReport(ctx context.Context, reqs []scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) (*scheduler.JobCompletionTimeSummary, error) {
-	var allReports scheduler.JobCompletionTimeReports
+func (s *JobExpectatorService) GenerateJobExpectedCompletionTimeReport(ctx context.Context, reqs []scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) (*scheduler.JobCompletionTimeReport, error) {
+	var allDetails scheduler.JobCompletionTimeDetails
 	me := errors.NewMultiError("GenerateJobExpectedCompletionTimeReport")
 	for _, req := range reqs {
-		reports, err := s.computeCompletionTimeReports(ctx, req, referenceTime, scheduleRangeInHours)
+		details, err := s.computeCompletionTimeReports(ctx, req, referenceTime, scheduleRangeInHours)
 		if err != nil {
 			s.l.Error(fmt.Sprintf("failed to compute completion time report for combo, skipping [project: %s]: %s", req.ProjectName.String(), err.Error()))
 			me.Append(err)
 			continue
 		}
-		allReports = append(allReports, reports...)
+		allDetails = append(allDetails, details...)
 	}
-	if len(allReports) == 0 && len(reqs) > 0 {
+	if len(allDetails) == 0 && len(me.Errors) > 0 {
 		return nil, me.ToErr()
 	}
 
-	return &scheduler.JobCompletionTimeSummary{
-		Reports:   allReports,
-		MeanDelay: allReports.ComputeMeanDelay(),
+	sort.Slice(allDetails, func(i, j int) bool {
+		return allDetails[i].ExpectedFinishTime.After(allDetails[j].ExpectedFinishTime)
+	})
+
+	return &scheduler.JobCompletionTimeReport{
+		Details: allDetails,
+		Summary: allDetails.GenerateSummary(),
 	}, nil
 }
 
-func (s *JobExpectatorService) computeCompletionTimeReports(ctx context.Context, req scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) ([]scheduler.JobCompletionTimeReport, error) {
+func (s *JobExpectatorService) computeCompletionTimeReports(ctx context.Context, req scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) ([]scheduler.JobCompletionTimeDetail, error) {
 	jobsWithDetails, err := s.getJobWithDetails(ctx, req)
 	if err != nil {
 		return nil, err
@@ -360,23 +365,29 @@ func (s *JobExpectatorService) computeCompletionTimeReports(ctx context.Context,
 		}
 	}
 
-	reports := make([]scheduler.JobCompletionTimeReport, 0, len(unfinishedJobSchedules))
+	details := make([]scheduler.JobCompletionTimeDetail, 0, len(unfinishedJobSchedules))
 	for _, jobSchedule := range unfinishedJobSchedules {
-		detail, ok := jobRunExpectedFinishTimeDetail[jobSchedule]
+		finishTimeDetail, ok := jobRunExpectedFinishTimeDetail[jobSchedule]
 		if !ok {
 			s.l.Warn(fmt.Sprintf("expected finish time not found for job schedule [job: %s, scheduled_at: %s]", jobSchedule.JobName, jobSchedule.ScheduledAt))
 			continue
 		}
-		reports = append(reports, scheduler.JobCompletionTimeReport{
+		actualFinishTime := actualFinishTimes[jobSchedule]
+		detail := scheduler.JobCompletionTimeDetail{
 			ProjectName:        req.ProjectName,
 			JobName:            jobSchedule.JobName,
 			ScheduledAt:        jobSchedule.ScheduledAt,
-			ExpectedFinishTime: detail.FinishTime,
-			ActualFinishTime:   actualFinishTimes[jobSchedule],
-		})
+			ExpectedFinishTime: finishTimeDetail.FinishTime,
+			ActualFinishTime:   actualFinishTime,
+		}
+		if actualFinishTime != nil {
+			delay := actualFinishTime.Sub(finishTimeDetail.FinishTime)
+			detail.Delay = &delay
+		}
+		details = append(details, detail)
 	}
 
-	return reports, nil
+	return details, nil
 }
 
 func (s *JobExpectatorService) getJobWithDetails(ctx context.Context, req scheduler.JobFilterRequest) ([]*scheduler.JobWithDetails, error) {

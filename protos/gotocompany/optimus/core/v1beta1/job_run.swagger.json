@@ -1076,7 +1076,7 @@
       ],
       "default": "TYPE_UNSPECIFIED"
     },
-    "v1beta1JobCompletionTimeReport": {
+    "v1beta1JobCompletionTimeDetail": {
       "type": "object",
       "properties": {
         "projectName": {
@@ -1094,6 +1094,28 @@
           "format": "date-time"
         },
         "actualFinishTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "delay": {
+          "type": "string"
+        }
+      }
+    },
+    "v1beta1JobCompletionTimeSummary": {
+      "type": "object",
+      "properties": {
+        "meanDelay": {
+          "type": "string"
+        },
+        "maxDelay": {
+          "type": "string"
+        },
+        "maxExpectedCompletionTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "maxActualCompletionTime": {
           "type": "string",
           "format": "date-time"
         }
@@ -1197,23 +1219,26 @@
         "referenceTime": {
           "type": "string",
           "format": "date-time"
+        },
+        "jobNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
     "v1beta1JobExpectedCompletionTimeReportResponse": {
       "type": "object",
       "properties": {
-        "reports": {
+        "details": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/v1beta1JobCompletionTimeReport"
+            "$ref": "#/definitions/v1beta1JobCompletionTimeDetail"
           }
         },
-        "meanDelay": {
-          "type": "string"
-        },
-        "hasMeanDelay": {
-          "type": "boolean"
+        "summary": {
+          "$ref": "#/definitions/v1beta1JobCompletionTimeSummary"
         }
       }
     },

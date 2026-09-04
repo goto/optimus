@@ -335,16 +335,22 @@ func buildJobFilter(req *pb.JobExpectedCompletionTimeReportRequest) ([]scheduler
 		labels[key] = values.GetValues()
 	}
 
-	combos := make([]scheduler.JobFilterRequest, 0, len(req.GetProjectNames()))
+	jobNames := []scheduler.JobName{}
+	for _, jobName := range req.GetJobNames() {
+		jobNames = append(jobNames, scheduler.JobName(jobName))
+	}
+
+	filters := make([]scheduler.JobFilterRequest, 0, len(req.GetProjectNames()))
 	for _, projectNameStr := range req.GetProjectNames() {
 		projectName, err := tenant.ProjectNameFrom(projectNameStr)
 		if err != nil {
 			return nil, err
 		}
-		combos = append(combos, scheduler.JobFilterRequest{
+		filters = append(filters, scheduler.JobFilterRequest{
 			ProjectName: projectName,
+			JobNames:    jobNames,
 			Labels:      labels,
 		})
 	}
-	return combos, nil
+	return filters, nil
 }

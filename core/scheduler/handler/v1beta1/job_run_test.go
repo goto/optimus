@@ -1166,6 +1166,145 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Equal(t, 1, len(resp.InprogressJobs))
 		})
 	})
+
+	t.Run("GetJobExpectedCompletionTimeReport", func(t *testing.T) {
+		t.Run("should return error when project name is invalid", func(t *testing.T) {
+			jobExpectatorService := NewJobExpectatorService(t)
+			defer jobExpectatorService.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+
+			req := &pb.JobExpectedCompletionTimeReportRequest{
+				ProjectNames:          []string{""},
+				ScheduledRangeInHours: 12,
+			}
+
+			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			assert.NotNil(t, err)
+			assert.Nil(t, resp)
+			assert.ErrorContains(t, err, "unable to adapt request")
+		})
+
+		t.Run("should return error when service returns an error", func(t *testing.T) {
+			jobExpectatorService := NewJobExpectatorService(t)
+			defer jobExpectatorService.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+
+			req := &pb.JobExpectedCompletionTimeReportRequest{
+				ProjectNames:          []string{projectName},
+				ScheduledRangeInHours: 12,
+			}
+
+			jobExpectatorService.On("GenerateJobExpectedCompletionTimeReport", ctx, []scheduler.JobFilterRequest{
+				{ProjectName: tenant.ProjectName(projectName), JobNames: []scheduler.JobName{}, Labels: map[string][]string{}},
+			}, mock.Anything, 12*time.Hour).Return(nil, errors.New("service error"))
+
+			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			assert.NotNil(t, err)
+			assert.Nil(t, resp)
+			assert.ErrorContains(t, err, "unable to generate job expected completion time report")
+		})
+
+		t.Run("should map reports and mean delay successfully", func(t *testing.T) {
+			jobExpectatorService := NewJobExpectatorService(t)
+			defer jobExpectatorService.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+
+			req := &pb.JobExpectedCompletionTimeReportRequest{
+				ProjectNames:          []string{projectName},
+				ScheduledRangeInHours: 12,
+			}
+
+			scheduledAt := time.Now().UTC()
+			expectedFinishTime := scheduledAt.Add(30 * time.Minute)
+			actualFinishTime := scheduledAt.Add(35 * time.Minute)
+			meanDelay := 5 * time.Minute
+
+			jobExpectatorService.On("GenerateJobExpectedCompletionTimeReport", ctx, []scheduler.JobFilterRequest{
+				{ProjectName: tenant.ProjectName(projectName), JobNames: []scheduler.JobName{}, Labels: map[string][]string{}},
+			}, mock.Anything, 12*time.Hour).Return(&scheduler.JobCompletionTimeReport{
+				Details: []scheduler.JobCompletionTimeDetail{
+					{
+						ProjectName:        tenant.ProjectName(projectName),
+						JobName:            "job-A",
+						ScheduledAt:        scheduledAt,
+						ExpectedFinishTime: expectedFinishTime,
+						ActualFinishTime:   &actualFinishTime,
+					},
+					{
+						ProjectName:        tenant.ProjectName(projectName),
+						JobName:            "job-B",
+						ScheduledAt:        scheduledAt,
+						ExpectedFinishTime: expectedFinishTime,
+						ActualFinishTime:   nil,
+					},
+				},
+				Summary: scheduler.JobCompletionTimeSummary{
+					MeanDelay: &meanDelay,
+				},
+			}, nil)
+
+			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			assert.Nil(t, err)
+			if assert.NotNil(t, resp) {
+				assert.Len(t, resp.Details, 2)
+
+				byJob := map[string]*pb.JobCompletionTimeDetail{}
+				for _, r := range resp.Details {
+					byJob[r.JobName] = r
+				}
+
+				reportA := byJob["job-A"]
+				if assert.NotNil(t, reportA) {
+					assert.Equal(t, projectName, reportA.ProjectName)
+					assert.Equal(t, scheduledAt, reportA.ScheduledAt.AsTime())
+					assert.Equal(t, expectedFinishTime, reportA.ExpectedFinishTime.AsTime())
+					if assert.NotNil(t, reportA.ActualFinishTime) {
+						assert.Equal(t, actualFinishTime, reportA.ActualFinishTime.AsTime())
+					}
+				}
+
+				reportB := byJob["job-B"]
+				if assert.NotNil(t, reportB) {
+					assert.Nil(t, reportB.ActualFinishTime)
+				}
+
+				if assert.NotNil(t, resp.Summary.MeanDelay) {
+					assert.Equal(t, meanDelay, resp.Summary.MeanDelay.AsDuration())
+				}
+			}
+		})
+
+		t.Run("should leave mean delay unset when the service returns none", func(t *testing.T) {
+			jobExpectatorService := NewJobExpectatorService(t)
+			defer jobExpectatorService.AssertExpectations(t)
+
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+
+			req := &pb.JobExpectedCompletionTimeReportRequest{
+				ProjectNames:          []string{projectName},
+				ScheduledRangeInHours: 12,
+			}
+
+			jobExpectatorService.On("GenerateJobExpectedCompletionTimeReport", ctx, []scheduler.JobFilterRequest{
+				{ProjectName: tenant.ProjectName(projectName), JobNames: []scheduler.JobName{}, Labels: map[string][]string{}},
+			}, mock.Anything, 12*time.Hour).Return(&scheduler.JobCompletionTimeReport{
+				Details: []scheduler.JobCompletionTimeDetail{},
+				Summary: scheduler.JobCompletionTimeSummary{},
+			}, nil)
+
+			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			assert.Nil(t, err)
+			if assert.NotNil(t, resp) {
+				assert.Empty(t, resp.Details)
+				if assert.NotNil(t, resp.Summary) {
+					assert.Nil(t, resp.Summary.MeanDelay)
+				}
+			}
+		})
+	})
 }
 
 type mockThirdPartyClient struct {
@@ -1310,6 +1449,36 @@ func (_m *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context,
 
 	if rf, ok := ret.Get(1).(func(context.Context, tenant.ProjectName, []scheduler.JobName, map[string]string, time.Time, time.Duration) error); ok {
 		r1 = rf(ctx, projectName, jobNames, labels, referenceTime, scheduleRangeInHours)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GenerateJobExpectedCompletionTimeReport provides a mock function with given fields: ctx, reqs, referenceTime, scheduleRangeInHours
+func (_m *JobExpectatorService) GenerateJobExpectedCompletionTimeReport(ctx context.Context, reqs []scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) (*scheduler.JobCompletionTimeReport, error) {
+	ret := _m.Called(ctx, reqs, referenceTime, scheduleRangeInHours)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GenerateJobExpectedCompletionTimeReport")
+	}
+
+	var r0 *scheduler.JobCompletionTimeReport
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobFilterRequest, time.Time, time.Duration) (*scheduler.JobCompletionTimeReport, error)); ok {
+		return rf(ctx, reqs, referenceTime, scheduleRangeInHours)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []scheduler.JobFilterRequest, time.Time, time.Duration) *scheduler.JobCompletionTimeReport); ok {
+		r0 = rf(ctx, reqs, referenceTime, scheduleRangeInHours)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*scheduler.JobCompletionTimeReport)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []scheduler.JobFilterRequest, time.Time, time.Duration) error); ok {
+		r1 = rf(ctx, reqs, referenceTime, scheduleRangeInHours)
 	} else {
 		r1 = ret.Error(1)
 	}

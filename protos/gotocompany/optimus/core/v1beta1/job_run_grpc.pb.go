@@ -45,6 +45,9 @@ type JobRunServiceClient interface {
 	IdentifyPotentialSLABreach(ctx context.Context, in *IdentifyPotentialSLABreachRequest, opts ...grpc.CallOption) (*IdentifyPotentialSLABreachResponse, error)
 	// GenerateExpectedFinishTime generates and stores the expected finish time for a given job(s)
 	GenerateExpectedFinishTime(ctx context.Context, in *GenerateExpectedFinishTimeRequest, opts ...grpc.CallOption) (*GenerateExpectedFinishTimeResponse, error)
+	// GetJobExpectedCompletionTimeReport will provide a report on the selected jobs' completion time (actual & expected)
+	// on a given point of time, and get the mean delay between those times
+	GetJobExpectedCompletionTimeReport(ctx context.Context, in *JobExpectedCompletionTimeReportRequest, opts ...grpc.CallOption) (*JobExpectedCompletionTimeReportResponse, error)
 }
 
 type jobRunServiceClient struct {
@@ -163,6 +166,15 @@ func (c *jobRunServiceClient) GenerateExpectedFinishTime(ctx context.Context, in
 	return out, nil
 }
 
+func (c *jobRunServiceClient) GetJobExpectedCompletionTimeReport(ctx context.Context, in *JobExpectedCompletionTimeReportRequest, opts ...grpc.CallOption) (*JobExpectedCompletionTimeReportResponse, error) {
+	out := new(JobExpectedCompletionTimeReportResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobExpectedCompletionTimeReport", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobRunServiceServer is the server API for JobRunService service.
 // All implementations must embed UnimplementedJobRunServiceServer
 // for forward compatibility
@@ -190,6 +202,9 @@ type JobRunServiceServer interface {
 	IdentifyPotentialSLABreach(context.Context, *IdentifyPotentialSLABreachRequest) (*IdentifyPotentialSLABreachResponse, error)
 	// GenerateExpectedFinishTime generates and stores the expected finish time for a given job(s)
 	GenerateExpectedFinishTime(context.Context, *GenerateExpectedFinishTimeRequest) (*GenerateExpectedFinishTimeResponse, error)
+	// GetJobExpectedCompletionTimeReport will provide a report on the selected jobs' completion time (actual & expected)
+	// on a given point of time, and get the mean delay between those times
+	GetJobExpectedCompletionTimeReport(context.Context, *JobExpectedCompletionTimeReportRequest) (*JobExpectedCompletionTimeReportResponse, error)
 	mustEmbedUnimplementedJobRunServiceServer()
 }
 
@@ -232,6 +247,9 @@ func (UnimplementedJobRunServiceServer) IdentifyPotentialSLABreach(context.Conte
 }
 func (UnimplementedJobRunServiceServer) GenerateExpectedFinishTime(context.Context, *GenerateExpectedFinishTimeRequest) (*GenerateExpectedFinishTimeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GenerateExpectedFinishTime not implemented")
+}
+func (UnimplementedJobRunServiceServer) GetJobExpectedCompletionTimeReport(context.Context, *JobExpectedCompletionTimeReportRequest) (*JobExpectedCompletionTimeReportResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetJobExpectedCompletionTimeReport not implemented")
 }
 func (UnimplementedJobRunServiceServer) mustEmbedUnimplementedJobRunServiceServer() {}
 
@@ -462,6 +480,24 @@ func _JobRunService_GenerateExpectedFinishTime_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobRunService_GetJobExpectedCompletionTimeReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JobExpectedCompletionTimeReportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobRunServiceServer).GetJobExpectedCompletionTimeReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/GetJobExpectedCompletionTimeReport",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobRunServiceServer).GetJobExpectedCompletionTimeReport(ctx, req.(*JobExpectedCompletionTimeReportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobRunService_ServiceDesc is the grpc.ServiceDesc for JobRunService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -516,6 +552,10 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GenerateExpectedFinishTime",
 			Handler:    _JobRunService_GenerateExpectedFinishTime_Handler,
+		},
+		{
+			MethodName: "GetJobExpectedCompletionTimeReport",
+			Handler:    _JobRunService_GetJobExpectedCompletionTimeReport_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

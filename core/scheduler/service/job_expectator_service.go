@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/errors"
 )
 
 type FinishTimeStatus string
@@ -109,7 +111,7 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 			continue
 		}
 		s.l.Debug("calculating expected finish time for job", "job", jobSchedule.JobName, "scheduled_at", jobSchedule.ScheduledAt)
-		err := s.PopulateExpectedFinishTime(jobSchedule, jobsWithLineageMap[jobSchedule.JobName], jobRunExpectedFinishTimeDetail, jobDurationsEstimation, referenceTime)
+		err := s.PopulateExpectedFinishTime(jobSchedule.JobName, jobsWithLineageMap[jobSchedule.JobName], jobRunExpectedFinishTimeDetail, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			s.l.Error(fmt.Sprintf("failed to populate expected finish time for job [%s]: %s", jobSchedule.JobName, err.Error()))
 			return nil, err
@@ -150,9 +152,13 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 	return finalJobRunExpectedFinishTimes, nil
 }
 
-func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.JobSchedule, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
+// selfParent is the immediate downstream job that led to currentJobWithLineage in the current
+// traversal - currentJobWithLineage's own run is keyed by that name in JobRuns, since
+// LineageResolver.BuildLineage keys a node's JobRuns by its immediate downstream
+// to support lineages where a shared upstream carries a distinct run per downstream path.
+func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.JobName, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
 	// pre condition check
-	if currentJobWithLineage == nil || currentJobWithLineage.JobRuns[jobTarget.JobName] == nil {
+	if currentJobWithLineage == nil || currentJobWithLineage.GetRunForJob(selfParent) == nil {
 		// TODO: add metric to track how many times this happens
 		s.l.Error(fmt.Sprintf("[critical] no job run found for job [%s], skipping expected finish time calculation", currentJobWithLineage.JobName))
 		return nil
@@ -162,7 +168,7 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		return nil
 	}
 
-	currentJobRun := currentJobWithLineage.JobRuns[jobTarget.JobName]
+	currentJobRun := currentJobWithLineage.GetRunForJob(selfParent)
 	currentJobScheduleKey := scheduler.JobSchedule{
 		// TODO: add project name as well, PR: https://github.com/goto/optimus/pull/501
 		JobName:     currentJobWithLineage.JobName,
@@ -231,17 +237,18 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(jobTarget *scheduler.J
 		FinishTime: maxUpstreamExpectedFinishTime.Add(*estimatedDuration),
 	}
 	for _, upstream := range currentJobWithLineage.Upstreams {
-		err := s.PopulateExpectedFinishTime(jobTarget, upstream, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
+		err := s.PopulateExpectedFinishTime(currentJobWithLineage.JobName, upstream, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			return err
 		}
-		if upstream.JobRuns[jobTarget.JobName] == nil {
+		upstreamJobRun := upstream.GetRunForJob(currentJobWithLineage.JobName)
+		if upstream.JobRuns[currentJobWithLineage.JobName] == nil {
 			s.l.Debug(fmt.Sprintf("no upstream job run found for job, skipping upstream in expected finish time calculation [job: %s, upstream_job: %s]", currentJobWithLineage.JobName, upstream.JobName))
 			continue
 		}
 		upstreamScheduleKey := scheduler.JobSchedule{
 			JobName:     upstream.JobName,
-			ScheduledAt: upstream.JobRuns[jobTarget.JobName].ScheduledAt,
+			ScheduledAt: upstreamJobRun.ScheduledAt,
 		}
 		upstreamExpectedFinishTime, ok := jobRunExpectedFinishTimes[upstreamScheduleKey]
 		if !ok {
@@ -265,4 +272,160 @@ func maxTime(t1, t2 time.Time) time.Time {
 		return t1
 	}
 	return t2
+}
+
+func (s *JobExpectatorService) GenerateJobExpectedCompletionTimeReport(ctx context.Context, reqs []scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) (*scheduler.JobCompletionTimeReport, error) {
+	var allDetails scheduler.JobCompletionTimeDetails
+	me := errors.NewMultiError("GenerateJobExpectedCompletionTimeReport")
+	for _, req := range reqs {
+		details, err := s.computeCompletionTimeReports(ctx, req, referenceTime, scheduleRangeInHours)
+		if err != nil {
+			s.l.Error(fmt.Sprintf("failed to compute completion time report for combo, skipping [project: %s]: %s", req.ProjectName.String(), err.Error()))
+			me.Append(err)
+			continue
+		}
+		allDetails = append(allDetails, details...)
+	}
+	if len(allDetails) == 0 && len(me.Errors) > 0 {
+		return nil, me.ToErr()
+	}
+
+	sort.Slice(allDetails, func(i, j int) bool {
+		return allDetails[i].ExpectedFinishTime.After(allDetails[j].ExpectedFinishTime)
+	})
+
+	return &scheduler.JobCompletionTimeReport{
+		Details: allDetails,
+		Summary: allDetails.GenerateSummary(),
+	}, nil
+}
+
+func (s *JobExpectatorService) computeCompletionTimeReports(ctx context.Context, req scheduler.JobFilterRequest, referenceTime time.Time, scheduleRangeInHours time.Duration) ([]scheduler.JobCompletionTimeDetail, error) {
+	jobsWithDetails, err := s.getJobWithDetails(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobsWithDetails) == 0 {
+		return nil, nil
+	}
+
+	jobSchedules := getJobSchedules(s.l, jobsWithDetails, scheduleRangeInHours, referenceTime)
+	if len(jobSchedules) == 0 {
+		return nil, nil
+	}
+
+	jobsWithLineageMap, err := s.jobLineageFetcher.GetJobLineage(ctx, jobSchedules, int(scheduleRangeInHours.Hours()))
+	if err != nil {
+		return nil, err
+	}
+
+	// filter out schedules & lineages which is already finished & invalid ones
+	unfinishedJobSchedules := []scheduler.JobSchedule{}
+	unfinishedJobsWithLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
+	actualFinishTimes := map[scheduler.JobSchedule]*time.Time{}
+	for _, jobSchedule := range jobSchedules {
+		if jobSchedule == nil {
+			continue
+		}
+
+		lineage, ok := jobsWithLineageMap[jobSchedule.JobName]
+		if !ok {
+			continue
+		}
+
+		if run := lineage.GetRunForJob(jobSchedule.JobName); run != nil && (run.GetActualEndTime() == nil ||
+			run.GetActualEndTime().After(referenceTime)) {
+
+			unfinishedJobSchedules = append(unfinishedJobSchedules, *jobSchedule)
+			unfinishedJobsWithLineageMap[jobSchedule.JobName] = lineage
+			actualFinishTimes[*jobSchedule] = run.GetActualEndTime()
+		}
+	}
+
+	scheduler.ClipLineageRunsToReferenceTime(unfinishedJobsWithLineageMap, referenceTime)
+
+	uniqueJobNames := collectJobNames(unfinishedJobsWithLineageMap)
+	jobDurationsEstimation, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, referenceTime, uniqueJobNames)
+	if err != nil {
+		return nil, err
+	}
+
+	jobRunExpectedFinishTimeDetail := map[scheduler.JobSchedule]FinishTimeDetail{}
+	for _, jobSchedule := range unfinishedJobSchedules {
+		if _, ok := jobRunExpectedFinishTimeDetail[jobSchedule]; ok {
+			continue
+		}
+		lineage, ok := unfinishedJobsWithLineageMap[jobSchedule.JobName]
+		if !ok {
+			s.l.Warn(fmt.Sprintf("no lineage found for job [%s], cannot calculate expected finish time", jobSchedule.JobName))
+			continue
+		}
+		if err := s.PopulateExpectedFinishTime(jobSchedule.JobName, lineage, jobRunExpectedFinishTimeDetail, jobDurationsEstimation, referenceTime); err != nil {
+			return nil, err
+		}
+	}
+
+	details := make([]scheduler.JobCompletionTimeDetail, 0, len(unfinishedJobSchedules))
+	for _, jobSchedule := range unfinishedJobSchedules {
+		finishTimeDetail, ok := jobRunExpectedFinishTimeDetail[jobSchedule]
+		if !ok {
+			s.l.Warn(fmt.Sprintf("expected finish time not found for job schedule [job: %s, scheduled_at: %s]", jobSchedule.JobName, jobSchedule.ScheduledAt))
+			continue
+		}
+		actualFinishTime := actualFinishTimes[jobSchedule]
+		detail := scheduler.JobCompletionTimeDetail{
+			ProjectName:        req.ProjectName,
+			JobName:            jobSchedule.JobName,
+			ScheduledAt:        jobSchedule.ScheduledAt,
+			ExpectedFinishTime: finishTimeDetail.FinishTime,
+			ActualFinishTime:   actualFinishTime,
+		}
+		if actualFinishTime != nil {
+			delay := actualFinishTime.Sub(finishTimeDetail.FinishTime)
+			detail.Delay = &delay
+		}
+		details = append(details, detail)
+	}
+
+	return details, nil
+}
+
+func (s *JobExpectatorService) getJobWithDetails(ctx context.Context, req scheduler.JobFilterRequest) ([]*scheduler.JobWithDetails, error) {
+	filteredJobMerged := map[scheduler.JobName]*scheduler.JobWithDetails{}
+
+	if len(req.JobNames) > 0 {
+		jobNames := make([]string, 0, len(req.JobNames))
+		for _, jn := range req.JobNames {
+			jobNames = append(jobNames, jn.String())
+		}
+		jobsWithDetails, err := s.jobDetailsGetter.GetJobs(ctx, req.ProjectName, jobNames)
+		if err != nil {
+			if jobsWithDetails == nil {
+				return nil, err
+			}
+			s.l.Error("[getJobWithDetailsMultiValueLabels] encountered non-blocking error when fetching jobs by names: %s", err.Error())
+		}
+		for _, job := range jobsWithDetails {
+			filteredJobMerged[job.Name] = job
+		}
+	}
+
+	if len(req.Labels) > 0 {
+		jobsWithDetails, err := s.jobDetailsGetter.GetJobsByLabelsMultiValue(ctx, req.ProjectName, req.Labels)
+		if err != nil {
+			if jobsWithDetails == nil {
+				return nil, err
+			}
+			s.l.Error("[getJobWithDetailsMultiValueLabels] encountered non-blocking error when fetching jobs by labels: %s", err.Error())
+		}
+		for _, job := range jobsWithDetails {
+			filteredJobMerged[job.Name] = job
+		}
+	}
+
+	filteredJobs := make([]*scheduler.JobWithDetails, 0, len(filteredJobMerged))
+	for _, job := range filteredJobMerged {
+		filteredJobs = append(filteredJobs, job)
+	}
+	return filteredJobs, nil
 }

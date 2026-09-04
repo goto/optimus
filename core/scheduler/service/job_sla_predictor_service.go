@@ -50,6 +50,9 @@ type DurationEstimator interface {
 type JobDetailsGetter interface {
 	GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error)
 	GetJobsByLabels(ctx context.Context, projectName tenant.ProjectName, labels map[string]string) ([]*scheduler.JobWithDetails, error)
+	// GetJobsByLabelsMultiValue is like GetJobsByLabels but each key may match any of several
+	// values (OR'd within a key, AND'd across keys).
+	GetJobsByLabelsMultiValue(ctx context.Context, projectName tenant.ProjectName, labels map[string][]string) ([]*scheduler.JobWithDetails, error)
 }
 
 type SLAPredictorRepository interface {

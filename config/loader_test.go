@@ -263,8 +263,10 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 	s.expectedServerConfig.Serve.DB.DSN = "postgres://user:password@localhost:5432/database?sslmode=disable"
 	s.expectedServerConfig.Serve.DB.MinOpenConnection = 5
 	s.expectedServerConfig.Serve.DB.MaxOpenConnection = 10
+
 	s.expectedServerConfig.Completeness.ResolutionCacheTTLMinutes = 45
 	s.expectedServerConfig.Completeness.RunStatusCacheTTLMinutes = 5
+	s.expectedServerConfig.Completeness.SchedulingTimezone = "Asia/Jakarta"
 
 	s.expectedServerConfig.Telemetry = config.TelemetryConfig{}
 	s.expectedServerConfig.Telemetry.ProfileAddr = ":9110"

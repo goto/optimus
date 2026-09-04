@@ -63,6 +63,7 @@ type managedJobRef struct {
 	jobName          string
 	tenant           tenant.Tenant
 	cronInterval     string
+	isActive         bool
 }
 
 type resolutionEntry struct {
@@ -133,6 +134,7 @@ type ManagedTable struct {
 	OptimusNamespace string
 	JobName          string
 	Run              *RunStatus
+	IsActive         bool // false if the job is currently disabled/paused
 }
 
 type UnmanagedTable struct {
@@ -202,6 +204,7 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 					OptimusNamespace: ref.optimusNamespace,
 					JobName:          ref.jobName,
 					Run:              run,
+					IsActive:         ref.isActive,
 				})
 			}
 			return result, nil
@@ -275,6 +278,7 @@ func (s *Service) resolveDestination(ctx context.Context, urn resource.URN) (res
 			jobName:          j.GetName(),
 			tenant:           j.Tenant(),
 			cronInterval:     j.Spec().Schedule().Interval(),
+			isActive:         j.IsEnabled(),
 		})
 	}
 	return resolutionEntry{managed: refs}, nil

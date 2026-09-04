@@ -8,13 +8,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 )
 
-// This is a package-internal test (not service_test) because overallStatus is
-// unexported. It's the one piece of CheckQueryCompleteness's logic that's still a pure
-// function after Service's dependencies became concrete repository/plugin types
-// (jobRepo.JobRepository, *schedulerRepo.JobRunRepository, *plugin.PluginService) --
-// those can no longer be swapped for mocks, so exercising the rest of
-// CheckQueryCompleteness now needs a real Postgres-backed integration test, the same
-// way internal/store/postgres/job's own tests do.
+// Package-internal (not service_test) because overallStatus is unexported.
 func TestOverallStatus(t *testing.T) {
 	t.Run("complete when every managed table succeeded", func(t *testing.T) {
 		tables := []ManagedTable{

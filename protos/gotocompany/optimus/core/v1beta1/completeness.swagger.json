@@ -155,6 +155,10 @@
         "jobName": {
           "type": "string"
         },
+        "isActive": {
+          "type": "boolean",
+          "description": "is_active is false if the job is currently disabled/paused."
+        },
         "run": {
           "$ref": "#/definitions/v1beta1CompletenessJobRun",
           "description": "run is absent only if the job has never run."

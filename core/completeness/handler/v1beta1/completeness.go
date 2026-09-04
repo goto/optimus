@@ -71,6 +71,7 @@ func toProtoManagedTables(tables []service.ManagedTable) []*pb.ManagedTable {
 			OptimusNamespace: t.OptimusNamespace,
 			JobName:          t.JobName,
 			Run:              toProtoJobRun(t.Run),
+			IsActive:         t.IsActive,
 		})
 	}
 	return out

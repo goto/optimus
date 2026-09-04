@@ -61,8 +61,9 @@ func (m *mockThirdPartyClient) IsComplete(ctx context.Context, resourceURN resou
 	return args.Bool(0), args.Get(1), args.Error(2)
 }
 
-// buildJob constructs a minimal *job.Job fixture with a daily 1AM schedule, following
-// the same builder chain as core/job/resolver/internal_upstream_resolver_test.go.
+// buildJob constructs a minimal *job.Job fixture with a daily 1AM schedule and
+// ENABLED state, following the same builder chain as
+// core/job/resolver/internal_upstream_resolver_test.go.
 func buildJob(t *testing.T, tnnt tenant.Tenant, name job.Name, destination resource.URN) *job.Job {
 	t.Helper()
 
@@ -82,7 +83,9 @@ func buildJob(t *testing.T, tnnt tenant.Tenant, name job.Name, destination resou
 	spec, err := job.NewSpecBuilder(1, name, "sample-owner", jobSchedule, jobWindow, jobTask).Build()
 	require.NoError(t, err)
 
-	return job.NewJob(tnnt, spec, destination, nil, false)
+	theJob := job.NewJob(tnnt, spec, destination, nil, false)
+	require.NoError(t, theJob.SetState("enabled"))
+	return theJob
 }
 
 func TestCheckQueryCompleteness(t *testing.T) {
@@ -140,7 +143,32 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		assert.Equal(t, "ns1", mt.OptimusNamespace)
 		require.NotNil(t, mt.Run)
 		assert.Equal(t, scheduler.StateSuccess, mt.Run.State)
+		assert.True(t, mt.IsActive)
 		assert.Equal(t, service.OverallStatusComplete, result.OverallStatus)
+	})
+
+	t.Run("disabled job reports is_active false", func(t *testing.T) {
+		upstreamIdentifier := &mockUpstreamIdentifier{}
+		jobDestRepo := &mockJobDestinationRepository{}
+		jobRunRepo := &mockJobRunRepository{}
+
+		jobName, err := job.NameFrom("job-a")
+		require.NoError(t, err)
+		theJob := buildJob(t, tnnt, jobName, tableURN)
+		require.NoError(t, theJob.SetState("disabled"))
+
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
+			Return([]resource.URN{tableURN}, nil)
+		jobDestRepo.On("GetAllByResourceDestination", mock.Anything, tableURN).Return([]*job.Job{theJob}, nil)
+		jobRunRepo.On("GetByScheduledAt", mock.Anything, tnnt, mock.Anything, mock.Anything).
+			Return(&scheduler.JobRun{State: scheduler.StateSuccess, ScheduledAt: time.Now()}, nil)
+
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, service.Config{})
+		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
+
+		require.NoError(t, err)
+		require.Len(t, result.ManagedTables, 1)
+		assert.False(t, result.ManagedTables[0].IsActive)
 	})
 
 	t.Run("multiple jobs claiming the same destination are all surfaced, not just the first", func(t *testing.T) {

@@ -69,6 +69,10 @@ type CompletenessConfig struct {
 	// A cache ttl of 0 disables that cache rather than erroring.
 	ResolutionCacheTTLMinutes int `mapstructure:"resolution_cache_ttl_minutes" default:"45"`
 	RunStatusCacheTTLMinutes  int `mapstructure:"run_status_cache_ttl_minutes" default:"5"`
+
+	// SchedulingTimezone is the IANA zone (e.g. "Asia/Jakarta") whose calendar day
+	// defines "today" when picking a job's relevant scheduled run.
+	SchedulingTimezone string `mapstructure:"scheduling_timezone" default:"Asia/Jakarta"`
 }
 
 type DBConfig struct {

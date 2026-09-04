@@ -561,6 +561,13 @@ func (s *OptimusServer) setupHandlers() error {
 
 	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver) // nil if not configured; Service treats nil as "not managed"
 
+	schedulingLocation, err := time.LoadLocation(s.conf.Completeness.SchedulingTimezone)
+	if err != nil {
+		s.logger.Warn(fmt.Sprintf("completeness: invalid completeness.scheduling_timezone %q, defaulting to %s: %s",
+			s.conf.Completeness.SchedulingTimezone, completenessService.JKT, err.Error()))
+		schedulingLocation = completenessService.JKT
+	}
+
 	newCompletenessService := completenessService.NewService(
 		pluginService,
 		jJobRepo,
@@ -570,6 +577,7 @@ func (s *OptimusServer) setupHandlers() error {
 			MaxcomputeServiceAccount: maxcomputeCredentialSecret,
 			ResolutionCacheTTL:       time.Duration(s.conf.Completeness.ResolutionCacheTTLMinutes) * time.Minute,
 			RunStatusCacheTTL:        time.Duration(s.conf.Completeness.RunStatusCacheTTLMinutes) * time.Minute,
+			Location:                 schedulingLocation,
 		},
 	)
 	s.cleanupFn = append(s.cleanupFn, newCompletenessService.Close)

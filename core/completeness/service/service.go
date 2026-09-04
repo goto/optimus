@@ -51,6 +51,10 @@ type Config struct {
 	// A zero cache TTL disables that cache (see internal/lib/cache.New)
 	ResolutionCacheTTL time.Duration
 	RunStatusCacheTTL  time.Duration
+
+	// Location is the reference timezone whose calendar day defines "today" for
+	// daily-or-slower job schedules (see SelectScheduledAt). Defaults to JKT if nil.
+	Location *time.Location
 }
 
 // managedJobRef is a resolved table's producing job, everything needed to build a
@@ -109,6 +113,13 @@ func NewService(
 func (s *Service) Close() {
 	s.resolutionCache.Close()
 	s.runStatusCache.Close()
+}
+
+func (s *Service) location() *time.Location {
+	if s.conf.Location == nil {
+		return JKT
+	}
+	return s.conf.Location
 }
 
 type OverallStatus string
@@ -296,7 +307,7 @@ func (s *Service) getRunStatus(ctx context.Context, ref managedJobRef) (*RunStat
 		return nil, errors.InternalError(EntityCompleteness, "unable to parse cron interval for job "+ref.jobName, err)
 	}
 
-	scheduledAt, hasSchedule := SelectScheduledAt(jobCron, time.Now().In(JKT))
+	scheduledAt, hasSchedule := SelectScheduledAt(jobCron, time.Now(), s.location())
 	if !hasSchedule {
 		return nil, nil //nolint:nilnil // scheduled today but hasn't fired yet
 	}

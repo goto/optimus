@@ -12,9 +12,12 @@ import (
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/ext/store/bigquery"
+	"github.com/goto/optimus/ext/store/maxcompute"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cache"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/plugin"
 )
 
 const (
@@ -25,13 +28,6 @@ const (
 	maxResolvedResources = 200
 	fanOutTicketPerSec   = 50
 	fanOutConcurrency    = 100
-
-	datastoreNameMaxcompute = "maxcompute"
-	datastoreNameBigquery   = "bigquery"
-
-	// Secret keys, matching ext/store/maxcompute.accountKey / ext/store/bigquery.accountKey.
-	maxcomputeAccountKey = "DATASTORE_MAXCOMPUTE"
-	bigqueryAccountKey   = "DATASTORE_BIGQUERY"
 
 	secretCacheTTL = 12 * time.Hour
 )
@@ -150,9 +146,9 @@ func (s *Service) resolveServiceAccount(ctx context.Context, datastoreName strin
 		return "", fmt.Errorf("completeness.datastore_project is not configured")
 	}
 
-	accountKey := maxcomputeAccountKey
-	if datastoreName == datastoreNameBigquery {
-		accountKey = bigqueryAccountKey
+	accountKey := maxcompute.AccountKey
+	if datastoreName == plugin.DatastoreNameBigquery {
+		accountKey = bigquery.AccountKey
 	}
 
 	return s.secretCache.GetOrLoad(ctx, datastoreName, func(ctx context.Context) (string, error) {
@@ -176,7 +172,7 @@ type perURNResult struct {
 
 func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, query string) (*completeness.Result, error) {
 	if datastoreName == "" {
-		datastoreName = datastoreNameMaxcompute
+		datastoreName = plugin.DatastoreNameMaxcompute
 	}
 
 	svcAcc, err := s.resolveServiceAccount(ctx, datastoreName)

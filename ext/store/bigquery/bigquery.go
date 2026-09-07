@@ -15,8 +15,9 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
+// AccountKey is the tenant secret name for BigQuery credentials.
 const (
-	accountKey = "DATASTORE_BIGQUERY"
+	AccountKey = "DATASTORE_BIGQUERY"
 	store      = "BigqueryStore"
 
 	ConcurrentTicketPerSec = 5
@@ -66,7 +67,7 @@ func (s Store) Create(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "bigquery/CreateResource")
 	defer span.End()
 
-	account, err := s.secretProvider.GetSecret(spanCtx, res.Tenant(), accountKey)
+	account, err := s.secretProvider.GetSecret(spanCtx, res.Tenant(), AccountKey)
 	if err != nil {
 		return err
 	}
@@ -108,7 +109,7 @@ func (s Store) Update(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "bigquery/UpdateResource")
 	defer span.End()
 
-	account, err := s.secretProvider.GetSecret(spanCtx, res.Tenant(), accountKey)
+	account, err := s.secretProvider.GetSecret(spanCtx, res.Tenant(), AccountKey)
 	if err != nil {
 		return err
 	}
@@ -183,7 +184,7 @@ func (s Store) BatchUpdate(ctx context.Context, resources []*resource.Resource) 
 	}
 
 	tnnt := resources[0].Tenant()
-	account, err := s.secretProvider.GetSecret(spanCtx, tnnt, accountKey)
+	account, err := s.secretProvider.GetSecret(spanCtx, tnnt, AccountKey)
 	if err != nil {
 		return err
 	}
@@ -257,7 +258,7 @@ func (Store) GetURN(res *resource.Resource) (resource.URN, error) {
 }
 
 func (s Store) Backup(ctx context.Context, backup *resource.Backup, resources []*resource.Resource) (*resource.BackupResult, error) {
-	account, err := s.secretProvider.GetSecret(ctx, backup.Tenant(), accountKey)
+	account, err := s.secretProvider.GetSecret(ctx, backup.Tenant(), AccountKey)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +281,7 @@ func (s Store) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.URN) 
 		return false, errors.InvalidArgument(store, msg)
 	}
 
-	account, err := s.secretProvider.GetSecret(spanCtx, tnnt, accountKey)
+	account, err := s.secretProvider.GetSecret(spanCtx, tnnt, AccountKey)
 	if err != nil {
 		return false, err
 	}

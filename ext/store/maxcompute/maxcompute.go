@@ -15,8 +15,9 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
+// AccountKey is the tenant secret name for MaxCompute credentials.
 const (
-	accountKey = "DATASTORE_MAXCOMPUTE"
+	AccountKey = "DATASTORE_MAXCOMPUTE"
 	store      = "MaxComputeStore"
 
 	maxcomputeID = "maxcompute"
@@ -77,7 +78,7 @@ func (m MaxCompute) Create(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "maxcompute/CreateResource")
 	defer span.End()
 
-	odpsClient, err := m.initializeClient(spanCtx, res.Tenant(), accountKey)
+	odpsClient, err := m.initializeClient(spanCtx, res.Tenant(), AccountKey)
 	if err != nil {
 		return err
 	}
@@ -137,7 +138,7 @@ func (m MaxCompute) Update(ctx context.Context, res *resource.Resource) error {
 	spanCtx, span := startChildSpan(ctx, "maxcompute/UpdateResource")
 	defer span.End()
 
-	odpsClient, err := m.initializeClient(spanCtx, res.Tenant(), accountKey)
+	odpsClient, err := m.initializeClient(spanCtx, res.Tenant(), AccountKey)
 	if err != nil {
 		return err
 	}
@@ -232,7 +233,7 @@ func (m MaxCompute) Exist(ctx context.Context, tnnt tenant.Tenant, urn resource.
 		return false, errors.InvalidArgument(store, msg)
 	}
 
-	client, err := m.initializeClient(spanCtx, tnnt, accountKey)
+	client, err := m.initializeClient(spanCtx, tnnt, AccountKey)
 	if err != nil {
 		return false, err
 	}

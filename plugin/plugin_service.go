@@ -188,7 +188,7 @@ func (s PluginService) IdentifyUpstreamsFromQuery(ctx context.Context, datastore
 	var upstreamIdentifier upstreamidentifier.UpstreamIdentifier
 	var err error
 	switch datastoreName {
-	case "", DatastoreNameMaxcompute:
+	case DatastoreNameMaxcompute:
 		upstreamIdentifier, err = s.upstreamIdentifierFactory.GetMaxcomputeUpstreamIdentifier(ctx, svcAcc, evaluators...)
 	case DatastoreNameBigquery:
 		upstreamIdentifier, err = s.upstreamIdentifierFactory.GetBQUpstreamIdentifier(ctx, svcAcc, evaluators...)

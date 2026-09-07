@@ -214,6 +214,5 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		require.Len(t, result.ManagedTables, 0)
 		require.Len(t, result.UnmanagedTables, 0)
 		assert.Equal(t, completeness.OverallStatusComplete, result.OverallStatus)
-
 	})
 }

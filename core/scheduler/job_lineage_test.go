@@ -1019,3 +1019,100 @@ func TestJobRunSummary_GetState(t *testing.T) {
 		assert.Equal(t, scheduler.StateRunning, run.GetState())
 	})
 }
+
+func TestClipLineageRunsToReferenceTime(t *testing.T) {
+	referenceTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+	before := referenceTime.Add(-1 * time.Hour)
+	after := referenceTime.Add(1 * time.Hour)
+
+	t.Run("clips fields at or after referenceTime, leaves earlier fields and ScheduledAt/SLATime untouched", func(t *testing.T) {
+		scheduledAt := before
+		slaTime := after // a target, not an observed outcome - must survive clipping
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			SLATime:       &slaTime,
+			JobStartTime:  &before,
+			JobEndTime:    &after,
+			WaitStartTime: &before,
+			WaitEndTime:   &after,
+			TaskStartTime: &before,
+			TaskEndTime:   &referenceTime, // boundary case: equal to referenceTime must be clipped
+			HookStartTime: &before,
+			HookEndTime:   &after,
+			JobStatus:     "success",
+		}
+		lineage := &scheduler.JobLineageSummary{
+			JobName: "job-A",
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
+		}
+
+		scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": lineage}, referenceTime)
+
+		assert.Equal(t, scheduledAt, run.ScheduledAt, "ScheduledAt must never be clipped")
+		assert.Equal(t, &slaTime, run.SLATime, "SLATime must never be clipped")
+		assert.Equal(t, &before, run.JobStartTime, "field before referenceTime must survive")
+		assert.Nil(t, run.JobEndTime, "field after referenceTime must be clipped")
+		assert.Equal(t, &before, run.WaitStartTime)
+		assert.Nil(t, run.WaitEndTime)
+		assert.Equal(t, &before, run.TaskStartTime)
+		assert.Nil(t, run.TaskEndTime, "field exactly at referenceTime must be clipped")
+		assert.Equal(t, &before, run.HookStartTime)
+		assert.Nil(t, run.HookEndTime)
+		assert.Empty(t, run.JobStatus, "JobStatus must be reset since something was clipped")
+	})
+
+	t.Run("does not touch JobStatus when nothing was clipped", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   before,
+			TaskStartTime: &before,
+			TaskEndTime:   &before,
+			HookEndTime:   &before,
+			JobStatus:     "success",
+		}
+		lineage := &scheduler.JobLineageSummary{
+			JobName: "job-A",
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
+		}
+
+		scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": lineage}, referenceTime)
+
+		assert.Equal(t, "success", run.JobStatus)
+		assert.Equal(t, &before, run.TaskEndTime)
+	})
+
+	t.Run("a diamond-shared upstream node is only clipped once and recursion terminates", func(t *testing.T) {
+		sharedRun := &scheduler.JobRunSummary{
+			ScheduledAt: before,
+			JobEndTime:  &after,
+			JobStatus:   "success",
+		}
+		shared := &scheduler.JobLineageSummary{
+			JobName: "job-shared",
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-B": sharedRun,
+				"job-C": sharedRun, // same pointer reached via two downstream paths
+			},
+		}
+		jobB := &scheduler.JobLineageSummary{
+			JobName:   "job-B",
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
+			Upstreams: []*scheduler.JobLineageSummary{shared},
+		}
+		jobC := &scheduler.JobLineageSummary{
+			JobName:   "job-C",
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
+			Upstreams: []*scheduler.JobLineageSummary{shared},
+		}
+		root := &scheduler.JobLineageSummary{
+			JobName:   "job-A",
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
+			Upstreams: []*scheduler.JobLineageSummary{jobB, jobC},
+		}
+
+		assert.NotPanics(t, func() {
+			scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": root}, referenceTime)
+		})
+		assert.Nil(t, sharedRun.JobEndTime)
+		assert.Empty(t, sharedRun.JobStatus)
+	})
+}

@@ -549,6 +549,7 @@ WITH operations AS (
 	) opr ON opr.job_run_id = jr.id
 	WHERE (%s)
 	AND jr.project_name NOT LIKE '%%-preprod'
+	AND (opr.operation_type = 'sensor' OR opr.start_time > jr.scheduled_at)
 ),
 summary_operations AS (
 	SELECT 

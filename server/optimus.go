@@ -18,6 +18,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/goto/optimus/config"
+	completenessHandler "github.com/goto/optimus/core/completeness/handler/v1beta1"
+	completenessService "github.com/goto/optimus/core/completeness/service"
 	"github.com/goto/optimus/core/event/moderator"
 	jHandler "github.com/goto/optimus/core/job/handler/v1beta1"
 	jResolver "github.com/goto/optimus/core/job/resolver"
@@ -526,6 +528,36 @@ func (s *OptimusServer) setupHandlers() error {
 
 	sensorService := schedulerService.NewSensorService(s.logger, s.conf.UpstreamResolvers...)
 	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService))
+
+	// Completeness Handler
+	if s.conf.Completeness.DatastoreProject == "" {
+		s.logger.Warn("completeness: completeness.datastore_project not configured, ad hoc queries will fail")
+	}
+
+	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver) // nil if not configured; Service treats nil as "not managed"
+
+	schedulingLocation, err := time.LoadLocation(s.conf.Completeness.SchedulingTimezone)
+	if err != nil {
+		s.logger.Warn(fmt.Sprintf("completeness: invalid completeness.scheduling_timezone %q, defaulting to %s: %s",
+			s.conf.Completeness.SchedulingTimezone, completenessService.UTC, err.Error()))
+		schedulingLocation = completenessService.UTC
+	}
+
+	newCompletenessService := completenessService.NewService(
+		pluginService,
+		jJobRepo,
+		jobRunRepo,
+		dexClient,
+		tSecretService,
+		completenessService.Config{
+			DatastoreProject:   s.conf.Completeness.DatastoreProject,
+			ResolutionCacheTTL: time.Duration(s.conf.Completeness.ResolutionCacheTTLMinutes) * time.Minute,
+			RunStatusCacheTTL:  time.Duration(s.conf.Completeness.RunStatusCacheTTLMinutes) * time.Minute,
+			Location:           schedulingLocation,
+		},
+	)
+	s.cleanupFn = append(s.cleanupFn, newCompletenessService.Close)
+	pb.RegisterCompletenessServiceServer(s.grpcServer, completenessHandler.NewCompletenessHandler(newCompletenessService, s.logger))
 
 	// backup service
 	pb.RegisterBackupServiceServer(s.grpcServer, rHandler.NewBackupHandler(s.logger, backupService))

@@ -681,7 +681,7 @@ several details at once:
 2. `run_id` → `scheduled_at`. `execution_date` is **NULL** in these rows; only `run_id` is
    populated, and it comes in at least three shapes seen in production:
    - `scheduled__2026-07-24T18:00:00+00:00`
-   - `custom-backfill_<uuid>__2026-07-25T09:38:53+00:00`
+   - `custom-backfill_UUID__2026-07-25T09:38:53+00:00`
    - `replayed__2025-05-29T18:00:00+00:00`
    Parse the trailing timestamp, then apply the **same shift `__lib.py` uses**:
    `croniter(interval, execution_date).get_next()`. Optimus's `scheduled_at` is *not*
@@ -783,7 +783,7 @@ Siren's resolve semantics wired up, so treat it as a follow-up rather than v1.
    `scheduled__` (see "Demo" below) and holds by construction for the others, since it's the same
    `execution_date → next tick` arithmetic `__lib.py get_scheduled_at` and
    `ext/scheduler/airflow/client.go`'s `getJobRuns` both already use elsewhere in this codebase.
-   `custom-backfill_<uuid>__<timestamp>` is the one irregular shape: split on the **last** `__`, not
+   `custom-backfill_UUID__TIMESTAMP` is the one irregular shape: split on the **last** `__`, not
    a fixed prefix strip, since the UUID's hyphens never produce a literal `__` — confirmed against a
    real run_id (`custom-backfill_76515cc3-b3aa-440f-b998-04e6f4935ea3__2026-07-25T09:38:53+00:00`).
 

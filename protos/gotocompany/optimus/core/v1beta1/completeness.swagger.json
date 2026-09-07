@@ -1,0 +1,193 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "gotocompany/optimus/core/v1beta1/completeness.proto",
+    "version": "0.1"
+  },
+  "tags": [
+    {
+      "name": "CompletenessService"
+    }
+  ],
+  "host": "127.0.0.1:9100",
+  "basePath": "/api",
+  "schemes": [
+    "http"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1beta1/completeness/query": {
+      "post": {
+        "summary": "CheckQueryCompleteness parses a SQL query, resolves the tables/views it reads from\n(recursively through views down to base tables), and reports which of them are\nmanaged by Optimus and whether their most relevant scheduled run has completed.",
+        "operationId": "CompletenessService_CheckQueryCompleteness",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1CheckQueryCompletenessResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1CheckQueryCompletenessRequest"
+            }
+          }
+        ],
+        "tags": [
+          "CompletenessService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "typeUrl": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1beta1CheckQueryCompletenessRequest": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query is the raw SQL text to resolve upstream tables/views from."
+        },
+        "datastoreName": {
+          "type": "string",
+          "description": "datastore_name selects the SQL dialect and view-resolution backend.\nOptional, defaults to \"maxcompute\" when empty. Also accepts \"bigquery\"."
+        }
+      }
+    },
+    "v1beta1CheckQueryCompletenessResponse": {
+      "type": "object",
+      "properties": {
+        "overallStatus": {
+          "$ref": "#/definitions/v1beta1OverallStatus"
+        },
+        "unmanagedTables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1UnmanagedTable"
+          }
+        },
+        "managedTables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1ManagedTable"
+          }
+        }
+      }
+    },
+    "v1beta1CompletenessJobRun": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "CompletenessJobRun is distinct from the JobRun message in job_spec.proto (which only\ncarries state + scheduled_at) because this response also needs start_time/end_time."
+    },
+    "v1beta1ManagedTable": {
+      "type": "object",
+      "properties": {
+        "tableName": {
+          "type": "string"
+        },
+        "optimusProject": {
+          "type": "string"
+        },
+        "optimusNamespace": {
+          "type": "string"
+        },
+        "jobName": {
+          "type": "string"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "is_active is false if the job is currently disabled/paused."
+        },
+        "run": {
+          "$ref": "#/definitions/v1beta1CompletenessJobRun",
+          "description": "run is absent only if the job has never run."
+        }
+      }
+    },
+    "v1beta1OverallStatus": {
+      "type": "string",
+      "enum": [
+        "OVERALL_STATUS_UNSPECIFIED",
+        "OVERALL_STATUS_COMPLETE",
+        "OVERALL_STATUS_NOT_COMPLETE"
+      ],
+      "default": "OVERALL_STATUS_UNSPECIFIED"
+    },
+    "v1beta1UnmanagedTable": {
+      "type": "object",
+      "properties": {
+        "tableName": {
+          "type": "string"
+        },
+        "managedByDex": {
+          "type": "boolean",
+          "description": "managed_by_dex is true when a non-Optimus system (Dex) manages this resource\ninstead of Optimus."
+        }
+      }
+    }
+  },
+  "externalDocs": {
+    "description": "Optimus Completeness Service"
+  }
+}

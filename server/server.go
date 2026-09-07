@@ -170,6 +170,9 @@ func prepareHTTPProxy(httpAddr, grpcAddr string) (*http.Server, func(), error) {
 	if err := pb.RegisterSecretServiceHandler(runtimeCtx, gwmux, grpcConn); err != nil {
 		return nil, cleanup, fmt.Errorf("RegisterSecretServiceHandler: %w", err)
 	}
+	if err := pb.RegisterCompletenessServiceHandler(runtimeCtx, gwmux, grpcConn); err != nil {
+		return nil, cleanup, fmt.Errorf("RegisterCompletenessServiceHandler: %w", err)
+	}
 
 	// base router
 	baseMux := http.NewServeMux()

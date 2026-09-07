@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/goto/optimus/core/completeness"
 	"github.com/kushsharma/parallel"
 
+	"github.com/goto/optimus/core/completeness"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"

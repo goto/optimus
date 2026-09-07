@@ -3,12 +3,12 @@ package v1beta1
 import (
 	"context"
 
+	"github.com/goto/salt/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/completeness"
 	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
-	"github.com/goto/salt/log"
 )
 
 // CompletenessService is the port this handler depends on; satisfied by

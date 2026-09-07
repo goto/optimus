@@ -3,9 +3,9 @@ package service // nolint: testpackage
 import (
 	"testing"
 
-	"github.com/goto/optimus/core/completeness"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/goto/optimus/core/completeness"
 	"github.com/goto/optimus/core/scheduler"
 )
 

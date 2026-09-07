@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goto/optimus/core/completeness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/goto/optimus/core/completeness"
 	"github.com/goto/optimus/core/completeness/service"
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"

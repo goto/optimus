@@ -335,7 +335,6 @@ func (s *JobExpectatorService) computeCompletionTimeReports(ctx context.Context,
 
 		if run := lineage.GetRunForJob(jobSchedule.JobName); run != nil && (run.GetActualEndTime() == nil ||
 			run.GetActualEndTime().After(referenceTime)) {
-
 			unfinishedJobSchedules = append(unfinishedJobSchedules, *jobSchedule)
 			unfinishedJobsWithLineageMap[jobSchedule.JobName] = lineage
 			actualFinishTimes[*jobSchedule] = run.GetActualEndTime()

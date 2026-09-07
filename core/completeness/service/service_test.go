@@ -62,6 +62,33 @@ func (m *mockThirdPartyClient) IsComplete(ctx context.Context, resourceURN resou
 	return args.Bool(0), args.Get(1), args.Error(2)
 }
 
+type mockSecretGetter struct{ mock.Mock }
+
+func (m *mockSecretGetter) Get(ctx context.Context, projectName tenant.ProjectName, namespaceName, name string) (*tenant.PlainTextSecret, error) {
+	args := m.Called(ctx, projectName, namespaceName, name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*tenant.PlainTextSecret), args.Error(1)
+}
+
+// newTestSecretGetter stubs a successful DATASTORE_MAXCOMPUTE lookup for "test-project",
+// the DatastoreProject used by every test's service.Config below.
+func newTestSecretGetter(t *testing.T) *mockSecretGetter {
+	t.Helper()
+	secretGetter := &mockSecretGetter{}
+	secret, err := tenant.NewPlainTextSecret("DATASTORE_MAXCOMPUTE", "svc-account-json")
+	require.NoError(t, err)
+	projectName, err := tenant.ProjectNameFrom("test-project")
+	require.NoError(t, err)
+	secretGetter.On("Get", mock.Anything, projectName, "", "DATASTORE_MAXCOMPUTE").Return(secret, nil)
+	return secretGetter
+}
+
+func testConfig() service.Config {
+	return service.Config{DatastoreProject: "test-project"}
+}
+
 // buildJob constructs a minimal *job.Job fixture with a daily 1AM schedule and
 // ENABLED state, following the same builder chain as
 // core/job/resolver/internal_upstream_resolver_test.go.
@@ -103,12 +130,12 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		jobRunRepo := &mockJobRunRepository{}
 		thirdParty := &mockThirdPartyClient{}
 
-		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1").
 			Return([]resource.URN{tableURN}, nil)
 		jobDestRepo.On("GetAllByResourceDestination", mock.Anything, tableURN).Return([]*job.Job{}, nil)
 		thirdParty.On("IsManaged", mock.Anything, tableURN).Return(true, nil)
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, thirdParty, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, thirdParty, newTestSecretGetter(t), testConfig())
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -127,13 +154,13 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		require.NoError(t, err)
 		theJob := buildJob(t, tnnt, jobName, tableURN)
 
-		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1").
 			Return([]resource.URN{tableURN}, nil)
 		jobDestRepo.On("GetAllByResourceDestination", mock.Anything, tableURN).Return([]*job.Job{theJob}, nil)
 		jobRunRepo.On("GetByScheduledAt", mock.Anything, tnnt, mock.Anything, mock.Anything).
 			Return(&scheduler.JobRun{State: scheduler.StateSuccess, ScheduledAt: time.Now()}, nil)
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, newTestSecretGetter(t), testConfig())
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -158,13 +185,13 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		theJob := buildJob(t, tnnt, jobName, tableURN)
 		require.NoError(t, theJob.SetState("disabled"))
 
-		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1").
 			Return([]resource.URN{tableURN}, nil)
 		jobDestRepo.On("GetAllByResourceDestination", mock.Anything, tableURN).Return([]*job.Job{theJob}, nil)
 		jobRunRepo.On("GetByScheduledAt", mock.Anything, tnnt, mock.Anything, mock.Anything).
 			Return(&scheduler.JobRun{State: scheduler.StateSuccess, ScheduledAt: time.Now()}, nil)
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, newTestSecretGetter(t), testConfig())
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -182,13 +209,13 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		jobA := buildJob(t, tnnt, nameA, tableURN)
 		jobB := buildJob(t, tnnt, nameB, tableURN)
 
-		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1").
 			Return([]resource.URN{tableURN}, nil)
 		jobDestRepo.On("GetAllByResourceDestination", mock.Anything, tableURN).Return([]*job.Job{jobA, jobB}, nil)
 		jobRunRepo.On("GetByScheduledAt", mock.Anything, tnnt, mock.Anything, mock.Anything).
 			Return(nil, errors.NotFound(scheduler.EntityJobRun, "no run"))
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, newTestSecretGetter(t), testConfig())
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -204,15 +231,53 @@ func TestCheckQueryCompleteness(t *testing.T) {
 
 	t.Run("no tables found in query is rejected", func(t *testing.T) {
 		upstreamIdentifier := &mockUpstreamIdentifier{}
-		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1").
 			Return([]resource.URN{}, nil)
 
-		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, nil, service.Config{})
+		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, nil, newTestSecretGetter(t), testConfig())
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
 		require.Len(t, result.ManagedTables, 0)
 		require.Len(t, result.UnmanagedTables, 0)
 		assert.Equal(t, completeness.OverallStatusComplete, result.OverallStatus)
+	})
+
+	t.Run("empty datastore_name defaults to maxcompute", func(t *testing.T) {
+		upstreamIdentifier := &mockUpstreamIdentifier{}
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1").
+			Return([]resource.URN{}, nil)
+
+		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, nil, newTestSecretGetter(t), testConfig())
+		_, err := svc.CheckQueryCompleteness(ctx, "", "select 1")
+
+		require.NoError(t, err)
+		upstreamIdentifier.AssertCalled(t, "IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1")
+	})
+
+	t.Run("service account is fetched once per datastore and reused across requests (secret cache)", func(t *testing.T) {
+		upstreamIdentifier := &mockUpstreamIdentifier{}
+		secretGetter := newTestSecretGetter(t)
+
+		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "svc-account-json", "select 1").
+			Return([]resource.URN{}, nil)
+
+		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, nil, secretGetter, testConfig())
+
+		_, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
+		require.NoError(t, err)
+		_, err = svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
+		require.NoError(t, err)
+
+		secretGetter.AssertNumberOfCalls(t, "Get", 1)
+	})
+
+	t.Run("missing datastore_project config surfaces as an error", func(t *testing.T) {
+		upstreamIdentifier := &mockUpstreamIdentifier{}
+
+		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, nil, &mockSecretGetter{}, service.Config{})
+		_, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
+
+		require.Error(t, err)
 	})
 }

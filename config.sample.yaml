@@ -33,8 +33,9 @@ serve:
 
 # completeness-check API (CheckQueryCompleteness)
 completeness:
-  datastore_type: maxcompute # maxcompute or bigquery
-  datastore_project: my-existing-project  # existing project whose DATASTORE_MAXCOMPUTE/BIGQUERY secret to reuse for ad hoc queries
+  # existing project whose DATASTORE_MAXCOMPUTE/BIGQUERY secret to reuse for ad hoc queries;
+  # picked per-request by the request's own datastore_name (required), fetched fresh (cached 12h) rather than at server startup
+  datastore_project: my-existing-project
   resolution_cache_ttl_minutes: 45
   run_status_cache_ttl_minutes: 5
   scheduling_timezone: Asia/Jakarta

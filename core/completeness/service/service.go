@@ -25,6 +25,15 @@ const (
 	maxResolvedResources = 200
 	fanOutTicketPerSec   = 50
 	fanOutConcurrency    = 100
+
+	datastoreNameMaxcompute = "maxcompute"
+	datastoreNameBigquery   = "bigquery"
+
+	// Secret keys, matching ext/store/maxcompute.accountKey / ext/store/bigquery.accountKey.
+	maxcomputeAccountKey = "DATASTORE_MAXCOMPUTE"
+	bigqueryAccountKey   = "DATASTORE_BIGQUERY"
+
+	secretCacheTTL = 12 * time.Hour
 )
 
 // UpstreamIdentifier resolves the tables/views an ad hoc query reads from, recursively
@@ -46,9 +55,14 @@ type ThirdPartyDexClient interface {
 	IsManaged(ctx context.Context, resourceURN resource.URN) (bool, error)
 }
 
+type SecretGetter interface {
+	Get(ctx context.Context, projectName tenant.ProjectName, namespaceName, name string) (*tenant.PlainTextSecret, error)
+}
+
 type Config struct {
-	MaxcomputeServiceAccount string
-	BigqueryServiceAccount   string
+	// DatastoreProject is the Optimus project whose secrets hold the ad hoc query
+	// datastore credentials (looked up per request)
+	DatastoreProject string
 
 	// A zero cache TTL disables that cache (see internal/lib/cache.New)
 	ResolutionCacheTTL time.Duration
@@ -88,10 +102,12 @@ type Service struct {
 	jobRepository      JobDestinationRepository
 	jobRunRepo         JobRunRepository
 	thirdPartyClient   ThirdPartyDexClient // nil if no third-party resolver is configured
+	secretGetter       SecretGetter
 	conf               Config
 
 	resolutionCache *cache.Cache[resource.URN, resolutionEntry]   // who owns a table; long TTL
 	runStatusCache  *cache.Cache[runStatusKey, *scheduler.JobRun] // one run's state; short TTL
+	secretCache     *cache.Cache[string, string]                  // datastore name -> service account; 12h TTL
 }
 
 func NewService(
@@ -99,6 +115,7 @@ func NewService(
 	jobRepository JobDestinationRepository,
 	jobRunRepo JobRunRepository,
 	thirdPartyClient ThirdPartyDexClient,
+	secretGetter SecretGetter,
 	conf Config,
 ) *Service {
 	return &Service{
@@ -106,15 +123,18 @@ func NewService(
 		jobRepository:      jobRepository,
 		jobRunRepo:         jobRunRepo,
 		thirdPartyClient:   thirdPartyClient,
+		secretGetter:       secretGetter,
 		conf:               conf,
 		resolutionCache:    cache.New[resource.URN, resolutionEntry](conf.ResolutionCacheTTL),
 		runStatusCache:     cache.New[runStatusKey, *scheduler.JobRun](conf.RunStatusCacheTTL),
+		secretCache:        cache.New[string, string](secretCacheTTL),
 	}
 }
 
 func (s *Service) Close() {
 	s.resolutionCache.Close()
 	s.runStatusCache.Close()
+	s.secretCache.Close()
 }
 
 func (s *Service) location() *time.Location {
@@ -124,6 +144,30 @@ func (s *Service) location() *time.Location {
 	return s.conf.Location
 }
 
+// resolveServiceAccount fetches the datastore credential for datastoreName
+func (s *Service) resolveServiceAccount(ctx context.Context, datastoreName string) (string, error) {
+	if s.conf.DatastoreProject == "" {
+		return "", fmt.Errorf("completeness.datastore_project is not configured")
+	}
+
+	accountKey := maxcomputeAccountKey
+	if datastoreName == datastoreNameBigquery {
+		accountKey = bigqueryAccountKey
+	}
+
+	return s.secretCache.GetOrLoad(ctx, datastoreName, func(ctx context.Context) (string, error) {
+		projectName, err := tenant.ProjectNameFrom(s.conf.DatastoreProject)
+		if err != nil {
+			return "", err
+		}
+		secret, err := s.secretGetter.Get(ctx, projectName, "", accountKey)
+		if err != nil {
+			return "", err
+		}
+		return secret.Value(), nil
+	})
+}
+
 // exactly one of managedTables/unmanaged is populated on success
 type perURNResult struct {
 	managedTables []completeness.ManagedTable
@@ -131,9 +175,13 @@ type perURNResult struct {
 }
 
 func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, query string) (*completeness.Result, error) {
-	svcAcc := s.conf.MaxcomputeServiceAccount
-	if datastoreName == "bigquery" {
-		svcAcc = s.conf.BigqueryServiceAccount
+	if datastoreName == "" {
+		datastoreName = datastoreNameMaxcompute
+	}
+
+	svcAcc, err := s.resolveServiceAccount(ctx, datastoreName)
+	if err != nil {
+		return nil, errors.InternalError(EntityCompleteness, "failed to resolve datastore credential", err)
 	}
 
 	urns, err := s.upstreamIdentifier.IdentifyUpstreamsFromQuery(ctx, datastoreName, svcAcc, query)

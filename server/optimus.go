@@ -30,7 +30,6 @@ import (
 	schedulerHandler "github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	schedulerResolver "github.com/goto/optimus/core/scheduler/resolver"
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
-	coreTenant "github.com/goto/optimus/core/tenant"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
 	"github.com/goto/optimus/ext/notify/alertmanager"
@@ -57,11 +56,7 @@ import (
 	oHandler "github.com/goto/optimus/server/handler/v1beta1"
 )
 
-const (
-	keyLength            = 32
-	maxcomputeAccountKey = "DATASTORE_MAXCOMPUTE" // matches ext/store/maxcompute.accountKey
-	bigqueryAccountKey   = "DATASTORE_BIGQUERY"   // matches ext/store/bigquery.accountKey
-)
+const keyLength = 32
 
 type setupFn func() error
 
@@ -535,28 +530,8 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService))
 
 	// Completeness Handler
-	var maxcomputeCredentialSecret string
-	if datastoreProject := s.conf.Completeness.DatastoreProject; datastoreProject != "" {
-		credProjectName, err := coreTenant.ProjectNameFrom(datastoreProject)
-		if err != nil {
-			return err
-		}
-
-		datastoreType := s.conf.Completeness.DatastoreType
-		var accKey string
-		if datastoreType == "maxcompute" || datastoreType == "" {
-			accKey = maxcomputeAccountKey
-		} else {
-			accKey = bigqueryAccountKey
-		}
-		secret, err := tSecretService.Get(context.Background(), credProjectName, "", accKey)
-		if err != nil {
-			s.logger.Warn("completeness: unable to fetch maxcompute credential, ad hoc queries against maxcompute will fail: " + err.Error())
-		} else {
-			maxcomputeCredentialSecret = secret.Value()
-		}
-	} else {
-		s.logger.Warn("completeness: completeness.datastore_project not configured, ad hoc queries against maxcompute will fail")
+	if s.conf.Completeness.DatastoreProject == "" {
+		s.logger.Warn("completeness: completeness.datastore_project not configured, ad hoc queries will fail")
 	}
 
 	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver) // nil if not configured; Service treats nil as "not managed"
@@ -573,11 +548,12 @@ func (s *OptimusServer) setupHandlers() error {
 		jJobRepo,
 		jobRunRepo,
 		dexClient,
+		tSecretService,
 		completenessService.Config{
-			MaxcomputeServiceAccount: maxcomputeCredentialSecret,
-			ResolutionCacheTTL:       time.Duration(s.conf.Completeness.ResolutionCacheTTLMinutes) * time.Minute,
-			RunStatusCacheTTL:        time.Duration(s.conf.Completeness.RunStatusCacheTTLMinutes) * time.Minute,
-			Location:                 schedulingLocation,
+			DatastoreProject:   s.conf.Completeness.DatastoreProject,
+			ResolutionCacheTTL: time.Duration(s.conf.Completeness.ResolutionCacheTTLMinutes) * time.Minute,
+			RunStatusCacheTTL:  time.Duration(s.conf.Completeness.RunStatusCacheTTLMinutes) * time.Minute,
+			Location:           schedulingLocation,
 		},
 	)
 	s.cleanupFn = append(s.cleanupFn, newCompletenessService.Close)

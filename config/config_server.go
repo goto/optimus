@@ -63,7 +63,8 @@ type Serve struct {
 }
 
 type CompletenessConfig struct {
-	DatastoreType    string `mapstructure:"datastore_type"` // maxcompute or bigquery
+	// DatastoreProject holds the Optimus secrets for ad hoc query credentials (per
+	// datastore_name on the request).
 	DatastoreProject string `mapstructure:"datastore_project"`
 
 	// A cache ttl of 0 disables that cache rather than erroring.

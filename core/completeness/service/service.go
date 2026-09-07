@@ -247,10 +247,13 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 	}, nil
 }
 
-// overallStatus is COMPLETE only if every managed table's selected run succeeded;
-// vacuously COMPLETE when there are no managed tables at all.
+// overallStatus is COMPLETE only if every active managed table's selected run
+// succeeded; Vacuously COMPLETE when there are no active managed tables at all.
 func overallStatus(managedTables []ManagedTable) OverallStatus {
 	for _, mt := range managedTables {
+		if !mt.IsActive {
+			continue
+		}
 		if mt.Run == nil || mt.Run.State != scheduler.StateSuccess {
 			return OverallStatusNotComplete
 		}

@@ -717,6 +717,21 @@ func (j JobRepository) GetAllByResourceDestination(ctx context.Context, resource
 	return jobs, me.ToErr()
 }
 
+// ExistsThirdPartyUpstream reports whether some job already declares identifier (e.g. a
+// resource URN's name) as a resolved third-party upstream of the given type (e.g. "dex").
+func (j JobRepository) ExistsThirdPartyUpstream(ctx context.Context, upstreamType, identifier string) (bool, error) {
+	const query = `SELECT EXISTS(
+		SELECT 1 FROM job_third_party_upstream
+		WHERE upstream_third_party_type = $1 AND upstream_third_party_identifier = $2
+	);`
+
+	var exists bool
+	if err := j.db.QueryRow(ctx, query, upstreamType, identifier).Scan(&exists); err != nil {
+		return false, errors.Wrap(job.EntityJob, "error while checking third party upstream for "+identifier, err)
+	}
+	return exists, nil
+}
+
 func specToJob(spec *Spec) (*job.Job, error) {
 	jobSpec, err := fromStorageSpec(spec)
 	if err != nil {

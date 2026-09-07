@@ -10,7 +10,6 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
-	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cache"
@@ -25,6 +24,11 @@ const (
 	maxResolvedResources = 200
 	fanOutTicketPerSec   = 50
 	fanOutConcurrency    = 100
+
+	// dexThirdPartyUpstreamType matches config.DexUpstreamResolver.String(), the value
+	// stored in job_third_party_upstream.upstream_third_party_type by the job upstream
+	// resolver (core/job/resolver/dex_upstream_resolver.go).
+	dexThirdPartyUpstreamType = "dex"
 )
 
 // UpstreamIdentifier resolves the tables/views an ad hoc query reads from, recursively
@@ -36,13 +40,16 @@ type UpstreamIdentifier interface {
 // JobDestinationRepository Implemented by internal/store/postgres/job.JobRepository.
 type JobDestinationRepository interface {
 	GetAllByResourceDestination(ctx context.Context, resourceDestination resource.URN) ([]*job.Job, error)
+
+	// ExistsThirdPartyUpstream reports whether some job already declares identifier as a
+	// resolved third-party upstream of the given type -- i.e. it's already known to be
+	// managed by that third party (e.g. Dex), without calling out to it live.
+	ExistsThirdPartyUpstream(ctx context.Context, upstreamType, identifier string) (bool, error)
 }
 
 type JobRunRepository interface {
 	GetByScheduledAt(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
 }
-
-type ThirdPartyClient = schedulerService.ThirdPartyClient
 
 type Config struct {
 	MaxcomputeServiceAccount string
@@ -85,7 +92,6 @@ type Service struct {
 	upstreamIdentifier UpstreamIdentifier
 	jobRepository      JobDestinationRepository
 	jobRunRepo         JobRunRepository
-	thirdPartyClient   ThirdPartyClient // nil if no third-party resolver is configured
 	conf               Config
 
 	resolutionCache *cache.Cache[resource.URN, resolutionEntry]   // who owns a table; long TTL
@@ -96,14 +102,12 @@ func NewService(
 	upstreamIdentifier UpstreamIdentifier,
 	jobRepository JobDestinationRepository,
 	jobRunRepo JobRunRepository,
-	thirdPartyClient ThirdPartyClient,
 	conf Config,
 ) *Service {
 	return &Service{
 		upstreamIdentifier: upstreamIdentifier,
 		jobRepository:      jobRepository,
 		jobRunRepo:         jobRunRepo,
-		thirdPartyClient:   thirdPartyClient,
 		conf:               conf,
 		resolutionCache:    cache.New[resource.URN, resolutionEntry](conf.ResolutionCacheTTL),
 		runStatusCache:     cache.New[runStatusKey, *scheduler.JobRun](conf.RunStatusCacheTTL),
@@ -262,10 +266,7 @@ func overallStatus(managedTables []ManagedTable) OverallStatus {
 }
 
 func (s *Service) checkManagedByDex(ctx context.Context, urn resource.URN) bool {
-	if s.thirdPartyClient == nil {
-		return false
-	}
-	managed, err := s.thirdPartyClient.IsManaged(ctx, urn)
+	managed, err := s.jobRepository.ExistsThirdPartyUpstream(ctx, dexThirdPartyUpstreamType, urn.GetName())
 	if err != nil {
 		return false // best-effort: a lookup failure just means "not confirmed", not a request failure
 	}

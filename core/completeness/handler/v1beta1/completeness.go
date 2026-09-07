@@ -3,10 +3,10 @@ package v1beta1
 import (
 	"context"
 
+	"github.com/goto/optimus/core/completeness"
 	"github.com/goto/salt/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/goto/optimus/core/completeness/service"
 	"github.com/goto/optimus/internal/errors"
 	pb "github.com/goto/optimus/protos/gotocompany/optimus/core/v1beta1"
 )
@@ -14,7 +14,7 @@ import (
 // CompletenessService is the port this handler depends on; satisfied by
 // core/completeness/service.Service.
 type CompletenessService interface {
-	CheckQueryCompleteness(ctx context.Context, datastoreName, query string) (*service.Result, error)
+	CheckQueryCompleteness(ctx context.Context, datastoreName, query string) (*completeness.Result, error)
 }
 
 type CompletenessHandler struct {
@@ -44,14 +44,14 @@ func (h *CompletenessHandler) CheckQueryCompleteness(ctx context.Context, req *p
 	}, nil
 }
 
-func toProtoOverallStatus(s service.OverallStatus) pb.OverallStatus {
-	if s == service.OverallStatusComplete {
+func toProtoOverallStatus(s completeness.OverallStatus) pb.OverallStatus {
+	if s == completeness.OverallStatusComplete {
 		return pb.OverallStatus_OVERALL_STATUS_COMPLETE
 	}
 	return pb.OverallStatus_OVERALL_STATUS_NOT_COMPLETE
 }
 
-func toProtoUnmanagedTables(tables []service.UnmanagedTable) []*pb.UnmanagedTable {
+func toProtoUnmanagedTables(tables []completeness.UnmanagedTable) []*pb.UnmanagedTable {
 	out := make([]*pb.UnmanagedTable, 0, len(tables))
 	for _, t := range tables {
 		out = append(out, &pb.UnmanagedTable{
@@ -62,7 +62,7 @@ func toProtoUnmanagedTables(tables []service.UnmanagedTable) []*pb.UnmanagedTabl
 	return out
 }
 
-func toProtoManagedTables(tables []service.ManagedTable) []*pb.ManagedTable {
+func toProtoManagedTables(tables []completeness.ManagedTable) []*pb.ManagedTable {
 	out := make([]*pb.ManagedTable, 0, len(tables))
 	for _, t := range tables {
 		out = append(out, &pb.ManagedTable{
@@ -77,7 +77,7 @@ func toProtoManagedTables(tables []service.ManagedTable) []*pb.ManagedTable {
 	return out
 }
 
-func toProtoJobRun(run *service.RunStatus) *pb.CompletenessJobRun {
+func toProtoJobRun(run *completeness.RunStatus) *pb.CompletenessJobRun {
 	if run == nil {
 		return nil
 	}

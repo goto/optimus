@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/goto/optimus/core/completeness"
 	"github.com/kushsharma/parallel"
 
 	"github.com/goto/optimus/core/job"
@@ -59,7 +60,7 @@ type Config struct {
 }
 
 // managedJobRef is a resolved table's producing job, everything needed to build a
-// ManagedTable except its live run status (looked up separately, with a much shorter
+// completeness.ManagedTable except its live run status (looked up separately, with a much shorter
 // cache TTL, since it changes far more often than which job owns a table).
 type managedJobRef struct {
 	tableName        string
@@ -123,50 +124,13 @@ func (s *Service) location() *time.Location {
 	return s.conf.Location
 }
 
-type OverallStatus string
-
-const (
-	OverallStatusComplete    OverallStatus = "COMPLETE"
-	OverallStatusNotComplete OverallStatus = "NOT_COMPLETE"
-)
-
-// RunStatus is the run selected by SelectScheduledAt. A nil *RunStatus on ManagedTable
-// means the job hasn't reached its relevant occurrence yet, or no run was recorded for
-// it -- both map to NOT_COMPLETE.
-type RunStatus struct {
-	State       scheduler.State
-	ScheduledAt time.Time
-	StartTime   time.Time
-	EndTime     *time.Time
-}
-
-type ManagedTable struct {
-	TableName        string
-	OptimusProject   string
-	OptimusNamespace string
-	JobName          string
-	Run              *RunStatus
-	IsActive         bool // false if the job is currently disabled/paused
-}
-
-type UnmanagedTable struct {
-	TableName    string
-	ManagedByDex bool
-}
-
-type Result struct {
-	OverallStatus   OverallStatus
-	UnmanagedTables []UnmanagedTable
-	ManagedTables   []ManagedTable
-}
-
 // exactly one of managedTables/unmanaged is populated on success
 type perURNResult struct {
-	managedTables []ManagedTable
-	unmanaged     *UnmanagedTable
+	managedTables []completeness.ManagedTable
+	unmanaged     *completeness.UnmanagedTable
 }
 
-func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, query string) (*Result, error) {
+func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, query string) (*completeness.Result, error) {
 	svcAcc := s.conf.MaxcomputeServiceAccount
 	if datastoreName == "bigquery" {
 		svcAcc = s.conf.BigqueryServiceAccount
@@ -177,8 +141,8 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 		return nil, errors.InternalError(EntityCompleteness, "failed to resolve tables from query", err)
 	}
 	if len(urns) == 0 {
-		return &Result{
-			OverallStatus: OverallStatusComplete,
+		return &completeness.Result{
+			OverallStatus: completeness.OverallStatusComplete,
 		}, nil
 	}
 	if len(urns) > maxResolvedResources {
@@ -189,8 +153,8 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 	runner := s.constructParallelExecution(ctx, urns)
 
 	me := errors.NewMultiError("check query completeness errors")
-	var managedTables []ManagedTable
-	var unmanagedTables []UnmanagedTable
+	var managedTables []completeness.ManagedTable
+	var unmanagedTables []completeness.UnmanagedTable
 	for _, state := range runner.Run() {
 		if state.Err != nil {
 			me.Append(state.Err)
@@ -206,7 +170,7 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 		return nil, me.ToErr()
 	}
 
-	return &Result{
+	return &completeness.Result{
 		OverallStatus:   overallStatus(managedTables),
 		UnmanagedTables: unmanagedTables,
 		ManagedTables:   managedTables,
@@ -226,7 +190,7 @@ func (s *Service) constructParallelExecution(ctx context.Context, urns []resourc
 			}
 
 			if len(res.managed) == 0 {
-				return &perURNResult{unmanaged: &UnmanagedTable{
+				return &perURNResult{unmanaged: &completeness.UnmanagedTable{
 					TableName:    urn.GetName(),
 					ManagedByDex: res.managedByDex,
 				}}, nil
@@ -240,7 +204,7 @@ func (s *Service) constructParallelExecution(ctx context.Context, urns []resourc
 				if err != nil {
 					return nil, err
 				}
-				result.managedTables = append(result.managedTables, ManagedTable{
+				result.managedTables = append(result.managedTables, completeness.ManagedTable{
 					TableName:        ref.tableName,
 					OptimusProject:   ref.optimusProject,
 					OptimusNamespace: ref.optimusNamespace,
@@ -257,16 +221,16 @@ func (s *Service) constructParallelExecution(ctx context.Context, urns []resourc
 
 // overallStatus is COMPLETE only if every active managed table's selected run
 // succeeded; Vacuously COMPLETE when there are no active managed tables at all.
-func overallStatus(managedTables []ManagedTable) OverallStatus {
+func overallStatus(managedTables []completeness.ManagedTable) completeness.OverallStatus {
 	for _, mt := range managedTables {
 		if !mt.IsActive {
 			continue
 		}
 		if mt.Run == nil || mt.Run.State != scheduler.StateSuccess {
-			return OverallStatusNotComplete
+			return completeness.OverallStatusNotComplete
 		}
 	}
-	return OverallStatusComplete
+	return completeness.OverallStatusComplete
 }
 
 func (s *Service) checkManagedByDex(ctx context.Context, urn resource.URN) bool {
@@ -308,7 +272,7 @@ func (s *Service) resolveDestination(ctx context.Context, urn resource.URN) (res
 
 // getRunStatus computes the relevant scheduled_at fresh (depends on "now", so it's
 // never itself cached) and looks up that run through runStatusCache.
-func (s *Service) getRunStatus(ctx context.Context, ref managedJobRef) (*RunStatus, error) {
+func (s *Service) getRunStatus(ctx context.Context, ref managedJobRef) (*completeness.RunStatus, error) {
 	if ref.cronInterval == "" {
 		return nil, nil //nolint:nilnil // no schedule to evaluate against
 	}
@@ -346,7 +310,7 @@ func (s *Service) getRunStatus(ctx context.Context, ref managedJobRef) (*RunStat
 		return nil, nil //nolint:nilnil
 	}
 
-	return &RunStatus{
+	return &completeness.RunStatus{
 		State:       run.State,
 		ScheduledAt: run.ScheduledAt,
 		StartTime:   run.StartTime,

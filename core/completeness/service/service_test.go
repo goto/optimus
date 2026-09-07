@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goto/optimus/core/completeness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -111,7 +112,7 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
-		assert.Equal(t, service.OverallStatusComplete, result.OverallStatus) // vacuously complete, nothing Optimus-managed
+		assert.Equal(t, completeness.OverallStatusComplete, result.OverallStatus) // vacuously complete, nothing Optimus-managed
 		require.Len(t, result.UnmanagedTables, 1)
 		assert.True(t, result.UnmanagedTables[0].ManagedByDex)
 		assert.Empty(t, result.ManagedTables)
@@ -144,7 +145,7 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		require.NotNil(t, mt.Run)
 		assert.Equal(t, scheduler.StateSuccess, mt.Run.State)
 		assert.True(t, mt.IsActive)
-		assert.Equal(t, service.OverallStatusComplete, result.OverallStatus)
+		assert.Equal(t, completeness.OverallStatusComplete, result.OverallStatus)
 	})
 
 	t.Run("disabled job reports is_active false", func(t *testing.T) {
@@ -195,7 +196,7 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		jobNames := []string{result.ManagedTables[0].JobName, result.ManagedTables[1].JobName}
 		assert.ElementsMatch(t, []string{"job-a", "job-b"}, jobNames)
 		// no run recorded for either -> both nil Run -> NOT_COMPLETE
-		assert.Equal(t, service.OverallStatusNotComplete, result.OverallStatus)
+		assert.Equal(t, completeness.OverallStatusNotComplete, result.OverallStatus)
 		for _, mt := range result.ManagedTables {
 			assert.Nil(t, mt.Run)
 		}
@@ -207,8 +208,12 @@ func TestCheckQueryCompleteness(t *testing.T) {
 			Return([]resource.URN{}, nil)
 
 		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, nil, service.Config{})
-		_, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
+		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
-		require.Error(t, err)
+		require.NoError(t, err)
+		require.Len(t, result.ManagedTables, 0)
+		require.Len(t, result.UnmanagedTables, 0)
+		assert.Equal(t, completeness.OverallStatusComplete, result.OverallStatus)
+
 	})
 }

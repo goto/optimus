@@ -559,6 +559,8 @@ func (s *OptimusServer) setupHandlers() error {
 		s.logger.Warn("completeness: completeness.datastore_project not configured, ad hoc queries against maxcompute will fail")
 	}
 
+	dexClient, _ := sensorService.GetClient(config.DexUpstreamResolver) // nil if not configured; Service treats nil as "not managed"
+
 	schedulingLocation, err := time.LoadLocation(s.conf.Completeness.SchedulingTimezone)
 	if err != nil {
 		s.logger.Warn(fmt.Sprintf("completeness: invalid completeness.scheduling_timezone %q, defaulting to %s: %s",
@@ -570,6 +572,7 @@ func (s *OptimusServer) setupHandlers() error {
 		pluginService,
 		jJobRepo,
 		jobRunRepo,
+		dexClient,
 		completenessService.Config{
 			MaxcomputeServiceAccount: maxcomputeCredentialSecret,
 			ResolutionCacheTTL:       time.Duration(s.conf.Completeness.ResolutionCacheTTLMinutes) * time.Minute,

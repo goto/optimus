@@ -39,11 +39,6 @@ func (m *mockJobDestinationRepository) GetAllByResourceDestination(ctx context.C
 	return args.Get(0).([]*job.Job), args.Error(1)
 }
 
-func (m *mockJobDestinationRepository) ExistsThirdPartyUpstream(ctx context.Context, upstreamType, identifier string) (bool, error) {
-	args := m.Called(ctx, upstreamType, identifier)
-	return args.Bool(0), args.Error(1)
-}
-
 type mockJobRunRepository struct{ mock.Mock }
 
 func (m *mockJobRunRepository) GetByScheduledAt(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error) {
@@ -52,6 +47,18 @@ func (m *mockJobRunRepository) GetByScheduledAt(ctx context.Context, t tenant.Te
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*scheduler.JobRun), args.Error(1)
+}
+
+type mockThirdPartyClient struct{ mock.Mock }
+
+func (m *mockThirdPartyClient) IsManaged(ctx context.Context, resourceURN resource.URN) (bool, error) {
+	args := m.Called(ctx, resourceURN)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *mockThirdPartyClient) IsComplete(ctx context.Context, resourceURN resource.URN, dateFrom, dateTo time.Time) (bool, interface{}, error) {
+	args := m.Called(ctx, resourceURN, dateFrom, dateTo)
+	return args.Bool(0), args.Get(1), args.Error(2)
 }
 
 // buildJob constructs a minimal *job.Job fixture with a daily 1AM schedule and
@@ -89,17 +96,18 @@ func TestCheckQueryCompleteness(t *testing.T) {
 	tableURN, err := resource.ParseURN("maxcompute://p_gojek_id_mart.dataset.table_a")
 	require.NoError(t, err)
 
-	t.Run("unmanaged table checks job_third_party_upstream and reports managed_by_dex", func(t *testing.T) {
+	t.Run("unmanaged table checks the third-party client and reports managed_by_dex", func(t *testing.T) {
 		upstreamIdentifier := &mockUpstreamIdentifier{}
 		jobDestRepo := &mockJobDestinationRepository{}
 		jobRunRepo := &mockJobRunRepository{}
+		thirdParty := &mockThirdPartyClient{}
 
 		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
 			Return([]resource.URN{tableURN}, nil)
 		jobDestRepo.On("GetAllByResourceDestination", mock.Anything, tableURN).Return([]*job.Job{}, nil)
-		jobDestRepo.On("ExistsThirdPartyUpstream", mock.Anything, "dex", tableURN.GetName()).Return(true, nil)
+		thirdParty.On("IsManaged", mock.Anything, tableURN).Return(true, nil)
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, thirdParty, service.Config{})
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -124,7 +132,7 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		jobRunRepo.On("GetByScheduledAt", mock.Anything, tnnt, mock.Anything, mock.Anything).
 			Return(&scheduler.JobRun{State: scheduler.StateSuccess, ScheduledAt: time.Now()}, nil)
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, service.Config{})
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -155,7 +163,7 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		jobRunRepo.On("GetByScheduledAt", mock.Anything, tnnt, mock.Anything, mock.Anything).
 			Return(&scheduler.JobRun{State: scheduler.StateSuccess, ScheduledAt: time.Now()}, nil)
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, service.Config{})
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -179,7 +187,7 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		jobRunRepo.On("GetByScheduledAt", mock.Anything, tnnt, mock.Anything, mock.Anything).
 			Return(nil, errors.NotFound(scheduler.EntityJobRun, "no run"))
 
-		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, service.Config{})
+		svc := service.NewService(upstreamIdentifier, jobDestRepo, jobRunRepo, nil, service.Config{})
 		result, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.NoError(t, err)
@@ -198,7 +206,7 @@ func TestCheckQueryCompleteness(t *testing.T) {
 		upstreamIdentifier.On("IdentifyUpstreamsFromQuery", ctx, "maxcompute", "", "select 1").
 			Return([]resource.URN{}, nil)
 
-		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, service.Config{})
+		svc := service.NewService(upstreamIdentifier, &mockJobDestinationRepository{}, &mockJobRunRepository{}, nil, service.Config{})
 		_, err := svc.CheckQueryCompleteness(ctx, "maxcompute", "select 1")
 
 		require.Error(t, err)

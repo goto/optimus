@@ -657,7 +657,7 @@ func (h JobRunHandler) GenerateExpectedFinishTime(ctx context.Context, req *pb.G
 	return response, nil
 }
 
-func (h JobRunHandler) GetJobExpectedCompletionTimeReport(ctx context.Context, req *pb.JobExpectedCompletionTimeReportRequest) (*pb.JobExpectedCompletionTimeReportResponse, error) {
+func (h JobRunHandler) JobExpectedCompletionTimeReport(ctx context.Context, req *pb.JobExpectedCompletionTimeReportRequest) (*pb.JobExpectedCompletionTimeReportResponse, error) {
 	filters, err := buildJobFilter(req)
 	if err != nil {
 		return nil, errors.GRPCErr(err, "unable to adapt request")

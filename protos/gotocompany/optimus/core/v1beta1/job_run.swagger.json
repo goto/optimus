@@ -57,7 +57,7 @@
     "/v1beta1/job_expected_completion_time_report": {
       "post": {
         "summary": "GetJobExpectedCompletionTimeReport will provide a report on the selected jobs' completion time (actual \u0026 expected)\non a given point of time, and get the mean delay between those times",
-        "operationId": "JobRunService_GetJobExpectedCompletionTimeReport",
+        "operationId": "JobRunService_JobExpectedCompletionTimeReport",
         "responses": {
           "200": {
             "description": "A successful response.",

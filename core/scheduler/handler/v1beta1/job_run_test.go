@@ -1179,7 +1179,7 @@ func TestJobRunHandler(t *testing.T) {
 				ScheduledRangeInHours: 12,
 			}
 
-			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			resp, err := handler.JobExpectedCompletionTimeReport(ctx, req)
 			assert.NotNil(t, err)
 			assert.Nil(t, resp)
 			assert.ErrorContains(t, err, "unable to adapt request")
@@ -1200,7 +1200,7 @@ func TestJobRunHandler(t *testing.T) {
 				{ProjectName: tenant.ProjectName(projectName), JobNames: []scheduler.JobName{}, Labels: map[string][]string{}},
 			}, mock.Anything, 12*time.Hour).Return(nil, errors.New("service error"))
 
-			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			resp, err := handler.JobExpectedCompletionTimeReport(ctx, req)
 			assert.NotNil(t, err)
 			assert.Nil(t, resp)
 			assert.ErrorContains(t, err, "unable to generate job expected completion time report")
@@ -1246,7 +1246,7 @@ func TestJobRunHandler(t *testing.T) {
 				},
 			}, nil)
 
-			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			resp, err := handler.JobExpectedCompletionTimeReport(ctx, req)
 			assert.Nil(t, err)
 			if assert.NotNil(t, resp) {
 				assert.Len(t, resp.Details, 2)
@@ -1295,7 +1295,7 @@ func TestJobRunHandler(t *testing.T) {
 				Summary: scheduler.JobCompletionTimeSummary{},
 			}, nil)
 
-			resp, err := handler.GetJobExpectedCompletionTimeReport(ctx, req)
+			resp, err := handler.JobExpectedCompletionTimeReport(ctx, req)
 			assert.Nil(t, err)
 			if assert.NotNil(t, resp) {
 				assert.Empty(t, resp.Details)

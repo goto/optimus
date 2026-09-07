@@ -819,8 +819,11 @@ func (j *JobRepository) GetJobsByLabelsMultiValue(ctx context.Context, projectNa
 	args := []interface{}{projectName}
 	clauses := make([]string, 0, len(keys))
 	for _, k := range keys {
+		args = append(args, k)
+		keyPos := len(args)
 		args = append(args, labels[k])
-		clauses = append(clauses, fmt.Sprintf("labels->>'%s' = ANY($%d)", k, len(args)))
+		valuesPos := len(args)
+		clauses = append(clauses, fmt.Sprintf("jsonb_extract_path_text(labels, $%d) = ANY($%d)", keyPos, valuesPos))
 	}
 
 	query := `SELECT ` + jobColumns + `
@@ -842,7 +845,7 @@ func (j *JobRepository) GetJobsByLabelsMultiValue(ctx context.Context, projectNa
 	for rows.Next() {
 		spec, err := FromRow(rows)
 		if err != nil {
-			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job:"+spec.Name, err))
+			multiError.Append(errors.Wrap(scheduler.EntityJobRun, "error parsing job row", err))
 			continue
 		}
 
@@ -874,7 +877,7 @@ func (j *JobRepository) GetJobsByLabelsMultiValue(ctx context.Context, projectNa
 		}
 	}
 
-	return utils.MapToList[*scheduler.JobWithDetails](jobsMap), errors.MultiToError(multiError)
+	return utils.MapToList(jobsMap), errors.MultiToError(multiError)
 }
 
 func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[scheduler.JobName][]scheduler.JobName, error) {

@@ -564,8 +564,8 @@ func (s *OptimusServer) setupHandlers() error {
 	schedulingLocation, err := time.LoadLocation(s.conf.Completeness.SchedulingTimezone)
 	if err != nil {
 		s.logger.Warn(fmt.Sprintf("completeness: invalid completeness.scheduling_timezone %q, defaulting to %s: %s",
-			s.conf.Completeness.SchedulingTimezone, completenessService.JKT, err.Error()))
-		schedulingLocation = completenessService.JKT
+			s.conf.Completeness.SchedulingTimezone, completenessService.UTC, err.Error()))
+		schedulingLocation = completenessService.UTC
 	}
 
 	newCompletenessService := completenessService.NewService(

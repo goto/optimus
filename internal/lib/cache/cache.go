@@ -1,5 +1,3 @@
-// Package cache provides a generic in-memory TTL cache with request coalescing, for
-// when a fan-out of concurrent lookups shares a smaller set of underlying keys.
 package cache
 
 import (

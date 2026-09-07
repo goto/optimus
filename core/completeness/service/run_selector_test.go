@@ -20,7 +20,7 @@ func mustParseCron(t *testing.T, interval string) *cron.ScheduleSpec {
 
 func atJKT(t *testing.T, s string) time.Time {
 	t.Helper()
-	parsed, err := time.ParseInLocation("2006-01-02 15:04:05", s, service.JKT)
+	parsed, err := time.ParseInLocation("2006-01-02 15:04:05", s, service.UTC)
 	require.NoError(t, err)
 	return parsed
 }
@@ -30,7 +30,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		hourly := mustParseCron(t, "0 * * * *")
 		now := atJKT(t, "2026-09-02 02:30:00")
 
-		got, hasSchedule := service.SelectScheduledAt(hourly, now, service.JKT)
+		got, hasSchedule := service.SelectScheduledAt(hourly, now, service.UTC)
 
 		assert.True(t, hasSchedule)
 		assert.Equal(t, atJKT(t, "2026-09-02 02:00:00"), got)
@@ -47,7 +47,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		hourly := mustParseCron(t, "0 * * * *")
 		now := atJKT(t, "2026-09-02 02:00:00")
 
-		got, hasSchedule := service.SelectScheduledAt(hourly, now, service.JKT)
+		got, hasSchedule := service.SelectScheduledAt(hourly, now, service.UTC)
 
 		assert.True(t, hasSchedule)
 		assert.Equal(t, atJKT(t, "2026-09-02 01:00:00"), got)
@@ -58,7 +58,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		every6h := mustParseCron(t, "0 */6 * * *")
 		now := atJKT(t, "2026-09-02 13:15:00")
 
-		got, hasSchedule := service.SelectScheduledAt(every6h, now, service.JKT)
+		got, hasSchedule := service.SelectScheduledAt(every6h, now, service.UTC)
 
 		assert.True(t, hasSchedule)
 		assert.Equal(t, atJKT(t, "2026-09-02 13:00:00"), got)
@@ -68,7 +68,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		daily1AM := mustParseCron(t, "0 1 * * *")
 		now := atJKT(t, "2026-09-02 00:30:00")
 
-		_, hasSchedule := service.SelectScheduledAt(daily1AM, now, service.JKT)
+		_, hasSchedule := service.SelectScheduledAt(daily1AM, now, service.UTC)
 
 		assert.False(t, hasSchedule)
 	})
@@ -78,7 +78,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		daily1AM := mustParseCron(t, "0 1 * * *")
 		now := atJKT(t, "2026-09-02 09:00:00")
 
-		got, hasSchedule := service.SelectScheduledAt(daily1AM, now, service.JKT)
+		got, hasSchedule := service.SelectScheduledAt(daily1AM, now, service.UTC)
 
 		assert.True(t, hasSchedule)
 		assert.Equal(t, atJKT(t, "2026-09-02 08:00:00"), got)
@@ -89,7 +89,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		weeklyWed1AM := mustParseCron(t, "0 1 * * 3")
 		now := atJKT(t, "2026-09-02 00:30:00")
 
-		_, hasSchedule := service.SelectScheduledAt(weeklyWed1AM, now, service.JKT)
+		_, hasSchedule := service.SelectScheduledAt(weeklyWed1AM, now, service.UTC)
 
 		assert.False(t, hasSchedule)
 	})
@@ -99,7 +99,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		weeklyWed1AM := mustParseCron(t, "0 1 * * 3")
 		now := atJKT(t, "2026-09-02 09:00:00")
 
-		got, hasSchedule := service.SelectScheduledAt(weeklyWed1AM, now, service.JKT)
+		got, hasSchedule := service.SelectScheduledAt(weeklyWed1AM, now, service.UTC)
 
 		assert.True(t, hasSchedule)
 		assert.Equal(t, atJKT(t, "2026-09-02 08:00:00"), got)
@@ -109,7 +109,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		weeklyWed1AM := mustParseCron(t, "0 1 * * 3")
 		now := atJKT(t, "2026-09-04 12:00:00") // Friday
 
-		got, hasSchedule := service.SelectScheduledAt(weeklyWed1AM, now, service.JKT)
+		got, hasSchedule := service.SelectScheduledAt(weeklyWed1AM, now, service.UTC)
 
 		assert.True(t, hasSchedule)
 		assert.Equal(t, atJKT(t, "2026-09-02 08:00:00"), got) // last Wednesday
@@ -120,7 +120,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		weekdays9AM := mustParseCron(t, "0 9 * * 1-5")
 		now := atJKT(t, "2026-09-05 12:00:00") // Saturday
 
-		got, hasSchedule := service.SelectScheduledAt(weekdays9AM, now, service.JKT)
+		got, hasSchedule := service.SelectScheduledAt(weekdays9AM, now, service.UTC)
 
 		assert.True(t, hasSchedule)
 		assert.Equal(t, atJKT(t, "2026-09-04 16:00:00"), got) // Friday
@@ -130,7 +130,7 @@ func TestSelectScheduledAt(t *testing.T) {
 		weekdays9AM := mustParseCron(t, "0 9 * * 1-5")
 		now := atJKT(t, "2026-09-04 08:00:00") // Friday, before 9 AM
 
-		_, hasSchedule := service.SelectScheduledAt(weekdays9AM, now, service.JKT)
+		_, hasSchedule := service.SelectScheduledAt(weekdays9AM, now, service.UTC)
 
 		assert.False(t, hasSchedule)
 	})

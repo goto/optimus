@@ -10,7 +10,6 @@ import (
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/scheduler"
-	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cache"
@@ -42,7 +41,9 @@ type JobRunRepository interface {
 	GetByScheduledAt(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error)
 }
 
-type ThirdPartyClient = schedulerService.ThirdPartyClient
+type ThirdPartyDexClient interface {
+	IsManaged(ctx context.Context, resourceURN resource.URN) (bool, error)
+}
 
 type Config struct {
 	MaxcomputeServiceAccount string
@@ -53,7 +54,7 @@ type Config struct {
 	RunStatusCacheTTL  time.Duration
 
 	// Location is the reference timezone whose calendar day defines "today" for
-	// daily-or-slower job schedules (see SelectScheduledAt). Defaults to JKT if nil.
+	// daily-or-slower job schedules (see SelectScheduledAt). Defaults to UTC if nil.
 	Location *time.Location
 }
 
@@ -85,7 +86,7 @@ type Service struct {
 	upstreamIdentifier UpstreamIdentifier
 	jobRepository      JobDestinationRepository
 	jobRunRepo         JobRunRepository
-	thirdPartyClient   ThirdPartyClient // nil if no third-party resolver is configured
+	thirdPartyClient   ThirdPartyDexClient // nil if no third-party resolver is configured
 	conf               Config
 
 	resolutionCache *cache.Cache[resource.URN, resolutionEntry]   // who owns a table; long TTL
@@ -96,7 +97,7 @@ func NewService(
 	upstreamIdentifier UpstreamIdentifier,
 	jobRepository JobDestinationRepository,
 	jobRunRepo JobRunRepository,
-	thirdPartyClient ThirdPartyClient,
+	thirdPartyClient ThirdPartyDexClient,
 	conf Config,
 ) *Service {
 	return &Service{
@@ -117,7 +118,7 @@ func (s *Service) Close() {
 
 func (s *Service) location() *time.Location {
 	if s.conf.Location == nil {
-		return JKT
+		return UTC
 	}
 	return s.conf.Location
 }
@@ -159,6 +160,12 @@ type Result struct {
 	ManagedTables   []ManagedTable
 }
 
+// exactly one of managedTables/unmanaged is populated on success
+type perURNResult struct {
+	managedTables []ManagedTable
+	unmanaged     *UnmanagedTable
+}
+
 func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, query string) (*Result, error) {
 	svcAcc := s.conf.MaxcomputeServiceAccount
 	if datastoreName == "bigquery" {
@@ -170,19 +177,43 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 		return nil, errors.InternalError(EntityCompleteness, "failed to resolve tables from query", err)
 	}
 	if len(urns) == 0 {
-		return nil, errors.InvalidArgument(EntityCompleteness, "no tables found in query")
+		return &Result{
+			OverallStatus: OverallStatusComplete,
+		}, nil
 	}
 	if len(urns) > maxResolvedResources {
 		return nil, errors.InvalidArgument(EntityCompleteness,
 			fmt.Sprintf("query resolves to %d tables, exceeding the %d limit per request", len(urns), maxResolvedResources))
 	}
 
-	// exactly one of managedTables/unmanaged is populated on success
-	type perURNResult struct {
-		managedTables []ManagedTable
-		unmanaged     *UnmanagedTable
+	runner := s.constructParallelExecution(ctx, urns)
+
+	me := errors.NewMultiError("check query completeness errors")
+	var managedTables []ManagedTable
+	var unmanagedTables []UnmanagedTable
+	for _, state := range runner.Run() {
+		if state.Err != nil {
+			me.Append(state.Err)
+			continue
+		}
+		result := state.Val.(*perURNResult)
+		if result.unmanaged != nil {
+			unmanagedTables = append(unmanagedTables, *result.unmanaged)
+		}
+		managedTables = append(managedTables, result.managedTables...)
+	}
+	if me.ToErr() != nil {
+		return nil, me.ToErr()
 	}
 
+	return &Result{
+		OverallStatus:   overallStatus(managedTables),
+		UnmanagedTables: unmanagedTables,
+		ManagedTables:   managedTables,
+	}, nil
+}
+
+func (s *Service) constructParallelExecution(ctx context.Context, urns []resource.URN) *parallel.Runner {
 	runner := parallel.NewRunner(parallel.WithTicket(fanOutTicketPerSec), parallel.WithLimit(fanOutConcurrency))
 	for _, urn := range urns {
 		urn := urn
@@ -221,30 +252,7 @@ func (s *Service) CheckQueryCompleteness(ctx context.Context, datastoreName, que
 			return result, nil
 		})
 	}
-
-	me := errors.NewMultiError("check query completeness errors")
-	var managedTables []ManagedTable
-	var unmanagedTables []UnmanagedTable
-	for _, state := range runner.Run() {
-		if state.Err != nil {
-			me.Append(state.Err)
-			continue
-		}
-		result := state.Val.(*perURNResult)
-		if result.unmanaged != nil {
-			unmanagedTables = append(unmanagedTables, *result.unmanaged)
-		}
-		managedTables = append(managedTables, result.managedTables...)
-	}
-	if me.ToErr() != nil {
-		return nil, me.ToErr()
-	}
-
-	return &Result{
-		OverallStatus:   overallStatus(managedTables),
-		UnmanagedTables: unmanagedTables,
-		ManagedTables:   managedTables,
-	}, nil
+	return runner
 }
 
 // overallStatus is COMPLETE only if every active managed table's selected run

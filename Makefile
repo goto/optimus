@@ -5,7 +5,7 @@ NAME = "github.com/goto/optimus"
 LAST_COMMIT := $(shell git rev-parse --short HEAD)
 LAST_TAG := "$(shell git rev-list --tags --max-count=1)"
 OPMS_VERSION := "$(shell git describe --tags ${LAST_TAG})-next"
-PROTON_COMMIT := "a21d3bb72838c5f60bb24b6cfaabff301b43b322"
+PROTON_COMMIT := "a2079dafd7e8e6c4c57bf72c742f86e548d766e6"
 
 
 .PHONY: build test test-ci generate-proto unit-test-ci integration-test vet coverage clean install lint
@@ -54,7 +54,7 @@ coverage: ## print code coverage
 	go test -race -coverprofile coverage.txt -covermode=atomic ./... -tags=unit_test && go tool cover -html=coverage.txt
 
 lint:
-	golangci-lint run --fix --config=".golangci.yml" --new-from-rev=origin/main --max-same-issues=0 --max-issues-per-linter=0
+	golangci-lint run --fix --config=".golangci.yml" --new-from-rev=HEAD~1 --max-same-issues=0 --max-issues-per-linter=0
 
 install: ## install required dependencies
 	@echo "> installing dependencies"

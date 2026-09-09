@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/salt/log"
+
+	"github.com/goto/optimus/ext/notify/alertmanager"
 )
 
 type AlertLogRepository interface {

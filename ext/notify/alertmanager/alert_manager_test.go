@@ -15,7 +15,6 @@ import (
 	"github.com/goto/optimus/ext/notify/alertmanager"
 )
 
-
 func TestAlertManager(t *testing.T) {
 	projectName := "ss"
 	jobName := scheduler.JobName("foo-job-spec")
@@ -118,5 +117,4 @@ func TestAlertManager(t *testing.T) {
 			})
 		}
 	})
-
 }

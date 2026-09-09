@@ -130,9 +130,17 @@ type ExternalTablesConfig struct {
 }
 
 type EventManagerConfig struct {
-	Host     string `mapstructure:"host"`
-	Endpoint string `mapstructure:"endpoint"`
-	Enabled  bool   `mapstructure:"enabled" default:"true"`
+	Host          string                   `mapstructure:"host"`
+	Endpoint      string                   `mapstructure:"endpoint"`
+	Enabled       bool                     `mapstructure:"enabled" default:"true"`
+	Deduplication AlertDeduplicationConfig `mapstructure:"deduplication"`
+}
+
+type AlertDeduplicationConfig struct {
+	TemplatesToDedup      []string `mapstructure:"templates_to_dedup"`
+	WindowMinutes         int      `mapstructure:"window_minutes" default:"30"`
+	ActiveWindowStartHour int      `mapstructure:"active_window_start_hour" default:"0"`
+	ActiveWindowEndHour   int      `mapstructure:"active_window_end_hour" default:"7"`
 }
 
 type ResourceManager struct {

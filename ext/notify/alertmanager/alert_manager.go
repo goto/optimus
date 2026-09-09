@@ -8,6 +8,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -25,9 +26,10 @@ const (
 	eventBatchInterval    = time.Second * 10
 	httpTimeout           = time.Second * 30
 
-	StatusPending AlertStatus = "PENDING"
-	StatusSent    AlertStatus = "SENT"
-	StatusFailed  AlertStatus = "FAILED"
+	StatusPending      AlertStatus = "PENDING"
+	StatusSent         AlertStatus = "SENT"
+	StatusFailed       AlertStatus = "FAILED"
+	StatusDeduplicated AlertStatus = "DEDUPLICATED"
 )
 
 const (
@@ -89,6 +91,7 @@ type AlertManager struct {
 	dataConsole string
 	alertsRepo  AlertsRepo
 	alertRules  AlertRules
+	dedupConfig DeduplicationConfig
 
 	eventBatchInterval time.Duration
 }
@@ -100,7 +103,16 @@ type AlertRules struct {
 
 type AlertsRepo interface {
 	Insert(ctx context.Context, payload *AlertPayload) (uuid.UUID, error)
+	InsertWithStatus(ctx context.Context, payload *AlertPayload, status AlertStatus) (uuid.UUID, error)
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status AlertStatus, message string) error
+	HasRecentAlert(ctx context.Context, team, template string, since time.Time) (bool, error)
+}
+
+type DeduplicationConfig struct {
+	TemplatesToDedup      []string
+	WindowMinutes         int
+	ActiveWindowStartHour int
+	ActiveWindowEndHour   int
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {
@@ -126,6 +138,40 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 			eventsReceived.WithLabelValues(al.Project, al.LogTag).Inc()
 		}(&alertCopy)
 	}
+}
+
+func (a *AlertManager) deduplicate(ctx context.Context, alert *AlertPayload) bool {
+	if !a.isTemplateDedupAllowed(alert) {
+		return false
+	}
+
+	team := alert.Labels[DefaultChannelLabel]
+	since := time.Now().Add(-time.Duration(a.dedupConfig.WindowMinutes) * time.Minute)
+
+	exists, err := a.alertsRepo.HasRecentAlert(ctx, team, alert.Template, since)
+	if err != nil {
+		a.logger.Error("alert-manager: dedup check failed, sending alert anyway", "error", err)
+		return false
+	}
+	if !exists {
+		return false
+	}
+
+	a.logger.Info("alert-manager: suppressing duplicate alert", "team", team, "template", alert.Template)
+	if _, err := a.alertsRepo.InsertWithStatus(ctx, alert, StatusDeduplicated); err != nil {
+		a.logger.Error("alert-manager: failed to log deduplicated alert", "error", err)
+	}
+	return true
+}
+
+func (a *AlertManager) isTemplateDedupAllowed(alert *AlertPayload) bool {
+	return slices.Contains(a.dedupConfig.TemplatesToDedup, alert.Template) &&
+		a.isWithinActiveWindow(time.Now()) && alert.HasDefaultChannelLabel()
+}
+
+func (a *AlertManager) isWithinActiveWindow(t time.Time) bool {
+	hour := t.UTC().Hour()
+	return hour >= a.dedupConfig.ActiveWindowStartHour && hour < a.dedupConfig.ActiveWindowEndHour
 }
 
 func (a *AlertManager) IsBackFill(alert *AlertPayload) bool {
@@ -198,6 +244,10 @@ func (a *AlertManager) worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-a.alertChan:
+			if isDeduped := a.deduplicate(ctx, e); isDeduped {
+				continue
+			}
+
 			logID, err := a.logEvent(ctx, e)
 			if err != nil {
 				a.logger.Error("failed to log event", "error", err)
@@ -233,7 +283,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 	return nil
 }
 
-func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo, alertRules AlertRules) *AlertManager {
+func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo, alertRules AlertRules, dedupConfig DeduplicationConfig) *AlertManager {
 	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
 		logger.Info("alert-manager: host name not found in server config, Optimus can still send events to Alert manager using tenant config.")
@@ -250,6 +300,7 @@ func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, data
 		dataConsole:        dataConsole,
 		alertsRepo:         alertsRepo,
 		alertRules:         alertRules,
+		dedupConfig:        dedupConfig,
 	}
 
 	this.wg.Add(1)

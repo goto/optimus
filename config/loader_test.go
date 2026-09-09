@@ -340,6 +340,12 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		MaxConcurrentProjects: 5,
 		MaxAttempts:           3,
 	}
+
+	s.expectedServerConfig.Alerting.EventManager.Deduplication = config.AlertDeduplicationConfig{
+		WindowMinutes:         30,
+		ActiveWindowStartHour: 0,
+		ActiveWindowEndHour:   7,
+	}
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

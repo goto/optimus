@@ -44,7 +44,7 @@ func TestAlertManager(t *testing.T) {
 		mockServer := httptest.NewServer(httpHandler)
 		defer mockServer.Close()
 		ctx := context.Background()
-		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", nil, alertmanager.AlertRules{})
+		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", nil, alertmanager.AlertRules{}, alertmanager.DeduplicationConfig{})
 		err := am.PrepareAndSendEvent(&alertmanager.AlertPayload{
 			Project: projectName,
 			LogTag:  jobName.String(),
@@ -70,7 +70,7 @@ func TestAlertManager(t *testing.T) {
 			TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusSLAAlertTemplate},
 			BackfillLookBackPeriodInHours:  2,
 		}
-		am := alertmanager.New(context.Background(), log.NewNoop(), "http://alertmanager", alertManagerEndPoint, "dashboard_url", "data_console_url", nil, ar)
+		am := alertmanager.New(context.Background(), log.NewNoop(), "http://alertmanager", alertManagerEndPoint, "dashboard_url", "data_console_url", nil, ar, alertmanager.DeduplicationConfig{})
 
 		tc := []struct {
 			name         string

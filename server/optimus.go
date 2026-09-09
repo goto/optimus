@@ -326,6 +326,7 @@ func (s *OptimusServer) setupHandlers() error {
 
 	alertsHandler := new(alertmanager.AlertManager)
 	if s.conf.Alerting.EventManager.Enabled {
+		dedupConf := s.conf.Alerting.EventManager.Deduplication
 		alertsHandler = alertmanager.New(
 			notificationContext,
 			s.logger,
@@ -337,6 +338,12 @@ func (s *OptimusServer) setupHandlers() error {
 			alertmanager.AlertRules{
 				TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusOperatorSLAMissTemplate}, // for now only disable task level alerts
 				BackfillLookBackPeriodInHours:  12,                                                    // disable alert if alert is after 12 hours of scheduled time
+			},
+			alertmanager.DeduplicationConfig{
+				TemplatesToDedup:      dedupConf.TemplatesToDedup,
+				WindowMinutes:         dedupConf.WindowMinutes,
+				ActiveWindowStartHour: dedupConf.ActiveWindowStartHour,
+				ActiveWindowEndHour:   dedupConf.ActiveWindowEndHour,
 			},
 		)
 	}

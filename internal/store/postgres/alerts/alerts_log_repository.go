@@ -3,6 +3,7 @@ package alerts
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,29 +21,6 @@ type AlertRepository struct {
 // NewAlertRepository creates a new instance of AlertRepository
 func NewAlertRepository(db *pgxpool.Pool) *AlertRepository {
 	return &AlertRepository{db: db}
-}
-
-// Insert logs an alert payload into the database
-func (r *AlertRepository) Insert(ctx context.Context, alertPayload *alertmanager.AlertPayload) (uuid.UUID, error) {
-	// default record Id in case inserting to DB fails
-	recordID := uuid.New()
-
-	alertLog, err := toDBSpec(alertPayload)
-	if err != nil {
-		return recordID, err
-	}
-
-	query := `
-		INSERT INTO alert_logs (project_name, data, template_name, labels, endpoint)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id;
-	`
-
-	err = r.db.QueryRow(ctx, query, alertLog.Project, alertLog.Data, alertLog.Template, alertLog.Labels, alertLog.Endpoint).Scan(&recordID)
-	if err != nil {
-		return recordID, err
-	}
-
-	return recordID, nil
 }
 
 // InsertWithStatus logs an alert payload with an explicit initial status
@@ -70,21 +48,42 @@ func (r *AlertRepository) InsertWithStatus(ctx context.Context, alertPayload *al
 	return recordID, nil
 }
 
-// HasRecentAlert returns true when a SENT alert for the given (team, template)
-// exists in alert_logs with a created_at >= since
-func (r *AlertRepository) HasRecentAlert(ctx context.Context, team, template string, since time.Time) (bool, error) {
-	query := `
-		SELECT EXISTS(
-			SELECT 1 FROM alert_logs
-			WHERE template_name = $1
-			  AND labels->>'team' = $2
-			  AND created_at >= $3
-			  AND status = 'SENT'
-		)
-	`
+// HasRecentAlert returns true when a SENT alert for the given (alertType, dedupValues) exists
+// in alert_logs with created_at >= since.
+func (r *AlertRepository) HasRecentAlert(ctx context.Context, alertType string, dedupValues map[string]string, since time.Time) (bool, error) {
+	if len(dedupValues) == 0 {
+		return false, nil
+	}
+
+	args := []interface{}{alertType, since}
+	argIdx := 3
+
+	conditions := []string{
+		"alert_type = $1",
+		"created_at >= $2",
+		"status = 'SENT'",
+	}
+
+	for dedupKey, dedupValue := range dedupValues {
+		parts := strings.SplitN(dedupKey, ".", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		column := parts[0]
+		if column != "data" && column != "labels" {
+			continue
+		}
+		fieldKey := parts[1]
+		// parameterise both the field key and value to avoid SQL injection
+		conditions = append(conditions, fmt.Sprintf("%s->>$%d = $%d", column, argIdx, argIdx+1))
+		args = append(args, fieldKey, dedupValue)
+		argIdx += 2
+	}
+
+	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM alert_logs WHERE %s)`, strings.Join(conditions, " AND "))
 
 	var exists bool
-	if err := r.db.QueryRow(ctx, query, template, team, since).Scan(&exists); err != nil {
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&exists); err != nil {
 		return false, err
 	}
 	return exists, nil

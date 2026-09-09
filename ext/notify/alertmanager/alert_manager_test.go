@@ -8,12 +8,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/ext/notify/alertmanager"
 )
+
+// mockAlertLogProvider satisfies alertmanager.AlertLogProvider for unit tests.
+type mockAlertLogProvider struct {
+	mock.Mock
+}
+
+func (m *mockAlertLogProvider) Insert(ctx context.Context, payload *alertmanager.AlertPayload) (uuid.UUID, bool, error) {
+	args := m.Called(ctx, payload)
+	return args.Get(0).(uuid.UUID), args.Bool(1), args.Error(2)
+}
+
+func (m *mockAlertLogProvider) UpdateStatus(ctx context.Context, recordID uuid.UUID, status alertmanager.AlertStatus, message string) error {
+	args := m.Called(ctx, recordID, status, message)
+	return args.Error(0)
+}
 
 func TestAlertManager(t *testing.T) {
 	projectName := "ss"
@@ -44,7 +61,7 @@ func TestAlertManager(t *testing.T) {
 		mockServer := httptest.NewServer(httpHandler)
 		defer mockServer.Close()
 		ctx := context.Background()
-		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", nil, alertmanager.AlertRules{}, alertmanager.DeduplicationConfig{})
+		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint, "dashboard_url", "data_console_url", nil, alertmanager.AlertRules{})
 		err := am.PrepareAndSendEvent(&alertmanager.AlertPayload{
 			Project: projectName,
 			LogTag:  jobName.String(),
@@ -70,7 +87,7 @@ func TestAlertManager(t *testing.T) {
 			TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusSLAAlertTemplate},
 			BackfillLookBackPeriodInHours:  2,
 		}
-		am := alertmanager.New(context.Background(), log.NewNoop(), "http://alertmanager", alertManagerEndPoint, "dashboard_url", "data_console_url", nil, ar, alertmanager.DeduplicationConfig{})
+		am := alertmanager.New(context.Background(), log.NewNoop(), "http://alertmanager", alertManagerEndPoint, "dashboard_url", "data_console_url", nil, ar)
 
 		tc := []struct {
 			name         string
@@ -116,5 +133,41 @@ func TestAlertManager(t *testing.T) {
 				assert.Equal(t, tc.expectSkip, skip)
 			})
 		}
+	})
+
+	t.Run("should skip send when alertLogProvider returns isDeduplicated=true", func(t *testing.T) {
+		httpCalled := false
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			httpCalled = true
+			t.Error("HTTP server should not be called when the alert is deduplicated")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer mockServer.Close()
+
+		testUUID := uuid.New()
+		provider := new(mockAlertLogProvider)
+		// Insert returns isDeduplicated = true; UpdateStatus must NOT be called.
+		provider.On("Insert", mock.Anything, mock.Anything).Return(testUUID, true, nil)
+		defer provider.AssertExpectations(t)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		am := alertmanager.New(ctx, log.NewNoop(), mockServer.URL, alertManagerEndPoint,
+			"dashboard_url", "data_console_url", provider, alertmanager.AlertRules{})
+
+		alertPayload := &alertmanager.AlertPayload{
+			Labels: map[string]string{
+				alertmanager.DefaultChannelLabel: "test-team",
+			},
+			Template: alertmanager.OptimusFailureAlertTemplate,
+			Endpoint: mockServer.URL + alertManagerEndPoint,
+		}
+
+		// ForTest_WorkerStep drives the per-event worker logic synchronously so the
+		// test does not depend on goroutine scheduling or sleep timers.
+		am.ForTest_WorkerStep(ctx, alertPayload)
+
+		assert.False(t, httpCalled, "HTTP server must not be called when isDeduplicated=true")
 	})
 }

@@ -1,0 +1,2 @@
+ALTER TABLE alert_logs
+  ADD COLUMN IF NOT EXISTS alert_type VARCHAR(128);

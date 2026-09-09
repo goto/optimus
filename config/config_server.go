@@ -93,13 +93,14 @@ type TelemetryConfig struct {
 }
 
 type AlertingConfig struct {
-	EventManager             EventManagerConfig       `mapstructure:"alert_manager"`
-	Dashboard                string                   `mapstructure:"dashboard"`
-	DataConsole              string                   `mapstructure:"data_console"`
-	EnableSlack              bool                     `mapstructure:"enable_slack"`
-	EnablePagerDuty          bool                     `mapstructure:"enable_pager_duty"`
-	AutoSLABreachConfig      DurationEstimatorConfig  `mapstructure:"auto_sla_breach_config"`
-	PotentialSLABreachConfig PotentialSLABreachConfig `mapstructure:"potential_sla_breach_config"`
+	EventManager             EventManagerConfig                  `mapstructure:"alert_manager"`
+	Dashboard                string                              `mapstructure:"dashboard"`
+	DataConsole              string                              `mapstructure:"data_console"`
+	EnableSlack              bool                                `mapstructure:"enable_slack"`
+	EnablePagerDuty          bool                                `mapstructure:"enable_pager_duty"`
+	AutoSLABreachConfig      DurationEstimatorConfig             `mapstructure:"auto_sla_breach_config"`
+	PotentialSLABreachConfig PotentialSLABreachConfig            `mapstructure:"potential_sla_breach_config"`
+	DeduplicationConfig      map[string]AlertDeduplicationConfig `mapstructure:"deduplication"`
 }
 
 type PotentialSLABreachConfig struct {
@@ -130,14 +131,13 @@ type ExternalTablesConfig struct {
 }
 
 type EventManagerConfig struct {
-	Host          string                   `mapstructure:"host"`
-	Endpoint      string                   `mapstructure:"endpoint"`
-	Enabled       bool                     `mapstructure:"enabled" default:"true"`
-	Deduplication AlertDeduplicationConfig `mapstructure:"deduplication"`
+	Host     string `mapstructure:"host"`
+	Endpoint string `mapstructure:"endpoint"`
+	Enabled  bool   `mapstructure:"enabled" default:"true"`
 }
 
 type AlertDeduplicationConfig struct {
-	TemplatesToDedup      []string `mapstructure:"templates_to_dedup"`
+	DedupKeys             []string `mapstructure:"dedup_keys"`
 	WindowMinutes         int      `mapstructure:"window_minutes" default:"30"`
 	ActiveWindowStartHour int      `mapstructure:"active_window_start_hour" default:"0"`
 	ActiveWindowEndHour   int      `mapstructure:"active_window_end_hour" default:"7"`

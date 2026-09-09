@@ -8,7 +8,6 @@ import (
 	"io"
 	"maps"
 	"net/http"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -69,6 +68,7 @@ type AlertPayload struct {
 	Template          string                 `json:"template"`
 	Labels            map[string]string      `json:"labels"`
 	Endpoint          string                 `json:"-"`
+	AlertType         string                 `json:"-"`
 }
 
 func (a *AlertPayload) HasDefaultChannelLabel() bool {
@@ -86,12 +86,11 @@ type AlertManager struct {
 	workerErrChan chan error
 	logger        log.Logger
 
-	endpoint    string
-	dashboard   string
-	dataConsole string
-	alertsRepo  AlertsRepo
-	alertRules  AlertRules
-	dedupConfig DeduplicationConfig
+	endpoint         string
+	dashboard        string
+	dataConsole      string
+	alertRules       AlertRules
+	alertLogProvider AlertLogProvider
 
 	eventBatchInterval time.Duration
 }
@@ -101,11 +100,9 @@ type AlertRules struct {
 	BackfillLookBackPeriodInHours  int
 }
 
-type AlertsRepo interface {
-	Insert(ctx context.Context, payload *AlertPayload) (uuid.UUID, error)
-	InsertWithStatus(ctx context.Context, payload *AlertPayload, status AlertStatus) (uuid.UUID, error)
+type AlertLogProvider interface {
+	Insert(ctx context.Context, payload *AlertPayload) (uuid.UUID, bool, error)
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status AlertStatus, message string) error
-	HasRecentAlert(ctx context.Context, team, template string, since time.Time) (bool, error)
 }
 
 type DeduplicationConfig struct {
@@ -138,40 +135,6 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 			eventsReceived.WithLabelValues(al.Project, al.LogTag).Inc()
 		}(&alertCopy)
 	}
-}
-
-func (a *AlertManager) deduplicate(ctx context.Context, alert *AlertPayload) bool {
-	if !a.isTemplateDedupAllowed(alert) {
-		return false
-	}
-
-	team := alert.Labels[DefaultChannelLabel]
-	since := time.Now().Add(-time.Duration(a.dedupConfig.WindowMinutes) * time.Minute)
-
-	exists, err := a.alertsRepo.HasRecentAlert(ctx, team, alert.Template, since)
-	if err != nil {
-		a.logger.Error("alert-manager: dedup check failed, sending alert anyway", "error", err)
-		return false
-	}
-	if !exists {
-		return false
-	}
-
-	a.logger.Info("alert-manager: suppressing duplicate alert", "team", team, "template", alert.Template)
-	if _, err := a.alertsRepo.InsertWithStatus(ctx, alert, StatusDeduplicated); err != nil {
-		a.logger.Error("alert-manager: failed to log deduplicated alert", "error", err)
-	}
-	return true
-}
-
-func (a *AlertManager) isTemplateDedupAllowed(alert *AlertPayload) bool {
-	return slices.Contains(a.dedupConfig.TemplatesToDedup, alert.Template) &&
-		a.isWithinActiveWindow(time.Now()) && alert.HasDefaultChannelLabel()
-}
-
-func (a *AlertManager) isWithinActiveWindow(t time.Time) bool {
-	hour := t.UTC().Hour()
-	return hour >= a.dedupConfig.ActiveWindowStartHour && hour < a.dedupConfig.ActiveWindowEndHour
 }
 
 func (a *AlertManager) IsBackFill(alert *AlertPayload) bool {
@@ -232,11 +195,11 @@ func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
 	return res.Body.Close()
 }
 
-func (a *AlertManager) logEvent(ctx context.Context, e *AlertPayload) (uuid.UUID, error) {
+func (a *AlertManager) logEvent(ctx context.Context, e *AlertPayload) (uuid.UUID, bool, error) {
 	if e.HasDefaultChannelLabel() {
-		return a.alertsRepo.Insert(ctx, e)
+		return a.alertLogProvider.Insert(ctx, e)
 	}
-	return uuid.Nil, nil
+	return uuid.Nil, false, nil
 }
 
 func (a *AlertManager) worker(ctx context.Context) {
@@ -244,14 +207,14 @@ func (a *AlertManager) worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-a.alertChan:
-			if isDeduped := a.deduplicate(ctx, e); isDeduped {
-				continue
-			}
-
-			logID, err := a.logEvent(ctx, e)
+			logID, isDeduplicated, err := a.logEvent(ctx, e)
 			if err != nil {
 				a.logger.Error("failed to log event", "error", err)
 			}
+			if isDeduplicated {
+				continue
+			}
+
 			err = a.PrepareAndSendEvent(e) // nolint:contextcheck
 			if err != nil {
 				eventWorkerSendErrCounter.WithLabelValues(e.Project, e.LogTag, err.Error()).Inc()
@@ -262,9 +225,9 @@ func (a *AlertManager) worker(ctx context.Context) {
 			}
 			if e.HasDefaultChannelLabel() {
 				if err != nil {
-					a.alertsRepo.UpdateStatus(ctx, logID, StatusFailed, err.Error())
+					a.alertLogProvider.UpdateStatus(ctx, logID, StatusFailed, err.Error())
 				} else {
-					a.alertsRepo.UpdateStatus(ctx, logID, StatusSent, "")
+					a.alertLogProvider.UpdateStatus(ctx, logID, StatusSent, "")
 				}
 			}
 
@@ -283,7 +246,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 	return nil
 }
 
-func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo, alertRules AlertRules, dedupConfig DeduplicationConfig) *AlertManager {
+func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertLogProvider AlertLogProvider, alertRules AlertRules) *AlertManager {
 	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
 		logger.Info("alert-manager: host name not found in server config, Optimus can still send events to Alert manager using tenant config.")
@@ -298,9 +261,8 @@ func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, data
 		eventBatchInterval: eventBatchInterval,
 		dashboard:          dashboard,
 		dataConsole:        dataConsole,
-		alertsRepo:         alertsRepo,
+		alertLogProvider:   alertLogProvider,
 		alertRules:         alertRules,
-		dedupConfig:        dedupConfig,
 	}
 
 	this.wg.Add(1)

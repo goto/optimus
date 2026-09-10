@@ -139,6 +139,7 @@ type EventManagerConfig struct {
 type AlertDeduplicationConfig struct {
 	DedupKeys             []string `mapstructure:"dedup_keys"`
 	WindowMinutes         int      `mapstructure:"window_minutes" default:"30"`
+	ActiveWindowTimezone  string   `mapstructure:"active_window_timezone"`
 	ActiveWindowStartHour int      `mapstructure:"active_window_start_hour" default:"0"`
 	ActiveWindowEndHour   int      `mapstructure:"active_window_end_hour" default:"7"`
 }

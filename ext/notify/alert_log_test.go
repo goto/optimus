@@ -1,5 +1,3 @@
-//go:build unit_test
-
 package notify_test
 
 import (
@@ -78,6 +76,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{"data.job_name"},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   0,
 			},
@@ -105,6 +104,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{"data.job_name"},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   24, // whole day = always active
 			},
@@ -131,6 +131,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{"data.job_name"},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   24,
 			},
@@ -157,6 +158,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{"data.job_name"},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   24,
 			},
@@ -181,6 +183,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   24,
 			},
@@ -205,6 +208,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{"unknown.field"},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   24,
 			},
@@ -229,6 +233,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{"data.missing_key"},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   24,
 			},
@@ -243,8 +248,6 @@ func TestAlertLogProvider(t *testing.T) {
 	})
 
 	t.Run("getDedupValues: happy path extracts both data and label values", func(t *testing.T) {
-		// Both "data.job_name" and "labels.team" should be extracted and passed to
-		// HasRecentAlert as the dedup values map.
 		expectedDedupValues := map[string]string{
 			"data.job_name": "test-job",
 			"labels.team":   "data-eng",
@@ -261,6 +264,7 @@ func TestAlertLogProvider(t *testing.T) {
 			"job_failure": {
 				DedupKeys:             []string{"data.job_name", "labels.team"},
 				WindowMinutes:         60,
+				ActiveWindowTimezone:  time.UTC,
 				ActiveWindowStartHour: 0,
 				ActiveWindowEndHour:   24,
 			},

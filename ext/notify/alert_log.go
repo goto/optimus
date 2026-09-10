@@ -20,12 +20,13 @@ type AlertLogRepository interface {
 type AlertDeduplicationConfig struct {
 	DedupKeys             []string
 	WindowMinutes         int
+	ActiveWindowTimezone  *time.Location
 	ActiveWindowStartHour int
 	ActiveWindowEndHour   int
 }
 
 func (c AlertDeduplicationConfig) IsWithinActiveWindow(t time.Time) bool {
-	hour := t.UTC().Hour()
+	hour := t.In(c.ActiveWindowTimezone).Hour()
 	return hour >= c.ActiveWindowStartHour && hour < c.ActiveWindowEndHour
 }
 

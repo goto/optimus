@@ -327,9 +327,17 @@ func (s *OptimusServer) setupHandlers() error {
 	dedupSrvConfig := s.conf.Alerting.DeduplicationConfig
 	dedupConfig := make(map[string]notify.AlertDeduplicationConfig, len(dedupSrvConfig))
 	for alertType, cfg := range dedupSrvConfig {
+		loc := time.UTC
+		if cfg.ActiveWindowTimezone != "" {
+			if parsedLoc, _ := time.LoadLocation(cfg.ActiveWindowTimezone); parsedLoc != nil {
+				loc = parsedLoc
+			}
+		}
+
 		dedupConfig[alertType] = notify.AlertDeduplicationConfig{
 			DedupKeys:             cfg.DedupKeys,
 			WindowMinutes:         cfg.WindowMinutes,
+			ActiveWindowTimezone:  loc,
 			ActiveWindowStartHour: cfg.ActiveWindowStartHour,
 			ActiveWindowEndHour:   cfg.ActiveWindowEndHour,
 		}

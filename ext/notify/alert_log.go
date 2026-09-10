@@ -110,9 +110,10 @@ func getDedupValues(alert *alertmanager.AlertPayload, dedupKeys []string) map[st
 			}
 		}
 
-		// skip if the obtained value is not an empty string
+		// every dedup key must have the values in the payload, else, it is considered
+		// as invalid and dedup is cancelled
 		if value == "" {
-			continue
+			return map[string]string{}
 		}
 
 		dedupValues[dedupKey] = value

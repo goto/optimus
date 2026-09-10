@@ -78,6 +78,17 @@ alerting:
       padding_percentage: 0
       min_padding_minutes: 0
       max_padding_minutes: 1000
+  # alert deduplication
+  deduplication:
+    operator_sla_miss:
+      dedup_keys:
+      - labels.team
+      - labels.severity
+      - data.job_name
+      window_minutes: 10
+      active_window_timezone: Asia/Jakarta
+      active_window_start_hour: 0
+      active_window_end_hour: 3
 
 # SLA breach-detection background worker cadence
 sla:

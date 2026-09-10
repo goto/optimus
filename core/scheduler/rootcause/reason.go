@@ -1,15 +1,20 @@
 package rootcause
 
 import (
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/goto/optimus/core/scheduler"
 )
 
-// DexSensorPrefix is how the DAG template names third-party sensor tasks:
-// wait_<type>_<identifier>. Optimus stores that task_id verbatim in sensor_run.name.
-const DexSensorPrefix = "wait_dex_"
+// sensorPrefixFor mirrors how the DAG template names third-party sensor tasks --
+// wait_<type>_<identifier> -- which Optimus stores verbatim in sensor_run.name.
+// Deriving the prefix from the configured upstream_resolvers types means no separate
+// config can drift out of sync with the sensors actually generated.
+func sensorPrefixFor(thirdPartyType string) string {
+	return "wait_" + thirdPartyType + "_"
+}
 
 // Candidate is one root cause job plus the run facts needed to explain it.
 type Candidate struct {
@@ -27,14 +32,14 @@ type ReasonDetector interface {
 
 // DefaultDetectors returns the chain in precedence order. Overrunning beats starting
 // late, because a job doing both is best described by the part still growing.
-func DefaultDetectors(sensorPrefix string) []ReasonDetector {
-	if sensorPrefix == "" {
-		sensorPrefix = DexSensorPrefix
-	}
+//
+// thirdPartyTypes comes from the server's upstream_resolvers. Empty means the
+// deployment has no third-party sensors, so THIRD_PARTY_DELAY never fires.
+func DefaultDetectors(thirdPartyTypes []string) []ReasonDetector {
 	return []ReasonDetector{
 		RunningLongDetector{},
 		StartedLateDetector{},
-		RawDataDelayDetector{SensorPrefix: sensorPrefix},
+		NewThirdPartySensorDetector(thirdPartyTypes),
 	}
 }
 
@@ -70,28 +75,45 @@ func (StartedLateDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 	return scheduler.ReasonStartedLate, evidenceForStarted(c), true
 }
 
-type RawDataDelayDetector struct {
-	SensorPrefix string
+type ThirdPartySensorDetector struct {
+	typeByPrefix map[string]string
 }
 
-func (RawDataDelayDetector) Name() string { return "raw_data_delay" }
+func NewThirdPartySensorDetector(thirdPartyTypes []string) ThirdPartySensorDetector {
+	typeByPrefix := make(map[string]string, len(thirdPartyTypes))
+	for _, thirdPartyType := range thirdPartyTypes {
+		if thirdPartyType == "" {
+			continue
+		}
+		typeByPrefix[sensorPrefixFor(thirdPartyType)] = thirdPartyType
+	}
+	return ThirdPartySensorDetector{typeByPrefix: typeByPrefix}
+}
 
-// A pending third-party sensor is itself the signal that the raw data has not landed,
-// so no call out to the third party is needed to reach this verdict.
-func (d RawDataDelayDetector) Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool) {
+func (ThirdPartySensorDetector) Name() string { return "third_party_delay" }
+
+// A pending third-party sensor is itself the signal that the source data has not
+// landed, so no call out to the third party is needed to reach this verdict.
+func (d ThirdPartySensorDetector) Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool) {
 	if c.State.JobRun.TaskStartTime != nil {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
 	blocked := make([]string, 0, len(c.PendingSensors))
+	sourceType := ""
 	for _, sensor := range c.PendingSensors {
-		if strings.HasPrefix(sensor, d.SensorPrefix) {
-			blocked = append(blocked, sensor)
+		for prefix, thirdPartyType := range d.typeByPrefix {
+			if strings.HasPrefix(sensor, prefix) {
+				blocked = append(blocked, sensor)
+				sourceType = thirdPartyType
+				break
+			}
 		}
 	}
 	if len(blocked) == 0 {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
-	return scheduler.ReasonRawDataDelay, scheduler.RootCauseEvidence{BlockedOnSensors: blocked}, true
+	sort.Strings(blocked) // map iteration above makes the order otherwise unstable
+	return scheduler.ReasonThirdPartyDelay, scheduler.RootCauseEvidence{BlockedOnSensors: blocked, SourceType: sourceType}, true
 }
 
 func evidenceForStarted(c Candidate) scheduler.RootCauseEvidence {

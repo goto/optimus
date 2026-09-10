@@ -186,6 +186,26 @@ type JobSLAState struct {
 	InferredSLA       *time.Time
 }
 
+// RootCauseReason explains why a breaching job is late. Status says whether it is
+// past its deadline; this says what put it there.
+type RootCauseReason string
+
+const (
+	ReasonRunningLong  RootCauseReason = "RUNNING_LONG"
+	ReasonStartedLate  RootCauseReason = "STARTED_LATE"
+	ReasonRawDataDelay RootCauseReason = "RAW_DATA_DELAY"
+	ReasonUnknown      RootCauseReason = "UNKNOWN"
+)
+
+// RootCauseEvidence carries the numbers behind a reason so an alert can state them
+// rather than just naming the reason.
+type RootCauseEvidence struct {
+	StartedAt         *time.Time
+	ExpectedFinishAt  *time.Time
+	LatestSafeStartAt *time.Time
+	BlockedOnSensors  []string
+}
+
 type JobState struct {
 	JobSLAState
 	JobName       JobName
@@ -193,6 +213,8 @@ type JobState struct {
 	Tenant        tenant.Tenant
 	RelativeLevel int
 	Status        SLABreachCause
+	Reason        RootCauseReason
+	Evidence      RootCauseEvidence
 }
 
 // TargetBreach is the per-target result returned to the caller for building the

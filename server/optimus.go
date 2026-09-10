@@ -475,7 +475,7 @@ func (s *OptimusServer) setupHandlers() error {
 		s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.PaddingPercentage, s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.MinPaddingMinutes,
 		s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.MaxPaddingMinutes)
 
-	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService)
+	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService, operatorRunRepository)
 
 	// Job Estimator Service
 	newJobExpectatorDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,

@@ -14,7 +14,7 @@ import (
 
 func TestDefaultDetectors(t *testing.T) {
 	ref := time.Date(2026, 9, 10, 6, 0, 0, 0, time.UTC)
-	detectors := rootcause.DefaultDetectors("")
+	detectors := rootcause.DefaultDetectors([]string{"dex"})
 
 	// first detector in the chain that claims the candidate wins
 	detect := func(c rootcause.Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence) {
@@ -73,15 +73,49 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, scheduler.ReasonRunningLong, reason)
 	})
 
-	t.Run("unstarted job blocked on a dex sensor is RAW_DATA_DELAY", func(t *testing.T) {
+	t.Run("unstarted job blocked on a third-party sensor is THIRD_PARTY_DELAY", func(t *testing.T) {
 		reason, evidence := detect(rootcause.Candidate{
 			State:          state(nil, dur(30*time.Minute), at(6, 0)),
 			PendingSensors: []string{"wait_upstream_job", "wait_dex_p_gopay_id_raw.gpppo.order_final_log"},
 			ReferenceTime:  ref,
 		})
 
-		assert.Equal(t, scheduler.ReasonRawDataDelay, reason)
+		assert.Equal(t, scheduler.ReasonThirdPartyDelay, reason)
 		assert.Equal(t, []string{"wait_dex_p_gopay_id_raw.gpppo.order_final_log"}, evidence.BlockedOnSensors)
+		assert.Equal(t, "dex", evidence.SourceType)
+	})
+
+	t.Run("no configured resolvers means third-party delay never fires", func(t *testing.T) {
+		// the open-source default: nothing in upstream_resolvers, so the same pending
+		// sensor is not attributable and must fall through rather than be guessed at
+		bare := rootcause.DefaultDetectors(nil)
+		var reason scheduler.RootCauseReason = scheduler.ReasonUnknown
+		for _, d := range bare {
+			if r, _, ok := d.Detect(rootcause.Candidate{
+				State:          state(nil, dur(30*time.Minute), at(6, 0)),
+				PendingSensors: []string{"wait_dex_p_gopay_id_raw.gpppo.order_final_log"},
+				ReferenceTime:  ref,
+			}); ok {
+				reason = r
+				break
+			}
+		}
+
+		assert.Equal(t, scheduler.ReasonUnknown, reason)
+	})
+
+	t.Run("a resolver type other than dex is matched from config", func(t *testing.T) {
+		kafka := rootcause.NewThirdPartySensorDetector([]string{"kafka"})
+
+		reason, evidence, ok := kafka.Detect(rootcause.Candidate{
+			State:          state(nil, dur(30*time.Minute), at(6, 0)),
+			PendingSensors: []string{"wait_kafka_orders_topic"},
+			ReferenceTime:  ref,
+		})
+
+		assert.True(t, ok)
+		assert.Equal(t, scheduler.ReasonThirdPartyDelay, reason)
+		assert.Equal(t, "kafka", evidence.SourceType)
 	})
 
 	t.Run("unstarted job blocked only on optimus upstreams is UNKNOWN", func(t *testing.T) {

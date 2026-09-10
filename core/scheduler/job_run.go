@@ -186,24 +186,23 @@ type JobSLAState struct {
 	InferredSLA       *time.Time
 }
 
-// RootCauseReason explains why a breaching job is late. Status says whether it is
-// past its deadline; this says what put it there.
+// RootCauseReason explains why a breaching job is late.
 type RootCauseReason string
 
 const (
-	ReasonRunningLong  RootCauseReason = "RUNNING_LONG"
-	ReasonStartedLate  RootCauseReason = "STARTED_LATE"
-	ReasonRawDataDelay RootCauseReason = "RAW_DATA_DELAY"
-	ReasonUnknown      RootCauseReason = "UNKNOWN"
+	ReasonRunningLong     RootCauseReason = "RUNNING_LONG"
+	ReasonStartedLate     RootCauseReason = "STARTED_LATE"
+	ReasonThirdPartyDelay RootCauseReason = "THIRD_PARTY_DELAY"
+	ReasonUnknown         RootCauseReason = "UNKNOWN"
 )
 
-// RootCauseEvidence carries the numbers behind a reason so an alert can state them
-// rather than just naming the reason.
 type RootCauseEvidence struct {
 	StartedAt         *time.Time
 	ExpectedFinishAt  *time.Time
 	LatestSafeStartAt *time.Time
 	BlockedOnSensors  []string
+	// SourceType is the upstream_resolvers type behind a THIRD_PARTY_DELAY, e.g. "dex".
+	SourceType string
 }
 
 type JobState struct {

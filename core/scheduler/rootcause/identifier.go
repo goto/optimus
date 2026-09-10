@@ -45,9 +45,9 @@ type Identifier struct {
 
 // A nil pendingSensorGetter is allowed; RAW_DATA_DELAY then never fires and those
 // causes fall through to UNKNOWN.
-func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, detectors ...ReasonDetector) *Identifier {
+func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, thirdPartyTypes []string, detectors ...ReasonDetector) *Identifier {
 	if len(detectors) == 0 {
-		detectors = DefaultDetectors("")
+		detectors = DefaultDetectors(thirdPartyTypes)
 	}
 	return &Identifier{
 		l:                     l,

@@ -33,13 +33,13 @@ func (r *AlertRepository) InsertWithStatus(ctx context.Context, alertPayload *al
 	}
 
 	query := `
-		INSERT INTO alert_logs (project_name, data, template_name, labels, endpoint, status)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;
+		INSERT INTO alert_logs (project_name, data, template_name, labels, endpoint, status, alert_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;
 	`
 
 	err = r.db.QueryRow(ctx, query,
 		alertLog.Project, alertLog.Data, alertLog.Template,
-		alertLog.Labels, alertLog.Endpoint, status,
+		alertLog.Labels, alertLog.Endpoint, status, alertLog.AlertType,
 	).Scan(&recordID)
 	if err != nil {
 		return recordID, err

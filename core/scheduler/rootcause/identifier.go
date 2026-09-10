@@ -115,10 +115,12 @@ func (i *Identifier) classify(ctx context.Context, causes map[scheduler.JobName]
 			PendingSensors: pending[key.String()],
 			ReferenceTime:  referenceTime,
 		})
-		if state.Reason == scheduler.ReasonUnknown && state.JobRun.TaskStartTime != nil {
-			// sensors should have cleared before the task began; surface the inconsistency
-			// rather than letting it silently shape the reason
-			i.l.Warn("root cause started while classification found no reason", "job", state.JobName)
+		// a started job with a known estimate cannot breach without being slow or late,
+		// so landing on UNKNOWN here means the run data disagrees with itself
+		if state.Reason == scheduler.ReasonUnknown && state.JobRun.TaskStartTime != nil && state.EstimatedDuration != nil {
+			i.l.Warn("started root cause classified as unknown", "job", state.JobName,
+				"task_start", state.JobRun.TaskStartTime, "task_end", state.JobRun.TaskEndTime,
+				"estimated_duration", state.EstimatedDuration, "inferred_sla", state.InferredSLA)
 		}
 	}
 }

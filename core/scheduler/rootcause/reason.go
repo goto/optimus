@@ -1,17 +1,12 @@
 package rootcause
 
 import (
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/goto/optimus/core/scheduler"
 )
 
-// sensorPrefixFor mirrors how the DAG template names third-party sensor tasks --
-// wait_<type>_<identifier> -- which Optimus stores verbatim in sensor_run.name.
-// Deriving the prefix from the configured upstream_resolvers types means no separate
-// config can drift out of sync with the sensors actually generated.
 func sensorPrefixFor(thirdPartyType string) string {
 	return "wait_" + thirdPartyType + "_"
 }
@@ -30,9 +25,7 @@ type ReasonDetector interface {
 	Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool)
 }
 
-// DefaultDetectors returns the chain in precedence order. Overrunning beats starting
-// late, because a job doing both is best described by the part still growing.
-//
+// DefaultDetectors returns the chain in precedence order.
 // thirdPartyTypes comes from the server's upstream_resolvers. Empty means the
 // deployment has no third-party sensors, so THIRD_PARTY_DELAY never fires.
 func DefaultDetectors(thirdPartyTypes []string) []ReasonDetector {
@@ -52,7 +45,12 @@ func (RunningLongDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 	if start == nil || c.State.EstimatedDuration == nil {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
-	if c.ReferenceTime.Sub(*start) <= *c.State.EstimatedDuration {
+	elapsed := c.ReferenceTime.Sub(*start)
+	// a run that finished late is still a root cause
+	if end := c.State.JobRun.TaskEndTime; end != nil {
+		elapsed = end.Sub(*start)
+	}
+	if elapsed <= *c.State.EstimatedDuration {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
 	return scheduler.ReasonRunningLong, evidenceForStarted(c), true
@@ -112,7 +110,6 @@ func (d ThirdPartySensorDetector) Detect(c Candidate) (scheduler.RootCauseReason
 	if len(blocked) == 0 {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
-	sort.Strings(blocked) // map iteration above makes the order otherwise unstable
 	return scheduler.ReasonThirdPartyDelay, scheduler.RootCauseEvidence{BlockedOnSensors: blocked, SourceType: sourceType}, true
 }
 

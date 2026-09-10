@@ -63,6 +63,44 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, *at(6, 20), *evidence.ExpectedFinishAt)
 	})
 
+	t.Run("a run that finished late but ran normally is STARTED_LATE, not RUNNING_LONG", func(t *testing.T) {
+		// started 05:40, ran its usual 10m, done 05:50, deadline was 05:45.
+		// evaluated at 06:00 -- elapsed must be the 10m it ran, not the 20m since it began
+		finished := state(at(5, 40), dur(30*time.Minute), at(5, 45))
+		finished.JobRun.TaskEndTime = at(5, 50)
+
+		reason, _ := detect(rootcause.Candidate{State: finished, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonStartedLate, reason)
+	})
+
+	t.Run("hook time is excluded, matching the task-only estimate", func(t *testing.T) {
+		// task ran its usual 10m (05:40-05:50); a slow hook then pushed the run to 07:00.
+		// the estimate is task-only, so the hook must not make this look like an overrun
+		hookHeavy := state(at(5, 40), dur(30*time.Minute), at(5, 45))
+		hookHeavy.JobRun.TaskEndTime = at(5, 50)
+		hookHeavy.JobRun.HookEndTime = at(7, 0)
+
+		reason, _ := detect(rootcause.Candidate{State: hookHeavy, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonStartedLate, reason)
+	})
+
+	t.Run("every blocking third-party sensor is captured across providers", func(t *testing.T) {
+		multi := rootcause.NewThirdPartySensorDetector([]string{"dex", "kafka"})
+
+		_, evidence, ok := multi.Detect(rootcause.Candidate{
+			State:          state(nil, dur(30*time.Minute), at(6, 0)),
+			PendingSensors: []string{"wait_dex_orders", "wait_kafka_topic", "wait_upstream_job"},
+			ReferenceTime:  ref,
+		})
+
+		assert.True(t, ok)
+		// SourceType names one provider; BlockedOnSensors carries the full truth
+		assert.Equal(t, []string{"wait_dex_orders", "wait_kafka_topic"}, evidence.BlockedOnSensors)
+		assert.Contains(t, []string{"dex", "kafka"}, evidence.SourceType)
+	})
+
 	t.Run("overrunning takes precedence over having started late", func(t *testing.T) {
 		// started late AND already past its estimate; the growing problem wins
 		reason, _ := detect(rootcause.Candidate{

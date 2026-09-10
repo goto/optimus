@@ -184,7 +184,8 @@ WITH targets AS (
 SELECT r.project_name, r.job_name, r.scheduled_at, ls.name
 FROM runs r
 JOIN latest_sensor ls ON ls.job_run_id = r.id
-WHERE ls.end_time IS NULL`
+WHERE ls.end_time IS NULL
+ORDER BY r.project_name, r.job_name, r.scheduled_at, ls.name`
 
 	rows, err := o.db.Query(ctx, query, projects, jobNames, scheduledAts)
 	if err != nil {

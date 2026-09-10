@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS alert_logs_alert_type_created_at_sent_idx;

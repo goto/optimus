@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS alert_logs_alert_type_created_at_sent_idx ON alert_logs (alert_type, created_at DESC);

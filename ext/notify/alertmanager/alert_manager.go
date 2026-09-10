@@ -25,9 +25,10 @@ const (
 	eventBatchInterval    = time.Second * 10
 	httpTimeout           = time.Second * 30
 
-	StatusPending AlertStatus = "PENDING"
-	StatusSent    AlertStatus = "SENT"
-	StatusFailed  AlertStatus = "FAILED"
+	StatusPending      AlertStatus = "PENDING"
+	StatusSent         AlertStatus = "SENT"
+	StatusFailed       AlertStatus = "FAILED"
+	StatusDeduplicated AlertStatus = "DEDUPLICATED"
 )
 
 const (
@@ -67,6 +68,7 @@ type AlertPayload struct {
 	Template          string                 `json:"template"`
 	Labels            map[string]string      `json:"labels"`
 	Endpoint          string                 `json:"-"`
+	AlertType         string                 `json:"-"`
 }
 
 func (a *AlertPayload) HasDefaultChannelLabel() bool {
@@ -84,11 +86,11 @@ type AlertManager struct {
 	workerErrChan chan error
 	logger        log.Logger
 
-	endpoint    string
-	dashboard   string
-	dataConsole string
-	alertsRepo  AlertsRepo
-	alertRules  AlertRules
+	endpoint         string
+	dashboard        string
+	dataConsole      string
+	alertRules       AlertRules
+	alertLogProvider AlertLogProvider
 
 	eventBatchInterval time.Duration
 }
@@ -98,8 +100,8 @@ type AlertRules struct {
 	BackfillLookBackPeriodInHours  int
 }
 
-type AlertsRepo interface {
-	Insert(ctx context.Context, payload *AlertPayload) (uuid.UUID, error)
+type AlertLogProvider interface {
+	Insert(ctx context.Context, payload *AlertPayload) (uuid.UUID, bool, error)
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status AlertStatus, message string) error
 }
 
@@ -186,11 +188,11 @@ func (a *AlertManager) PrepareAndSendEvent(alertPayload *AlertPayload) error {
 	return res.Body.Close()
 }
 
-func (a *AlertManager) logEvent(ctx context.Context, e *AlertPayload) (uuid.UUID, error) {
+func (a *AlertManager) logEvent(ctx context.Context, e *AlertPayload) (uuid.UUID, bool, error) {
 	if e.HasDefaultChannelLabel() {
-		return a.alertsRepo.Insert(ctx, e)
+		return a.alertLogProvider.Insert(ctx, e)
 	}
-	return uuid.Nil, nil
+	return uuid.Nil, false, nil
 }
 
 func (a *AlertManager) worker(ctx context.Context) {
@@ -198,10 +200,14 @@ func (a *AlertManager) worker(ctx context.Context) {
 	for {
 		select {
 		case e := <-a.alertChan:
-			logID, err := a.logEvent(ctx, e)
+			logID, isDeduplicated, err := a.logEvent(ctx, e)
 			if err != nil {
 				a.logger.Error("failed to log event", "error", err)
 			}
+			if isDeduplicated {
+				continue
+			}
+
 			err = a.PrepareAndSendEvent(e) // nolint:contextcheck
 			if err != nil {
 				eventWorkerSendErrCounter.WithLabelValues(e.Project, e.LogTag, err.Error()).Inc()
@@ -212,9 +218,9 @@ func (a *AlertManager) worker(ctx context.Context) {
 			}
 			if e.HasDefaultChannelLabel() {
 				if err != nil {
-					a.alertsRepo.UpdateStatus(ctx, logID, StatusFailed, err.Error())
+					a.alertLogProvider.UpdateStatus(ctx, logID, StatusFailed, err.Error())
 				} else {
-					a.alertsRepo.UpdateStatus(ctx, logID, StatusSent, "")
+					a.alertLogProvider.UpdateStatus(ctx, logID, StatusSent, "")
 				}
 			}
 
@@ -233,7 +239,7 @@ func (a *AlertManager) Close() error { // nolint: unparam
 	return nil
 }
 
-func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertsRepo AlertsRepo, alertRules AlertRules) *AlertManager {
+func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, dataConsole string, alertLogProvider AlertLogProvider, alertRules AlertRules) *AlertManager {
 	logger.Info(fmt.Sprintf("alert-manager: Starting alert-manager worker with config: \n host: %s \n endpoint: %s \n dashboard: %s \n dataConsole: %s\n", host, endpoint, dashboard, dataConsole))
 	if host == "" {
 		logger.Info("alert-manager: host name not found in server config, Optimus can still send events to Alert manager using tenant config.")
@@ -248,7 +254,7 @@ func New(ctx context.Context, logger log.Logger, host, endpoint, dashboard, data
 		eventBatchInterval: eventBatchInterval,
 		dashboard:          dashboard,
 		dataConsole:        dataConsole,
-		alertsRepo:         alertsRepo,
+		alertLogProvider:   alertLogProvider,
 		alertRules:         alertRules,
 	}
 

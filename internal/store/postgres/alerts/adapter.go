@@ -8,13 +8,14 @@ import (
 
 // AlertLog represents the structure received from the alert system
 type AlertLog struct {
-	Project  string          `json:"project"`
-	Data     json.RawMessage `json:"data"`
-	Template string          `json:"template"`
-	Labels   json.RawMessage `json:"labels"`
-	Endpoint string          `json:"endpoint"`
-	Status   string          `json:"status"`
-	Message  string          `json:"message"`
+	Project   string          `json:"project"`
+	Data      json.RawMessage `json:"data"`
+	Template  string          `json:"template"`
+	AlertType string          `json:"alert_type"`
+	Labels    json.RawMessage `json:"labels"`
+	Endpoint  string          `json:"endpoint"`
+	Status    string          `json:"status"`
+	Message   string          `json:"message"`
 }
 
 func toDBSpec(payload *alertmanager.AlertPayload) (*AlertLog, error) {
@@ -29,10 +30,11 @@ func toDBSpec(payload *alertmanager.AlertPayload) (*AlertLog, error) {
 	}
 
 	return &AlertLog{
-		Project:  payload.Project,
-		Data:     dataJSON,
-		Template: payload.Template,
-		Labels:   labelsJSON,
-		Endpoint: payload.Endpoint,
+		Project:   payload.Project,
+		Data:      dataJSON,
+		Template:  payload.Template,
+		AlertType: payload.AlertType,
+		Labels:    labelsJSON,
+		Endpoint:  payload.Endpoint,
 	}, nil
 }

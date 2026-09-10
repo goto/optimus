@@ -32,6 +32,7 @@ import (
 	schedulerService "github.com/goto/optimus/core/scheduler/service"
 	tHandler "github.com/goto/optimus/core/tenant/handler/v1beta1"
 	tService "github.com/goto/optimus/core/tenant/service"
+	"github.com/goto/optimus/ext/notify"
 	"github.com/goto/optimus/ext/notify/alertmanager"
 	"github.com/goto/optimus/ext/notify/pagerduty"
 	"github.com/goto/optimus/ext/notify/slack"
@@ -323,6 +324,26 @@ func (s *OptimusServer) setupHandlers() error {
 	)
 
 	alertsLogRepo := alerts.NewAlertRepository(s.dbPool)
+	dedupSrvConfig := s.conf.Alerting.DeduplicationConfig
+	dedupConfig := make(map[string]notify.AlertDeduplicationConfig, len(dedupSrvConfig))
+	for alertType, cfg := range dedupSrvConfig {
+		loc := time.UTC
+		if cfg.ActiveWindowTimezone != "" {
+			if parsedLoc, _ := time.LoadLocation(cfg.ActiveWindowTimezone); parsedLoc != nil {
+				loc = parsedLoc
+			}
+		}
+
+		dedupConfig[alertType] = notify.AlertDeduplicationConfig{
+			DedupKeys:             cfg.DedupKeys,
+			WindowMinutes:         cfg.WindowMinutes,
+			ActiveWindowTimezone:  loc,
+			ActiveWindowStartHour: cfg.ActiveWindowStartHour,
+			ActiveWindowEndHour:   cfg.ActiveWindowEndHour,
+		}
+	}
+
+	alertLogProvider := notify.NewAlertLogProvider(alertsLogRepo, dedupConfig, s.logger)
 
 	alertsHandler := new(alertmanager.AlertManager)
 	if s.conf.Alerting.EventManager.Enabled {
@@ -333,7 +354,7 @@ func (s *OptimusServer) setupHandlers() error {
 			s.conf.Alerting.EventManager.Endpoint,
 			s.conf.Alerting.Dashboard,
 			s.conf.Alerting.DataConsole,
-			alertsLogRepo,
+			alertLogProvider,
 			alertmanager.AlertRules{
 				TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusOperatorSLAMissTemplate}, // for now only disable task level alerts
 				BackfillLookBackPeriodInHours:  12,                                                    // disable alert if alert is after 12 hours of scheduled time
@@ -346,7 +367,7 @@ func (s *OptimusServer) setupHandlers() error {
 	newPriorityResolver := schedulerResolver.NewSimpleResolver()
 	assetCompiler := schedulerService.NewJobAssetsCompiler(newEngine, s.logger)
 	jobInputCompiler := schedulerService.NewJobInputCompiler(tenantService, newEngine, assetCompiler, s.logger)
-	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler, alertsLogRepo)
+	eventsService := schedulerService.NewEventsService(s.logger, jobProviderRepo, tenantService, notifierChanels, webhookNotifier, newEngine, alertsHandler, alertLogProvider)
 	newScheduler, err := NewScheduler(s.logger, s.conf, s.pluginStore, tProjectService, tSecretService)
 	if err != nil {
 		return err

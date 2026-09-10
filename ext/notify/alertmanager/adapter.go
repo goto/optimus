@@ -15,6 +15,15 @@ import (
 const (
 	radarTimeFormat = "2006/01/02 15:04:05"
 
+	AlertTypeJobReplay          = "job_replay"
+	AlertTypeChange             = "change"
+	AlertTypeExternalTable      = "external_table"
+	AlertTypeJobFailure         = "job_failure"
+	AlertTypeJobSLAAlert        = "job_sla_miss"
+	AlertTypeJobSuccess         = "job_success"
+	AlertTypeOperatorSLAMiss    = "operator_sla_miss"
+	AlertTypePotentialSLABreach = "potential_sla_breach"
+
 	OptimusReplayTemplate              = "optimus-job-replay"
 	OptimusChangeTemplate              = "optimus-change"
 	OptimusExternalTablesTemplate      = "external-tables"
@@ -33,6 +42,21 @@ const (
 	SeverityLabel       = "severity"
 	EnvironmentLabel    = "environment"
 )
+
+func EventTypeToAlertType(e scheduler.JobEventType) string {
+	switch e {
+	case scheduler.JobFailureEvent:
+		return AlertTypeJobFailure
+	case scheduler.JobSuccessEvent:
+		return AlertTypeJobSuccess
+	case scheduler.SLAMissEvent:
+		return AlertTypeJobSLAAlert
+	case scheduler.ReplayEvent:
+		return AlertTypeJobReplay
+	}
+
+	return ""
+}
 
 type ReplayEventType string
 
@@ -94,7 +118,8 @@ func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttr
 			DefaultChannelLabel: attr.Team,
 			SeverityLabel:       attr.Severity,
 		},
-		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
+		Endpoint:  utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
+		AlertType: AlertTypeOperatorSLAMiss,
 	}
 	if attr.Severity == CriticalSeverity {
 		alertPayload.Labels[EnvironmentLabel] = "production"
@@ -128,16 +153,23 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		templateContext["airflow_logs"] = fmt.Sprintf("%s/dags/%s/grid", e.SchedulerHost, jobName)
 	}
 
-	var template string
+	var (
+		template  string
+		alertType string
+	)
+
 	switch e.JobEvent.Type {
 	case scheduler.JobFailureEvent:
 		template = OptimusFailureAlertTemplate
+		alertType = AlertTypeJobFailure
 		templateContext["task_id"] = e.JobEvent.OperatorName
 	case scheduler.SLAMissEvent:
 		template = OptimusSLAAlertTemplate
+		alertType = AlertTypeJobSLAAlert
 		templateContext["state"] = e.JobEvent.Status.String()
 	case scheduler.JobSuccessEvent:
 		template = OptimusSuccessNotificationTemplate
+		alertType = AlertTypeJobSuccess
 		templateContext["state"] = e.JobEvent.Status.String()
 	}
 	baseAlertPayload := &AlertPayload{
@@ -149,7 +181,8 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 			"identifier": e.JobURN,
 			"event_type": e.JobEvent.Type.String(),
 		},
-		Endpoint: utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
+		Endpoint:  utils.GetFirstNonEmpty(e.AlertManager.Endpoint, a.endpoint),
+		AlertType: alertType,
 	}
 	alertPayloads := getSpecBasedAlerts(e.JobWithDetails, e.JobEvent.Type, baseAlertPayload)
 
@@ -177,7 +210,8 @@ func (a *AlertManager) SendJobEvent(attr *job.AlertAttrs) {
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.ChangeType.String()),
 		},
-		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
+		Endpoint:  utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
+		AlertType: AlertTypeChange,
 	})
 }
 
@@ -199,7 +233,8 @@ func (a *AlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAttrs) 
 			"identifier": attr.JobURN,
 			"event_type": strings.ToLower(scheduler.ReplayEvent.String()),
 		},
-		Endpoint: utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
+		Endpoint:  utils.GetFirstNonEmpty(attr.AlertManager.Endpoint, a.endpoint),
+		AlertType: AlertTypeJobReplay,
 	}
 	alertPayloads := getSpecBasedAlerts(attr.JobWithDetails, scheduler.ReplayEvent, &baseAlertPayload)
 	for _, alertPayload := range alertPayloads {
@@ -227,7 +262,8 @@ func (a *AlertManager) SendResourceEvent(attr *resource.AlertAttrs) {
 			"identifier": attr.URN,
 			"event_type": strings.ToLower(attr.EventType.String()),
 		},
-		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
+		Endpoint:  utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
+		AlertType: AlertTypeChange,
 	})
 }
 
@@ -245,7 +281,8 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 			DefaultChannelLabel: attr.Tenant.NamespaceName().String(),
 			SeverityLabel:       WarningSeverity,
 		},
-		Endpoint: utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
+		Endpoint:  utils.GetFirstNonEmpty(attr.AlertManagerEndpoint, a.endpoint),
+		AlertType: AlertTypeExternalTable,
 	})
 }
 
@@ -324,7 +361,8 @@ func (a *AlertManager) buildPotentialSLABreachPayload(attr *scheduler.PotentialS
 			DefaultChannelLabel: attr.TeamName,
 			SeverityLabel:       maxSeverity,
 		},
-		Endpoint: a.endpoint,
+		Endpoint:  a.endpoint,
+		AlertType: AlertTypePotentialSLABreach,
 	}
 
 	if maxSeverity == CriticalSeverity {

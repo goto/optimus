@@ -45,20 +45,20 @@ type AlertManager interface {
 	SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs)
 }
 
-type AlertsRepo interface {
-	Insert(ctx context.Context, payload *alertmanager.AlertPayload) (uuid.UUID, error)
+type AlertLogProvider interface {
+	Insert(ctx context.Context, payload *alertmanager.AlertPayload) (uuid.UUID, bool, error)
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status alertmanager.AlertStatus, message string) error
 }
 
 type EventsService struct {
-	notifyChannels map[string]Notifier
-	webhookChannel Webhook
-	alertManager   AlertManager
-	compiler       TemplateCompiler
-	jobRepo        JobRepository
-	tenantService  TenantService
-	alertRepo      AlertsRepo
-	l              log.Logger
+	notifyChannels   map[string]Notifier
+	webhookChannel   Webhook
+	alertManager     AlertManager
+	compiler         TemplateCompiler
+	jobRepo          JobRepository
+	tenantService    TenantService
+	alertLogProvider AlertLogProvider
+	l                log.Logger
 }
 
 func (e *EventsService) Relay(ctx context.Context, event *scheduler.Event) error {
@@ -161,12 +161,12 @@ func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
 	return false
 }
 
-func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jobDetails *scheduler.JobWithDetails, scheme string) (uuid.UUID, error) {
+func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jobDetails *scheduler.JobWithDetails, scheme, route string) (uuid.UUID, bool, error) {
 	scheduledAt := event.JobScheduledAt
 	if event.Type.IsOfType(scheduler.EventCategorySLAMiss) && len(event.SLAObjectList) > 0 {
 		scheduledAt = event.SLAObjectList[0].JobScheduledAt
 	}
-	return e.alertRepo.Insert(ctx, &alertmanager.AlertPayload{
+	alertPayload := &alertmanager.AlertPayload{
 		Project:           event.Tenant.ProjectName().String(),
 		JobRunScheduledAt: scheduledAt,
 		Data: map[string]interface{}{
@@ -178,8 +178,14 @@ func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jo
 			"event_type":   event.Type.String(),
 			"task_id":      event.OperatorName,
 		},
-		Template: scheme,
-	})
+		Labels: map[string]string{
+			"team": route,
+		},
+		Template:  scheme,
+		AlertType: alertmanager.EventTypeToAlertType(event.Type),
+	}
+
+	return e.alertLogProvider.Insert(ctx, alertPayload)
 }
 
 func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error {
@@ -243,9 +249,13 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 				}
 
 				if notifyChannel, ok := e.notifyChannels[scheme]; ok {
-					uuid, err := e.logAlert(ctx, event, jobDetails, scheme)
+					uuid, isDeduplicated, err := e.logAlert(ctx, event, jobDetails, scheme, route)
 					if err != nil {
 						e.l.Error("error logging alert for job [%s]: %s", event.JobName, err.Error())
+					}
+					if isDeduplicated {
+						e.l.Warn("alert is deduplicated: %v", event.String())
+						continue
 					}
 					if currErr := notifyChannel.Notify(ctx, scheduler.NotifyAttrs{
 						Owner:    jobDetails.JobMetadata.Owner,
@@ -256,10 +266,10 @@ func (e *EventsService) Push(ctx context.Context, event *scheduler.Event) error 
 						e.l.Error("Error: No notification event for job current error: %s", currErr)
 						multierror.Append(fmt.Errorf("notifyChannel.Notify: %s: %w", channel, currErr))
 						if err == nil {
-							e.alertRepo.UpdateStatus(ctx, uuid, alertmanager.StatusFailed, currErr.Error())
+							e.alertLogProvider.UpdateStatus(ctx, uuid, alertmanager.StatusFailed, currErr.Error())
 						}
 					} else if err == nil {
-						e.alertRepo.UpdateStatus(ctx, uuid, alertmanager.StatusSent, "")
+						e.alertLogProvider.UpdateStatus(ctx, uuid, alertmanager.StatusSent, "")
 					}
 				}
 			}
@@ -296,16 +306,16 @@ func getAlertManagerProjectConfig(tenantWithDetails *tenant.WithDetails) schedul
 
 func NewEventsService(l log.Logger, jobRepo JobRepository, tenantService TenantService,
 	notifyChan map[string]Notifier, webhookNotifier Webhook, compiler TemplateCompiler,
-	alertsHandler AlertManager, alertRepo AlertsRepo,
+	alertsHandler AlertManager, alertLogProvider AlertLogProvider,
 ) *EventsService {
 	return &EventsService{
-		l:              l,
-		jobRepo:        jobRepo,
-		tenantService:  tenantService,
-		notifyChannels: notifyChan,
-		webhookChannel: webhookNotifier,
-		compiler:       compiler,
-		alertManager:   alertsHandler,
-		alertRepo:      alertRepo,
+		l:                l,
+		jobRepo:          jobRepo,
+		tenantService:    tenantService,
+		notifyChannels:   notifyChan,
+		webhookChannel:   webhookNotifier,
+		compiler:         compiler,
+		alertManager:     alertsHandler,
+		alertLogProvider: alertLogProvider,
 	}
 }

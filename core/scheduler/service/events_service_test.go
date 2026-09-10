@@ -249,10 +249,12 @@ func TestNotificationService(t *testing.T) {
 						"event_type":   event.Type.String(),
 						"task_id":      event.OperatorName,
 					},
-					Template: "slack",
+					Labels:    map[string]string{"team": "#chanel-name"},
+					Template:  "slack",
+					AlertType: alertmanager.AlertTypeJobSLAAlert,
 				}
 				alertRepo := new(mockAlertRepo)
-				alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, nil)
+				alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, false, nil)
 				alertRepo.On("UpdateStatus", ctx, testUUID, alertmanager.StatusSent, "").Return(nil)
 				defer alertRepo.AssertExpectations(t)
 
@@ -325,6 +327,7 @@ func TestNotificationService(t *testing.T) {
 			alertPayload := &alertmanager.AlertPayload{
 				Project:           event.Tenant.ProjectName().String(),
 				JobRunScheduledAt: scheduledAt,
+				AlertType:         alertmanager.AlertTypeJobFailure,
 				Data: map[string]interface{}{
 					"job_name":     event.JobName,
 					"owner":        "jobOwnerName",
@@ -334,10 +337,11 @@ func TestNotificationService(t *testing.T) {
 					"event_type":   event.Type.String(),
 					"task_id":      event.OperatorName,
 				},
+				Labels:   map[string]string{"team": "#chanel-name"},
 				Template: "pagerduty",
 			}
 			alertRepo := new(mockAlertRepo)
-			alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, nil)
+			alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, false, nil)
 			alertRepo.On("UpdateStatus", ctx, testUUID, alertmanager.StatusSent, "").Return(nil)
 			defer alertRepo.AssertExpectations(t)
 
@@ -409,6 +413,7 @@ func TestNotificationService(t *testing.T) {
 			alertPayload := &alertmanager.AlertPayload{
 				Project:           event.Tenant.ProjectName().String(),
 				JobRunScheduledAt: scheduledAt,
+				AlertType:         alertmanager.AlertTypeJobFailure,
 				Data: map[string]interface{}{
 					"job_name":     event.JobName,
 					"owner":        "jobOwnerName",
@@ -418,10 +423,11 @@ func TestNotificationService(t *testing.T) {
 					"event_type":   event.Type.String(),
 					"task_id":      event.OperatorName,
 				},
+				Labels:   map[string]string{"team": "#chanel-name"},
 				Template: "pagerduty",
 			}
 			alertRepo := new(mockAlertRepo)
-			alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, nil)
+			alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, false, nil)
 			alertRepo.On("UpdateStatus", ctx, testUUID, alertmanager.StatusFailed, "error in pagerduty push").Return(nil)
 			defer alertRepo.AssertExpectations(t)
 
@@ -432,6 +438,98 @@ func TestNotificationService(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "ErrorsInNotifyPush:\n notifyChannel.Notify: pagerduty://#chanel-name: error in pagerduty push")
 		})
+
+		t.Run("should skip send and log as deduplicated when alertLogProvider deduplicates", func(t *testing.T) {
+			job := scheduler.Job{
+				Name:   jobName,
+				Tenant: tnnt,
+				Task: &scheduler.Task{
+					Name: "bq2bq",
+				},
+			}
+			scheduledAt := time.Now().Add(-2 * time.Hour)
+			jobWithDetails := scheduler.JobWithDetails{
+				Job: &job,
+				JobMetadata: &scheduler.JobMetadata{
+					Version: 1,
+					Owner:   "jobOwnerName",
+				},
+				Alerts: []scheduler.Alert{
+					{
+						On:       scheduler.EventCategorySLAMiss,
+						Channels: []string{"slack://#chanel-name"},
+						Config:   nil,
+					},
+				},
+				Schedule: &scheduler.Schedule{
+					StartDate: startDate.Add(-time.Hour * 24),
+					Interval:  "0 12 * * *",
+				},
+			}
+			event := &scheduler.Event{
+				JobName:        jobName,
+				Tenant:         tnnt,
+				Type:           scheduler.SLAMissEvent,
+				EventTime:      time.Now(),
+				JobScheduledAt: scheduledAt,
+				Values:         map[string]any{},
+				SLAObjectList: []*scheduler.SLAObject{
+					{
+						JobName:        jobName,
+						JobScheduledAt: scheduledAt,
+					},
+				},
+			}
+
+			jobRepo := new(JobRepository)
+			jobRepo.On("GetJobDetails", ctx, project.Name(), jobName).Return(&jobWithDetails, nil)
+			defer jobRepo.AssertExpectations(t)
+
+			plainSecret, _ := tenant.NewPlainTextSecret("NOTIFY_SLACK", "secretValue")
+			plainSecrets := []*tenant.PlainTextSecret{plainSecret}
+			tenantService := new(mockTenantService)
+			tenantService.On("GetSecrets", ctx, tnnt).Return(plainSecrets, nil)
+			defer tenantService.AssertExpectations(t)
+
+			// notifyChanelSlack has no Notify expectation — if Notify is called the
+			// test will fail with "unexpected call".
+			notifyChanelSlack := new(mockNotificationChanel)
+			defer notifyChanelSlack.AssertExpectations(t)
+
+			notifierChannels := map[string]service.Notifier{
+				"slack": notifyChanelSlack,
+			}
+
+			testUUID := uuid.New()
+			alertPayload := &alertmanager.AlertPayload{
+				Project:           event.Tenant.ProjectName().String(),
+				JobRunScheduledAt: scheduledAt,
+				Data: map[string]interface{}{
+					"job_name":     event.JobName,
+					"owner":        "jobOwnerName",
+					"project":      tnnt.ProjectName().String(),
+					"namespace":    tnnt.NamespaceName().String(),
+					"scheduled_at": scheduledAt,
+					"event_type":   event.Type.String(),
+					"task_id":      event.OperatorName,
+				},
+				Labels: map[string]string{
+					"team": "#chanel-name",
+				},
+				Template:  "slack",
+				AlertType: alertmanager.AlertTypeJobSLAAlert,
+			}
+			// alertRepo has no UpdateStatus expectation — if UpdateStatus is called
+			// the test will fail with "unexpected call".
+			alertRepo := new(mockAlertRepo)
+			alertRepo.On("Insert", ctx, alertPayload).Return(testUUID, true, nil)
+			defer alertRepo.AssertExpectations(t)
+
+			notifyService := service.NewEventsService(logger, jobRepo, tenantService, notifierChannels, nil, nil, nil, alertRepo)
+
+			err := notifyService.Push(ctx, event)
+			assert.Nil(t, err)
+		})
 	})
 }
 
@@ -440,9 +538,9 @@ type mockAlertRepo struct {
 	mock.Mock
 }
 
-func (m *mockAlertRepo) Insert(ctx context.Context, payload *alertmanager.AlertPayload) (uuid.UUID, error) {
+func (m *mockAlertRepo) Insert(ctx context.Context, payload *alertmanager.AlertPayload) (uuid.UUID, bool, error) {
 	args := m.Called(ctx, payload)
-	return args.Get(0).(uuid.UUID), args.Error(1)
+	return args.Get(0).(uuid.UUID), args.Bool(1), args.Error(2)
 }
 
 func (m *mockAlertRepo) UpdateStatus(ctx context.Context, recordID uuid.UUID, status alertmanager.AlertStatus, message string) error {

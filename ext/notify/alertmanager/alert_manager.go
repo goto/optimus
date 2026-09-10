@@ -105,13 +105,6 @@ type AlertLogProvider interface {
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status AlertStatus, message string) error
 }
 
-type DeduplicationConfig struct {
-	TemplatesToDedup      []string
-	WindowMinutes         int
-	ActiveWindowStartHour int
-	ActiveWindowEndHour   int
-}
-
 func (a *AlertManager) relay(alert *AlertPayload) {
 	if a.IsBackFill(alert) {
 		a.logger.Info("alert-manager: skipping alert for backfill job " + alert.LogTag)

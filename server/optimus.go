@@ -475,7 +475,14 @@ func (s *OptimusServer) setupHandlers() error {
 		s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.PaddingPercentage, s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.MinPaddingMinutes,
 		s.conf.Alerting.PotentialSLABreachConfig.DurationEstimatorConfig.MaxPaddingMinutes)
 
-	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService)
+	// sensor task names are wait_<resolver type>_*, so the configured resolvers are
+	// what tells the classifier which pending sensors are third-party
+	thirdPartyUpstreamTypes := make([]string, 0, len(s.conf.UpstreamResolvers))
+	for _, resolver := range s.conf.UpstreamResolvers {
+		thirdPartyUpstreamTypes = append(thirdPartyUpstreamTypes, resolver.Type.String())
+	}
+
+	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService, operatorRunRepository, thirdPartyUpstreamTypes)
 
 	// Job Estimator Service
 	newJobExpectatorDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,

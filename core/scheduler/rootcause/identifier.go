@@ -18,15 +18,42 @@ type ScheduledChangeGetter interface {
 	GetRecentScheduleChange(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, startTime time.Time) (string, error)
 }
 
+type JobRunKey struct {
+	Project     tenant.ProjectName
+	JobName     scheduler.JobName
+	ScheduledAt time.Time
+}
+
+// String is the map key used across this package: time.Time is unsafe as a map key
+// because equality also compares monotonic reading and location.
+func (k JobRunKey) String() string {
+	return k.Project.String() + "/" + k.JobName.String() + "/" + k.ScheduledAt.UTC().Format(time.RFC3339)
+}
+
+// PendingSensorGetter returns the sensor task names still waiting on each run,
+// keyed by JobRunKey.String().
+type PendingSensorGetter interface {
+	GetPendingSensors(ctx context.Context, keys []JobRunKey) (map[string][]string, error)
+}
+
 type Identifier struct {
 	l                     log.Logger
 	scheduledChangeGetter ScheduledChangeGetter
+	pendingSensorGetter   PendingSensorGetter
+	detectors             []ReasonDetector
 }
 
-func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter) *Identifier {
+// A nil pendingSensorGetter is allowed; RAW_DATA_DELAY then never fires and those
+// causes fall through to UNKNOWN.
+func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, thirdPartyTypes []string, detectors ...ReasonDetector) *Identifier {
+	if len(detectors) == 0 {
+		detectors = DefaultDetectors(thirdPartyTypes)
+	}
 	return &Identifier{
 		l:                     l,
 		scheduledChangeGetter: scheduledChangeGetter,
+		pendingSensorGetter:   pendingSensorGetter,
+		detectors:             detectors,
 	}
 }
 
@@ -72,7 +99,53 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 		fullBreachesCauses[cause.JobName] = causes
 	}
 
+	// states are shared pointers with the reconstructed paths, so this also labels
+	// the copies inside fullBreachesCauses
+	i.classify(ctx, breachesCauses, referenceTime)
+
 	return breachesCauses, fullBreachesCauses
+}
+
+func (i *Identifier) classify(ctx context.Context, causes map[scheduler.JobName]*scheduler.JobState, referenceTime time.Time) {
+	pending := i.pendingSensors(ctx, causes)
+	for _, state := range causes {
+		key := JobRunKey{Project: state.Tenant.ProjectName(), JobName: state.JobName, ScheduledAt: state.JobRun.ScheduledAt}
+		state.Reason, state.Evidence = classify(i.detectors, Candidate{
+			State:          state,
+			PendingSensors: pending[key.String()],
+			ReferenceTime:  referenceTime,
+		})
+		// a started job with a known estimate cannot breach without being slow or late,
+		// so landing on UNKNOWN here means the run data disagrees with itself
+		if state.Reason == scheduler.ReasonUnknown && state.JobRun.TaskStartTime != nil && state.EstimatedDuration != nil {
+			i.l.Warn("started root cause classified as unknown", "job", state.JobName,
+				"task_start", state.JobRun.TaskStartTime, "task_end", state.JobRun.TaskEndTime,
+				"estimated_duration", state.EstimatedDuration, "inferred_sla", state.InferredSLA)
+		}
+	}
+}
+
+// Only unstarted causes can be sensor-blocked, so the query is limited to those.
+func (i *Identifier) pendingSensors(ctx context.Context, causes map[scheduler.JobName]*scheduler.JobState) map[string][]string {
+	if i.pendingSensorGetter == nil {
+		return nil
+	}
+	keys := make([]JobRunKey, 0, len(causes))
+	for _, state := range causes {
+		if state.JobRun.TaskStartTime != nil {
+			continue
+		}
+		keys = append(keys, JobRunKey{Project: state.Tenant.ProjectName(), JobName: state.JobName, ScheduledAt: state.JobRun.ScheduledAt})
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	pending, err := i.pendingSensorGetter.GetPendingSensors(ctx, keys)
+	if err != nil {
+		i.l.Error("failed to fetch pending sensors, classifying without them", "error", err)
+		return nil
+	}
+	return pending
 }
 
 // BottleneckPath records, for each job in the lineage, the immediate downstream predecessor

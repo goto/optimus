@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/rootcause"
+	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 )
 
@@ -145,6 +147,70 @@ func (o *OperatorRunRepository) UpdateOperatorRun(ctx context.Context, operatorT
 	updateJobRun := "UPDATE " + operatorTableName + " SET status = $1, end_time = $2, updated_at = NOW() where id = $3"
 	_, err = o.db.Exec(ctx, updateJobRun, state, eventTime, operatorRunID)
 	return errors.WrapIfErr(scheduler.EntityJobRun, "error while updating the run", err)
+}
+
+// GetPendingSensors returns, per requested run, the sensor task names that have not
+// finished. Retries insert a fresh sensor_run row rather than updating, so only the
+// newest row per name decides whether that sensor is still waiting.
+func (o *OperatorRunRepository) GetPendingSensors(ctx context.Context, keys []rootcause.JobRunKey) (map[string][]string, error) {
+	if len(keys) == 0 {
+		return map[string][]string{}, nil
+	}
+
+	projects := make([]string, len(keys))
+	jobNames := make([]string, len(keys))
+	scheduledAts := make([]time.Time, len(keys))
+	for idx, key := range keys {
+		projects[idx] = key.Project.String()
+		jobNames[idx] = key.JobName.String()
+		scheduledAts[idx] = key.ScheduledAt.UTC()
+	}
+
+	query := `
+WITH targets AS (
+	SELECT * FROM unnest($1::text[], $2::text[], $3::timestamptz[]) AS t(project_name, job_name, scheduled_at)
+), runs AS (
+	SELECT jr.id, jr.project_name, jr.job_name, jr.scheduled_at
+	FROM job_run jr
+	JOIN targets t ON t.project_name = jr.project_name
+		AND t.job_name = jr.job_name
+		AND t.scheduled_at = jr.scheduled_at
+), latest_sensor AS (
+	SELECT DISTINCT ON (sr.job_run_id, sr.name) sr.job_run_id, sr.name, sr.end_time
+	FROM sensor_run sr
+	WHERE sr.job_run_id IN (SELECT id FROM runs)
+	ORDER BY sr.job_run_id, sr.name, sr.created_at DESC
+)
+SELECT r.project_name, r.job_name, r.scheduled_at, ls.name
+FROM runs r
+JOIN latest_sensor ls ON ls.job_run_id = r.id
+WHERE ls.end_time IS NULL
+ORDER BY r.project_name, r.job_name, r.scheduled_at, ls.name`
+
+	rows, err := o.db.Query(ctx, query, projects, jobNames, scheduledAts)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting pending sensors", err)
+	}
+	defer rows.Close()
+
+	pending := map[string][]string{}
+	for rows.Next() {
+		var projectName, jobName, sensorName string
+		var scheduledAt time.Time
+		if err := rows.Scan(&projectName, &jobName, &scheduledAt, &sensorName); err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning pending sensor", err)
+		}
+		key := rootcause.JobRunKey{
+			Project:     tenant.ProjectName(projectName),
+			JobName:     scheduler.JobName(jobName),
+			ScheduledAt: scheduledAt,
+		}
+		pending[key.String()] = append(pending[key.String()], sensorName)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error iterating pending sensors", err)
+	}
+	return pending, nil
 }
 
 func NewOperatorRunRepository(pool *pgxpool.Pool) *OperatorRunRepository {

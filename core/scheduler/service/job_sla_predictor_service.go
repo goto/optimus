@@ -22,7 +22,6 @@ type JobSLAPredictorRequestConfig struct {
 	ScheduleRangeInHours time.Duration
 	SkipJobNames         []string
 	EnableAlert          bool
-	EnableDeduplication  bool
 	Severity             string
 	DamperFactor         scheduler.DamperFactor
 }
@@ -38,7 +37,7 @@ type comboBreachResult struct {
 }
 
 type PotentialSLANotifier interface {
-	SendPotentialSLABreach(attr *scheduler.PotentialSLABreachAttrs)
+	SendPotentialSLABreach(alert *scheduler.PotentialSLABreachAlert)
 }
 
 type DurationEstimator interface {
@@ -57,7 +56,6 @@ type JobDetailsGetter interface {
 
 type SLAPredictorRepository interface {
 	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, targetedSLA, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
-	GetPredictedSLAJobNamesWithinTimeRange(ctx context.Context, from, to time.Time) ([]scheduler.JobName, error)
 }
 
 type ScheduledChangeGetter interface {
@@ -262,7 +260,7 @@ func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo sche
 // the current run's own writes never suppress its alerts.
 func (s *JobSLAPredictorService) processBreachResults(ctx context.Context, results []*comboBreachResult, reqConfig JobSLAPredictorRequestConfig) {
 	if reqConfig.EnableAlert {
-		s.sendConsolidatedAlerts(ctx, results, reqConfig)
+		s.sendBreachAlerts(ctx, results, reqConfig)
 	}
 
 	if s.config.EnablePersistentLogging {
@@ -451,10 +449,11 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 	return nil
 }
 
-// sendConsolidatedAlerts aggregates breaches from all combos and emits exactly
-// one alert per cause-owner team. The alert body is organized as
-// project -> SLA group (with severity) -> target -> causes owned by that team.
-func (s *JobSLAPredictorService) sendConsolidatedAlerts(ctx context.Context, results []*comboBreachResult, reqConfig JobSLAPredictorRequestConfig) {
+// sendBreachAlerts emits one alert per (team, root cause, scheduled at, reason), which is
+// the key deduplication reads -- so one alert must never carry more than one root cause.
+// Routing still follows the cause-owning team; moving it to the impacted team is a
+// separate change so it can be reverted without losing this deduplication.
+func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results []*comboBreachResult, reqConfig JobSLAPredictorRequestConfig) {
 	totalBreaches := 0
 	for _, r := range results {
 		totalBreaches += len(r.jobBreachCauses)
@@ -464,46 +463,22 @@ func (s *JobSLAPredictorService) sendConsolidatedAlerts(ctx context.Context, res
 	}
 	s.l.Info("potential SLA breaches found", "count", totalBreaches)
 
-	// deduplicate target job names against previously predicted breaches
-	suppressed := map[scheduler.JobName]bool{}
-	if reqConfig.EnableDeduplication {
-		existing, err := s.deduplicateTargetNames(ctx, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime)
-		if err != nil {
-			s.l.Error("failed to compute deduplication set, sending alerts without deduplication", "error", err)
-		} else {
-			suppressed = existing
-		}
-	}
-
-	agg := scheduler.NewTeamBreachAggregator()
+	agg := scheduler.NewBreachAlertAggregator()
 	teamCache := map[tenant.Tenant]string{}
 	for _, r := range results {
-		groupName := r.combo.GroupName
-		if groupName == "" {
-			groupName = deriveGroupName(r.combo.Labels)
-		}
-		severity := reqConfig.Severity
 		for targetName, upstreamCauses := range r.jobBreachCauses {
-			if suppressed[targetName] {
-				s.l.Info("skipping target for alerting as it was recently predicted", "job", targetName.String())
-				continue
-			}
 			for _, upstreamCause := range upstreamCauses {
 				team := s.resolveTeam(ctx, upstreamCause.Tenant, teamCache)
 				if team == "" {
 					continue
 				}
-				agg.Add(team, r.combo.ProjectName.String(), groupName, severity, targetName.String(), scheduler.UpstreamAttrs{
-					JobName:       upstreamCause.JobName.String(),
-					RelativeLevel: upstreamCause.RelativeLevel,
-					Status:        string(upstreamCause.Status),
-				})
+				agg.Add(team, targetName.String(), upstreamCause, r.combo.ProjectName.String(), reqConfig.Severity)
 			}
 		}
 	}
 
-	for _, attr := range agg.Build() {
-		s.potentialSLANotifier.SendPotentialSLABreach(attr)
+	for _, alert := range agg.Build() {
+		s.potentialSLANotifier.SendPotentialSLABreach(alert)
 	}
 }
 
@@ -599,33 +574,4 @@ func collectJobNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineage
 		jobNames = append(jobNames, jobName)
 	}
 	return jobNames
-}
-
-// deduplicateTargetNames returns the set of target job names that were already
-// predicted to breach within the time window, so they can be skipped when
-// alerting. Deduplication is name-based; it relies on Optimus job names being
-// globally unique. Requires persistent logging to be enabled.
-func (s *JobSLAPredictorService) deduplicateTargetNames(ctx context.Context, scheduleRangeInHours time.Duration, referenceTime time.Time) (map[scheduler.JobName]bool, error) {
-	if !s.config.EnablePersistentLogging {
-		s.l.Warn("persistent logging is disabled, cannot perform deduplication")
-		return map[scheduler.JobName]bool{}, nil
-	}
-
-	// define time range to check existing job names
-	from := referenceTime.Add(-scheduleRangeInHours)
-	to := referenceTime.Add(scheduleRangeInHours)
-
-	existingJobNames, err := s.repo.GetPredictedSLAJobNamesWithinTimeRange(ctx, from, to)
-	if err != nil {
-		s.l.Error("failed to get existing predicted SLA job names from repository, skipping deduplication", "error", err)
-		return nil, err
-	}
-
-	suppressed := make(map[scheduler.JobName]bool, len(existingJobNames))
-	for _, jobName := range existingJobNames {
-		suppressed[jobName] = true
-	}
-	s.l.Info("computed deduplication set", "count", len(suppressed), "from", from, "to", to)
-
-	return suppressed, nil
 }

@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -144,34 +145,21 @@ type UpstreamAttrs struct {
 	Status        string
 }
 
-// SLABreachTarget is a single SLA-bearing (target) job that may breach, along
-// with the upstream cause jobs owned by the alerted team.
-type SLABreachTarget struct {
-	JobName string
-	Causes  []UpstreamAttrs
-}
+// PotentialSLABreachAlert is one alert: a single root cause, and the SLA-bearing jobs
+// it threatens for one impacted team.
+type PotentialSLABreachAlert struct {
+	Team    string
+	Project string
 
-// SLABreachGroup groups targets that share the same SLA target (label group),
-// carrying its own severity so different SLA buckets can be distinguished within
-// a single team's message.
-type SLABreachGroup struct {
-	Name     string
-	Severity string
-	Targets  []SLABreachTarget
-}
+	RootCauseJob         string
+	RootCauseScheduledAt time.Time
+	Reason               RootCauseReason
+	Evidence             RootCauseEvidence
+	RelativeLevel        int
+	Status               SLABreachCause
 
-// SLABreachProject groups the breaching targets by the target job's project.
-type SLABreachProject struct {
-	Name   string
-	Groups []SLABreachGroup
-}
-
-// PotentialSLABreachAttrs is a single consolidated alert for one team. It is
-// routed to the team owning the root-cause (upstream) jobs, and its body is
-// organized as project -> SLA group (with severity) -> target -> causes.
-type PotentialSLABreachAttrs struct {
-	TeamName string
-	Projects []SLABreachProject
+	Severity     string
+	ImpactedJobs []string
 }
 
 type SLABreachCause string
@@ -234,98 +222,48 @@ type SLABreachCombo struct {
 	GroupName   string // display name for the SLA group; derived from labels if empty
 }
 
-// TeamBreachAggregator accumulates breaches into a deterministic, insertion-
-// ordered team -> project -> group -> target -> causes structure and builds one
-// PotentialSLABreachAttrs per team.
-type TeamBreachAggregator struct {
-	teams     map[string]*teamAgg
-	teamOrder []string
+// BreachAlertAggregator groups breaches into one alert per deduplication key, in
+// insertion order so repeated evaluations emit alerts in a stable sequence.
+type BreachAlertAggregator struct {
+	alerts map[string]*PotentialSLABreachAlert
+	order  []string
 }
 
-type teamAgg struct {
-	name         string
-	projects     map[string]*projectAgg
-	projectOrder []string
+func NewBreachAlertAggregator() *BreachAlertAggregator {
+	return &BreachAlertAggregator{alerts: map[string]*PotentialSLABreachAlert{}}
 }
 
-type projectAgg struct {
-	name       string
-	groups     map[string]*groupAgg
-	groupOrder []string
-}
+// Add records that rootCause threatens impactedJob for team. Repeated calls for the
+// same key append the job rather than producing a second alert.
+func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobState, project, severity string) {
+	key := team + "\x00" + rootCause.JobName.String() + "\x00" +
+		rootCause.JobRun.ScheduledAt.UTC().Format(time.RFC3339) + "\x00" + string(rootCause.Reason)
 
-type groupAgg struct {
-	name        string
-	severity    string
-	targets     map[string]*targetAgg
-	targetOrder []string
-}
-
-type targetAgg struct {
-	name       string
-	causes     map[string]UpstreamAttrs
-	causeOrder []string
-}
-
-func NewTeamBreachAggregator() *TeamBreachAggregator {
-	return &TeamBreachAggregator{teams: map[string]*teamAgg{}}
-}
-
-func (a *TeamBreachAggregator) Add(team, project, group, severity, target string, cause UpstreamAttrs) {
-	t, ok := a.teams[team]
+	alert, ok := a.alerts[key]
 	if !ok {
-		t = &teamAgg{name: team, projects: map[string]*projectAgg{}}
-		a.teams[team] = t
-		a.teamOrder = append(a.teamOrder, team)
-	}
-	p, ok := t.projects[project]
-	if !ok {
-		p = &projectAgg{name: project, groups: map[string]*groupAgg{}}
-		t.projects[project] = p
-		t.projectOrder = append(t.projectOrder, project)
-	}
-	g, ok := p.groups[group]
-	if !ok {
-		g = &groupAgg{name: group, severity: severity, targets: map[string]*targetAgg{}}
-		p.groups[group] = g
-		p.groupOrder = append(p.groupOrder, group)
-	}
-	tg, ok := g.targets[target]
-	if !ok {
-		tg = &targetAgg{name: target, causes: map[string]UpstreamAttrs{}}
-		g.targets[target] = tg
-		g.targetOrder = append(g.targetOrder, target)
-	}
-	if _, ok := tg.causes[cause.JobName]; !ok {
-		tg.causes[cause.JobName] = cause
-		tg.causeOrder = append(tg.causeOrder, cause.JobName)
-	}
-}
-
-func (a *TeamBreachAggregator) Build() []*PotentialSLABreachAttrs {
-	out := make([]*PotentialSLABreachAttrs, 0, len(a.teamOrder))
-	for _, teamName := range a.teamOrder {
-		t := a.teams[teamName]
-		attr := &PotentialSLABreachAttrs{TeamName: t.name}
-		for _, projectName := range t.projectOrder {
-			p := t.projects[projectName]
-			project := SLABreachProject{Name: p.name}
-			for _, groupName := range p.groupOrder {
-				g := p.groups[groupName]
-				group := SLABreachGroup{Name: g.name, Severity: g.severity}
-				for _, targetName := range g.targetOrder {
-					tg := g.targets[targetName]
-					target := SLABreachTarget{JobName: tg.name}
-					for _, causeName := range tg.causeOrder {
-						target.Causes = append(target.Causes, tg.causes[causeName])
-					}
-					group.Targets = append(group.Targets, target)
-				}
-				project.Groups = append(project.Groups, group)
-			}
-			attr.Projects = append(attr.Projects, project)
+		alert = &PotentialSLABreachAlert{
+			Team:                 team,
+			Project:              project,
+			RootCauseJob:         rootCause.JobName.String(),
+			RootCauseScheduledAt: rootCause.JobRun.ScheduledAt,
+			Reason:               rootCause.Reason,
+			Evidence:             rootCause.Evidence,
+			RelativeLevel:        rootCause.RelativeLevel,
+			Status:               rootCause.Status,
+			Severity:             severity,
 		}
-		out = append(out, attr)
+		a.alerts[key] = alert
+		a.order = append(a.order, key)
+	}
+	if !slices.Contains(alert.ImpactedJobs, impactedJob) {
+		alert.ImpactedJobs = append(alert.ImpactedJobs, impactedJob)
+	}
+}
+
+func (a *BreachAlertAggregator) Build() []*PotentialSLABreachAlert {
+	out := make([]*PotentialSLABreachAlert, 0, len(a.order))
+	for _, key := range a.order {
+		out = append(out, a.alerts[key])
 	}
 	return out
 }

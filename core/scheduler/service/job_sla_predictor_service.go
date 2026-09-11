@@ -449,6 +449,9 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 	return nil
 }
 
+// sendBreachAlerts Alerts go to the team owning the at-risk SLA job, not the team owning the root cause:
+// upstream anomalies already reach that team through task duration, sensor and failure
+// alerts, so alerting them again here would just duplicate a signal they have.
 func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results []*comboBreachResult, reqConfig JobSLAPredictorRequestConfig) {
 	totalBreaches := 0
 	for _, r := range results {
@@ -463,11 +466,15 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 	teamCache := map[tenant.Tenant]string{}
 	for _, r := range results {
 		for targetName, upstreamCauses := range r.jobBreachCauses {
+			target := r.jobsWithLineageMap[targetName]
+			if target == nil {
+				continue
+			}
+			team := s.resolveTeam(ctx, target.Tenant, teamCache)
+			if team == "" {
+				continue
+			}
 			for _, upstreamCause := range upstreamCauses {
-				team := s.resolveTeam(ctx, upstreamCause.Tenant, teamCache)
-				if team == "" {
-					continue
-				}
 				agg.Add(team, targetName.String(), upstreamCause, r.combo.ProjectName.String(), reqConfig.Severity)
 			}
 		}

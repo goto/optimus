@@ -146,8 +146,7 @@ type UpstreamAttrs struct {
 }
 
 // PotentialSLABreachAlert is one alert: a single root cause, and the SLA-bearing jobs
-// it threatens for one impacted team. Deliberately flat -- deduplication keys on
-// (root cause, scheduled at, reason, team), so one alert must map to exactly one key.
+// it threatens for one impacted team.
 type PotentialSLABreachAlert struct {
 	Team    string
 	Project string

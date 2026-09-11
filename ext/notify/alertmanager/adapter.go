@@ -32,7 +32,10 @@ const (
 	OptimusSLAAlertTemplate            = "optimus-job-sla-miss"
 	OptimusSuccessNotificationTemplate = "optimus-job-success"
 	OptimusOperatorSLAMissTemplate     = "optimus-operator-sla-miss"
-	OptimusPotentialSLABreachTemplate  = "optimus-potential-sla-breach"
+	// v2 takes a flat payload rather than the nested project/group/target tree. The name
+	// is versioned so the Siren template and this service deploy independently: v2 sits
+	// unused until this constant points at it, and reverting the constant restores v1.
+	OptimusPotentialSLABreachTemplate = "optimus-potential-sla-breach-v2"
 
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"

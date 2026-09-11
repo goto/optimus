@@ -451,9 +451,10 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 	return nil
 }
 
-// sendBreachAlerts emits one alert per (impacted team, root cause, scheduled at, reason).
-// Alerts go to the team owning the at-risk SLA job, not the one owning the root cause:
-// upstream anomalies are already covered by task duration, sensor and failure alerts.
+// sendBreachAlerts emits one alert per (team, root cause, scheduled at, reason), which is
+// the key deduplication reads -- so one alert must never carry more than one root cause.
+// Routing still follows the cause-owning team; moving it to the impacted team is a
+// separate change so it can be reverted without losing this deduplication.
 func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results []*comboBreachResult, reqConfig JobSLAPredictorRequestConfig) {
 	totalBreaches := 0
 	for _, r := range results {
@@ -483,15 +484,11 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 				s.l.Info("skipping target for alerting as it was recently predicted", "job", targetName.String())
 				continue
 			}
-			target := r.jobsWithLineageMap[targetName]
-			if target == nil {
-				continue
-			}
-			team := s.resolveTeam(ctx, target.Tenant, teamCache)
-			if team == "" {
-				continue
-			}
 			for _, upstreamCause := range upstreamCauses {
+				team := s.resolveTeam(ctx, upstreamCause.Tenant, teamCache)
+				if team == "" {
+					continue
+				}
 				agg.Add(team, targetName.String(), upstreamCause, r.combo.ProjectName.String(), reqConfig.Severity)
 			}
 		}

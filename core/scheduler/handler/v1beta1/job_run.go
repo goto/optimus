@@ -567,6 +567,8 @@ func (h JobRunHandler) IdentifyPotentialSLABreach(ctx context.Context, req *pb.I
 				InferredSlaTime: timestamppb.New(*upstreamJobState.InferredSLA),
 				RelativeLevel:   int32(upstreamJobState.RelativeLevel),
 				Status:          string(upstreamJobState.Status),
+				Reason:          string(upstreamJobState.Reason),
+				Evidence:        toRootCauseEvidenceProto(upstreamJobState.Evidence),
 			})
 		}
 		if len(upstreamStatus) == 0 {

@@ -100,7 +100,6 @@ func buildIdentifySLABreachInputs(req *pb.IdentifyPotentialSLABreachRequest) ([]
 		ScheduleRangeInHours: scheduleRangeInHours,
 		SkipJobNames:         req.GetSkipJobNames(),
 		EnableAlert:          req.GetAlertOnBreach(),
-		EnableDeduplication:  req.GetEnableDeduplication(),
 		Severity:             req.GetSeverity(),
 		DamperFactor:         damperFactor,
 	}

@@ -672,7 +672,8 @@
                   "format": "int32"
                 },
                 "enableDeduplication": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "Ignored. Deduplication is now server-side, configured per alert type under\nalerting.deduplication, and is no longer selectable per request."
                 },
                 "damperCoeff": {
                   "type": "number",
@@ -1025,7 +1026,8 @@
           "format": "int32"
         },
         "enableDeduplication": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Ignored. Deduplication is now server-side, configured per alert type under\nalerting.deduplication, and is no longer selectable per request."
         },
         "damperCoeff": {
           "type": "number",
@@ -1547,6 +1549,35 @@
     "v1beta1RegisterJobEventResponse": {
       "type": "object"
     },
+    "v1beta1RootCauseEvidence": {
+      "type": "object",
+      "properties": {
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expectedFinishAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "latestSafeStartAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Latest start that would still have met the deadline; set for STARTED_LATE."
+        },
+        "blockedOnSensors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Sensor task names still waiting; set for THIRD_PARTY_DELAY."
+        },
+        "sourceType": {
+          "type": "string",
+          "description": "The upstream_resolvers type behind a THIRD_PARTY_DELAY, e.g. \"dex\"."
+        }
+      }
+    },
     "v1beta1SLAConfig": {
       "type": "object",
       "properties": {
@@ -1601,6 +1632,13 @@
         "scheduledAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "reason": {
+          "type": "string",
+          "description": "status says whether this job is past its deadline; reason says what put it there:\nRUNNING_LONG, STARTED_LATE, THIRD_PARTY_DELAY or UNKNOWN."
+        },
+        "evidence": {
+          "$ref": "#/definitions/v1beta1RootCauseEvidence"
         }
       }
     },

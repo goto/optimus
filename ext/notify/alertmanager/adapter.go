@@ -287,21 +287,6 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 	})
 }
 
-// severityRank orders severities so we can pick the most severe one as the
-// single routing label for a team's consolidated message.
-func severityRank(severity string) int {
-	switch getSeverity(severity) {
-	case CriticalSeverity:
-		return 3
-	case WarningSeverity:
-		return 2
-	case InfoSeverity:
-		return 1
-	default:
-		return 0
-	}
-}
-
 func (a *AlertManager) SendPotentialSLABreach(alert *scheduler.PotentialSLABreachAlert) {
 	a.relay(a.buildPotentialSLABreachPayload(alert))
 }

@@ -22,7 +22,6 @@ type JobSLAPredictorRequestConfig struct {
 	ScheduleRangeInHours time.Duration
 	SkipJobNames         []string
 	EnableAlert          bool
-	EnableDeduplication  bool
 	Severity             string
 	DamperFactor         scheduler.DamperFactor
 }
@@ -57,7 +56,6 @@ type JobDetailsGetter interface {
 
 type SLAPredictorRepository interface {
 	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, targetedSLA, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
-	GetPredictedSLAJobNamesWithinTimeRange(ctx context.Context, from, to time.Time) ([]scheduler.JobName, error)
 }
 
 type ScheduledChangeGetter interface {
@@ -465,25 +463,10 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 	}
 	s.l.Info("potential SLA breaches found", "count", totalBreaches)
 
-	// legacy target-name suppression; retire once deduplication.potential_sla_breach is live
-	suppressed := map[scheduler.JobName]bool{}
-	if reqConfig.EnableDeduplication {
-		existing, err := s.deduplicateTargetNames(ctx, reqConfig.ScheduleRangeInHours, reqConfig.ReferenceTime)
-		if err != nil {
-			s.l.Error("failed to compute deduplication set, sending alerts without deduplication", "error", err)
-		} else {
-			suppressed = existing
-		}
-	}
-
 	agg := scheduler.NewBreachAlertAggregator()
 	teamCache := map[tenant.Tenant]string{}
 	for _, r := range results {
 		for targetName, upstreamCauses := range r.jobBreachCauses {
-			if suppressed[targetName] {
-				s.l.Info("skipping target for alerting as it was recently predicted", "job", targetName.String())
-				continue
-			}
 			for _, upstreamCause := range upstreamCauses {
 				team := s.resolveTeam(ctx, upstreamCause.Tenant, teamCache)
 				if team == "" {
@@ -591,33 +574,4 @@ func collectJobNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineage
 		jobNames = append(jobNames, jobName)
 	}
 	return jobNames
-}
-
-// deduplicateTargetNames returns the set of target job names that were already
-// predicted to breach within the time window, so they can be skipped when
-// alerting. Deduplication is name-based; it relies on Optimus job names being
-// globally unique. Requires persistent logging to be enabled.
-func (s *JobSLAPredictorService) deduplicateTargetNames(ctx context.Context, scheduleRangeInHours time.Duration, referenceTime time.Time) (map[scheduler.JobName]bool, error) {
-	if !s.config.EnablePersistentLogging {
-		s.l.Warn("persistent logging is disabled, cannot perform deduplication")
-		return map[scheduler.JobName]bool{}, nil
-	}
-
-	// define time range to check existing job names
-	from := referenceTime.Add(-scheduleRangeInHours)
-	to := referenceTime.Add(scheduleRangeInHours)
-
-	existingJobNames, err := s.repo.GetPredictedSLAJobNamesWithinTimeRange(ctx, from, to)
-	if err != nil {
-		s.l.Error("failed to get existing predicted SLA job names from repository, skipping deduplication", "error", err)
-		return nil, err
-	}
-
-	suppressed := make(map[scheduler.JobName]bool, len(existingJobNames))
-	for _, jobName := range existingJobNames {
-		suppressed[jobName] = true
-	}
-	s.l.Info("computed deduplication set", "count", len(suppressed), "from", from, "to", to)
-
-	return suppressed, nil
 }

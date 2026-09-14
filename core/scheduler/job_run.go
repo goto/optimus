@@ -186,6 +186,25 @@ type JobSLAState struct {
 	InferredSLA       *time.Time
 }
 
+// RootCauseReason explains why a breaching job is late.
+type RootCauseReason string
+
+const (
+	ReasonRunningLong     RootCauseReason = "RUNNING_LONG"
+	ReasonStartedLate     RootCauseReason = "STARTED_LATE"
+	ReasonThirdPartyDelay RootCauseReason = "THIRD_PARTY_DELAY"
+	ReasonUnknown         RootCauseReason = "UNKNOWN"
+)
+
+type RootCauseEvidence struct {
+	StartedAt         *time.Time
+	ExpectedFinishAt  *time.Time
+	LatestSafeStartAt *time.Time
+	BlockedOnSensors  []string
+	// SourceType is the upstream_resolvers type behind a THIRD_PARTY_DELAY, e.g. "dex".
+	SourceType string
+}
+
 type JobState struct {
 	JobSLAState
 	JobName       JobName
@@ -193,6 +212,8 @@ type JobState struct {
 	Tenant        tenant.Tenant
 	RelativeLevel int
 	Status        SLABreachCause
+	Reason        RootCauseReason
+	Evidence      RootCauseEvidence
 }
 
 // TargetBreach is the per-target result returned to the caller for building the

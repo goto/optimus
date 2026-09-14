@@ -38,6 +38,7 @@ func TestDefaultDetectors(t *testing.T) {
 		return &v
 	}
 	dur := func(d time.Duration) *time.Duration { return &d }
+	strPtr := func(s string) *string { return &s }
 
 	t.Run("running past its estimated duration is RUNNING_LONG", func(t *testing.T) {
 		// started 05:00, estimate 30m, now 06:00 -> 60m elapsed
@@ -63,6 +64,23 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, *at(6, 20), *evidence.ExpectedFinishAt)
 	})
 
+	t.Run("late start explained by the job's own already-resolved sensor is THIRD_PARTY_DELAY", func(t *testing.T) {
+		// estimate 40m, deadline 06:00 -> had to start by 05:20; started 05:40, same as the
+		// STARTED_LATE case above, but this run also recorded a dex sensor that occupied
+		// 04:30-05:40 -- a wait that has already resolved, so PendingSensors (which only ever
+		// reports still-waiting sensors) would never see it.
+		late := state(at(5, 40), dur(40*time.Minute), at(6, 0))
+		late.JobRun.SensorName = strPtr("wait_dex_orders")
+		late.JobRun.WaitStartTime = at(4, 30)
+		late.JobRun.WaitEndTime = at(5, 40)
+
+		reason, evidence := detect(rootcause.Candidate{State: late, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonThirdPartyDelay, reason)
+		assert.Equal(t, []string{"wait_dex_orders"}, evidence.BlockedOnSensors)
+		assert.Equal(t, "dex", evidence.SourceType)
+	})
+
 	t.Run("a run that finished late but ran normally is STARTED_LATE, not RUNNING_LONG", func(t *testing.T) {
 		// started 05:40, ran its usual 10m, done 05:50, deadline was 05:45.
 		// evaluated at 06:00 -- elapsed must be the 10m it ran, not the 20m since it began
@@ -74,16 +92,18 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, scheduler.ReasonStartedLate, reason)
 	})
 
-	t.Run("hook time is excluded, matching the task-only estimate", func(t *testing.T) {
+	t.Run("hook time counts toward the estimate, matching the task+hook estimator", func(t *testing.T) {
 		// task ran its usual 10m (05:40-05:50); a slow hook then pushed the run to 07:00.
-		// the estimate is task-only, so the hook must not make this look like an overrun
+		// GetPercentileDurationByJobNames sums task and hook percentiles into the estimate,
+		// so the comparison must use the hook-inclusive finish time too, or a genuinely slow
+		// hook would never surface as an overrun.
 		hookHeavy := state(at(5, 40), dur(30*time.Minute), at(5, 45))
 		hookHeavy.JobRun.TaskEndTime = at(5, 50)
 		hookHeavy.JobRun.HookEndTime = at(7, 0)
 
-		reason, _ := detect(rootcause.Candidate{State: hookHeavy, ReferenceTime: ref})
+		reason, _ := detect(rootcause.Candidate{State: hookHeavy, ReferenceTime: *at(7, 10)})
 
-		assert.Equal(t, scheduler.ReasonStartedLate, reason)
+		assert.Equal(t, scheduler.ReasonRunningLong, reason)
 	})
 
 	t.Run("every blocking third-party sensor is captured across providers", func(t *testing.T) {

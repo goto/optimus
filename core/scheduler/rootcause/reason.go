@@ -31,9 +31,21 @@ type ReasonDetector interface {
 func DefaultDetectors(thirdPartyTypes []string) []ReasonDetector {
 	return []ReasonDetector{
 		RunningLongDetector{},
+		NewResolvedThirdPartySensorDetector(thirdPartyTypes),
 		StartedLateDetector{},
 		NewThirdPartySensorDetector(thirdPartyTypes),
 	}
+}
+
+func thirdPartyPrefixes(thirdPartyTypes []string) map[string]string {
+	typeByPrefix := make(map[string]string, len(thirdPartyTypes))
+	for _, thirdPartyType := range thirdPartyTypes {
+		if thirdPartyType == "" {
+			continue
+		}
+		typeByPrefix[sensorPrefixFor(thirdPartyType)] = thirdPartyType
+	}
+	return typeByPrefix
 }
 
 type RunningLongDetector struct{}
@@ -47,7 +59,7 @@ func (RunningLongDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 	}
 	elapsed := c.ReferenceTime.Sub(*start)
 	// a run that finished late is still a root cause
-	if end := c.State.JobRun.TaskEndTime; end != nil {
+	if end := c.State.JobRun.GetActualEndTime(); end != nil {
 		elapsed = end.Sub(*start)
 	}
 	if elapsed <= *c.State.EstimatedDuration {
@@ -73,19 +85,41 @@ func (StartedLateDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 	return scheduler.ReasonStartedLate, evidenceForStarted(c), true
 }
 
+// ResolvedThirdPartySensorDetector catches a third-party sensor that already finished waiting
+// by the time the job started. So, the started late due to third party sensor capture here.
+type ResolvedThirdPartySensorDetector struct {
+	typeByPrefix map[string]string
+}
+
+func NewResolvedThirdPartySensorDetector(thirdPartyTypes []string) ResolvedThirdPartySensorDetector {
+	return ResolvedThirdPartySensorDetector{typeByPrefix: thirdPartyPrefixes(thirdPartyTypes)}
+}
+
+func (ResolvedThirdPartySensorDetector) Name() string { return "resolved_third_party_delay" }
+
+func (d ResolvedThirdPartySensorDetector) Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool) {
+	sensorName := c.State.JobRun.SensorName
+	if sensorName == nil || c.State.JobRun.WaitStartTime == nil || c.State.JobRun.WaitEndTime == nil {
+		return "", scheduler.RootCauseEvidence{}, false
+	}
+	for prefix, thirdPartyType := range d.typeByPrefix {
+		if strings.HasPrefix(*sensorName, prefix) {
+			return scheduler.ReasonThirdPartyDelay, scheduler.RootCauseEvidence{
+				BlockedOnSensors: []string{*sensorName},
+				SourceType:       thirdPartyType,
+			}, true
+		}
+	}
+	return "", scheduler.RootCauseEvidence{}, false
+}
+
+// ThirdPartySensorDetector only ever sees a sensor that is still pending.
 type ThirdPartySensorDetector struct {
 	typeByPrefix map[string]string
 }
 
 func NewThirdPartySensorDetector(thirdPartyTypes []string) ThirdPartySensorDetector {
-	typeByPrefix := make(map[string]string, len(thirdPartyTypes))
-	for _, thirdPartyType := range thirdPartyTypes {
-		if thirdPartyType == "" {
-			continue
-		}
-		typeByPrefix[sensorPrefixFor(thirdPartyType)] = thirdPartyType
-	}
-	return ThirdPartySensorDetector{typeByPrefix: typeByPrefix}
+	return ThirdPartySensorDetector{typeByPrefix: thirdPartyPrefixes(thirdPartyTypes)}
 }
 
 func (ThirdPartySensorDetector) Name() string { return "third_party_delay" }

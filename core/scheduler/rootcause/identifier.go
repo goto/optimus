@@ -150,11 +150,10 @@ func (i *Identifier) classify(ctx context.Context, rootCauses [][]*scheduler.Job
 // that upstream's own inferred SLA. It stops when the moment a hop is clean (on time) or maxRootCauseClimb runs out
 func (i *Identifier) escalate(ctx context.Context, state *scheduler.JobState, node *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) {
 	visited := map[scheduler.JobName]bool{state.JobName: true}
-	downstreamName := state.JobName
 	current := node
 
 	for depth := 0; depth < maxRootCauseClimb; depth++ {
-		upstream, run := gatingUpstream(current, downstreamName, visited)
+		upstream, run := gatingUpstream(current, visited)
 		if upstream == nil || run == nil {
 			return
 		}
@@ -196,43 +195,31 @@ func (i *Identifier) escalate(ctx context.Context, state *scheduler.JobState, no
 			return // definitive cause found (RUNNING_LONG / THIRD_PARTY_DELAY)
 		}
 
-		downstreamName = upstream.JobName
 		current = upstream
 	}
 }
 
-// gatingUpstream returns the direct upstream of node (as reached from downstreamJobName)
-// most likely to have determined when node actually started: the one that finished last, or,
-// if none has finished yet, the first one still pending. Either way the detector chain's own
-// nil guards classify it safely.
-func gatingUpstream(node *scheduler.JobLineageSummary, downstreamJobName scheduler.JobName, visited map[scheduler.JobName]bool) (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
-	var latest, pending *scheduler.JobLineageSummary
-	var latestRun, pendingRun *scheduler.JobRunSummary
-	var latestFinish time.Time
-
+// gatingUpstream returns the direct upstream of node most likely to have determined when node
+// actually started, reusing the same selection scheduler.SelectUpstreams already applies for
+// lineage-walk gating (latest-finishing, or the first still pending) instead of a second
+// ranking implementation.
+func gatingUpstream(node *scheduler.JobLineageSummary, visited map[scheduler.JobName]bool) (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
+	candidates := make([]*scheduler.JobLineageSummary, 0, len(node.Upstreams))
 	for _, upstream := range node.Upstreams {
-		if visited[upstream.JobName] {
-			continue
-		}
-		run := upstream.GetRunForJob(downstreamJobName)
-		if run == nil {
-			continue
-		}
-		finish := run.GetActualEndTime()
-		if finish == nil {
-			if pending == nil {
-				pending, pendingRun = upstream, run
-			}
-			continue
-		}
-		if latest == nil || finish.After(latestFinish) {
-			latest, latestRun, latestFinish = upstream, run, *finish
+		if !visited[upstream.JobName] {
+			candidates = append(candidates, upstream)
 		}
 	}
-	if latest != nil {
-		return latest, latestRun
+	if len(candidates) == 0 {
+		return nil, nil
 	}
-	return pending, pendingRun
+
+	selected := scheduler.SelectUpstreams(&scheduler.JobLineageSummary{JobName: node.JobName, Upstreams: candidates}, 1)
+	if len(selected) == 0 {
+		return nil, nil
+	}
+	upstream := selected[0]
+	return upstream, upstream.GetRunForJob(node.JobName)
 }
 
 // Only unstarted candidates can be sensor-blocked, so pending sensors are fetched for them alone.

@@ -82,9 +82,9 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 	rootCauses, breachFullPaths, nodeByName := i.identifyRootCauses(ctx, jobTarget, jobSLAStates, bottleneck, skipJobNames, referenceTime)
 
 	// classify (and, where ambiguous, escalate to the upstream that actually caused the
-	// delay) before keying the result maps by JobName: escalation reassigns a state's
-	// JobName in place, and states are shared pointers between rootCauses and breachFullPaths.
-	i.classify(ctx, rootCauses, nodeByName, jobSLAStates, referenceTime)
+	// delay) before keying the result maps by JobName: escalation can swap a path's root
+	// cause for an upstream one, which changes the JobName the maps below are keyed by.
+	rootCauses, breachFullPaths = i.classify(ctx, rootCauses, breachFullPaths, nodeByName, jobSLAStates, referenceTime)
 
 	// populate breachesCauses
 	breachesCauses := make(map[scheduler.JobName]*scheduler.JobState)
@@ -109,7 +109,11 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 	return breachesCauses, fullBreachesCauses
 }
 
-func (i *Identifier) classify(ctx context.Context, rootCauses [][]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) {
+// classify resolves the reason behind every path's root cause, escalating to an upstream where
+// the reason turns out to be a relayed delay. It leaves the states it is given untouched and
+// returns both path sets with the resolved causes substituted in, since a cause can be shared
+// between the two sets and can appear mid-path as well as at the end.
+func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [][]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) (resolvedRootCauses, resolvedFullPaths [][]*scheduler.JobState) {
 	causes := make(map[scheduler.JobName]*scheduler.JobState, len(rootCauses))
 	for _, path := range rootCauses {
 		if len(path) == 0 {
@@ -120,9 +124,11 @@ func (i *Identifier) classify(ctx context.Context, rootCauses [][]*scheduler.Job
 	}
 
 	pending := i.pendingSensors(ctx, causes)
+	resolved := make(map[*scheduler.JobState]*scheduler.JobState, len(causes))
 	for jobName, state := range causes {
 		key := JobRunKey{Project: state.Tenant.ProjectName(), JobName: state.JobName, ScheduledAt: state.JobRun.ScheduledAt}
-		state.Reason, state.Evidence = classify(i.detectors, Candidate{
+		cause := *state
+		cause.Reason, cause.Evidence = classify(i.detectors, Candidate{
 			State:          state,
 			PendingSensors: pending[key.String()],
 			ReferenceTime:  referenceTime,
@@ -131,44 +137,69 @@ func (i *Identifier) classify(ctx context.Context, rootCauses [][]*scheduler.Job
 		// STARTED_LATE only says the job missed its own inferred deadline, not why - it may
 		// just be relaying a delay from further up the lineage, so climb toward whichever
 		// upstream actually gated its start.
-		if state.Reason == scheduler.ReasonStartedLate {
-			i.escalate(ctx, state, nodeByName[jobName], jobSLAStates, referenceTime)
+		if cause.Reason == scheduler.ReasonStartedLate {
+			cause = i.escalate(ctx, cause, nodeByName[jobName], jobSLAStates, referenceTime)
 		}
 
 		// a started job with a known estimate cannot breach without being slow or late,
 		// so landing on UNKNOWN here means the run data disagrees with itself
-		if state.Reason == scheduler.ReasonUnknown && state.JobRun.TaskStartTime != nil && state.EstimatedDuration != nil {
-			i.l.Warn("started root cause classified as unknown", "job", state.JobName,
-				"task_start", state.JobRun.TaskStartTime, "task_end", state.JobRun.TaskEndTime,
-				"estimated_duration", state.EstimatedDuration, "inferred_sla", state.InferredSLA)
+		if cause.Reason == scheduler.ReasonUnknown && cause.JobRun.TaskStartTime != nil && cause.EstimatedDuration != nil {
+			i.l.Warn("started root cause classified as unknown", "job", cause.JobName,
+				"task_start", cause.JobRun.TaskStartTime, "task_end", cause.JobRun.TaskEndTime,
+				"estimated_duration", cause.EstimatedDuration, "inferred_sla", cause.InferredSLA)
 		}
+
+		resolved[state] = &cause
 	}
+
+	return substituteStates(rootCauses, resolved), substituteStates(breachFullPaths, resolved)
+}
+
+// substituteStates rebuilds paths with every state that has a resolved counterpart swapped for
+// it, leaving the original paths and states as they were.
+func substituteStates(paths [][]*scheduler.JobState, resolved map[*scheduler.JobState]*scheduler.JobState) [][]*scheduler.JobState {
+	out := make([][]*scheduler.JobState, 0, len(paths))
+	for _, path := range paths {
+		substituted := make([]*scheduler.JobState, len(path))
+		for idx, state := range path {
+			if replacement, ok := resolved[state]; ok {
+				substituted[idx] = replacement
+				continue
+			}
+			substituted[idx] = state
+		}
+		out = append(out, substituted)
+	}
+	return out
 }
 
 // escalate climbs from a STARTED_LATE root cause toward the direct upstream that finished
 // last (the one most likely to have gated this job's start), reclassifying at each hop using
-// that upstream's own inferred SLA. It stops when the moment a hop is clean (on time) or maxRootCauseClimb runs out.
-func (i *Identifier) escalate(ctx context.Context, state *scheduler.JobState, node *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) {
+// that upstream's own inferred SLA. It stops the moment a hop is clean (on time) or maxRootCauseClimb
+// runs out, and returns the blamed state - the last upstream it blamed, or state itself if no
+// upstream is to blame.
+func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, node *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) scheduler.JobState {
 	visited := map[scheduler.JobName]bool{state.JobName: true}
 	current := node
+	blamed := state
 
 	for depth := 0; depth < maxRootCauseClimb; depth++ {
 		upstream, run := gatingUpstream(current, visited)
 		if upstream == nil || run == nil {
-			return
+			return blamed
 		}
 		slaState := jobSLAStates[upstream.JobName]
 		if slaState == nil {
-			return
+			return blamed
 		}
 		visited[upstream.JobName] = true
 
-		candidateState := &scheduler.JobState{
+		candidateState := scheduler.JobState{
 			JobSLAState:   *slaState,
 			JobName:       upstream.JobName,
 			JobRun:        *run,
 			Tenant:        upstream.Tenant,
-			RelativeLevel: state.RelativeLevel + 1,
+			RelativeLevel: blamed.RelativeLevel + 1,
 			Status:        scheduler.SLABreachCauseRunningLate,
 		}
 		if run.TaskStartTime == nil {
@@ -176,27 +207,28 @@ func (i *Identifier) escalate(ctx context.Context, state *scheduler.JobState, no
 		}
 
 		reason, evidence := classify(i.detectors, Candidate{
-			State:          candidateState,
+			State:          &candidateState,
 			PendingSensors: i.pendingSensorsFor(ctx, upstream.JobName, upstream.Tenant, run.ScheduledAt, run.TaskStartTime),
 			ReferenceTime:  referenceTime,
 		})
 
 		// clean (or undetermined) hop: this upstream isn't to blame, so stop climbing and
-		// leave state as the original
+		// keep whichever state is blamed so far
 		if reason == scheduler.ReasonUnknown {
-			return
+			return blamed
 		}
 
-		*state = *candidateState
-		state.Reason = reason
-		state.Evidence = evidence
+		candidateState.Reason = reason
+		candidateState.Evidence = evidence
+		blamed = candidateState
 
 		if reason != scheduler.ReasonStartedLate {
-			return // definitive cause found (RUNNING_LONG / THIRD_PARTY_DELAY)
+			return blamed // definitive cause found (RUNNING_LONG / THIRD_PARTY_DELAY)
 		}
 
 		current = upstream
 	}
+	return blamed
 }
 
 // gatingUpstream returns the direct upstream of node most likely to have determined when node

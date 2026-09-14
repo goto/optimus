@@ -100,7 +100,6 @@ func buildIdentifySLABreachInputs(req *pb.IdentifyPotentialSLABreachRequest) ([]
 		ScheduleRangeInHours: scheduleRangeInHours,
 		SkipJobNames:         req.GetSkipJobNames(),
 		EnableAlert:          req.GetAlertOnBreach(),
-		EnableDeduplication:  req.GetEnableDeduplication(),
 		Severity:             req.GetSeverity(),
 		DamperFactor:         damperFactor,
 	}
@@ -353,4 +352,28 @@ func buildJobFilter(req *pb.JobExpectedCompletionTimeReportRequest) ([]scheduler
 		})
 	}
 	return filters, nil
+}
+
+// toRootCauseEvidenceProto returns nil for empty evidence so the field is absent from
+// the response rather than an object of zero timestamps a caller would have to filter.
+func toRootCauseEvidenceProto(evidence scheduler.RootCauseEvidence) *pb.RootCauseEvidence {
+	if evidence.StartedAt == nil && evidence.ExpectedFinishAt == nil &&
+		evidence.LatestSafeStartAt == nil && len(evidence.BlockedOnSensors) == 0 && evidence.SourceType == "" {
+		return nil
+	}
+
+	out := &pb.RootCauseEvidence{
+		BlockedOnSensors: evidence.BlockedOnSensors,
+		SourceType:       evidence.SourceType,
+	}
+	if evidence.StartedAt != nil {
+		out.StartedAt = timestamppb.New(*evidence.StartedAt)
+	}
+	if evidence.ExpectedFinishAt != nil {
+		out.ExpectedFinishAt = timestamppb.New(*evidence.ExpectedFinishAt)
+	}
+	if evidence.LatestSafeStartAt != nil {
+		out.LatestSafeStartAt = timestamppb.New(*evidence.LatestSafeStartAt)
+	}
+	return out
 }

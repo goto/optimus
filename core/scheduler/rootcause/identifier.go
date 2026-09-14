@@ -147,7 +147,7 @@ func (i *Identifier) classify(ctx context.Context, rootCauses [][]*scheduler.Job
 
 // escalate climbs from a STARTED_LATE root cause toward the direct upstream that finished
 // last (the one most likely to have gated this job's start), reclassifying at each hop using
-// that upstream's own inferred SLA. It stops when the moment a hop is clean (on time) or maxRootCauseClimb runs out
+// that upstream's own inferred SLA. It stops when the moment a hop is clean (on time) or maxRootCauseClimb runs out.
 func (i *Identifier) escalate(ctx context.Context, state *scheduler.JobState, node *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) {
 	visited := map[scheduler.JobName]bool{state.JobName: true}
 	current := node
@@ -219,7 +219,8 @@ func gatingUpstream(node *scheduler.JobLineageSummary, visited map[scheduler.Job
 		return nil, nil
 	}
 	upstream := selected[0]
-	return upstream, upstream.GetRunForJob(node.JobName)
+	run := upstream.GetRunForJob(node.JobName)
+	return upstream, run
 }
 
 // Only unstarted candidates can be sensor-blocked, so pending sensors are fetched for them alone.

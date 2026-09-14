@@ -12,6 +12,8 @@ import (
 	"github.com/goto/optimus/core/tenant"
 )
 
+const maxRootCauseClimb = 5
+
 // ScheduledChangeGetter exists so runs whose inferred SLA came from a since-changed
 // schedule can be skipped rather than reported as breaching.
 type ScheduledChangeGetter interface {
@@ -43,7 +45,7 @@ type Identifier struct {
 	detectors             []ReasonDetector
 }
 
-// A nil pendingSensorGetter is allowed; RAW_DATA_DELAY then never fires and those
+// A nil pendingSensorGetter is allowed; THIRD_PARTY_DELAY then never fires and those
 // causes fall through to UNKNOWN.
 func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, thirdPartyTypes []string, detectors ...ReasonDetector) *Identifier {
 	if len(detectors) == 0 {
@@ -77,7 +79,12 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 	// identify jobs that might breach their SLAs based on current time and inferred SLAs
 	// T(now)>= S(u|j) and the job u has not completed yet
 	// T(now)>= S(u|j) - D(u) and the job u has not started yet
-	rootCauses, breachFullPaths := i.identifyRootCauses(ctx, jobTarget, jobSLAStates, bottleneck, skipJobNames, referenceTime)
+	rootCauses, breachFullPaths, nodeByName := i.identifyRootCauses(ctx, jobTarget, jobSLAStates, bottleneck, skipJobNames, referenceTime)
+
+	// classify (and, where ambiguous, escalate to the upstream that actually caused the
+	// delay) before keying the result maps by JobName: escalation reassigns a state's
+	// JobName in place, and states are shared pointers between rootCauses and breachFullPaths.
+	i.classify(ctx, rootCauses, nodeByName, jobSLAStates, referenceTime)
 
 	// populate breachesCauses
 	breachesCauses := make(map[scheduler.JobName]*scheduler.JobState)
@@ -99,22 +106,35 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 		fullBreachesCauses[cause.JobName] = causes
 	}
 
-	// states are shared pointers with the reconstructed paths, so this also labels
-	// the copies inside fullBreachesCauses
-	i.classify(ctx, breachesCauses, referenceTime)
-
 	return breachesCauses, fullBreachesCauses
 }
 
-func (i *Identifier) classify(ctx context.Context, causes map[scheduler.JobName]*scheduler.JobState, referenceTime time.Time) {
+func (i *Identifier) classify(ctx context.Context, rootCauses [][]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) {
+	causes := make(map[scheduler.JobName]*scheduler.JobState, len(rootCauses))
+	for _, path := range rootCauses {
+		if len(path) == 0 {
+			continue
+		}
+		state := path[len(path)-1]
+		causes[state.JobName] = state
+	}
+
 	pending := i.pendingSensors(ctx, causes)
-	for _, state := range causes {
+	for jobName, state := range causes {
 		key := JobRunKey{Project: state.Tenant.ProjectName(), JobName: state.JobName, ScheduledAt: state.JobRun.ScheduledAt}
 		state.Reason, state.Evidence = classify(i.detectors, Candidate{
 			State:          state,
 			PendingSensors: pending[key.String()],
 			ReferenceTime:  referenceTime,
 		})
+
+		// STARTED_LATE only says the job missed its own inferred deadline, not why - it may
+		// just be relaying a delay from further up the lineage, so climb toward whichever
+		// upstream actually gated its start.
+		if state.Reason == scheduler.ReasonStartedLate {
+			i.escalate(ctx, state, nodeByName[jobName], jobSLAStates, referenceTime)
+		}
+
 		// a started job with a known estimate cannot breach without being slow or late,
 		// so landing on UNKNOWN here means the run data disagrees with itself
 		if state.Reason == scheduler.ReasonUnknown && state.JobRun.TaskStartTime != nil && state.EstimatedDuration != nil {
@@ -123,6 +143,110 @@ func (i *Identifier) classify(ctx context.Context, causes map[scheduler.JobName]
 				"estimated_duration", state.EstimatedDuration, "inferred_sla", state.InferredSLA)
 		}
 	}
+}
+
+// escalate climbs from a STARTED_LATE root cause toward the direct upstream that finished
+// last (the one most likely to have gated this job's start), reclassifying at each hop using
+// that upstream's own inferred SLA. It stops when the moment a hop is clean (on time) or maxRootCauseClimb runs out
+func (i *Identifier) escalate(ctx context.Context, state *scheduler.JobState, node *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) {
+	visited := map[scheduler.JobName]bool{state.JobName: true}
+	downstreamName := state.JobName
+	current := node
+
+	for depth := 0; depth < maxRootCauseClimb; depth++ {
+		upstream, run := gatingUpstream(current, downstreamName, visited)
+		if upstream == nil || run == nil {
+			return
+		}
+		slaState := jobSLAStates[upstream.JobName]
+		if slaState == nil {
+			return
+		}
+		visited[upstream.JobName] = true
+
+		candidateState := &scheduler.JobState{
+			JobSLAState:   *slaState,
+			JobName:       upstream.JobName,
+			JobRun:        *run,
+			Tenant:        upstream.Tenant,
+			RelativeLevel: state.RelativeLevel + 1,
+			Status:        scheduler.SLABreachCauseRunningLate,
+		}
+		if run.TaskStartTime == nil {
+			candidateState.Status = scheduler.SLABreachCauseNotStarted
+		}
+
+		reason, evidence := classify(i.detectors, Candidate{
+			State:          candidateState,
+			PendingSensors: i.pendingSensorsFor(ctx, upstream.JobName, upstream.Tenant, run.ScheduledAt, run.TaskStartTime),
+			ReferenceTime:  referenceTime,
+		})
+
+		// clean (or undetermined) hop: this upstream isn't to blame, so stop climbing and
+		// leave state as the original
+		if reason == scheduler.ReasonUnknown {
+			return
+		}
+
+		*state = *candidateState
+		state.Reason = reason
+		state.Evidence = evidence
+
+		if reason != scheduler.ReasonStartedLate {
+			return // definitive cause found (RUNNING_LONG / THIRD_PARTY_DELAY)
+		}
+
+		downstreamName = upstream.JobName
+		current = upstream
+	}
+}
+
+// gatingUpstream returns the direct upstream of node (as reached from downstreamJobName)
+// most likely to have determined when node actually started: the one that finished last, or,
+// if none has finished yet, the first one still pending. Either way the detector chain's own
+// nil guards classify it safely.
+func gatingUpstream(node *scheduler.JobLineageSummary, downstreamJobName scheduler.JobName, visited map[scheduler.JobName]bool) (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
+	var latest, pending *scheduler.JobLineageSummary
+	var latestRun, pendingRun *scheduler.JobRunSummary
+	var latestFinish time.Time
+
+	for _, upstream := range node.Upstreams {
+		if visited[upstream.JobName] {
+			continue
+		}
+		run := upstream.GetRunForJob(downstreamJobName)
+		if run == nil {
+			continue
+		}
+		finish := run.GetActualEndTime()
+		if finish == nil {
+			if pending == nil {
+				pending, pendingRun = upstream, run
+			}
+			continue
+		}
+		if latest == nil || finish.After(latestFinish) {
+			latest, latestRun, latestFinish = upstream, run, *finish
+		}
+	}
+	if latest != nil {
+		return latest, latestRun
+	}
+	return pending, pendingRun
+}
+
+// Only unstarted candidates can be sensor-blocked, so pending sensors are fetched for them alone.
+func (i *Identifier) pendingSensorsFor(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, scheduledAt time.Time, taskStartTime *time.Time) []string {
+	if i.pendingSensorGetter == nil || taskStartTime != nil {
+		return nil
+	}
+	key := JobRunKey{Project: tnnt.ProjectName(), JobName: jobName, ScheduledAt: scheduledAt}
+	pending, err := i.pendingSensorGetter.GetPendingSensors(ctx, []JobRunKey{key})
+	if err != nil {
+		i.l.Error("failed to fetch pending sensors while escalating root cause, classifying without them", "job", jobName, "error", err)
+		return nil
+	}
+	return pending[key.String()]
 }
 
 // Only unstarted causes can be sensor-blocked, so the query is limited to those.
@@ -268,7 +392,18 @@ func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummar
 // A job is a *true* root cause when it is breaching but none of its direct upstreams are
 // also breaching. This graph-based rule collapses diamond lineages to the single deepest
 // breaching job regardless of which traversal branch visits the shared ancestor first.
-func (i *Identifier) identifyRootCauses(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, bottleneck BottleneckPath, skipJobNames map[scheduler.JobName]bool, referenceTime time.Time) ([][]*scheduler.JobState, [][]*scheduler.JobState) {
+func (i *Identifier) identifyRootCauses(
+	ctx context.Context,
+	jobTarget *scheduler.JobLineageSummary,
+	jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState,
+	bottleneck BottleneckPath,
+	skipJobNames map[scheduler.JobName]bool,
+	referenceTime time.Time,
+) (
+	[][]*scheduler.JobState,
+	[][]*scheduler.JobState,
+	map[scheduler.JobName]*scheduler.JobLineageSummary,
+) {
 	jobBreachStates := make(map[scheduler.JobName]*scheduler.JobState)
 	nodeByName := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
 
@@ -387,7 +522,7 @@ func (i *Identifier) identifyRootCauses(ctx context.Context, jobTarget *schedule
 		}
 	}
 
-	return rootCauses, fullPaths
+	return rootCauses, fullPaths, nodeByName
 }
 
 // reconstructStatePath rebuilds the path from the target down to breachName by following the

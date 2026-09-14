@@ -456,10 +456,6 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 	return nil
 }
 
-// sendBreachAlerts emits one alert per (team, root cause, scheduled at, reason), which is
-// the key deduplication reads -- so one alert must never carry more than one root cause.
-// Routing still follows the cause-owning team; moving it to the impacted team is a
-// separate change so it can be reverted without losing this deduplication.
 func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results []*comboBreachResult, reqConfig JobSLAPredictorRequestConfig) {
 	totalBreaches := 0
 	for _, r := range results {

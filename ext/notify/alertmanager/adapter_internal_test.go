@@ -36,6 +36,7 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		assert.Equal(t, "2026-09-11T05:00:00Z", payload.Data["root_cause_scheduled_at"])
 		assert.Equal(t, "RUNNING_LONG", payload.Data["reason"])
 		assert.Equal(t, "dwh-team", payload.Labels[DefaultChannelLabel])
+		assert.Equal(t, 2, payload.Data["impacted_jobs_count"])
 
 		for _, key := range []string{"root_cause_job", "root_cause_scheduled_at", "reason"} {
 			_, isString := payload.Data[key].(string)

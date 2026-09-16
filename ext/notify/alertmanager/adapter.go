@@ -306,14 +306,15 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 	}
 
 	data := map[string]interface{}{
-		"team":           alert.Team,
-		"project":        alert.Project,
-		"root_cause_job": alert.RootCauseJob,
-		"reason":         string(alert.Reason),
-		"status":         string(alert.Status),
-		"relative_level": alert.RelativeLevel,
-		"impacted_jobs":  alert.ImpactedJobs,
-		"console_link":   a.getJobConsoleLink(consoleProject, consoleJob),
+		"team":                alert.Team,
+		"project":             alert.Project,
+		"root_cause_job":      alert.RootCauseJob,
+		"reason":              string(alert.Reason),
+		"status":              string(alert.Status),
+		"relative_level":      alert.RelativeLevel,
+		"impacted_jobs":       alert.ImpactedJobs,
+		"impacted_jobs_count": len(alert.ImpactedJobs),
+		"console_link":        a.getJobConsoleLink(consoleProject, consoleJob),
 	}
 	if alert.RootCauseScheduledAt != nil {
 		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)

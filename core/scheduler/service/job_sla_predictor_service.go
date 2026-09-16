@@ -82,7 +82,7 @@ type RootCauseIdentifier interface {
 	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath)
 }
 
-func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
 		l:                    l,
 		config:               config,
@@ -91,8 +91,16 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 		durationEstimator:    durationEstimator,
 		jobDetailsGetter:     jobDetailsGetter,
 		tenantGetter:         tenantGetter,
-		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter),
+		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter, pendingSensorGetter, thirdPartyTypes, identifierConfig(rootCauseConfig)),
 		potentialSLANotifier: potentialSLANotifier,
+	}
+}
+
+func identifierConfig(cfg config.RootCauseConfig) rootcause.IdentifierConfig {
+	return rootcause.IdentifierConfig{
+		ThirdPartyDelayStartHourUTC:     cfg.ThirdPartyDelayStartHourUTC,
+		ThirdPartyDelayThresholdSeconds: cfg.ThirdPartyDelayThresholdSeconds,
+		MinRootCauseDelaySeconds:        cfg.MinRootCauseDelaySeconds,
 	}
 }
 

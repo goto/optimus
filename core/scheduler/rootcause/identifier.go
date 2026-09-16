@@ -45,12 +45,14 @@ type Identifier struct {
 	detectors                []ReasonDetector
 	thirdPartyDelayStartHour int
 	thirdPartyDelayThreshold time.Duration
+	minRootCauseDelay        time.Duration
 }
 
 // IdentifierConfig tunes delay scoring.
 type IdentifierConfig struct {
 	ThirdPartyDelayStartHourUTC     int
 	ThirdPartyDelayThresholdSeconds int
+	MinRootCauseDelaySeconds        int
 }
 
 func (c IdentifierConfig) delayStartHourUTC() int {
@@ -67,6 +69,13 @@ func (c IdentifierConfig) delayThreshold() time.Duration {
 	return time.Duration(c.ThirdPartyDelayThresholdSeconds) * time.Second
 }
 
+func (c IdentifierConfig) minRootCauseDelay() time.Duration {
+	if c.MinRootCauseDelaySeconds < 0 {
+		return 0
+	}
+	return time.Duration(c.MinRootCauseDelaySeconds) * time.Second
+}
+
 // A nil pendingSensorGetter is allowed; pending THIRD_PARTY_DELAY then never fires and those
 // causes fall through to UNKNOWN.
 func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, thirdPartyTypes []string, cfg IdentifierConfig, detectors ...ReasonDetector) *Identifier {
@@ -80,6 +89,7 @@ func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pe
 		detectors:                detectors,
 		thirdPartyDelayStartHour: cfg.delayStartHourUTC(),
 		thirdPartyDelayThreshold: cfg.delayThreshold(),
+		minRootCauseDelay:        cfg.minRootCauseDelay(),
 	}
 }
 
@@ -134,7 +144,18 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 	if chosen == nil {
 		return make(map[scheduler.JobName]*scheduler.JobState), make(map[scheduler.JobName][]*scheduler.JobState)
 	}
-	return map[scheduler.JobName]*scheduler.JobState{chosen.JobName: chosen}, map[scheduler.JobName][]*scheduler.JobState{chosen.JobName: fullBreachesCauses[chosen.JobName]}
+	path := fullBreachesCauses[chosen.JobName]
+	if demoted := demoteBelowMinRootCauseDelay(chosen, i.minRootCauseDelay); demoted != chosen {
+		i.l.Info("root cause delay below min_root_cause_delay_seconds, keeping unknown reason",
+			"job", chosen.JobName, "classified_reason", chosen.Reason,
+			"induced_delay", chosen.Evidence.InducedDelay, "min_root_cause_delay", i.minRootCauseDelay)
+		chosen = demoted
+		if len(path) > 0 {
+			path = append([]*scheduler.JobState(nil), path...)
+			path[len(path)-1] = chosen
+		}
+	}
+	return map[scheduler.JobName]*scheduler.JobState{chosen.JobName: chosen}, map[scheduler.JobName][]*scheduler.JobState{chosen.JobName: path}
 }
 
 // classify resolves the reason behind every path's root cause, escalating to an upstream where

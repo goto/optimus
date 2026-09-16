@@ -113,6 +113,9 @@ type RootCauseConfig struct {
 	ThirdPartyDelayStartHourUTC int `mapstructure:"third_party_delay_start_hour_utc" default:"0"`
 	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
 	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"0"`
+	// MinRootCauseDelaySeconds is the induced-delay floor for a classified reason.
+	// If the chosen (max-delay) cause is below this, the reason stays UNKNOWN.
+	MinRootCauseDelaySeconds int `mapstructure:"min_root_cause_delay_seconds" default:"0"`
 }
 
 type PotentialSLABreachConfig struct {

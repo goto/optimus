@@ -195,7 +195,7 @@ type RootCauseEvidence struct {
 	// SourceType is the upstream_resolvers type behind a THIRD_PARTY_DELAY, e.g. "dex".
 	SourceType string
 	// InducedDelay is how much this cause overran its baseline (historical duration,
-	// latest safe start, or third-party chargeable wait). Used to pick the max-delay cause.
+	// latest safe start, or third-party wait after delay_start_hour). Used to pick the max-delay cause.
 	InducedDelay time.Duration
 }
 

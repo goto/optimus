@@ -28,10 +28,10 @@ func TestInducedDelay(t *testing.T) {
 				TaskEndTime:   at(6, 10),
 			},
 		}
-		assert.Equal(t, 40*time.Minute, inducedDelay(state, ref, defaultThirdPartyChargeHour))
+		assert.Equal(t, 40*time.Minute, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
 	})
 
-	t.Run("third party wait before 01:00 UTC is not charged", func(t *testing.T) {
+	t.Run("third party wait before delay start hour UTC is not counted", func(t *testing.T) {
 		state := scheduler.JobState{
 			Reason: scheduler.ReasonThirdPartyDelay,
 			JobRun: scheduler.JobRunSummary{
@@ -49,18 +49,18 @@ func TestInducedDelay(t *testing.T) {
 				WaitStartTime: at(6, 0),
 			},
 		}
-		assert.Equal(t, 2*time.Hour, inducedDelay(state, ref, defaultThirdPartyChargeHour))
+		assert.Equal(t, 2*time.Hour, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
 	})
 
-	t.Run("missing wait start charges from the UTC hour", func(t *testing.T) {
+	t.Run("missing wait start counts from the UTC delay start hour", func(t *testing.T) {
 		state := scheduler.JobState{
 			Reason: scheduler.ReasonThirdPartyDelay,
 			JobRun: scheduler.JobRunSummary{},
 		}
-		assert.Equal(t, 8*time.Hour, inducedDelay(state, ref, defaultThirdPartyChargeHour))
+		assert.Equal(t, 8*time.Hour, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
 	})
 
-	t.Run("configured UTC charge hour is the wait floor", func(t *testing.T) {
+	t.Run("configured UTC delay start hour is the wait floor", func(t *testing.T) {
 		state := scheduler.JobState{
 			Reason: scheduler.ReasonThirdPartyDelay,
 			JobRun: scheduler.JobRunSummary{

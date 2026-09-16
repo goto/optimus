@@ -96,7 +96,7 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 
 func identifierConfig(cfg config.RootCauseConfig) rootcause.IdentifierConfig {
 	return rootcause.IdentifierConfig{
-		ThirdPartyChargeHourUTC:         cfg.ThirdPartyChargeHourUTC,
+		ThirdPartyDelayStartHourUTC:     cfg.ThirdPartyDelayStartHourUTC,
 		ThirdPartyDelayThresholdSeconds: cfg.ThirdPartyDelayThresholdSeconds,
 	}
 }

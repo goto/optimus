@@ -13,25 +13,36 @@ func sensorPrefixFor(thirdPartyType string) string {
 
 // Candidate is one root cause job plus the run facts needed to explain it.
 type Candidate struct {
-	State          *scheduler.JobState
-	PendingSensors []string
-	ReferenceTime  time.Time
+	State                    *scheduler.JobState
+	PendingSensors           []string
+	ReferenceTime            time.Time
+	ThirdPartyChargeHourUTC  int
+	ThirdPartyDelayThreshold time.Duration
+}
+
+func (c Candidate) thirdPartyDelayExceedsThreshold() bool {
+	if c.State == nil {
+		return false
+	}
+	return thirdPartyDelayExceedsThreshold(*c.State, c.ReferenceTime, c.ThirdPartyChargeHourUTC, c.ThirdPartyDelayThreshold)
 }
 
 // ReasonDetector is the extension point: reasons are added by appending a detector
-// rather than by editing a switch. The chain is ordered and the first match wins.
+// rather than by editing a switch. Every match is scored; the max induced delay wins.
 type ReasonDetector interface {
 	Name() string
 	Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool)
 }
 
-// DefaultDetectors returns the chain in precedence order.
+// DefaultDetectors is the set of explanations considered for each candidate.
+// A job can match more than one (e.g. STARTED_LATE and RUNNING_LONG); identification
+// keeps the match with the largest induced delay.
 // thirdPartyTypes comes from the server's upstream_resolvers. Empty means the
 // deployment has no third-party sensors, so THIRD_PARTY_DELAY never fires.
 func DefaultDetectors(thirdPartyTypes []string) []ReasonDetector {
 	return []ReasonDetector{
-		RunningLongDetector{},
 		NewResolvedThirdPartySensorDetector(thirdPartyTypes),
+		RunningLongDetector{},
 		StartedLateDetector{},
 		NewThirdPartySensorDetector(thirdPartyTypes),
 	}
@@ -85,8 +96,10 @@ func (StartedLateDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 	return scheduler.ReasonStartedLate, evidenceForStarted(c), true
 }
 
-// ResolvedThirdPartySensorDetector catches a third-party sensor that already finished waiting
-// by the time the job started. So, the started late due to third party sensor capture here.
+// ResolvedThirdPartySensorDetector catches a finished third-party wait whose induced delay
+// exceeds the configured seconds threshold. wait_dex is typically a seconds-long API
+// completeness check, so a wait at or under the threshold is treated as normal gating
+// and must not steal STARTED_LATE / RUNNING_LONG.
 type ResolvedThirdPartySensorDetector struct {
 	typeByPrefix map[string]string
 }
@@ -100,6 +113,9 @@ func (ResolvedThirdPartySensorDetector) Name() string { return "resolved_third_p
 func (d ResolvedThirdPartySensorDetector) Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool) {
 	sensorName := c.State.JobRun.SensorName
 	if sensorName == nil || c.State.JobRun.WaitStartTime == nil || c.State.JobRun.WaitEndTime == nil {
+		return "", scheduler.RootCauseEvidence{}, false
+	}
+	if !c.thirdPartyDelayExceedsThreshold() {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
 	for prefix, thirdPartyType := range d.typeByPrefix {
@@ -144,6 +160,9 @@ func (d ThirdPartySensorDetector) Detect(c Candidate) (scheduler.RootCauseReason
 	if len(blocked) == 0 {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
+	if !c.thirdPartyDelayExceedsThreshold() {
+		return "", scheduler.RootCauseEvidence{}, false
+	}
 	return scheduler.ReasonThirdPartyDelay, scheduler.RootCauseEvidence{BlockedOnSensors: blocked, SourceType: sourceType}, true
 }
 
@@ -160,11 +179,17 @@ func evidenceForStarted(c Candidate) scheduler.RootCauseEvidence {
 	return evidence
 }
 
-func classify(detectors []ReasonDetector, c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence) {
+type classified struct {
+	Reason   scheduler.RootCauseReason
+	Evidence scheduler.RootCauseEvidence
+}
+
+func classifyAll(detectors []ReasonDetector, c Candidate) []classified {
+	matches := make([]classified, 0, len(detectors))
 	for _, detector := range detectors {
 		if reason, evidence, ok := detector.Detect(c); ok {
-			return reason, evidence
+			matches = append(matches, classified{Reason: reason, Evidence: evidence})
 		}
 	}
-	return scheduler.ReasonUnknown, scheduler.RootCauseEvidence{}
+	return matches
 }

@@ -1391,10 +1391,9 @@ func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
 	})
 
 	t.Run("breach is in 2 upstream branch job-F and job-B", func(t *testing.T) {
-		// now = s+30. The shared job-D (end s+14 <= S(D)=s+15) and job-E (end s+4 <= S(E)=s+5)
-		// finished on time;
-		// job-F is running late, while job-B hasn't started yet.
-		// highlight both job-F and job-B as the root cause
+		// now = s+30. The shared job-D and job-E finished on time; job-F is running late
+		// and job-B has not started. Both are graph leaves, but identification keeps the
+		// max induced delay: job-F overran by 6m vs job-B started-late by 5m.
 		res := run(t, scheduledAt.Add(30*time.Minute), map[scheduler.JobName]runState{
 			"job-E": {start: dur(0), end: dur(4 * time.Minute)},
 			"job-D": {start: dur(4 * time.Minute), end: dur(14 * time.Minute)},
@@ -1403,15 +1402,10 @@ func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
 			// job-C not started (blocked behind late job-F)
 		})
 		assert.Len(t, res, 1)
-		assert.Len(t, res["job-A"], 2)
-
+		assert.Len(t, res["job-A"], 1)
 		assert.Equal(t, scheduler.JobName("job-F"), res["job-A"]["job-F"].JobName)
 		assert.Equal(t, scheduler.SLABreachCauseRunningLate, res["job-A"]["job-F"].Status)
 		assert.Equal(t, 2, res["job-A"]["job-F"].RelativeLevel)
-
-		assert.Equal(t, scheduler.JobName("job-B"), res["job-A"]["job-B"].JobName)
-		assert.Equal(t, scheduler.SLABreachCauseNotStarted, res["job-A"]["job-B"].Status)
-		assert.Equal(t, 1, res["job-A"]["job-B"].RelativeLevel)
 	})
 
 	t.Run("shared merge point job-D running late -> root cause job-D", func(t *testing.T) {

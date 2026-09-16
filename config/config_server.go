@@ -107,6 +107,10 @@ type PotentialSLABreachConfig struct {
 	DamperCoeff             float64                 `mapstructure:"damper_coeff" default:"1.0"`
 	EnablePersistentLogging bool                    `mapstructure:"enable_persistent_logging" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
+	// ThirdPartyChargeHourUTC is the UTC hour (0-23) before which sensor wait is not counted as induced delay.
+	ThirdPartyChargeHourUTC int `mapstructure:"third_party_charge_hour_utc" default:"0"`
+	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
+	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"0"`
 }
 
 type DurationEstimatorConfig struct {

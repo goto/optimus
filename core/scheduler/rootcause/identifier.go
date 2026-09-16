@@ -39,23 +39,47 @@ type PendingSensorGetter interface {
 }
 
 type Identifier struct {
-	l                     log.Logger
-	scheduledChangeGetter ScheduledChangeGetter
-	pendingSensorGetter   PendingSensorGetter
-	detectors             []ReasonDetector
+	l                        log.Logger
+	scheduledChangeGetter    ScheduledChangeGetter
+	pendingSensorGetter      PendingSensorGetter
+	detectors                []ReasonDetector
+	thirdPartyChargeHour     int
+	thirdPartyDelayThreshold time.Duration
 }
 
-// A nil pendingSensorGetter is allowed; THIRD_PARTY_DELAY then never fires and those
+// IdentifierConfig tunes delay scoring.
+type IdentifierConfig struct {
+	ThirdPartyChargeHourUTC         int
+	ThirdPartyDelayThresholdSeconds int
+}
+
+func (c IdentifierConfig) chargeHourUTC() int {
+	if c.ThirdPartyChargeHourUTC < 0 || c.ThirdPartyChargeHourUTC > 23 {
+		return defaultThirdPartyChargeHour
+	}
+	return c.ThirdPartyChargeHourUTC
+}
+
+func (c IdentifierConfig) delayThreshold() time.Duration {
+	if c.ThirdPartyDelayThresholdSeconds < 0 {
+		return 0
+	}
+	return time.Duration(c.ThirdPartyDelayThresholdSeconds) * time.Second
+}
+
+// A nil pendingSensorGetter is allowed; pending THIRD_PARTY_DELAY then never fires and those
 // causes fall through to UNKNOWN.
-func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, thirdPartyTypes []string, detectors ...ReasonDetector) *Identifier {
+func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, thirdPartyTypes []string, cfg IdentifierConfig, detectors ...ReasonDetector) *Identifier {
 	if len(detectors) == 0 {
 		detectors = DefaultDetectors(thirdPartyTypes)
 	}
 	return &Identifier{
-		l:                     l,
-		scheduledChangeGetter: scheduledChangeGetter,
-		pendingSensorGetter:   pendingSensorGetter,
-		detectors:             detectors,
+		l:                        l,
+		scheduledChangeGetter:    scheduledChangeGetter,
+		pendingSensorGetter:      pendingSensorGetter,
+		detectors:                detectors,
+		thirdPartyChargeHour:     cfg.chargeHourUTC(),
+		thirdPartyDelayThreshold: cfg.delayThreshold(),
 	}
 }
 
@@ -82,8 +106,8 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 	rootCauses, breachFullPaths, nodeByName := i.identifyRootCauses(ctx, jobTarget, jobSLAStates, bottleneck, skipJobNames, referenceTime)
 
 	// classify (and, where ambiguous, escalate to the upstream that actually caused the
-	// delay) before keying the result maps by JobName: escalation can swap a path's root
-	// cause for an upstream one, which changes the JobName the maps below are keyed by.
+	// delay) before keying the result maps by JobName: a THIRD_PARTY_DELAY cause is keyed
+	// by the sensor, and when several leaves remain, only the max-delay one is returned.
 	rootCauses, breachFullPaths = i.classify(ctx, rootCauses, breachFullPaths, nodeByName, jobSLAStates, referenceTime)
 
 	// populate breachesCauses
@@ -106,7 +130,11 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 		fullBreachesCauses[cause.JobName] = causes
 	}
 
-	return breachesCauses, fullBreachesCauses
+	chosen := pickMaxDelayCause(breachesCauses)
+	if chosen == nil {
+		return make(map[scheduler.JobName]*scheduler.JobState), make(map[scheduler.JobName][]*scheduler.JobState)
+	}
+	return map[scheduler.JobName]*scheduler.JobState{chosen.JobName: chosen}, map[scheduler.JobName][]*scheduler.JobState{chosen.JobName: fullBreachesCauses[chosen.JobName]}
 }
 
 // classify resolves the reason behind every path's root cause, escalating to an upstream where
@@ -127,32 +155,65 @@ func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [
 	resolved := make(map[*scheduler.JobState]*scheduler.JobState, len(causes))
 	for jobName, state := range causes {
 		key := JobRunKey{Project: state.Tenant.ProjectName(), JobName: state.JobName, ScheduledAt: state.JobRun.ScheduledAt}
-		cause := *state
-		cause.Reason, cause.Evidence = classify(i.detectors, Candidate{
-			State:          state,
-			PendingSensors: pending[key.String()],
-			ReferenceTime:  referenceTime,
-		})
+		explanations := i.explanationsFor(*state, pending[key.String()], referenceTime)
+		pool := make([]*scheduler.JobState, 0, len(explanations)+maxRootCauseClimb)
+		startedLate := false
+		for idx := range explanations {
+			exp := explanations[idx]
+			pool = append(pool, &explanations[idx])
+			if exp.Reason == scheduler.ReasonStartedLate {
+				startedLate = true
+			}
+		}
+		if startedLate {
+			upstreams := i.escalate(ctx, *state, nodeByName[jobName], jobSLAStates, referenceTime)
+			for idx := range upstreams {
+				pool = append(pool, &upstreams[idx])
+			}
+		}
 
-		// STARTED_LATE only says the job missed its own inferred deadline, not why - it may
-		// just be relaying a delay from further up the lineage, so climb toward whichever
-		// upstream actually gated its start.
-		if cause.Reason == scheduler.ReasonStartedLate {
-			cause = i.escalate(ctx, cause, nodeByName[jobName], jobSLAStates, referenceTime)
+		best := pickMaxDelay(pool)
+		if best == nil {
+			unknown := *state
+			unknown.Reason = scheduler.ReasonUnknown
+			best = &unknown
 		}
 
 		// a started job with a known estimate cannot breach without being slow or late,
 		// so landing on UNKNOWN here means the run data disagrees with itself
-		if cause.Reason == scheduler.ReasonUnknown && cause.JobRun.TaskStartTime != nil && cause.EstimatedDuration != nil {
-			i.l.Warn("started root cause classified as unknown", "job", cause.JobName,
-				"task_start", cause.JobRun.TaskStartTime, "task_end", cause.JobRun.TaskEndTime,
-				"estimated_duration", cause.EstimatedDuration, "inferred_sla", cause.InferredSLA)
+		if best.Reason == scheduler.ReasonUnknown && best.JobRun.TaskStartTime != nil && best.EstimatedDuration != nil {
+			i.l.Warn("started root cause classified as unknown", "job", best.JobName,
+				"task_start", best.JobRun.TaskStartTime, "task_end", best.JobRun.TaskEndTime,
+				"estimated_duration", best.EstimatedDuration, "inferred_sla", best.InferredSLA)
 		}
 
-		resolved[state] = &cause
+		resolved[state] = best
 	}
 
 	return substituteStates(rootCauses, resolved), substituteStates(breachFullPaths, resolved)
+}
+
+func (i *Identifier) explanationsFor(state scheduler.JobState, pending []string, referenceTime time.Time) []scheduler.JobState {
+	matches := classifyAll(i.detectors, Candidate{
+		State:                    &state,
+		PendingSensors:           pending,
+		ReferenceTime:            referenceTime,
+		ThirdPartyChargeHourUTC:  i.thirdPartyChargeHour,
+		ThirdPartyDelayThreshold: i.thirdPartyDelayThreshold,
+	})
+	if len(matches) == 0 {
+		state.Reason = scheduler.ReasonUnknown
+		return []scheduler.JobState{i.annotateInducedDelay(state, referenceTime)}
+	}
+	out := make([]scheduler.JobState, 0, len(matches))
+	for _, match := range matches {
+		cause := state
+		cause.Reason = match.Reason
+		cause.Evidence = match.Evidence
+		cause = attributeThirdPartyIdentity(cause)
+		out = append(out, i.annotateInducedDelay(cause, referenceTime))
+	}
+	return out
 }
 
 // substituteStates rebuilds paths with every state that has a resolved counterpart swapped for
@@ -173,24 +234,23 @@ func substituteStates(paths [][]*scheduler.JobState, resolved map[*scheduler.Job
 	return out
 }
 
-// escalate climbs from a STARTED_LATE root cause toward the direct upstream that finished
-// last (the one most likely to have gated this job's start), reclassifying at each hop using
-// that upstream's own inferred SLA. It stops the moment a hop is clean (on time) or maxRootCauseClimb
-// runs out, and returns the blamed state - the last upstream it blamed, or state itself if no
-// upstream is to blame.
-func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, node *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) scheduler.JobState {
+// escalate climbs from a STARTED_LATE job toward the gating upstream, scoring every matching
+// reason on each hop. It returns all abnormal explanations found on the climb (not only the
+// first) so the caller can pick the max induced delay.
+func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, node *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) []scheduler.JobState {
 	visited := map[scheduler.JobName]bool{state.JobName: true}
 	current := node
-	blamed := state
+	level := state.RelativeLevel
+	found := make([]scheduler.JobState, 0, maxRootCauseClimb)
 
 	for depth := 0; depth < maxRootCauseClimb; depth++ {
 		upstream, run := gatingUpstream(current, visited)
 		if upstream == nil || run == nil {
-			return blamed
+			return found
 		}
 		slaState := jobSLAStates[upstream.JobName]
 		if slaState == nil {
-			return blamed
+			return found
 		}
 		visited[upstream.JobName] = true
 
@@ -199,36 +259,36 @@ func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, nod
 			JobName:       upstream.JobName,
 			JobRun:        *run,
 			Tenant:        upstream.Tenant,
-			RelativeLevel: blamed.RelativeLevel + 1,
+			RelativeLevel: level + 1,
 			Status:        scheduler.SLABreachCauseRunningLate,
 		}
 		if run.TaskStartTime == nil {
 			candidateState.Status = scheduler.SLABreachCauseNotStarted
 		}
 
-		reason, evidence := classify(i.detectors, Candidate{
-			State:          &candidateState,
-			PendingSensors: i.pendingSensorsFor(ctx, upstream.JobName, upstream.Tenant, run.ScheduledAt, run.TaskStartTime),
-			ReferenceTime:  referenceTime,
-		})
+		hop := i.explanationsFor(candidateState,
+			i.pendingSensorsFor(ctx, upstream.JobName, upstream.Tenant, run.ScheduledAt, run.TaskStartTime),
+			referenceTime)
 
-		// clean (or undetermined) hop: this upstream isn't to blame, so stop climbing and
-		// keep whichever state is blamed so far
-		if reason == scheduler.ReasonUnknown {
-			return blamed
+		keepClimbing := false
+		abnormal := false
+		for _, exp := range hop {
+			if exp.Reason == scheduler.ReasonUnknown {
+				continue
+			}
+			abnormal = true
+			found = append(found, exp)
+			if exp.Reason == scheduler.ReasonStartedLate {
+				keepClimbing = true
+				level = exp.RelativeLevel
+			}
 		}
-
-		candidateState.Reason = reason
-		candidateState.Evidence = evidence
-		blamed = candidateState
-
-		if reason != scheduler.ReasonStartedLate {
-			return blamed // definitive cause found (RUNNING_LONG / THIRD_PARTY_DELAY)
+		if !abnormal || !keepClimbing {
+			return found
 		}
-
 		current = upstream
 	}
-	return blamed
+	return found
 }
 
 // gatingUpstream returns the direct upstream of node most likely to have determined when node

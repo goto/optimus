@@ -91,8 +91,15 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 		durationEstimator:    durationEstimator,
 		jobDetailsGetter:     jobDetailsGetter,
 		tenantGetter:         tenantGetter,
-		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter, pendingSensorGetter, thirdPartyTypes),
+		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter, pendingSensorGetter, thirdPartyTypes, identifierConfig(config)),
 		potentialSLANotifier: potentialSLANotifier,
+	}
+}
+
+func identifierConfig(cfg config.PotentialSLABreachConfig) rootcause.IdentifierConfig {
+	return rootcause.IdentifierConfig{
+		ThirdPartyChargeHourUTC:         cfg.ThirdPartyChargeHourUTC,
+		ThirdPartyDelayThresholdSeconds: cfg.ThirdPartyDelayThresholdSeconds,
 	}
 }
 

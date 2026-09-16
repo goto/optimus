@@ -72,6 +72,11 @@ alerting:
   potential_sla_breach_config:
     damper_coeff: 1.0
     enable_persistent_logging: false
+    # sensor wait before this UTC hour is not charged as third-party induced delay.
+    # default 0 (midnight UTC); 01:00 Jakarta is 18
+    third_party_charge_hour_utc: 0
+    # wait_dex is typically a seconds-long API check; only induced delay above this is THIRD_PARTY_DELAY
+    third_party_delay_threshold_seconds: 0
     duration_estimator_config:
       last_n_runs: 7
       percentile: 95

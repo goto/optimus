@@ -81,6 +81,28 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, "dex", evidence.SourceType)
 	})
 
+	t.Run("a finished third-party wait under the delay threshold is not THIRD_PARTY_DELAY", func(t *testing.T) {
+		late := state(at(5, 40), dur(40*time.Minute), at(6, 0))
+		late.JobRun.SensorName = strPtr("wait_dex_orders")
+		late.JobRun.WaitStartTime = at(4, 30)
+		late.JobRun.WaitEndTime = at(5, 40)
+
+		reason, _ := detect(rootcause.Candidate{State: late, ReferenceTime: ref, ThirdPartyDelayThreshold: 2 * time.Hour})
+
+		assert.Equal(t, scheduler.ReasonStartedLate, reason)
+	})
+
+	t.Run("an overrunning wait beats RUNNING_LONG on the same run", func(t *testing.T) {
+		late := state(at(5, 0), dur(30*time.Minute), at(5, 45))
+		late.JobRun.SensorName = strPtr("wait_dex_orders")
+		late.JobRun.WaitStartTime = at(4, 0)
+		late.JobRun.WaitEndTime = at(5, 0)
+
+		reason, _ := detect(rootcause.Candidate{State: late, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonThirdPartyDelay, reason)
+	})
+
 	t.Run("a run that finished late but ran normally is STARTED_LATE, not RUNNING_LONG", func(t *testing.T) {
 		// started 05:40, ran its usual 10m, done 05:50, deadline was 05:45.
 		// evaluated at 06:00 -- elapsed must be the 10m it ran, not the 20m since it began
@@ -141,6 +163,20 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, scheduler.ReasonThirdPartyDelay, reason)
 		assert.Equal(t, []string{"wait_dex_p_gopay_id_raw.gpppo.order_final_log"}, evidence.BlockedOnSensors)
 		assert.Equal(t, "dex", evidence.SourceType)
+	})
+
+	t.Run("pending third-party wait under the delay threshold is not THIRD_PARTY_DELAY", func(t *testing.T) {
+		blocked := state(nil, dur(30*time.Minute), at(6, 0))
+		blocked.JobRun.WaitStartTime = at(5, 59)
+
+		reason, _ := detect(rootcause.Candidate{
+			State:                    blocked,
+			PendingSensors:           []string{"wait_dex_orders"},
+			ReferenceTime:            ref,
+			ThirdPartyDelayThreshold: 2 * time.Minute,
+		})
+
+		assert.Equal(t, scheduler.ReasonUnknown, reason)
 	})
 
 	t.Run("no configured resolvers means third-party delay never fires", func(t *testing.T) {

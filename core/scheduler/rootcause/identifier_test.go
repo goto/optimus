@@ -59,7 +59,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		if pendingSensors != nil {
 			sensorGetter = fakePendingSensorGetter{byKey: pendingSensors}
 		}
-		return rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, sensorGetter, []string{"dex"})
+		return rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, sensorGetter, []string{"dex"}, rootcause.IdentifierConfig{})
 	}
 
 	buildLineage := func(upstreamRun *scheduler.JobRunSummary, targetRun *scheduler.JobRunSummary) *scheduler.JobLineageSummary {
@@ -132,6 +132,32 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		assert.Equal(t, scheduler.ReasonStartedLate, cause.Reason)
 	})
 
+	t.Run("started late and running long on the same leaf keeps the larger delay", func(t *testing.T) {
+		// job-A started 15m after its safe start (10:20) and has already overrun its 10m
+		// estimate by 8m at 10:40. job-B finished by 10:20 so it is not an SLA leaf, but
+		// escalate still scores it as RUNNING_LONG (15m overrun vs 5m estimate) which beats
+		// both of job-A's own delays.
+		upstreamRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(0),
+			TaskEndTime:   at(20),
+			JobEndTime:    at(20),
+		}
+		targetRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(22),
+		}
+		lineage := buildLineage(upstreamRun, targetRun)
+
+		causes, _ := newIdentifier(nil).Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(40*time.Minute))
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-B"]
+		assert.True(t, ok, "max delay should be job-B's overrun, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonRunningLong, cause.Reason)
+		assert.Equal(t, 15*time.Minute, cause.Evidence.InducedDelay)
+	})
+
 	t.Run("upstream blocked on a configured third-party sensor escalates identity to it", func(t *testing.T) {
 		// job-B has not started at all, and is blocked on a pending dex sensor.
 		upstreamRun := &scheduler.JobRunSummary{ScheduledAt: scheduledAt}
@@ -147,10 +173,91 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
-		cause, ok := causes["job-B"]
-		assert.True(t, ok, "root cause should have escalated to job-B, got: %+v", causes)
+		cause, ok := causes["wait_dex_some-topic"]
+		assert.True(t, ok, "root cause identity should be the dex sensor, got: %+v", causes)
 		assert.Equal(t, scheduler.ReasonThirdPartyDelay, cause.Reason)
+		assert.Equal(t, scheduler.JobName("wait_dex_some-topic"), cause.JobName)
+		assert.Equal(t, scheduler.JobName("job-B"), cause.JobRun.JobName)
 		assert.Equal(t, []string{"wait_dex_some-topic"}, cause.Evidence.BlockedOnSensors)
 		assert.Equal(t, "dex", cause.Evidence.SourceType)
+	})
+
+	t.Run("upstream wait above the delay threshold is attributed to the sensor", func(t *testing.T) {
+		sensor := "wait_dex_orders"
+		upstreamRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			SensorName:    &sensor,
+			WaitStartTime: at(0),
+			WaitEndTime:   at(20),
+			TaskStartTime: at(20),
+			TaskEndTime:   at(25),
+			JobEndTime:    at(25),
+		}
+		targetRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(26),
+		}
+		lineage := buildLineage(upstreamRun, targetRun)
+		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes[scheduler.JobName(sensor)]
+		assert.True(t, ok, "root cause identity should be the dex sensor, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonThirdPartyDelay, cause.Reason)
+	})
+
+	t.Run("max induced delay wins when two independent leaves exist", func(t *testing.T) {
+		// job-B overran its estimate by 12m; job-C is still waiting on DEX since 10:00.
+		// At 10:32 the third-party wait (32m after 10:00, chargeable from 00:00 UTC) beats B.
+		runningLong := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(0),
+			TaskEndTime:   at(25),
+			JobEndTime:    at(25),
+		}
+		blocked := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			WaitStartTime: at(0),
+		}
+		targetRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(22),
+		}
+		jobC := &scheduler.JobLineageSummary{
+			JobName:   "job-C",
+			IsEnabled: true,
+			Tenant:    tnnt,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": blocked},
+		}
+		jobB := &scheduler.JobLineageSummary{
+			JobName:   "job-B",
+			IsEnabled: true,
+			Tenant:    tnnt,
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": runningLong},
+		}
+		lineage := &scheduler.JobLineageSummary{
+			JobName:   "job-A",
+			IsEnabled: true,
+			Tenant:    tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{jobB, jobC},
+			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": targetRun},
+		}
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(10 * time.Minute),
+			"job-B": dur(5 * time.Minute),
+			"job-C": dur(5 * time.Minute),
+		}
+		key := rootcause.JobRunKey{Project: tnnt.ProjectName(), JobName: "job-C", ScheduledAt: scheduledAt}
+		identifier := newIdentifier(map[string][]string{key.String(): {"wait_dex_orders"}})
+
+		causes, _ := identifier.Identify(context.Background(), lineage, durations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["wait_dex_orders"]
+		assert.True(t, ok, "max-delay cause should be the dex sensor, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonThirdPartyDelay, cause.Reason)
+		assert.Greater(t, cause.Evidence.InducedDelay, 12*time.Minute)
 	})
 }

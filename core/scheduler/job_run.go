@@ -203,6 +203,9 @@ type RootCauseEvidence struct {
 	BlockedOnSensors  []string
 	// SourceType is the upstream_resolvers type behind a THIRD_PARTY_DELAY, e.g. "dex".
 	SourceType string
+	// InducedDelay is how much this cause overran its baseline (historical duration,
+	// latest safe start, or third-party chargeable wait). Used to pick the max-delay cause.
+	InducedDelay time.Duration
 }
 
 type JobState struct {

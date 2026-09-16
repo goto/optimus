@@ -68,6 +68,8 @@ alerting:
     third_party_delay_start_hour_utc: 0
     # wait_dex is typically a seconds-long API check; only induced delay above this is THIRD_PARTY_DELAY
     third_party_delay_threshold_seconds: 0
+    # chosen (max-delay) cause below this stays UNKNOWN instead of RUNNING_LONG / STARTED_LATE / THIRD_PARTY_DELAY
+    min_root_cause_delay_seconds: 0
   # estimator used for the "confirmed" SLA breach alert
   auto_sla_breach_config:
     last_n_runs: 7

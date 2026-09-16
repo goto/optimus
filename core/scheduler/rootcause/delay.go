@@ -134,3 +134,14 @@ func pickMaxDelayCause(causes map[scheduler.JobName]*scheduler.JobState) *schedu
 	}
 	return pickMaxDelay(pool)
 }
+
+// demoteBelowMinRootCauseDelay keeps the cause identity and evidence but drops the
+// classified reason when induced delay is below the configured floor.
+func demoteBelowMinRootCauseDelay(cause *scheduler.JobState, minDelay time.Duration) *scheduler.JobState {
+	if cause == nil || minDelay <= 0 || cause.Evidence.InducedDelay >= minDelay {
+		return cause
+	}
+	demoted := *cause
+	demoted.Reason = scheduler.ReasonUnknown
+	return &demoted
+}

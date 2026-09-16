@@ -260,4 +260,56 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		assert.Equal(t, scheduler.ReasonThirdPartyDelay, cause.Reason)
 		assert.Greater(t, cause.Evidence.InducedDelay, 12*time.Minute)
 	})
+
+	t.Run("max delay below min_root_cause_delay keeps unknown reason", func(t *testing.T) {
+		// job-B overran its 5m estimate by 12m; 12m is below a 13m floor.
+		upstreamRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(0),
+			TaskEndTime:   at(17),
+			JobEndTime:    at(17),
+		}
+		targetRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(22),
+		}
+		lineage := buildLineage(upstreamRun, targetRun)
+		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{
+			MinRootCauseDelaySeconds: 13 * 60,
+		})
+
+		causes, paths := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-B"]
+		assert.True(t, ok, "root cause identity should stay job-B, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonUnknown, cause.Reason)
+		assert.Equal(t, 12*time.Minute, cause.Evidence.InducedDelay)
+		assert.Equal(t, scheduler.ReasonUnknown, paths["job-B"][len(paths["job-B"])-1].Reason)
+	})
+
+	t.Run("max delay at min_root_cause_delay keeps classified reason", func(t *testing.T) {
+		upstreamRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(0),
+			TaskEndTime:   at(17),
+			JobEndTime:    at(17),
+		}
+		targetRun := &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(22),
+		}
+		lineage := buildLineage(upstreamRun, targetRun)
+		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{
+			MinRootCauseDelaySeconds: 12 * 60,
+		})
+
+		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-B"]
+		assert.True(t, ok, "root cause identity should stay job-B, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonRunningLong, cause.Reason)
+		assert.Equal(t, 12*time.Minute, cause.Evidence.InducedDelay)
+	})
 }

@@ -84,3 +84,30 @@ func TestAttributeThirdPartyIdentity(t *testing.T) {
 	assert.Equal(t, scheduler.JobName("wait_dex_orders"), got.JobName)
 	assert.Equal(t, scheduler.JobName("job-B"), got.JobRun.JobName)
 }
+
+func TestDemoteBelowMinRootCauseDelay(t *testing.T) {
+	cause := &scheduler.JobState{
+		JobName:  "job-B",
+		Reason:   scheduler.ReasonRunningLong,
+		Evidence: scheduler.RootCauseEvidence{InducedDelay: 12 * time.Minute},
+	}
+
+	t.Run("below floor drops the classified reason", func(t *testing.T) {
+		got := demoteBelowMinRootCauseDelay(cause, 13*time.Minute)
+		assert.Equal(t, scheduler.ReasonUnknown, got.Reason)
+		assert.Equal(t, scheduler.JobName("job-B"), got.JobName)
+		assert.Equal(t, 12*time.Minute, got.Evidence.InducedDelay)
+		assert.Equal(t, scheduler.ReasonRunningLong, cause.Reason)
+	})
+
+	t.Run("equal to floor keeps the classified reason", func(t *testing.T) {
+		got := demoteBelowMinRootCauseDelay(cause, 12*time.Minute)
+		assert.Same(t, cause, got)
+		assert.Equal(t, scheduler.ReasonRunningLong, got.Reason)
+	})
+
+	t.Run("zero floor is a no-op", func(t *testing.T) {
+		got := demoteBelowMinRootCauseDelay(cause, 0)
+		assert.Same(t, cause, got)
+	})
+}

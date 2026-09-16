@@ -297,6 +297,10 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 	}
 
 	s.expectedServerConfig.Alerting.EventManager.Enabled = true
+	s.expectedServerConfig.Alerting.RootCause = config.RootCauseConfig{
+		ThirdPartyChargeHourUTC:         0,
+		ThirdPartyDelayThresholdSeconds: 0,
+	}
 	s.expectedServerConfig.Alerting.AutoSLABreachConfig = config.DurationEstimatorConfig{
 		LastNRuns:         7,
 		Percentile:        95,
@@ -305,10 +309,8 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		MaxPaddingMinutes: 1000,
 	}
 	s.expectedServerConfig.Alerting.PotentialSLABreachConfig = config.PotentialSLABreachConfig{
-		DamperCoeff:                     1.0,
-		EnablePersistentLogging:         false,
-		ThirdPartyChargeHourUTC:         0,
-		ThirdPartyDelayThresholdSeconds: 0,
+		DamperCoeff:             1.0,
+		EnablePersistentLogging: false,
 		DurationEstimatorConfig: config.DurationEstimatorConfig{
 			LastNRuns:         7,
 			Percentile:        95,

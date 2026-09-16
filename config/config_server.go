@@ -98,19 +98,26 @@ type AlertingConfig struct {
 	DataConsole              string                              `mapstructure:"data_console"`
 	EnableSlack              bool                                `mapstructure:"enable_slack"`
 	EnablePagerDuty          bool                                `mapstructure:"enable_pager_duty"`
+	RootCause                RootCauseConfig                     `mapstructure:"root_cause"`
 	AutoSLABreachConfig      DurationEstimatorConfig             `mapstructure:"auto_sla_breach_config"`
 	PotentialSLABreachConfig PotentialSLABreachConfig            `mapstructure:"potential_sla_breach_config"`
 	DeduplicationConfig      map[string]AlertDeduplicationConfig `mapstructure:"deduplication"`
+}
+
+// RootCauseConfig tunes how late jobs are classified (RUNNING_LONG, STARTED_LATE,
+// THIRD_PARTY_DELAY). Shared by any caller of root-cause identification, not only
+// potential-SLA alerting.
+type RootCauseConfig struct {
+	// ThirdPartyChargeHourUTC is the UTC hour (0-23) before which sensor wait is not counted as induced delay.
+	ThirdPartyChargeHourUTC int `mapstructure:"third_party_charge_hour_utc" default:"0"`
+	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
+	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"0"`
 }
 
 type PotentialSLABreachConfig struct {
 	DamperCoeff             float64                 `mapstructure:"damper_coeff" default:"1.0"`
 	EnablePersistentLogging bool                    `mapstructure:"enable_persistent_logging" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
-	// ThirdPartyChargeHourUTC is the UTC hour (0-23) before which sensor wait is not counted as induced delay.
-	ThirdPartyChargeHourUTC int `mapstructure:"third_party_charge_hour_utc" default:"0"`
-	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
-	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"0"`
 }
 
 type DurationEstimatorConfig struct {

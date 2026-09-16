@@ -43,21 +43,21 @@ type Identifier struct {
 	scheduledChangeGetter    ScheduledChangeGetter
 	pendingSensorGetter      PendingSensorGetter
 	detectors                []ReasonDetector
-	thirdPartyChargeHour     int
+	thirdPartyDelayStartHour int
 	thirdPartyDelayThreshold time.Duration
 }
 
 // IdentifierConfig tunes delay scoring.
 type IdentifierConfig struct {
-	ThirdPartyChargeHourUTC         int
+	ThirdPartyDelayStartHourUTC     int
 	ThirdPartyDelayThresholdSeconds int
 }
 
-func (c IdentifierConfig) chargeHourUTC() int {
-	if c.ThirdPartyChargeHourUTC < 0 || c.ThirdPartyChargeHourUTC > 23 {
-		return defaultThirdPartyChargeHour
+func (c IdentifierConfig) delayStartHourUTC() int {
+	if c.ThirdPartyDelayStartHourUTC < 0 || c.ThirdPartyDelayStartHourUTC > 23 {
+		return defaultThirdPartyDelayStartHour
 	}
-	return c.ThirdPartyChargeHourUTC
+	return c.ThirdPartyDelayStartHourUTC
 }
 
 func (c IdentifierConfig) delayThreshold() time.Duration {
@@ -78,7 +78,7 @@ func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pe
 		scheduledChangeGetter:    scheduledChangeGetter,
 		pendingSensorGetter:      pendingSensorGetter,
 		detectors:                detectors,
-		thirdPartyChargeHour:     cfg.chargeHourUTC(),
+		thirdPartyDelayStartHour: cfg.delayStartHourUTC(),
 		thirdPartyDelayThreshold: cfg.delayThreshold(),
 	}
 }
@@ -195,11 +195,11 @@ func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [
 
 func (i *Identifier) explanationsFor(state scheduler.JobState, pending []string, referenceTime time.Time) []scheduler.JobState {
 	matches := classifyAll(i.detectors, Candidate{
-		State:                    &state,
-		PendingSensors:           pending,
-		ReferenceTime:            referenceTime,
-		ThirdPartyChargeHourUTC:  i.thirdPartyChargeHour,
-		ThirdPartyDelayThreshold: i.thirdPartyDelayThreshold,
+		State:                       &state,
+		PendingSensors:              pending,
+		ReferenceTime:               referenceTime,
+		ThirdPartyDelayStartHourUTC: i.thirdPartyDelayStartHour,
+		ThirdPartyDelayThreshold:    i.thirdPartyDelayThreshold,
 	})
 	if len(matches) == 0 {
 		state.Reason = scheduler.ReasonUnknown

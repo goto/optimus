@@ -6,16 +6,16 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 )
 
-const defaultThirdPartyChargeHour = 0
+const defaultThirdPartyDelayStartHour = 0
 
-func inducedDelay(state scheduler.JobState, referenceTime time.Time, chargeHourUTC int) time.Duration {
+func inducedDelay(state scheduler.JobState, referenceTime time.Time, delayStartHourUTC int) time.Duration {
 	switch state.Reason {
 	case scheduler.ReasonRunningLong:
 		return runningLongDelay(state, referenceTime)
 	case scheduler.ReasonStartedLate:
 		return startedLateDelay(state, referenceTime)
 	case scheduler.ReasonThirdPartyDelay:
-		return thirdPartyInducedDelay(state, referenceTime, chargeHourUTC)
+		return thirdPartyInducedDelay(state, referenceTime, delayStartHourUTC)
 	default:
 		return 0
 	}
@@ -52,22 +52,22 @@ func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 	return start.Sub(safeStart)
 }
 
-// thirdPartyInducedDelay is sensor completion (or now) minus max(sensor start, charge hour
+// thirdPartyInducedDelay is sensor completion (or now) minus max(sensor start, delay-start hour
 // on the completion calendar day in UTC). Wait before that UTC hour is not treated as impact.
-func thirdPartyInducedDelay(state scheduler.JobState, referenceTime time.Time, chargeHourUTC int) time.Duration {
+func thirdPartyInducedDelay(state scheduler.JobState, referenceTime time.Time, delayStartHourUTC int) time.Duration {
 	end := referenceTime
 	if state.JobRun.WaitEndTime != nil {
 		end = *state.JobRun.WaitEndTime
 	}
-	chargeFrom := chargeableWaitStartUTC(end, chargeHourUTC)
-	start := chargeFrom
+	delayFrom := delayStartUTC(end, delayStartHourUTC)
+	start := delayFrom
 	if state.JobRun.WaitStartTime != nil {
 		start = *state.JobRun.WaitStartTime
 	} else if !state.JobRun.ScheduledAt.IsZero() {
 		start = state.JobRun.ScheduledAt
 	}
-	if chargeFrom.After(start) {
-		start = chargeFrom
+	if delayFrom.After(start) {
+		start = delayFrom
 	}
 	if !end.After(start) {
 		return 0
@@ -75,23 +75,23 @@ func thirdPartyInducedDelay(state scheduler.JobState, referenceTime time.Time, c
 	return end.Sub(start)
 }
 
-func thirdPartyDelayExceedsThreshold(state scheduler.JobState, referenceTime time.Time, chargeHourUTC int, threshold time.Duration) bool {
+func thirdPartyDelayExceedsThreshold(state scheduler.JobState, referenceTime time.Time, delayStartHourUTC int, threshold time.Duration) bool {
 	if threshold < 0 {
 		threshold = 0
 	}
-	return thirdPartyInducedDelay(state, referenceTime, chargeHourUTC) > threshold
+	return thirdPartyInducedDelay(state, referenceTime, delayStartHourUTC) > threshold
 }
 
-func chargeableWaitStartUTC(at time.Time, hour int) time.Time {
+func delayStartUTC(at time.Time, hour int) time.Time {
 	if hour < 0 || hour > 23 {
-		hour = defaultThirdPartyChargeHour
+		hour = defaultThirdPartyDelayStartHour
 	}
 	utc := at.UTC()
 	return time.Date(utc.Year(), utc.Month(), utc.Day(), hour, 0, 0, 0, time.UTC)
 }
 
 func (i *Identifier) annotateInducedDelay(state scheduler.JobState, referenceTime time.Time) scheduler.JobState {
-	state.Evidence.InducedDelay = inducedDelay(state, referenceTime, i.thirdPartyChargeHour)
+	state.Evidence.InducedDelay = inducedDelay(state, referenceTime, i.thirdPartyDelayStartHour)
 	return state
 }
 
@@ -122,9 +122,6 @@ func pickMaxDelay(causes []*scheduler.JobState) *scheduler.JobState {
 		if cause.Evidence.InducedDelay > chosen.Evidence.InducedDelay {
 			chosen = cause
 			continue
-		}
-		if cause.Evidence.InducedDelay == chosen.Evidence.InducedDelay && cause.JobName.String() < chosen.JobName.String() {
-			chosen = cause
 		}
 	}
 	return chosen

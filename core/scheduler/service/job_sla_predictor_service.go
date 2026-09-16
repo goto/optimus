@@ -448,12 +448,25 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 		if err := json.Unmarshal(rawLineage, &lineages); err != nil {
 			return err
 		}
-		err = s.repo.StorePredictedSLABreach(ctx, jobTarget.JobName, cause.JobName, slaTarget, scheduledAt, string(cause.Status), reqConfig.ReferenceTime, config, lineages)
+		err = s.repo.StorePredictedSLABreach(ctx, jobTarget.JobName, cause.JobName, slaTarget, scheduledAt, storedCause(cause), reqConfig.ReferenceTime, config, lineages)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func storedCause(cause *scheduler.JobState) string {
+	if cause == nil {
+		return ""
+	}
+	if cause.Reason == "" {
+		return string(cause.Status)
+	}
+	if cause.Status == "" {
+		return string(cause.Reason)
+	}
+	return string(cause.Status) + "/" + string(cause.Reason)
 }
 
 // sendBreachAlerts Alerts go to the team owning the at-risk SLA job, not the team owning the root cause:

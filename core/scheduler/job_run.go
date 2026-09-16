@@ -149,14 +149,17 @@ type UpstreamAttrs struct {
 // it threatens for one impacted team.
 type PotentialSLABreachAlert struct {
 	Team    string
-	Project string
+	Project string // impacted SLA job's project
 
 	RootCauseJob         string
-	RootCauseScheduledAt time.Time
-	Reason               RootCauseReason
-	Evidence             RootCauseEvidence
-	RelativeLevel        int
-	Status               SLABreachCause
+	RootCauseProject     string // cause tenant; used for the console link
+	RootCauseScheduledAt *time.Time
+	// ConsoleJob is the Optimus job to open: the waiter for THIRD_PARTY_DELAY, else RootCauseJob.
+	ConsoleJob    string
+	Reason        RootCauseReason
+	Evidence      RootCauseEvidence
+	RelativeLevel int
+	Status        SLABreachCause
 
 	Severity     string
 	ImpactedJobs []string
@@ -238,9 +241,14 @@ func NewBreachAlertAggregator() *BreachAlertAggregator {
 
 // Add records that rootCause threatens impactedJob for team. Repeated calls for the
 // same key append the job rather than producing a second alert.
+// THIRD_PARTY_DELAY drops scheduled_at from the key so every waiter on the same
+// sensor collapses to one incident.
 func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobState, project, severity string) {
-	key := team + "\x00" + rootCause.JobName.String() + "\x00" +
-		rootCause.JobRun.ScheduledAt.UTC().Format(time.RFC3339) + "\x00" + string(rootCause.Reason)
+	scheduledKey := ""
+	if t := alertScheduledAt(rootCause); t != nil {
+		scheduledKey = t.UTC().Format(time.RFC3339)
+	}
+	key := team + "\x00" + rootCause.JobName.String() + "\x00" + scheduledKey + "\x00" + string(rootCause.Reason)
 
 	alert, ok := a.alerts[key]
 	if !ok {
@@ -248,7 +256,9 @@ func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobStat
 			Team:                 team,
 			Project:              project,
 			RootCauseJob:         rootCause.JobName.String(),
-			RootCauseScheduledAt: rootCause.JobRun.ScheduledAt,
+			RootCauseProject:     rootCause.Tenant.ProjectName().String(),
+			RootCauseScheduledAt: alertScheduledAt(rootCause),
+			ConsoleJob:           consoleJobFor(rootCause),
 			Reason:               rootCause.Reason,
 			Evidence:             rootCause.Evidence,
 			RelativeLevel:        rootCause.RelativeLevel,
@@ -257,10 +267,36 @@ func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobStat
 		}
 		a.alerts[key] = alert
 		a.order = append(a.order, key)
+	} else if rootCause.Evidence.InducedDelay > alert.Evidence.InducedDelay {
+		alert.Evidence = rootCause.Evidence
+		alert.RelativeLevel = rootCause.RelativeLevel
+		alert.Status = rootCause.Status
+		alert.ConsoleJob = consoleJobFor(rootCause)
+		alert.RootCauseProject = rootCause.Tenant.ProjectName().String()
 	}
 	if !slices.Contains(alert.ImpactedJobs, impactedJob) {
 		alert.ImpactedJobs = append(alert.ImpactedJobs, impactedJob)
 	}
+}
+
+// alertScheduledAt is nil for THIRD_PARTY_DELAY: the waiter's schedule is not
+// the sensor's identity, and including it would split one DEX delay into many alerts.
+func alertScheduledAt(rootCause *JobState) *time.Time {
+	if rootCause == nil || rootCause.Reason == ReasonThirdPartyDelay {
+		return nil
+	}
+	if rootCause.JobRun.ScheduledAt.IsZero() {
+		return nil
+	}
+	t := rootCause.JobRun.ScheduledAt
+	return &t
+}
+
+func consoleJobFor(rootCause *JobState) string {
+	if rootCause.Reason == ReasonThirdPartyDelay && rootCause.JobRun.JobName != "" {
+		return rootCause.JobRun.JobName.String()
+	}
+	return rootCause.JobName.String()
 }
 
 func (a *BreachAlertAggregator) Build() []*PotentialSLABreachAlert {

@@ -81,4 +81,22 @@ func TestBreachAlertAggregator(t *testing.T) {
 
 		assert.Len(t, agg.Build(), 2)
 	})
+
+	t.Run("third-party waiters on the same sensor collapse regardless of scheduled_at", func(t *testing.T) {
+		agg := scheduler.NewBreachAlertAggregator()
+		dexA := cause("wait_dex_orders", scheduler.ReasonThirdPartyDelay, scheduledAt)
+		dexA.JobRun.JobName = "stg_orders"
+		dexB := cause("wait_dex_orders", scheduler.ReasonThirdPartyDelay, scheduledAt.Add(2*time.Hour))
+		dexB.JobRun.JobName = "stg_payments"
+
+		agg.Add("dwh-team", "dwh_orders", dexA, "dwh-project", "CRITICAL")
+		agg.Add("dwh-team", "dwh_refunds", dexB, "dwh-project", "CRITICAL")
+
+		alerts := agg.Build()
+		assert.Len(t, alerts, 1)
+		assert.Equal(t, []string{"dwh_orders", "dwh_refunds"}, alerts[0].ImpactedJobs)
+		assert.Equal(t, "wait_dex_orders", alerts[0].RootCauseJob)
+		assert.Nil(t, alerts[0].RootCauseScheduledAt)
+		assert.Equal(t, "stg_orders", alerts[0].ConsoleJob)
+	})
 }

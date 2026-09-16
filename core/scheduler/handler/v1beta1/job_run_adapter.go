@@ -358,7 +358,8 @@ func buildJobFilter(req *pb.JobExpectedCompletionTimeReportRequest) ([]scheduler
 // the response rather than an object of zero timestamps a caller would have to filter.
 func toRootCauseEvidenceProto(evidence scheduler.RootCauseEvidence) *pb.RootCauseEvidence {
 	if evidence.StartedAt == nil && evidence.ExpectedFinishAt == nil &&
-		evidence.LatestSafeStartAt == nil && len(evidence.BlockedOnSensors) == 0 && evidence.SourceType == "" {
+		evidence.LatestSafeStartAt == nil && len(evidence.BlockedOnSensors) == 0 &&
+		evidence.SourceType == "" && evidence.InducedDelay == 0 {
 		return nil
 	}
 
@@ -374,6 +375,9 @@ func toRootCauseEvidenceProto(evidence scheduler.RootCauseEvidence) *pb.RootCaus
 	}
 	if evidence.LatestSafeStartAt != nil {
 		out.LatestSafeStartAt = timestamppb.New(*evidence.LatestSafeStartAt)
+	}
+	if evidence.InducedDelay > 0 {
+		out.InducedDelay = durationpb.New(evidence.InducedDelay)
 	}
 	return out
 }

@@ -99,7 +99,6 @@ alerting:
     potential_sla_breach:
       dedup_keys:
       - data.root_cause_job
-      - data.root_cause_scheduled_at
       - data.reason
       - labels.team
       window_minutes: 60

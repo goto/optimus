@@ -3287,6 +3287,9 @@ type RootCauseEvidence struct {
 	BlockedOnSensors []string `protobuf:"bytes,4,rep,name=blocked_on_sensors,json=blockedOnSensors,proto3" json:"blocked_on_sensors,omitempty"`
 	// The upstream_resolvers type behind a THIRD_PARTY_DELAY, e.g. "dex".
 	SourceType string `protobuf:"bytes,5,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
+	// How far this cause overran its baseline. Set when identification scored
+	// induced delay (RUNNING_LONG, STARTED_LATE, THIRD_PARTY_DELAY).
+	InducedDelay *durationpb.Duration `protobuf:"bytes,6,opt,name=induced_delay,json=inducedDelay,proto3" json:"induced_delay,omitempty"`
 }
 
 func (x *RootCauseEvidence) Reset() {
@@ -3354,6 +3357,13 @@ func (x *RootCauseEvidence) GetSourceType() string {
 		return x.SourceType
 	}
 	return ""
+}
+
+func (x *RootCauseEvidence) GetInducedDelay() *durationpb.Duration {
+	if x != nil {
+		return x.InducedDelay
+	}
+	return nil
 }
 
 type UpstreamJobsStatus struct {
@@ -4653,7 +4663,7 @@ var file_gotocompany_optimus_core_v1beta1_job_run_proto_rawDesc = []byte{
 	0x6f, 0x70, 0x74, 0x69, 0x6d, 0x75, 0x73, 0x2e, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x76, 0x31, 0x62,
 	0x65, 0x74, 0x61, 0x31, 0x2e, 0x52, 0x6f, 0x6f, 0x74, 0x43, 0x61, 0x75, 0x73, 0x65, 0x45, 0x76,
 	0x69, 0x64, 0x65, 0x6e, 0x63, 0x65, 0x52, 0x08, 0x65, 0x76, 0x69, 0x64, 0x65, 0x6e, 0x63, 0x65,
-	0x22, 0xb4, 0x02, 0x0a, 0x11, 0x52, 0x6f, 0x6f, 0x74, 0x43, 0x61, 0x75, 0x73, 0x65, 0x45, 0x76,
+	0x22, 0xf4, 0x02, 0x0a, 0x11, 0x52, 0x6f, 0x6f, 0x74, 0x43, 0x61, 0x75, 0x73, 0x65, 0x45, 0x76,
 	0x69, 0x64, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x39, 0x0a, 0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65,
 	0x64, 0x5f, 0x61, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f,
 	0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d,
@@ -4672,7 +4682,11 @@ var file_gotocompany_optimus_core_v1beta1_job_run_proto_rawDesc = []byte{
 	0x20, 0x03, 0x28, 0x09, 0x52, 0x10, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x65, 0x64, 0x4f, 0x6e, 0x53,
 	0x65, 0x6e, 0x73, 0x6f, 0x72, 0x73, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65,
 	0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x73, 0x6f, 0x75,
-	0x72, 0x63, 0x65, 0x54, 0x79, 0x70, 0x65, 0x22, 0xc2, 0x01, 0x0a, 0x12, 0x55, 0x70, 0x73, 0x74,
+	0x72, 0x63, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x3e, 0x0a, 0x0d, 0x69, 0x6e, 0x64, 0x75, 0x63,
+	0x65, 0x64, 0x5f, 0x64, 0x65, 0x6c, 0x61, 0x79, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19,
+	0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66,
+	0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x0c, 0x69, 0x6e, 0x64, 0x75, 0x63,
+	0x65, 0x64, 0x44, 0x65, 0x6c, 0x61, 0x79, 0x22, 0xc2, 0x01, 0x0a, 0x12, 0x55, 0x70, 0x73, 0x74,
 	0x72, 0x65, 0x61, 0x6d, 0x4a, 0x6f, 0x62, 0x73, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x54,
 	0x0a, 0x0b, 0x6a, 0x6f, 0x62, 0x73, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20,
 	0x03, 0x28, 0x0b, 0x32, 0x33, 0x2e, 0x67, 0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x6e,
@@ -5209,61 +5223,62 @@ var file_gotocompany_optimus_core_v1beta1_job_run_proto_depIdxs = []int32{
 	67,  // 69: gotocompany.optimus.core.v1beta1.RootCauseEvidence.started_at:type_name -> google.protobuf.Timestamp
 	67,  // 70: gotocompany.optimus.core.v1beta1.RootCauseEvidence.expected_finish_at:type_name -> google.protobuf.Timestamp
 	67,  // 71: gotocompany.optimus.core.v1beta1.RootCauseEvidence.latest_safe_start_at:type_name -> google.protobuf.Timestamp
-	46,  // 72: gotocompany.optimus.core.v1beta1.UpstreamJobsStatus.jobs_status:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobStatus
-	63,  // 73: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest.job_labels:type_name -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest.JobLabelsEntry
-	67,  // 74: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest.reference_time:type_name -> google.protobuf.Timestamp
-	64,  // 75: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.inprogress_jobs:type_name -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.InprogressJobsEntry
-	65,  // 76: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.finished_jobs:type_name -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.FinishedJobsEntry
-	67,  // 77: gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse.scheduled_at:type_name -> google.protobuf.Timestamp
-	67,  // 78: gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse.expected_finish_time:type_name -> google.protobuf.Timestamp
-	67,  // 79: gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse.actual_finish_time:type_name -> google.protobuf.Timestamp
-	66,  // 80: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.job_labels:type_name -> gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.JobLabelsEntry
-	67,  // 81: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.reference_time:type_name -> google.protobuf.Timestamp
-	67,  // 82: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.scheduled_at:type_name -> google.protobuf.Timestamp
-	67,  // 83: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.expected_finish_time:type_name -> google.protobuf.Timestamp
-	67,  // 84: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.actual_finish_time:type_name -> google.protobuf.Timestamp
-	70,  // 85: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.delay:type_name -> google.protobuf.Duration
-	70,  // 86: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.mean_delay:type_name -> google.protobuf.Duration
-	70,  // 87: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.max_delay:type_name -> google.protobuf.Duration
-	67,  // 88: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.max_expected_completion_time:type_name -> google.protobuf.Timestamp
-	67,  // 89: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.max_actual_completion_time:type_name -> google.protobuf.Timestamp
-	54,  // 90: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportResponse.details:type_name -> gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail
-	55,  // 91: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportResponse.summary:type_name -> gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary
-	48,  // 92: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.JobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobsStatus
-	51,  // 93: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.InprogressJobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse
-	51,  // 94: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.FinishedJobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse
-	52,  // 95: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.JobLabelsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.LabelValues
-	15,  // 96: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:input_type -> gotocompany.optimus.core.v1beta1.JobRunInputRequest
-	19,  // 97: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:input_type -> gotocompany.optimus.core.v1beta1.JobRunRequest
-	21,  // 98: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleRequest
-	23,  // 99: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleRequest
-	16,  // 100: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunsRequest
-	7,   // 101: gotocompany.optimus.core.v1beta1.JobRunService.GetThirdPartySensorStatus:input_type -> gotocompany.optimus.core.v1beta1.GetThirdPartySensorRequest
-	13,  // 102: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:input_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventRequest
-	11,  // 103: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:input_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerRequest
-	9,   // 104: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:input_type -> gotocompany.optimus.core.v1beta1.GetIntervalRequest
-	29,  // 105: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryRequest
-	44,  // 106: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:input_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachRequest
-	49,  // 107: gotocompany.optimus.core.v1beta1.JobRunService.GenerateExpectedFinishTime:input_type -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest
-	53,  // 108: gotocompany.optimus.core.v1beta1.JobRunService.JobExpectedCompletionTimeReport:input_type -> gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest
-	27,  // 109: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:output_type -> gotocompany.optimus.core.v1beta1.JobRunInputResponse
-	20,  // 110: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:output_type -> gotocompany.optimus.core.v1beta1.JobRunResponse
-	22,  // 111: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleResponse
-	24,  // 112: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleResponse
-	18,  // 113: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunsResponse
-	8,   // 114: gotocompany.optimus.core.v1beta1.JobRunService.GetThirdPartySensorStatus:output_type -> gotocompany.optimus.core.v1beta1.GetThirdPartySensorResponse
-	14,  // 115: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:output_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventResponse
-	12,  // 116: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:output_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerResponse
-	10,  // 117: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:output_type -> gotocompany.optimus.core.v1beta1.GetIntervalResponse
-	31,  // 118: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryResponse
-	45,  // 119: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:output_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse
-	50,  // 120: gotocompany.optimus.core.v1beta1.JobRunService.GenerateExpectedFinishTime:output_type -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse
-	56,  // 121: gotocompany.optimus.core.v1beta1.JobRunService.JobExpectedCompletionTimeReport:output_type -> gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportResponse
-	109, // [109:122] is the sub-list for method output_type
-	96,  // [96:109] is the sub-list for method input_type
-	96,  // [96:96] is the sub-list for extension type_name
-	96,  // [96:96] is the sub-list for extension extendee
-	0,   // [0:96] is the sub-list for field type_name
+	70,  // 72: gotocompany.optimus.core.v1beta1.RootCauseEvidence.induced_delay:type_name -> google.protobuf.Duration
+	46,  // 73: gotocompany.optimus.core.v1beta1.UpstreamJobsStatus.jobs_status:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobStatus
+	63,  // 74: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest.job_labels:type_name -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest.JobLabelsEntry
+	67,  // 75: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest.reference_time:type_name -> google.protobuf.Timestamp
+	64,  // 76: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.inprogress_jobs:type_name -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.InprogressJobsEntry
+	65,  // 77: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.finished_jobs:type_name -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.FinishedJobsEntry
+	67,  // 78: gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse.scheduled_at:type_name -> google.protobuf.Timestamp
+	67,  // 79: gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse.expected_finish_time:type_name -> google.protobuf.Timestamp
+	67,  // 80: gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse.actual_finish_time:type_name -> google.protobuf.Timestamp
+	66,  // 81: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.job_labels:type_name -> gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.JobLabelsEntry
+	67,  // 82: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.reference_time:type_name -> google.protobuf.Timestamp
+	67,  // 83: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.scheduled_at:type_name -> google.protobuf.Timestamp
+	67,  // 84: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.expected_finish_time:type_name -> google.protobuf.Timestamp
+	67,  // 85: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.actual_finish_time:type_name -> google.protobuf.Timestamp
+	70,  // 86: gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail.delay:type_name -> google.protobuf.Duration
+	70,  // 87: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.mean_delay:type_name -> google.protobuf.Duration
+	70,  // 88: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.max_delay:type_name -> google.protobuf.Duration
+	67,  // 89: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.max_expected_completion_time:type_name -> google.protobuf.Timestamp
+	67,  // 90: gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary.max_actual_completion_time:type_name -> google.protobuf.Timestamp
+	54,  // 91: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportResponse.details:type_name -> gotocompany.optimus.core.v1beta1.JobCompletionTimeDetail
+	55,  // 92: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportResponse.summary:type_name -> gotocompany.optimus.core.v1beta1.JobCompletionTimeSummary
+	48,  // 93: gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse.JobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.UpstreamJobsStatus
+	51,  // 94: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.InprogressJobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse
+	51,  // 95: gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse.FinishedJobsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.FinishTimeDetailResponse
+	52,  // 96: gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest.JobLabelsEntry.value:type_name -> gotocompany.optimus.core.v1beta1.LabelValues
+	15,  // 97: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:input_type -> gotocompany.optimus.core.v1beta1.JobRunInputRequest
+	19,  // 98: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:input_type -> gotocompany.optimus.core.v1beta1.JobRunRequest
+	21,  // 99: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleRequest
+	23,  // 100: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:input_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleRequest
+	16,  // 101: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunsRequest
+	7,   // 102: gotocompany.optimus.core.v1beta1.JobRunService.GetThirdPartySensorStatus:input_type -> gotocompany.optimus.core.v1beta1.GetThirdPartySensorRequest
+	13,  // 103: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:input_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventRequest
+	11,  // 104: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:input_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerRequest
+	9,   // 105: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:input_type -> gotocompany.optimus.core.v1beta1.GetIntervalRequest
+	29,  // 106: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:input_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryRequest
+	44,  // 107: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:input_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachRequest
+	49,  // 108: gotocompany.optimus.core.v1beta1.JobRunService.GenerateExpectedFinishTime:input_type -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeRequest
+	53,  // 109: gotocompany.optimus.core.v1beta1.JobRunService.JobExpectedCompletionTimeReport:input_type -> gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportRequest
+	27,  // 110: gotocompany.optimus.core.v1beta1.JobRunService.JobRunInput:output_type -> gotocompany.optimus.core.v1beta1.JobRunInputResponse
+	20,  // 111: gotocompany.optimus.core.v1beta1.JobRunService.JobRun:output_type -> gotocompany.optimus.core.v1beta1.JobRunResponse
+	22,  // 112: gotocompany.optimus.core.v1beta1.JobRunService.GetSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.GetSchedulerRoleResponse
+	24,  // 113: gotocompany.optimus.core.v1beta1.JobRunService.CreateSchedulerRole:output_type -> gotocompany.optimus.core.v1beta1.CreateSchedulerRoleResponse
+	18,  // 114: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRuns:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunsResponse
+	8,   // 115: gotocompany.optimus.core.v1beta1.JobRunService.GetThirdPartySensorStatus:output_type -> gotocompany.optimus.core.v1beta1.GetThirdPartySensorResponse
+	14,  // 116: gotocompany.optimus.core.v1beta1.JobRunService.RegisterJobEvent:output_type -> gotocompany.optimus.core.v1beta1.RegisterJobEventResponse
+	12,  // 117: gotocompany.optimus.core.v1beta1.JobRunService.UploadToScheduler:output_type -> gotocompany.optimus.core.v1beta1.UploadToSchedulerResponse
+	10,  // 118: gotocompany.optimus.core.v1beta1.JobRunService.GetInterval:output_type -> gotocompany.optimus.core.v1beta1.GetIntervalResponse
+	31,  // 119: gotocompany.optimus.core.v1beta1.JobRunService.GetJobRunLineageSummary:output_type -> gotocompany.optimus.core.v1beta1.GetJobRunLineageSummaryResponse
+	45,  // 120: gotocompany.optimus.core.v1beta1.JobRunService.IdentifyPotentialSLABreach:output_type -> gotocompany.optimus.core.v1beta1.IdentifyPotentialSLABreachResponse
+	50,  // 121: gotocompany.optimus.core.v1beta1.JobRunService.GenerateExpectedFinishTime:output_type -> gotocompany.optimus.core.v1beta1.GenerateExpectedFinishTimeResponse
+	56,  // 122: gotocompany.optimus.core.v1beta1.JobRunService.JobExpectedCompletionTimeReport:output_type -> gotocompany.optimus.core.v1beta1.JobExpectedCompletionTimeReportResponse
+	110, // [110:123] is the sub-list for method output_type
+	97,  // [97:110] is the sub-list for method input_type
+	97,  // [97:97] is the sub-list for extension type_name
+	97,  // [97:97] is the sub-list for extension extendee
+	0,   // [0:97] is the sub-list for field type_name
 }
 
 func init() { file_gotocompany_optimus_core_v1beta1_job_run_proto_init() }

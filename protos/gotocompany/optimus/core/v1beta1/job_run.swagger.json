@@ -1575,6 +1575,10 @@
         "sourceType": {
           "type": "string",
           "description": "The upstream_resolvers type behind a THIRD_PARTY_DELAY, e.g. \"dex\"."
+        },
+        "inducedDelay": {
+          "type": "string",
+          "description": "How far this cause overran its baseline. Set when identification scored\ninduced delay (RUNNING_LONG, STARTED_LATE, THIRD_PARTY_DELAY)."
         }
       }
     },

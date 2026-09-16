@@ -291,22 +291,32 @@ func (a *AlertManager) SendPotentialSLABreach(alert *scheduler.PotentialSLABreac
 	a.relay(a.buildPotentialSLABreachPayload(alert))
 }
 
-// buildPotentialSLABreachPayload flattens one root cause into a payload. The keys
-// deduplication reads -- root_cause_job, root_cause_scheduled_at, reason and the team
-// label -- must stay top-level strings, because getDedupValues only resolves those.
+// buildPotentialSLABreachPayload flattens one root cause into a payload. Dedup keys
+// (root_cause_job, reason, team; scheduled_at when set) must stay top-level strings.
 func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.PotentialSLABreachAlert) *AlertPayload {
 	severity := getSeverity(alert.Severity)
 
+	consoleJob := alert.ConsoleJob
+	if consoleJob == "" {
+		consoleJob = alert.RootCauseJob
+	}
+	consoleProject := alert.RootCauseProject
+	if consoleProject == "" {
+		consoleProject = alert.Project
+	}
+
 	data := map[string]interface{}{
-		"team":                    alert.Team,
-		"project":                 alert.Project,
-		"root_cause_job":          alert.RootCauseJob,
-		"root_cause_scheduled_at": alert.RootCauseScheduledAt.UTC().Format(time.RFC3339),
-		"reason":                  string(alert.Reason),
-		"status":                  string(alert.Status),
-		"relative_level":          alert.RelativeLevel,
-		"impacted_jobs":           alert.ImpactedJobs,
-		"console_link":            a.getJobConsoleLink(alert.Project, alert.RootCauseJob),
+		"team":           alert.Team,
+		"project":        alert.Project,
+		"root_cause_job": alert.RootCauseJob,
+		"reason":         string(alert.Reason),
+		"status":         string(alert.Status),
+		"relative_level": alert.RelativeLevel,
+		"impacted_jobs":  alert.ImpactedJobs,
+		"console_link":   a.getJobConsoleLink(consoleProject, consoleJob),
+	}
+	if alert.RootCauseScheduledAt != nil {
+		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
 	}
 	for key, value := range evidenceFields(alert.Evidence) {
 		data[key] = value
@@ -349,6 +359,9 @@ func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{}
 	}
 	if evidence.SourceType != "" {
 		fields["source_type"] = evidence.SourceType
+	}
+	if evidence.InducedDelay > 0 {
+		fields["induced_delay"] = evidence.InducedDelay.String()
 	}
 	return fields
 }

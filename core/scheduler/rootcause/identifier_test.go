@@ -210,7 +210,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 
 	t.Run("max induced delay wins when two independent leaves exist", func(t *testing.T) {
 		// job-B overran its estimate by 12m; job-C is still waiting on DEX since 10:00.
-		// At 10:32 the third-party wait (32m after 10:00, chargeable from 00:00 UTC) beats B.
+		// At 10:32 the third-party wait (32m after 10:00, counting from 00:00 UTC) beats B.
 		runningLong := &scheduler.JobRunSummary{
 			ScheduledAt:   scheduledAt,
 			TaskStartTime: at(0),

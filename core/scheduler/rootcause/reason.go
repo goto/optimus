@@ -13,18 +13,18 @@ func sensorPrefixFor(thirdPartyType string) string {
 
 // Candidate is one root cause job plus the run facts needed to explain it.
 type Candidate struct {
-	State                    *scheduler.JobState
-	PendingSensors           []string
-	ReferenceTime            time.Time
-	ThirdPartyChargeHourUTC  int
-	ThirdPartyDelayThreshold time.Duration
+	State                       *scheduler.JobState
+	PendingSensors              []string
+	ReferenceTime               time.Time
+	ThirdPartyDelayStartHourUTC int
+	ThirdPartyDelayThreshold    time.Duration
 }
 
 func (c Candidate) thirdPartyDelayExceedsThreshold() bool {
 	if c.State == nil {
 		return false
 	}
-	return thirdPartyDelayExceedsThreshold(*c.State, c.ReferenceTime, c.ThirdPartyChargeHourUTC, c.ThirdPartyDelayThreshold)
+	return thirdPartyDelayExceedsThreshold(*c.State, c.ReferenceTime, c.ThirdPartyDelayStartHourUTC, c.ThirdPartyDelayThreshold)
 }
 
 // ReasonDetector is the extension point: reasons are added by appending a detector

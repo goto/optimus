@@ -298,7 +298,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 
 	s.expectedServerConfig.Alerting.EventManager.Enabled = true
 	s.expectedServerConfig.Alerting.RootCause = config.RootCauseConfig{
-		ThirdPartyChargeHourUTC:         0,
+		ThirdPartyDelayStartHourUTC:     0,
 		ThirdPartyDelayThresholdSeconds: 0,
 	}
 	s.expectedServerConfig.Alerting.AutoSLABreachConfig = config.DurationEstimatorConfig{

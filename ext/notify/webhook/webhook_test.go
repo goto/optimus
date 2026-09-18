@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,12 +41,17 @@ func TestWebhook(t *testing.T) {
 			rw.Write(response)
 		})
 
-		var sendErrors []error
+		var (
+			mu         sync.Mutex
+			sendErrors []error
+		)
 		ctx, cancel := context.WithCancel(context.Background())
 		client := webhook.NewNotifier(
 			ctx,
 			time.Millisecond*500,
 			func(err error) {
+				mu.Lock()
+				defer mu.Unlock()
 				sendErrors = append(sendErrors, err)
 			},
 		)
@@ -70,16 +76,25 @@ func TestWebhook(t *testing.T) {
 				},
 				DestinationURN: jobDestinationTableURN,
 			},
-			Route: server.URL,
+			// must match the handler path below, or fireWebhook 404s and this
+			// "successfully" test would actually assert a swallowed failure.
+			Route: server.URL + "/users/webhook_end_point",
 			Headers: map[string]string{
 				"auth": "compiled_headers",
 			},
 		})
 
-		assert.Nil(t, sendErrors)
+		// cancel + Close wait for the worker and error-forwarding goroutines to exit
+		// (via the WaitGroup), which is what actually establishes a happens-before
+		// edge with any sendErrors write below - reading the slice before this
+		// point/without the mutex is what the race detector was flagging.
 		cancel()
 		err := client.Close()
 		assert.Nil(t, err)
+
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Nil(t, sendErrors)
 	})
 	t.Run("should log wehook failure errors", func(t *testing.T) {
 		muxRouter := http.NewServeMux()
@@ -95,12 +110,17 @@ func TestWebhook(t *testing.T) {
 			rw.Write(response)
 		})
 
-		var sendErrors []error
+		var (
+			mu         sync.Mutex
+			sendErrors []error
+		)
 		ctx, cancel := context.WithCancel(context.Background())
 		client := webhook.NewNotifier(
 			ctx,
 			time.Millisecond*500,
 			func(err error) {
+				mu.Lock()
+				defer mu.Unlock()
 				sendErrors = append(sendErrors, err)
 				assert.True(t, true, len(sendErrors) > 0)
 			},

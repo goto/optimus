@@ -208,6 +208,10 @@ func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [
 				"estimated_duration", best.EstimatedDuration, "inferred_sla", best.InferredSLA)
 		}
 
+		// STARTED_LATE surviving escalation means no upstream explains it either; report
+		// UNKNOWN rather than implying we know the cause.
+		best = demoteStartedLateToUnknown(best)
+
 		resolved[state] = best
 	}
 

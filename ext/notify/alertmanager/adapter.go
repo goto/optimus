@@ -296,15 +296,6 @@ func (a *AlertManager) SendPotentialSLABreach(alert *scheduler.PotentialSLABreac
 func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.PotentialSLABreachAlert) *AlertPayload {
 	severity := getSeverity(alert.Severity)
 
-	consoleJob := alert.ConsoleJob
-	if consoleJob == "" {
-		consoleJob = alert.RootCauseJob
-	}
-	consoleProject := alert.RootCauseProject
-	if consoleProject == "" {
-		consoleProject = alert.Project
-	}
-
 	data := map[string]interface{}{
 		"team":                alert.Team,
 		"project":             alert.Project,
@@ -314,7 +305,6 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 		"relative_level":      alert.RelativeLevel,
 		"impacted_jobs":       alert.ImpactedJobs,
 		"impacted_jobs_count": len(alert.ImpactedJobs),
-		"console_link":        a.getJobConsoleLink(consoleProject, consoleJob),
 	}
 	if alert.RootCauseScheduledAt != nil {
 		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
@@ -347,13 +337,13 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{} {
 	fields := map[string]interface{}{}
 	if evidence.StartedAt != nil {
-		fields["started_at"] = evidence.StartedAt.UTC().Format(radarTimeFormat)
+		fields["started_at"] = evidence.StartedAt.UTC().Format(time.RFC3339)
 	}
 	if evidence.ExpectedFinishAt != nil {
-		fields["expected_finish_at"] = evidence.ExpectedFinishAt.UTC().Format(radarTimeFormat)
+		fields["expected_finish_at"] = evidence.ExpectedFinishAt.UTC().Format(time.RFC3339)
 	}
 	if evidence.LatestSafeStartAt != nil {
-		fields["latest_safe_start_at"] = evidence.LatestSafeStartAt.UTC().Format(radarTimeFormat)
+		fields["latest_safe_start_at"] = evidence.LatestSafeStartAt.UTC().Format(time.RFC3339)
 	}
 	if len(evidence.BlockedOnSensors) > 0 {
 		fields["blocked_on_sensors"] = evidence.BlockedOnSensors

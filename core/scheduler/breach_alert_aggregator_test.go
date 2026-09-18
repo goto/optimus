@@ -97,6 +97,5 @@ func TestBreachAlertAggregator(t *testing.T) {
 		assert.Equal(t, []string{"dwh_orders", "dwh_refunds"}, alerts[0].ImpactedJobs)
 		assert.Equal(t, "wait_dex_orders", alerts[0].RootCauseJob)
 		assert.Nil(t, alerts[0].RootCauseScheduledAt)
-		assert.Equal(t, "stg_orders", alerts[0].ConsoleJob)
 	})
 }

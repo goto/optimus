@@ -152,14 +152,11 @@ type PotentialSLABreachAlert struct {
 	Project string // impacted SLA job's project
 
 	RootCauseJob         string
-	RootCauseProject     string // cause tenant; used for the console link
 	RootCauseScheduledAt *time.Time
-	// ConsoleJob is the Optimus job to open: the waiter for THIRD_PARTY_DELAY, else RootCauseJob.
-	ConsoleJob    string
-	Reason        RootCauseReason
-	Evidence      RootCauseEvidence
-	RelativeLevel int
-	Status        SLABreachCause
+	Reason               RootCauseReason
+	Evidence             RootCauseEvidence
+	RelativeLevel        int
+	Status               SLABreachCause
 
 	Severity     string
 	ImpactedJobs []string
@@ -256,9 +253,7 @@ func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobStat
 			Team:                 team,
 			Project:              project,
 			RootCauseJob:         rootCause.JobName.String(),
-			RootCauseProject:     rootCause.Tenant.ProjectName().String(),
 			RootCauseScheduledAt: alertScheduledAt(rootCause),
-			ConsoleJob:           consoleJobFor(rootCause),
 			Reason:               rootCause.Reason,
 			Evidence:             rootCause.Evidence,
 			RelativeLevel:        rootCause.RelativeLevel,
@@ -271,8 +266,6 @@ func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobStat
 		alert.Evidence = rootCause.Evidence
 		alert.RelativeLevel = rootCause.RelativeLevel
 		alert.Status = rootCause.Status
-		alert.ConsoleJob = consoleJobFor(rootCause)
-		alert.RootCauseProject = rootCause.Tenant.ProjectName().String()
 	}
 	if !slices.Contains(alert.ImpactedJobs, impactedJob) {
 		alert.ImpactedJobs = append(alert.ImpactedJobs, impactedJob)
@@ -290,13 +283,6 @@ func alertScheduledAt(rootCause *JobState) *time.Time {
 	}
 	t := rootCause.JobRun.ScheduledAt
 	return &t
-}
-
-func consoleJobFor(rootCause *JobState) string {
-	if rootCause.Reason == ReasonThirdPartyDelay && rootCause.JobRun.JobName != "" {
-		return rootCause.JobRun.JobName.String()
-	}
-	return rootCause.JobName.String()
 }
 
 func (a *BreachAlertAggregator) Build() []*PotentialSLABreachAlert {

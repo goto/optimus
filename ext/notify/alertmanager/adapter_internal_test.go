@@ -23,9 +23,7 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 			Team:                 "dwh-team",
 			Project:              "proj-1",
 			RootCauseJob:         "stg_payments",
-			RootCauseProject:     "proj-1",
 			RootCauseScheduledAt: &scheduledAt,
-			ConsoleJob:           "stg_payments",
 			Reason:               scheduler.ReasonRunningLong,
 			Status:               scheduler.SLABreachCauseRunningLate,
 			Severity:             CriticalSeverity,
@@ -80,8 +78,8 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 			},
 		})
 
-		assert.Equal(t, "2026/09/11 05:30:00", payload.Data["started_at"])
-		assert.Equal(t, "2026/09/11 06:45:00", payload.Data["expected_finish_at"])
+		assert.Equal(t, "2026-09-11T05:30:00Z", payload.Data["started_at"])
+		assert.Equal(t, "2026-09-11T06:45:00Z", payload.Data["expected_finish_at"])
 		assert.Equal(t, (75 * time.Minute).String(), payload.Data["induced_delay"])
 		// unset evidence must be absent rather than a zero timestamp the template would render
 		assert.NotContains(t, payload.Data, "latest_safe_start_at")
@@ -91,12 +89,10 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 
 	t.Run("third party delay links the waiter job and omits scheduled_at", func(t *testing.T) {
 		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
-			Team:             "dwh-team",
-			Project:          "dwh-project",
-			RootCauseJob:     "wait_dex_orders",
-			RootCauseProject: "stg-project",
-			ConsoleJob:       "stg_orders",
-			Reason:           scheduler.ReasonThirdPartyDelay,
+			Team:         "dwh-team",
+			Project:      "dwh-project",
+			RootCauseJob: "wait_dex_orders",
+			Reason:       scheduler.ReasonThirdPartyDelay,
 			Evidence: scheduler.RootCauseEvidence{
 				BlockedOnSensors: []string{"wait_dex_orders"},
 				SourceType:       "dex",
@@ -109,21 +105,5 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		assert.Equal(t, "wait_dex_orders", payload.Data["root_cause_job"])
 		assert.NotContains(t, payload.Data, "root_cause_scheduled_at")
 		assert.NotContains(t, payload.Data, "induced_delay")
-		assert.Equal(t, am.getJobConsoleLink("stg-project", "stg_orders"), payload.Data["console_link"])
-	})
-
-	t.Run("cross-project cause uses the cause project on the console link", func(t *testing.T) {
-		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
-			Team:                 "dwh-team",
-			Project:              "dwh-project",
-			RootCauseJob:         "stg_payments",
-			RootCauseProject:     "stg-project",
-			ConsoleJob:           "stg_payments",
-			Reason:               scheduler.ReasonRunningLong,
-			RootCauseScheduledAt: &scheduledAt,
-		})
-
-		assert.Equal(t, "dwh-project", payload.Data["project"])
-		assert.Equal(t, am.getJobConsoleLink("stg-project", "stg_payments"), payload.Data["console_link"])
 	})
 }

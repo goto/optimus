@@ -21,6 +21,7 @@ const (
 	GoogleSheet ExternalTableSourceType = "GOOGLE_SHEETS"
 	GoogleDrive ExternalTableSourceType = "GOOGLE_DRIVE"
 	LarkSheet   ExternalTableSourceType = "LARK_SHEET"
+	LarkDrive   ExternalTableSourceType = "LARK_DRIVE"
 	OSS         ExternalTableSourceType = "OSS"
 )
 

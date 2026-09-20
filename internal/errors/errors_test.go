@@ -50,6 +50,14 @@ func TestErrors(t *testing.T) {
 			assert.Error(t, invalidStateTransition)
 			assert.ErrorContains(t, invalidStateTransition, "transition is invalid")
 		})
+		t.Run("creates a forbidden error", func(t *testing.T) {
+			forbiddenError := errors.NewForbidden(testEntity, "access is forbidden")
+
+			assert.Error(t, forbiddenError)
+			assert.ErrorContains(t, forbiddenError, "access is forbidden")
+			assert.True(t, errors.IsErrorType(forbiddenError, errors.ErrForbidden))
+			assert.False(t, errors.IsErrorType(forbiddenError, errors.ErrInternalError))
+		})
 		t.Run("creates a domain error", func(t *testing.T) {
 			domainError := errors.NewError(errors.ErrFailedPrecond, testEntity, "random error")
 

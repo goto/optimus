@@ -70,6 +70,34 @@ func TestInducedDelay(t *testing.T) {
 		}
 		assert.Equal(t, 2*time.Hour, inducedDelay(state, ref, 6))
 	})
+
+	t.Run("started late delay is floored at the job's own schedule, not the naive cascade safe start", func(t *testing.T) {
+		// estimate 40m, inferred SLA 06:00 -> naive safe start 05:20; but the job's own
+		// schedule is 05:40 (SLA budget too tight for the full upstream chain). Started
+		// right on that schedule -> zero induced delay, not ~20m against the naive value.
+		state := scheduler.JobState{
+			Reason:      scheduler.ReasonStartedLate,
+			JobSLAState: scheduler.JobSLAState{EstimatedDuration: dur(40 * time.Minute), InferredSLA: at(6, 0)},
+			JobRun: scheduler.JobRunSummary{
+				ScheduledAt:   *at(5, 40),
+				TaskStartTime: at(5, 40),
+			},
+		}
+		assert.Equal(t, time.Duration(0), inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
+	})
+
+	t.Run("started late delay above the floored schedule is measured from the schedule", func(t *testing.T) {
+		// same setup as above, but this run started 05:50, 10m after its own 05:40 schedule.
+		state := scheduler.JobState{
+			Reason:      scheduler.ReasonStartedLate,
+			JobSLAState: scheduler.JobSLAState{EstimatedDuration: dur(40 * time.Minute), InferredSLA: at(6, 0)},
+			JobRun: scheduler.JobRunSummary{
+				ScheduledAt:   *at(5, 40),
+				TaskStartTime: at(5, 50),
+			},
+		}
+		assert.Equal(t, 10*time.Minute, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
+	})
 }
 
 func TestAttributeThirdPartyIdentity(t *testing.T) {

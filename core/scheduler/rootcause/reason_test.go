@@ -64,6 +64,36 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, *at(6, 20), *evidence.ExpectedFinishAt)
 	})
 
+	t.Run("started exactly on its own schedule is not STARTED_LATE even when the SLA cascade implies an earlier safe start", func(t *testing.T) {
+		// estimate 40m, deadline 06:00 -> naive safe start 05:20; but the job's own
+		// schedule is 05:40 (the SLA budget is too tight for the full upstream chain).
+		// Starting right on that schedule must not be blamed for STARTED_LATE -- that's
+		// a config problem, not something the job's start behavior caused.
+		st := state(at(5, 40), dur(40*time.Minute), at(6, 0))
+		st.JobRun.ScheduledAt = *at(5, 40)
+
+		reason, _ := detect(rootcause.Candidate{
+			State:         st,
+			ReferenceTime: ref,
+		})
+
+		assert.Equal(t, scheduler.ReasonUnknown, reason)
+	})
+
+	t.Run("started after its own schedule is still STARTED_LATE, floored at the schedule not the naive safe start", func(t *testing.T) {
+		// same setup, but this run started 05:50, 10m after its own 05:40 schedule.
+		st := state(at(5, 50), dur(40*time.Minute), at(6, 0))
+		st.JobRun.ScheduledAt = *at(5, 40)
+
+		reason, evidence := detect(rootcause.Candidate{
+			State:         st,
+			ReferenceTime: ref,
+		})
+
+		assert.Equal(t, scheduler.ReasonStartedLate, reason)
+		assert.Equal(t, *at(5, 40), *evidence.LatestSafeStartAt)
+	})
+
 	t.Run("late start explained by the job's own already-resolved sensor is THIRD_PARTY_DELAY", func(t *testing.T) {
 		// estimate 40m, deadline 06:00 -> had to start by 05:20; started 05:40, same as the
 		// STARTED_LATE case above, but this run also recorded a dex sensor that occupied

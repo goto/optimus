@@ -41,7 +41,7 @@ func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 	if state.EstimatedDuration == nil || state.InferredSLA == nil {
 		return 0
 	}
-	safeStart := state.InferredSLA.Add(-*state.EstimatedDuration)
+	safeStart := effectiveSafeStart(state)
 	start := referenceTime
 	if state.JobRun.TaskStartTime != nil {
 		start = *state.JobRun.TaskStartTime
@@ -50,6 +50,17 @@ func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 		return 0
 	}
 	return start.Sub(safeStart)
+}
+
+// effectiveSafeStart is the latest a job could have started without breaching the
+// downstream SLA chain, floored at the job's own ScheduledAt.
+func effectiveSafeStart(state scheduler.JobState) time.Time {
+	safeStart := state.InferredSLA.Add(-*state.EstimatedDuration)
+	scheduledAt := state.JobRun.ScheduledAt
+	if scheduledAt.After(safeStart) {
+		return scheduledAt
+	}
+	return safeStart
 }
 
 // thirdPartyInducedDelay is sensor completion (or now) minus max(sensor start, delay-start hour

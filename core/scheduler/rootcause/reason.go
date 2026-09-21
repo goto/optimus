@@ -90,7 +90,7 @@ func (StartedLateDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 	if start == nil || c.State.EstimatedDuration == nil || c.State.InferredSLA == nil {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
-	if !start.After(c.State.InferredSLA.Add(-*c.State.EstimatedDuration)) {
+	if !start.After(effectiveSafeStart(*c.State)) {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
 	return scheduler.ReasonStartedLate, evidenceForStarted(c), true
@@ -172,7 +172,7 @@ func evidenceForStarted(c Candidate) scheduler.RootCauseEvidence {
 		finish := c.State.JobRun.TaskStartTime.Add(*c.State.EstimatedDuration)
 		evidence.ExpectedFinishAt = &finish
 		if c.State.InferredSLA != nil {
-			safeStart := c.State.InferredSLA.Add(-*c.State.EstimatedDuration)
+			safeStart := effectiveSafeStart(*c.State)
 			evidence.LatestSafeStartAt = &safeStart
 		}
 	}

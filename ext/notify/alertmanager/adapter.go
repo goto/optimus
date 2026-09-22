@@ -16,6 +16,10 @@ import (
 const (
 	radarTimeFormat = "2006/01/02 15:04:05"
 
+	// impactedJobsPreviewLimit caps how many impacted job names are named inline in
+	// the alert body; the rest are only reachable via the impacted_jobs_count.
+	impactedJobsPreviewLimit = 3
+
 	AlertTypeJobReplay          = "job_replay"
 	AlertTypeChange             = "change"
 	AlertTypeExternalTable      = "external_table"
@@ -297,14 +301,16 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 	severity := getSeverity(alert.Severity)
 
 	data := map[string]interface{}{
-		"team":                alert.Team,
-		"project":             alert.Project,
-		"root_cause_job":      alert.RootCauseJob,
-		"reason":              string(alert.Reason),
-		"status":              string(alert.Status),
-		"relative_level":      alert.RelativeLevel,
-		"impacted_jobs":       alert.ImpactedJobs,
-		"impacted_jobs_count": len(alert.ImpactedJobs),
+		"team":                  alert.Team,
+		"project":               alert.Project,
+		"root_cause_job":        alert.RootCauseJob,
+		"root_cause_project":    alert.RootCauseProject,
+		"reason":                string(alert.Reason),
+		"status":                string(alert.Status),
+		"relative_level":        alert.RelativeLevel,
+		"impacted_jobs":         alert.ImpactedJobs,
+		"impacted_jobs_count":   len(alert.ImpactedJobs),
+		"impacted_jobs_preview": formatJobsPreview(alert.ImpactedJobs, impactedJobsPreviewLimit),
 	}
 	if alert.RootCauseScheduledAt != nil {
 		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
@@ -330,6 +336,23 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 	}
 
 	return alertPayload
+}
+
+// formatJobsPreview renders up to limit job names as "A, B & C" for an inline summary,
+// leaving the full list/count to impacted_jobs/impacted_jobs_count.
+func formatJobsPreview(jobs []string, limit int) string {
+	if len(jobs) == 0 {
+		return ""
+	}
+	n := len(jobs)
+	if n > limit {
+		n = limit
+	}
+	preview := jobs[:n]
+	if len(preview) == 1 {
+		return preview[0]
+	}
+	return strings.Join(preview[:len(preview)-1], ", ") + " & " + preview[len(preview)-1]
 }
 
 // evidenceFields omits anything unset so the template can test presence rather than

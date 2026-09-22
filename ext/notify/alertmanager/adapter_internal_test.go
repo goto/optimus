@@ -23,6 +23,7 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 			Team:                 "dwh-team",
 			Project:              "proj-1",
 			RootCauseJob:         "stg_payments",
+			RootCauseProject:     "proj-0",
 			RootCauseScheduledAt: &scheduledAt,
 			Reason:               scheduler.ReasonRunningLong,
 			Status:               scheduler.SLABreachCauseRunningLate,
@@ -31,10 +32,14 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		})
 
 		assert.Equal(t, "stg_payments", payload.Data["root_cause_job"])
+		assert.Equal(t, "proj-0", payload.Data["root_cause_project"])
 		assert.Equal(t, "2026-09-11T05:00:00Z", payload.Data["root_cause_scheduled_at"])
 		assert.Equal(t, "RUNNING_LONG", payload.Data["reason"])
 		assert.Equal(t, "dwh-team", payload.Labels[DefaultChannelLabel])
 		assert.Equal(t, 2, payload.Data["impacted_jobs_count"])
+		assert.Equal(t, "dwh_orders & dwh_refunds", payload.Data["impacted_jobs_preview"])
+		assert.NotContains(t, payload.Data, "project_dashboard")
+		assert.NotContains(t, payload.Data, "root_cause_dashboard")
 
 		for _, key := range []string{"root_cause_job", "root_cause_scheduled_at", "reason"} {
 			_, isString := payload.Data[key].(string)
@@ -106,4 +111,15 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		assert.NotContains(t, payload.Data, "root_cause_scheduled_at")
 		assert.NotContains(t, payload.Data, "induced_delay")
 	})
+
+	t.Run("impacted jobs preview names at most 3 jobs, joined with an ampersand", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			ImpactedJobs: []string{"job_a", "job_b", "job_c", "job_d"},
+		})
+
+		assert.Equal(t, "job_a, job_b & job_c", payload.Data["impacted_jobs_preview"])
+		assert.Equal(t, 4, payload.Data["impacted_jobs_count"])
+	})
+
 }

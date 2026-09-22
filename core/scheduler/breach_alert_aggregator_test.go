@@ -9,10 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
 )
 
 func TestBreachAlertAggregator(t *testing.T) {
 	scheduledAt := time.Date(2026, 9, 11, 5, 0, 0, 0, time.UTC)
+
+	tnt, err := tenant.NewTenant("stg-project", "stg-namespace")
+	assert.NoError(t, err)
 
 	cause := func(name string, reason scheduler.RootCauseReason, at time.Time) *scheduler.JobState {
 		return &scheduler.JobState{
@@ -20,6 +24,7 @@ func TestBreachAlertAggregator(t *testing.T) {
 			JobRun:  scheduler.JobRunSummary{ScheduledAt: at},
 			Reason:  reason,
 			Status:  scheduler.SLABreachCauseRunningLate,
+			Tenant:  tnt,
 		}
 	}
 
@@ -35,6 +40,7 @@ func TestBreachAlertAggregator(t *testing.T) {
 		assert.Len(t, alerts, 1)
 		assert.Equal(t, []string{"dwh_orders", "dwh_refunds"}, alerts[0].ImpactedJobs)
 		assert.Equal(t, "stg_payments", alerts[0].RootCauseJob)
+		assert.Equal(t, "stg-project", alerts[0].RootCauseProject)
 	})
 
 	t.Run("the same job twice does not duplicate in the body", func(t *testing.T) {

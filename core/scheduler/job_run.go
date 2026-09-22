@@ -149,9 +149,10 @@ type UpstreamAttrs struct {
 // it threatens for one impacted team.
 type PotentialSLABreachAlert struct {
 	Team    string
-	Project string // impacted SLA job's project
+	Project string // impacted (at-risk) SLA job's project
 
 	RootCauseJob         string
+	RootCauseProject     string // root cause job's own project, may differ from Project
 	RootCauseScheduledAt *time.Time
 	Reason               RootCauseReason
 	Evidence             RootCauseEvidence
@@ -253,6 +254,7 @@ func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobStat
 			Team:                 team,
 			Project:              project,
 			RootCauseJob:         rootCause.JobName.String(),
+			RootCauseProject:     rootCause.Tenant.ProjectName().String(),
 			RootCauseScheduledAt: alertScheduledAt(rootCause),
 			Reason:               rootCause.Reason,
 			Evidence:             rootCause.Evidence,

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
 )
 
 func TestBuildPotentialSLABreachPayload(t *testing.T) {
@@ -59,4 +60,42 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		_, hasEnv := payload.Labels[EnvironmentLabel]
 		assert.False(t, hasEnv)
 	})
+}
+
+func TestGetSpecBasedAlerts(t *testing.T) {
+	tnnt, err := tenant.NewTenant("proj", "ns")
+	assert.NoError(t, err)
+
+	jobDetails := &scheduler.JobWithDetails{
+		Name: "sample_job",
+		Job: &scheduler.Job{
+			Name:   "sample_job",
+			Tenant: tnnt,
+		},
+		Alerts: []scheduler.Alert{
+			{On: scheduler.EventCategoryJobFailure, Severity: "WARNING", Team: "teamA", Channels: []string{}},
+			{On: scheduler.EventCategoryJobFailure, Severity: "CRITICAL", Team: "teamB", Channels: []string{"slack://#alert"}},
+		},
+	}
+
+	basePayload := &AlertPayload{Labels: map[string]string{"identifier": "sample_job"}}
+
+	payloads := getSpecBasedAlerts(jobDetails, scheduler.JobFailureEvent, basePayload)
+
+	assert.Len(t, payloads, 2, "each matching notify entry should produce its own alert")
+
+	assert.Equal(t, "teamA", payloads[0].Labels[DefaultChannelLabel])
+	assert.Equal(t, WarningSeverity, payloads[0].Labels[SeverityLabel])
+	_, hasEnv := payloads[0].Labels[EnvironmentLabel]
+	assert.False(t, hasEnv, "warning severity should not set environment label")
+
+	assert.Equal(t, "teamB", payloads[1].Labels[DefaultChannelLabel])
+	assert.Equal(t, CriticalSeverity, payloads[1].Labels[SeverityLabel])
+	assert.Equal(t, "production", payloads[1].Labels[EnvironmentLabel])
+
+	// entries must not share the same Labels map, otherwise mutating one
+	// payload's labels would retroactively corrupt the other.
+	assert.NotSame(t, payloads[0], payloads[1])
+	payloads[0].Labels[DefaultChannelLabel] = "mutated"
+	assert.Equal(t, "teamB", payloads[1].Labels[DefaultChannelLabel])
 }

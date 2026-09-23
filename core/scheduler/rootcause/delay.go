@@ -172,3 +172,12 @@ func demoteBelowMinRootCauseDelay(cause *scheduler.JobState, minDelay time.Durat
 	demoted.Reason = scheduler.ReasonUnknown
 	return &demoted
 }
+
+func demoteStartedLateToUnknown(best *scheduler.JobState) *scheduler.JobState {
+	if best == nil || best.Reason != scheduler.ReasonStartedLate {
+		return best
+	}
+	demoted := *best
+	demoted.Reason = scheduler.ReasonUnknown
+	return &demoted
+}

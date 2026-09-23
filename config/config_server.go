@@ -98,9 +98,25 @@ type AlertingConfig struct {
 	DataConsole              string                              `mapstructure:"data_console"`
 	EnableSlack              bool                                `mapstructure:"enable_slack"`
 	EnablePagerDuty          bool                                `mapstructure:"enable_pager_duty"`
+	RootCause                RootCauseConfig                     `mapstructure:"root_cause"`
 	AutoSLABreachConfig      DurationEstimatorConfig             `mapstructure:"auto_sla_breach_config"`
 	PotentialSLABreachConfig PotentialSLABreachConfig            `mapstructure:"potential_sla_breach_config"`
 	DeduplicationConfig      map[string]AlertDeduplicationConfig `mapstructure:"deduplication"`
+}
+
+// RootCauseConfig tunes how late jobs are classified (RUNNING_LONG, STARTED_LATE,
+// THIRD_PARTY_DELAY). Shared by any caller of root-cause identification, not only
+// potential-SLA alerting.
+type RootCauseConfig struct {
+	// ThirdPartyDelayStartHourUTC is the UTC hour (0-23) from which sensor wait
+	// counts as induced delay. Wait before that hour is ignored.
+	ThirdPartyDelayStartHourUTC int `mapstructure:"third_party_delay_start_hour_utc" default:"0"`
+	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
+	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"0"`
+	// MinRootCauseDelaySeconds is the induced-delay floor for a classified reason.
+	// If the chosen (max-delay) cause is below this, the reason stays UNKNOWN.
+	MinRootCauseDelaySeconds int `mapstructure:"min_root_cause_delay_seconds" default:"0"`
+	MaxRootCauseClimbDepth   int `mapstructure:"max_root_cause_climb_depth" default:"5"`
 }
 
 type PotentialSLABreachConfig struct {

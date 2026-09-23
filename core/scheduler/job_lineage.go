@@ -423,7 +423,7 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 			continue
 		}
 
-		for _, upstream := range selectUpstreams(current.lineage, opts.TopUpstreamsPerJob) {
+		for _, upstream := range SelectUpstreams(current.lineage, opts.TopUpstreamsPerJob) {
 			queue = append(queue, queueItem{
 				lineage: upstream,
 				parent:  current.lineage.JobName,
@@ -445,10 +445,10 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 	}
 }
 
-// selectUpstreams returns the upstreams of job to follow. With topN at zero that is all of
+// SelectUpstreams returns the upstreams of job to follow. With topN at zero that is all of
 // them; otherwise it is the N that finished last, which for a completed lineage are the runs
 // that actually held the job up
-func selectUpstreams(job *JobLineageSummary, topN int) []*JobLineageSummary {
+func SelectUpstreams(job *JobLineageSummary, topN int) []*JobLineageSummary {
 	if topN <= 0 || len(job.Upstreams) <= topN {
 		return job.Upstreams
 	}

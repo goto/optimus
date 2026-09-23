@@ -82,21 +82,27 @@ func getSeverity(severity string) string {
 	}
 }
 
-func getSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType scheduler.JobEventType, alertPayload *AlertPayload) []*AlertPayload {
+func getSpecBasedAlerts(jobDetails *scheduler.JobWithDetails, eventType scheduler.JobEventType, basePayload *AlertPayload) []*AlertPayload {
 	var alertPayloads []*AlertPayload
 	for _, notify := range jobDetails.Alerts {
 		if eventType.IsOfType(notify.On) {
+			payload := *basePayload
+			payload.Labels = make(map[string]string, len(basePayload.Labels))
+			for k, v := range basePayload.Labels {
+				payload.Labels[k] = v
+			}
+
 			severity := getSeverity(notify.Severity)
 			if len(notify.Team) > 0 {
-				alertPayload.Labels[DefaultChannelLabel] = notify.Team
+				payload.Labels[DefaultChannelLabel] = notify.Team
 			} else {
-				alertPayload.Labels[DefaultChannelLabel] = jobDetails.Job.Tenant.NamespaceName().String()
+				payload.Labels[DefaultChannelLabel] = jobDetails.Job.Tenant.NamespaceName().String()
 			}
-			alertPayload.Labels[SeverityLabel] = severity
+			payload.Labels[SeverityLabel] = severity
 			if severity == CriticalSeverity {
-				alertPayload.Labels[EnvironmentLabel] = "production"
+				payload.Labels[EnvironmentLabel] = "production"
 			}
-			alertPayloads = append(alertPayloads, alertPayload)
+			alertPayloads = append(alertPayloads, &payload)
 		}
 	}
 	return alertPayloads

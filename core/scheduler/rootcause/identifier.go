@@ -13,7 +13,7 @@ import (
 )
 
 // defaultMaxRootCauseClimb is used when MaxRootCauseClimbDepth is unset (<=0)
-const defaultMaxRootCauseClimb = 20
+const defaultMaxRootCauseClimb = 5
 
 // ScheduledChangeGetter exists so runs whose inferred SLA came from a since-changed
 // schedule can be skipped rather than reported as breaching.

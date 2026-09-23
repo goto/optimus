@@ -110,8 +110,11 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		assert.Equal(t, scheduler.JobName("job-B"), cause.JobName)
 	})
 
-	t.Run("upstream clean under its own threshold leaves the original job as the cause", func(t *testing.T) {
-		// job-B finishes comfortably within both its own estimate and its own deadline.
+	t.Run("upstream clean under its own threshold leaves the original job as the cause, reason UNKNOWN", func(t *testing.T) {
+		// job-B finishes comfortably within both its own estimate and its own deadline, so
+		// escalation finds nothing upstream to explain job-A's late start. STARTED_LATE
+		// surviving escalation with no explanation is reported as UNKNOWN rather than
+		// implying we know the cause.
 		upstreamRun := &scheduler.JobRunSummary{
 			ScheduledAt:   scheduledAt,
 			TaskStartTime: at(0),
@@ -129,7 +132,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-A"]
 		assert.True(t, ok, "root cause should stay job-A when the upstream is clean, got: %+v", causes)
-		assert.Equal(t, scheduler.ReasonStartedLate, cause.Reason)
+		assert.Equal(t, scheduler.ReasonUnknown, cause.Reason)
 	})
 
 	t.Run("started late and running long on the same leaf keeps the larger delay", func(t *testing.T) {

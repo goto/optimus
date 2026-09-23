@@ -247,7 +247,7 @@ func (a *BreachAlertAggregator) Add(team, impactedJob string, rootCause *JobStat
 	if t := alertScheduledAt(rootCause); t != nil {
 		scheduledKey = t.UTC().Format(time.RFC3339)
 	}
-	key := team + "\x00" + rootCause.JobName.String() + "\x00" + scheduledKey + "\x00" + string(rootCause.Reason)
+	key := team + "/" + rootCause.JobName.String() + "/" + scheduledKey + "/" + string(rootCause.Reason)
 
 	alert, ok := a.alerts[key]
 	if !ok {

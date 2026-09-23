@@ -12,7 +12,8 @@ import (
 	"github.com/goto/optimus/core/tenant"
 )
 
-const maxRootCauseClimb = 5
+// defaultMaxRootCauseClimb is used when MaxRootCauseClimbDepth is unset (<=0)
+const defaultMaxRootCauseClimb = 20
 
 // ScheduledChangeGetter exists so runs whose inferred SLA came from a since-changed
 // schedule can be skipped rather than reported as breaching.
@@ -46,6 +47,7 @@ type Identifier struct {
 	thirdPartyDelayStartHour int
 	thirdPartyDelayThreshold time.Duration
 	minRootCauseDelay        time.Duration
+	maxRootCauseClimb        int
 }
 
 // IdentifierConfig tunes delay scoring.
@@ -53,6 +55,7 @@ type IdentifierConfig struct {
 	ThirdPartyDelayStartHourUTC     int
 	ThirdPartyDelayThresholdSeconds int
 	MinRootCauseDelaySeconds        int
+	MaxRootCauseClimbDepth          int
 }
 
 func (c IdentifierConfig) delayStartHourUTC() int {
@@ -76,6 +79,13 @@ func (c IdentifierConfig) minRootCauseDelay() time.Duration {
 	return time.Duration(c.MinRootCauseDelaySeconds) * time.Second
 }
 
+func (c IdentifierConfig) maxRootCauseClimb() int {
+	if c.MaxRootCauseClimbDepth <= 0 {
+		return defaultMaxRootCauseClimb
+	}
+	return c.MaxRootCauseClimbDepth
+}
+
 // A nil pendingSensorGetter is allowed; pending THIRD_PARTY_DELAY then never fires and those
 // causes fall through to UNKNOWN.
 func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter PendingSensorGetter, thirdPartyTypes []string, cfg IdentifierConfig, detectors ...ReasonDetector) *Identifier {
@@ -90,6 +100,7 @@ func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pe
 		thirdPartyDelayStartHour: cfg.delayStartHourUTC(),
 		thirdPartyDelayThreshold: cfg.delayThreshold(),
 		minRootCauseDelay:        cfg.minRootCauseDelay(),
+		maxRootCauseClimb:        cfg.maxRootCauseClimb(),
 	}
 }
 
@@ -173,11 +184,11 @@ func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [
 	}
 
 	pending := i.pendingSensors(ctx, causes)
-	resolved := make(map[*scheduler.JobState]*scheduler.JobState, len(causes))
+	classifiedByRawState := make(map[*scheduler.JobState]*scheduler.JobState, len(causes))
 	for jobName, state := range causes {
 		key := JobRunKey{Project: state.Tenant.ProjectName(), JobName: state.JobName, ScheduledAt: state.JobRun.ScheduledAt}
 		explanations := i.explanationsFor(*state, pending[key.String()], referenceTime)
-		pool := make([]*scheduler.JobState, 0, len(explanations)+maxRootCauseClimb)
+		pool := make([]*scheduler.JobState, 0, len(explanations)+i.maxRootCauseClimb)
 		startedLate := false
 		for idx := range explanations {
 			exp := explanations[idx]
@@ -186,7 +197,7 @@ func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [
 				startedLate = true
 			}
 		}
-		if startedLate {
+		if startedLate || state.Status == scheduler.SLABreachCauseNotStarted {
 			upstreams := i.escalate(ctx, *state, nodeByName[jobName], jobSLAStates, referenceTime)
 			for idx := range upstreams {
 				pool = append(pool, &upstreams[idx])
@@ -212,10 +223,10 @@ func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [
 		// UNKNOWN rather than implying we know the cause.
 		best = demoteStartedLateToUnknown(best)
 
-		resolved[state] = best
+		classifiedByRawState[state] = best
 	}
 
-	return substituteStates(rootCauses, resolved), substituteStates(breachFullPaths, resolved)
+	return applyClassifiedCauses(rootCauses, classifiedByRawState), applyClassifiedCauses(breachFullPaths, classifiedByRawState)
 }
 
 func (i *Identifier) explanationsFor(state scheduler.JobState, pending []string, referenceTime time.Time) []scheduler.JobState {
@@ -241,14 +252,20 @@ func (i *Identifier) explanationsFor(state scheduler.JobState, pending []string,
 	return out
 }
 
-// substituteStates rebuilds paths with every state that has a resolved counterpart swapped for
-// it, leaving the original paths and states as they were.
-func substituteStates(paths [][]*scheduler.JobState, resolved map[*scheduler.JobState]*scheduler.JobState) [][]*scheduler.JobState {
+// applyClassifiedCauses rebuilds paths with every state that has a classified counterpart
+// swapped in, leaving the input paths/states untouched.
+//
+// Example: path = [target, mid_job, raw_root_cause] and
+// classifiedByRawState = {raw_root_cause: classified_root_cause} (classified_root_cause may
+// be a different job entirely, when escalate found the true upstream cause) produces
+// [target, mid_job, classified_root_cause]. Every other, non-root-cause entry in the path
+// (here, mid_job) has no key in the map and is copied through as-is.
+func applyClassifiedCauses(paths [][]*scheduler.JobState, classifiedByRawState map[*scheduler.JobState]*scheduler.JobState) [][]*scheduler.JobState {
 	out := make([][]*scheduler.JobState, 0, len(paths))
 	for _, path := range paths {
 		substituted := make([]*scheduler.JobState, len(path))
 		for idx, state := range path {
-			if replacement, ok := resolved[state]; ok {
+			if replacement, ok := classifiedByRawState[state]; ok {
 				substituted[idx] = replacement
 				continue
 			}
@@ -266,9 +283,10 @@ func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, nod
 	visited := map[scheduler.JobName]bool{state.JobName: true}
 	current := node
 	level := state.RelativeLevel
-	found := make([]scheduler.JobState, 0, maxRootCauseClimb)
+	climbThroughWaiting := state.Status == scheduler.SLABreachCauseNotStarted
+	found := make([]scheduler.JobState, 0, i.maxRootCauseClimb)
 
-	for depth := 0; depth < maxRootCauseClimb; depth++ {
+	for depth := 0; depth < i.maxRootCauseClimb; depth++ {
 		upstream, run := gatingUpstream(current, visited)
 		if upstream == nil || run == nil {
 			return found
@@ -295,20 +313,27 @@ func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, nod
 			i.pendingSensorsFor(ctx, upstream.JobName, upstream.Tenant, run.ScheduledAt, run.TaskStartTime),
 			referenceTime)
 
-		keepClimbing := false
-		abnormal := false
+		// An upstream that is itself still not started may simply be waiting on something
+		// further up; only the NOT_STARTED investigation follows that chain speculatively.
+		keepClimbing := climbThroughWaiting && candidateState.Status == scheduler.SLABreachCauseNotStarted
 		for _, exp := range hop {
 			if exp.Reason == scheduler.ReasonUnknown {
 				continue
 			}
-			abnormal = true
 			found = append(found, exp)
-			if exp.Reason == scheduler.ReasonStartedLate {
+			switch exp.Reason {
+			case scheduler.ReasonStartedLate:
 				keepClimbing = true
 				level = exp.RelativeLevel
+			case scheduler.ReasonRunningLong, scheduler.ReasonThirdPartyDelay, scheduler.ReasonUpstreamFailed:
+				// A definite, currently-binding answer: this hop's job has already started
+				// (or, for UPSTREAM_FAILED, already ended), so anything further upstream of
+				// it is stale history, not a bigger present-day cause. Stop here rather than
+				// climbing past it to compare against a hop several levels further up.
+				keepClimbing = false
 			}
 		}
-		if !abnormal || !keepClimbing {
+		if !keepClimbing {
 			return found
 		}
 		current = upstream

@@ -315,3 +315,140 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		assert.Equal(t, 12*time.Minute, cause.Evidence.InducedDelay)
 	})
 }
+
+// TestIdentifier_EscalatesNotStarted covers the case where a job hasn't started at all
+// because it is genuinely waiting on an upstream Optimus job (not a third-party sensor,
+// already covered elsewhere): the wait may be explained by that upstream having already
+// FAILED, or - since a not-started job can itself be waiting on something further up - by
+// a FAILED job several hops away, discovered only by climbing through a chain of upstreams
+// that are themselves still NOT_STARTED with no interesting explanation of their own.
+func TestIdentifier_EscalatesNotStarted(t *testing.T) {
+	tnnt, err := tenant.NewTenant("project-a", "team-a")
+	assert.NoError(t, err)
+
+	scheduledAt := time.Date(2026, 9, 10, 10, 0, 0, 0, time.UTC)
+	targetSLA := scheduledAt.Add(30 * time.Minute)
+	dur := func(d time.Duration) *time.Duration { return &d }
+	at := func(m int) *time.Time {
+		v := scheduledAt.Add(time.Duration(m) * time.Minute)
+		return &v
+	}
+	damper := scheduler.DamperFactor{Method: scheduler.DamperFactorMethodConstant, BaseValue: 1.0}
+	referenceTime := scheduledAt.Add(32 * time.Minute)
+
+	t.Run("direct upstream already failed before its task even started is picked directly as the root cause, reason UPSTREAM_FAILED", func(t *testing.T) {
+		// job-B: never got as far as running its task (e.g. failed resolving a sensor), so
+		// it is itself flagged NOT_STARTED-breaching by the plain time-only rule (its own
+		// TaskStartTime is nil) and correctly displaces job-A as the structural root cause.
+		// Without UpstreamFailedDetector this would classify as UNKNOWN; with it, job-B's
+		// own explanationsFor call matches directly, no escalation needed.
+		upstream := &scheduler.JobLineageSummary{
+			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt, JobStatus: scheduler.StateFailed.String(), JobEndTime: at(1)},
+			},
+		}
+		target := &scheduler.JobLineageSummary{
+			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{upstream},
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt},
+			},
+		}
+		jobDurations := map[scheduler.JobName]*time.Duration{"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute)}
+		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+		causes, _ := identifier.Identify(context.Background(), target, jobDurations, &targetSLA, nil, damper, referenceTime)
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-B"]
+		assert.True(t, ok, "root cause identity should escalate to job-B, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonUpstreamFailed, cause.Reason)
+	})
+
+	t.Run("failure two hops away is found by climbing through an intermediate upstream that is itself still not started", func(t *testing.T) {
+		// job-C fails fast, well inside its own estimate and inferred SLA, so it is never
+		// flagged as a breaching job by the time-only rule and is invisible to root-cause
+		// selection. job-B is genuinely still waiting on it (no run data at all yet), so job-B
+		// *is* flagged breaching, correctly becomes the structural root cause over job-A, but
+		// has no explanation of its own - it must escalate past itself to find job-C.
+		jobC := &scheduler.JobLineageSummary{
+			JobName: "job-C", IsEnabled: true, Tenant: tnnt,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-B": {
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: at(2),
+					TaskEndTime:   at(5),
+					JobEndTime:    at(5),
+					JobStatus:     scheduler.StateFailed.String(),
+				},
+			},
+		}
+		jobB := &scheduler.JobLineageSummary{
+			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{jobC},
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt}, // no run data at all: genuinely still waiting
+			},
+		}
+		jobA := &scheduler.JobLineageSummary{
+			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{jobB},
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt},
+			},
+		}
+		jobDurations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute), "job-C": dur(5 * time.Minute),
+		}
+		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+		causes, paths := identifier.Identify(context.Background(), jobA, jobDurations, &targetSLA, nil, damper, referenceTime)
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-C"]
+		assert.True(t, ok, "root cause identity should have escalated past job-B to job-C, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonUpstreamFailed, cause.Reason)
+		assert.Equal(t, *at(2), *cause.Evidence.StartedAt)
+		// the reported path still runs target -> ... -> the resolved cause
+		path := paths["job-C"]
+		assert.Equal(t, scheduler.JobName("job-A"), path[0].JobName)
+		assert.Equal(t, scheduler.JobName("job-C"), path[len(path)-1].JobName)
+	})
+
+	t.Run("still-waiting upstream with no explanation at all stays UNKNOWN, matching the STARTED_LATE case", func(t *testing.T) {
+		// job-B is waiting on job-C, but job-C is healthy (finished comfortably, no failure,
+		// no overrun): there is nothing abnormal to find on the climb.
+		jobC := &scheduler.JobLineageSummary{
+			JobName: "job-C", IsEnabled: true, Tenant: tnnt,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-B": {ScheduledAt: scheduledAt, TaskStartTime: at(0), TaskEndTime: at(3), JobEndTime: at(3)},
+			},
+		}
+		jobB := &scheduler.JobLineageSummary{
+			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{jobC},
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt},
+			},
+		}
+		jobA := &scheduler.JobLineageSummary{
+			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{jobB},
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt},
+			},
+		}
+		jobDurations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute), "job-C": dur(5 * time.Minute),
+		}
+		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+		causes, _ := identifier.Identify(context.Background(), jobA, jobDurations, &targetSLA, nil, damper, referenceTime)
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-B"]
+		assert.True(t, ok, "root cause identity should stay job-B when nothing upstream explains the wait, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonUnknown, cause.Reason)
+	})
+}

@@ -116,6 +116,7 @@ type RootCauseConfig struct {
 	// MinRootCauseDelaySeconds is the induced-delay floor for a classified reason.
 	// If the chosen (max-delay) cause is below this, the reason stays UNKNOWN.
 	MinRootCauseDelaySeconds int `mapstructure:"min_root_cause_delay_seconds" default:"0"`
+	MaxRootCauseClimbDepth   int `mapstructure:"max_root_cause_climb_depth" default:"5"`
 }
 
 type PotentialSLABreachConfig struct {

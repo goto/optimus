@@ -98,6 +98,22 @@ func TestInducedDelay(t *testing.T) {
 		}
 		assert.Equal(t, 10*time.Minute, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
 	})
+
+	t.Run("upstream failed delay grows with how long ago the run ended", func(t *testing.T) {
+		state := scheduler.JobState{
+			Reason: scheduler.ReasonUpstreamFailed,
+			JobRun: scheduler.JobRunSummary{JobEndTime: at(5, 0)},
+		}
+		assert.Equal(t, 3*time.Hour, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
+	})
+
+	t.Run("upstream failed delay is zero without a job end time", func(t *testing.T) {
+		state := scheduler.JobState{
+			Reason: scheduler.ReasonUpstreamFailed,
+			JobRun: scheduler.JobRunSummary{},
+		}
+		assert.Equal(t, time.Duration(0), inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
+	})
 }
 
 func TestAttributeThirdPartyIdentity(t *testing.T) {

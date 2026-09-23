@@ -182,6 +182,7 @@ const (
 	ReasonRunningLong     RootCauseReason = "RUNNING_LONG"
 	ReasonStartedLate     RootCauseReason = "STARTED_LATE"
 	ReasonThirdPartyDelay RootCauseReason = "THIRD_PARTY_DELAY"
+	ReasonUpstreamFailed  RootCauseReason = "UPSTREAM_FAILED"
 	ReasonUnknown         RootCauseReason = "UNKNOWN"
 )
 

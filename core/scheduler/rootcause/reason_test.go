@@ -272,4 +272,38 @@ func TestDefaultDetectors(t *testing.T) {
 
 		assert.Equal(t, scheduler.ReasonUnknown, reason)
 	})
+
+	t.Run("a run that already ended in FAILED is UPSTREAM_FAILED even with SLA budget left", func(t *testing.T) {
+		failed := state(at(5, 0), dur(30*time.Minute), at(8, 0)) // deadline hours away
+		failed.JobRun.JobStatus = scheduler.StateFailed.String()
+		failed.JobRun.TaskEndTime = at(5, 10)
+		failed.JobRun.JobEndTime = at(5, 10)
+
+		reason, evidence := detect(rootcause.Candidate{State: failed, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonUpstreamFailed, reason)
+		assert.Equal(t, *at(5, 0), *evidence.StartedAt)
+	})
+
+	t.Run("failed before the task ever started is still UPSTREAM_FAILED, not UNKNOWN", func(t *testing.T) {
+		// e.g. failed while resolving a sensor, so there is no TaskStartTime/TaskEndTime at all
+		failed := state(nil, dur(30*time.Minute), at(6, 0))
+		failed.JobRun.JobStatus = scheduler.StateFailed.String()
+		failed.JobRun.JobEndTime = at(5, 10)
+
+		reason, evidence := detect(rootcause.Candidate{State: failed, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonUpstreamFailed, reason)
+		assert.Nil(t, evidence.StartedAt)
+	})
+
+	t.Run("a FAILED status with no JobEndTime (run hasn't actually ended) is not UPSTREAM_FAILED", func(t *testing.T) {
+		running := state(at(5, 0), dur(30*time.Minute), at(6, 0))
+		running.JobRun.JobStatus = scheduler.StateFailed.String() // no JobEndTime yet
+		reason, _ := detect(rootcause.Candidate{State: running, ReferenceTime: ref})
+
+		// falls through to whatever the time-based detectors say (here, RUNNING_LONG),
+		// not the definite UPSTREAM_FAILED answer
+		assert.Equal(t, scheduler.ReasonRunningLong, reason)
+	})
 }

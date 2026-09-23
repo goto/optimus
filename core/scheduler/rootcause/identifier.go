@@ -13,7 +13,7 @@ import (
 )
 
 // defaultMaxRootCauseClimb is used when MaxRootCauseClimbDepth is unset (<=0)
-const defaultMaxRootCauseClimb = 20
+const defaultMaxRootCauseClimb = 5
 
 // ScheduledChangeGetter exists so runs whose inferred SLA came from a since-changed
 // schedule can be skipped rather than reported as breaching.
@@ -218,6 +218,10 @@ func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [
 				"task_start", best.JobRun.TaskStartTime, "task_end", best.JobRun.TaskEndTime,
 				"estimated_duration", best.EstimatedDuration, "inferred_sla", best.InferredSLA)
 		}
+
+		// STARTED_LATE surviving escalation means no upstream explains it either; report
+		// UNKNOWN rather than implying we know the cause.
+		best = demoteStartedLateToUnknown(best)
 
 		classifiedByRawState[state] = best
 	}

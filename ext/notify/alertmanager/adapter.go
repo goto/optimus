@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/goto/optimus/core/job"
 	"github.com/goto/optimus/core/resource"
@@ -14,6 +15,10 @@ import (
 
 const (
 	radarTimeFormat = "2006/01/02 15:04:05"
+
+	// impactedJobsPreviewLimit caps how many impacted job names are named inline in
+	// the alert body; the rest are only reachable via the impacted_jobs_count.
+	impactedJobsPreviewLimit = 3
 
 	AlertTypeJobReplay          = "job_replay"
 	AlertTypeChange             = "change"
@@ -286,88 +291,91 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 	})
 }
 
-// severityRank orders severities so we can pick the most severe one as the
-// single routing label for a team's consolidated message.
-func severityRank(severity string) int {
-	switch getSeverity(severity) {
-	case CriticalSeverity:
-		return 3
-	case WarningSeverity:
-		return 2
-	case InfoSeverity:
-		return 1
-	default:
-		return 0
-	}
+func (a *AlertManager) SendPotentialSLABreach(alert *scheduler.PotentialSLABreachAlert) {
+	a.relay(a.buildPotentialSLABreachPayload(alert))
 }
 
-func (a *AlertManager) SendPotentialSLABreach(attr *scheduler.PotentialSLABreachAttrs) {
-	a.relay(a.buildPotentialSLABreachPayload(attr))
-}
+// buildPotentialSLABreachPayload flattens one root cause into a payload. Dedup keys
+// (root_cause_job, reason, team; scheduled_at when set) must stay top-level strings.
+func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.PotentialSLABreachAlert) *AlertPayload {
+	severity := getSeverity(alert.Severity)
 
-// buildPotentialSLABreachPayload builds the structured alert payload for one
-// team: project -> group (severity) -> target -> causes. The routing severity
-// label is the max across all groups in this team's message, while each group
-// keeps its own severity in the body.
-func (a *AlertManager) buildPotentialSLABreachPayload(attr *scheduler.PotentialSLABreachAttrs) *AlertPayload {
-	maxSeverity := ""
-	projects := make([]map[string]interface{}, 0, len(attr.Projects))
-	firstProject := ""
-	for _, project := range attr.Projects {
-		if firstProject == "" {
-			firstProject = project.Name
-		}
-		groups := make([]map[string]interface{}, 0, len(project.Groups))
-		for _, group := range project.Groups {
-			groupSeverity := getSeverity(group.Severity)
-			if severityRank(groupSeverity) > severityRank(maxSeverity) {
-				maxSeverity = groupSeverity
-			}
-			targets := make([]map[string]interface{}, 0, len(group.Targets))
-			for _, target := range group.Targets {
-				causes := make([]string, 0, len(target.Causes))
-				for _, cause := range target.Causes {
-					causes = append(causes, fmt.Sprintf("%s (level: %d) (status: %s)", cause.JobName, cause.RelativeLevel, cause.Status))
-				}
-				targets = append(targets, map[string]interface{}{
-					"job_name": target.JobName,
-					"causes":   causes,
-				})
-			}
-			groups = append(groups, map[string]interface{}{
-				"name":     group.Name,
-				"severity": groupSeverity,
-				"targets":  targets,
-			})
-		}
-		projects = append(projects, map[string]interface{}{
-			"name":   project.Name,
-			"groups": groups,
-		})
+	data := map[string]interface{}{
+		"team":                  alert.Team,
+		"project":               alert.Project,
+		"root_cause_job":        alert.RootCauseJob,
+		"root_cause_project":    alert.RootCauseProject,
+		"reason":                string(alert.Reason),
+		"status":                string(alert.Status),
+		"relative_level":        alert.RelativeLevel,
+		"impacted_jobs":         alert.ImpactedJobs,
+		"impacted_jobs_count":   len(alert.ImpactedJobs),
+		"impacted_jobs_preview": formatJobsPreview(alert.ImpactedJobs, impactedJobsPreviewLimit),
 	}
-
-	if maxSeverity == "" {
-		maxSeverity = DefaultSeverity
+	if alert.RootCauseScheduledAt != nil {
+		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
+	}
+	for key, value := range evidenceFields(alert.Evidence) {
+		data[key] = value
 	}
 
 	alertPayload := &AlertPayload{
-		Project: firstProject,
-		Data: map[string]interface{}{
-			"team":     attr.TeamName,
-			"projects": projects,
-		},
+		Project:  alert.Project,
+		Data:     data,
 		Template: OptimusPotentialSLABreachTemplate,
 		Labels: map[string]string{
-			DefaultChannelLabel: attr.TeamName,
-			SeverityLabel:       maxSeverity,
+			DefaultChannelLabel: alert.Team,
+			SeverityLabel:       severity,
 		},
 		Endpoint:  a.endpoint,
 		AlertType: AlertTypePotentialSLABreach,
 	}
 
-	if maxSeverity == CriticalSeverity {
+	if severity == CriticalSeverity {
 		alertPayload.Labels[EnvironmentLabel] = "production"
 	}
 
 	return alertPayload
+}
+
+// formatJobsPreview renders up to limit job names as "A, B & C" for an inline summary,
+// leaving the full list/count to impacted_jobs/impacted_jobs_count.
+func formatJobsPreview(jobs []string, limit int) string {
+	if len(jobs) == 0 {
+		return ""
+	}
+	n := len(jobs)
+	if n > limit {
+		n = limit
+	}
+	preview := jobs[:n]
+	if len(preview) == 1 {
+		return preview[0]
+	}
+	return strings.Join(preview[:len(preview)-1], ", ") + " & " + preview[len(preview)-1]
+}
+
+// evidenceFields omits anything unset so the template can test presence rather than
+// render zero timestamps.
+func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{} {
+	fields := map[string]interface{}{}
+	if evidence.StartedAt != nil {
+		fields["started_at"] = evidence.StartedAt.UTC().Format(time.RFC3339)
+	}
+	if evidence.ExpectedFinishAt != nil {
+		fields["expected_finish_at"] = evidence.ExpectedFinishAt.UTC().Format(time.RFC3339)
+	}
+	if evidence.LatestSafeStartAt != nil {
+		fields["latest_safe_start_at"] = evidence.LatestSafeStartAt.UTC().Format(time.RFC3339)
+	}
+	if len(evidence.BlockedOnSensors) > 0 {
+		fields["blocked_on_sensors"] = evidence.BlockedOnSensors
+	}
+	if evidence.SourceType != "" {
+		fields["source_type"] = evidence.SourceType
+	}
+	if evidence.InducedDelay > 0 {
+		fields["induced_delay"] = evidence.InducedDelay.String()
+	}
+	return fields
 }

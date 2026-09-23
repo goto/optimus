@@ -301,7 +301,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		ThirdPartyDelayStartHourUTC:     0,
 		ThirdPartyDelayThresholdSeconds: 0,
 		MinRootCauseDelaySeconds:        0,
-		MaxRootCauseClimbDepth:          20,
+		MaxRootCauseClimbDepth:          5,
 	}
 	s.expectedServerConfig.Alerting.AutoSLABreachConfig = config.DurationEstimatorConfig{
 		LastNRuns:         7,

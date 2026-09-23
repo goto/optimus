@@ -16,9 +16,25 @@ func inducedDelay(state scheduler.JobState, referenceTime time.Time, delayStartH
 		return startedLateDelay(state, referenceTime)
 	case scheduler.ReasonThirdPartyDelay:
 		return thirdPartyInducedDelay(state, referenceTime, delayStartHourUTC)
+	case scheduler.ReasonUpstreamFailed:
+		return upstreamFailedDelay(state, referenceTime)
 	default:
 		return 0
 	}
+}
+
+// upstreamFailedDelay grows with how long ago the run failed.
+// JobEndTime is used since a run can fail before its task ever starts.
+func upstreamFailedDelay(state scheduler.JobState, referenceTime time.Time) time.Duration {
+	end := state.JobRun.JobEndTime
+	if end == nil {
+		return 0
+	}
+	elapsed := referenceTime.Sub(*end)
+	if elapsed < 0 {
+		return 0
+	}
+	return elapsed
 }
 
 func runningLongDelay(state scheduler.JobState, referenceTime time.Time) time.Duration {

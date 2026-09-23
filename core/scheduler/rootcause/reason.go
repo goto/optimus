@@ -41,6 +41,7 @@ type ReasonDetector interface {
 // deployment has no third-party sensors, so THIRD_PARTY_DELAY never fires.
 func DefaultDetectors(thirdPartyTypes []string) []ReasonDetector {
 	return []ReasonDetector{
+		UpstreamFailedDetector{},
 		NewResolvedThirdPartySensorDetector(thirdPartyTypes),
 		RunningLongDetector{},
 		StartedLateDetector{},
@@ -77,6 +78,18 @@ func (RunningLongDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 		return "", scheduler.RootCauseEvidence{}, false
 	}
 	return scheduler.ReasonRunningLong, evidenceForStarted(c), true
+}
+
+type UpstreamFailedDetector struct{}
+
+func (UpstreamFailedDetector) Name() string { return "upstream_failed" }
+
+func (UpstreamFailedDetector) Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool) {
+	run := c.State.JobRun
+	if run.JobStatus != scheduler.StateFailed.String() || run.JobEndTime == nil {
+		return "", scheduler.RootCauseEvidence{}, false
+	}
+	return scheduler.ReasonUpstreamFailed, scheduler.RootCauseEvidence{StartedAt: run.TaskStartTime}, true
 }
 
 type StartedLateDetector struct{}

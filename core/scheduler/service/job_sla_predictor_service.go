@@ -101,6 +101,7 @@ func identifierConfig(cfg config.RootCauseConfig) rootcause.IdentifierConfig {
 		ThirdPartyDelayStartHourUTC:     cfg.ThirdPartyDelayStartHourUTC,
 		ThirdPartyDelayThresholdSeconds: cfg.ThirdPartyDelayThresholdSeconds,
 		MinRootCauseDelaySeconds:        cfg.MinRootCauseDelaySeconds,
+		MaxRootCauseClimbDepth:          cfg.MaxRootCauseClimbDepth,
 	}
 }
 

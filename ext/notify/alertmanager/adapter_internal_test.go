@@ -121,5 +121,4 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		assert.Equal(t, "job_a, job_b & job_c", payload.Data["impacted_jobs_preview"])
 		assert.Equal(t, 4, payload.Data["impacted_jobs_count"])
 	})
-
 }

@@ -40,8 +40,8 @@ func TestEntitySpec(t *testing.T) {
 	alert, _ := job.NewAlertSpec("sla_miss", []string{"sample-channel"}, jobAlertConfig, "CRITICAL", "")
 	assetMap := map[string]string{"key": "value"}
 	asset, _ := job.AssetFrom(assetMap)
-	resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi")
-	resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi")
+	resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
+	resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
 	resourceMetadata := job.NewResourceMetadata(resourceRequestConfig, resourceLimitConfig)
 	jobMetadata, _ := job.NewMetadataBuilder().
 		WithResource(resourceMetadata).
@@ -113,8 +113,10 @@ func TestEntitySpec(t *testing.T) {
 			assert.Equal(t, jobMetadata.Resource(), specA.Metadata().Resource())
 			assert.Equal(t, jobMetadata.Resource().Request().CPU(), specA.Metadata().Resource().Request().CPU())
 			assert.Equal(t, jobMetadata.Resource().Request().Memory(), specA.Metadata().Resource().Request().Memory())
+			assert.Equal(t, jobMetadata.Resource().Request().EphemeralStorage(), specA.Metadata().Resource().Request().EphemeralStorage())
 			assert.Equal(t, jobMetadata.Resource().Limit().CPU(), specA.Metadata().Resource().Limit().CPU())
 			assert.Equal(t, jobMetadata.Resource().Limit().Memory(), specA.Metadata().Resource().Limit().Memory())
+			assert.Equal(t, jobMetadata.Resource().Limit().EphemeralStorage(), specA.Metadata().Resource().Limit().EphemeralStorage())
 			assert.Equal(t, jobMetadata.Scheduler(), specA.Metadata().Scheduler())
 			assert.Equal(t, jobMetadata.Scheduler(), specA.Metadata().Scheduler())
 		})

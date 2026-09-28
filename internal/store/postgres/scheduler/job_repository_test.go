@@ -208,8 +208,8 @@ func addJobs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) map[string]*
 	jobUpstream, _ := job.NewSpecUpstreamBuilder().WithUpstreamNames([]job.SpecUpstreamName{upstreamName1, upstreamName2}).Build()
 	jobAsset, err := job.AssetFrom(map[string]string{"sample-asset": "value-asset"})
 	assert.NoError(t, err)
-	resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi")
-	resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi")
+	resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
+	resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
 	resourceMetadata := job.NewResourceMetadata(resourceRequestConfig, resourceLimitConfig)
 	jobMetadata, _ := job.NewMetadataBuilder().
 		WithResource(resourceMetadata).
@@ -282,5 +282,18 @@ func compareEqualJobWithDetails(j *job.Job, s *scheduler.JobWithDetails) bool {
 		j.Spec().Schedule().DependsOnPast() == s.Schedule.DependsOnPast &&
 		j.Spec().Schedule().CatchUp() == s.Schedule.CatchUp &&
 		j.Spec().Schedule().Retry().ExponentialBackoff() == s.Retry.ExponentialBackoff &&
-		reflect.DeepEqual(j.Spec().Metadata().Scheduler(), s.RuntimeConfig.Scheduler)
+		reflect.DeepEqual(j.Spec().Metadata().Scheduler(), s.RuntimeConfig.Scheduler) &&
+		compareEqualResource(j.Spec().Metadata().Resource(), s.RuntimeConfig.Resource)
+}
+
+func compareEqualResource(specResource *job.MetadataResource, schedulerResource *scheduler.Resource) bool {
+	if specResource == nil || schedulerResource == nil {
+		return specResource == nil && schedulerResource == nil
+	}
+	return specResource.Request().CPU() == schedulerResource.Request.CPU &&
+		specResource.Request().Memory() == schedulerResource.Request.Memory &&
+		specResource.Request().EphemeralStorage() == schedulerResource.Request.EphemeralStorage &&
+		specResource.Limit().CPU() == schedulerResource.Limit.CPU &&
+		specResource.Limit().Memory() == schedulerResource.Limit.Memory &&
+		specResource.Limit().EphemeralStorage() == schedulerResource.Limit.EphemeralStorage
 }

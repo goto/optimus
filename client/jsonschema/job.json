@@ -259,6 +259,9 @@
         },
         "cpu": {
           "type": ["string", "integer"]
+        },
+        "ephemeral_storage": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

@@ -475,8 +475,9 @@ func (t Task) AlertConfig() *OperatorAlertConfig {
 }
 
 type MetadataResourceConfig struct {
-	cpu    string
-	memory string
+	cpu              string
+	memory           string
+	ephemeralStorage string
 }
 
 func (m MetadataResourceConfig) CPU() string {
@@ -487,8 +488,12 @@ func (m MetadataResourceConfig) Memory() string {
 	return m.memory
 }
 
-func NewMetadataResourceConfig(cpu, memory string) *MetadataResourceConfig {
-	return &MetadataResourceConfig{cpu: cpu, memory: memory}
+func (m MetadataResourceConfig) EphemeralStorage() string {
+	return m.ephemeralStorage
+}
+
+func NewMetadataResourceConfig(cpu, memory, ephemeralStorage string) *MetadataResourceConfig {
+	return &MetadataResourceConfig{cpu: cpu, memory: memory, ephemeralStorage: ephemeralStorage}
 }
 
 type MetadataResource struct {

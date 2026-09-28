@@ -75,6 +75,7 @@ resources = k8s.V1ResourceRequirements(
     limits={
         'memory': '2G',
         'cpu': '200m',
+        'ephemeral-storage': '5Gi',
     },
 )
 

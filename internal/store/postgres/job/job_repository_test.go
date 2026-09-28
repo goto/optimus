@@ -143,8 +143,8 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.NoError(t, err)
 			jobAsset, err := job.AssetFrom(map[string]string{"sample-asset": "value-asset"})
 			assert.NoError(t, err)
-			resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi")
-			resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi")
+			resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
+			resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
 			resourceMetadata := job.NewResourceMetadata(resourceRequestConfig, resourceLimitConfig)
 			jobMetadata, err := job.NewMetadataBuilder().
 				WithResource(resourceMetadata).
@@ -263,8 +263,8 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.NoError(t, err)
 			jobAsset, err := job.AssetFrom(map[string]string{"sample-asset": "value-asset"})
 			assert.NoError(t, err)
-			resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi")
-			resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi")
+			resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
+			resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
 			resourceMetadata := job.NewResourceMetadata(resourceRequestConfig, resourceLimitConfig)
 			jobMetadata, err := job.NewMetadataBuilder().
 				WithResource(resourceMetadata).
@@ -331,8 +331,8 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.NoError(t, err)
 			jobAsset, err := job.AssetFrom(map[string]string{"sample-asset": "value-asset"})
 			assert.NoError(t, err)
-			resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi")
-			resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi")
+			resourceRequestConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
+			resourceLimitConfig := job.NewMetadataResourceConfig("250m", "128Mi", "1Gi")
 			resourceMetadata := job.NewResourceMetadata(resourceRequestConfig, resourceLimitConfig)
 			jobMetadata, err := job.NewMetadataBuilder().
 				WithResource(resourceMetadata).

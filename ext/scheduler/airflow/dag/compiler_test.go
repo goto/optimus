@@ -192,8 +192,9 @@ func setupJobDetails(tnnt tenant.Tenant) *scheduler.JobWithDetails {
 	runtimeConfig := scheduler.RuntimeConfig{
 		Resource: &scheduler.Resource{
 			Limit: &scheduler.ResourceConfig{
-				CPU:    "200m",
-				Memory: "2G",
+				CPU:              "200m",
+				Memory:           "2G",
+				EphemeralStorage: "5Gi",
 			},
 		},
 		Kubernetes: &scheduler.Kubernetes{

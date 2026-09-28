@@ -1648,6 +1648,9 @@
         },
         "memory": {
           "type": "string"
+        },
+        "ephemeralStorage": {
+          "type": "string"
         }
       }
     },

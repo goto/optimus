@@ -190,8 +190,9 @@ type JobSpecMetadataResource struct {
 }
 
 type JobSpecMetadataResourceConfig struct {
-	Memory string `yaml:"memory,omitempty"`
-	CPU    string `yaml:"cpu,omitempty"`
+	Memory           string `yaml:"memory,omitempty"`
+	CPU              string `yaml:"cpu,omitempty"`
+	EphemeralStorage string `yaml:"ephemeral_storage,omitempty"`
 }
 
 type JobSpecMetadataAirflow struct {
@@ -286,8 +287,9 @@ func (*JobSpec) getProtoJobSpecMetadataResourceConfig(jobSpecMetadataResourceCon
 		return nil
 	}
 	return &pb.JobSpecMetadataResourceConfig{
-		Cpu:    jobSpecMetadataResourceConfig.CPU,
-		Memory: jobSpecMetadataResourceConfig.Memory,
+		Cpu:              jobSpecMetadataResourceConfig.CPU,
+		Memory:           jobSpecMetadataResourceConfig.Memory,
+		EphemeralStorage: jobSpecMetadataResourceConfig.EphemeralStorage,
 	}
 }
 
@@ -549,10 +551,12 @@ func (j *JobSpec) MergeFrom(anotherJobSpec *JobSpec) {
 			if request := resource.Request; request != nil {
 				j.Metadata.Resource.Request.CPU = getValue(j.Metadata.Resource.Request.CPU, request.CPU)
 				j.Metadata.Resource.Request.Memory = getValue(j.Metadata.Resource.Request.Memory, request.Memory)
+				j.Metadata.Resource.Request.EphemeralStorage = getValue(j.Metadata.Resource.Request.EphemeralStorage, request.EphemeralStorage)
 			}
 			if limit := resource.Limit; limit != nil {
 				j.Metadata.Resource.Limit.CPU = getValue(j.Metadata.Resource.Limit.CPU, limit.CPU)
 				j.Metadata.Resource.Limit.Memory = getValue(j.Metadata.Resource.Limit.Memory, limit.Memory)
+				j.Metadata.Resource.Limit.EphemeralStorage = getValue(j.Metadata.Resource.Limit.EphemeralStorage, limit.EphemeralStorage)
 			}
 		}
 		if airflow := metadata.Airflow; airflow != nil {
@@ -623,15 +627,17 @@ func toJobSpecMetadata(protoMetadata *pb.JobMetadata) *JobSpecMetadata {
 			var metadataResourceRequest *JobSpecMetadataResourceConfig
 			if protoMetadata.Resource.Request != nil {
 				metadataResourceRequest = &JobSpecMetadataResourceConfig{
-					Memory: protoMetadata.Resource.Request.Memory,
-					CPU:    protoMetadata.Resource.Request.Cpu,
+					Memory:           protoMetadata.Resource.Request.Memory,
+					CPU:              protoMetadata.Resource.Request.Cpu,
+					EphemeralStorage: protoMetadata.Resource.Request.EphemeralStorage,
 				}
 			}
 			var metadataResourceLimit *JobSpecMetadataResourceConfig
 			if protoMetadata.Resource.Limit != nil {
 				metadataResourceLimit = &JobSpecMetadataResourceConfig{
-					Memory: protoMetadata.Resource.Limit.Memory,
-					CPU:    protoMetadata.Resource.Limit.Cpu,
+					Memory:           protoMetadata.Resource.Limit.Memory,
+					CPU:              protoMetadata.Resource.Limit.Cpu,
+					EphemeralStorage: protoMetadata.Resource.Limit.EphemeralStorage,
 				}
 			}
 			metadataResourceSpec = &JobSpecMetadataResource{

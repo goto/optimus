@@ -435,8 +435,9 @@ type Resource struct {
 }
 
 type ResourceConfig struct {
-	CPU    string
-	Memory string
+	CPU              string
+	Memory           string
+	EphemeralStorage string
 }
 
 type Kubernetes struct {

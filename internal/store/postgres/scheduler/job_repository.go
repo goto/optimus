@@ -307,8 +307,9 @@ type MetadataResource struct {
 }
 
 type MetadataResourceConfig struct {
-	CPU    string
-	Memory string
+	CPU              string
+	Memory           string
+	EphemeralStorage string
 }
 
 type MetadataKubernetes struct {
@@ -328,15 +329,17 @@ func fromStorageMetadata(metadata json.RawMessage) (scheduler.RuntimeConfig, err
 		var resourceRequest *scheduler.ResourceConfig
 		if storeMetadata.Resource.Request != nil {
 			resourceRequest = &scheduler.ResourceConfig{
-				CPU:    storeMetadata.Resource.Request.CPU,
-				Memory: storeMetadata.Resource.Request.Memory,
+				CPU:              storeMetadata.Resource.Request.CPU,
+				Memory:           storeMetadata.Resource.Request.Memory,
+				EphemeralStorage: storeMetadata.Resource.Request.EphemeralStorage,
 			}
 		}
 		var resourceLimit *scheduler.ResourceConfig
 		if storeMetadata.Resource.Limit != nil {
 			resourceLimit = &scheduler.ResourceConfig{
-				CPU:    storeMetadata.Resource.Limit.CPU,
-				Memory: storeMetadata.Resource.Limit.Memory,
+				CPU:              storeMetadata.Resource.Limit.CPU,
+				Memory:           storeMetadata.Resource.Limit.Memory,
+				EphemeralStorage: storeMetadata.Resource.Limit.EphemeralStorage,
 			}
 		}
 		runtimeConfig.Resource = &scheduler.Resource{

@@ -148,20 +148,22 @@ func ToResource(resource *scheduler.Resource) *Resource {
 }
 
 type ResourceConfig struct {
-	CPU    string
-	Memory string
+	CPU              string
+	Memory           string
+	EphemeralStorage string
 }
 
 func ToResourceConfig(config *scheduler.ResourceConfig) *ResourceConfig {
 	if config == nil {
 		return nil
 	}
-	if config.CPU == "" && config.Memory == "" {
+	if config.CPU == "" && config.Memory == "" && config.EphemeralStorage == "" {
 		return nil
 	}
 	return &ResourceConfig{
-		CPU:    config.CPU,
-		Memory: config.Memory,
+		CPU:              config.CPU,
+		Memory:           config.Memory,
+		EphemeralStorage: config.EphemeralStorage,
 	}
 }
 

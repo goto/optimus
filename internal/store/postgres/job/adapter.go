@@ -156,8 +156,9 @@ type MetadataResource struct {
 }
 
 type MetadataResourceConfig struct {
-	CPU    string
-	Memory string
+	CPU              string
+	Memory           string
+	EphemeralStorage string
 }
 
 type MetadataKubernetes struct {
@@ -434,15 +435,17 @@ func toStorageMetadata(metadataSpec *job.Metadata) ([]byte, error) {
 		var resourceRequest *MetadataResourceConfig
 		if metadataSpec.Resource().Request() != nil {
 			resourceRequest = &MetadataResourceConfig{
-				CPU:    metadataSpec.Resource().Request().CPU(),
-				Memory: metadataSpec.Resource().Request().Memory(),
+				CPU:              metadataSpec.Resource().Request().CPU(),
+				Memory:           metadataSpec.Resource().Request().Memory(),
+				EphemeralStorage: metadataSpec.Resource().Request().EphemeralStorage(),
 			}
 		}
 		var resourceLimit *MetadataResourceConfig
 		if metadataSpec.Resource().Limit() != nil {
 			resourceLimit = &MetadataResourceConfig{
-				CPU:    metadataSpec.Resource().Limit().CPU(),
-				Memory: metadataSpec.Resource().Limit().Memory(),
+				CPU:              metadataSpec.Resource().Limit().CPU(),
+				Memory:           metadataSpec.Resource().Limit().Memory(),
+				EphemeralStorage: metadataSpec.Resource().Limit().EphemeralStorage(),
 			}
 		}
 		metadataResource = &MetadataResource{
@@ -588,11 +591,11 @@ func fromStorageSpec(jobSpec *Spec) (*job.Spec, error) {
 		if storeMetadata.Resource != nil {
 			var resourceRequest *job.MetadataResourceConfig
 			if storeMetadata.Resource.Request != nil {
-				resourceRequest = job.NewMetadataResourceConfig(storeMetadata.Resource.Request.CPU, storeMetadata.Resource.Request.Memory)
+				resourceRequest = job.NewMetadataResourceConfig(storeMetadata.Resource.Request.CPU, storeMetadata.Resource.Request.Memory, storeMetadata.Resource.Request.EphemeralStorage)
 			}
 			var resourceLimit *job.MetadataResourceConfig
 			if storeMetadata.Resource.Limit != nil {
-				resourceLimit = job.NewMetadataResourceConfig(storeMetadata.Resource.Limit.CPU, storeMetadata.Resource.Limit.Memory)
+				resourceLimit = job.NewMetadataResourceConfig(storeMetadata.Resource.Limit.CPU, storeMetadata.Resource.Limit.Memory, storeMetadata.Resource.Limit.EphemeralStorage)
 			}
 			resourceMetadata := job.NewResourceMetadata(resourceRequest, resourceLimit)
 			metadataBuilder = metadataBuilder.WithResource(resourceMetadata)

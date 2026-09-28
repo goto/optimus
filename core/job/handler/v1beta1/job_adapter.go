@@ -487,11 +487,11 @@ func toMetadata(jobMetadata *pb.JobMetadata) (*job.Metadata, error) {
 		metadataResourceProto := jobMetadata.Resource
 		var request *job.MetadataResourceConfig
 		if metadataResourceProto.Request != nil {
-			request = job.NewMetadataResourceConfig(metadataResourceProto.Request.Cpu, metadataResourceProto.Request.Memory)
+			request = job.NewMetadataResourceConfig(metadataResourceProto.Request.Cpu, metadataResourceProto.Request.Memory, metadataResourceProto.Request.EphemeralStorage)
 		}
 		var limit *job.MetadataResourceConfig
 		if metadataResourceProto.Limit != nil {
-			limit = job.NewMetadataResourceConfig(metadataResourceProto.Limit.Cpu, metadataResourceProto.Limit.Memory)
+			limit = job.NewMetadataResourceConfig(metadataResourceProto.Limit.Cpu, metadataResourceProto.Limit.Memory, metadataResourceProto.Limit.EphemeralStorage)
 		}
 		resourceMetadata := job.NewResourceMetadata(request, limit)
 		metadataBuilder = metadataBuilder.WithResource(resourceMetadata)
@@ -525,14 +525,16 @@ func fromMetadata(metadata *job.Metadata) *pb.JobMetadata {
 	if metadata.Resource() != nil {
 		if metadata.Resource().Request() != nil {
 			metadataResourceProto.Request = &pb.JobSpecMetadataResourceConfig{
-				Cpu:    metadata.Resource().Request().CPU(),
-				Memory: metadata.Resource().Request().Memory(),
+				Cpu:              metadata.Resource().Request().CPU(),
+				Memory:           metadata.Resource().Request().Memory(),
+				EphemeralStorage: metadata.Resource().Request().EphemeralStorage(),
 			}
 		}
 		if metadata.Resource().Limit() != nil {
 			metadataResourceProto.Limit = &pb.JobSpecMetadataResourceConfig{
-				Cpu:    metadata.Resource().Limit().CPU(),
-				Memory: metadata.Resource().Limit().Memory(),
+				Cpu:              metadata.Resource().Limit().CPU(),
+				Memory:           metadata.Resource().Limit().Memory(),
+				EphemeralStorage: metadata.Resource().Limit().EphemeralStorage(),
 			}
 		}
 	}

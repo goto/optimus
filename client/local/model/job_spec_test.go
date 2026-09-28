@@ -159,12 +159,14 @@ func (*JobSpecTestSuite) getCompleteJobSpec() model.JobSpec {
 		Metadata: &model.JobSpecMetadata{
 			Resource: &model.JobSpecMetadataResource{
 				Request: &model.JobSpecMetadataResourceConfig{
-					CPU:    "250m",
-					Memory: "64Mi",
+					CPU:              "250m",
+					Memory:           "64Mi",
+					EphemeralStorage: "1Gi",
 				},
 				Limit: &model.JobSpecMetadataResourceConfig{
-					CPU:    "500m",
-					Memory: "128Mi",
+					CPU:              "500m",
+					Memory:           "128Mi",
+					EphemeralStorage: "2Gi",
 				},
 			},
 			Airflow: &model.JobSpecMetadataAirflow{
@@ -264,12 +266,14 @@ func (*JobSpecTestSuite) getCompleteJobSpecProto() *pb.JobSpecification {
 		Metadata: &pb.JobMetadata{
 			Resource: &pb.JobSpecMetadataResource{
 				Request: &pb.JobSpecMetadataResourceConfig{
-					Cpu:    "250m",
-					Memory: "64Mi",
+					Cpu:              "250m",
+					Memory:           "64Mi",
+					EphemeralStorage: "1Gi",
 				},
 				Limit: &pb.JobSpecMetadataResourceConfig{
-					Cpu:    "500m",
-					Memory: "128Mi",
+					Cpu:              "500m",
+					Memory:           "128Mi",
+					EphemeralStorage: "2Gi",
 				},
 			},
 			Airflow: &pb.JobSpecMetadataAirflow{

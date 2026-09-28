@@ -92,6 +92,9 @@ resources = k8s.V1ResourceRequirements(
     {{- if ne .RuntimeConfig.Resource.Request.CPU ""}}
         'cpu': '{{.RuntimeConfig.Resource.Request.CPU}}',
     {{- end }}
+    {{- if ne .RuntimeConfig.Resource.Request.EphemeralStorage ""}}
+        'ephemeral-storage': '{{.RuntimeConfig.Resource.Request.EphemeralStorage}}',
+    {{- end }}
     },
 {{- end }}
 {{- if .RuntimeConfig.Resource.Limit }}
@@ -101,6 +104,9 @@ resources = k8s.V1ResourceRequirements(
     {{- end }}
     {{- if ne .RuntimeConfig.Resource.Limit.CPU ""}}
         'cpu': '{{.RuntimeConfig.Resource.Limit.CPU}}',
+    {{- end }}
+    {{- if ne .RuntimeConfig.Resource.Limit.EphemeralStorage ""}}
+        'ephemeral-storage': '{{.RuntimeConfig.Resource.Limit.EphemeralStorage}}',
     {{- end }}
     },
 {{ end -}}

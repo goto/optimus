@@ -80,6 +80,17 @@ func (s *JobSpecTestSuite) TestMergeFrom() {
 
 		s.Assert().EqualValues(jobSpec2, jobSpec1)
 	})
+
+	s.Run("should merge the job spec, filling the empty fields in current job spec", func() {
+		jobSpec1 := s.getCompleteJobSpec()
+		jobSpec1.Behavior.Notify = nil
+		jobSpec1.Metadata = nil
+		jobSpec2 := s.getCompleteJobSpec()
+
+		jobSpec1.MergeFrom(&jobSpec2)
+
+		s.Assert().EqualValues(jobSpec2, jobSpec1)
+	})
 }
 
 func (*JobSpecTestSuite) getCompleteJobSpec() model.JobSpec {

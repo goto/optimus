@@ -123,6 +123,7 @@ func FromStringToEventType(name string) (JobEventType, error) {
 type SLAObject struct {
 	JobName        JobName
 	JobScheduledAt time.Time
+	TaskName       string
 }
 
 func (s *SLAObject) String() string {
@@ -272,6 +273,7 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 			Slas []struct {
 				DagID       string `mapstructure:"dag_id"`
 				ScheduledAt string `mapstructure:"scheduled_at"`
+				TaskID      string `mapstructure:"task_id"`
 			} `mapstructure:"slas"`
 		}
 		var slaInputPayload slaInput
@@ -290,9 +292,10 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 			if err != nil {
 				return nil, errors.InvalidArgument(EntityEvent, "property 'scheduled_at' in slas list is not in appropriate format")
 			}
-			slaObjectDedupMap[fmt.Sprintf("%s:%s", schedulerJobName, scheduledAt)] = &SLAObject{
+			slaObjectDedupMap[fmt.Sprintf("%s:%s:%s", schedulerJobName, scheduledAt, slaObject.TaskID)] = &SLAObject{
 				JobName:        schedulerJobName,
 				JobScheduledAt: scheduledAt,
+				TaskName:       slaObject.TaskID,
 			}
 		}
 

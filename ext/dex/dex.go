@@ -19,7 +19,17 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 )
 
-const tableStatsEndpoint = "/dex/tables/%s/%s/stats"
+const (
+	tableStatsEndpointV1 = "/dex/tables/%s/%s/stats"
+	tableStatsEndpointV2 = "/dex/v2/tables/%s/%s/stats"
+)
+
+func tableStatsEndpoint(cfg *config.DexClientConfig) string {
+	if cfg != nil && cfg.UseV2Endpoint != nil && !*cfg.UseV2Endpoint {
+		return tableStatsEndpointV1
+	}
+	return tableStatsEndpointV2
+}
 
 type Client struct {
 	l          log.Logger
@@ -86,7 +96,7 @@ func newHTTPClient(host string) (*http.Client, error) {
 }
 
 func (d *Client) constructGetTableStatsRequest(ctx context.Context, store, tableName string, startTime, endTime time.Time) (*http.Request, error) {
-	path := fmt.Sprintf(tableStatsEndpoint, store, tableName)
+	path := fmt.Sprintf(tableStatsEndpoint(d.config), store, tableName)
 
 	values := url.Values{}
 	values.Add("with_date_breakdown", "true")

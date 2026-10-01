@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimal stand-in for Dex's table-stats endpoint, for local Optimus dev testing.
 
-Serves GET /dex/tables/{store}/{table_name}/stats matching the real Dex response
+Serves GET /dex/v2/tables/{store}/{table_name}/stats (and the v1 /dex/tables/... path) matching the real Dex response
 schema (see optimus's ext/dex/model.go), and a control endpoint to flip behavior
 at runtime without restarting the pod:
 
@@ -22,7 +22,7 @@ PRODUCER_TYPE = "mock-producer"
 
 state = {"mode": "complete"}
 
-STATS_PATH_RE = re.compile(r"^/dex/tables/[^/]+/[^/]+/stats$")
+STATS_PATH_RE = re.compile(r"^/dex(?:/v2)?/tables/[^/]+/[^/]+/stats$")
 
 
 def parse_iso(value):

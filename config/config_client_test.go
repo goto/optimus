@@ -27,6 +27,23 @@ func (c *ClientConfigTestSuite) TestParsing() {
 		c.Equal("http://g-godata-systems-dex.golabs.io", conf.Host)
 		c.Equal("de-optimus@gojek.com", conf.AuthEmail)
 		c.Equal("firehose", conf.ProducerType)
+		c.Nil(conf.UseV2Endpoint)
+	})
+
+	c.Run("should parse use_v2_endpoint when set", func() {
+		resolver := config.UpstreamResolver{
+			Type: config.DexUpstreamResolver,
+			Config: map[string]interface{}{
+				"host":            "http://g-godata-systems-dex.golabs.io",
+				"auth_email":      "de-optimus@gojek.com",
+				"producer_type":   "firehose",
+				"use_v2_endpoint": false,
+			},
+		}
+		conf, err := resolver.GetDexClientConfig()
+		c.NoError(err)
+		c.Require().NotNil(conf.UseV2Endpoint)
+		c.False(*conf.UseV2Endpoint)
 	})
 }
 

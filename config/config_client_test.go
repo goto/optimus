@@ -27,7 +27,7 @@ func (c *ClientConfigTestSuite) TestParsing() {
 		c.Equal("http://g-godata-systems-dex.golabs.io", conf.Host)
 		c.Equal("de-optimus@gojek.com", conf.AuthEmail)
 		c.Equal("firehose", conf.ProducerType)
-		c.Nil(conf.UseV2Endpoint)
+		c.False(conf.UseV2Endpoint)
 	})
 
 	c.Run("should parse use_v2_endpoint when set", func() {
@@ -43,7 +43,7 @@ func (c *ClientConfigTestSuite) TestParsing() {
 		conf, err := resolver.GetDexClientConfig()
 		c.NoError(err)
 		c.Require().NotNil(conf.UseV2Endpoint)
-		c.False(*conf.UseV2Endpoint)
+		c.False(conf.UseV2Endpoint)
 	})
 }
 

@@ -25,10 +25,10 @@ const (
 )
 
 func tableStatsEndpoint(cfg *config.DexClientConfig) string {
-	if cfg != nil && cfg.UseV2Endpoint != nil && !*cfg.UseV2Endpoint {
-		return tableStatsEndpointV1
+	if cfg.UseV2Endpoint {
+		return tableStatsEndpointV2
 	}
-	return tableStatsEndpointV2
+	return tableStatsEndpointV1
 }
 
 type Client struct {

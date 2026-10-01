@@ -176,6 +176,10 @@ type DexClientConfig struct {
 	Host         string `mapstructure:"host" json:"host"`
 	AuthEmail    string `mapstructure:"auth_email" json:"auth_email"`
 	ProducerType string `mapstructure:"producer_type" json:"producer_type"`
+	// UseV2Endpoint selects the Dex table-stats API.
+	//	true calls `/dex/v2/tables/{store}/{table}/stats`;
+	//	false rolls back to `/dex/tables/{store}/{table}/stats`
+	UseV2Endpoint bool `mapstructure:"use_v2_endpoint" json:"use_v2_endpoint"`
 }
 
 type ReplayConfig struct {

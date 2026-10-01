@@ -131,6 +131,8 @@ upstream_resolvers:
     host: https://dex.example.io
     auth_email: optimus@example.io
     producer_type: firehose
+    # table stats path; omit or true → /dex/v2/tables/.../stats, false → /dex/tables/.../stats
+    use_v2_endpoint: true
 
 # how job replays are executed
 replay:

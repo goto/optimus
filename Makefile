@@ -8,7 +8,7 @@ OPMS_VERSION := "$(shell git describe --tags ${LAST_TAG})-next"
 PROTON_COMMIT := "ba676abc5766884dcced9e873aa32835b4e5fb53"
 
 
-.PHONY: build test test-ci generate-proto unit-test-ci integration-test vet coverage clean install lint
+.PHONY: build test test-ci generate-proto unit-test-ci airflow-lib-test integration-test vet coverage clean install lint
 
 .DEFAULT_GOAL := build
 
@@ -24,7 +24,10 @@ build-linux: # build optimus binary for linux
 	@GOOS=linux GOARCH=arm64 go build -ldflags "-X ${NAME}/config.BuildVersion=${OPMS_VERSION} -X ${NAME}/config.BuildCommit=${LAST_COMMIT}" -o optimus .
 	@echo " - build complete"
 
-test-ci: unit-test-ci vet ## run tests
+test-ci: unit-test-ci airflow-lib-test vet ## run tests
+
+airflow-lib-test: ## run python unit tests for ext/scheduler/airflow/__lib.py (airflow is stubbed, stdlib only)
+	python3 -m unittest discover -s ./ext/scheduler/airflow -p "test_*.py"
 
 scheduler-resource-test:
 	cd ./ext/scheduler/airflow2/tests && pip3 install -r requirements.txt && python3 -m unittest discover .
@@ -44,7 +47,7 @@ integration-test:
 vet: ## run go vet
 	go vet ./...
 
-test:
+test: airflow-lib-test
 	go test -race -cover -timeout 1m -tags=unit_test ./...
 
 bench:

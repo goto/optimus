@@ -453,7 +453,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
     def _poke_hard(self, context):
         schedule_time = get_scheduled_at(context)
         is_available, _ = self._check_upstream_data_available(schedule_time)
-        return self._hard_check(is_available, schedule_time)
+        return self._hard_check(schedule_time=schedule_time, is_available=is_available)
 
     def _poke_soft(self, context):
         schedule_time = get_scheduled_at(context)
@@ -468,7 +468,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
             self.log.warning("Third party sensor got a 5xx error from dex, so will acting like soft-style grace period.")
             return self._apply_soft_grace_period(context, schedule_time, is_available)
 
-        return self._hard_check(is_available, schedule_time)
+        return self._hard_check(schedule_time=schedule_time, is_available=is_available)
 
     def _hard_check(self, schedule_time, is_available):
         if not is_available:
@@ -491,7 +491,7 @@ class SuperExternal3rdPartyTaskSensor(BaseSensorOperator):
                 return True
             else:
                 self.log.info("Third party sensor within max time limit of {} minutes, time left for sensor processing : {} minutes".format(max_sensor_time, max_sensor_time - (time_delta.total_seconds() // 60)))
-                return self._hard_check(is_available, schedule_time)
+                return self._hard_check(schedule_time=schedule_time, is_available=is_available)
 
         self.log.info("Third party sensor is in SOFT/SOFT_5XX mode, without the flag 'THIRD_PARTY_SENSOR_MAX_TIME', Always yielding true for now.")
         return True

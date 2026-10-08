@@ -113,30 +113,24 @@ type JobSchedule struct {
 	ScheduledAt time.Time
 }
 
+// JobLineageSummary is one job's node within a resolved lineage tree. Its upstream edges and
+// runs are reachable only through methods (Upstreams, Runs, and Occurrence-based navigation),
+// never as raw fields: a job reached via more than one downstream path (a diamond), or reached
+// twice by the same downstream job on different days, can carry more than one run, and getting
+// the keying wrong silently drops or conflates real data. Routing every access through the
+// RunSet/Occurrence API keeps that keying scheme in one place instead of re-implemented ad hoc
+// at every call site.
 type JobLineageSummary struct {
 	JobName   JobName
 	IsEnabled bool
-	Upstreams []*JobLineageSummary
 
 	Tenant           tenant.Tenant
 	ScheduleInterval string
 	SLA              SLAConfig
 	Window           *window.Config
 
-	// JobRuns contain the mapping of downstream's job name to their respective job run summaries
-	JobRuns map[JobName]*JobRunSummary
-}
-
-func (j *JobLineageSummary) GetRunForJob(jobName JobName) *JobRunSummary {
-	return getRunForJob(jobName, j.JobRuns)
-}
-
-func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSummary {
-	if run, exists := jobRuns[jobName]; exists {
-		return run
-	}
-
-	return nil
+	upstreams []*JobLineageSummary
+	runs      RunSet
 }
 
 // ClipLineageRunsToReferenceTime walks the lineage and hides any observed run timestamp that
@@ -154,10 +148,10 @@ func clipLineageNode(node *JobLineageSummary, referenceTime time.Time, visited m
 	}
 	visited[node] = true
 
-	for _, run := range node.JobRuns {
-		clipJobRunToReferenceTime(run, referenceTime)
+	for _, entry := range node.Runs().Entries() {
+		clipJobRunToReferenceTime(entry.Run, referenceTime)
 	}
-	for _, upstream := range node.Upstreams {
+	for _, upstream := range node.Upstreams() {
 		clipLineageNode(upstream, referenceTime, visited)
 	}
 }
@@ -183,6 +177,191 @@ func clipJobRunToReferenceTime(run *JobRunSummary, referenceTime time.Time) {
 	}
 }
 
+// NewJobLineageSummary constructs a lineage node for jobName. Upstream edges and runs are added
+// afterward via AddUpstream and RecordRun/RecordOwnRun.
+func NewJobLineageSummary(jobName JobName, tnnt tenant.Tenant, scheduleInterval string, sla SLAConfig, jobWindow *window.Config, isEnabled bool) *JobLineageSummary {
+	return &JobLineageSummary{
+		JobName:          jobName,
+		Tenant:           tnnt,
+		ScheduleInterval: scheduleInterval,
+		SLA:              sla,
+		Window:           jobWindow,
+		IsEnabled:        isEnabled,
+	}
+}
+
+// AddUpstream records upstream as one of j's immediate upstream jobs in the static topology.
+func (j *JobLineageSummary) AddUpstream(upstream *JobLineageSummary) {
+	j.upstreams = append(j.upstreams, upstream)
+}
+
+// Upstreams returns j's immediate upstream jobs in the static topology - structure only, no run
+// resolution. Used while a lineage is still being constructed, before any runs are known;
+// consumers of an already-built lineage should navigate via Occurrence.Upstreams instead, which
+// returns only the upstreams relevant to one specific run.
+func (j *JobLineageSummary) Upstreams() []*JobLineageSummary {
+	return j.upstreams
+}
+
+// RecordRun records run as the one required by the specific downstream run identified by parent.
+func (j *JobLineageSummary) RecordRun(parent JobRunIdentifier, run *JobRunSummary) {
+	j.runs.add(parent, run)
+}
+
+// RecordOwnRun records run as j's own run. Only meaningful for a lineage's root node, which has
+// no downstream of its own and is therefore self-keyed.
+func (j *JobLineageSummary) RecordOwnRun(run *JobRunSummary) {
+	j.runs.add(JobRunIdentifier{JobName: j.JobName, ScheduledAt: run.ScheduledAt}, run)
+}
+
+// Runs returns j's set of recorded runs.
+func (j *JobLineageSummary) Runs() RunSet {
+	return j.runs
+}
+
+// RootOccurrence returns the lineage's single starting point - the one schedule being analyzed.
+// Every traversal over a resolved lineage starts here.
+func (j *JobLineageSummary) OccurrenceFor(id JobRunIdentifier) Occurrence {
+	return Occurrence{node: j, run: j.runs.For(id)}
+}
+func (j *JobLineageSummary) RootOccurrence() Occurrence {
+	return Occurrence{node: j, run: j.runs.Own()}
+}
+
+// RunEntry pairs a run with the specific downstream run that required it.
+type RunEntry struct {
+	Parent JobRunIdentifier
+	Run    *JobRunSummary
+}
+
+// RunSet holds every distinct run of a job relevant to the current lineage analysis, keyed by
+// the identifier of the specific downstream run that required it. A job reached via more than
+// one downstream path, or reached twice by the same downstream job on two different days,
+// carries more than one entry.
+type RunSet struct {
+	byParent map[JobRunIdentifier]*JobRunSummary
+}
+
+func (r *RunSet) add(parent JobRunIdentifier, run *JobRunSummary) {
+	if r.byParent == nil {
+		r.byParent = make(map[JobRunIdentifier]*JobRunSummary)
+	}
+	r.byParent[parent] = run
+}
+
+// For returns the run required by the specific downstream run identified by parent, or nil.
+func (r RunSet) For(parent JobRunIdentifier) *JobRunSummary {
+	return r.byParent[parent]
+}
+
+// Own returns the sole run in the set. It is only meaningful for a lineage's root node, which by
+// construction always carries exactly one run (the single schedule being analyzed)
+func (r RunSet) Own() *JobRunSummary {
+	for _, run := range r.byParent {
+		return run
+	}
+	return nil
+}
+
+// Len returns the number of distinct runs in the set.
+func (r RunSet) Len() int {
+	return len(r.byParent)
+}
+
+// Entries returns every (parent, run) pair in the set, in no particular order.
+func (r RunSet) Entries() []RunEntry {
+	entries := make([]RunEntry, 0, len(r.byParent))
+	for parent, run := range r.byParent {
+		entries = append(entries, RunEntry{Parent: parent, Run: run})
+	}
+	return entries
+}
+
+// SortedEntries returns Entries ordered by run ScheduledAt ascending and deduped by ScheduledAt,
+// so a diamond-shared job with multiple candidate runs is checked deterministically, earliest
+// (most likely overdue) first.
+func (r RunSet) SortedEntries() []RunEntry {
+	entries := r.Entries()
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Run.ScheduledAt.Before(entries[j].Run.ScheduledAt)
+	})
+	unique := entries[:0]
+	for i, entry := range entries {
+		if i == 0 || !entry.Run.ScheduledAt.Equal(entries[i-1].Run.ScheduledAt) {
+			unique = append(unique, entry)
+		}
+	}
+	return unique
+}
+
+// Occurrence identifies one specific real run within a resolved lineage tree: a job together
+// with one of its runs. A job reached via more than one downstream path, or reached twice by the
+// same downstream job on different days, corresponds to more than one Occurrence.
+type Occurrence struct {
+	node *JobLineageSummary
+	run  *JobRunSummary
+}
+
+func (o Occurrence) JobName() JobName      { return o.node.JobName }
+func (o Occurrence) Run() *JobRunSummary   { return o.run }
+func (o Occurrence) IsEnabled() bool       { return o.node.IsEnabled }
+func (o Occurrence) SLA() SLAConfig        { return o.node.SLA }
+func (o Occurrence) Tenant() tenant.Tenant { return o.node.Tenant }
+
+// Identifier returns the (job, scheduled time) identifier of this specific occurrence.
+func (o Occurrence) Identifier() JobRunIdentifier {
+	return JobRunIdentifier{JobName: o.node.JobName, ScheduledAt: o.run.ScheduledAt}
+}
+
+// LatestFinishTime returns the occurrence's actual finish time (hook end, falling back to task
+// end), or nil if it hasn't finished yet.
+func (o Occurrence) LatestFinishTime() *time.Time {
+	return o.run.GetActualEndTime()
+}
+
+// Upstreams returns, for each of the job's upstream jobs, the specific occurrence that this
+// occurrence required - already resolved, so callers never construct a JobRunIdentifier or
+// touch a RunSet themselves. An upstream with no run recorded for this specific occurrence is
+// omitted.
+func (o Occurrence) Upstreams() []Occurrence {
+	var result []Occurrence
+	for _, upstream := range o.node.upstreams {
+		if run := upstream.runs.For(o.Identifier()); run != nil {
+			result = append(result, Occurrence{node: upstream, run: run})
+		}
+	}
+	return result
+}
+
+// sortedUpstreams ranks o's upstream occurrences by how their run compares to o's own run.
+// Upstreams that haven't finished yet are excluded, since there is nothing to rank them by.
+// Among the rest, an upstream scheduled after o's own scheduled time sorts last; otherwise the
+// latest-finishing upstream sorts first.
+func (o Occurrence) sortedUpstreams() []Occurrence {
+	var candidates []Occurrence
+	for _, upstream := range o.Upstreams() {
+		if upstream.LatestFinishTime() == nil {
+			continue
+		}
+		candidates = append(candidates, upstream)
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		iAfterCurrent := candidates[i].run.ScheduledAt.After(o.run.ScheduledAt)
+		jAfterCurrent := candidates[j].run.ScheduledAt.After(o.run.ScheduledAt)
+		if iAfterCurrent && !jAfterCurrent {
+			return false
+		}
+		if !iAfterCurrent && jAfterCurrent {
+			return true
+		}
+
+		return candidates[i].LatestFinishTime().After(*candidates[j].LatestFinishTime())
+	})
+
+	return candidates
+}
+
 func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOptions) *JobRunLineage {
 	if j == nil {
 		return nil
@@ -197,9 +376,6 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 
 	var taskDurationJobs, hookDurationJobs []JobWithTaskDuration
 
-	// the delay attribution below reads each entry's successor as the upstream that gated it,
-	// so the chain has to follow real edges. Picking the latest finisher per level instead
-	// would pair runs off neighbouring branches that never waited on each other.
 	gatingPath := walk.GatingPath()
 
 	for _, exec := range executionSummaries {
@@ -244,7 +420,7 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 
 		if hasUpstream {
 			upstreamExec := gatingPath[i+1]
-			upstreamRun = upstreamExec.JobRunSummary
+			upstreamRun := upstreamExec.JobRunSummary
 			if upstreamRun.GetActualEndTime() != nil {
 				upstreamLastTaskEndToCurrentTaskStartDuration = currentRun.TaskStartTime.Sub(*upstreamRun.GetActualEndTime())
 			}
@@ -330,13 +506,11 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 
 	lineage := &JobRunLineage{
 		JobName:          j.JobName,
+		ScheduledAt:      j.RootOccurrence().Run().ScheduledAt,
 		JobRuns:          executionSummaries,
 		ExecutionSummary: lineageSummary,
 		TotalNodes:       walk.TotalNodes,
 		Truncated:        walk.Truncated,
-	}
-	if targetRun := j.GetRunForJob(j.JobName); targetRun != nil {
-		lineage.ScheduledAt = targetRun.ScheduledAt
 	}
 
 	return lineage
@@ -365,28 +539,29 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 		maxDepth = MaxLineageDepth
 	}
 
+	root := j.RootOccurrence()
+
 	nodesByKey := map[JobRunKey]*JobExecutionSummary{}
 	upstreamsByKey := map[JobRunKey][]JobRunKey{}
 	var nodes []*JobExecutionSummary
 	truncated := false
 
 	type queueItem struct {
-		lineage *JobLineageSummary
-		parent  JobName
-		from    *JobRunKey
-		depth   int
+		occ    Occurrence
+		from   *JobRunKey
+		depth  int
 	}
 
-	queue := []queueItem{{lineage: j, parent: j.JobName, depth: 0}}
+	queue := []queueItem{{occ: root, depth: 0}}
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
 
-		run := current.lineage.GetRunForJob(current.parent)
+		run := current.occ.Run()
 		if run == nil {
 			continue
 		}
-		key := NewJobRunKey(current.lineage.JobName, run.ScheduledAt)
+		key := NewJobRunKey(current.occ.JobName(), run.ScheduledAt)
 
 		node, seen := nodesByKey[key]
 		if !seen {
@@ -395,13 +570,13 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 				continue
 			}
 
-			downstreamPathName := current.lineage.JobName.String()
+			downstreamPathName := current.occ.JobName().String()
 			if current.from != nil {
 				downstreamPathName = current.from.JobName.String()
 			}
 			node = &JobExecutionSummary{
-				JobName:            current.lineage.JobName,
-				SLA:                current.lineage.SLA,
+				JobName:            current.occ.JobName(),
+				SLA:                current.occ.SLA(),
 				Level:              current.depth,
 				JobRunSummary:      run,
 				State:              run.GetState(),
@@ -412,8 +587,6 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 			nodes = append(nodes, node)
 		}
 
-		// the edge is recorded whether or not the node is new, so that a shared upstream
-		// keeps every downstream that depends on it
 		if current.from != nil {
 			node.DownstreamRefs = append(node.DownstreamRefs, *current.from)
 			upstreamsByKey[*current.from] = append(upstreamsByKey[*current.from], key)
@@ -423,12 +596,11 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 			continue
 		}
 
-		for _, upstream := range SelectUpstreams(current.lineage, opts.TopUpstreamsPerJob) {
+		for _, upstream := range SelectUpstreams(current.occ, opts.TopUpstreamsPerJob) {
 			queue = append(queue, queueItem{
-				lineage: upstream,
-				parent:  current.lineage.JobName,
-				from:    &key,
-				depth:   current.depth + 1,
+				occ:   upstream,
+				from:  &key,
+				depth: current.depth + 1,
 			})
 		}
 	}
@@ -448,51 +620,36 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 // SelectUpstreams returns the upstreams of job to follow. With topN at zero that is all of
 // them; otherwise it is the N that finished last, which for a completed lineage are the runs
 // that actually held the job up
-func SelectUpstreams(job *JobLineageSummary, topN int) []*JobLineageSummary {
-	if topN <= 0 || len(job.Upstreams) <= topN {
-		return job.Upstreams
+func SelectUpstreams(occ Occurrence, topN int) []Occurrence {
+	upstreams := occ.Upstreams()
+	if topN <= 0 || len(upstreams) <= topN {
+		return upstreams
 	}
 
-	ranked := make([]*JobLineageSummary, len(job.Upstreams))
-	copy(ranked, job.Upstreams)
+	ranked := make([]Occurrence, len(upstreams))
+	copy(ranked, upstreams)
 
 	sort.SliceStable(ranked, func(i, k int) bool {
-		iRun, kRun := ranked[i].GetRunForJob(job.JobName), ranked[k].GetRunForJob(job.JobName)
-
-		// runs with no finish time cannot be ranked on one, so they sort after those that have
-		// one, newest first
-		iEnd, kEnd := finishTimeForRanking(iRun), finishTimeForRanking(kRun)
-		switch {
-		case iEnd == nil && kEnd == nil:
-			return ranked[i].JobName < ranked[k].JobName
-		case iEnd == nil:
-			return false
-		case kEnd == nil:
-			return true
-		case !iEnd.Equal(*kEnd):
-			return iEnd.After(*kEnd)
-		default:
-			return ranked[i].JobName < ranked[k].JobName
+		endI := ranked[i].LatestFinishTime()
+		endK := ranked[k].LatestFinishTime()
+		
+		if endI == nil && endK == nil {
+			return ranked[i].JobName() < ranked[k].JobName()
 		}
+		if endI == nil {
+			return false
+		}
+		if endK == nil {
+			return true
+		}
+		if !endI.Equal(*endK) {
+			return endI.After(*endK)
+		}
+		return ranked[i].JobName() < ranked[k].JobName()
 	})
 
 	return ranked[:topN]
 }
-
-func finishTimeForRanking(run *JobRunSummary) *time.Time {
-	if !run.IsFinished() {
-		return nil
-	}
-
-	return run.GetActualEndTime()
-}
-
-// markBlockingNodes flags the runs the lineage is currently waiting on: those that have not
-// finished and whose own upstreams have all finished. An unfinished run that is itself
-// waiting on an unfinished upstream is blocked, not blocking.
-//
-// When the walk was truncated the upstream edges of dropped nodes are unknown, so a node on
-// the truncation boundary may be flagged as blocking without being so.
 func markBlockingNodes(nodes []*JobExecutionSummary, nodesByKey map[JobRunKey]*JobExecutionSummary, upstreamsByKey map[JobRunKey][]JobRunKey) {
 	for _, node := range nodes {
 		if node.JobRunSummary.IsFinished() {

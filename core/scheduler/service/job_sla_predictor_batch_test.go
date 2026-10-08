@@ -62,29 +62,16 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 		}
 
 		jobASchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
-		jobALineage := &scheduler.JobLineageSummary{
-			JobName:          "job-A",
-			ScheduleInterval: interval,
-			IsEnabled:        true,
-			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: scheduledAt}},
-		}
-		jobBLineage := &scheduler.JobLineageSummary{
-			JobName:          "job-B",
-			ScheduleInterval: interval,
-			IsEnabled:        true,
-			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: scheduledAt.Add(-15 * time.Minute)}},
-		}
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
+		jobALineage := scheduler.NewJobLineageSummary("job-A", tenant.Tenant{}, interval, scheduler.SLAConfig{}, nil, true)
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{ScheduledAt: scheduledAt})
+		jobBLineage := scheduler.NewJobLineageSummary("job-B", tenant.Tenant{}, interval, scheduler.SLAConfig{}, nil, true)
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: "job-A", ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{ScheduledAt: jobBScheduledAt})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
-		jobCLineage := &scheduler.JobLineageSummary{
-			JobName:          "job-C",
-			ScheduleInterval: interval,
-			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt.Add(-25 * time.Minute), TaskStartTime: &jobCTaskStartTime},
-			},
-		}
-		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
-		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+		jobCLineage := scheduler.NewJobLineageSummary("job-C", tenant.Tenant{}, interval, scheduler.SLAConfig{}, nil, true)
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: "job-B", ScheduledAt: jobBScheduledAt}, &scheduler.JobRunSummary{ScheduledAt: scheduledAt.Add(-25 * time.Minute), TaskStartTime: &jobCTaskStartTime})
+		jobALineage.AddUpstream(jobBLineage)
+		jobBLineage.AddUpstream(jobCLineage)
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{"job-A": jobASchedule}, int(reqConfig.ScheduleRangeInHours.Hours())).

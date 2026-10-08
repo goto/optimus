@@ -11,6 +11,7 @@ import (
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/service"
+	"github.com/goto/optimus/core/tenant"
 )
 
 func ptr[T any](v T) *T {
@@ -106,14 +107,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 
 		scheduledAt := time.Now().UTC().Truncate(time.Second)
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
-		lineageSummary := &scheduler.JobLineageSummary{
-			JobName:   "job-A",
-			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: nil},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
-		}
+		lineageSummary := scheduler.NewJobLineageSummary("job-A", tenant.Tenant{}, "", scheduler.SLAConfig{}, nil, true)
+		lineageSummary.RecordOwnRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt, HookName: nil})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,
@@ -144,14 +139,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 
 		scheduledAt := time.Now().UTC().Truncate(time.Second)
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
-		lineageSummary := &scheduler.JobLineageSummary{
-			JobName:   "job-A",
-			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
-		}
+		lineageSummary := scheduler.NewJobLineageSummary("job-A", tenant.Tenant{}, "", scheduler.SLAConfig{}, nil, true)
+		lineageSummary.RecordOwnRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,
@@ -178,14 +167,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		scheduledAt := time.Now().UTC().Truncate(time.Second)
 		hookName := "my-hook"
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
-		lineageSummary := &scheduler.JobLineageSummary{
-			JobName:   "job-A",
-			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
-		}
+		lineageSummary := scheduler.NewJobLineageSummary("job-A", tenant.Tenant{}, "", scheduler.SLAConfig{}, nil, true)
+		lineageSummary.RecordOwnRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,
@@ -233,24 +216,16 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 
 		// both targets depend on the same upstream, at the same schedule
 		sharedRun := func(downstream scheduler.JobName) *scheduler.JobLineageSummary {
-			return &scheduler.JobLineageSummary{
-				JobName:   "shared-upstream",
-				IsEnabled: true,
-				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-					downstream: {JobName: "shared-upstream", ScheduledAt: scheduledAt},
-				},
-			}
+			s := scheduler.NewJobLineageSummary("shared-upstream", tenant.Tenant{}, "", scheduler.SLAConfig{}, nil, true)
+			s.RecordRun(scheduler.JobRunIdentifier{JobName: downstream, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{JobName: "shared-upstream", ScheduledAt: scheduledAt})
+			return s
 		}
-		lineageA := &scheduler.JobLineageSummary{
-			JobName: "job-A", IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {JobName: "job-A", ScheduledAt: scheduledAt}},
-			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-A")},
-		}
-		lineageB := &scheduler.JobLineageSummary{
-			JobName: "job-B", IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": {JobName: "job-B", ScheduledAt: scheduledAt}},
-			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-B")},
-		}
+		lineageA := scheduler.NewJobLineageSummary("job-A", tenant.Tenant{}, "", scheduler.SLAConfig{}, nil, true)
+		lineageA.RecordOwnRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt})
+		lineageA.AddUpstream(sharedRun("job-A"))
+		lineageB := scheduler.NewJobLineageSummary("job-B", tenant.Tenant{}, "", scheduler.SLAConfig{}, nil, true)
+		lineageB.RecordOwnRun(&scheduler.JobRunSummary{JobName: "job-B", ScheduledAt: scheduledAt})
+		lineageB.AddUpstream(sharedRun("job-B"))
 
 		schedules := []*scheduler.JobSchedule{scheduleA, scheduleB}
 		lineageBuilder.On("BuildLineage", ctx, schedules, 24).Return(
@@ -291,12 +266,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		scheduledAt := time.Now().UTC().Truncate(time.Second)
 		hookName := "my-hook"
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
-		lineageSummary := &scheduler.JobLineageSummary{
-			JobName: "job-A", IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
-			},
-		}
+		lineageSummary := scheduler.NewJobLineageSummary("job-A", tenant.Tenant{}, "", scheduler.SLAConfig{}, nil, true)
+		lineageSummary.RecordOwnRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,

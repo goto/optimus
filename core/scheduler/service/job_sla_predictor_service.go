@@ -77,7 +77,7 @@ type JobSLAPredictorService struct {
 
 type RootCauseIdentifier interface {
 	Identify(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState)
-	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath)
+	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobRunIdentifier]time.Time, rootcause.BottleneckPath)
 }
 
 func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string) *JobSLAPredictorService {
@@ -108,7 +108,7 @@ func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarge
 	return s.rootCause.Identify(ctx, jobTarget, jobDurations, targetedSLA, skipJobNames, damperFactor, referenceTime)
 }
 
-func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath) {
+func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobRunIdentifier]time.Time, rootcause.BottleneckPath) {
 	return s.rootCause.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperFactor)
 }
 
@@ -425,11 +425,7 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 		if len(path) == 0 {
 			continue
 		}
-		scheduledAt := time.Time{}
-		for _, jobRun := range jobTarget.JobRuns {
-			scheduledAt = jobRun.ScheduledAt
-			break
-		}
+		scheduledAt := jobTarget.RootOccurrence().Run().ScheduledAt
 		config := map[string]interface{}{}
 		config["server_config"] = s.config
 		config["request_config"] = reqConfig
@@ -592,7 +588,7 @@ func collectJobNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineage
 			continue
 		}
 		jobNamesMap[job.JobName] = true
-		stack = append(stack, job.Upstreams...)
+		stack = append(stack, job.Upstreams()...)
 	}
 	jobNames := make([]scheduler.JobName, 0, len(jobNamesMap))
 	for jobName := range jobNamesMap {

@@ -106,7 +106,7 @@ func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pe
 
 func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
 	// note: no need to realert again on target job which does not breached its SLA
-	if targetRun, ok := jobTarget.JobRuns[jobTarget.JobName]; ok && targetRun != nil {
+	if targetRun := jobTarget.RootOccurrence().Run(); targetRun != nil {
 		if endTime := targetRun.GetActualEndTime(); endTime != nil && !endTime.After(*targetedSLA) {
 			i.l.Info("target job finished before SLA, skipping breach detection",
 				"job", jobTarget.JobName, "end_time", endTime, "sla", targetedSLA)
@@ -117,14 +117,14 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 	// calculate inferred SLAs and record the tightest-path predecessor chain for level/path reporting
 	// S(u|j) = S(j) - D(u)
 	inferredSLAsByJobTarget, bottleneck := i.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperFactor)
-
+	
 	// populate jobSLAStatesByJobTargetName
-	jobSLAStates := populateJobSLAStates(jobDurations, inferredSLAsByJobTarget)
+	jobSLAStates := i.populateJobSLAStates(jobDurations, inferredSLAsByJobTarget, bottleneck.WinningRun)
 
 	// identify jobs that might breach their SLAs based on current time and inferred SLAs
 	// T(now)>= S(u|j) and the job u has not completed yet
 	// T(now)>= S(u|j) - D(u) and the job u has not started yet
-	rootCauses, breachFullPaths, nodeByName := i.identifyRootCauses(ctx, jobTarget, jobSLAStates, bottleneck, skipJobNames, referenceTime)
+	rootCauses, breachFullPaths, nodeByName := i.identifyRootCauses(ctx, jobTarget, jobSLAStates, inferredSLAsByJobTarget, bottleneck, skipJobNames, referenceTime)
 
 	// classify (and, where ambiguous, escalate to the upstream that actually caused the
 	// delay) before keying the result maps by JobName: a THIRD_PARTY_DELAY cause is keyed
@@ -346,8 +346,8 @@ func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, nod
 // lineage-walk gating (latest-finishing, or the first still pending) instead of a second
 // ranking implementation.
 func gatingUpstream(node *scheduler.JobLineageSummary, visited map[scheduler.JobName]bool) (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
-	candidates := make([]*scheduler.JobLineageSummary, 0, len(node.Upstreams))
-	for _, upstream := range node.Upstreams {
+	var candidates []*scheduler.JobLineageSummary
+	for _, upstream := range node.Upstreams() {
 		if !visited[upstream.JobName] {
 			candidates = append(candidates, upstream)
 		}
@@ -356,13 +356,33 @@ func gatingUpstream(node *scheduler.JobLineageSummary, visited map[scheduler.Job
 		return nil, nil
 	}
 
-	selected := scheduler.SelectUpstreams(&scheduler.JobLineageSummary{JobName: node.JobName, Upstreams: candidates}, 1)
-	if len(selected) == 0 {
-		return nil, nil
+	var latest *scheduler.JobLineageSummary
+	var latestRun *scheduler.JobRunSummary
+	for _, c := range candidates {
+        // try to find the run for node
+        var run *scheduler.JobRunSummary
+        if node.RootOccurrence().Run() != nil {
+            run = c.Runs().For(scheduler.JobRunIdentifier{JobName: node.JobName, ScheduledAt: node.RootOccurrence().Run().ScheduledAt})
+        }
+        if run == nil {
+            run = c.RootOccurrence().Run()
+        }
+		if run == nil {
+			continue
+		}
+		if latest == nil {
+			latest = c
+			latestRun = run
+			continue
+		}
+		endC := run.GetActualEndTime()
+		endL := latestRun.GetActualEndTime()
+		if endC != nil && endL != nil && endC.After(*endL) {
+			latest = c
+			latestRun = run
+		}
 	}
-	upstream := selected[0]
-	run := upstream.GetRunForJob(node.JobName)
-	return upstream, run
+	return latest, latestRun
 }
 
 // Only unstarted candidates can be sensor-blocked, so pending sensors are fetched for them alone.
@@ -406,8 +426,9 @@ func (i *Identifier) pendingSensors(ctx context.Context, causes map[scheduler.Jo
 // and depth on the path that produced the tightest (earliest) inferred SLA.
 // Used for level reporting and bottleneck-path reconstruction during breach detection.
 type BottleneckPath struct {
-	Pred  map[scheduler.JobName]scheduler.JobName
-	Level map[scheduler.JobName]int
+	Pred       map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier
+	Level      map[scheduler.JobRunIdentifier]int
+	WinningRun map[scheduler.JobName]scheduler.JobRunIdentifier
 }
 
 // CalculateInferredSLAs traverses bottom-up inferred-SLA calculation as a
@@ -424,46 +445,40 @@ type BottleneckPath struct {
 //   - BottleneckPath:
 //   - winningPred:  immediate downstream predecessor on the tightest path
 //   - winningLevel: depth of that tightest arrival (distance from the target)
-func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, BottleneckPath) {
-	inferredSLAs := make(map[scheduler.JobName]*time.Time)
+func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobRunIdentifier]time.Time, BottleneckPath) {
+	occurrenceSLAs := make(map[scheduler.JobRunIdentifier]time.Time)
 	bottleneck := BottleneckPath{
-		Pred:  map[scheduler.JobName]scheduler.JobName{},
-		Level: map[scheduler.JobName]int{},
+		Pred:       map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier{},
+		Level:      map[scheduler.JobRunIdentifier]int{},
+		WinningRun: map[scheduler.JobName]scheduler.JobRunIdentifier{},
 	}
 	if jobTarget == nil || targetedSLA == nil {
-		return inferredSLAs, bottleneck
+		return occurrenceSLAs, bottleneck
 	}
 
 	lowestDamperCoeff := damperFactor.InitialDamper()
 
 	i.l.Info("damper coefficient used for inferred SLA calculation", "damper_coeff", damperFactor.Alpha)
 
-	// bestByNodeLevel holds the tightest inferred SLA seen for a (job, level) pair; it is the
-	// pruning key that keeps the relaxation bounded even on graphs with many overlapping paths.
-	type nodeLevel struct {
-		jobName scheduler.JobName
-		level   int
-	}
-	bestByNodeLevel := make(map[nodeLevel]time.Time)
-
+	root := jobTarget.RootOccurrence()
 	targetSLA := *targetedSLA
-	inferredSLAs[jobTarget.JobName] = &targetSLA
-	bottleneck.Level[jobTarget.JobName] = 0
-	bestByNodeLevel[nodeLevel{jobTarget.JobName, 0}] = targetSLA
+	occurrenceSLAs[root.Identifier()] = targetSLA
+	bottleneck.Level[root.Identifier()] = 0
+	bottleneck.WinningRun[root.JobName()] = root.Identifier()
 
 	type state struct {
-		job    *scheduler.JobLineageSummary
+		occ    scheduler.Occurrence
 		level  int
 		damper float64
 		sla    time.Time
-		path   []scheduler.JobName // job names from target down to (and including) this entry
+		path   []scheduler.JobRunIdentifier // occurrences from target down to (and including) this entry
 	}
-	queue := []state{{job: jobTarget, level: 0, damper: damperFactor.InitialDamper(), sla: targetSLA, path: []scheduler.JobName{jobTarget.JobName}}}
+	queue := []state{{occ: root, level: 0, damper: damperFactor.InitialDamper(), sla: targetSLA, path: []scheduler.JobRunIdentifier{root.Identifier()}}}
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
 
-		duration := jobDurations[current.job.JobName]
+		duration := jobDurations[current.occ.JobName()]
 		if duration == nil {
 			continue
 		}
@@ -475,44 +490,54 @@ func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummar
 		childLevel := current.level + 1
 		childDamper := damperFactor.NextDamper(current.damper)
 
-		for _, upstreamJob := range current.job.Upstreams {
-			// do not set inferred sla from a job which has no valid job runs
-			if len(upstreamJob.JobRuns) == 0 {
-				i.l.Debug("upstream job does not have associated runs to attach SLA. skipping remaining upstreams for this table", "upstream", upstreamJob.JobName, "targetJob", jobTarget.JobName)
-				continue
-			}
-			// cycle guard: if the upstream already appears on the path from the target
-			// to the current entry, following it would form a back-edge.
-			cyclic := slices.Contains(current.path, upstreamJob.JobName)
-			if cyclic {
-				i.l.Warn("cycle detected in lineage, skipping upstream", "upstream", upstreamJob.JobName, "path", current.path)
+		for _, upstreamOcc := range current.occ.Upstreams() {
+			id := upstreamOcc.Identifier()
+
+			// cycle guard: if this occurrence already appears on the path from the target to the
+			// current entry, following it would form a back-edge.
+			if slices.Contains(current.path, id) {
+				i.l.Warn("cycle detected in lineage, skipping upstream", "upstream", upstreamOcc.JobName(), "path", current.path)
 				continue
 			}
 
-			key := nodeLevel{upstreamJob.JobName, childLevel}
-			if existing, ok := bestByNodeLevel[key]; ok && !childSLA.Before(existing) {
+			// tightest-wins is correct here: multiple consumers of the SAME physical run really
+			// do share one true deadline - the strictest one. Different physical runs of the
+			// same job name never collide here, since id includes the run's own scheduled time.
+			if existing, ok := occurrenceSLAs[id]; ok && !childSLA.Before(existing) {
 				continue
 			}
-			bestByNodeLevel[key] = childSLA
 
-			// record the global-minimum (tightest) inferred SLA across all paths and levels
-			if best, ok := inferredSLAs[upstreamJob.JobName]; !ok || childSLA.Before(*best) {
-				sla := childSLA
-				inferredSLAs[upstreamJob.JobName] = &sla
-				bottleneck.Pred[upstreamJob.JobName] = current.job.JobName
-				bottleneck.Level[upstreamJob.JobName] = childLevel
+			// capture the job name's current bottleneck value before writing occurrenceSLAs[id]:
+			// the winning identifier can be this same id (the same physical run reached via a
+			// different consumer earlier), in which case reading it back after the write below
+			// would just compare childSLA against itself.
+			var currentBest time.Time
+			winningID, hasWinner := bottleneck.WinningRun[upstreamOcc.JobName()]
+			if hasWinner {
+				currentBest = occurrenceSLAs[winningID]
 			}
 
-			childPath := make([]scheduler.JobName, len(current.path)+1)
+			occurrenceSLAs[id] = childSLA
+			// Level/Pred are keyed by this occurrence's own identifier, so they always describe
+			// exactly the chain that produced occurrenceSLAs[id] - correct per real run, even when
+			// this job name has another run elsewhere in the lineage with a different chain.
+			bottleneck.Level[id] = childLevel
+			bottleneck.Pred[id] = current.occ.Identifier()
+
+			if !hasWinner || childSLA.Before(currentBest) {
+				bottleneck.WinningRun[upstreamOcc.JobName()] = id
+			}
+
+			childPath := make([]scheduler.JobRunIdentifier, len(current.path)+1)
 			copy(childPath, current.path)
-			childPath[len(current.path)] = upstreamJob.JobName
-			queue = append(queue, state{job: upstreamJob, level: childLevel, damper: childDamper, sla: childSLA, path: childPath})
+			childPath[len(current.path)] = id
+			queue = append(queue, state{occ: upstreamOcc, level: childLevel, damper: childDamper, sla: childSLA, path: childPath})
 		}
 	}
 
 	i.l.Info("lowest damper coefficient used in inferred SLA calculation", "damper_coeff", lowestDamperCoeff)
 
-	return inferredSLAs, bottleneck
+	return occurrenceSLAs, bottleneck
 }
 
 // identifySLABreachRootCauses identifies jobs that might breach their SLA and traces the
@@ -522,18 +547,7 @@ func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummar
 // A job is a *true* root cause when it is breaching but none of its direct upstreams are
 // also breaching. This graph-based rule collapses diamond lineages to the single deepest
 // breaching job regardless of which traversal branch visits the shared ancestor first.
-func (i *Identifier) identifyRootCauses(
-	ctx context.Context,
-	jobTarget *scheduler.JobLineageSummary,
-	jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState,
-	bottleneck BottleneckPath,
-	skipJobNames map[scheduler.JobName]bool,
-	referenceTime time.Time,
-) (
-	[][]*scheduler.JobState,
-	[][]*scheduler.JobState,
-	map[scheduler.JobName]*scheduler.JobLineageSummary,
-) {
+func (i *Identifier) identifyRootCauses(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, occurrenceSLAs map[scheduler.JobRunIdentifier]time.Time, bottleneck BottleneckPath, skipJobNames map[scheduler.JobName]bool, referenceTime time.Time) ([][]*scheduler.JobState, [][]*scheduler.JobState, map[scheduler.JobName]*scheduler.JobLineageSummary) {
 	jobBreachStates := make(map[scheduler.JobName]*scheduler.JobState)
 	nodeByName := make(map[scheduler.JobName]*scheduler.JobLineageSummary)
 
@@ -556,7 +570,7 @@ func (i *Identifier) identifyRootCauses(
 		if jobSLAStates[job.JobName] == nil || jobSLAStates[job.JobName].InferredSLA == nil || jobSLAStates[job.JobName].EstimatedDuration == nil { // less likely occur, but just in case
 			continue
 		}
-		if len(job.JobRuns) == 0 {
+		if job.Runs().Len() == 0 {
 			i.l.Info("skipping job for SLA breach check as it has no job run associated", "job", job.JobName)
 			continue
 		}
@@ -567,16 +581,24 @@ func (i *Identifier) identifyRootCauses(
 				continue
 			}
 		} else {
-			inferredSLA := *jobSLAStates[job.JobName].InferredSLA
 			estimatedDuration := *jobSLAStates[job.JobName].EstimatedDuration
 
-			// A job reached via multiple downstream paths (a diamond) can carry more than one
-			// distinct run in JobRuns - one per path, since different downstream jobs can imply
-			// different actual schedules for the same shared upstream. Check every run so a
-			// breach on any converging branch isn't silently dropped just because another
-			// branch's run happens to look fine.
+			// A job reached via multiple downstream paths (a diamond), or reached twice by the
+			// same downstream job on different days, can carry more than one distinct run - each
+			// a genuinely independent physical execution with its own deadline. Check every run
+			// against its own deadline (occurrenceSLAs, not the collapsed per-job-name value) so
+			// a breach on any converging branch isn't silently dropped or checked against the
+			// wrong requirement just because another run of the same job looks fine.
 			var state *scheduler.JobState
-			for _, jobRun := range sortedJobRuns(job.JobRuns) {
+			for _, entry := range job.Runs().SortedEntries() {
+				jobRun := entry.Run
+				runID := scheduler.JobRunIdentifier{JobName: job.JobName, ScheduledAt: jobRun.ScheduledAt}
+				inferredSLA, ok := occurrenceSLAs[runID]
+				if !ok {
+					i.l.Debug("skipping run for SLA breach check as it has no inferred SLA recorded", "job", job.JobName, "scheduled_at", jobRun.ScheduledAt)
+					continue
+				}
+
 				if oldScheduled, err := i.scheduledChangeGetter.GetRecentScheduleChange(ctx, job.JobName, job.Tenant, jobRun.ScheduledAt); err != nil {
 					i.l.Error("failed to get recent schedule change for job, check the breach anyway", "job", job.JobName, "error", err)
 				} else if oldScheduled != "" {
@@ -590,22 +612,22 @@ func (i *Identifier) identifyRootCauses(
 				// condition 1: T(now)>= S(u|j) and the job u has not completed yet
 				if (referenceTime.After(inferredSLA) && jobRun.JobEndTime == nil) || (jobRun.JobEndTime != nil && jobRun.JobEndTime.After(inferredSLA)) {
 					runState = &scheduler.JobState{
-						JobSLAState:   *jobSLAStates[job.JobName],
+						JobSLAState:   scheduler.JobSLAState{EstimatedDuration: &estimatedDuration, InferredSLA: &inferredSLA},
 						JobName:       job.JobName,
 						JobRun:        *jobRun,
 						Tenant:        job.Tenant,
-						RelativeLevel: bottleneck.Level[job.JobName],
+						RelativeLevel: bottleneck.Level[runID],
 						Status:        scheduler.SLABreachCauseRunningLate,
 					}
 				}
 				// condition 2: T(now)>= S(u|j) - D(u) and the job u has not started yet
 				if referenceTime.After(inferredSLA.Add(-estimatedDuration)) && jobRun.TaskStartTime == nil {
 					runState = &scheduler.JobState{
-						JobSLAState:   *jobSLAStates[job.JobName],
+						JobSLAState:   scheduler.JobSLAState{EstimatedDuration: &estimatedDuration, InferredSLA: &inferredSLA},
 						JobName:       job.JobName,
 						JobRun:        *jobRun,
 						Tenant:        job.Tenant,
-						RelativeLevel: bottleneck.Level[job.JobName],
+						RelativeLevel: bottleneck.Level[runID],
 						Status:        scheduler.SLABreachCauseNotStarted,
 					}
 				}
@@ -616,17 +638,18 @@ func (i *Identifier) identifyRootCauses(
 			}
 			if state != nil {
 				jobBreachStates[job.JobName] = state
-				i.l.Info("potential SLA breach found", "job", job.JobName, "inferred_sla", inferredSLA, "duration", jobSLAStates[job.JobName].EstimatedDuration, "level", bottleneck.Level[job.JobName])
+				i.l.Info("potential SLA breach found", "job", job.JobName, "inferred_sla", *state.InferredSLA, "duration", estimatedDuration, "level", state.RelativeLevel)
 			}
 		}
 
-		stack = append(stack, job.Upstreams...)
+		stack = append(stack, job.Upstreams()...)
 	}
 
 	// find exact root causes:
 	// breaching jobs with no breaching direct upstream
 	// this logic below makes propagated upstream breaches do not appear
 	// as root cause of the target job breach
+	targetID := jobTarget.RootOccurrence().Identifier()
 	rootCauses := make([][]*scheduler.JobState, 0)
 	fullPaths := make([][]*scheduler.JobState, 0)
 	for jobName, breachState := range jobBreachStates {
@@ -636,7 +659,7 @@ func (i *Identifier) identifyRootCauses(
 		}
 
 		hasBreachingUpstream := false
-		for _, upstream := range node.Upstreams {
+		for _, upstream := range node.Upstreams() {
 			if _, breaching := jobBreachStates[upstream.JobName]; breaching {
 				hasBreachingUpstream = true
 				break
@@ -646,7 +669,8 @@ func (i *Identifier) identifyRootCauses(
 			continue
 		}
 		rootCauses = append(rootCauses, []*scheduler.JobState{breachState})
-		path := reconstructStatePath(jobTarget.JobName, jobName, bottleneck, jobSLAStates, jobBreachStates, nodeByName)
+		breachID := scheduler.JobRunIdentifier{JobName: jobName, ScheduledAt: breachState.JobRun.ScheduledAt}
+		path := reconstructStatePath(targetID, breachID, bottleneck, jobSLAStates, jobBreachStates, nodeByName)
 		if len(path) > 0 {
 			fullPaths = append(fullPaths, path)
 		}
@@ -657,18 +681,18 @@ func (i *Identifier) identifyRootCauses(
 
 // reconstructStatePath rebuilds the path from the target down to breachName by following the
 // strictest-SLA predecessor chain, returning ordered list with target job first.
-func reconstructStatePath(targetName, breachName scheduler.JobName, bottleneck BottleneckPath, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, jobBreachStates map[scheduler.JobName]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary) []*scheduler.JobState {
-	// walk from the breached jobs to the target job
-	names := []scheduler.JobName{}
-	seen := make(map[scheduler.JobName]bool)
-	for cur := breachName; ; {
+func reconstructStatePath(targetID, breachID scheduler.JobRunIdentifier, bottleneck BottleneckPath, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, jobBreachStates map[scheduler.JobName]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary) []*scheduler.JobState {
+	// walk from the breaching run to the target run
+	ids := []scheduler.JobRunIdentifier{}
+	seen := make(map[scheduler.JobRunIdentifier]bool)
+	for cur := breachID; ; {
 		// cyclic case: break
 		if seen[cur] {
 			break
 		}
 		seen[cur] = true
-		names = append(names, cur)
-		if cur == targetName {
+		ids = append(ids, cur)
+		if cur == targetID {
 			break
 		}
 		pred, ok := bottleneck.Pred[cur]
@@ -679,10 +703,11 @@ func reconstructStatePath(targetName, breachName scheduler.JobName, bottleneck B
 	}
 
 	// reverse into target-first order and materialize states
-	path := make([]*scheduler.JobState, 0, len(names))
-	for i := len(names) - 1; i >= 0; i-- {
-		name := names[i]
-		if breachState, ok := jobBreachStates[name]; ok {
+	path := make([]*scheduler.JobState, 0, len(ids))
+	for i := len(ids) - 1; i >= 0; i-- {
+		id := ids[i]
+		name := id.JobName
+		if breachState, ok := jobBreachStates[name]; ok && breachState.JobRun.ScheduledAt.Equal(id.ScheduledAt) {
 			path = append(path, breachState)
 			continue
 		}
@@ -693,7 +718,7 @@ func reconstructStatePath(targetName, breachName scheduler.JobName, bottleneck B
 		plain := &scheduler.JobState{
 			JobSLAState:   *slaState,
 			JobName:       name,
-			RelativeLevel: bottleneck.Level[name],
+			RelativeLevel: bottleneck.Level[id],
 		}
 		if node, ok := nodeByName[name]; ok {
 			plain.Tenant = node.Tenant
@@ -723,12 +748,16 @@ func sortedJobRuns(jobRuns map[scheduler.JobName]*scheduler.JobRunSummary) []*sc
 	return unique
 }
 
-func populateJobSLAStates(jobDurations map[scheduler.JobName]*time.Duration, jobSLAsByJobName map[scheduler.JobName]*time.Time) map[scheduler.JobName]*scheduler.JobSLAState {
+func (i *Identifier) populateJobSLAStates(jobDurations map[scheduler.JobName]*time.Duration, occurrenceSLAs map[scheduler.JobRunIdentifier]time.Time, winningRun map[scheduler.JobName]scheduler.JobRunIdentifier) map[scheduler.JobName]*scheduler.JobSLAState {
 	jobSLAStatesByJobName := make(map[scheduler.JobName]*scheduler.JobSLAState)
-	for jobName, inferredSLA := range jobSLAsByJobName {
+	for jobName, id := range winningRun {
+		inferredSLA, ok := occurrenceSLAs[id]
+		if !ok {
+			continue
+		}
 		jobSLAStatesByJobName[jobName] = &scheduler.JobSLAState{
 			EstimatedDuration: jobDurations[jobName],
-			InferredSLA:       inferredSLA,
+			InferredSLA:       &inferredSLA,
 		}
 	}
 	return jobSLAStatesByJobName

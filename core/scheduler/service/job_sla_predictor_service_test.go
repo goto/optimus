@@ -414,8 +414,6 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A",
 			ScheduleInterval: interval,
-			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{},
-			Upstreams:        []*scheduler.JobLineageSummary{},
 		}
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
@@ -496,42 +494,34 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A",
 			ScheduleInterval: interval,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobASchedule.JobName: {
-					ScheduledAt: scheduledAt,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt,
+		})
 		jobBTaskStartTime := scheduledAt.Add(-10 * time.Minute)
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-15 * time.Minute),
-					TaskStartTime: &jobBTaskStartTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobALineage.JobName, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   jobBScheduledAt,
+			TaskStartTime: &jobBTaskStartTime,
+		})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCTaskEndTime := scheduledAt.Add(-10 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobBLineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime,
-					TaskEndTime:   &jobCTaskEndTime,
-					JobEndTime:    &jobCTaskEndTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
-		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
-		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobBLineage.JobName, ScheduledAt: jobBScheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+			TaskStartTime: &jobCTaskStartTime,
+			TaskEndTime:   &jobCTaskEndTime,
+			JobEndTime:    &jobCTaskEndTime,
+		})
+		jobALineage.AddUpstream(jobBLineage)
+		jobBLineage.AddUpstream(jobCLineage)
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
@@ -619,39 +609,31 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobASchedule.JobName: {
-					ScheduledAt: scheduledAt,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt,
+		})
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt: scheduledAt.Add(-15 * time.Minute),
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobALineage.JobName, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt: jobBScheduledAt,
+		})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
-		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
-		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobBLineage.JobName, ScheduledAt: jobBScheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+			TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
+		})
+		jobALineage.AddUpstream(jobBLineage)
+		jobBLineage.AddUpstream(jobCLineage)
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
@@ -743,42 +725,34 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobASchedule.JobName: {
-					ScheduledAt: scheduledAt,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt,
+		})
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt: scheduledAt.Add(-15 * time.Minute), // job-B is not started yet, it should have started 5 mins ago
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobALineage.JobName, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt: jobBScheduledAt, // job-B is not started yet, it should have started 5 mins ago
+		})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCTaskEndTime := scheduledAt.Add(-10 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime,
-					TaskEndTime:   &jobCTaskEndTime,
-					JobEndTime:    &jobCTaskEndTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
-		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
-		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobBLineage.JobName, ScheduledAt: jobBScheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+			TaskStartTime: &jobCTaskStartTime,
+			TaskEndTime:   &jobCTaskEndTime,
+			JobEndTime:    &jobCTaskEndTime,
+		})
+		jobALineage.AddUpstream(jobBLineage)
+		jobBLineage.AddUpstream(jobCLineage)
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
@@ -893,55 +867,44 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A1",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobASchedule1.JobName: {
-					ScheduledAt: scheduledAt,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobA1Lineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt,
+		})
 		jobA2Lineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A2",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobASchedule2.JobName: {
-					ScheduledAt: scheduledAt,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobA2Lineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt,
+		})
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobA1Lineage.JobName: {
-					ScheduledAt: scheduledAt.Add(-15 * time.Minute),
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobA1Lineage.JobName, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt: jobBScheduledAt,
+		})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobA2Lineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
-				},
-				jobA1Lineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
-		jobA1Lineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
-		jobA2Lineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
-		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobA2Lineage.JobName, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+			TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
+		})
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobBLineage.JobName, ScheduledAt: jobBScheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+			TaskStartTime: &jobCTaskStartTime, // job-C is running, but not done yet
+		})
+		jobA1Lineage.AddUpstream(jobBLineage)
+		jobA2Lineage.AddUpstream(jobCLineage)
+		jobBLineage.AddUpstream(jobCLineage)
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A1", "job-A2"}).Return([]*scheduler.JobWithDetails{jobA1, jobA2}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
@@ -1030,42 +993,34 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A",
 			ScheduleInterval: interval,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobASchedule.JobName: {
-					ScheduledAt: scheduledAt,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt,
+		})
 		jobBTaskStartTime := scheduledAt.Add(-10 * time.Minute)
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-15 * time.Minute),
-					TaskStartTime: &jobBTaskStartTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobALineage.JobName, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   jobBScheduledAt,
+			TaskStartTime: &jobBTaskStartTime,
+		})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCTaskEndTime := scheduledAt.Add(-10 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobBLineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime,
-					TaskEndTime:   &jobCTaskEndTime,
-					JobEndTime:    &jobCTaskEndTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
-		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
-		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobBLineage.JobName, ScheduledAt: jobBScheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+			TaskStartTime: &jobCTaskStartTime,
+			TaskEndTime:   &jobCTaskEndTime,
+			JobEndTime:    &jobCTaskEndTime,
+		})
+		jobALineage.AddUpstream(jobBLineage)
+		jobBLineage.AddUpstream(jobCLineage)
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, errors.New("nonblocking error")).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
@@ -1157,48 +1112,40 @@ func TestIdentifySLABreaches(t *testing.T) {
 			JobName:          "job-A",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobASchedule.JobName: {
-					ScheduledAt:   scheduledAt,
-					TaskStartTime: &jobATaskStartTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: &jobATaskStartTime,
+		})
 		jobBTaskStartTime := scheduledAt.Add(-10 * time.Minute)
 		jobBTaskEndTime := scheduledAt.Add(5 * time.Minute)
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-15 * time.Minute),
-					TaskStartTime: &jobBTaskStartTime,
-					TaskEndTime:   &jobBTaskEndTime,
-					JobEndTime:    &jobBTaskEndTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobALineage.JobName, ScheduledAt: scheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   jobBScheduledAt,
+			TaskStartTime: &jobBTaskStartTime,
+			TaskEndTime:   &jobBTaskEndTime,
+			JobEndTime:    &jobBTaskEndTime,
+		})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCTaskEndTime := scheduledAt.Add(-10 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobALineage.JobName: {
-					ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
-					TaskStartTime: &jobCTaskStartTime,
-					TaskEndTime:   &jobCTaskEndTime,
-					JobEndTime:    &jobCTaskEndTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
-		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
-		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobBLineage.JobName, ScheduledAt: jobBScheduledAt}, &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt.Add(-25 * time.Minute),
+			TaskStartTime: &jobCTaskStartTime,
+			TaskEndTime:   &jobCTaskEndTime,
+			JobEndTime:    &jobCTaskEndTime,
+		})
+		jobALineage.AddUpstream(jobBLineage)
+		jobBLineage.AddUpstream(jobCLineage)
 
 		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{"job-A"}).Return([]*scheduler.JobWithDetails{jobA}, nil).Once()
 		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{
@@ -1276,7 +1223,13 @@ func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
 	}
 
 	buildLineage := func(states map[scheduler.JobName]runState) *scheduler.JobLineageSummary {
-		node := func(name scheduler.JobName) *scheduler.JobLineageSummary {
+		// parentID builds the identifier of the immediate downstream occurrence that requires a
+		// given upstream's run - every job in this fixture shares the same scheduledAt, so the
+		// only thing that varies is which job name is asking.
+		parentID := func(name scheduler.JobName) scheduler.JobRunIdentifier {
+			return scheduler.JobRunIdentifier{JobName: name, ScheduledAt: scheduledAt}
+		}
+		newNode := func(name scheduler.JobName) (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
 			run := &scheduler.JobRunSummary{ScheduledAt: scheduledAt}
 			if st := states[name]; st.start != nil {
 				start := scheduledAt.Add(*st.start)
@@ -1292,17 +1245,31 @@ func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
 				JobName:          name,
 				ScheduleInterval: interval,
 				IsEnabled:        true,
-				JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
-				Upstreams:        []*scheduler.JobLineageSummary{},
-			}
+			}, run
 		}
-		a, b, c := node("job-A"), node("job-B"), node("job-C")
-		f, d, e := node("job-F"), node("job-D"), node("job-E")
-		a.Upstreams = []*scheduler.JobLineageSummary{b, c}
-		b.Upstreams = []*scheduler.JobLineageSummary{d}
-		c.Upstreams = []*scheduler.JobLineageSummary{f}
-		f.Upstreams = []*scheduler.JobLineageSummary{d}
-		d.Upstreams = []*scheduler.JobLineageSummary{e}
+		a, aRun := newNode("job-A")
+		b, bRun := newNode("job-B")
+		c, cRun := newNode("job-C")
+		f, fRun := newNode("job-F")
+		d, dRun := newNode("job-D")
+		e, eRun := newNode("job-E")
+
+		a.RecordOwnRun(aRun)
+		b.RecordRun(parentID("job-A"), bRun)
+		c.RecordRun(parentID("job-A"), cRun)
+		// job-D is reached via both job-B and job-F (asymmetric diamond merge point), so its one
+		// physical run is recorded under both immediate-downstream identifiers.
+		d.RecordRun(parentID("job-B"), dRun)
+		d.RecordRun(parentID("job-F"), dRun)
+		f.RecordRun(parentID("job-C"), fRun)
+		e.RecordRun(parentID("job-D"), eRun)
+
+		a.AddUpstream(b)
+		a.AddUpstream(c)
+		b.AddUpstream(d)
+		c.AddUpstream(f)
+		f.AddUpstream(d)
+		d.AddUpstream(e)
 		return a
 	}
 
@@ -1486,6 +1453,104 @@ func TestIdentifySLABreach(t *testing.T) {
 
 	slaPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, nil, nil, nil, nil, nil, scheduledChangeGetter, nil, nil)
 
+	t.Run("double-scheduled upstream: divergent runs required at different levels", func(t *testing.T) {
+		// job-U is double-scheduled: it has two independent real runs (run1 and run2, at
+		// different ScheduledAt), each required by a different downstream chain at a different
+		// depth:
+		//
+		//   job-A -> job-B -> job-U (run2, level 2, tighter deadline)
+		//   job-A -> job-C -> job-D -> job-U (run1, level 3, looser deadline)
+		//
+		// run2 (the shallower chain's run, with the numerically tighter deadline) finishes on
+		// time. run1 (the deeper chain's run, with a looser deadline despite being reached at a
+		// greater depth) is still running past its own deadline. The reported breach for job-U
+		// must carry run1's own level/predecessor chain (level 3, via job-C -> job-D) - not
+		// job-B's chain, even though job-B's occurrence of job-U happens to have the tighter
+		// deadline of the two.
+		base := time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
+		targetSLA := base.Add(60 * time.Minute)
+
+		jobA := &scheduler.JobLineageSummary{JobName: "job-A", IsEnabled: true}
+		jobB := &scheduler.JobLineageSummary{JobName: "job-B", IsEnabled: true}
+		jobC := &scheduler.JobLineageSummary{JobName: "job-C", IsEnabled: true}
+		jobD := &scheduler.JobLineageSummary{JobName: "job-D", IsEnabled: true}
+		jobU := &scheduler.JobLineageSummary{JobName: "job-U", IsEnabled: true}
+
+		aRun := &scheduler.JobRunSummary{ScheduledAt: base}
+
+		bStart, bEnd := base.Add(5*time.Minute), base.Add(20*time.Minute)
+		bRun := &scheduler.JobRunSummary{ScheduledAt: base, TaskStartTime: &bStart, TaskEndTime: &bEnd, JobEndTime: &bEnd}
+
+		cStart, cEnd := base.Add(2*time.Minute), base.Add(6*time.Minute)
+		cRun := &scheduler.JobRunSummary{ScheduledAt: base, TaskStartTime: &cStart, TaskEndTime: &cEnd, JobEndTime: &cEnd}
+
+		dStart, dEnd := base.Add(7*time.Minute), base.Add(9*time.Minute)
+		dRun := &scheduler.JobRunSummary{ScheduledAt: base, TaskStartTime: &dStart, TaskEndTime: &dEnd, JobEndTime: &dEnd}
+
+		// run1: job-U's run required via job-D (the deeper, looser-deadline chain). Started but
+		// still running past its deadline.
+		run1ScheduledAt := base
+		run1Start := base.Add(10 * time.Minute)
+		run1 := &scheduler.JobRunSummary{ScheduledAt: run1ScheduledAt, TaskStartTime: &run1Start}
+
+		// run2: job-U's other run, required via job-B (the shallower, tighter-deadline chain).
+		// A distinct real execution - same job name, different scheduled time - that finishes
+		// comfortably before its own (tighter) deadline.
+		run2ScheduledAt := base.Add(12 * time.Hour)
+		run2Start, run2End := base.Add(21*time.Minute), base.Add(25*time.Minute)
+		run2 := &scheduler.JobRunSummary{ScheduledAt: run2ScheduledAt, TaskStartTime: &run2Start, TaskEndTime: &run2End, JobEndTime: &run2End}
+
+		jobA.RecordOwnRun(aRun)
+		jobB.RecordRun(scheduler.JobRunIdentifier{JobName: "job-A", ScheduledAt: base}, bRun)
+		jobC.RecordRun(scheduler.JobRunIdentifier{JobName: "job-A", ScheduledAt: base}, cRun)
+		jobD.RecordRun(scheduler.JobRunIdentifier{JobName: "job-C", ScheduledAt: base}, dRun)
+		jobU.RecordRun(scheduler.JobRunIdentifier{JobName: "job-D", ScheduledAt: base}, run1)
+		jobU.RecordRun(scheduler.JobRunIdentifier{JobName: "job-B", ScheduledAt: base}, run2)
+
+		jobA.AddUpstream(jobB)
+		jobA.AddUpstream(jobC)
+		jobB.AddUpstream(jobU)
+		jobC.AddUpstream(jobD)
+		jobD.AddUpstream(jobU)
+
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(10 * time.Minute),
+			"job-B": dur(15 * time.Minute),
+			"job-C": dur(3 * time.Minute),
+			"job-D": dur(2 * time.Minute),
+			"job-U": dur(5 * time.Minute),
+		}
+
+		// inferred SLAs (damper=1.0, full duration subtracted per hop):
+		//   S(A) = base+60                        (level 0)
+		//   S(B) = S(C) = base+60-10 = base+50     (level 1)
+		//   S(U via B, run2) = base+50-15 = base+35 (level 2, tighter)
+		//   S(D) = base+50-3 = base+47             (level 2)
+		//   S(U via D, run1) = base+47-2 = base+45 (level 3, looser, despite being deeper)
+		//
+		// referenceTime is past run1's deadline (base+45) but before every other job's own
+		// deadline, and run2 already finished before its own (tighter) deadline regardless.
+		referenceTime := base.Add(46 * time.Minute)
+
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobA, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
+
+		assert.Len(t, breachesCauses, 1)
+		if uState, ok := breachesCauses["job-U"]; assert.True(t, ok) {
+			assert.Equal(t, scheduler.SLABreachCauseRunningLate, uState.Status)
+			assert.True(t, uState.JobRun.ScheduledAt.Equal(run1ScheduledAt), "breach should be attributed to run1, not run2")
+			assert.Equal(t, 3, uState.RelativeLevel, "level must reflect run1's own chain (via job-D), not run2's (via job-B)")
+		}
+
+		if path, ok := fullBreachesCauses["job-U"]; assert.True(t, ok) && assert.Len(t, path, 4) {
+			wantChain := []scheduler.JobName{"job-A", "job-C", "job-D", "job-U"}
+			wantLevels := []int{0, 1, 2, 3}
+			for i, name := range wantChain {
+				assert.Equal(t, name, path[i].JobName)
+				assert.Equal(t, wantLevels[i], path[i].RelativeLevel)
+			}
+		}
+	})
+
 	t.Run("given job lineage with no upstream issues", func(t *testing.T) {
 		referenceTime := time.Now().UTC()
 		targetedSLAOffset := 30 * time.Minute
@@ -1497,7 +1562,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 		jobNames := []scheduler.JobName{"job-A", "job-B", "job-C"}
 
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
+		jobTargetLineageMap, _ := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
@@ -1528,18 +1593,18 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 		jobNames := []scheduler.JobName{"job-A", "job-B", "job-C"}
 
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
+		jobTargetLineageMap, runsByJobName := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: 1.0}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
-		jobTargetLineageMap["job-A"].JobRuns["job-A"].TaskStartTime = nil
-		jobTargetLineageMap["job-A"].JobRuns["job-A"].TaskEndTime = nil
-		jobTargetLineageMap["job-A"].JobRuns["job-A"].JobEndTime = nil
-		jobTargetLineageMap["job-B"].JobRuns["job-A"].TaskStartTime = nil
-		jobTargetLineageMap["job-B"].JobRuns["job-A"].TaskEndTime = nil
-		jobTargetLineageMap["job-B"].JobRuns["job-A"].JobEndTime = nil
-		jobTargetLineageMap["job-C"].JobRuns["job-A"].TaskEndTime = nil
-		jobTargetLineageMap["job-C"].JobRuns["job-A"].JobEndTime = nil
+		runsByJobName["job-A"].TaskStartTime = nil
+		runsByJobName["job-A"].TaskEndTime = nil
+		runsByJobName["job-A"].JobEndTime = nil
+		runsByJobName["job-B"].TaskStartTime = nil
+		runsByJobName["job-B"].TaskEndTime = nil
+		runsByJobName["job-B"].JobEndTime = nil
+		runsByJobName["job-C"].TaskEndTime = nil
+		runsByJobName["job-C"].JobEndTime = nil
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
@@ -1565,19 +1630,19 @@ func TestIdentifySLABreach(t *testing.T) {
 			durations[jobName] = func() *time.Duration { d := 5 * time.Minute; return &d }()
 			jobNames = append(jobNames, jobName)
 		}
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
+		jobTargetLineageMap, runsByJobName := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-1"]
 		// job-1 .. job-17 are not started yet
 		for i := 1; i < 18; i++ {
 			jobName := scheduler.JobName(fmt.Sprintf("job-%d", i))
-			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskStartTime = nil
-			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskEndTime = nil
-			jobTargetLineageMap[jobName].JobRuns["job-1"].JobEndTime = nil
+			runsByJobName[jobName].TaskStartTime = nil
+			runsByJobName[jobName].TaskEndTime = nil
+			runsByJobName[jobName].JobEndTime = nil
 		}
 		// job-18 is running late
-		jobTargetLineageMap["job-18"].JobRuns["job-1"].TaskEndTime = nil
-		jobTargetLineageMap["job-18"].JobRuns["job-1"].JobEndTime = nil
+		runsByJobName["job-18"].TaskEndTime = nil
+		runsByJobName["job-18"].JobEndTime = nil
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
@@ -1603,19 +1668,19 @@ func TestIdentifySLABreach(t *testing.T) {
 			durations[jobName] = func() *time.Duration { d := 5 * time.Minute; return &d }()
 			jobNames = append(jobNames, jobName)
 		}
-		jobTargetLineageMap := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
+		jobTargetLineageMap, runsByJobName := generateLineageWithSLAStates(slaPredictorService, durations, jobNames, referenceTime, scheduler.DamperFactor{Alpha: damperCoeff}, targetSLA)
 
 		jobTargetLineage := jobTargetLineageMap["job-1"]
 		// job-1 .. job-17 are not started yet
 		for i := 1; i < 18; i++ {
 			jobName := scheduler.JobName(fmt.Sprintf("job-%d", i))
-			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskStartTime = nil
-			jobTargetLineageMap[jobName].JobRuns["job-1"].TaskEndTime = nil
-			jobTargetLineageMap[jobName].JobRuns["job-1"].JobEndTime = nil
+			runsByJobName[jobName].TaskStartTime = nil
+			runsByJobName[jobName].TaskEndTime = nil
+			runsByJobName[jobName].JobEndTime = nil
 		}
 		// job-18 is running late
-		jobTargetLineageMap["job-18"].JobRuns["job-1"].TaskEndTime = nil
-		jobTargetLineageMap["job-18"].JobRuns["job-1"].JobEndTime = nil
+		runsByJobName["job-18"].TaskEndTime = nil
+		runsByJobName["job-18"].JobEndTime = nil
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
@@ -1653,32 +1718,29 @@ func TestIdentifySLABreach(t *testing.T) {
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:   "job-C",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: referenceTime, TaskStartTime: &jobCStartTime},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:   "job-B",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: referenceTime},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{jobCLineage},
 		}
+		jobCLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobBLineage.JobName, ScheduledAt: referenceTime}, &scheduler.JobRunSummary{
+			ScheduledAt: referenceTime, TaskStartTime: &jobCStartTime,
+		})
+		jobBLineage.AddUpstream(jobCLineage)
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {
-					ScheduledAt:   referenceTime,
-					TaskStartTime: &jobAStartTime,
-					TaskEndTime:   &jobAEndTime,
-					JobEndTime:    &jobAEndTime,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{jobBLineage},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobALineage.JobName, ScheduledAt: referenceTime}, &scheduler.JobRunSummary{
+			ScheduledAt: referenceTime,
+		})
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{
+			ScheduledAt:   referenceTime,
+			TaskStartTime: &jobAStartTime,
+			TaskEndTime:   &jobAEndTime,
+			JobEndTime:    &jobAEndTime,
+		})
+		jobALineage.AddUpstream(jobBLineage)
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
 			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
@@ -1716,33 +1778,31 @@ func TestIdentifySLABreach(t *testing.T) {
 		jobDLineage := &scheduler.JobLineageSummary{
 			JobName:   "job-D",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: referenceTime, TaskStartTime: &jobDStartTime},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:   "job-C",
 			IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{}, // no run for job-A
-			Upstreams: []*scheduler.JobLineageSummary{jobDLineage},
+			// no run recorded for job-C at all: its own downstream identifier is deliberately
+			// omitted below so DFS stops here.
 		}
+		jobDLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobCLineage.JobName, ScheduledAt: referenceTime}, &scheduler.JobRunSummary{
+			ScheduledAt: referenceTime, TaskStartTime: &jobDStartTime,
+		})
+		jobCLineage.AddUpstream(jobDLineage)
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:   "job-B",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: referenceTime},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{jobCLineage},
 		}
+		jobBLineage.AddUpstream(jobCLineage)
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: referenceTime},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{jobBLineage},
 		}
+		jobBLineage.RecordRun(scheduler.JobRunIdentifier{JobName: jobALineage.JobName, ScheduledAt: referenceTime}, &scheduler.JobRunSummary{
+			ScheduledAt: referenceTime,
+		})
+		jobALineage.RecordOwnRun(&scheduler.JobRunSummary{ScheduledAt: referenceTime})
+		jobALineage.AddUpstream(jobBLineage)
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
 			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
@@ -1759,24 +1819,53 @@ func TestCalculateInferredSLAs(t *testing.T) {
 
 	base := time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
 
-	node := func(name scheduler.JobName, scheduledAt *time.Time, upstreams ...*scheduler.JobLineageSummary) *scheduler.JobLineageSummary {
-		if scheduledAt != nil {
-			return &scheduler.JobLineageSummary{JobName: name, Upstreams: upstreams, JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				name: {ScheduledAt: *scheduledAt},
-			}}
-		}
+	// id builds the identifier of name's own occurrence - every job in this suite shares the same
+	// base scheduledAt, so that's the only thing that varies.
+	id := func(name scheduler.JobName) scheduler.JobRunIdentifier {
+		return scheduler.JobRunIdentifier{JobName: name, ScheduledAt: base}
+	}
 
-		return &scheduler.JobLineageSummary{JobName: name, Upstreams: upstreams}
+	// inferredSLANode pairs a lineage node with its own run (nil when the node has no run at all,
+	// mirroring the old "no job run" test cases).
+	type inferredSLANode struct {
+		summary *scheduler.JobLineageSummary
+		run     *scheduler.JobRunSummary
+	}
+
+	// node builds a lineage node named name, wires it to its upstreams, and - for each upstream
+	// that itself has a run - records that upstream's run as required by this node's own
+	// occurrence. A diamond (the same upstream passed to two different node calls) naturally ends
+	// up with one RunSet entry per requiring downstream, all sharing the same underlying run.
+	node := func(name scheduler.JobName, scheduledAt *time.Time, upstreams ...inferredSLANode) inferredSLANode {
+		summary := &scheduler.JobLineageSummary{JobName: name}
+		var run *scheduler.JobRunSummary
+		if scheduledAt != nil {
+			run = &scheduler.JobRunSummary{ScheduledAt: *scheduledAt}
+		}
+		for _, u := range upstreams {
+			summary.AddUpstream(u.summary)
+			if run != nil && u.run != nil {
+				u.summary.RecordRun(id(name), u.run)
+			}
+		}
+		return inferredSLANode{summary: summary, run: run}
+	}
+
+	// root finalizes n as the lineage's root (self-keys its own run) and returns the node to pass
+	// into CalculateInferredSLAs.
+	root := func(n inferredSLANode) *scheduler.JobLineageSummary {
+		n.summary.RecordOwnRun(n.run)
+		return n.summary
 	}
 
 	t.Run("single target node with no upstreams", func(t *testing.T) {
 		a := node("job-A", &base)
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, map[scheduler.JobName]*time.Duration{"job-A": dur(20 * time.Minute)}, &base, scheduler.DamperFactor{Alpha: 1.0})
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(root(a), map[scheduler.JobName]*time.Duration{"job-A": dur(20 * time.Minute)}, &base, scheduler.DamperFactor{Alpha: 1.0})
 
-		assert.Equal(t, base, *gotSLAs["job-A"])
+		assert.Equal(t, base, gotSLAs[id("job-A")])
 		assert.Len(t, gotSLAs, 1)
 		assert.Empty(t, gotPath.Pred)
-		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0}, gotPath.Level)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]int{id("job-A"): 0}, gotPath.Level)
 	})
 
 	t.Run("linear chain damper=1.0 propagates full duration at each hop", func(t *testing.T) {
@@ -1791,13 +1880,13 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-B": dur(15 * time.Minute),
 			"job-C": dur(10 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(root(a), durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
-		assert.Equal(t, base, *gotSLAs["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
-		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-C"])
-		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-B"}, gotPath.Pred)
-		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 2}, gotPath.Level)
+		assert.Equal(t, base, gotSLAs[id("job-A")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-B")])
+		assert.Equal(t, base.Add(-35*time.Minute), gotSLAs[id("job-C")])
+		assert.Equal(t, map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier{id("job-B"): id("job-A"), id("job-C"): id("job-B")}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]int{id("job-A"): 0, id("job-B"): 1, id("job-C"): 2}, gotPath.Level)
 	})
 
 	t.Run("linear chain damper=0.5 attenuates duration at each level", func(t *testing.T) {
@@ -1812,13 +1901,13 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-B": dur(20 * time.Minute),
 			"job-C": dur(20 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 0.5})
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(root(a), durations, &base, scheduler.DamperFactor{Alpha: 0.5})
 
-		assert.Equal(t, base, *gotSLAs["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
-		assert.Equal(t, base.Add(-30*time.Minute), *gotSLAs["job-C"])
-		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-B"}, gotPath.Pred)
-		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 2}, gotPath.Level)
+		assert.Equal(t, base, gotSLAs[id("job-A")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-B")])
+		assert.Equal(t, base.Add(-30*time.Minute), gotSLAs[id("job-C")])
+		assert.Equal(t, map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier{id("job-B"): id("job-A"), id("job-C"): id("job-B")}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]int{id("job-A"): 0, id("job-B"): 1, id("job-C"): 2}, gotPath.Level)
 	})
 
 	t.Run("simple diamond: shared node gets the tightest inferred SLA", func(t *testing.T) {
@@ -1837,14 +1926,14 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-C": dur(15 * time.Minute),
 			"job-D": dur(10 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(root(a), durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
-		assert.Equal(t, base, *gotSLAs["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-C"])
-		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-D"])
-		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A", "job-C": "job-A", "job-D": "job-C"}, gotPath.Pred)
-		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1, "job-C": 1, "job-D": 2}, gotPath.Level)
+		assert.Equal(t, base, gotSLAs[id("job-A")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-B")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-C")])
+		assert.Equal(t, base.Add(-35*time.Minute), gotSLAs[id("job-D")])
+		assert.Equal(t, map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier{id("job-B"): id("job-A"), id("job-C"): id("job-A"), id("job-D"): id("job-C")}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]int{id("job-A"): 0, id("job-B"): 1, id("job-C"): 1, id("job-D"): 2}, gotPath.Level)
 	})
 
 	t.Run("asymmetric diamond: shared node anchored to the longest (bottleneck) path", func(t *testing.T) {
@@ -1870,23 +1959,23 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-D": dur(10 * time.Minute),
 			"job-E": dur(5 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(root(a), durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
-		assert.Equal(t, base, *gotSLAs["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-C"])
-		assert.Equal(t, base.Add(-35*time.Minute), *gotSLAs["job-F"])
-		assert.Equal(t, base.Add(-45*time.Minute), *gotSLAs["job-D"])
-		assert.Equal(t, base.Add(-55*time.Minute), *gotSLAs["job-E"])
-		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{
-			"job-B": "job-A",
-			"job-C": "job-A",
-			"job-F": "job-C",
-			"job-D": "job-F",
-			"job-E": "job-D",
+		assert.Equal(t, base, gotSLAs[id("job-A")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-B")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-C")])
+		assert.Equal(t, base.Add(-35*time.Minute), gotSLAs[id("job-F")])
+		assert.Equal(t, base.Add(-45*time.Minute), gotSLAs[id("job-D")])
+		assert.Equal(t, base.Add(-55*time.Minute), gotSLAs[id("job-E")])
+		assert.Equal(t, map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier{
+			id("job-B"): id("job-A"),
+			id("job-C"): id("job-A"),
+			id("job-F"): id("job-C"),
+			id("job-D"): id("job-F"),
+			id("job-E"): id("job-D"),
 		}, gotPath.Pred)
-		assert.Equal(t, map[scheduler.JobName]int{
-			"job-A": 0, "job-B": 1, "job-C": 1, "job-F": 2, "job-D": 3, "job-E": 4,
+		assert.Equal(t, map[scheduler.JobRunIdentifier]int{
+			id("job-A"): 0, id("job-B"): 1, id("job-C"): 1, id("job-F"): 2, id("job-D"): 3, id("job-E"): 4,
 		}, gotPath.Level)
 	})
 
@@ -1901,13 +1990,14 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			// job-B intentionally missing
 			"job-C": dur(10 * time.Minute),
 		}
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(root(a), durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
-		assert.Equal(t, base, *gotSLAs["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
-		assert.Nil(t, gotSLAs["job-C"])
-		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A"}, gotPath.Pred)
-		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1}, gotPath.Level)
+		assert.Equal(t, base, gotSLAs[id("job-A")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-B")])
+		_, ok := gotSLAs[id("job-C")]
+		assert.False(t, ok)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier{id("job-B"): id("job-A")}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]int{id("job-A"): 0, id("job-B"): 1}, gotPath.Level)
 	})
 
 	t.Run("upstream job with missing job runs should not calculate inferred SLA", func(t *testing.T) {
@@ -1925,40 +2015,44 @@ func TestCalculateInferredSLAs(t *testing.T) {
 			"job-D": dur(5 * time.Minute),
 		}
 
-		gotSLAs, gotPath := svc.CalculateInferredSLAs(a, durations, &base, scheduler.DamperFactor{Alpha: 1.0})
+		gotSLAs, gotPath := svc.CalculateInferredSLAs(root(a), durations, &base, scheduler.DamperFactor{Alpha: 1.0})
 
-		assert.Equal(t, base, *gotSLAs["job-A"])
-		assert.Equal(t, base.Add(-20*time.Minute), *gotSLAs["job-B"])
-		assert.Nil(t, gotSLAs["job-C"])
-		assert.Nil(t, gotSLAs["job-D"])
-		assert.Equal(t, map[scheduler.JobName]scheduler.JobName{"job-B": "job-A"}, gotPath.Pred)
-		assert.Equal(t, map[scheduler.JobName]int{"job-A": 0, "job-B": 1}, gotPath.Level)
+		assert.Equal(t, base, gotSLAs[id("job-A")])
+		assert.Equal(t, base.Add(-20*time.Minute), gotSLAs[id("job-B")])
+		_, cOk := gotSLAs[id("job-C")]
+		assert.False(t, cOk)
+		_, dOk := gotSLAs[id("job-D")]
+		assert.False(t, dOk)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]scheduler.JobRunIdentifier{id("job-B"): id("job-A")}, gotPath.Pred)
+		assert.Equal(t, map[scheduler.JobRunIdentifier]int{id("job-A"): 0, id("job-B"): 1}, gotPath.Level)
 	})
 }
 
-func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorService, jobDurations map[scheduler.JobName]*time.Duration, jobNamePath []scheduler.JobName, referenceTime time.Time, damperFactor scheduler.DamperFactor, targetSLA time.Time) map[scheduler.JobName]*scheduler.JobLineageSummary {
+// generateLineageWithSLAStates builds a linear chain jobNamePath[0] -> jobNamePath[1] -> ... and
+// computes each job's inferred SLA-derived task start/end times. It returns both the lineage
+// nodes and, keyed by job name, the *JobRunSummary each node's own run was recorded with - so
+// callers can mutate specific runs afterward (e.g. to simulate a job not having started yet)
+// without needing to know each node's own scheduled time or its immediate downstream identifier.
+func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorService, jobDurations map[scheduler.JobName]*time.Duration, jobNamePath []scheduler.JobName, referenceTime time.Time, damperFactor scheduler.DamperFactor, targetSLA time.Time) (map[scheduler.JobName]*scheduler.JobLineageSummary, map[scheduler.JobName]*scheduler.JobRunSummary) {
 	// get hour from now for simulation purpose, we set scheduledAt to be now
 	scheduledAt := referenceTime.Add(1 * time.Minute).Truncate(time.Minute)
 	interval := fmt.Sprintf("%d %d * * *", scheduledAt.Minute(), scheduledAt.Hour()) // daily
 	jobNameTarget := jobNamePath[0]
 
 	jobTargetLineageMap := map[scheduler.JobName]*scheduler.JobLineageSummary{}
+	runsByJobName := map[scheduler.JobName]*scheduler.JobRunSummary{}
 
 	for _, jobName := range jobNamePath {
 		currentJobLineage := &scheduler.JobLineageSummary{
 			JobName:          jobName,
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobNameTarget: {
-					ScheduledAt: scheduledAt,
-				},
-			},
-			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 
 		jobTargetLineageMap[jobName] = currentJobLineage
+		runsByJobName[jobName] = &scheduler.JobRunSummary{ScheduledAt: scheduledAt}
 	}
+	jobTargetLineageMap[jobNameTarget].RecordOwnRun(runsByJobName[jobNameTarget])
 
 	for i := len(jobNamePath) - 2; i >= 0; i-- {
 		currentJobName := jobNamePath[i]
@@ -1967,26 +2061,28 @@ func generateLineageWithSLAStates(slaPredictorService *service.JobSLAPredictorSe
 		currentJobLineage := jobTargetLineageMap[currentJobName]
 		upstreamJobLineage := jobTargetLineageMap[upstreamJobName]
 
-		currentJobLineage.Upstreams = []*scheduler.JobLineageSummary{upstreamJobLineage}
+		currentJobLineage.AddUpstream(upstreamJobLineage)
+		// upstreamJobLineage's run is required by currentJobLineage's own occurrence - every node
+		// here shares the same scheduledAt, so that's the identifier's ScheduledAt too.
+		upstreamJobLineage.RecordRun(scheduler.JobRunIdentifier{JobName: currentJobName, ScheduledAt: scheduledAt}, runsByJobName[upstreamJobName])
 	}
 
 	slaStates, _ := slaPredictorService.CalculateInferredSLAs(jobTargetLineageMap[jobNameTarget], jobDurations, &targetSLA, damperFactor)
 
 	for _, jobName := range jobNamePath {
-		currentInferredSLA := slaStates[jobName]
+		currentInferredSLA := slaStates[scheduler.JobRunIdentifier{JobName: jobName, ScheduledAt: scheduledAt}]
 		currentEstimatedDuration := jobDurations[jobName]
 
 		taskStartTime := currentInferredSLA.Add(-*currentEstimatedDuration).Add(-1 * time.Minute) // started 1 min earlier than must start time
 		taskEndTime := currentInferredSLA.Add(-1 * time.Minute)                                   // ended 1 min earlier than inferred SLA
 
-		jobLineage := jobTargetLineageMap[jobName]
-		jobRunSummary := jobLineage.JobRuns[jobNameTarget]
+		jobRunSummary := runsByJobName[jobName]
 		jobRunSummary.TaskStartTime = &taskStartTime
 		jobRunSummary.TaskEndTime = &taskEndTime
 		jobRunSummary.JobEndTime = &taskEndTime
 	}
 
-	return jobTargetLineageMap
+	return jobTargetLineageMap, runsByJobName
 }
 
 // JobLineageFetcher is an autogenerated mock type for the JobLineageFetcher type

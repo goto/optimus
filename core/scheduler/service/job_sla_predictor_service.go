@@ -56,6 +56,7 @@ type JobDetailsGetter interface {
 
 type SLAPredictorRepository interface {
 	StorePredictedSLABreach(ctx context.Context, jobTargetName, jobCauseName scheduler.JobName, targetedSLA, jobScheduledAt time.Time, cause string, referenceTime time.Time, config map[string]interface{}, lineages []interface{}) error
+	GetPredictedTargetJobNames(ctx context.Context, targets []*scheduler.JobSchedule) ([]scheduler.JobName, error)
 }
 
 type ScheduledChangeGetter interface {
@@ -425,11 +426,7 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 		if len(path) == 0 {
 			continue
 		}
-		scheduledAt := time.Time{}
-		for _, jobRun := range jobTarget.JobRuns {
-			scheduledAt = jobRun.ScheduledAt
-			break
-		}
+		scheduledAt := targetScheduledAt(jobTarget)
 		config := map[string]interface{}{}
 		config["server_config"] = s.config
 		config["request_config"] = reqConfig
@@ -458,6 +455,18 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 	return nil
 }
 
+// targetScheduledAt is the run stored as sla_predictor.job_scheduled_at, and therefore the
+// run that impacted-job deduplication keys on; both must resolve it the same way.
+func targetScheduledAt(jobTarget *scheduler.JobLineageSummary) time.Time {
+	if run := jobTarget.JobRuns[jobTarget.JobName]; run != nil {
+		return run.ScheduledAt
+	}
+	for _, jobRun := range jobTarget.JobRuns {
+		return jobRun.ScheduledAt
+	}
+	return time.Time{}
+}
+
 func storedCause(cause *scheduler.JobState) string {
 	if cause == nil {
 		return ""
@@ -484,12 +493,18 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 	}
 	s.l.Info("potential SLA breaches found", "count", totalBreaches)
 
+	suppressed := s.predictedTargets(ctx, results)
+
 	agg := scheduler.NewBreachAlertAggregator()
 	teamCache := map[tenant.Tenant]string{}
 	for _, r := range results {
 		for targetName, upstreamCauses := range r.jobBreachCauses {
 			target := r.jobsWithLineageMap[targetName]
 			if target == nil {
+				continue
+			}
+			if suppressed[targetName] {
+				s.l.Info("skipping impacted job for alerting as its run was already predicted to breach", "job", targetName.String())
 				continue
 			}
 			team := s.resolveTeam(ctx, target.Tenant, teamCache)
@@ -505,6 +520,41 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 	for _, alert := range agg.Build() {
 		s.potentialSLANotifier.SendPotentialSLABreach(alert)
 	}
+}
+
+// predictedTargets returns the impacted jobs whose current run already has a stored breach
+// prediction. Matching is by job name alone across projects, as job names are unique.
+func (s *JobSLAPredictorService) predictedTargets(ctx context.Context, results []*comboBreachResult) map[scheduler.JobName]bool {
+	suppressed := map[scheduler.JobName]bool{}
+	if !s.config.DedupImpactedJobs {
+		return suppressed
+	}
+	if !s.config.EnablePersistentLogging {
+		s.l.Warn("persistent logging is disabled, cannot deduplicate impacted jobs")
+		return suppressed
+	}
+
+	var targets []*scheduler.JobSchedule
+	for _, r := range results {
+		for targetName := range r.jobBreachCauses {
+			target := r.jobsWithLineageMap[targetName]
+			if target == nil {
+				continue
+			}
+			targets = append(targets, &scheduler.JobSchedule{JobName: targetName, ScheduledAt: targetScheduledAt(target)})
+		}
+	}
+
+	predicted, err := s.repo.GetPredictedTargetJobNames(ctx, targets)
+	if err != nil {
+		s.l.Error("failed to get predicted SLA targets, sending alerts without impacted job deduplication", "error", err)
+		return suppressed
+	}
+	for _, jobName := range predicted {
+		suppressed[jobName] = true
+	}
+	s.l.Info("computed impacted job deduplication set", "count", len(suppressed))
+	return suppressed
 }
 
 // resolveTeam looks up the alertmanager team for a tenant, caching the result

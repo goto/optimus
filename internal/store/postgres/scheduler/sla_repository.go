@@ -181,6 +181,47 @@ func (s *SLARepository) StorePredictedSLABreach(ctx context.Context, jobTargetNa
 	return nil
 }
 
+// GetPredictedTargetJobNames returns the targets that already have a predicted breach stored
+// for the same scheduled run. job_scheduled_at is TIMESTAMP (no zone), so the lookup values
+// go through the same timestamp codec as StorePredictedSLABreach to compare equal.
+func (s *SLARepository) GetPredictedTargetJobNames(ctx context.Context, targets []*scheduler.JobSchedule) ([]scheduler.JobName, error) {
+	if len(targets) == 0 {
+		return nil, nil
+	}
+	jobNames := make([]string, len(targets))
+	scheduledAts := make([]time.Time, len(targets))
+	for i, target := range targets {
+		jobNames[i] = target.JobName.String()
+		scheduledAts[i] = target.ScheduledAt
+	}
+
+	query := `SELECT DISTINCT p.job_name FROM sla_predictor p
+	JOIN unnest($1::text[], $2::timestamp[]) AS t(job_name, job_scheduled_at)
+	ON p.job_name = t.job_name AND p.job_scheduled_at = t.job_scheduled_at`
+	rows, err := s.db.Query(ctx, query, jobNames, scheduledAts)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityEvent, "error querying predicted SLA target job names", err)
+	}
+	defer rows.Close()
+
+	var predicted []scheduler.JobName
+	for rows.Next() {
+		var jobName string
+		if err := rows.Scan(&jobName); err != nil {
+			return nil, errors.Wrap(scheduler.EntityEvent, "error scanning predicted SLA target job name", err)
+		}
+		parsedJobName, err := scheduler.JobNameFrom(jobName)
+		if err != nil {
+			return nil, errors.Wrap(scheduler.EntityEvent, "error parsing predicted SLA target job name", err)
+		}
+		predicted = append(predicted, parsedJobName)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(scheduler.EntityEvent, "error reading predicted SLA target job names", err)
+	}
+	return predicted, nil
+}
+
 func SLAFromRow(row pgx.Row) (*OperatorsSLA, error) {
 	var sla OperatorsSLA
 	err := row.Scan(&sla.ID, &sla.ProjectName, &sla.JobName, &sla.OperatorName, &sla.OperatorType, &sla.RunID,

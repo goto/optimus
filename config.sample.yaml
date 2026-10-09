@@ -82,7 +82,9 @@ alerting:
   # estimator used for the earlier "potential" SLA breach warning
   potential_sla_breach_config:
     damper_coeff: 1.0
-    enable_persistent_logging: false
+    enable_persistent_logging: true
+    # alert each impacted job run at most once; requires enable_persistent_logging
+    dedup_impacted_jobs: true
     duration_estimator_config:
       last_n_runs: 7
       percentile: 95

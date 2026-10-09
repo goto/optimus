@@ -120,8 +120,11 @@ type RootCauseConfig struct {
 }
 
 type PotentialSLABreachConfig struct {
-	DamperCoeff             float64                 `mapstructure:"damper_coeff" default:"1.0"`
-	EnablePersistentLogging bool                    `mapstructure:"enable_persistent_logging" default:"false"`
+	DamperCoeff             float64 `mapstructure:"damper_coeff" default:"1.0"`
+	EnablePersistentLogging bool    `mapstructure:"enable_persistent_logging" default:"false"`
+	// DedupImpactedJobs alerts each impacted (target) job run at most once. It reads what
+	// persistent logging writes, so it is a no-op unless EnablePersistentLogging is on.
+	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
 }
 

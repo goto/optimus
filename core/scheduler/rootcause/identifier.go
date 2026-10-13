@@ -104,7 +104,19 @@ func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pe
 	}
 }
 
-func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, startOffsets map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
+func (i *Identifier) Identify(
+	ctx context.Context,
+	jobTarget *scheduler.JobLineageSummary,
+	jobDurations map[scheduler.JobName]*time.Duration,
+	startOffsets map[scheduler.JobName]*time.Duration,
+	targetedSLA *time.Time,
+	skipJobNames map[scheduler.JobName]bool,
+	damperFactor scheduler.DamperFactor,
+	referenceTime time.Time,
+) (
+	map[scheduler.JobName]*scheduler.JobState,
+	map[scheduler.JobName][]*scheduler.JobState,
+) {
 	// note: no need to realert again on target job which does not breached its SLA
 	if targetRun, ok := jobTarget.JobRuns[jobTarget.JobName]; ok && targetRun != nil {
 		if endTime := targetRun.GetActualEndTime(); endTime != nil && !endTime.After(*targetedSLA) {

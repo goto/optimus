@@ -340,6 +340,7 @@ func (s *OptimusServer) setupHandlers() error {
 			ActiveWindowTimezone:  loc,
 			ActiveWindowStartHour: cfg.ActiveWindowStartHour,
 			ActiveWindowEndHour:   cfg.ActiveWindowEndHour,
+			EnabledWarningDedup:   cfg.EnabledWarningDedup,
 		}
 	}
 

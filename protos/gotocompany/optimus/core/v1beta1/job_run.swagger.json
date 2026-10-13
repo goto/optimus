@@ -1412,6 +1412,17 @@
         },
         "hookName": {
           "type": "string"
+        },
+        "projectName": {
+          "type": "string"
+        },
+        "taskAttempts": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "hookAttempts": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

@@ -48,8 +48,8 @@ func TestWantsStartTimeBasedDelay(t *testing.T) {
 		alert  *scheduler.PotentialSLABreachAlert
 		expect bool
 	}{
-		{"running long", &scheduler.PotentialSLABreachAlert{Reason: scheduler.ReasonRunningLong}, true},
-		{"started late", &scheduler.PotentialSLABreachAlert{Reason: scheduler.ReasonStartedLate}, true},
+		{"running long", &scheduler.PotentialSLABreachAlert{Reason: scheduler.ReasonRunningLong}, false},
+		{"started late", &scheduler.PotentialSLABreachAlert{Reason: scheduler.ReasonStartedLate}, false},
 		{"unclassified and not started", &scheduler.PotentialSLABreachAlert{Reason: scheduler.ReasonUnknown, Status: scheduler.SLABreachCauseNotStarted}, true},
 		{"unclassified but running late", &scheduler.PotentialSLABreachAlert{Reason: scheduler.ReasonUnknown, Status: scheduler.SLABreachCauseRunningLate}, false},
 		{"third party delay", &scheduler.PotentialSLABreachAlert{Reason: scheduler.ReasonThirdPartyDelay}, false},
@@ -62,23 +62,137 @@ func TestWantsStartTimeBasedDelay(t *testing.T) {
 	}
 }
 
+func TestCopyStartTimeEvidence(t *testing.T) {
+	t.Run("mirrors a running-long cause's safe-start evidence onto the display fields", func(t *testing.T) {
+		safeStart := time.Date(2026, 10, 13, 7, 50, 0, 0, time.UTC)
+		startedAt := time.Date(2026, 10, 13, 8, 10, 0, 0, time.UTC)
+		induced := 25 * time.Minute
+		alert := &scheduler.PotentialSLABreachAlert{
+			Reason: scheduler.ReasonRunningLong,
+			Evidence: scheduler.RootCauseEvidence{
+				LatestSafeStartAt: &safeStart,
+				StartedAt:         &startedAt,
+				InducedDelay:      induced,
+			},
+		}
+
+		ok := copyStartTimeEvidence(alert)
+
+		assert.True(t, ok)
+		assert.Equal(t, &safeStart, alert.HistoricalP50StartTime)
+		assert.Equal(t, &startedAt, alert.CurrentStartTime)
+		assert.Equal(t, &induced, alert.TotalInducedDelay)
+	})
+
+	t.Run("mirrors a started-late cause the same way", func(t *testing.T) {
+		safeStart := time.Date(2026, 10, 13, 7, 50, 0, 0, time.UTC)
+		startedAt := time.Date(2026, 10, 13, 8, 10, 0, 0, time.UTC)
+		induced := 20 * time.Minute
+		alert := &scheduler.PotentialSLABreachAlert{
+			Reason: scheduler.ReasonStartedLate,
+			Evidence: scheduler.RootCauseEvidence{
+				LatestSafeStartAt: &safeStart,
+				StartedAt:         &startedAt,
+				InducedDelay:      induced,
+			},
+		}
+
+		ok := copyStartTimeEvidence(alert)
+
+		assert.True(t, ok)
+		assert.Equal(t, &safeStart, alert.HistoricalP50StartTime)
+		assert.Equal(t, &startedAt, alert.CurrentStartTime)
+		assert.Equal(t, &induced, alert.TotalInducedDelay)
+	})
+
+	t.Run("is a no-op for every other reason", func(t *testing.T) {
+		for _, reason := range []scheduler.RootCauseReason{
+			scheduler.ReasonThirdPartyDelay, scheduler.ReasonUpstreamFailed, scheduler.ReasonUnknown,
+		} {
+			alert := &scheduler.PotentialSLABreachAlert{Reason: reason}
+
+			ok := copyStartTimeEvidence(alert)
+
+			assert.False(t, ok)
+			assert.Nil(t, alert.HistoricalP50StartTime)
+			assert.Nil(t, alert.CurrentStartTime)
+			assert.Nil(t, alert.TotalInducedDelay)
+		}
+	})
+}
+
 func TestEnrichBreachAlerts(t *testing.T) {
 	ctx := context.Background()
 	referenceTime := time.Date(2026, 10, 13, 10, 0, 0, 0, time.UTC)
 	scheduledAt := referenceTime.Add(-2 * time.Hour)
 	reqConfig := JobSLAPredictorRequestConfig{ReferenceTime: referenceTime}
 
-	t.Run("a running-long cause that has not finished uses reference time as the current start", func(t *testing.T) {
-		offset := 10 * time.Minute
+	t.Run("a running-long cause copies its already-classified safe-start evidence rather than re-deriving it", func(t *testing.T) {
+		safeStart := scheduledAt.Add(10 * time.Minute)
+		startedAt := scheduledAt.Add(45 * time.Minute)
+		induced := 90 * time.Minute
 		svc := &JobSLAPredictorService{
-			l:                   log.NewNoop(),
-			config:              config.PotentialSLABreachConfig{DownstreamCategoryLabelKey: "category_table_tag"},
-			startDelayEstimator: stubStartDelayEstimator{delays: map[scheduler.JobName]*time.Duration{"job-C": &offset}},
-			downstreamCounter:   stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{"job-C": {"business-critical": 3, "ssot": 1}}},
+			l:                 log.NewNoop(),
+			config:            config.PotentialSLABreachConfig{DownstreamCategoryLabelKey: "category_table_tag"},
+			downstreamCounter: stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{"job-C": {"business-critical": 3, "ssot": 1}}},
 		}
 		alert := &scheduler.PotentialSLABreachAlert{
 			RootCauseJob:         "job-C",
 			Reason:               scheduler.ReasonRunningLong,
+			RootCauseScheduledAt: &scheduledAt,
+			Evidence: scheduler.RootCauseEvidence{
+				LatestSafeStartAt: &safeStart,
+				StartedAt:         &startedAt,
+				InducedDelay:      induced,
+			},
+		}
+
+		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
+
+		assert.Equal(t, &safeStart, alert.HistoricalP50StartTime)
+		assert.Equal(t, &startedAt, alert.CurrentStartTime)
+		assert.Equal(t, &induced, alert.TotalInducedDelay)
+		assert.Equal(t, map[string]int{"business-critical": 3, "ssot": 1}, alert.DownstreamCounts)
+	})
+
+	t.Run("a started-late cause is handled the same way", func(t *testing.T) {
+		safeStart := scheduledAt.Add(10 * time.Minute)
+		startedAt := scheduledAt.Add(50 * time.Minute)
+		induced := 40 * time.Minute
+		svc := &JobSLAPredictorService{
+			l:                 log.NewNoop(),
+			config:            config.PotentialSLABreachConfig{},
+			downstreamCounter: stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{}},
+		}
+		alert := &scheduler.PotentialSLABreachAlert{
+			RootCauseJob:         "job-C",
+			Reason:               scheduler.ReasonStartedLate,
+			RootCauseScheduledAt: &scheduledAt,
+			Evidence: scheduler.RootCauseEvidence{
+				LatestSafeStartAt: &safeStart,
+				StartedAt:         &startedAt,
+				InducedDelay:      induced,
+			},
+		}
+
+		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
+
+		assert.Equal(t, &induced, alert.TotalInducedDelay)
+		assert.Equal(t, &startedAt, alert.CurrentStartTime)
+	})
+
+	t.Run("an unclassified not-started cause falls back to a fresh historical-start lookup, since Identify never ran a detector for it", func(t *testing.T) {
+		offset := 10 * time.Minute
+		svc := &JobSLAPredictorService{
+			l:                   log.NewNoop(),
+			config:              config.PotentialSLABreachConfig{},
+			startDelayEstimator: stubStartDelayEstimator{delays: map[scheduler.JobName]*time.Duration{"job-C": &offset}},
+			downstreamCounter:   stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{}},
+		}
+		alert := &scheduler.PotentialSLABreachAlert{
+			RootCauseJob:         "job-C",
+			Reason:               scheduler.ReasonUnknown,
+			Status:               scheduler.SLABreachCauseNotStarted,
 			RootCauseScheduledAt: &scheduledAt,
 		}
 
@@ -89,31 +203,6 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		assert.Equal(t, &referenceTime, alert.CurrentStartTime)
 		wantDelay := referenceTime.Sub(wantP50Start)
 		assert.Equal(t, &wantDelay, alert.TotalInducedDelay)
-		assert.Equal(t, map[string]int{"business-critical": 3, "ssot": 1}, alert.DownstreamCounts)
-	})
-
-	t.Run("uses the actual start time once the root cause has started", func(t *testing.T) {
-		offset := 10 * time.Minute
-		startedAt := scheduledAt.Add(30 * time.Minute)
-		svc := &JobSLAPredictorService{
-			l:                   log.NewNoop(),
-			config:              config.PotentialSLABreachConfig{},
-			startDelayEstimator: stubStartDelayEstimator{delays: map[scheduler.JobName]*time.Duration{"job-C": &offset}},
-			downstreamCounter:   stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{}},
-		}
-		alert := &scheduler.PotentialSLABreachAlert{
-			RootCauseJob:         "job-C",
-			Reason:               scheduler.ReasonStartedLate,
-			RootCauseScheduledAt: &scheduledAt,
-			Evidence:             scheduler.RootCauseEvidence{StartedAt: &startedAt},
-		}
-
-		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
-
-		wantP50Start := scheduledAt.Add(offset)
-		wantDelay := startedAt.Sub(wantP50Start)
-		assert.Equal(t, &wantDelay, alert.TotalInducedDelay)
-		assert.Equal(t, &startedAt, alert.CurrentStartTime)
 	})
 
 	t.Run("skips both lookups for third-party delay, since the root cause job name is a sensor identity", func(t *testing.T) {
@@ -145,7 +234,8 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		}
 		alert := &scheduler.PotentialSLABreachAlert{
 			RootCauseJob:         "job-C",
-			Reason:               scheduler.ReasonRunningLong,
+			Reason:               scheduler.ReasonUnknown,
+			Status:               scheduler.SLABreachCauseNotStarted,
 			RootCauseScheduledAt: &scheduledAt,
 		}
 

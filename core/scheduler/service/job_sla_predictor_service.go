@@ -87,7 +87,7 @@ type JobSLAPredictorService struct {
 }
 
 type RootCauseIdentifier interface {
-	Identify(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState)
+	Identify(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations, startOffsets map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState)
 	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath)
 }
 
@@ -117,8 +117,8 @@ func identifierConfig(cfg config.RootCauseConfig) rootcause.IdentifierConfig {
 }
 
 // Kept on the service so existing callers and tests keep working after the move.
-func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
-	return s.rootCause.Identify(ctx, jobTarget, jobDurations, targetedSLA, skipJobNames, damperFactor, referenceTime)
+func (s *JobSLAPredictorService) IdentifySLABreach(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations, startOffsets map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
+	return s.rootCause.Identify(ctx, jobTarget, jobDurations, startOffsets, targetedSLA, skipJobNames, damperFactor, referenceTime)
 }
 
 func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath) {
@@ -247,6 +247,18 @@ func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo sche
 		return nil, err
 	}
 
+	// get historical start-time offsets: the preferred (schedule-rhythm-aware) basis for each
+	// job's "safe start" inside rootcause.Identify (see effectiveSafeStart).
+	jobStartOffsets := map[scheduler.JobName]*time.Duration{}
+	if s.startDelayEstimator != nil {
+		jobStartOffsets, err = s.startDelayEstimator.GetPercentileStartDelayByJobNames(ctx, uniqueJobNames, reqConfig.ReferenceTime,
+			s.config.HistoricalStartConfig.LastNRuns, s.config.HistoricalStartConfig.Percentile)
+		if err != nil {
+			s.l.Error("failed to get historical start offsets, falling back to deadline-driven safe start", "error", err)
+			jobStartOffsets = map[scheduler.JobName]*time.Duration{}
+		}
+	}
+
 	for _, jobSchedule := range jobSchedules {
 		// identify potential breach
 		jobWithLineage, ok := jobsWithLineageMap[jobSchedule.JobName]
@@ -257,7 +269,7 @@ func (s *JobSLAPredictorService) computeBreaches(ctx context.Context, combo sche
 		if !ok || targetSLA == nil {
 			continue
 		}
-		breachesCauses, fullBreachesCauses := s.IdentifySLABreach(ctx, jobWithLineage, jobDurations, targetSLA, skipJobNames, damperFactor, reqConfig.ReferenceTime)
+		breachesCauses, fullBreachesCauses := s.IdentifySLABreach(ctx, jobWithLineage, jobDurations, jobStartOffsets, targetSLA, skipJobNames, damperFactor, reqConfig.ReferenceTime)
 		// populate jobBreachCauses
 		if len(breachesCauses) > 0 {
 			jobBreachCauses[jobSchedule.JobName] = breachesCauses
@@ -537,19 +549,35 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 }
 
 func wantsStartTimeBasedDelay(alert *scheduler.PotentialSLABreachAlert) bool {
-	switch alert.Reason {
-	case scheduler.ReasonRunningLong, scheduler.ReasonStartedLate:
-		return true
-	case scheduler.ReasonUnknown:
-		return alert.Status == scheduler.SLABreachCauseNotStarted
-	default:
+	return alert.Reason == scheduler.ReasonUnknown && alert.Status == scheduler.SLABreachCauseNotStarted
+}
+
+// copyStartTimeEvidence mirrors a RUNNING_LONG/STARTED_LATE cause's already-classified
+// safe-start evidence onto the alert's display fields, rather than re-deriving a second,
+// potentially inconsistent, value. Returns false (no-op) for every other reason.
+func copyStartTimeEvidence(alert *scheduler.PotentialSLABreachAlert) bool {
+	if alert.Reason != scheduler.ReasonRunningLong && alert.Reason != scheduler.ReasonStartedLate {
 		return false
 	}
+	if alert.Evidence.LatestSafeStartAt != nil {
+		p50Start := *alert.Evidence.LatestSafeStartAt
+		alert.HistoricalP50StartTime = &p50Start
+	}
+	if alert.Evidence.StartedAt != nil {
+		startedAt := *alert.Evidence.StartedAt
+		alert.CurrentStartTime = &startedAt
+	}
+	delay := alert.Evidence.InducedDelay
+	alert.TotalInducedDelay = &delay
+	return true
 }
 
 func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts []*scheduler.PotentialSLABreachAlert, reqConfig JobSLAPredictorRequestConfig) {
 	startDelayJobNames := make([]scheduler.JobName, 0, len(alerts))
 	for _, alert := range alerts {
+		if copyStartTimeEvidence(alert) {
+			continue
+		}
 		// alert.RootCauseScheduledAt is nil for THIRD_PARTY_DELAY (the sensor identity has no
 		// single scheduled_at of its own), which wantsStartTimeBasedDelay already excludes.
 		if wantsStartTimeBasedDelay(alert) && alert.RootCauseScheduledAt != nil {

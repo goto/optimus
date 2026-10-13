@@ -1501,7 +1501,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
-		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
+		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachCauses, 0)
 		assert.Len(t, allUpstreamStates, 0)
@@ -1543,7 +1543,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-C"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1581,7 +1581,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-18"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1619,7 +1619,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
 
 		assert.Len(t, breachesCauses, 0)
 		assert.Len(t, fullBreachesCauses, 0)
@@ -1681,7 +1681,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
-			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
+			ctx, jobALineage, durations, nil, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
 		)
 
 		assert.Len(t, breachesCauses, 0)
@@ -1745,7 +1745,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
-			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
+			ctx, jobALineage, durations, nil, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
 		)
 
 		assert.Len(t, breachesCauses, 0)

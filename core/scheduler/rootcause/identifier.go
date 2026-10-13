@@ -104,7 +104,7 @@ func NewIdentifier(l log.Logger, scheduledChangeGetter ScheduledChangeGetter, pe
 	}
 }
 
-func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
+func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, startOffsets map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, skipJobNames map[scheduler.JobName]bool, damperFactor scheduler.DamperFactor, referenceTime time.Time) (map[scheduler.JobName]*scheduler.JobState, map[scheduler.JobName][]*scheduler.JobState) {
 	// note: no need to realert again on target job which does not breached its SLA
 	if targetRun, ok := jobTarget.JobRuns[jobTarget.JobName]; ok && targetRun != nil {
 		if endTime := targetRun.GetActualEndTime(); endTime != nil && !endTime.After(*targetedSLA) {
@@ -119,7 +119,7 @@ func (i *Identifier) Identify(ctx context.Context, jobTarget *scheduler.JobLinea
 	inferredSLAsByJobTarget, bottleneck := i.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperFactor)
 
 	// populate jobSLAStatesByJobTargetName
-	jobSLAStates := populateJobSLAStates(jobDurations, inferredSLAsByJobTarget)
+	jobSLAStates := populateJobSLAStates(jobDurations, startOffsets, inferredSLAsByJobTarget)
 
 	// identify jobs that might breach their SLAs based on current time and inferred SLAs
 	// T(now)>= S(u|j) and the job u has not completed yet
@@ -723,12 +723,13 @@ func sortedJobRuns(jobRuns map[scheduler.JobName]*scheduler.JobRunSummary) []*sc
 	return unique
 }
 
-func populateJobSLAStates(jobDurations map[scheduler.JobName]*time.Duration, jobSLAsByJobName map[scheduler.JobName]*time.Time) map[scheduler.JobName]*scheduler.JobSLAState {
+func populateJobSLAStates(jobDurations, startOffsets map[scheduler.JobName]*time.Duration, jobSLAsByJobName map[scheduler.JobName]*time.Time) map[scheduler.JobName]*scheduler.JobSLAState {
 	jobSLAStatesByJobName := make(map[scheduler.JobName]*scheduler.JobSLAState)
 	for jobName, inferredSLA := range jobSLAsByJobName {
 		jobSLAStatesByJobName[jobName] = &scheduler.JobSLAState{
-			EstimatedDuration: jobDurations[jobName],
-			InferredSLA:       inferredSLA,
+			EstimatedDuration:               jobDurations[jobName],
+			InferredSLA:                     inferredSLA,
+			HistoricalPercentileStartOffset: startOffsets[jobName],
 		}
 	}
 	return jobSLAStatesByJobName

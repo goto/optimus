@@ -101,7 +101,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		}
 		lineage := buildLineage(upstreamRun, targetRun)
 
-		causes, _ := newIdentifier(nil).Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+		causes, _ := newIdentifier(nil).Identify(context.Background(), lineage, jobDurations, nil, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-B"]
@@ -127,7 +127,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		}
 		lineage := buildLineage(upstreamRun, targetRun)
 
-		causes, _ := newIdentifier(nil).Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+		causes, _ := newIdentifier(nil).Identify(context.Background(), lineage, jobDurations, nil, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-A"]
@@ -152,7 +152,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		}
 		lineage := buildLineage(upstreamRun, targetRun)
 
-		causes, _ := newIdentifier(nil).Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(40*time.Minute))
+		causes, _ := newIdentifier(nil).Identify(context.Background(), lineage, jobDurations, nil, &targetSLA, nil, damper, scheduledAt.Add(40*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-B"]
@@ -173,7 +173,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		key := rootcause.JobRunKey{Project: tnnt.ProjectName(), JobName: "job-B", ScheduledAt: scheduledAt}
 		identifier := newIdentifier(map[string][]string{key.String(): {"wait_dex_some-topic"}})
 
-		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, nil, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["wait_dex_some-topic"]
@@ -203,7 +203,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		lineage := buildLineage(upstreamRun, targetRun)
 		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
 
-		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, nil, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes[scheduler.JobName(sensor)]
@@ -255,7 +255,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		key := rootcause.JobRunKey{Project: tnnt.ProjectName(), JobName: "job-C", ScheduledAt: scheduledAt}
 		identifier := newIdentifier(map[string][]string{key.String(): {"wait_dex_orders"}})
 
-		causes, _ := identifier.Identify(context.Background(), lineage, durations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+		causes, _ := identifier.Identify(context.Background(), lineage, durations, nil, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["wait_dex_orders"]
@@ -281,7 +281,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 			MinRootCauseDelaySeconds: 13 * 60,
 		})
 
-		causes, paths := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+		causes, paths := identifier.Identify(context.Background(), lineage, jobDurations, nil, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-B"]
@@ -307,7 +307,7 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 			MinRootCauseDelaySeconds: 12 * 60,
 		})
 
-		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
+		causes, _ := identifier.Identify(context.Background(), lineage, jobDurations, nil, &targetSLA, nil, damper, scheduledAt.Add(32*time.Minute))
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-B"]
@@ -359,7 +359,7 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		jobDurations := map[scheduler.JobName]*time.Duration{"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute)}
 		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
 
-		causes, _ := identifier.Identify(context.Background(), target, jobDurations, &targetSLA, nil, damper, referenceTime)
+		causes, _ := identifier.Identify(context.Background(), target, jobDurations, nil, &targetSLA, nil, damper, referenceTime)
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-B"]
@@ -404,7 +404,7 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		}
 		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
 
-		causes, paths := identifier.Identify(context.Background(), jobA, jobDurations, &targetSLA, nil, damper, referenceTime)
+		causes, paths := identifier.Identify(context.Background(), jobA, jobDurations, nil, &targetSLA, nil, damper, referenceTime)
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-C"]
@@ -445,7 +445,7 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		}
 		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
 
-		causes, _ := identifier.Identify(context.Background(), jobA, jobDurations, &targetSLA, nil, damper, referenceTime)
+		causes, _ := identifier.Identify(context.Background(), jobA, jobDurations, nil, &targetSLA, nil, damper, referenceTime)
 
 		assert.Len(t, causes, 1)
 		cause, ok := causes["job-B"]

@@ -619,6 +619,7 @@ type SLAConfig struct {
 
 type JobRunSummary struct {
 	JobName     JobName
+	ProjectName tenant.ProjectName
 	ScheduledAt time.Time
 	SLATime     *time.Time
 
@@ -632,9 +633,11 @@ type JobRunSummary struct {
 	HookStartTime *time.Time
 	HookEndTime   *time.Time
 
-	SensorName *string
-	TaskName   *string
-	HookName   *string
+	SensorName   *string
+	TaskName     *string
+	HookName     *string
+	TaskAttempts int
+	HookAttempts int
 }
 
 func (j *JobRunSummary) GetActualEndTime() *time.Time {

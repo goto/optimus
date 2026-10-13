@@ -420,7 +420,7 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 
 		if hasUpstream {
 			upstreamExec := gatingPath[i+1]
-			upstreamRun := upstreamExec.JobRunSummary
+			upstreamRun = upstreamExec.JobRunSummary
 			if upstreamRun.GetActualEndTime() != nil {
 				upstreamLastTaskEndToCurrentTaskStartDuration = currentRun.TaskStartTime.Sub(*upstreamRun.GetActualEndTime())
 			}

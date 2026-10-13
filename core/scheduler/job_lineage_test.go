@@ -64,7 +64,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 
 	t.Run("should return nil for nil job lineage", func(t *testing.T) {
 		var jobLineage *scheduler.JobLineageSummary
-		result := jobLineage.GenerateLineageExecutionSummary(10, 5)
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 		assert.Nil(t, result)
 	})
 
@@ -74,7 +74,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, nil,
 			createJobRunPair("root", baseTime, "root", baseTime, startTime, endTime))
 
-		result := jobLineage.GenerateLineageExecutionSummary(10, 5)
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
 		assert.NotNil(t, result)
 		assert.Equal(t, scheduler.JobName("root"), result.JobName)
@@ -95,7 +95,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
 			createJobRunPair("root", baseTime, "root", baseTime, rootStartTime, rootEndTime))
 
-		result := jobLineage.GenerateLineageExecutionSummary(10, 5)
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
 		assert.Equal(t, int64(600), result.ExecutionSummary.TotalSystemSchedulingDelaySeconds)
 		assert.Equal(t, int64(300), result.ExecutionSummary.AverageSystemSchedulingDelaySeconds)
@@ -118,7 +118,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
 			createJobRunPair("root", baseRootTime, "root", baseRootTime, rootStartTime, rootEndTime))
 
-		result := jobLineage.GenerateLineageExecutionSummary(10, 5)
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
 		// 5 minutes from last upstream end time - root scheduled time
 		assert.Equal(t, int64(300), result.ExecutionSummary.TotalScheduledWayTooLateSeconds)
@@ -147,7 +147,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		jobLineage := scheduler.NewJobLineageSummary("root", tnnt, "0 8 * * *", scheduler.SLAConfig{Duration: time.Hour}, &windowConfig, true)
 		jobLineage.RecordOwnRun(jobRun)
 
-		result := jobLineage.GenerateLineageExecutionSummary(10, 5)
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
 		assert.Len(t, result.ExecutionSummary.TopLongestTaskDurationJobs, 1)
 		assert.Len(t, result.ExecutionSummary.TopLongestHookDurationJobs, 1)
@@ -181,7 +181,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		}
 		jobLineage.RecordOwnRun(rootRun)
 
-		result := jobLineage.GenerateLineageExecutionSummary(10, 5)
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
 		assert.LessOrEqual(t, len(result.ExecutionSummary.TopLongestTaskDurationJobs), 3)
 	})
@@ -206,7 +206,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		jobLineage.AddUpstream(upstream)
 		jobLineage.RecordOwnRun(rootRun)
 
-		result := jobLineage.GenerateLineageExecutionSummary(10, 5)
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
 		assert.NotNil(t, result)
 		assert.Empty(t, result.ExecutionSummary.TopLongestTaskDurationJobs)
@@ -243,7 +243,7 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, upstreams,
 			createJobRunPair("root", baseTime, "root", baseTime, baseTime.Add(30*time.Minute), baseTime.Add(40*time.Minute)))
 
-		summaries := jobLineage.GetLineageNodes(scheduler.LineageWalkOptions{MaxNodes: 1000, MaxDepth: 5}).Nodes
+		summaries := jobLineage.GetLineageNodes(scheduler.LineageWalkOptions{MaxNodes: 1000, MaxDepth: 5, TopUpstreamsPerJob: 3}).Nodes
 
 		level1Count := 0
 		for _, summary := range summaries {
@@ -298,7 +298,7 @@ func TestJobLineageSummary_GetFlattenedSummaries(t *testing.T) {
 			[]*scheduler.JobLineageSummary{upstream1, upstream2, upstream3},
 			createJobRunPair("root", baseTime, "root", baseTime, baseTime.Add(20*time.Minute), baseTime.Add(30*time.Minute)))
 
-		summaries := jobLineage.GetLineageNodes(scheduler.LineageWalkOptions{MaxNodes: 1000, MaxDepth: 5}).Nodes
+		summaries := jobLineage.GetLineageNodes(scheduler.LineageWalkOptions{MaxNodes: 1000, MaxDepth: 5, TopUpstreamsPerJob: 2}).Nodes
 
 		level1Jobs := make([]string, 0)
 		for _, summary := range summaries {

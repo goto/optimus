@@ -30,18 +30,11 @@ func (s stubStartDelayEstimator) GetPercentileStartDelayByJobNames(_ context.Con
 	return out, nil
 }
 
-type stubDownstreamCounter struct {
-	counts map[scheduler.JobName]map[string]int
-	err    error
-}
-
-func (s stubDownstreamCounter) GetDownstreamJobCategoryCounts(_ context.Context, jobName scheduler.JobName, _ string) (map[string]int, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.counts[jobName], nil
-}
-
+// wantsStartTimeBasedDelay now covers only the not-yet-started/UNKNOWN gap: RUNNING_LONG and
+// STARTED_LATE are handled by copyStartTimeEvidence instead, since rootcause.Identify already
+// computes their safe-start evidence using the same historical-start data (see
+// effectiveSafeStart in core/scheduler/rootcause/delay.go) as the real basis for classification
+// and root-cause selection, not just display.
 func TestWantsStartTimeBasedDelay(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -132,9 +125,8 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		startedAt := scheduledAt.Add(45 * time.Minute)
 		induced := 90 * time.Minute
 		svc := &JobSLAPredictorService{
-			l:                 log.NewNoop(),
-			config:            config.PotentialSLABreachConfig{DownstreamCategoryLabelKey: "category_table_tag"},
-			downstreamCounter: stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{"job-C": {"business-critical": 3, "ssot": 1}}},
+			l:      log.NewNoop(),
+			config: config.PotentialSLABreachConfig{},
 		}
 		alert := &scheduler.PotentialSLABreachAlert{
 			RootCauseJob:         "job-C",
@@ -152,7 +144,6 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		assert.Equal(t, &safeStart, alert.HistoricalP50StartTime)
 		assert.Equal(t, &startedAt, alert.CurrentStartTime)
 		assert.Equal(t, &induced, alert.TotalInducedDelay)
-		assert.Equal(t, map[string]int{"business-critical": 3, "ssot": 1}, alert.DownstreamCounts)
 	})
 
 	t.Run("a started-late cause is handled the same way", func(t *testing.T) {
@@ -160,9 +151,8 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		startedAt := scheduledAt.Add(50 * time.Minute)
 		induced := 40 * time.Minute
 		svc := &JobSLAPredictorService{
-			l:                 log.NewNoop(),
-			config:            config.PotentialSLABreachConfig{},
-			downstreamCounter: stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{}},
+			l:      log.NewNoop(),
+			config: config.PotentialSLABreachConfig{},
 		}
 		alert := &scheduler.PotentialSLABreachAlert{
 			RootCauseJob:         "job-C",
@@ -187,7 +177,6 @@ func TestEnrichBreachAlerts(t *testing.T) {
 			l:                   log.NewNoop(),
 			config:              config.PotentialSLABreachConfig{},
 			startDelayEstimator: stubStartDelayEstimator{delays: map[scheduler.JobName]*time.Duration{"job-C": &offset}},
-			downstreamCounter:   stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{}},
 		}
 		alert := &scheduler.PotentialSLABreachAlert{
 			RootCauseJob:         "job-C",
@@ -205,12 +194,11 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		assert.Equal(t, &wantDelay, alert.TotalInducedDelay)
 	})
 
-	t.Run("skips both lookups for third-party delay, since the root cause job name is a sensor identity", func(t *testing.T) {
+	t.Run("skips the start-time lookup for third-party delay, since the root cause job name is a sensor identity", func(t *testing.T) {
 		svc := &JobSLAPredictorService{
 			l:                   log.NewNoop(),
 			config:              config.PotentialSLABreachConfig{},
 			startDelayEstimator: stubStartDelayEstimator{err: assert.AnError},
-			downstreamCounter:   stubDownstreamCounter{err: assert.AnError},
 		}
 		alert := &scheduler.PotentialSLABreachAlert{
 			RootCauseJob: "wait_dex_orders",
@@ -222,7 +210,6 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		assert.Nil(t, alert.TotalInducedDelay)
 		assert.Nil(t, alert.HistoricalP50StartTime)
 		assert.Nil(t, alert.CurrentStartTime)
-		assert.Nil(t, alert.DownstreamCounts)
 	})
 
 	t.Run("leaves induced delay unset when the historical start estimate is unavailable", func(t *testing.T) {
@@ -230,7 +217,6 @@ func TestEnrichBreachAlerts(t *testing.T) {
 			l:                   log.NewNoop(),
 			config:              config.PotentialSLABreachConfig{},
 			startDelayEstimator: stubStartDelayEstimator{delays: map[scheduler.JobName]*time.Duration{}},
-			downstreamCounter:   stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{}},
 		}
 		alert := &scheduler.PotentialSLABreachAlert{
 			RootCauseJob:         "job-C",
@@ -244,22 +230,5 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		assert.Nil(t, alert.TotalInducedDelay)
 		assert.Nil(t, alert.HistoricalP50StartTime)
 		assert.Nil(t, alert.CurrentStartTime)
-	})
-
-	t.Run("a downstream-counter failure logs and leaves the alert without counts rather than failing the send", func(t *testing.T) {
-		svc := &JobSLAPredictorService{
-			l:                   log.NewNoop(),
-			config:              config.PotentialSLABreachConfig{},
-			startDelayEstimator: stubStartDelayEstimator{delays: map[scheduler.JobName]*time.Duration{}},
-			downstreamCounter:   stubDownstreamCounter{err: assert.AnError},
-		}
-		alert := &scheduler.PotentialSLABreachAlert{
-			RootCauseJob: "job-C",
-			Reason:       scheduler.ReasonUpstreamFailed,
-		}
-
-		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
-
-		assert.Nil(t, alert.DownstreamCounts)
 	})
 }

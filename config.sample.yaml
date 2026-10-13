@@ -96,8 +96,6 @@ alerting:
     historical_start_config:
       last_n_runs: 7
       percentile: 50
-    # job label key used to group the "downstream count" shown in an alert
-    downstream_category_label_key: category_table_tag
   # alert deduplication
   deduplication:
     operator_sla_miss:

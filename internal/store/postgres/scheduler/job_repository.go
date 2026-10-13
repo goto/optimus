@@ -915,48 +915,6 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 	return upstreamMap, nil
 }
 
-// GetDownstreamJobCategoryCounts Jobs with the key unset or empty are grouped under "".
-// The recursive CTE's UNION (not UNION ALL) dedupes visited nodes, so a cycle in job_upstream
-// terminates naturally rather than looping forever.
-func (j *JobRepository) GetDownstreamJobCategoryCounts(ctx context.Context, jobName scheduler.JobName, labelKey string) (map[string]int, error) {
-	query := `
-	WITH RECURSIVE downstream AS (
-		SELECT job_name FROM job_upstream
-		WHERE upstream_job_name = $1 AND upstream_state = 'resolved'
-		UNION
-		SELECT ju.job_name
-		FROM job_upstream ju
-		JOIN downstream d ON ju.upstream_job_name = d.job_name
-		WHERE ju.upstream_state = 'resolved'
-	)
-	SELECT COALESCE(j.labels->>$2, '') AS category, COUNT(DISTINCT d.job_name)
-	FROM downstream d
-	JOIN job j ON j.name = d.job_name
-	WHERE j.deleted_at IS NULL AND j.project_name NOT LIKE '%-preprod'
-	GROUP BY category`
-
-	rows, err := j.db.Query(ctx, query, jobName.String(), labelKey)
-	if err != nil {
-		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting downstream job category counts", err)
-	}
-	defer rows.Close()
-
-	counts := make(map[string]int)
-	for rows.Next() {
-		var category string
-		var count int
-		if err := rows.Scan(&category, &count); err != nil {
-			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning downstream job category count", err)
-		}
-		counts[category] = count
-	}
-	if err := rows.Err(); err != nil {
-		return nil, errors.Wrap(scheduler.EntityJobRun, "error iterating downstream job category count rows", err)
-	}
-
-	return counts, nil
-}
-
 func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobSummary, error) {
 	if len(jobNames) == 0 {
 		return make(map[scheduler.JobName]*scheduler.JobSummary), nil

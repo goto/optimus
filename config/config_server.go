@@ -126,6 +126,16 @@ type PotentialSLABreachConfig struct {
 	// persistent logging writes, so it is a no-op unless EnablePersistentLogging is on.
 	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
+	HistoricalStartConfig   HistoricalStartConfig   `mapstructure:"historical_start_config"`
+	// DownstreamCategoryLabelKey groups the "downstream count" shown in an alert by
+	// this job label key, e.g. "category_table_tag" -> business-critical: 4, ssot: 2.
+	DownstreamCategoryLabelKey string `mapstructure:"downstream_category_label_key" default:"category_table_tag"`
+}
+
+// HistoricalStartConfig the percentile offset between a run's scheduled_at and when its task actually started, over the last N runs.
+type HistoricalStartConfig struct {
+	LastNRuns  int `mapstructure:"last_n_runs" default:"7"`
+	Percentile int `mapstructure:"percentile" default:"50"`
 }
 
 type DurationEstimatorConfig struct {

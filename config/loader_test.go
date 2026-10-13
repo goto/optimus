@@ -320,6 +320,11 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			MinPaddingMinutes: 0,
 			MaxPaddingMinutes: 1000,
 		},
+		HistoricalStartConfig: config.HistoricalStartConfig{
+			LastNRuns:  7,
+			Percentile: 50,
+		},
+		DownstreamCategoryLabelKey: "category_table_tag",
 	}
 	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{
 		BufferDurationInMinutes: 10,

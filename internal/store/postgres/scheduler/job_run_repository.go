@@ -323,6 +323,32 @@ func (j *JobRunRepository) getTaskDuration(ctx context.Context, jobNames []sched
 	return jobDurations, nil
 }
 
+func (j *JobRunRepository) GetPercentileStartDelayByJobNames(ctx context.Context, jobNames []scheduler.JobName, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error) {
+	if len(jobNames) == 0 {
+		return map[scheduler.JobName]*time.Duration{}, nil
+	}
+	query := getQueryStartDelay(lastNRuns, percentile)
+	rows, err := j.db.Query(ctx, query, jobNames, referenceTime)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job run start delay", err)
+	}
+	jobStartDelays := make(map[scheduler.JobName]*time.Duration)
+	for rows.Next() {
+		var jobName string
+		var percentileStartDelaySeconds float64
+		err := rows.Scan(&jobName, &percentileStartDelaySeconds)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return map[scheduler.JobName]*time.Duration{}, nil
+			}
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting job run start delay on scan", err)
+		}
+		delay := time.Duration(percentileStartDelaySeconds * float64(time.Second))
+		jobStartDelays[scheduler.JobName(jobName)] = &delay
+	}
+	return jobStartDelays, nil
+}
+
 func (j *JobRunRepository) getHookDuration(ctx context.Context, jobNames []scheduler.JobName,
 	hookNames []string, referenceTime time.Time, lastNRuns, percentile int,
 ) (map[scheduler.JobName][]*time.Duration, error) {
@@ -393,6 +419,46 @@ func getQueryTask(lastNRuns, percentile int) string {
 		percentile_cont(0.%d) WITHIN GROUP (
 			ORDER BY EXTRACT(EPOCH FROM (end_time - start_time))
 		) AS percentile_duration_seconds
+	FROM last_n_runs
+	GROUP BY job_name;
+	`, lastNRuns, percentile)
+
+	return query
+}
+
+// getQueryStartDelay mirrors getQueryTask's shape but measures the offset between a run's own
+// scheduled_at and when its task actually started, instead of task duration.
+func getQueryStartDelay(lastNRuns, percentile int) string {
+	query := fmt.Sprintf(`
+	WITH target_jobs AS (
+		SELECT UNNEST($1::text[]) AS job_name
+	),
+	last_n_runs AS (
+		SELECT
+			tj.job_name,
+			r.scheduled_at,
+			r.start_time
+		FROM
+			target_jobs tj
+			CROSS JOIN LATERAL (
+				SELECT
+					j.scheduled_at,
+					t.start_time
+				FROM job_run j
+				JOIN task_run t ON t.job_run_id = j.id
+				WHERE j.job_name = tj.job_name
+					AND t.status = 'success'
+					AND t.start_time IS NOT NULL
+					AND j.scheduled_at <= $2
+				ORDER BY j.scheduled_at DESC
+				LIMIT %d
+			) r
+	)
+	SELECT
+		job_name,
+		percentile_cont(0.%d) WITHIN GROUP (
+			ORDER BY EXTRACT(EPOCH FROM (start_time - scheduled_at))
+		) AS percentile_start_delay_seconds
 	FROM last_n_runs
 	GROUP BY job_name;
 	`, lastNRuns, percentile)

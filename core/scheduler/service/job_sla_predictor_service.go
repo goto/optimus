@@ -46,6 +46,14 @@ type DurationEstimator interface {
 	GetPercentileDurationByJobNamesByHookName(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, hookNames []string) (map[scheduler.JobName]*time.Duration, error)
 }
 
+type StartDelayEstimator interface {
+	GetPercentileStartDelayByJobNames(ctx context.Context, jobNames []scheduler.JobName, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error)
+}
+
+type DownstreamCategoryCounter interface {
+	GetDownstreamJobCategoryCounts(ctx context.Context, jobName scheduler.JobName, labelKey string) (map[string]int, error)
+}
+
 type JobDetailsGetter interface {
 	GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error)
 	GetJobsByLabels(ctx context.Context, projectName tenant.ProjectName, labels map[string]string) ([]*scheduler.JobWithDetails, error)
@@ -74,6 +82,8 @@ type JobSLAPredictorService struct {
 	rootCause         RootCauseIdentifier
 	// alerting purpose
 	potentialSLANotifier PotentialSLANotifier
+	startDelayEstimator  StartDelayEstimator
+	downstreamCounter    DownstreamCategoryCounter
 }
 
 type RootCauseIdentifier interface {
@@ -81,7 +91,7 @@ type RootCauseIdentifier interface {
 	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath)
 }
 
-func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string, startDelayEstimator StartDelayEstimator, downstreamCounter DownstreamCategoryCounter) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
 		l:                    l,
 		config:               config,
@@ -92,6 +102,8 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 		tenantGetter:         tenantGetter,
 		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter, pendingSensorGetter, thirdPartyTypes, identifierConfig(rootCauseConfig)),
 		potentialSLANotifier: potentialSLANotifier,
+		startDelayEstimator:  startDelayEstimator,
+		downstreamCounter:    downstreamCounter,
 	}
 }
 
@@ -517,8 +529,76 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 		}
 	}
 
-	for _, alert := range agg.Build() {
+	alerts := agg.Build()
+	s.enrichBreachAlerts(ctx, alerts, reqConfig)
+	for _, alert := range alerts {
 		s.potentialSLANotifier.SendPotentialSLABreach(alert)
+	}
+}
+
+func wantsStartTimeBasedDelay(alert *scheduler.PotentialSLABreachAlert) bool {
+	switch alert.Reason {
+	case scheduler.ReasonRunningLong, scheduler.ReasonStartedLate:
+		return true
+	case scheduler.ReasonUnknown:
+		return alert.Status == scheduler.SLABreachCauseNotStarted
+	default:
+		return false
+	}
+}
+
+func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts []*scheduler.PotentialSLABreachAlert, reqConfig JobSLAPredictorRequestConfig) {
+	startDelayJobNames := make([]scheduler.JobName, 0, len(alerts))
+	for _, alert := range alerts {
+		// alert.RootCauseScheduledAt is nil for THIRD_PARTY_DELAY (the sensor identity has no
+		// single scheduled_at of its own), which wantsStartTimeBasedDelay already excludes.
+		if wantsStartTimeBasedDelay(alert) && alert.RootCauseScheduledAt != nil {
+			startDelayJobNames = append(startDelayJobNames, scheduler.JobName(alert.RootCauseJob))
+		}
+	}
+	startDelays := map[scheduler.JobName]*time.Duration{}
+	if s.startDelayEstimator != nil && len(startDelayJobNames) > 0 {
+		var err error
+		startDelays, err = s.startDelayEstimator.GetPercentileStartDelayByJobNames(ctx, startDelayJobNames, reqConfig.ReferenceTime,
+			s.config.HistoricalStartConfig.LastNRuns, s.config.HistoricalStartConfig.Percentile)
+		if err != nil {
+			s.l.Error("failed to get historical start delay, sending alerts without it", "error", err)
+			startDelays = map[scheduler.JobName]*time.Duration{}
+		}
+	}
+
+	for _, alert := range alerts {
+		// the root cause job name is a sensor identity for THIRD_PARTY_DELAY, not a real row
+		// in job_upstream, so a downstream-lineage walk from it would find nothing meaningful.
+		if s.downstreamCounter != nil && alert.Reason != scheduler.ReasonThirdPartyDelay {
+			counts, err := s.downstreamCounter.GetDownstreamJobCategoryCounts(ctx, scheduler.JobName(alert.RootCauseJob), s.config.DownstreamCategoryLabelKey)
+			if err != nil {
+				s.l.Error("failed to get downstream job category counts, sending alert without it", "job", alert.RootCauseJob, "error", err)
+			} else {
+				alert.DownstreamCounts = counts
+			}
+		}
+
+		if !wantsStartTimeBasedDelay(alert) || alert.RootCauseScheduledAt == nil {
+			continue
+		}
+		offset := startDelays[scheduler.JobName(alert.RootCauseJob)]
+		if offset == nil {
+			continue
+		}
+		p50Start := alert.RootCauseScheduledAt.Add(*offset)
+		alert.HistoricalP50StartTime = &p50Start
+
+		actualOrNow := reqConfig.ReferenceTime
+		if alert.Evidence.StartedAt != nil {
+			actualOrNow = *alert.Evidence.StartedAt
+		}
+		alert.CurrentStartTime = &actualOrNow
+		delay := actualOrNow.Sub(p50Start)
+		if delay < 0 {
+			delay = 0
+		}
+		alert.TotalInducedDelay = &delay
 	}
 }
 

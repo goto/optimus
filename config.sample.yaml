@@ -91,6 +91,13 @@ alerting:
       padding_percentage: 0
       min_padding_minutes: 0
       max_padding_minutes: 1000
+    # baseline for "Delayed by": percentile offset between a run's scheduled_at and when its
+    # task actually started, over the last last_n_runs runs
+    historical_start_config:
+      last_n_runs: 7
+      percentile: 50
+    # job label key used to group the "downstream count" shown in an alert
+    downstream_category_label_key: category_table_tag
   # alert deduplication
   deduplication:
     operator_sla_miss:

@@ -123,28 +123,6 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		assert.NotContains(t, payload.Data, "reason")
 	})
 
-	t.Run("includes downstream counts grouped by category", func(t *testing.T) {
-		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
-			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
-			RootCauseScheduledAt: &scheduledAt,
-			DownstreamCounts:     map[string]int{"ssot": 2, "business-critical": 4},
-		})
-
-		assert.Equal(t, []DownstreamCategoryCount{
-			{Category: "business-critical", Count: 4},
-			{Category: "ssot", Count: 2},
-		}, payload.Data["downstream_counts"])
-	})
-
-	t.Run("omits downstream counts when there are none", func(t *testing.T) {
-		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
-			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
-			RootCauseScheduledAt: &scheduledAt,
-		})
-
-		assert.NotContains(t, payload.Data, "downstream_counts")
-	})
-
 	t.Run("the start-time-based induced delay takes precedence over the duration-estimation one", func(t *testing.T) {
 		p50Start := time.Date(2026, 9, 11, 5, 40, 0, 0, time.UTC)
 		totalInducedDelay := 95 * time.Minute

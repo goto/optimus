@@ -162,9 +162,6 @@ type PotentialSLABreachAlert struct {
 	Severity     string
 	ImpactedJobs []string
 
-	// DownstreamCounts is every job transitively downstream of RootCauseJob in the full lineage graph
-	DownstreamCounts map[string]int
-
 	// HistoricalP50StartTime, CurrentStartTime, and TotalInducedDelay are set only for
 	// RUNNING_LONG, STARTED_LATE, and an unclassified NOT_STARTED cause.
 	// CurrentStartTime is the actual start time if the root cause has started, or the reference ("now") time if it hasn't;

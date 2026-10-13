@@ -324,7 +324,6 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			LastNRuns:  7,
 			Percentile: 50,
 		},
-		DownstreamCategoryLabelKey: "category_table_tag",
 	}
 	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{
 		BufferDurationInMinutes: 10,

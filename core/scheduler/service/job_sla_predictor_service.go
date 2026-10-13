@@ -63,6 +63,10 @@ type ScheduledChangeGetter interface {
 	GetRecentScheduleChange(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, startTime time.Time) (string, error)
 }
 
+type DownstreamCategoryCounter interface {
+	GetDownstreamJobCategoryCounts(ctx context.Context, jobName scheduler.JobName, labelKey string) (map[string]int, error)
+}
+
 type JobSLAPredictorService struct {
 	l                 log.Logger
 	config            config.PotentialSLABreachConfig
@@ -74,6 +78,7 @@ type JobSLAPredictorService struct {
 	rootCause         RootCauseIdentifier
 	// alerting purpose
 	potentialSLANotifier PotentialSLANotifier
+	downstreamCounter    DownstreamCategoryCounter
 }
 
 type RootCauseIdentifier interface {
@@ -81,7 +86,7 @@ type RootCauseIdentifier interface {
 	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath)
 }
 
-func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string, downstreamCounter DownstreamCategoryCounter) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
 		l:                    l,
 		config:               config,
@@ -92,6 +97,7 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 		tenantGetter:         tenantGetter,
 		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter, pendingSensorGetter, thirdPartyTypes, identifierConfig(rootCauseConfig)),
 		potentialSLANotifier: potentialSLANotifier,
+		downstreamCounter:    downstreamCounter,
 	}
 }
 
@@ -517,8 +523,29 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 		}
 	}
 
-	for _, alert := range agg.Build() {
+	alerts := agg.Build()
+	s.enrichBreachAlerts(ctx, alerts, reqConfig)
+	for _, alert := range alerts {
 		s.potentialSLANotifier.SendPotentialSLABreach(alert)
+	}
+}
+
+// enrichBreachAlerts attaches downstream-impact context to each alert just before sending.
+// A lookup failure is logged and the alert goes out without the counts rather than blocking
+// the send. THIRD_PARTY_DELAY causes are skipped: their RootCauseJob is a sensor identity,
+// not a real row in job_upstream, so a downstream-lineage walk from it would find nothing
+// meaningful.
+func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts []*scheduler.PotentialSLABreachAlert, reqConfig JobSLAPredictorRequestConfig) {
+	for _, alert := range alerts {
+		if s.downstreamCounter == nil || alert.Reason == scheduler.ReasonThirdPartyDelay {
+			continue
+		}
+		counts, err := s.downstreamCounter.GetDownstreamJobCategoryCounts(ctx, scheduler.JobName(alert.RootCauseJob), s.config.DownstreamCategoryLabelKey)
+		if err != nil {
+			s.l.Error("failed to get downstream job category counts, sending alert without it", "job", alert.RootCauseJob, "error", err)
+			continue
+		}
+		alert.DownstreamCounts = counts
 	}
 }
 

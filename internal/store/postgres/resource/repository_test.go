@@ -677,10 +677,11 @@ func insertTestResourceChangelog(pool *pgxpool.Pool, resourceName serviceResourc
 	}
 }
 
+// nolint: contextcheck
 func dbSetup() *pgxpool.Pool {
 	ctx := context.Background()
 	pool := setup.TestPool()
-	setup.TruncateTablesWith(pool)
+	setup.TruncateTablesWith(ctx, pool)
 	proj, _ := tenant.NewProject("t-optimus-1",
 		map[string]string{
 			"bucket":                     "gs://some_folder-2",

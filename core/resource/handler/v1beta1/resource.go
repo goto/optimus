@@ -206,7 +206,7 @@ func (rh ResourceHandler) listFiltersFromRequest(req *pb.ListResourceSpecificati
 	}
 
 	if req.GetResourceFilter() != "" {
-		resourceFilter, err := resource.ResourceFilterFrom(req.GetResourceFilter())
+		resourceFilter, err := resource.FilterFrom(req.GetResourceFilter())
 		if err != nil {
 			rh.l.Error("invalid resource filter [%s]: %s", req.GetResourceFilter(), err)
 			return nil, err

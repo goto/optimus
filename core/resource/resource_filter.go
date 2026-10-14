@@ -10,7 +10,7 @@ import (
 // Wildcard marks the prefix position in a resource filter expression.
 const Wildcard = "*"
 
-// ResourceFilter is the parsed form of the `resource_filter` request field of
+// Filter is the parsed form of the `resource_filter` request field of
 // ListResourceSpecification. It selects resources by their datastore full name
 // (e.g. `projectA.schemaA.tableA`):
 //
@@ -20,43 +20,43 @@ const Wildcard = "*"
 //     resource whose full_name starts with `projectA.schemaA.`)
 //
 // Only the text before the first wildcard is used as the prefix.
-type ResourceFilter struct {
+type Filter struct {
 	fullName       string
 	fullNamePrefix string
 }
 
-// ResourceFilterFrom parses a raw resource filter expression.
-func ResourceFilterFrom(filterStr string) (ResourceFilter, error) {
+// FilterFrom parses a raw resource filter expression.
+func FilterFrom(filterStr string) (Filter, error) {
 	trimmed := strings.TrimSpace(filterStr)
 	if trimmed == "" {
-		return ResourceFilter{}, errors.InvalidArgument(EntityResource, "resource filter is empty")
+		return Filter{}, errors.InvalidArgument(EntityResource, "resource filter is empty")
 	}
 
 	if idx := strings.Index(trimmed, Wildcard); idx >= 0 {
 		prefix := strings.TrimSpace(trimmed[:idx])
 		if prefix == "" {
-			return ResourceFilter{}, errors.InvalidArgument(EntityResource, "invalid resource filter ["+trimmed+"]: wildcard must be preceded by a full name prefix")
+			return Filter{}, errors.InvalidArgument(EntityResource, "invalid resource filter ["+trimmed+"]: wildcard must be preceded by a full name prefix")
 		}
-		return ResourceFilter{fullNamePrefix: prefix}, nil
+		return Filter{fullNamePrefix: prefix}, nil
 	}
 
-	return ResourceFilter{fullName: trimmed}, nil
+	return Filter{fullName: trimmed}, nil
 }
 
-func (rf ResourceFilter) IsExactMatch() bool {
+func (rf Filter) IsExactMatch() bool {
 	return rf.fullNamePrefix == ""
 }
 
-func (rf ResourceFilter) FullName() string {
+func (rf Filter) FullName() string {
 	return rf.fullName
 }
 
-func (rf ResourceFilter) FullNamePrefix() string {
+func (rf Filter) FullNamePrefix() string {
 	return rf.fullNamePrefix
 }
 
 // FilterOpts converts the filter into repository filter options.
-func (rf ResourceFilter) FilterOpts() []filter.FilterOpt {
+func (rf Filter) FilterOpts() []filter.FilterOpt {
 	if !rf.IsExactMatch() {
 		return []filter.FilterOpt{filter.WithString(filter.ResourceFullNamePrefix, rf.fullNamePrefix)}
 	}

@@ -27,7 +27,7 @@ func TestPostgresPresetRepository(t *testing.T) {
 
 	dbSetup := func() *pgxpool.Pool {
 		dbPool := setup.TestPool()
-		setup.TruncateTablesWith(dbPool)
+		setup.TruncateTablesWith(ctx, dbPool)
 
 		prjRepo := postgres.NewProjectRepository(dbPool)
 		err := prjRepo.Save(ctx, proj)

@@ -14,7 +14,7 @@ import (
 
 func TestResourceFilterFrom(t *testing.T) {
 	t.Run("exact match when no wildcard present", func(t *testing.T) {
-		rf, err := resource.ResourceFilterFrom("projectA.schemaA")
+		rf, err := resource.FilterFrom("projectA.schemaA")
 		assert.NoError(t, err)
 		assert.True(t, rf.IsExactMatch())
 		assert.Equal(t, "projectA.schemaA", rf.FullName())
@@ -28,7 +28,7 @@ func TestResourceFilterFrom(t *testing.T) {
 	})
 
 	t.Run("prefix match when wildcard present", func(t *testing.T) {
-		rf, err := resource.ResourceFilterFrom("projectA.schemaA.*")
+		rf, err := resource.FilterFrom("projectA.schemaA.*")
 		assert.NoError(t, err)
 		assert.False(t, rf.IsExactMatch())
 		assert.Equal(t, "projectA.schemaA.", rf.FullNamePrefix())
@@ -42,29 +42,29 @@ func TestResourceFilterFrom(t *testing.T) {
 	})
 
 	t.Run("only text before the first wildcard is used as prefix", func(t *testing.T) {
-		rf, err := resource.ResourceFilterFrom("projectA.sch*emaA.table*")
+		rf, err := resource.FilterFrom("projectA.sch*emaA.table*")
 		assert.NoError(t, err)
 		assert.False(t, rf.IsExactMatch())
 		assert.Equal(t, "projectA.sch", rf.FullNamePrefix())
 	})
 
 	t.Run("trims surrounding whitespace", func(t *testing.T) {
-		rf, err := resource.ResourceFilterFrom("  projectA.schemaA.*  ")
+		rf, err := resource.FilterFrom("  projectA.schemaA.*  ")
 		assert.NoError(t, err)
 		assert.Equal(t, "projectA.schemaA.", rf.FullNamePrefix())
 	})
 
 	t.Run("returns error for empty filter", func(t *testing.T) {
-		rf, err := resource.ResourceFilterFrom("   ")
+		rf, err := resource.FilterFrom("   ")
 		assert.Error(t, err)
 		assert.True(t, errors.IsErrorType(err, errors.ErrInvalidArgument))
-		assert.Equal(t, resource.ResourceFilter{}, rf)
+		assert.Equal(t, resource.Filter{}, rf)
 	})
 
 	t.Run("returns error when wildcard has no prefix", func(t *testing.T) {
-		rf, err := resource.ResourceFilterFrom("*")
+		rf, err := resource.FilterFrom("*")
 		assert.Error(t, err)
 		assert.True(t, errors.IsErrorType(err, errors.ErrInvalidArgument))
-		assert.Equal(t, resource.ResourceFilter{}, rf)
+		assert.Equal(t, resource.Filter{}, rf)
 	})
 }

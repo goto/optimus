@@ -303,6 +303,66 @@ func (r Repository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resou
 	return resources, nil
 }
 
+// GetByFilters lists resources of a store by any combination of the provided
+// optional filters. Every filter is optional, but the caller
+// is expected to provide at least one of them.
+func (r Repository) GetByFilters(ctx context.Context, store resource.Store, onlyActive bool, filters []filter.FilterOpt) ([]*resource.Resource, error) {
+	f := filter.NewFilter(filters...)
+
+	getResources := `SELECT ` + resourceColumns + ` FROM resource WHERE store = $1`
+	args := []any{store}
+	paramCount := 1
+
+	if f.Contains(filter.ProjectName) {
+		paramCount++
+		getResources += fmt.Sprintf(" AND project_name = $%d", paramCount)
+		args = append(args, f.GetStringValue(filter.ProjectName))
+	}
+	if f.Contains(filter.NamespaceName) {
+		paramCount++
+		getResources += fmt.Sprintf(" AND namespace_name = $%d", paramCount)
+		args = append(args, f.GetStringValue(filter.NamespaceName))
+	}
+	if f.Contains(filter.ResourceFullName) {
+		paramCount++
+		getResources += fmt.Sprintf(" AND full_name = $%d", paramCount)
+		args = append(args, f.GetStringValue(filter.ResourceFullName))
+	}
+	if f.Contains(filter.ResourceFullNamePrefix) {
+		paramCount++
+		getResources += fmt.Sprintf(" AND full_name LIKE $%d", paramCount)
+		args = append(args, utils.EscapeLikePattern(f.GetStringValue(filter.ResourceFullNamePrefix))+"%")
+	}
+	if onlyActive {
+		getResources += fmt.Sprintf(" AND status NOT IN ($%d, $%d)", paramCount+1, paramCount+2)
+		args = append(args, resource.StatusDeleted, resource.StatusToDelete)
+	}
+
+	rows, err := r.db.Query(ctx, getResources, args...)
+	if err != nil {
+		return nil, errors.Wrap(resource.EntityResource, "error in GetByFilters", err)
+	}
+	defer rows.Close()
+
+	var resources []*resource.Resource
+	for rows.Next() {
+		var res Resource
+		err = rows.Scan(&res.ID, &res.FullName, &res.Kind, &res.Store, &res.Status, &res.URN,
+			&res.ProjectName, &res.NamespaceName, &res.Metadata, &res.Spec, &res.CreatedAt, &res.UpdatedAt)
+		if err != nil {
+			return nil, errors.Wrap(resource.EntityResource, "error in GetAll", err)
+		}
+
+		resourceModel, err := FromModelToResource(&res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resourceModel)
+	}
+
+	return resources, nil
+}
+
 func (r Repository) GetExternal(ctx context.Context, projName tenant.ProjectName, store resource.Store, filters []filter.FilterOpt) ([]*resource.Resource, error) {
 	getExternal := `SELECT ` + resourceColumns + ` FROM resource WHERE project_name = $1 and store = $2 and kind = 'external_table' AND status NOT IN ($3, $4)`
 	args := []any{projName, store, resource.StatusDeleted, resource.StatusToDelete}

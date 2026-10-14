@@ -965,15 +965,23 @@ func TestResourceService(t *testing.T) {
 
 	t.Run("GetAll", func(t *testing.T) {
 		onlyActive := true
+		t.Run("returns error when no filter is provided", func(t *testing.T) {
+			rscService := service.NewResourceService(logger, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+			actualResources, actualError := rscService.GetAll(ctx, resource.Bigquery)
+			assert.Nil(t, actualResources)
+			assert.ErrorContains(t, actualError, "at least one filter is required")
+		})
 		t.Run("returns nil and error if error is encountered when getting all from repo", func(t *testing.T) {
 			repo := newResourceRepository(t)
-			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return(nil, errors.New("unknown error"))
+			filters := []filter.FilterOpt{filter.WithString(filter.ProjectName, tnnt.ProjectName().String())}
+			repo.On("GetByFilters", ctx, resource.Bigquery, onlyActive, filters).Return(nil, errors.New("unknown error"))
 
 			refresher := new(mockDownstreamRefresher)
 
 			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil, nil, nil, nil, nil)
 
-			actualResources, actualError := rscService.GetAll(ctx, tnnt, resource.Bigquery)
+			actualResources, actualError := rscService.GetAll(ctx, resource.Bigquery, filters...)
 			assert.Nil(t, actualResources)
 			assert.ErrorContains(t, actualError, "unknown error")
 		})
@@ -983,13 +991,17 @@ func TestResourceService(t *testing.T) {
 			assert.NoError(t, err)
 
 			repo := newResourceRepository(t)
-			repo.On("ReadAll", ctx, tnnt, resource.Bigquery, onlyActive).Return([]*resource.Resource{existingResource}, nil)
+			filters := []filter.FilterOpt{
+				filter.WithString(filter.ProjectName, tnnt.ProjectName().String()),
+				filter.WithString(filter.NamespaceName, tnnt.NamespaceName().String()),
+			}
+			repo.On("GetByFilters", ctx, resource.Bigquery, onlyActive, filters).Return([]*resource.Resource{existingResource}, nil)
 
 			refresher := new(mockDownstreamRefresher)
 
 			rscService := service.NewResourceService(logger, repo, refresher, nil, nil, nil, nil, nil, nil, nil, nil)
 
-			actualResources, actualError := rscService.GetAll(ctx, tnnt, resource.Bigquery)
+			actualResources, actualError := rscService.GetAll(ctx, resource.Bigquery, filters...)
 			assert.EqualValues(t, []*resource.Resource{existingResource}, actualResources)
 			assert.NoError(t, actualError)
 		})
@@ -1783,6 +1795,14 @@ func (m *mockResourceRepository) Create(ctx context.Context, res *resource.Resou
 
 func (m *mockResourceRepository) ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error) {
 	args := m.Called(ctx, tnnt, store, onlyActive)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*resource.Resource), args.Error(1)
+}
+
+func (m *mockResourceRepository) GetByFilters(ctx context.Context, store resource.Store, onlyActive bool, filters []filter.FilterOpt) ([]*resource.Resource, error) {
+	args := m.Called(ctx, store, onlyActive, filters)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

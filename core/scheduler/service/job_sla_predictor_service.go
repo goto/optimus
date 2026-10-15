@@ -566,6 +566,11 @@ func copyStartTimeEvidence(alert *scheduler.PotentialSLABreachAlert) bool {
 	return true
 }
 
+// enrichBreachAlerts populating three display fields:
+//   - HistoricalStartTime: the root-cause job's "usual" start time
+//   - CurrentStartTime: the root cause's actual start time if it has already started, otherwise
+//     the reference ("now") time.
+//   - TotalInducedDelay: CurrentStartTime minus HistoricalStartTime
 func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts []*scheduler.PotentialSLABreachAlert, reqConfig JobSLAPredictorRequestConfig) {
 	startDelayJobNames := make([]scheduler.JobName, 0, len(alerts))
 	for _, alert := range alerts {

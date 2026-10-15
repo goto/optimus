@@ -437,19 +437,18 @@ func getQueryStartDelay(lastNRuns, percentile int) string {
 		SELECT
 			tj.job_name,
 			r.scheduled_at,
-			r.start_time
+			r.first_start_time
 		FROM
 			target_jobs tj
 			CROSS JOIN LATERAL (
 				SELECT
 					j.scheduled_at,
-					t.start_time
+					MIN(t.start_time) AS first_start_time
 				FROM job_run j
 				JOIN task_run t ON t.job_run_id = j.id
 				WHERE j.job_name = tj.job_name
-					AND t.status = 'success'
-					AND t.start_time IS NOT NULL
 					AND j.scheduled_at <= $2
+				GROUP BY j.id, j.scheduled_at
 				ORDER BY j.scheduled_at DESC
 				LIMIT %d
 			) r
@@ -457,7 +456,7 @@ func getQueryStartDelay(lastNRuns, percentile int) string {
 	SELECT
 		job_name,
 		percentile_cont(0.%d) WITHIN GROUP (
-			ORDER BY EXTRACT(EPOCH FROM (start_time - scheduled_at))
+			ORDER BY EXTRACT(EPOCH FROM (first_start_time - scheduled_at))
 		) AS percentile_start_delay_seconds
 	FROM last_n_runs
 	GROUP BY job_name;

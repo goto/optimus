@@ -1022,13 +1022,14 @@ func TestJobRunHandler(t *testing.T) {
 			mockLineages := []*scheduler.JobRunLineage{
 				{
 					JobName:     "test-job",
+					ProjectName: "test-project",
 					ScheduledAt: scheduledAt.AsTime(),
 					JobRuns: []*scheduler.JobExecutionSummary{
 						{
-							JobName: "test-job",
+							JobName:     "test-job",
+							ProjectName: "test-project",
 							JobRunSummary: &scheduler.JobRunSummary{
 								JobName:      "test-job",
-								ProjectName:  "test-project",
 								ScheduledAt:  scheduledAt.AsTime(),
 								TaskAttempts: 2,
 								HookAttempts: 1,
@@ -1046,7 +1047,8 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Nil(t, err)
 			assert.NotNil(t, resp)
 			assert.Equal(t, len(mockLineages), len(resp.Jobs))
-			assert.Equal(t, "test-project", resp.Jobs[0].JobRuns[0].JobRunSummary.ProjectName)
+			assert.Equal(t, "test-project", resp.Jobs[0].ProjectName)
+			assert.Equal(t, "test-project", resp.Jobs[0].JobRuns[0].ProjectName)
 			assert.Equal(t, int32(2), resp.Jobs[0].JobRuns[0].JobRunSummary.TaskAttempts)
 			assert.Equal(t, int32(1), resp.Jobs[0].JobRuns[0].JobRunSummary.HookAttempts)
 		})

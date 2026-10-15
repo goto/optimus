@@ -149,7 +149,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		fetchedJobRunSummaries := []*scheduler.JobRunSummary{
 			{
 				JobName:       jobNameA,
-				ProjectName:   project.Name(),
 				ScheduledAt:   time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC),
 				JobStartTime:  timePtr(time.Date(2023, 1, 1, 19, 0, 0, 0, time.UTC)),
 				JobEndTime:    timePtr(time.Date(2023, 1, 1, 19, 30, 0, 0, time.UTC)),
@@ -167,7 +166,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 			},
 			{
 				JobName:       jobNameB,
-				ProjectName:   project.Name(),
 				ScheduledAt:   time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC),
 				JobStartTime:  timePtr(time.Date(2023, 1, 1, 13, 0, 0, 0, time.UTC)),
 				JobEndTime:    timePtr(time.Date(2023, 1, 1, 13, 20, 0, 0, time.UTC)),
@@ -185,7 +183,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 			},
 			{
 				JobName:       jobNameC,
-				ProjectName:   project.Name(),
 				ScheduledAt:   time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC),
 				JobStartTime:  timePtr(time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC)),
 				JobEndTime:    timePtr(time.Date(2023, 1, 1, 7, 10, 0, 0, time.UTC)),
@@ -237,7 +234,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, len(result.JobRuns), 1)
 		assert.Equal(t, scheduledTime, result.JobRuns[jobNameA].ScheduledAt)
 		assert.Equal(t, jobNameA, result.JobRuns[jobNameA].JobName)
-		assert.Equal(t, project.Name(), result.JobRuns[jobNameA].ProjectName)
 		assert.Equal(t, 1, result.JobRuns[jobNameA].TaskAttempts)
 		assert.Equal(t, 1, result.JobRuns[jobNameA].HookAttempts)
 
@@ -251,7 +247,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		expectedBSchedule := jobBExpectedSchedules[0]
 		assert.Equal(t, expectedBSchedule, upstreamB.JobRuns[jobNameA].ScheduledAt)
 		assert.Equal(t, jobNameB, upstreamB.JobRuns[jobNameA].JobName)
-		assert.Equal(t, project.Name(), upstreamB.JobRuns[jobNameA].ProjectName)
 		assert.Equal(t, 2, upstreamB.JobRuns[jobNameA].TaskAttempts)
 		assert.Equal(t, 1, upstreamB.JobRuns[jobNameA].HookAttempts)
 
@@ -266,7 +261,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		// job-c's immediate downstream is job-b, so its run is keyed by job-b, not the tree root
 		assert.Equal(t, expectedCSchedule, upstreamC.JobRuns[jobNameB].ScheduledAt)
 		assert.Equal(t, jobNameC, upstreamC.JobRuns[jobNameB].JobName)
-		assert.Equal(t, project.Name(), upstreamC.JobRuns[jobNameB].ProjectName)
 		assert.Equal(t, 1, upstreamC.JobRuns[jobNameB].TaskAttempts)
 		assert.Equal(t, 3, upstreamC.JobRuns[jobNameB].HookAttempts)
 
@@ -750,8 +744,6 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Len(t, upstreamDViaB.JobRuns, 2)
 		assert.Equal(t, scheduleDViaB, upstreamDViaB.JobRuns[jobNameB].ScheduledAt)
 		assert.Equal(t, scheduleDViaC, upstreamDViaB.JobRuns[jobNameC].ScheduledAt)
-		assert.Equal(t, project.Name(), upstreamDViaB.JobRuns[jobNameB].ProjectName)
-		assert.Equal(t, project.Name(), upstreamDViaB.JobRuns[jobNameC].ProjectName)
 		assert.Equal(t, 0, upstreamDViaB.JobRuns[jobNameB].TaskAttempts)
 		assert.Equal(t, 0, upstreamDViaB.JobRuns[jobNameB].HookAttempts)
 

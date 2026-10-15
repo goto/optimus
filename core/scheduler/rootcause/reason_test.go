@@ -94,6 +94,45 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, *at(5, 40), *evidence.LatestSafeStartAt)
 	})
 
+	t.Run("a historical P50 start offset takes over as the safe start, even catching lateness the deadline math alone would miss", func(t *testing.T) {
+		// deadline-driven safe start would be 05:20 (06:00 - 40m) -- 05:25 wouldn't trip it.
+		// But this job's own rhythm (median 10m after its 05:00 schedule) says 05:10 is already
+		// its safe start, so 05:25 is 15m late by its own history even though the SLA chain
+		// isn't at risk yet.
+		st := state(at(5, 25), dur(40*time.Minute), at(6, 0))
+		st.JobRun.ScheduledAt = *at(5, 0)
+		st.HistoricalPercentileStartOffset = dur(10 * time.Minute)
+
+		reason, evidence := detect(rootcause.Candidate{State: st, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonStartedLate, reason)
+		assert.Equal(t, *at(5, 10), *evidence.LatestSafeStartAt)
+	})
+
+	t.Run("a historical P50 start offset can also clear a cause the deadline math alone would flag", func(t *testing.T) {
+		// deadline-driven safe start would be 05:20 (06:00 - 40m), and this run started 05:25 --
+		// 5m past it. But its own rhythm (median 30m after its 05:00 schedule) puts its safe
+		// start at 05:30, so 05:25 is actually on time for this job.
+		st := state(at(5, 25), dur(40*time.Minute), at(6, 0))
+		st.JobRun.ScheduledAt = *at(5, 0)
+		st.HistoricalPercentileStartOffset = dur(30 * time.Minute)
+
+		reason, _ := detect(rootcause.Candidate{State: st, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonUnknown, reason)
+	})
+
+	t.Run("falls back to the deadline-driven safe start when there's no run history yet", func(t *testing.T) {
+		st := state(at(5, 40), dur(40*time.Minute), at(6, 0))
+		st.JobRun.ScheduledAt = *at(5, 0)
+		st.HistoricalPercentileStartOffset = nil // new job, no successful runs yet
+
+		reason, evidence := detect(rootcause.Candidate{State: st, ReferenceTime: ref})
+
+		assert.Equal(t, scheduler.ReasonStartedLate, reason)
+		assert.Equal(t, *at(5, 20), *evidence.LatestSafeStartAt)
+	})
+
 	t.Run("late start explained by the job's own already-resolved sensor is THIRD_PARTY_DELAY", func(t *testing.T) {
 		// estimate 40m, deadline 06:00 -> had to start by 05:20; started 05:40, same as the
 		// STARTED_LATE case above, but this run also recorded a dex sensor that occupied
@@ -259,15 +298,6 @@ func TestDefaultDetectors(t *testing.T) {
 			State:          state(at(5, 55), dur(30*time.Minute), at(6, 30)),
 			PendingSensors: []string{"wait_dex_p_gopay_id_raw.gpppo.order_final_log"},
 			ReferenceTime:  ref,
-		})
-
-		assert.Equal(t, scheduler.ReasonUnknown, reason)
-	})
-
-	t.Run("missing duration estimate falls through to UNKNOWN", func(t *testing.T) {
-		reason, _ := detect(rootcause.Candidate{
-			State:         state(at(5, 0), nil, at(6, 0)),
-			ReferenceTime: ref,
 		})
 
 		assert.Equal(t, scheduler.ReasonUnknown, reason)

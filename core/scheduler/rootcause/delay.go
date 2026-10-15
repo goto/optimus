@@ -54,9 +54,6 @@ func runningLongDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 }
 
 func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Duration {
-	if state.EstimatedDuration == nil || state.InferredSLA == nil {
-		return 0
-	}
 	safeStart := effectiveSafeStart(state)
 	start := referenceTime
 	if state.JobRun.TaskStartTime != nil {
@@ -68,11 +65,16 @@ func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 	return start.Sub(safeStart)
 }
 
-// effectiveSafeStart is the latest a job could have started without breaching the
-// downstream SLA chain, floored at the job's own ScheduledAt.
+// effectiveSafeStart is the latest a job could have started without being behind, floored at
+// the job's own ScheduledAt.
 func effectiveSafeStart(state scheduler.JobState) time.Time {
-	safeStart := state.InferredSLA.Add(-*state.EstimatedDuration)
 	scheduledAt := state.JobRun.ScheduledAt
+	var safeStart time.Time
+	if state.HistoricalPercentileStartOffset != nil {
+		safeStart = scheduledAt.Add(*state.HistoricalPercentileStartOffset)
+	} else {
+		safeStart = state.InferredSLA.Add(-*state.EstimatedDuration)
+	}
 	if scheduledAt.After(safeStart) {
 		return scheduledAt
 	}

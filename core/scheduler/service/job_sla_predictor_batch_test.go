@@ -32,7 +32,7 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		referenceTime := time.Now().UTC()
@@ -118,7 +118,7 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		labels := map[string]string{"criticality": "critical"}
@@ -166,7 +166,7 @@ func TestIdentifySLABreachesBatchImpactedJobDedup(t *testing.T) {
 		jobDetailsGetter := NewJobDetailsGetter(t)
 		tenantGetter := new(TenantGetter)
 		tenantGetter.On("GetDetails", ctx, mock.Anything).Return(tenantWithDetails, nil).Maybe()
-		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, repo, jobLineageFetcher, durationEstimator, jobDetailsGetter, notifier, tenantGetter, scheduledChangeGetter, nil, nil)
+		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, repo, jobLineageFetcher, durationEstimator, jobDetailsGetter, notifier, tenantGetter, scheduledChangeGetter, nil, nil, nil)
 
 		referenceTime := time.Now().UTC()
 		reqConfig := service.JobSLAPredictorRequestConfig{

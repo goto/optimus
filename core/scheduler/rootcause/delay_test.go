@@ -99,6 +99,43 @@ func TestInducedDelay(t *testing.T) {
 		assert.Equal(t, 10*time.Minute, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
 	})
 
+	t.Run("started late delay prefers the historical P50 start offset over the deadline-driven safe start", func(t *testing.T) {
+		// deadline-driven safe start would be 05:20 (06:00 - 40m), but this job's own rhythm
+		// (median start offset of 10m from its 05:00 schedule) says 05:10 is already late for
+		// it, even though the SLA chain wouldn't be at risk yet.
+		state := scheduler.JobState{
+			Reason: scheduler.ReasonStartedLate,
+			JobSLAState: scheduler.JobSLAState{
+				EstimatedDuration:               dur(40 * time.Minute),
+				InferredSLA:                     at(6, 0),
+				HistoricalPercentileStartOffset: dur(10 * time.Minute),
+			},
+			JobRun: scheduler.JobRunSummary{
+				ScheduledAt:   *at(5, 0),
+				TaskStartTime: at(5, 25),
+			},
+		}
+		assert.Equal(t, 15*time.Minute, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
+	})
+
+	t.Run("started late delay falls back to the deadline-driven safe start when there's no run history yet", func(t *testing.T) {
+		state := scheduler.JobState{
+			Reason: scheduler.ReasonStartedLate,
+			JobSLAState: scheduler.JobSLAState{
+				EstimatedDuration:               dur(40 * time.Minute),
+				InferredSLA:                     at(6, 0),
+				HistoricalPercentileStartOffset: nil, // new job, no successful runs yet
+			},
+			JobRun: scheduler.JobRunSummary{
+				ScheduledAt:   *at(5, 0),
+				TaskStartTime: at(5, 25),
+			},
+		}
+		// naive safe start 05:20 (06:00 - 40m), which is after the 05:00 schedule, so it's used
+		// as-is: 05:25 start is 5m past it.
+		assert.Equal(t, 5*time.Minute, inducedDelay(state, ref, defaultThirdPartyDelayStartHour))
+	})
+
 	t.Run("upstream failed delay grows with how long ago the run ended", func(t *testing.T) {
 		state := scheduler.JobState{
 			Reason: scheduler.ReasonUpstreamFailed,

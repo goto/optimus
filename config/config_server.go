@@ -126,6 +126,13 @@ type PotentialSLABreachConfig struct {
 	// persistent logging writes, so it is a no-op unless EnablePersistentLogging is on.
 	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
+	HistoricalStartConfig   HistoricalStartConfig   `mapstructure:"historical_start_config"`
+}
+
+// HistoricalStartConfig the percentile offset between a run's scheduled_at and when its task actually started, over the last N runs.
+type HistoricalStartConfig struct {
+	LastNRuns  int `mapstructure:"last_n_runs" default:"7"`
+	Percentile int `mapstructure:"percentile" default:"50"`
 }
 
 type DurationEstimatorConfig struct {

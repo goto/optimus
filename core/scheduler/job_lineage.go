@@ -330,6 +330,7 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 
 	lineage := &JobRunLineage{
 		JobName:          j.JobName,
+		ProjectName:      j.Tenant.ProjectName(),
 		JobRuns:          executionSummaries,
 		ExecutionSummary: lineageSummary,
 		TotalNodes:       walk.TotalNodes,
@@ -399,8 +400,10 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 			if current.from != nil {
 				downstreamPathName = current.from.JobName.String()
 			}
+			projectName := current.lineage.Tenant.ProjectName()
 			node = &JobExecutionSummary{
 				JobName:            current.lineage.JobName,
+				ProjectName:        projectName,
 				SLA:                current.lineage.SLA,
 				Level:              current.depth,
 				JobRunSummary:      run,
@@ -545,6 +548,7 @@ func statePriority(state State) int {
 
 type JobRunLineage struct {
 	JobName          JobName
+	ProjectName      tenant.ProjectName
 	ScheduledAt      time.Time
 	JobRuns          []*JobExecutionSummary
 	ExecutionSummary *LineageExecutionSummary
@@ -586,8 +590,9 @@ type LineageDelaySummary struct {
 
 // JobExecutionSummary is a flattened version of JobLineageSummary
 type JobExecutionSummary struct {
-	JobName JobName
-	SLA     SLAConfig
+	JobName     JobName
+	ProjectName tenant.ProjectName
+	SLA         SLAConfig
 	// Level marks the shortest distance from the original job in question
 	Level         int
 	JobRunSummary *JobRunSummary
@@ -619,7 +624,6 @@ type SLAConfig struct {
 
 type JobRunSummary struct {
 	JobName     JobName
-	ProjectName tenant.ProjectName
 	ScheduledAt time.Time
 	SLATime     *time.Time
 

@@ -188,7 +188,6 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 	lineage.JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{
 		lineage.JobName: {
 			JobName:     lineage.JobName,
-			ProjectName: lineage.Tenant.ProjectName(),
 			ScheduledAt: scheduledAt,
 			SLATime:     &baseSLATime,
 		},
@@ -263,7 +262,6 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 				baseSLATime := upstreamSchedule.Add(upstream.SLA.Duration)
 				allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()] = &scheduler.JobRunSummary{
 					JobName:     upstream.JobName,
-					ProjectName: upstreamJob.Tenant.ProjectName(),
 					ScheduledAt: upstreamSchedule,
 					SLATime:     &baseSLATime,
 				}
@@ -334,9 +332,6 @@ func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap 
 			scheduleKey := detail.ScheduledAt.UTC()
 			if _, exists := jobRuns[scheduleKey]; exists {
 				jobRuns[scheduleKey].JobName = detail.JobName
-				if detail.ProjectName != "" {
-					jobRuns[scheduleKey].ProjectName = detail.ProjectName
-				}
 				jobRuns[scheduleKey].JobStartTime = detail.JobStartTime
 				jobRuns[scheduleKey].JobEndTime = detail.JobEndTime
 				jobRuns[scheduleKey].JobStatus = detail.JobStatus
@@ -398,7 +393,6 @@ func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {
 	}
 	return &scheduler.JobRunSummary{
 		JobName:       source.JobName,
-		ProjectName:   source.ProjectName,
 		ScheduledAt:   source.ScheduledAt,
 		SLATime:       source.SLATime,
 		JobStartTime:  source.JobStartTime,

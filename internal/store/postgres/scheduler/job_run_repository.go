@@ -599,7 +599,6 @@ attempt_counts AS (
 )
 SELECT
 	so.job_name,
-	so.project_name,
 	so.scheduled_at,
 	so.job_start_time,
 	COALESCE(so.hook_end_time, so.task_end_time) AS job_end_time,
@@ -632,7 +631,6 @@ ORDER BY so.scheduled_at DESC
 	for rows.Next() {
 		var (
 			jobName         string
-			projectName     string
 			scheduledAt     time.Time
 			jobStartTime    *time.Time
 			jobEndTime      *time.Time
@@ -650,7 +648,7 @@ ORDER BY so.scheduled_at DESC
 			hookAttempts    int
 		)
 
-		err = rows.Scan(&jobName, &projectName, &scheduledAt, &jobStartTime, &jobEndTime, &jobStatus,
+		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime, &jobStatus,
 			&sensorStartTime, &sensorEndTime,
 			&taskStartTime, &taskEndTime,
 			&hookStartTime, &hookEndTime,
@@ -662,7 +660,6 @@ ORDER BY so.scheduled_at DESC
 
 		summary := &scheduler.JobRunSummary{
 			JobName:       scheduler.JobName(jobName),
-			ProjectName:   tenant.ProjectName(projectName),
 			ScheduledAt:   scheduledAt,
 			JobStartTime:  jobStartTime,
 			JobEndTime:    jobEndTime,

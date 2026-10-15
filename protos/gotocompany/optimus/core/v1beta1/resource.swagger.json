@@ -21,56 +21,6 @@
     "application/json"
   ],
   "paths": {
-    "/v1beta1/datastore/{datastoreName}/resource": {
-      "get": {
-        "summary": "ListResourceSpecification lists all resource specifications of a datastore in project",
-        "operationId": "ResourceService_ListResourceSpecification2",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1beta1ListResourceSpecificationResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "datastoreName",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "projectName",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "namespaceName",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "resourceFilter",
-            "description": "Filters resources by an exact full name match, or by a prefix match if a wildcard (*) is appended (e.g., \"projectA.schemaA.*\").",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ResourceService"
-        ]
-      }
-    },
     "/v1beta1/project/{projectName}/change-resource-namespace": {
       "post": {
         "summary": "ChangeJobNamespace move a job spec from one namespace to another",
@@ -159,13 +109,6 @@
             "name": "datastoreName",
             "in": "path",
             "required": true,
-            "type": "string"
-          },
-          {
-            "name": "resourceFilter",
-            "description": "Filters resources by an exact full name match, or by a prefix match if a wildcard (*) is appended (e.g., \"projectA.schemaA.*\").",
-            "in": "query",
-            "required": false,
             "type": "string"
           }
         ],
@@ -625,7 +568,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",

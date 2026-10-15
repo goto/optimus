@@ -9,33 +9,33 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/tenant"
 )
 
 type stubDownstreamCounter struct {
-	counts map[scheduler.JobName]map[string]int
+	counts map[tenant.ProjectName]map[scheduler.JobName]map[string]int
 	err    error
 }
 
-func (s stubDownstreamCounter) GetDownstreamJobCategoryCounts(_ context.Context, jobName scheduler.JobName, _ string) (map[string]int, error) {
+func (s stubDownstreamCounter) GetDownstreamJobCategoryCounts(_ context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, _ string) (map[string]int, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return s.counts[jobName], nil
+	return s.counts[projectName][jobName], nil
 }
 
 func TestEnrichBreachAlertsDownstream(t *testing.T) {
 	ctx := context.Background()
-	reqConfig := JobSLAPredictorRequestConfig{}
 
 	t.Run("attaches category counts to the alert", func(t *testing.T) {
 		svc := &JobSLAPredictorService{
 			l:                 log.NewNoop(),
 			config:            config.PotentialSLABreachConfig{DownstreamCategoryLabelKey: "labelA"},
-			downstreamCounter: stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{"job-C": {"categoryA": 3, "categoryB": 1}}},
+			downstreamCounter: stubDownstreamCounter{counts: map[tenant.ProjectName]map[scheduler.JobName]map[string]int{"proj-1": {"job-C": {"categoryA": 3, "categoryB": 1}}}},
 		}
-		alert := &scheduler.PotentialSLABreachAlert{RootCauseJob: "job-C", Reason: scheduler.ReasonRunningLong}
+		alert := &scheduler.PotentialSLABreachAlert{RootCauseProject: "proj-1", RootCauseJob: "job-C", Reason: scheduler.ReasonRunningLong}
 
-		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
+		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert})
 
 		assert.Equal(t, map[string]int{"categoryA": 3, "categoryB": 1}, alert.DownstreamCounts)
 	})
@@ -48,7 +48,7 @@ func TestEnrichBreachAlertsDownstream(t *testing.T) {
 		}
 		alert := &scheduler.PotentialSLABreachAlert{RootCauseJob: "wait_dex_orders", Reason: scheduler.ReasonThirdPartyDelay}
 
-		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
+		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert})
 
 		assert.Nil(t, alert.DownstreamCounts)
 	})
@@ -61,7 +61,7 @@ func TestEnrichBreachAlertsDownstream(t *testing.T) {
 		}
 		alert := &scheduler.PotentialSLABreachAlert{RootCauseJob: "job-C", Reason: scheduler.ReasonUpstreamFailed}
 
-		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
+		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert})
 
 		assert.Nil(t, alert.DownstreamCounts)
 	})
@@ -73,7 +73,7 @@ func TestEnrichBreachAlertsDownstream(t *testing.T) {
 		}
 		alert := &scheduler.PotentialSLABreachAlert{RootCauseJob: "job-C", Reason: scheduler.ReasonRunningLong}
 
-		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
+		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert})
 
 		assert.Nil(t, alert.DownstreamCounts)
 	})

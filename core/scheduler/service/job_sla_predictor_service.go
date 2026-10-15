@@ -64,7 +64,7 @@ type ScheduledChangeGetter interface {
 }
 
 type DownstreamCategoryCounter interface {
-	GetDownstreamJobCategoryCounts(ctx context.Context, jobName scheduler.JobName, labelKey string) (map[string]int, error)
+	GetDownstreamJobCategoryCounts(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, labelKey string) (map[string]int, error)
 }
 
 type JobSLAPredictorService struct {
@@ -524,7 +524,7 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 	}
 
 	alerts := agg.Build()
-	s.enrichBreachAlerts(ctx, alerts, reqConfig)
+	s.enrichBreachAlerts(ctx, alerts)
 	for _, alert := range alerts {
 		s.potentialSLANotifier.SendPotentialSLABreach(alert)
 	}
@@ -535,12 +535,12 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 // the send. THIRD_PARTY_DELAY causes are skipped: their RootCauseJob is a sensor identity,
 // not a real row in job_upstream, so a downstream-lineage walk from it would find nothing
 // meaningful.
-func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts []*scheduler.PotentialSLABreachAlert, reqConfig JobSLAPredictorRequestConfig) {
+func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts []*scheduler.PotentialSLABreachAlert) {
 	for _, alert := range alerts {
 		if s.downstreamCounter == nil || alert.Reason == scheduler.ReasonThirdPartyDelay {
 			continue
 		}
-		counts, err := s.downstreamCounter.GetDownstreamJobCategoryCounts(ctx, scheduler.JobName(alert.RootCauseJob), s.config.DownstreamCategoryLabelKey)
+		counts, err := s.downstreamCounter.GetDownstreamJobCategoryCounts(ctx, tenant.ProjectName(alert.RootCauseProject), scheduler.JobName(alert.RootCauseJob), s.config.DownstreamCategoryLabelKey)
 		if err != nil {
 			s.l.Error("failed to get downstream job category counts, sending alert without it", "job", alert.RootCauseJob, "error", err)
 			continue

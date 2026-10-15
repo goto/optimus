@@ -554,8 +554,8 @@ func copyStartTimeEvidence(alert *scheduler.PotentialSLABreachAlert) bool {
 		return false
 	}
 	if alert.Evidence.LatestSafeStartAt != nil {
-		p50Start := *alert.Evidence.LatestSafeStartAt
-		alert.HistoricalP50StartTime = &p50Start
+		percentileStart := *alert.Evidence.LatestSafeStartAt
+		alert.HistoricalStartTime = &percentileStart
 	}
 	if alert.Evidence.StartedAt != nil {
 		startedAt := *alert.Evidence.StartedAt
@@ -598,7 +598,7 @@ func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts 
 			continue
 		}
 		p50Start := alert.RootCauseScheduledAt.Add(*offset)
-		alert.HistoricalP50StartTime = &p50Start
+		alert.HistoricalStartTime = &p50Start
 
 		actualOrNow := reqConfig.ReferenceTime
 		if alert.Evidence.StartedAt != nil {

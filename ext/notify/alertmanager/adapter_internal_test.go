@@ -128,17 +128,17 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		totalInducedDelay := 95 * time.Minute
 		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
 			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
-			RootCauseScheduledAt:   &scheduledAt,
-			Reason:                 scheduler.ReasonRunningLong,
-			HistoricalP50StartTime: &p50Start,
-			TotalInducedDelay:      &totalInducedDelay,
+			RootCauseScheduledAt: &scheduledAt,
+			Reason:               scheduler.ReasonRunningLong,
+			HistoricalStartTime:  &p50Start,
+			TotalInducedDelay:    &totalInducedDelay,
 			Evidence: scheduler.RootCauseEvidence{
 				// a different value, to prove the start-time-based one wins
 				InducedDelay: 10 * time.Minute,
 			},
 		})
 
-		assert.Equal(t, "2026-09-11T05:40:00Z", payload.Data["historical_p50_start_time"])
+		assert.Equal(t, "2026-09-11T05:40:00Z", payload.Data["historical_start_time"])
 		assert.Equal(t, (95 * time.Minute).String(), payload.Data["induced_delay"])
 	})
 

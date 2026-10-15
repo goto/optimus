@@ -104,8 +104,8 @@ func (StartedLateDetector) Detect(c Candidate) (scheduler.RootCauseReason, sched
 	if start == nil {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
-	safeStart, ok := effectiveSafeStart(*c.State)
-	if !ok || !start.After(safeStart) {
+	safeStart := effectiveSafeStart(*c.State)
+	if !start.After(safeStart) {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
 	return scheduler.ReasonStartedLate, evidenceForStarted(c), true
@@ -189,9 +189,8 @@ func evidenceForStarted(c Candidate) scheduler.RootCauseEvidence {
 	}
 	// LatestSafeStartAt is independent of ExpectedFinishAt's gate above: it can come from
 	// HistoricalP50StartOffset alone, with no EstimatedDuration/InferredSLA involved at all.
-	if safeStart, ok := effectiveSafeStart(*c.State); ok {
-		evidence.LatestSafeStartAt = &safeStart
-	}
+	safeStart := effectiveSafeStart(*c.State)
+	evidence.LatestSafeStartAt = &safeStart
 	return evidence
 }
 

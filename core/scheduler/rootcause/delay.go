@@ -54,10 +54,7 @@ func runningLongDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 }
 
 func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Duration {
-	safeStart, ok := effectiveSafeStart(state)
-	if !ok {
-		return 0
-	}
+	safeStart := effectiveSafeStart(state)
 	start := referenceTime
 	if state.JobRun.TaskStartTime != nil {
 		start = *state.JobRun.TaskStartTime
@@ -70,21 +67,18 @@ func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 
 // effectiveSafeStart is the latest a job could have started without being behind, floored at
 // the job's own ScheduledAt.
-func effectiveSafeStart(state scheduler.JobState) (time.Time, bool) {
+func effectiveSafeStart(state scheduler.JobState) time.Time {
 	scheduledAt := state.JobRun.ScheduledAt
 	var safeStart time.Time
-	switch {
-	case state.HistoricalPercentileStartOffset != nil:
+	if state.HistoricalPercentileStartOffset != nil {
 		safeStart = scheduledAt.Add(*state.HistoricalPercentileStartOffset)
-	case state.InferredSLA != nil && state.EstimatedDuration != nil:
+	} else {
 		safeStart = state.InferredSLA.Add(-*state.EstimatedDuration)
-	default:
-		return time.Time{}, false
 	}
 	if scheduledAt.After(safeStart) {
-		return scheduledAt, true
+		return scheduledAt
 	}
-	return safeStart, true
+	return safeStart
 }
 
 // thirdPartyInducedDelay is sensor completion (or now) minus max(sensor start, delay-start hour

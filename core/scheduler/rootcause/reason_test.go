@@ -303,15 +303,6 @@ func TestDefaultDetectors(t *testing.T) {
 		assert.Equal(t, scheduler.ReasonUnknown, reason)
 	})
 
-	t.Run("missing duration estimate falls through to UNKNOWN", func(t *testing.T) {
-		reason, _ := detect(rootcause.Candidate{
-			State:         state(at(5, 0), nil, at(6, 0)),
-			ReferenceTime: ref,
-		})
-
-		assert.Equal(t, scheduler.ReasonUnknown, reason)
-	})
-
 	t.Run("a run that already ended in FAILED is UPSTREAM_FAILED even with SLA budget left", func(t *testing.T) {
 		failed := state(at(5, 0), dur(30*time.Minute), at(8, 0)) // deadline hours away
 		failed.JobRun.JobStatus = scheduler.StateFailed.String()

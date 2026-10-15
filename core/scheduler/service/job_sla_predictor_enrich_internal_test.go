@@ -72,7 +72,7 @@ func TestCopyStartTimeEvidence(t *testing.T) {
 		ok := copyStartTimeEvidence(alert)
 
 		assert.True(t, ok)
-		assert.Equal(t, &safeStart, alert.HistoricalP50StartTime)
+		assert.Equal(t, &safeStart, alert.HistoricalStartTime)
 		assert.Equal(t, &startedAt, alert.CurrentStartTime)
 		assert.Equal(t, &induced, alert.TotalInducedDelay)
 	})
@@ -93,7 +93,7 @@ func TestCopyStartTimeEvidence(t *testing.T) {
 		ok := copyStartTimeEvidence(alert)
 
 		assert.True(t, ok)
-		assert.Equal(t, &safeStart, alert.HistoricalP50StartTime)
+		assert.Equal(t, &safeStart, alert.HistoricalStartTime)
 		assert.Equal(t, &startedAt, alert.CurrentStartTime)
 		assert.Equal(t, &induced, alert.TotalInducedDelay)
 	})
@@ -107,7 +107,7 @@ func TestCopyStartTimeEvidence(t *testing.T) {
 			ok := copyStartTimeEvidence(alert)
 
 			assert.False(t, ok)
-			assert.Nil(t, alert.HistoricalP50StartTime)
+			assert.Nil(t, alert.HistoricalStartTime)
 			assert.Nil(t, alert.CurrentStartTime)
 			assert.Nil(t, alert.TotalInducedDelay)
 		}
@@ -141,7 +141,7 @@ func TestEnrichBreachAlerts(t *testing.T) {
 
 		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
 
-		assert.Equal(t, &safeStart, alert.HistoricalP50StartTime)
+		assert.Equal(t, &safeStart, alert.HistoricalStartTime)
 		assert.Equal(t, &startedAt, alert.CurrentStartTime)
 		assert.Equal(t, &induced, alert.TotalInducedDelay)
 	})
@@ -188,7 +188,7 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
 
 		wantP50Start := scheduledAt.Add(offset)
-		assert.Equal(t, &wantP50Start, alert.HistoricalP50StartTime)
+		assert.Equal(t, &wantP50Start, alert.HistoricalStartTime)
 		assert.Equal(t, &referenceTime, alert.CurrentStartTime)
 		wantDelay := referenceTime.Sub(wantP50Start)
 		assert.Equal(t, &wantDelay, alert.TotalInducedDelay)
@@ -208,7 +208,7 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
 
 		assert.Nil(t, alert.TotalInducedDelay)
-		assert.Nil(t, alert.HistoricalP50StartTime)
+		assert.Nil(t, alert.HistoricalStartTime)
 		assert.Nil(t, alert.CurrentStartTime)
 	})
 
@@ -228,7 +228,7 @@ func TestEnrichBreachAlerts(t *testing.T) {
 		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
 
 		assert.Nil(t, alert.TotalInducedDelay)
-		assert.Nil(t, alert.HistoricalP50StartTime)
+		assert.Nil(t, alert.HistoricalStartTime)
 		assert.Nil(t, alert.CurrentStartTime)
 	})
 }

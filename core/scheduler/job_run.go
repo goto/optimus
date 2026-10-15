@@ -162,13 +162,13 @@ type PotentialSLABreachAlert struct {
 	Severity     string
 	ImpactedJobs []string
 
-	// HistoricalP50StartTime, CurrentStartTime, and TotalInducedDelay are set only for
+	// HistoricalStartTime, CurrentStartTime, and TotalInducedDelay are set only for
 	// RUNNING_LONG, STARTED_LATE, and an unclassified NOT_STARTED cause.
 	// CurrentStartTime is the actual start time if the root cause has started, or the reference ("now") time if it hasn't;
-	// TotalInducedDelay is CurrentStartTime minus HistoricalP50StartTime.
-	HistoricalP50StartTime *time.Time
-	CurrentStartTime       *time.Time
-	TotalInducedDelay      *time.Duration
+	// TotalInducedDelay is CurrentStartTime minus HistoricalStartTime.
+	HistoricalStartTime *time.Time
+	CurrentStartTime    *time.Time
+	TotalInducedDelay   *time.Duration
 }
 
 type SLABreachCause string

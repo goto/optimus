@@ -325,8 +325,8 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 	if alert.RootCauseScheduledAt != nil {
 		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
 	}
-	if alert.HistoricalP50StartTime != nil {
-		data["historical_p50_start_time"] = alert.HistoricalP50StartTime.UTC().Format(time.RFC3339)
+	if alert.HistoricalStartTime != nil {
+		data["historical_start_time"] = alert.HistoricalStartTime.UTC().Format(time.RFC3339)
 	}
 	// CurrentStartTime is the actual root cause start time if it has started, or the reference
 	// ("now") time otherwise — i.e. exactly the value TotalInducedDelay was computed against, so

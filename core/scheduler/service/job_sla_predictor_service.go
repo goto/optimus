@@ -67,6 +67,10 @@ type ScheduledChangeGetter interface {
 	GetRecentScheduleChange(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, startTime time.Time) (string, error)
 }
 
+type DownstreamCategoryCounter interface {
+	GetDownstreamJobCategoryCounts(ctx context.Context, jobName scheduler.JobName, labelKey string) (map[string]int, error)
+}
+
 type JobSLAPredictorService struct {
 	l                 log.Logger
 	config            config.PotentialSLABreachConfig
@@ -79,6 +83,7 @@ type JobSLAPredictorService struct {
 	// alerting purpose
 	potentialSLANotifier PotentialSLANotifier
 	startDelayEstimator  StartDelayEstimator
+	downstreamCounter    DownstreamCategoryCounter
 }
 
 type RootCauseIdentifier interface {
@@ -86,7 +91,7 @@ type RootCauseIdentifier interface {
 	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath)
 }
 
-func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string, startDelayEstimator StartDelayEstimator) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string, startDelayEstimator StartDelayEstimator, downstreamCounter DownstreamCategoryCounter) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
 		l:                    l,
 		config:               config,
@@ -98,6 +103,7 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter, pendingSensorGetter, thirdPartyTypes, identifierConfig(rootCauseConfig)),
 		potentialSLANotifier: potentialSLANotifier,
 		startDelayEstimator:  startDelayEstimator,
+		downstreamCounter:    downstreamCounter,
 	}
 }
 
@@ -610,6 +616,18 @@ func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts 
 			delay = 0
 		}
 		alert.TotalInducedDelay = &delay
+	}
+
+	for _, alert := range alerts {
+		if s.downstreamCounter == nil || alert.Reason == scheduler.ReasonThirdPartyDelay {
+			continue
+		}
+		counts, err := s.downstreamCounter.GetDownstreamJobCategoryCounts(ctx, scheduler.JobName(alert.RootCauseJob), s.config.DownstreamCategoryLabelKey)
+		if err != nil {
+			s.l.Error("failed to get downstream job category counts, sending alert without it", "job", alert.RootCauseJob, "error", err)
+			continue
+		}
+		alert.DownstreamCounts = counts
 	}
 }
 

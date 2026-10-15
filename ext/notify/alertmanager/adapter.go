@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -340,6 +341,9 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 	if alert.TotalInducedDelay != nil {
 		data["induced_delay"] = formatDuration(*alert.TotalInducedDelay)
 	}
+	if len(alert.DownstreamCounts) > 0 {
+		data["downstream_counts"] = downstreamCountPairs(alert.DownstreamCounts)
+	}
 	for key, value := range evidenceFields(alert.Evidence) {
 		if _, exists := data[key]; exists {
 			continue
@@ -412,4 +416,26 @@ func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{}
 // "1h2m3.456789s" that time.Duration.String() would otherwise produce.
 func formatDuration(d time.Duration) string {
 	return d.Round(time.Minute).String()
+}
+
+// DownstreamCategoryCount is one category's count in the "potential downstream" breakdown,
+// e.g. category_table_tag "business-critical" -> 4. Exported as a slice (not the source map)
+// so the template can iterate it in a stable, sorted order.
+type DownstreamCategoryCount struct {
+	Category string `json:"category"`
+	Count    int    `json:"count"`
+}
+
+func downstreamCountPairs(counts map[string]int) []DownstreamCategoryCount {
+	categories := make([]string, 0, len(counts))
+	for category := range counts {
+		categories = append(categories, category)
+	}
+	sort.Strings(categories)
+
+	pairs := make([]DownstreamCategoryCount, 0, len(categories))
+	for _, category := range categories {
+		pairs = append(pairs, DownstreamCategoryCount{Category: category, Count: counts[category]})
+	}
+	return pairs
 }

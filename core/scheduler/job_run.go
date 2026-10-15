@@ -169,6 +169,12 @@ type PotentialSLABreachAlert struct {
 	HistoricalP50StartTime *time.Time
 	CurrentStartTime       *time.Time
 	TotalInducedDelay      *time.Duration
+
+	// DownstreamCounts is every job transitively downstream of RootCauseJob in the full
+	// lineage graph, grouped by the configured label key (see
+	// PotentialSLABreachConfig.DownstreamCategoryLabelKey). Jobs with the label unset are
+	// grouped under "".
+	DownstreamCounts map[string]int
 }
 
 type SLABreachCause string

@@ -146,8 +146,9 @@ func TestPostgresJobRepository(t *testing.T) {
 }
 
 func dbSetup() *pgxpool.Pool {
+	ctx := context.Background()
 	pool := setup.TestPool()
-	setup.TruncateTablesWith(pool)
+	setup.TruncateTablesWith(ctx, pool)
 	return pool
 }
 

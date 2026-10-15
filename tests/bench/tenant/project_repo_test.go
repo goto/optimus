@@ -21,7 +21,7 @@ func BenchmarkProjectRepository(b *testing.B) {
 	ctx := context.Background()
 	dbSetup := func() *pgxpool.Pool {
 		pool := setup.TestPool()
-		setup.TruncateTablesWith(pool)
+		setup.TruncateTablesWith(ctx, pool)
 		return pool
 	}
 

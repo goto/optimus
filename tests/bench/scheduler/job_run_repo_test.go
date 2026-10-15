@@ -50,7 +50,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 		b.Helper()
 
 		pool := setup.TestPool()
-		setup.TruncateTablesWith(pool)
+		setup.TruncateTablesWith(ctx, pool)
 
 		projectRepo := repoTenant.NewProjectRepository(pool)
 		err := projectRepo.Save(ctx, project)

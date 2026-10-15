@@ -85,7 +85,7 @@ func TestPostgresJobRepository(t *testing.T) {
 
 	dbSetup := func() *pgxpool.Pool {
 		pool := setup.TestPool()
-		setup.TruncateTablesWith(pool)
+		setup.TruncateTablesWith(ctx, pool)
 		projRepo := tenantPostgres.NewProjectRepository(pool)
 		assert.NoError(t, projRepo.Save(ctx, proj))
 		assert.NoError(t, projRepo.Save(ctx, otherProj))

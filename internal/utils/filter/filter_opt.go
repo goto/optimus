@@ -26,27 +26,31 @@ const (
 	bitOnSchedulerRunID      uint64 = 1 << 15
 	bitOnBackfillID          uint64 = 1 << 16
 	bitOnBackfillStatus      uint64 = 1 << 17
+	bitOnResourceFullName    uint64 = 1 << 18
+	bitOnResourceNamePrefix  uint64 = 1 << 19
 )
 
 const (
-	ProjectName         = Operand(bitOnProjectName)
-	NamespaceName       = Operand(bitOnNamespaceName)
-	NamespaceNames      = Operand(bitOnNamespaceNames)
-	JobName             = Operand(bitOnJobName)
-	JobNames            = Operand(bitOnJobNames)
-	ResourceDestination = Operand(bitOnResourceDestination)
-	ReplayStatus        = Operand(bitOnReplayStatus)
-	ScheduledAt         = Operand(bitOnScheduledAt)
-	ReplayID            = Operand(bitOnReplayID)
-	RunState            = Operand(bitOnRunState)
-	StartDate           = Operand(bitOnStartDate)
-	EndDate             = Operand(bitOnEndDate)
-	ApprovalID          = Operand(bitOnApprovalID)
-	UserID              = Operand(bitOnUserID)
-	TableName           = Operand(bitOnTableName)
-	SchedulerRunID      = Operand(bitOnSchedulerRunID)
-	BackfillID          = Operand(bitOnBackfillID)
-	BackfillStatus      = Operand(bitOnBackfillStatus)
+	ProjectName            = Operand(bitOnProjectName)
+	NamespaceName          = Operand(bitOnNamespaceName)
+	NamespaceNames         = Operand(bitOnNamespaceNames)
+	JobName                = Operand(bitOnJobName)
+	JobNames               = Operand(bitOnJobNames)
+	ResourceDestination    = Operand(bitOnResourceDestination)
+	ReplayStatus           = Operand(bitOnReplayStatus)
+	ScheduledAt            = Operand(bitOnScheduledAt)
+	ReplayID               = Operand(bitOnReplayID)
+	RunState               = Operand(bitOnRunState)
+	StartDate              = Operand(bitOnStartDate)
+	EndDate                = Operand(bitOnEndDate)
+	ApprovalID             = Operand(bitOnApprovalID)
+	UserID                 = Operand(bitOnUserID)
+	TableName              = Operand(bitOnTableName)
+	SchedulerRunID         = Operand(bitOnSchedulerRunID)
+	BackfillID             = Operand(bitOnBackfillID)
+	BackfillStatus         = Operand(bitOnBackfillStatus)
+	ResourceFullName       = Operand(bitOnResourceFullName)
+	ResourceFullNamePrefix = Operand(bitOnResourceNamePrefix)
 )
 
 func WithTime(operand Operand, value time.Time) FilterOpt {

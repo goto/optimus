@@ -161,6 +161,20 @@ type PotentialSLABreachAlert struct {
 
 	Severity     string
 	ImpactedJobs []string
+
+	// HistoricalP50StartTime, CurrentStartTime, and TotalInducedDelay are set only for
+	// RUNNING_LONG, STARTED_LATE, and an unclassified NOT_STARTED cause.
+	// CurrentStartTime is the actual start time if the root cause has started, or the reference ("now") time if it hasn't;
+	// TotalInducedDelay is CurrentStartTime minus HistoricalP50StartTime.
+	HistoricalP50StartTime *time.Time
+	CurrentStartTime       *time.Time
+	TotalInducedDelay      *time.Duration
+
+	// DownstreamCounts is every job transitively downstream of RootCauseJob in the full
+	// lineage graph, grouped by the configured label key (see
+	// PotentialSLABreachConfig.DownstreamCategoryLabelKey). Jobs with the label unset are
+	// grouped under "".
+	DownstreamCounts map[string]int
 }
 
 type SLABreachCause string
@@ -171,8 +185,9 @@ const (
 )
 
 type JobSLAState struct {
-	EstimatedDuration *time.Duration
-	InferredSLA       *time.Time
+	EstimatedDuration               *time.Duration
+	InferredSLA                     *time.Time
+	HistoricalPercentileStartOffset *time.Duration
 }
 
 // RootCauseReason explains why a breaching job is late.

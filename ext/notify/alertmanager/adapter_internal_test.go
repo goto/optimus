@@ -17,6 +17,28 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 	startedAt := time.Date(2026, 9, 11, 5, 30, 0, 0, time.UTC)
 	expectedFinish := time.Date(2026, 9, 11, 6, 45, 0, 0, time.UTC)
 
+	t.Run("includes downstream counts grouped by category", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+			DownstreamCounts:     map[string]int{"ssot": 2, "business-critical": 4},
+		})
+
+		assert.Equal(t, []DownstreamCategoryCount{
+			{Category: "business-critical", Count: 4},
+			{Category: "ssot", Count: 2},
+		}, payload.Data["downstream_counts"])
+	})
+
+	t.Run("omits downstream counts when there are none", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+		})
+
+		assert.NotContains(t, payload.Data, "downstream_counts")
+	})
+
 	t.Run("carries the deduplication keys as top-level strings", func(t *testing.T) {
 		// getDedupValues only resolves top-level string values. AM keys
 		// potential_sla_breach on root_cause_job, reason, and labels.team.
@@ -111,6 +133,56 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		assert.Equal(t, "wait_dex_orders", payload.Data["root_cause_job"])
 		assert.NotContains(t, payload.Data, "root_cause_scheduled_at")
 		assert.NotContains(t, payload.Data, "induced_delay")
+	})
+
+	t.Run("omits the reason entirely when it is unknown, rather than rendering the literal UNKNOWN", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+			Reason:               scheduler.ReasonUnknown,
+		})
+
+		assert.NotContains(t, payload.Data, "reason")
+	})
+
+	t.Run("the start-time-based induced delay takes precedence over the duration-estimation one", func(t *testing.T) {
+		p50Start := time.Date(2026, 9, 11, 5, 40, 0, 0, time.UTC)
+		totalInducedDelay := 95 * time.Minute
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt:   &scheduledAt,
+			Reason:                 scheduler.ReasonRunningLong,
+			HistoricalP50StartTime: &p50Start,
+			TotalInducedDelay:      &totalInducedDelay,
+			Evidence: scheduler.RootCauseEvidence{
+				// a different value, to prove the start-time-based one wins
+				InducedDelay: 10 * time.Minute,
+			},
+		})
+
+		assert.Equal(t, "2026-09-11T05:40:00Z", payload.Data["historical_p50_start_time"])
+		assert.Equal(t, (95 * time.Minute).String(), payload.Data["induced_delay"])
+	})
+
+	t.Run("includes the current start time used in the induced delay calc", func(t *testing.T) {
+		currentStartTime := time.Date(2026, 9, 11, 7, 15, 0, 0, time.UTC)
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+			Reason:               scheduler.ReasonRunningLong,
+			CurrentStartTime:     &currentStartTime,
+		})
+
+		assert.Equal(t, "2026-09-11T07:15:00Z", payload.Data["current_start_time"])
+	})
+
+	t.Run("omits the current start time when it is not set", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+		})
+
+		assert.NotContains(t, payload.Data, "current_start_time")
 	})
 
 	t.Run("impacted jobs preview names at most 3 jobs, joined with an ampersand", func(t *testing.T) {

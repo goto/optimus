@@ -96,14 +96,16 @@ type StartedLateDetector struct{}
 
 func (StartedLateDetector) Name() string { return "started_late" }
 
-// A deadline derived from the job's own history cannot be missed by a job that both
-// started on time and ran at that speed, so a normal-speed breach means a late start.
+// A safe-start a job that both started on time (by its own rhythm, or failing that by the
+// SLA-deadline math) and ran at normal speed cannot miss, so a normal-speed breach past it
+// means a late start.
 func (StartedLateDetector) Detect(c Candidate) (scheduler.RootCauseReason, scheduler.RootCauseEvidence, bool) {
 	start := c.State.JobRun.TaskStartTime
-	if start == nil || c.State.EstimatedDuration == nil || c.State.InferredSLA == nil {
+	if start == nil {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
-	if !start.After(effectiveSafeStart(*c.State)) {
+	safeStart, ok := effectiveSafeStart(*c.State)
+	if !ok || !start.After(safeStart) {
 		return "", scheduler.RootCauseEvidence{}, false
 	}
 	return scheduler.ReasonStartedLate, evidenceForStarted(c), true
@@ -184,10 +186,11 @@ func evidenceForStarted(c Candidate) scheduler.RootCauseEvidence {
 	if c.State.EstimatedDuration != nil {
 		finish := c.State.JobRun.TaskStartTime.Add(*c.State.EstimatedDuration)
 		evidence.ExpectedFinishAt = &finish
-		if c.State.InferredSLA != nil {
-			safeStart := effectiveSafeStart(*c.State)
-			evidence.LatestSafeStartAt = &safeStart
-		}
+	}
+	// LatestSafeStartAt is independent of ExpectedFinishAt's gate above: it can come from
+	// HistoricalP50StartOffset alone, with no EstimatedDuration/InferredSLA involved at all.
+	if safeStart, ok := effectiveSafeStart(*c.State); ok {
+		evidence.LatestSafeStartAt = &safeStart
 	}
 	return evidence
 }

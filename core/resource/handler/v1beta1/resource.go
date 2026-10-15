@@ -35,7 +35,7 @@ type ResourceService interface {
 	Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResponse, error)
 	ChangeNamespace(ctx context.Context, datastore resource.Store, resourceFullName string, oldTenant, newTenant tenant.Tenant) error
 	Get(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resourceName string) (*resource.Resource, error)
-	GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error)
+	GetAll(ctx context.Context, store resource.Store, filters ...filter.FilterOpt) ([]*resource.Resource, error)
 	SyncExternalTables(ctx context.Context, projectName tenant.ProjectName, store resource.Store, skipInterval bool, filters ...filter.FilterOpt) ([]string, error)
 	Deploy(ctx context.Context, tnnt tenant.Tenant, store resource.Store, resources []*resource.Resource, logWriter writer.LogWriter) error
 	SyncResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) (*resource.SyncResponse, error)
@@ -157,13 +157,12 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 		return nil, errors.GRPCErr(err, "invalid list resource request")
 	}
 
-	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
+	filterOpts, err := rh.listFiltersFromRequest(req)
 	if err != nil {
-		rh.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
 		return nil, errors.GRPCErr(err, "failed to list resource for "+req.GetDatastoreName())
 	}
 
-	resources, err := rh.service.GetAll(ctx, tnnt, store)
+	resources, err := rh.service.GetAll(ctx, store, filterOpts...)
 	if err != nil {
 		rh.l.Error("error getting all resources: %s", err)
 		return nil, errors.GRPCErr(err, "failed to list resource for "+req.GetDatastoreName())
@@ -182,6 +181,45 @@ func (rh ResourceHandler) ListResourceSpecification(ctx context.Context, req *pb
 	return &pb.ListResourceSpecificationResponse{
 		Resources: resourceProtos,
 	}, nil
+}
+
+// listFiltersFromRequest builds the optional filters of ListResourceSpecification.
+// At least one of project_name, namespace_name or resource_filter must be set;
+// multiple filters are combined with AND.
+func (rh ResourceHandler) listFiltersFromRequest(req *pb.ListResourceSpecificationRequest) ([]filter.FilterOpt, error) {
+	var opts []filter.FilterOpt
+
+	if projectName := req.GetProjectName(); projectName != "" {
+		if _, err := tenant.ProjectNameFrom(projectName); err != nil {
+			rh.l.Error("invalid project name [%s]: %s", projectName, err)
+			return nil, err
+		}
+		opts = append(opts, filter.WithString(filter.ProjectName, projectName))
+	}
+
+	if namespaceName := req.GetNamespaceName(); namespaceName != "" {
+		if _, err := tenant.NamespaceNameFrom(namespaceName); err != nil {
+			rh.l.Error("invalid namespace name [%s]: %s", namespaceName, err)
+			return nil, err
+		}
+		opts = append(opts, filter.WithString(filter.NamespaceName, namespaceName))
+	}
+
+	if req.GetResourceFilter() != "" {
+		resourceFilter, err := resource.FilterFrom(req.GetResourceFilter())
+		if err != nil {
+			rh.l.Error("invalid resource filter [%s]: %s", req.GetResourceFilter(), err)
+			return nil, err
+		}
+		opts = append(opts, resourceFilter.FilterOpts()...)
+	}
+
+	if len(opts) == 0 {
+		err := errors.InvalidArgument(resource.EntityResource, "at least one filter is required: project_name, namespace_name, or resource_filter")
+		rh.l.Error(err.Error())
+		return nil, err
+	}
+	return opts, nil
 }
 
 func (rh ResourceHandler) SyncExternalTables(ctx context.Context, req *pb.SyncExternalTablesRequest) (*pb.SyncExternalTablesResponse, error) {

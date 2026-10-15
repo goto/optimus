@@ -131,8 +131,7 @@ func dropTables(db *pgxpool.Pool) error {
 	return nil
 }
 
-func TruncateTablesWith(pool *pgxpool.Pool) {
-	ctx := context.Background()
+func TruncateTablesWith(ctx context.Context, pool *pgxpool.Pool) {
 	pool.Exec(ctx, "TRUNCATE TABLE backup_old, resource_old CASCADE")
 	pool.Exec(ctx, "TRUNCATE TABLE backup CASCADE")
 	pool.Exec(ctx, "TRUNCATE TABLE replay_request CASCADE")

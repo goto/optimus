@@ -36,7 +36,7 @@ func BenchmarkNamespaceRepository(b *testing.B) {
 		b.Helper()
 
 		pool := setup.TestPool()
-		setup.TruncateTablesWith(pool)
+		setup.TruncateTablesWith(ctx, pool)
 
 		prjRepo := repoTenant.NewProjectRepository(pool)
 		err := prjRepo.Save(ctx, project)

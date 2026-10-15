@@ -41,7 +41,7 @@ func BenchmarkBackupRepository(b *testing.B) {
 
 	dbSetup := func() *pgxpool.Pool {
 		pool := setup.TestPool()
-		setup.TruncateTablesWith(pool)
+		setup.TruncateTablesWith(ctx, pool)
 
 		projRepo := repoTenant.NewProjectRepository(pool)
 		if err := projRepo.Save(ctx, proj); err != nil {

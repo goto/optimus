@@ -784,7 +784,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -1196,6 +1196,9 @@
             "$ref": "#/definitions/v1beta1JobRunRef"
           },
           "title": "the runs that depend on this one"
+        },
+        "projectName": {
+          "type": "string"
         }
       }
     },
@@ -1319,6 +1322,9 @@
         "truncated": {
           "type": "boolean",
           "description": "truncated means the returned tree is not the full lineage."
+        },
+        "projectName": {
+          "type": "string"
         }
       }
     },
@@ -1412,6 +1418,14 @@
         },
         "hookName": {
           "type": "string"
+        },
+        "taskAttempts": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "hookAttempts": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

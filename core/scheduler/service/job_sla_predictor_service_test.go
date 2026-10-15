@@ -35,7 +35,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -64,7 +64,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -97,7 +97,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -130,7 +130,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -163,7 +163,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -205,7 +205,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -251,7 +251,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -307,7 +307,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -365,7 +365,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -448,7 +448,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -570,7 +570,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -694,7 +694,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -823,7 +823,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -982,7 +982,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -1106,7 +1106,7 @@ func TestIdentifySLABreaches(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		jobSLAPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		projectName := tenant.ProjectName("project-a")
 		nextScheduledRangeInHours := 10 * time.Hour
@@ -1311,7 +1311,7 @@ func TestIdentifySLABreaches_AsymmetricCases(t *testing.T) {
 		jobLineageFetcher := NewJobLineageFetcher(t)
 		durationEstimator := NewDurationEstimator(t)
 		jobDetailsGetter := NewJobDetailsGetter(t)
-		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil)
+		svc := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, jobLineageFetcher, durationEstimator, jobDetailsGetter, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 		jobA := &scheduler.JobWithDetails{
 			Name: "job-A",
@@ -1484,7 +1484,7 @@ func TestIdentifySLABreach(t *testing.T) {
 	scheduledChangeGetter := NewScheduledChangeGetter(t)
 	scheduledChangeGetter.On("GetRecentScheduleChange", ctx, mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
 
-	slaPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, nil, nil, nil, nil, nil, scheduledChangeGetter, nil, nil)
+	slaPredictorService := service.NewJobSLAPredictorService(l, conf, config.RootCauseConfig{}, nil, nil, nil, nil, nil, nil, scheduledChangeGetter, nil, nil, nil, nil)
 
 	t.Run("given job lineage with no upstream issues", func(t *testing.T) {
 		referenceTime := time.Now().UTC()
@@ -1501,7 +1501,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		jobTargetLineage := jobTargetLineageMap["job-A"]
 
-		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
+		breachCauses, allUpstreamStates := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachCauses, 0)
 		assert.Len(t, allUpstreamStates, 0)
@@ -1543,7 +1543,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: 1.0}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-C"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1581,7 +1581,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
 
 		assert.Len(t, breachesCauses, 1)
 		assert.Equal(t, breachesCauses["job-18"].Status, scheduler.SLABreachCauseRunningLate)
@@ -1619,7 +1619,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 		skipJobNames := map[scheduler.JobName]bool{}
 
-		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
+		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(ctx, jobTargetLineage, durations, nil, &targetSLA, skipJobNames, scheduler.DamperFactor{Alpha: damperCoeff}, referenceTime)
 
 		assert.Len(t, breachesCauses, 0)
 		assert.Len(t, fullBreachesCauses, 0)
@@ -1681,7 +1681,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
-			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
+			ctx, jobALineage, durations, nil, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
 		)
 
 		assert.Len(t, breachesCauses, 0)
@@ -1745,7 +1745,7 @@ func TestIdentifySLABreach(t *testing.T) {
 		}
 
 		breachesCauses, fullBreachesCauses := slaPredictorService.IdentifySLABreach(
-			ctx, jobALineage, durations, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
+			ctx, jobALineage, durations, nil, &targetSLA, map[scheduler.JobName]bool{}, scheduler.DamperFactor{Alpha: 1.0}, referenceTime,
 		)
 
 		assert.Len(t, breachesCauses, 0)
@@ -1755,7 +1755,7 @@ func TestIdentifySLABreach(t *testing.T) {
 
 func TestCalculateInferredSLAs(t *testing.T) {
 	l := log.NewNoop()
-	svc := service.NewJobSLAPredictorService(l, config.PotentialSLABreachConfig{}, config.RootCauseConfig{}, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	svc := service.NewJobSLAPredictorService(l, config.PotentialSLABreachConfig{}, config.RootCauseConfig{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	base := time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
 

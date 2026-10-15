@@ -216,24 +216,36 @@ func TestResourceHandler(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorContains(t, err, "invalid list resource request")
 		})
-		t.Run("returns error when tenant is invalid", func(t *testing.T) {
+		t.Run("returns error when no filter is provided", func(t *testing.T) {
 			service := new(resourceService)
 			handler := v1beta1.NewResourceHandler(logger, service, nil)
 
 			req := &pb.ListResourceSpecificationRequest{
-				ProjectName:   "",
 				DatastoreName: "bigquery",
-				NamespaceName: "ns",
 			}
 
 			_, err := handler.ListResourceSpecification(ctx, req)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = invalid argument for entity "+
-				"project: project name is empty: failed to list resource for bigquery")
+				"resource: at least one filter is required: project_name, namespace_name, or resource_filter: "+
+				"failed to list resource for bigquery")
+		})
+		t.Run("returns error when resource filter is invalid", func(t *testing.T) {
+			service := new(resourceService)
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.ListResourceSpecificationRequest{
+				DatastoreName:  "bigquery",
+				ResourceFilter: "*",
+			}
+
+			_, err := handler.ListResourceSpecification(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "wildcard must be preceded by a full name prefix")
 		})
 		t.Run("returns error when service returns error", func(t *testing.T) {
 			service := new(resourceService)
-			service.On("GetAll", ctx, mock.Anything, resource.Bigquery).
+			service.On("GetAll", ctx, resource.Bigquery, mock.Anything).
 				Return(nil, errors.New("error in getAll"))
 			defer service.AssertExpectations(t)
 
@@ -251,7 +263,7 @@ func TestResourceHandler(t *testing.T) {
 		})
 		t.Run("returns error when unable to convert", func(t *testing.T) {
 			service := new(resourceService)
-			service.On("GetAll", ctx, mock.Anything, resource.Bigquery).
+			service.On("GetAll", ctx, resource.Bigquery, mock.Anything).
 				Return([]*resource.Resource{{}}, nil)
 			defer service.AssertExpectations(t)
 
@@ -275,8 +287,12 @@ func TestResourceHandler(t *testing.T) {
 			assert.Nil(t, err)
 
 			service := new(resourceService)
-			service.On("GetAll", ctx, mock.Anything, resource.Bigquery).
-				Return([]*resource.Resource{dbRes}, nil)
+			service.On("GetAll", ctx, resource.Bigquery, mock.MatchedBy(func(filters []filter.FilterOpt) bool {
+				f := filter.NewFilter(filters...)
+				return f.Contains(filter.ProjectName, filter.NamespaceName) &&
+					f.GetStringValue(filter.ProjectName) == "proj" &&
+					f.GetStringValue(filter.NamespaceName) == "ns"
+			})).Return([]*resource.Resource{dbRes}, nil)
 			defer service.AssertExpectations(t)
 
 			handler := v1beta1.NewResourceHandler(logger, service, nil)
@@ -292,6 +308,83 @@ func TestResourceHandler(t *testing.T) {
 
 			assert.Equal(t, 1, len(res.Resources))
 			assert.Equal(t, dbRes.FullName(), res.Resources[0].Name)
+		})
+		t.Run("lists the resources with only project name", func(t *testing.T) {
+			spec := map[string]any{"a": "b"}
+			dbRes, err := resource.NewResource("proj.set.table", "table", resource.Bigquery, tnnt,
+				&resource.Metadata{}, spec)
+			assert.Nil(t, err)
+
+			service := new(resourceService)
+			service.On("GetAll", ctx, resource.Bigquery, mock.MatchedBy(func(filters []filter.FilterOpt) bool {
+				f := filter.NewFilter(filters...)
+				return f.Contains(filter.ProjectName) && !f.Contains(filter.NamespaceName) &&
+					f.GetStringValue(filter.ProjectName) == "proj"
+			})).Return([]*resource.Resource{dbRes}, nil)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.ListResourceSpecificationRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+			}
+
+			res, err := handler.ListResourceSpecification(ctx, req)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(res.Resources))
+		})
+		t.Run("lists the resources with wildcard resource filter", func(t *testing.T) {
+			spec := map[string]any{"a": "b"}
+			dbRes, err := resource.NewResource("projectA.schemaA.tableA", "table", resource.Bigquery, tnnt,
+				&resource.Metadata{}, spec)
+			assert.Nil(t, err)
+
+			service := new(resourceService)
+			service.On("GetAll", ctx, resource.Bigquery, mock.MatchedBy(func(filters []filter.FilterOpt) bool {
+				f := filter.NewFilter(filters...)
+				return f.Contains(filter.ResourceFullNamePrefix) &&
+					f.GetStringValue(filter.ResourceFullNamePrefix) == "projectA.schemaA."
+			})).Return([]*resource.Resource{dbRes}, nil)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.ListResourceSpecificationRequest{
+				DatastoreName:  "bigquery",
+				ResourceFilter: "projectA.schemaA.*",
+			}
+
+			res, err := handler.ListResourceSpecification(ctx, req)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(res.Resources))
+			assert.Equal(t, "projectA.schemaA.tableA", res.Resources[0].Name)
+		})
+		t.Run("lists the resources with exact resource filter", func(t *testing.T) {
+			spec := map[string]any{"a": "b"}
+			dbRes, err := resource.NewResource("projectA.schemaA", "dataset", resource.Bigquery, tnnt,
+				&resource.Metadata{}, spec)
+			assert.Nil(t, err)
+
+			service := new(resourceService)
+			service.On("GetAll", ctx, resource.Bigquery, mock.MatchedBy(func(filters []filter.FilterOpt) bool {
+				f := filter.NewFilter(filters...)
+				return f.Contains(filter.ResourceFullName) &&
+					f.GetStringValue(filter.ResourceFullName) == "projectA.schemaA"
+			})).Return([]*resource.Resource{dbRes}, nil)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.ListResourceSpecificationRequest{
+				DatastoreName:  "bigquery",
+				ResourceFilter: "projectA.schemaA",
+			}
+
+			res, err := handler.ListResourceSpecification(ctx, req)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(res.Resources))
+			assert.Equal(t, "projectA.schemaA", res.Resources[0].Name)
 		})
 	})
 	t.Run("CreateResource", func(t *testing.T) {
@@ -1280,8 +1373,8 @@ func (r *resourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 	return rs, args.Error(1)
 }
 
-func (r *resourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) {
-	args := r.Called(ctx, tnnt, store)
+func (r *resourceService) GetAll(ctx context.Context, store resource.Store, filters ...filter.FilterOpt) ([]*resource.Resource, error) {
+	args := r.Called(ctx, store, filters)
 	var resources []*resource.Resource
 	if args.Get(0) != nil {
 		resources = args.Get(0).([]*resource.Resource)

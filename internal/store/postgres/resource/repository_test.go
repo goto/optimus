@@ -40,6 +40,10 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 	resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset")
 	assert.NoError(t, err)
+	resourceURNSchemaA, err := serviceResource.ParseURN("maxcompute://project:schemaA")
+	assert.NoError(t, err)
+	resourceURNTableA, err := serviceResource.ParseURN("maxcompute://project:schemaA.tableA")
+	assert.NoError(t, err)
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error if resource with the provided full name is already defined within project and namespace", func(t *testing.T) {
@@ -239,6 +243,174 @@ func TestPostgresResourceRepository(t *testing.T) {
 			assert.NoError(t, actualError)
 			resourceToCreate.SetUpdateAt(actualResources[0].GetUpdateAt())
 			assert.EqualValues(t, []*serviceResource.Resource{resourceToCreate}, actualResources)
+		})
+	})
+
+	t.Run("GetByFilters", func(t *testing.T) {
+		t.Run("returns resource matching exact full name", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			dataset, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = dataset.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
+			table, err := serviceResource.NewResource("project.schemaA.tableA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = table.UpdateURN(resourceURNTableA)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, dataset)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, table)
+			assert.NoError(t, err)
+
+			filters := []filter.FilterOpt{filter.WithString(filter.ResourceFullName, "project.schemaA")}
+			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
+			assert.NoError(t, actualError)
+			assert.Len(t, actualResources, 1)
+			assert.Equal(t, "project.schemaA", actualResources[0].FullName())
+		})
+
+		t.Run("returns resources matching full name prefix", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			dataset, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = dataset.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
+			table, err := serviceResource.NewResource("project.schemaA.tableA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = table.UpdateURN(resourceURNTableA)
+			assert.NoError(t, err)
+			other, err := serviceResource.NewResource("project.schemaA.tableB", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, dataset)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, table)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, other)
+			assert.NoError(t, err)
+
+			filters := []filter.FilterOpt{filter.WithString(filter.ResourceFullNamePrefix, "project.schemaA.")}
+			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
+			assert.NoError(t, actualError)
+			assert.Len(t, actualResources, 2)
+			assert.Equal(t, "project.schemaA.tableA", actualResources[0].FullName())
+		})
+
+		t.Run("escapes LIKE wildcard characters in prefix", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			likeResource, err := serviceResource.NewResource("pro_ject%odd.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = likeResource.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
+			normalResource, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = normalResource.UpdateURN(resourceURNTableA)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, likeResource)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, normalResource)
+			assert.NoError(t, err)
+
+			filters := []filter.FilterOpt{filter.WithString(filter.ResourceFullNamePrefix, "pro_ject%odd.")}
+			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
+			assert.NoError(t, actualError)
+			assert.Len(t, actualResources, 1)
+			assert.Equal(t, "pro_ject%odd.schemaA", actualResources[0].FullName())
+		})
+
+		t.Run("returns resources by project name across namespaces", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			first, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = first.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
+			second, err := serviceResource.NewResource("other.schemaA", kindDataset, store, tnnt2, meta, spec)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, first)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, second)
+			assert.NoError(t, err)
+
+			filters := []filter.FilterOpt{filter.WithString(filter.ProjectName, tnnt.ProjectName().String())}
+			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
+			assert.NoError(t, actualError)
+			assert.Len(t, actualResources, 2)
+		})
+
+		t.Run("returns resources by namespace name", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			first, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = first.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
+			second, err := serviceResource.NewResource("other.schemaA", kindDataset, store, tnnt2, meta, spec)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, first)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, second)
+			assert.NoError(t, err)
+
+			filters := []filter.FilterOpt{filter.WithString(filter.NamespaceName, tnnt2.NamespaceName().String())}
+			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
+			assert.NoError(t, actualError)
+			assert.Len(t, actualResources, 1)
+			assert.Equal(t, "other.schemaA", actualResources[0].FullName())
+		})
+
+		t.Run("combines filters with AND", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			matching, err := serviceResource.NewResource("project.schemaA.tableA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = matching.UpdateURN(resourceURNTableA)
+			assert.NoError(t, err)
+			otherNamespace, err := serviceResource.NewResource("project.schemaA.tableB", kindDataset, store, tnnt2, meta, spec)
+			assert.NoError(t, err)
+			err = otherNamespace.UpdateURN(resourceURNTableA)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, matching)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, otherNamespace)
+			assert.NoError(t, err)
+
+			filters := []filter.FilterOpt{
+				filter.WithString(filter.NamespaceName, tnnt.NamespaceName().String()),
+				filter.WithString(filter.ResourceFullNamePrefix, "project.schemaA."),
+			}
+			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
+			assert.NoError(t, actualError)
+			assert.Len(t, actualResources, 1)
+			assert.Equal(t, "project.schemaA.tableA", actualResources[0].FullName())
+		})
+
+		t.Run("excludes deleted resources when only active is set", func(t *testing.T) {
+			pool := dbSetup()
+			repository := repoResource.NewRepository(pool)
+
+			resourceToCreate, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = resourceToCreate.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
+			err = repository.Create(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			err = repository.Delete(ctx, resourceToCreate)
+			assert.NoError(t, err)
+
+			filters := []filter.FilterOpt{filter.WithString(filter.ProjectName, tnnt.ProjectName().String())}
+			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
+			assert.NoError(t, actualError)
+			assert.Empty(t, actualResources)
 		})
 	})
 
@@ -531,10 +703,11 @@ func insertTestResourceChangelog(pool *pgxpool.Pool, resourceName serviceResourc
 	}
 }
 
+// nolint: contextcheck
 func dbSetup() *pgxpool.Pool {
 	ctx := context.Background()
 	pool := setup.TestPool()
-	setup.TruncateTablesWith(pool)
+	setup.TruncateTablesWith(ctx, pool)
 	proj, _ := tenant.NewProject("t-optimus-1",
 		map[string]string{
 			"bucket":                     "gs://some_folder-2",

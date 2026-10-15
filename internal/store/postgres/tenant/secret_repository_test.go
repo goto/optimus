@@ -34,7 +34,7 @@ func TestPostgresSecretRepository(t *testing.T) {
 
 	dbSetup := func() *pgxpool.Pool {
 		pool := setup.TestPool()
-		setup.TruncateTablesWith(pool)
+		setup.TruncateTablesWith(ctx, pool)
 
 		projRepo := postgres.NewProjectRepository(pool)
 		assert.Nil(t, projRepo.Save(ctx, proj))

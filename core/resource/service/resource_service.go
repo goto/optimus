@@ -32,6 +32,7 @@ type ResourceRepository interface {
 	ChangeNamespace(ctx context.Context, res *resource.Resource, newTenant tenant.Tenant) error
 	ReadByFullName(ctx context.Context, tnnt tenant.Tenant, store resource.Store, fullName string, onlyActive bool) (*resource.Resource, error)
 	ReadAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store, onlyActive bool) ([]*resource.Resource, error)
+	GetByFilters(ctx context.Context, store resource.Store, onlyActive bool, filters []filter.FilterOpt) ([]*resource.Resource, error)
 	GetExternal(ctx context.Context, projName tenant.ProjectName, store resource.Store, filters []filter.FilterOpt) ([]*resource.Resource, error)
 	GetAllExternal(ctx context.Context, store resource.Store) ([]*resource.Resource, error)
 	GetResources(ctx context.Context, tnnt tenant.Tenant, store resource.Store, names []string) ([]*resource.Resource, error)
@@ -398,8 +399,13 @@ func (rs ResourceService) Get(ctx context.Context, tnnt tenant.Tenant, store res
 	return rs.repo.ReadByFullName(ctx, tnnt, store, resourceFullName, true)
 }
 
-func (rs ResourceService) GetAll(ctx context.Context, tnnt tenant.Tenant, store resource.Store) ([]*resource.Resource, error) { // nolint:gocritic
-	return rs.repo.ReadAll(ctx, tnnt, store, true)
+func (rs ResourceService) GetAll(ctx context.Context, store resource.Store, filters ...filter.FilterOpt) ([]*resource.Resource, error) { // nolint:gocritic
+	if len(filters) == 0 {
+		msg := "at least one filter is required: project_name, namespace_name, or resource_filter"
+		rs.logger.Error(msg)
+		return nil, errors.InvalidArgument(resource.EntityResource, msg)
+	}
+	return rs.repo.GetByFilters(ctx, store, true, filters)
 }
 
 func groupByTenant(resources []*resource.Resource) map[tenant.Tenant][]*resource.Resource {

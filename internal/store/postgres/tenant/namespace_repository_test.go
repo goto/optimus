@@ -31,7 +31,7 @@ func TestPostgresNamespaceRepository(t *testing.T) {
 	ctx := context.Background()
 	dbSetup := func() *pgxpool.Pool {
 		pool := setup.TestPool()
-		setup.TruncateTablesWith(pool)
+		setup.TruncateTablesWith(ctx, pool)
 
 		prjRepo := postgres.NewProjectRepository(pool)
 		err := prjRepo.Save(ctx, proj)

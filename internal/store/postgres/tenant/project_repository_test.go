@@ -27,7 +27,7 @@ func TestPostgresProjectRepository(t *testing.T) {
 	ctx := context.Background()
 	dbSetup := func() *pgxpool.Pool {
 		dbPool := setup.TestPool()
-		setup.TruncateTablesWith(dbPool)
+		setup.TruncateTablesWith(ctx, dbPool)
 
 		return dbPool
 	}

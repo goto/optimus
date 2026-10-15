@@ -234,7 +234,8 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 			}
 
 			pbJobRun := &pb.JobExecutionSummary{
-				JobName: run.JobName.String(),
+				JobName:     run.JobName.String(),
+				ProjectName: run.ProjectName.String(),
 				Sla: &pb.SLAConfig{
 					Duration: durationpb.New(run.SLA.Duration),
 				},
@@ -252,6 +253,8 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 					SensorName:    sensorName,
 					TaskName:      taskName,
 					HookName:      hookName,
+					TaskAttempts:  int32(run.JobRunSummary.TaskAttempts),
+					HookAttempts:  int32(run.JobRunSummary.HookAttempts),
 				},
 				Level:              int32(run.Level),
 				DownstreamPathName: run.DownstreamPathName,
@@ -293,6 +296,7 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 
 		pbJobRunLineages = append(pbJobRunLineages, &pb.JobRunLineageSummary{
 			JobName:     lineage.JobName.String(),
+			ProjectName: lineage.ProjectName.String(),
 			ScheduledAt: timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
 			JobRuns:     pbJobRuns,
 			TotalNodes:  int32(lineage.TotalNodes),

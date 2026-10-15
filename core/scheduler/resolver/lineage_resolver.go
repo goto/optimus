@@ -187,6 +187,7 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 	baseSLATime := scheduledAt.Add(lineage.SLA.Duration)
 	lineage.JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{
 		lineage.JobName: {
+			JobName:     lineage.JobName,
 			ScheduledAt: scheduledAt,
 			SLATime:     &baseSLATime,
 		},
@@ -260,6 +261,7 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 			if _, exists := allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]; !exists {
 				baseSLATime := upstreamSchedule.Add(upstream.SLA.Duration)
 				allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()] = &scheduler.JobRunSummary{
+					JobName:     upstream.JobName,
 					ScheduledAt: upstreamSchedule,
 					SLATime:     &baseSLATime,
 				}
@@ -342,6 +344,8 @@ func (r *LineageResolver) fetchJobRunDetails(ctx context.Context, allJobRunsMap 
 				jobRuns[scheduleKey].SensorName = detail.SensorName
 				jobRuns[scheduleKey].TaskName = detail.TaskName
 				jobRuns[scheduleKey].HookName = detail.HookName
+				jobRuns[scheduleKey].TaskAttempts = detail.TaskAttempts
+				jobRuns[scheduleKey].HookAttempts = detail.HookAttempts
 			}
 		}
 	}
@@ -403,5 +407,7 @@ func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {
 		SensorName:    source.SensorName,
 		TaskName:      source.TaskName,
 		HookName:      source.HookName,
+		TaskAttempts:  source.TaskAttempts,
+		HookAttempts:  source.HookAttempts,
 	}
 }

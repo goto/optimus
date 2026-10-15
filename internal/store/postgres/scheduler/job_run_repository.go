@@ -554,6 +554,7 @@ WITH operations AS (
 summary_operations AS (
 	SELECT 
 		job_name,
+		project_name,
 		scheduled_at,
 		job_start_time,
 		job_end_time,
@@ -569,25 +570,55 @@ summary_operations AS (
 		MAX(CASE WHEN operation_type = 'hook' AND rn_end = 1 THEN end_time END) as hook_end_time
 	FROM operations
 	WHERE rn_start = 1 OR rn_end = 1
-	GROUP BY job_name, scheduled_at, job_start_time, job_end_time, job_status
+	GROUP BY job_name, project_name, scheduled_at, job_start_time, job_end_time, job_status
+),
+attempt_counts AS (
+	SELECT 
+		opr.job_name,
+		opr.project_name,
+		opr.scheduled_at,
+		COUNT(CASE 
+			WHEN opr.operation_type = 'task' 
+				AND so.task_start_time IS NOT NULL 
+				AND opr.start_time >= so.task_start_time 
+				AND (so.task_end_time IS NULL OR (opr.start_time <= so.task_end_time AND (opr.end_time IS NULL OR opr.end_time <= so.task_end_time)))
+			THEN 1 
+		END) AS task_attempts,
+		COUNT(CASE 
+			WHEN opr.operation_type = 'hook' 
+				AND so.hook_start_time IS NOT NULL 
+				AND opr.start_time >= so.hook_start_time 
+				AND (so.hook_end_time IS NULL OR (opr.start_time <= so.hook_end_time AND (opr.end_time IS NULL OR opr.end_time <= so.hook_end_time)))
+			THEN 1 
+		END) AS hook_attempts
+	FROM operations opr
+	JOIN summary_operations so ON so.job_name = opr.job_name 
+		AND so.project_name = opr.project_name 
+		AND so.scheduled_at = opr.scheduled_at
+	GROUP BY opr.job_name, opr.project_name, opr.scheduled_at
 )
 SELECT
-	job_name,
-	scheduled_at,
-	job_start_time,
-	COALESCE(hook_end_time, task_end_time) AS job_end_time,
-	job_status,
-	sensor_start_time,
-	sensor_end_time,
-	task_start_time,
-	task_end_time,
-	hook_start_time,
-	hook_end_time,
-	sensor_name,
-	task_name,
-	hook_name
-FROM summary_operations
-ORDER BY scheduled_at DESC
+	so.job_name,
+	so.scheduled_at,
+	so.job_start_time,
+	COALESCE(so.hook_end_time, so.task_end_time) AS job_end_time,
+	so.job_status,
+	so.sensor_start_time,
+	so.sensor_end_time,
+	so.task_start_time,
+	so.task_end_time,
+	so.hook_start_time,
+	so.hook_end_time,
+	so.sensor_name,
+	so.task_name,
+	so.hook_name,
+	COALESCE(ac.task_attempts, 0) AS task_attempts,
+	COALESCE(ac.hook_attempts, 0) AS hook_attempts
+FROM summary_operations so
+LEFT JOIN attempt_counts ac ON ac.job_name = so.job_name 
+	AND ac.project_name = so.project_name 
+	AND ac.scheduled_at = so.scheduled_at
+ORDER BY so.scheduled_at DESC
 	`, strings.Join(conditions, " OR "))
 
 	rows, err := j.db.Query(ctx, query, args...)
@@ -613,13 +644,16 @@ ORDER BY scheduled_at DESC
 			sensorName      *string
 			taskName        *string
 			hookName        *string
+			taskAttempts    int
+			hookAttempts    int
 		)
 
 		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime, &jobStatus,
 			&sensorStartTime, &sensorEndTime,
 			&taskStartTime, &taskEndTime,
 			&hookStartTime, &hookEndTime,
-			&sensorName, &taskName, &hookName)
+			&sensorName, &taskName, &hookName,
+			&taskAttempts, &hookAttempts)
 		if err != nil {
 			return nil, errors.Wrap(scheduler.EntityJobRun, "error while scanning job run summary", err)
 		}
@@ -639,6 +673,8 @@ ORDER BY scheduled_at DESC
 			SensorName:    sensorName,
 			TaskName:      taskName,
 			HookName:      hookName,
+			TaskAttempts:  taskAttempts,
+			HookAttempts:  hookAttempts,
 		}
 		summaries = append(summaries, summary)
 	}

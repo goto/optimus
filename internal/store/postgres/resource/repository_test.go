@@ -40,6 +40,10 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 	resourceURN, err := serviceResource.ParseURN("bigquery://project:dataset")
 	assert.NoError(t, err)
+	resourceURNSchemaA, err := serviceResource.ParseURN("maxcompute://project:schemaA")
+	assert.NoError(t, err)
+	resourceURNTableA, err := serviceResource.ParseURN("maxcompute://project:schemaA.tableA")
+	assert.NoError(t, err)
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("returns error if resource with the provided full name is already defined within project and namespace", func(t *testing.T) {
@@ -249,7 +253,11 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			dataset, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
+			err = dataset.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
 			table, err := serviceResource.NewResource("project.schemaA.tableA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = table.UpdateURN(resourceURNTableA)
 			assert.NoError(t, err)
 			err = repository.Create(ctx, dataset)
 			assert.NoError(t, err)
@@ -269,7 +277,11 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			dataset, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
+			err = dataset.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
 			table, err := serviceResource.NewResource("project.schemaA.tableA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = table.UpdateURN(resourceURNTableA)
 			assert.NoError(t, err)
 			other, err := serviceResource.NewResource("project.schemaA.tableB", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
@@ -283,7 +295,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			filters := []filter.FilterOpt{filter.WithString(filter.ResourceFullNamePrefix, "project.schemaA.")}
 			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
 			assert.NoError(t, actualError)
-			assert.Len(t, actualResources, 1)
+			assert.Len(t, actualResources, 2)
 			assert.Equal(t, "project.schemaA.tableA", actualResources[0].FullName())
 		})
 
@@ -293,7 +305,11 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			likeResource, err := serviceResource.NewResource("pro_ject%odd.schemaA", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
+			err = likeResource.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
 			normalResource, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = normalResource.UpdateURN(resourceURNTableA)
 			assert.NoError(t, err)
 			err = repository.Create(ctx, likeResource)
 			assert.NoError(t, err)
@@ -312,6 +328,8 @@ func TestPostgresResourceRepository(t *testing.T) {
 			repository := repoResource.NewRepository(pool)
 
 			first, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = first.UpdateURN(resourceURNSchemaA)
 			assert.NoError(t, err)
 			second, err := serviceResource.NewResource("other.schemaA", kindDataset, store, tnnt2, meta, spec)
 			assert.NoError(t, err)
@@ -332,6 +350,8 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			first, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
+			err = first.UpdateURN(resourceURNSchemaA)
+			assert.NoError(t, err)
 			second, err := serviceResource.NewResource("other.schemaA", kindDataset, store, tnnt2, meta, spec)
 			assert.NoError(t, err)
 			err = repository.Create(ctx, first)
@@ -343,7 +363,7 @@ func TestPostgresResourceRepository(t *testing.T) {
 			actualResources, actualError := repository.GetByFilters(ctx, store, true, filters)
 			assert.NoError(t, actualError)
 			assert.Len(t, actualResources, 1)
-			assert.Equal(t, "other.dataset", actualResources[0].FullName())
+			assert.Equal(t, "other.schemaA", actualResources[0].FullName())
 		})
 
 		t.Run("combines filters with AND", func(t *testing.T) {
@@ -352,7 +372,11 @@ func TestPostgresResourceRepository(t *testing.T) {
 
 			matching, err := serviceResource.NewResource("project.schemaA.tableA", kindDataset, store, tnnt, meta, spec)
 			assert.NoError(t, err)
+			err = matching.UpdateURN(resourceURNTableA)
+			assert.NoError(t, err)
 			otherNamespace, err := serviceResource.NewResource("project.schemaA.tableB", kindDataset, store, tnnt2, meta, spec)
+			assert.NoError(t, err)
+			err = otherNamespace.UpdateURN(resourceURNTableA)
 			assert.NoError(t, err)
 			err = repository.Create(ctx, matching)
 			assert.NoError(t, err)
@@ -374,6 +398,8 @@ func TestPostgresResourceRepository(t *testing.T) {
 			repository := repoResource.NewRepository(pool)
 
 			resourceToCreate, err := serviceResource.NewResource("project.schemaA", kindDataset, store, tnnt, meta, spec)
+			assert.NoError(t, err)
+			err = resourceToCreate.UpdateURN(resourceURNSchemaA)
 			assert.NoError(t, err)
 			err = repository.Create(ctx, resourceToCreate)
 			assert.NoError(t, err)

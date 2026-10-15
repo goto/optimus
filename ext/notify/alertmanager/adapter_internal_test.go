@@ -21,12 +21,12 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
 			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
 			RootCauseScheduledAt: &scheduledAt,
-			DownstreamCounts:     map[string]int{"ssot": 2, "business-critical": 4},
+			DownstreamCounts:     map[string]int{"categoryB": 2, "categoryA": 4},
 		})
 
 		assert.Equal(t, []DownstreamCategoryCount{
-			{Category: "business-critical", Count: 4},
-			{Category: "ssot", Count: 2},
+			{Category: "categoryA", Count: 4},
+			{Category: "categoryB", Count: 2},
 		}, payload.Data["downstream_counts"])
 	})
 

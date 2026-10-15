@@ -30,14 +30,14 @@ func TestEnrichBreachAlertsDownstream(t *testing.T) {
 	t.Run("attaches category counts to the alert", func(t *testing.T) {
 		svc := &JobSLAPredictorService{
 			l:                 log.NewNoop(),
-			config:            config.PotentialSLABreachConfig{DownstreamCategoryLabelKey: "category_table_tag"},
-			downstreamCounter: stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{"job-C": {"business-critical": 3, "ssot": 1}}},
+			config:            config.PotentialSLABreachConfig{DownstreamCategoryLabelKey: "labelA"},
+			downstreamCounter: stubDownstreamCounter{counts: map[scheduler.JobName]map[string]int{"job-C": {"categoryA": 3, "categoryB": 1}}},
 		}
 		alert := &scheduler.PotentialSLABreachAlert{RootCauseJob: "job-C", Reason: scheduler.ReasonRunningLong}
 
 		svc.enrichBreachAlerts(ctx, []*scheduler.PotentialSLABreachAlert{alert}, reqConfig)
 
-		assert.Equal(t, map[string]int{"business-critical": 3, "ssot": 1}, alert.DownstreamCounts)
+		assert.Equal(t, map[string]int{"categoryA": 3, "categoryB": 1}, alert.DownstreamCounts)
 	})
 
 	t.Run("skips third-party delay, since the root cause job name is a sensor identity, not a real row in job_upstream", func(t *testing.T) {

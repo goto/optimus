@@ -805,8 +805,8 @@ func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.
 }
 
 // GetJobsByLabelsMultiValue is like GetJobsByLabels but each key may match any of several
-// values (OR'd within a key, AND'd across keys), e.g. {"category_table_tag": ["business-critical",
-// "ssot"]} matches jobs tagged with either value. GetJobsByLabels' single-value @> containment
+// values (OR'd within a key, AND'd across keys), e.g. {"category": ["categoryA",
+// "categoryB"]} matches jobs tagged with either value. GetJobsByLabels' single-value @> containment
 // operator can't express this, so each key becomes its own labels->>'key' = ANY(...) clause.
 func (j *JobRepository) GetJobsByLabelsMultiValue(ctx context.Context, projectName tenant.ProjectName, labels map[string][]string) ([]*scheduler.JobWithDetails, error) {
 	if len(labels) == 0 {
@@ -917,7 +917,7 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 
 // GetDownstreamJobCategoryCounts walks the full transitive lineage downstream of jobName
 // (over resolved job_upstream edges) and counts distinct downstream jobs grouped by the
-// given label key, e.g. "category_table_tag" -> {"business-critical": 4, "ssot": 2}.
+// given label key, e.g. "category" -> {"categoryA": 4, "categoryB": 2}.
 // Jobs with the key unset or empty are grouped under "". The recursive CTE's UNION (not
 // UNION ALL) dedupes visited nodes, so a cycle in job_upstream terminates naturally rather
 // than looping forever.

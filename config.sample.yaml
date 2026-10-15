@@ -92,7 +92,7 @@ alerting:
       min_padding_minutes: 0
       max_padding_minutes: 1000
     # job label key used to group the "downstream count" shown in an alert
-    downstream_category_label_key: category_table_tag
+    downstream_category_label_key: labelCategoryA
   # alert deduplication
   deduplication:
     operator_sla_miss:

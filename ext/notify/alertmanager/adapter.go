@@ -390,9 +390,6 @@ func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{}
 	return fields
 }
 
-// DownstreamCategoryCount is one category's count in the "potential downstream" breakdown,
-// e.g. category_table_tag "business-critical" -> 4. Exported as a slice (not the source map)
-// so the template can iterate it in a stable, sorted order.
 type DownstreamCategoryCount struct {
 	Category string `json:"category"`
 	Count    int    `json:"count"`

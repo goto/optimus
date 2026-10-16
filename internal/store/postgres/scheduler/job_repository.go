@@ -936,7 +936,9 @@ func (j *JobRepository) GetDownstreamJobCategoryCounts(ctx context.Context, proj
 	SELECT COALESCE(j.labels->>$3, '') AS category, COUNT(*)
 	FROM downstream d
 	JOIN job j ON j.project_name = d.project_name AND j.name = d.job_name
-	WHERE j.deleted_at IS NULL AND j.project_name NOT LIKE '%-preprod'
+	WHERE j.deleted_at IS NULL
+	  AND j.state = 'enabled'
+	  AND j.project_name NOT LIKE '%-preprod'
 	GROUP BY category`
 
 	rows, err := j.db.Query(ctx, query, projectName.String(), jobName.String(), labelKey)

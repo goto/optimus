@@ -805,8 +805,8 @@ func (j *JobRepository) GetJobsByLabels(ctx context.Context, projectName tenant.
 }
 
 // GetJobsByLabelsMultiValue is like GetJobsByLabels but each key may match any of several
-// values (OR'd within a key, AND'd across keys), e.g. {"category_table_tag": ["business-critical",
-// "ssot"]} matches jobs tagged with either value. GetJobsByLabels' single-value @> containment
+// values (OR'd within a key, AND'd across keys), e.g. {"category": ["categoryA",
+// "categoryB"]} matches jobs tagged with either value. GetJobsByLabels' single-value @> containment
 // operator can't express this, so each key becomes its own labels->>'key' = ANY(...) clause.
 func (j *JobRepository) GetJobsByLabelsMultiValue(ctx context.Context, projectName tenant.ProjectName, labels map[string][]string) ([]*scheduler.JobWithDetails, error) {
 	if len(labels) == 0 {
@@ -913,6 +913,54 @@ func (j *JobRepository) GetAllResolvedUpstreams(ctx context.Context) (map[schedu
 	}
 
 	return upstreamMap, nil
+}
+
+// GetDownstreamJobCategoryCounts walks the full transitive lineage downstream of
+// (projectName, jobName) — over resolved job_upstream edges — and counts distinct downstream
+// jobs grouped by the given label key, e.g. "category" -> {"categoryA": 4, "categoryB": 2}.
+//
+// Jobs with the key unset or empty are grouped under "".
+// The recursive CTE's UNION (not UNION ALL) dedupes visited nodes, so a cycle in job_upstream
+// terminates naturally rather than looping forever.
+func (j *JobRepository) GetDownstreamJobCategoryCounts(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, labelKey string) (map[string]int, error) {
+	query := `
+	WITH RECURSIVE downstream AS (
+		SELECT project_name, job_name FROM job_upstream
+		WHERE upstream_project_name = $1 AND upstream_job_name = $2 AND upstream_state = 'resolved'
+		UNION
+		SELECT ju.project_name, ju.job_name
+		FROM job_upstream ju
+		JOIN downstream d ON ju.upstream_project_name = d.project_name AND ju.upstream_job_name = d.job_name
+		WHERE ju.upstream_state = 'resolved'
+	)
+	SELECT COALESCE(j.labels->>$3, '') AS category, COUNT(*)
+	FROM downstream d
+	JOIN job j ON j.project_name = d.project_name AND j.name = d.job_name
+	WHERE j.deleted_at IS NULL
+	  AND j.state = 'enabled'
+	  AND j.project_name NOT LIKE '%-preprod'
+	GROUP BY category`
+
+	rows, err := j.db.Query(ctx, query, projectName.String(), jobName.String(), labelKey)
+	if err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error while getting downstream job category counts", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var category string
+		var count int
+		if err := rows.Scan(&category, &count); err != nil {
+			return nil, errors.Wrap(scheduler.EntityJobRun, "error scanning downstream job category count", err)
+		}
+		counts[category] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(scheduler.EntityJobRun, "error iterating downstream job category count rows", err)
+	}
+
+	return counts, nil
 }
 
 func (j *JobRepository) GetSummaryByNames(ctx context.Context, jobNames []scheduler.JobName) (map[scheduler.JobName]*scheduler.JobSummary, error) {

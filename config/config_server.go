@@ -126,6 +126,8 @@ type PotentialSLABreachConfig struct {
 	// persistent logging writes, so it is a no-op unless EnablePersistentLogging is on.
 	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
+	// DownstreamCategoryLabelKey groups the "downstream count" shown in an alert by this job label key
+	DownstreamCategoryLabelKey string `mapstructure:"downstream_category_label_key"`
 }
 
 type DurationEstimatorConfig struct {

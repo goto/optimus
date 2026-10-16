@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -321,6 +322,9 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 	if alert.RootCauseScheduledAt != nil {
 		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
 	}
+	if len(alert.DownstreamCounts) > 0 {
+		data["downstream_counts"] = downstreamCountPairs(alert.DownstreamCounts)
+	}
 	for key, value := range evidenceFields(alert.Evidence) {
 		data[key] = value
 	}
@@ -384,4 +388,23 @@ func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{}
 		fields["induced_delay"] = evidence.InducedDelay.String()
 	}
 	return fields
+}
+
+type DownstreamCategoryCount struct {
+	Category string `json:"category"`
+	Count    int    `json:"count"`
+}
+
+func downstreamCountPairs(counts map[string]int) []DownstreamCategoryCount {
+	categories := make([]string, 0, len(counts))
+	for category := range counts {
+		categories = append(categories, category)
+	}
+	sort.Strings(categories)
+
+	pairs := make([]DownstreamCategoryCount, 0, len(categories))
+	for _, category := range categories {
+		pairs = append(pairs, DownstreamCategoryCount{Category: category, Count: counts[category]})
+	}
+	return pairs
 }

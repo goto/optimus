@@ -17,6 +17,28 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 	startedAt := time.Date(2026, 9, 11, 5, 30, 0, 0, time.UTC)
 	expectedFinish := time.Date(2026, 9, 11, 6, 45, 0, 0, time.UTC)
 
+	t.Run("includes downstream counts grouped by category", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+			DownstreamCounts:     map[string]int{"categoryB": 2, "categoryA": 4},
+		})
+
+		assert.Equal(t, []DownstreamCategoryCount{
+			{Category: "categoryA", Count: 4},
+			{Category: "categoryB", Count: 2},
+		}, payload.Data["downstream_counts"])
+	})
+
+	t.Run("omits downstream counts when there are none", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+		})
+
+		assert.NotContains(t, payload.Data, "downstream_counts")
+	})
+
 	t.Run("carries the deduplication keys as top-level strings", func(t *testing.T) {
 		// getDedupValues only resolves top-level string values. AM keys
 		// potential_sla_breach on root_cause_job, reason, and labels.team.

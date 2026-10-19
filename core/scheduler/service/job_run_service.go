@@ -871,11 +871,13 @@ func (*JobRunService) getMonitoringValues(event *scheduler.Event) map[string]any
 func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.Event) ([]*scheduler.SLAObject, []time.Time) {
 	scheduleTimesList := make([]time.Time, len(event.SLAObjectList))
 	unfilteredSLAObj := make([]*scheduler.SLAObject, len(event.SLAObjectList))
+	runIDByScheduleTime := make(map[time.Time]string, len(event.SLAObjectList))
 	var slaBreachedJobRunScheduleTimes []time.Time
 
 	for i, SLAObject := range event.SLAObjectList {
 		scheduleTimesList[i] = SLAObject.JobScheduledAt
-		unfilteredSLAObj[i] = &scheduler.SLAObject{JobName: SLAObject.JobName, JobScheduledAt: SLAObject.JobScheduledAt}
+		unfilteredSLAObj[i] = &scheduler.SLAObject{JobName: SLAObject.JobName, JobScheduledAt: SLAObject.JobScheduledAt, RunID: SLAObject.RunID}
+		runIDByScheduleTime[SLAObject.JobScheduledAt] = SLAObject.RunID
 	}
 	jobRuns, err := s.repo.GetByScheduledTimes(ctx, event.Tenant, event.JobName, scheduleTimesList)
 	if err != nil {
@@ -908,6 +910,7 @@ func (s *JobRunService) filterSLAObjects(ctx context.Context, event *scheduler.E
 		filteredSLAObject = append(filteredSLAObject, &scheduler.SLAObject{
 			JobName:        jobRun.JobName,
 			JobScheduledAt: jobRun.ScheduledAt,
+			RunID:          runIDByScheduleTime[jobRun.ScheduledAt],
 		})
 		if jobRun.ScheduledAt.Unix() > latestScheduleTime.Unix() {
 			latestScheduleTime = jobRun.ScheduledAt

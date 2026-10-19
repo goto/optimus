@@ -123,6 +123,7 @@ func FromStringToEventType(name string) (JobEventType, error) {
 type SLAObject struct {
 	JobName        JobName
 	JobScheduledAt time.Time
+	RunID          string
 }
 
 func (s *SLAObject) String() string {
@@ -193,6 +194,27 @@ func (e Event) String() string {
 		return fmt.Sprintf("error marshalling Event: %s, job: %s, operator: %s, err: %s", e.Type, e.JobName, e.OperatorName, err.Error())
 	}
 	return string(data)
+}
+
+func (e Event) IsFromCustomBackfillRun() bool {
+	if e.EventContext != nil {
+		return IsCustomBackfillRunID(e.EventContext.DagRun.RunID)
+	}
+	if len(e.SLAObjectList) == 0 {
+		return false
+	}
+	runID := ""
+	for _, slaObject := range e.SLAObjectList {
+		if slaObject == nil || slaObject.RunID == "" {
+			return false
+		}
+		if runID == "" {
+			runID = slaObject.RunID
+		} else if runID != slaObject.RunID {
+			return false
+		}
+	}
+	return IsCustomBackfillRunID(runID)
 }
 
 func (e EventCategory) String() string {
@@ -271,6 +293,7 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 		type slaInput struct {
 			Slas []struct {
 				DagID       string `mapstructure:"dag_id"`
+				RunID       string `mapstructure:"run_id"`
 				ScheduledAt string `mapstructure:"scheduled_at"`
 			} `mapstructure:"slas"`
 		}
@@ -290,9 +313,11 @@ func EventFrom(eventTypeName string, eventValues map[string]any, jobName JobName
 			if err != nil {
 				return nil, errors.InvalidArgument(EntityEvent, "property 'scheduled_at' in slas list is not in appropriate format")
 			}
-			slaObjectDedupMap[fmt.Sprintf("%s:%s", schedulerJobName, scheduledAt)] = &SLAObject{
+			dedupKey := fmt.Sprintf("%s:%s:%s", schedulerJobName, scheduledAt, slaObject.RunID)
+			slaObjectDedupMap[dedupKey] = &SLAObject{
 				JobName:        schedulerJobName,
 				JobScheduledAt: scheduledAt,
+				RunID:          slaObject.RunID,
 			}
 		}
 

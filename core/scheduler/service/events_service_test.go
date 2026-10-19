@@ -592,3 +592,49 @@ func (m *mockAlertManager) SendReplayEvent(attr *scheduler.ReplayNotificationAtt
 func (m *mockAlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttrs) {
 	m.Called(attr)
 }
+
+func TestEventsServiceIsBackFill(t *testing.T) {
+	customBackfillRunID := "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19"
+	notifyService := service.NewEventsService(log.NewNoop(), nil, nil, nil, nil, nil, nil, nil)
+
+	t.Run("should detect failure events from a custom backfill run via the dag run context", func(t *testing.T) {
+		event := &scheduler.Event{
+			Type: scheduler.JobFailureEvent,
+			EventContext: &scheduler.EventContext{
+				DagRun: scheduler.DagRun{RunID: customBackfillRunID},
+			},
+		}
+		assert.True(t, notifyService.IsBackFill(event))
+	})
+
+	t.Run("should detect sla miss events from a custom backfill run via the sla run ids", func(t *testing.T) {
+		event := &scheduler.Event{
+			Type: scheduler.SLAMissEvent,
+			SLAObjectList: []*scheduler.SLAObject{
+				{RunID: customBackfillRunID},
+			},
+		}
+		assert.True(t, notifyService.IsBackFill(event))
+	})
+
+	t.Run("should not detect events without a custom backfill marker", func(t *testing.T) {
+		// future scheduled_at used to bypass the lookback check -- without the run id marker
+		// it still must not be treated as a backfill
+		event := &scheduler.Event{
+			Type:           scheduler.SLAMissEvent,
+			JobScheduledAt: time.Now().Add(time.Hour),
+			SLAObjectList: []*scheduler.SLAObject{
+				{RunID: ""},
+			},
+		}
+		assert.False(t, notifyService.IsBackFill(event))
+	})
+
+	t.Run("should keep the time based heuristic for old scheduled times", func(t *testing.T) {
+		event := &scheduler.Event{
+			Type:           scheduler.SLAMissEvent,
+			JobScheduledAt: time.Now().Add(-13 * time.Hour),
+		}
+		assert.True(t, notifyService.IsBackFill(event))
+	})
+}

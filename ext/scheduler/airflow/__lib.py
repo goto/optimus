@@ -910,6 +910,7 @@ def optimus_sla_miss_notify(dag, task_list, blocking_task_list, slas, blocking_t
             sla_list.append({
                 'task_id': sla.task_id,
                 'dag_id': sla.dag_id,
+                'run_id': sla.run_id,
                 'scheduled_at': sla.execution_date.strftime(TIMESTAMP_FORMAT),
                 'timestamp': sla.timestamp.strftime(TIMESTAMP_FORMAT)
             })

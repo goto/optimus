@@ -5,10 +5,67 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 )
+
+func TestEventIsFromCustomBackfillRun(t *testing.T) {
+	customBackfillRunID := "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19"
+	scheduledRunID := "scheduled__2026-10-19T10:00:00+00:00"
+
+	t.Run("should detect operator events via the dag run context", func(t *testing.T) {
+		event := scheduler.Event{
+			EventContext: &scheduler.EventContext{
+				DagRun: scheduler.DagRun{RunID: customBackfillRunID},
+			},
+		}
+		assert.True(t, event.IsFromCustomBackfillRun())
+	})
+
+	t.Run("should not detect scheduled runs", func(t *testing.T) {
+		event := scheduler.Event{
+			EventContext: &scheduler.EventContext{
+				DagRun: scheduler.DagRun{RunID: scheduledRunID},
+			},
+		}
+		assert.False(t, event.IsFromCustomBackfillRun())
+	})
+
+	t.Run("should detect sla miss events when all sla objects agree on a custom backfill run id", func(t *testing.T) {
+		event := scheduler.Event{
+			SLAObjectList: []*scheduler.SLAObject{
+				{RunID: customBackfillRunID},
+				{RunID: customBackfillRunID},
+			},
+		}
+		assert.True(t, event.IsFromCustomBackfillRun())
+	})
+
+	t.Run("should not detect when sla run ids disagree", func(t *testing.T) {
+		event := scheduler.Event{
+			SLAObjectList: []*scheduler.SLAObject{
+				{RunID: customBackfillRunID},
+				{RunID: scheduledRunID},
+			},
+		}
+		assert.False(t, event.IsFromCustomBackfillRun())
+	})
+
+	t.Run("should not detect when sla run ids are missing (old dag files)", func(t *testing.T) {
+		event := scheduler.Event{
+			SLAObjectList: []*scheduler.SLAObject{
+				{RunID: ""},
+			},
+		}
+		assert.False(t, event.IsFromCustomBackfillRun())
+	})
+
+	t.Run("should not detect events without context or sla objects", func(t *testing.T) {
+		assert.False(t, scheduler.Event{}.IsFromCustomBackfillRun())
+	})
+}
 
 func TestFromStringToEventType(t *testing.T) {
 	t.Run("FromStringToEventType", func(t *testing.T) {
@@ -155,6 +212,27 @@ func TestFromStringToEventType(t *testing.T) {
 					},
 				},
 			})
+		})
+		t.Run("Should parse run_id of sla miss events", func(t *testing.T) {
+			sla := []map[string]string{
+				{
+					"dag_id":       "sample_select",
+					"run_id":       "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19",
+					"scheduled_at": "2006-01-02T15:04:05Z",
+				},
+			}
+			eventValues := map[string]any{
+				"event_time": "16000631600.0",
+				"slas":       sla,
+			}
+			jobName := scheduler.JobName("")
+			tnnt, err := tenant.NewTenant("someProject", "someNamespace")
+			assert.Nil(t, err)
+
+			eventObj, err := scheduler.EventFrom("TYPE_SLA_MISS", eventValues, jobName, tnnt)
+			assert.Nil(t, err)
+			require.Len(t, eventObj.SLAObjectList, 1)
+			assert.Equal(t, "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19", eventObj.SLAObjectList[0].RunID)
 		})
 		t.Run("Should return error if event is unregistered type", func(t *testing.T) {
 			eventValues := map[string]any{

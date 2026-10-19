@@ -149,6 +149,10 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 
 func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
 	referenceTime := time.Now()
+	if event.IsFromCustomBackfillRun() {
+		e.l.Info("alert-manager: skipping alert for custom backfill run, job [%s]", event.JobName)
+		return true
+	}
 	if event.JobScheduledAt.IsZero() {
 		e.l.Info("alert-manager: skipping alert check for direct integration alerts as scheduled time is not set")
 		return false

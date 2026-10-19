@@ -11,59 +11,60 @@ import (
 	"github.com/goto/optimus/core/tenant"
 )
 
-func TestEventIsFromCustomBackfillRun(t *testing.T) {
+func TestEventDagRunID(t *testing.T) {
 	customBackfillRunID := "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19"
 	scheduledRunID := "scheduled__2026-10-19T10:00:00+00:00"
 
-	t.Run("should detect operator events via the dag run context", func(t *testing.T) {
+	t.Run("should return the dag run id from the event context of operator events", func(t *testing.T) {
 		event := scheduler.Event{
 			EventContext: &scheduler.EventContext{
 				DagRun: scheduler.DagRun{RunID: customBackfillRunID},
 			},
 		}
-		assert.True(t, event.IsFromCustomBackfillRun())
+		assert.Equal(t, customBackfillRunID, event.DagRunID())
 	})
 
-	t.Run("should not detect scheduled runs", func(t *testing.T) {
-		event := scheduler.Event{
-			EventContext: &scheduler.EventContext{
-				DagRun: scheduler.DagRun{RunID: scheduledRunID},
-			},
-		}
-		assert.False(t, event.IsFromCustomBackfillRun())
-	})
-
-	t.Run("should detect sla miss events when all sla objects agree on a custom backfill run id", func(t *testing.T) {
+	t.Run("should return the dag run id from sla objects when they all agree", func(t *testing.T) {
 		event := scheduler.Event{
 			SLAObjectList: []*scheduler.SLAObject{
 				{RunID: customBackfillRunID},
 				{RunID: customBackfillRunID},
 			},
 		}
-		assert.True(t, event.IsFromCustomBackfillRun())
+		assert.Equal(t, customBackfillRunID, event.DagRunID())
 	})
 
-	t.Run("should not detect when sla run ids disagree", func(t *testing.T) {
+	t.Run("should return the run id even for non backfill runs", func(t *testing.T) {
+		// the custom-backfill prefix check happens in IsBackfillRun, not here
+		event := scheduler.Event{
+			EventContext: &scheduler.EventContext{
+				DagRun: scheduler.DagRun{RunID: scheduledRunID},
+			},
+		}
+		assert.Equal(t, scheduledRunID, event.DagRunID())
+	})
+
+	t.Run("should return empty when sla run ids disagree", func(t *testing.T) {
 		event := scheduler.Event{
 			SLAObjectList: []*scheduler.SLAObject{
 				{RunID: customBackfillRunID},
 				{RunID: scheduledRunID},
 			},
 		}
-		assert.False(t, event.IsFromCustomBackfillRun())
+		assert.Empty(t, event.DagRunID())
 	})
 
-	t.Run("should not detect when sla run ids are missing (old dag files)", func(t *testing.T) {
+	t.Run("should return empty when sla run ids are missing (old dag files)", func(t *testing.T) {
 		event := scheduler.Event{
 			SLAObjectList: []*scheduler.SLAObject{
 				{RunID: ""},
 			},
 		}
-		assert.False(t, event.IsFromCustomBackfillRun())
+		assert.Empty(t, event.DagRunID())
 	})
 
-	t.Run("should not detect events without context or sla objects", func(t *testing.T) {
-		assert.False(t, scheduler.Event{}.IsFromCustomBackfillRun())
+	t.Run("should return empty for events without context or sla objects", func(t *testing.T) {
+		assert.Empty(t, scheduler.Event{}.DagRunID())
 	})
 }
 

@@ -147,12 +147,7 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 }
 
 func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
-	var dagRunID string
-	if event.EventContext != nil {
-		dagRunID = event.EventContext.DagRun.RunID
-	}
-
-	return scheduler.IsBackfillRun(dagRunID, event.JobScheduledAt, BackfillLookBackPeriodInHours)
+	return scheduler.IsBackfillRun(event.DagRunID(), event.JobScheduledAt, BackfillLookBackPeriodInHours)
 }
 
 func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jobDetails *scheduler.JobWithDetails, scheme, route string) (uuid.UUID, bool, error) {

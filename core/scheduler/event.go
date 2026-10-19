@@ -196,25 +196,25 @@ func (e Event) String() string {
 	return string(data)
 }
 
-func (e Event) IsFromCustomBackfillRun() bool {
+func (e Event) DagRunID() string {
 	if e.EventContext != nil {
-		return IsCustomBackfillRunID(e.EventContext.DagRun.RunID)
+		return e.EventContext.DagRun.RunID
 	}
 	if len(e.SLAObjectList) == 0 {
-		return false
+		return ""
 	}
 	runID := ""
 	for _, slaObject := range e.SLAObjectList {
 		if slaObject == nil || slaObject.RunID == "" {
-			return false
+			return ""
 		}
 		if runID == "" {
 			runID = slaObject.RunID
 		} else if runID != slaObject.RunID {
-			return false
+			return ""
 		}
 	}
-	return IsCustomBackfillRunID(runID)
+	return runID
 }
 
 func (e EventCategory) String() string {

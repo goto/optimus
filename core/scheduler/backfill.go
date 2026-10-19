@@ -155,6 +155,16 @@ func IsCustomBackfillRunID(dagRunID string) bool {
 	return strings.HasPrefix(dagRunID, RunIDCustomBackfillPrefix)
 }
 
+func IsBackfillRun(dagRunID string, jobRunScheduledAt time.Time, lookBackPeriodInHours int) bool {
+	if IsCustomBackfillRunID(dagRunID) {
+		return true
+	}
+	if jobRunScheduledAt.IsZero() {
+		return false
+	}
+	return jobRunScheduledAt.Add(time.Duration(lookBackPeriodInHours) * time.Hour).Before(time.Now())
+}
+
 func NewBackfillConfig(startTime, endTime time.Time, jobConfig, assets map[string]string, description, category, approvalID, userID string) *BackfilConfig {
 	return &BackfilConfig{
 		Dstart:      startTime.UTC(),

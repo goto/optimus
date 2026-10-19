@@ -134,23 +134,13 @@ func (a *AlertManager) relay(alert *AlertPayload) {
 }
 
 func (a *AlertManager) IsBackFill(alert *AlertPayload) bool {
-	// if options to disable alert are set, check and skip alerting
-	referenceTime := time.Now()
+	// if options to disable alert are set, check and skip alerting,
 	for _, disabledTemplate := range a.alertRules.TemplatesToSkipDuringBackfills {
 		if alert.Template != disabledTemplate {
 			continue
 		}
-		if scheduler.IsCustomBackfillRunID(alert.DagRunID) {
-			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it belongs to a custom backfill run %s", disabledTemplate, alert.DagRunID))
-			return true
-		}
-		if alert.JobRunScheduledAt.IsZero() {
-			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as scheduled time is not set", disabledTemplate))
-			continue
-		}
-		// skip alert if current time is after the allowed range from scheduled time
-		if alert.JobRunScheduledAt.Add(time.Duration(a.alertRules.BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
-			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it is after %d hours of scheduled time", disabledTemplate, a.alertRules.BackfillLookBackPeriodInHours))
+		if scheduler.IsBackfillRun(alert.DagRunID, alert.JobRunScheduledAt, a.alertRules.BackfillLookBackPeriodInHours) {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it belongs to a backfill run, dagRunID: %s, scheduled_at: %s", disabledTemplate, alert.DagRunID, alert.JobRunScheduledAt))
 			return true
 		}
 	}

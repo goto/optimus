@@ -82,7 +82,7 @@ func TestSLAWorkerProcess(t *testing.T) {
 
 	ctx := context.Background()
 
-	t.Run("should remove SLA record without alerting for a custom backfill run", func(t *testing.T) {
+	t.Run("should process custom backfill runs like regular runs (suppression happens at alertmanager)", func(t *testing.T) {
 		slaID := uuid.New()
 		slaObj := &scheduler.OperatorsSLA{
 			ID:                slaID,
@@ -95,18 +95,29 @@ func TestSLAWorkerProcess(t *testing.T) {
 			ScheduledAt:       time.Now().Add(time.Hour), // custom backfills carry a future scheduled_at
 			OperatorStartTime: time.Now().Add(-2 * time.Hour),
 		}
+		job := &scheduler.Job{Name: jobName, Tenant: tnnt, Task: &scheduler.Task{}}
 
 		operatorSLARepo := new(mockSLAOperatorRepo)
 		operatorSLARepo.On("GetExpiredSLAsForProcessing", mock.Anything, mock.Anything, mock.Anything).
 			Return([]*scheduler.OperatorsSLA{slaObj}, nil)
+		// the operator finished before its SLA time, so no alert is sent but the record is removed
 		operatorSLARepo.On("RemoveProcessedSLA", mock.Anything, slaID).Return(nil)
+
+		runScheduler := new(mockSLARunScheduler)
+		endTime := time.Now().Add(-2 * time.Hour)
+		runScheduler.On("GetOperatorInstance", mock.Anything, tnnt, jobName, slaObj.RunID, slaObj.OperatorName).
+			Return(&scheduler.OperatorRunInstance{State: scheduler.StateSuccess.String(), EndTime: &endTime}, nil)
+
+		jobRepo := new(mockSLAJobRepo)
+		jobRepo.On("GetJob", mock.Anything, projName, jobName).Return(job, nil)
 
 		alertManager := new(mockSLAAlertManager)
 
-		worker := NewSLAWorker(log.NewNoop(), alertManager, operatorSLARepo, nil, nil, nil, nil, nil)
+		worker := NewSLAWorker(log.NewNoop(), alertManager, operatorSLARepo, jobRepo, nil, nil, nil, runScheduler)
 		worker.process(ctx, uuid.New().String(), time.Minute)
 
 		operatorSLARepo.AssertExpectations(t)
+		runScheduler.AssertExpectations(t)
 		alertManager.AssertNotCalled(t, "SendOperatorSLAEvent", mock.Anything)
 	})
 

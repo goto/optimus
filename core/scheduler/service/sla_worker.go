@@ -145,14 +145,6 @@ func (w *SLAWorker) process(ctx context.Context, signature string, processDurati
 		return
 	}
 	for _, slaObj := range expiredSLAs {
-		if scheduler.IsCustomBackfillRunID(slaObj.RunID) {
-			w.logger.Info("[processSLABreach] skipping SLA alert for custom backfill run, jobName: %s, dagRunID: %s, operator: %s/%s",
-				slaObj.JobName, slaObj.RunID, slaObj.OperatorType, slaObj.OperatorName)
-			if err := w.operatorSLARepo.RemoveProcessedSLA(ctx, slaObj.ID); err != nil {
-				w.logger.Error("[processSLABreach] failed to update SLA processed for %s: %v", slaObj, err)
-			}
-			continue
-		}
 		if err := w.processSLABreach(ctx, slaObj); err == nil {
 			if err := w.operatorSLARepo.RemoveProcessedSLA(ctx, slaObj.ID); err != nil {
 				w.logger.Error("[processSLABreach] failed to update SLA processed for %s: %v", slaObj, err)

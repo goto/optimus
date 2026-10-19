@@ -184,11 +184,7 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		alertType = AlertTypeJobSuccess
 		templateContext["state"] = e.JobEvent.Status.String()
 	}
-	// Job SLA-miss events have no event context, hence no dag run ID
-	var dagRunID string
-	if e.JobEvent.EventContext != nil {
-		dagRunID = e.JobEvent.EventContext.DagRun.RunID
-	}
+	dagRunID := e.JobEvent.DagRunID()
 	baseAlertPayload := &AlertPayload{
 		Project:  projectName,
 		LogTag:   e.JobURN,

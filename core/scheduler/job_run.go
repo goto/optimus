@@ -120,6 +120,7 @@ type OperatorSLAAlertAttrs struct {
 	StartTime          time.Time
 	ExpectedSLAEndTime time.Time
 	CurrentState       State
+	DagRunID           string
 
 	AlertManager AlertManagerConfig
 }

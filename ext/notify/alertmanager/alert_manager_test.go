@@ -67,7 +67,7 @@ func TestAlertManager(t *testing.T) {
 
 	t.Run("should skip alert for backfill job", func(t *testing.T) {
 		ar := alertmanager.AlertRules{
-			TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusSLAAlertTemplate},
+			TemplatesToSkipDuringBackfills: []string{alertmanager.OptimusSLAAlertTemplate, alertmanager.OptimusOperatorSLAMissTemplate},
 			BackfillLookBackPeriodInHours:  2,
 		}
 		am := alertmanager.New(context.Background(), log.NewNoop(), "http://alertmanager", alertManagerEndPoint, "dashboard_url", "data_console_url", nil, ar)
@@ -107,6 +107,50 @@ func TestAlertManager(t *testing.T) {
 					JobRunScheduledAt: time.Now().Add(-3 * time.Hour),
 				},
 				expectSkip: true,
+			},
+			{
+				name: "should detected as backfill when dag run id belongs to a custom backfill and template is targeted",
+				alertPayload: alertmanager.AlertPayload{
+					Template:          alertmanager.OptimusSLAAlertTemplate,
+					JobRunScheduledAt: time.Now().Add(time.Hour), // future, custom backfills carry future scheduled_at
+					DagRunID:          "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19",
+				},
+				expectSkip: true,
+			},
+			{
+				name: "should detected as backfill for operator sla miss template on a custom backfill run",
+				alertPayload: alertmanager.AlertPayload{
+					Template:          alertmanager.OptimusOperatorSLAMissTemplate,
+					JobRunScheduledAt: time.Now().Add(time.Hour), // future, custom backfills carry future scheduled_at
+					DagRunID:          "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19",
+				},
+				expectSkip: true,
+			},
+			{
+				name: "should not detected as backfill for operator sla miss template on a scheduled run",
+				alertPayload: alertmanager.AlertPayload{
+					Template:          alertmanager.OptimusOperatorSLAMissTemplate,
+					JobRunScheduledAt: time.Now().Add(-1 * time.Hour), // within lookback
+					DagRunID:          "scheduled__2026-10-19T10:00:00+00:00",
+				},
+				expectSkip: false,
+			},
+			{
+				name: "should not detected as backfill for custom backfill run when template is not targeted",
+				alertPayload: alertmanager.AlertPayload{
+					Template: alertmanager.OptimusFailureAlertTemplate,
+					DagRunID: "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19",
+				},
+				expectSkip: false,
+			},
+			{
+				name: "should not detected as backfill for a scheduled run with future scheduled time",
+				alertPayload: alertmanager.AlertPayload{
+					Template:          alertmanager.OptimusSLAAlertTemplate,
+					JobRunScheduledAt: time.Now().Add(time.Hour),
+					DagRunID:          "scheduled__2026-10-19T10:00:00+00:00",
+				},
+				expectSkip: false,
 			},
 		}
 

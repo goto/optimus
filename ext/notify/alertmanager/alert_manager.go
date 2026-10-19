@@ -16,6 +16,8 @@ import (
 	"github.com/goto/salt/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/goto/optimus/core/scheduler"
 )
 
 type AlertStatus string
@@ -63,6 +65,7 @@ var (
 type AlertPayload struct {
 	Project           string                 `json:"-"`
 	JobRunScheduledAt time.Time              `json:"-"` // for internal use only
+	DagRunID          string                 `json:"-"` // for internal use only; used to detect custom backfill runs
 	LogTag            string                 `json:"-"`
 	Data              map[string]interface{} `json:"data"`
 	Template          string                 `json:"template"`
@@ -136,6 +139,10 @@ func (a *AlertManager) IsBackFill(alert *AlertPayload) bool {
 	for _, disabledTemplate := range a.alertRules.TemplatesToSkipDuringBackfills {
 		if alert.Template != disabledTemplate {
 			continue
+		}
+		if scheduler.IsCustomBackfillRunID(alert.DagRunID) {
+			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as it belongs to a custom backfill run %s", disabledTemplate, alert.DagRunID))
+			return true
 		}
 		if alert.JobRunScheduledAt.IsZero() {
 			a.logger.Info(fmt.Sprintf("alert-manager: skipping alert for template %s as scheduled time is not set", disabledTemplate))

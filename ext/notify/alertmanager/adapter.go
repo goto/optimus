@@ -112,6 +112,7 @@ func (a *AlertManager) SendOperatorSLAEvent(attr *scheduler.OperatorSLAAlertAttr
 	alertPayload := &AlertPayload{
 		Project:           attr.Project,
 		JobRunScheduledAt: attr.ScheduledAt,
+		DagRunID:          attr.DagRunID,
 		LogTag:            attr.OperatorType,
 		Data: map[string]interface{}{
 			"operator_name":       attr.OperatorName,
@@ -183,9 +184,15 @@ func (a *AlertManager) SendJobRunEvent(e *scheduler.AlertAttrs) {
 		alertType = AlertTypeJobSuccess
 		templateContext["state"] = e.JobEvent.Status.String()
 	}
+	// Job SLA-miss events have no event context, hence no dag run ID
+	var dagRunID string
+	if e.JobEvent.EventContext != nil {
+		dagRunID = e.JobEvent.EventContext.DagRun.RunID
+	}
 	baseAlertPayload := &AlertPayload{
 		Project:  projectName,
 		LogTag:   e.JobURN,
+		DagRunID: dagRunID,
 		Data:     templateContext,
 		Template: template,
 		Labels: map[string]string{

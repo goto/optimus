@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
@@ -148,17 +147,12 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 }
 
 func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
-	referenceTime := time.Now()
-	if event.JobScheduledAt.IsZero() {
-		e.l.Info("alert-manager: skipping alert check for direct integration alerts as scheduled time is not set")
-		return false
+	var dagRunID string
+	if event.EventContext != nil {
+		dagRunID = event.EventContext.DagRun.RunID
 	}
-	// skip alert if current time is after the allowed range from scheduled time
-	if event.JobScheduledAt.Add(time.Duration(BackfillLookBackPeriodInHours) * time.Hour).Before(referenceTime) {
-		e.l.Info(fmt.Sprintf("alert-manager: skipping alert for as it is after %d hours of scheduled time", BackfillLookBackPeriodInHours))
-		return true
-	}
-	return false
+
+	return scheduler.IsBackfillRun(dagRunID, event.JobScheduledAt, BackfillLookBackPeriodInHours)
 }
 
 func (e *EventsService) logAlert(ctx context.Context, event *scheduler.Event, jobDetails *scheduler.JobWithDetails, scheme, route string) (uuid.UUID, bool, error) {

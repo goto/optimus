@@ -146,7 +146,7 @@ func (e *EventsService) Webhook(ctx context.Context, event *scheduler.Event) err
 	return multierror.ToErr()
 }
 
-func (e *EventsService) IsBackFill(event *scheduler.Event) bool {
+func (*EventsService) IsBackFill(event *scheduler.Event) bool {
 	return scheduler.IsBackfillRun(event.DagRunID(), event.JobScheduledAt, BackfillLookBackPeriodInHours)
 }
 

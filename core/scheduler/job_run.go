@@ -161,6 +161,14 @@ type PotentialSLABreachAlert struct {
 
 	Severity     string
 	ImpactedJobs []string
+
+	// HistoricalStartTime, CurrentStartTime, and TotalInducedDelay are set only for
+	// RUNNING_LONG, STARTED_LATE, and an unclassified NOT_STARTED cause.
+	// CurrentStartTime is the actual start time if the root cause has started, or the reference ("now") time if it hasn't;
+	// TotalInducedDelay is CurrentStartTime minus HistoricalStartTime.
+	HistoricalStartTime *time.Time
+	CurrentStartTime    *time.Time
+	TotalInducedDelay   *time.Duration
 }
 
 type SLABreachCause string
@@ -171,8 +179,9 @@ const (
 )
 
 type JobSLAState struct {
-	EstimatedDuration *time.Duration
-	InferredSLA       *time.Time
+	EstimatedDuration     *time.Duration
+	InferredSLA           *time.Time
+	HistoricalStartOffset *time.Duration
 }
 
 // RootCauseReason explains why a breaching job is late.

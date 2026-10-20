@@ -311,17 +311,39 @@ func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.Potential
 		"project":               alert.Project,
 		"root_cause_job":        alert.RootCauseJob,
 		"root_cause_project":    alert.RootCauseProject,
-		"reason":                string(alert.Reason),
 		"status":                string(alert.Status),
 		"relative_level":        alert.RelativeLevel,
 		"impacted_jobs":         alert.ImpactedJobs,
 		"impacted_jobs_count":   len(alert.ImpactedJobs),
 		"impacted_jobs_preview": formatJobsPreview(alert.ImpactedJobs, impactedJobsPreviewLimit),
 	}
+	// omit rather than render "UNKNOWN": an unclassified cause isn't a useful action item,
+	// and the template hides the Reason line entirely when this key is absent.
+	if alert.Reason != "" && alert.Reason != scheduler.ReasonUnknown {
+		data["reason"] = string(alert.Reason)
+	}
 	if alert.RootCauseScheduledAt != nil {
 		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
 	}
+	if alert.HistoricalStartTime != nil {
+		data["historical_start_time"] = alert.HistoricalStartTime.UTC().Format(time.RFC3339)
+	}
+	// CurrentStartTime is the actual root cause start time if it has started, or the reference
+	// ("now") time otherwise — i.e. exactly the value TotalInducedDelay was computed against, so
+	// recipients can see what "current" meant without re-deriving it from started_at/reason.
+	if alert.CurrentStartTime != nil {
+		data["current_start_time"] = alert.CurrentStartTime.UTC().Format(time.RFC3339)
+	}
+	// TotalInducedDelay (start-time-based) takes precedence over the duration-estimation
+	// InducedDelay in evidenceFields when both would otherwise be set, since it's the clearer
+	// "how much later than usual" signal for RUNNING_LONG/STARTED_LATE/NOT_STARTED.
+	if alert.TotalInducedDelay != nil {
+		data["induced_delay"] = formatDuration(*alert.TotalInducedDelay)
+	}
 	for key, value := range evidenceFields(alert.Evidence) {
+		if _, exists := data[key]; exists {
+			continue
+		}
 		data[key] = value
 	}
 
@@ -381,7 +403,13 @@ func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{}
 		fields["source_type"] = evidence.SourceType
 	}
 	if evidence.InducedDelay > 0 {
-		fields["induced_delay"] = evidence.InducedDelay.String()
+		fields["induced_delay"] = formatDuration(evidence.InducedDelay)
 	}
 	return fields
+}
+
+// formatDuration rounds to the minute so "Delayed by" reads e.g. "1h2m" instead of the raw
+// "1h2m3.456789s" that time.Duration.String() would otherwise produce.
+func formatDuration(d time.Duration) string {
+	return d.Round(time.Minute).String()
 }

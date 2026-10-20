@@ -113,6 +113,56 @@ func TestBuildPotentialSLABreachPayload(t *testing.T) {
 		assert.NotContains(t, payload.Data, "induced_delay")
 	})
 
+	t.Run("omits the reason entirely when it is unknown, rather than rendering the literal UNKNOWN", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+			Reason:               scheduler.ReasonUnknown,
+		})
+
+		assert.NotContains(t, payload.Data, "reason")
+	})
+
+	t.Run("the start-time-based induced delay takes precedence over the duration-estimation one", func(t *testing.T) {
+		p50Start := time.Date(2026, 9, 11, 5, 40, 0, 0, time.UTC)
+		totalInducedDelay := 95 * time.Minute
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+			Reason:               scheduler.ReasonRunningLong,
+			HistoricalStartTime:  &p50Start,
+			TotalInducedDelay:    &totalInducedDelay,
+			Evidence: scheduler.RootCauseEvidence{
+				// a different value, to prove the start-time-based one wins
+				InducedDelay: 10 * time.Minute,
+			},
+		})
+
+		assert.Equal(t, "2026-09-11T05:40:00Z", payload.Data["historical_start_time"])
+		assert.Equal(t, (95 * time.Minute).String(), payload.Data["induced_delay"])
+	})
+
+	t.Run("includes the current start time used in the induced delay calc", func(t *testing.T) {
+		currentStartTime := time.Date(2026, 9, 11, 7, 15, 0, 0, time.UTC)
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+			Reason:               scheduler.ReasonRunningLong,
+			CurrentStartTime:     &currentStartTime,
+		})
+
+		assert.Equal(t, "2026-09-11T07:15:00Z", payload.Data["current_start_time"])
+	})
+
+	t.Run("omits the current start time when it is not set", func(t *testing.T) {
+		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
+			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",
+			RootCauseScheduledAt: &scheduledAt,
+		})
+
+		assert.NotContains(t, payload.Data, "current_start_time")
+	})
+
 	t.Run("impacted jobs preview names at most 3 jobs, joined with an ampersand", func(t *testing.T) {
 		payload := am.buildPotentialSLABreachPayload(&scheduler.PotentialSLABreachAlert{
 			Team: "dwh-team", Project: "proj-1", RootCauseJob: "stg_payments",

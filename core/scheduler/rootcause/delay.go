@@ -70,8 +70,8 @@ func startedLateDelay(state scheduler.JobState, referenceTime time.Time) time.Du
 func effectiveSafeStart(state scheduler.JobState) time.Time {
 	scheduledAt := state.JobRun.ScheduledAt
 	var safeStart time.Time
-	if state.HistoricalPercentileStartOffset != nil {
-		safeStart = scheduledAt.Add(*state.HistoricalPercentileStartOffset)
+	if state.HistoricalStartOffset != nil {
+		safeStart = scheduledAt.Add(*state.HistoricalStartOffset)
 	} else {
 		safeStart = state.InferredSLA.Add(-*state.EstimatedDuration)
 	}

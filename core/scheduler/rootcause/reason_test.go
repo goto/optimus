@@ -101,7 +101,7 @@ func TestDefaultDetectors(t *testing.T) {
 		// isn't at risk yet.
 		st := state(at(5, 25), dur(40*time.Minute), at(6, 0))
 		st.JobRun.ScheduledAt = *at(5, 0)
-		st.HistoricalPercentileStartOffset = dur(10 * time.Minute)
+		st.HistoricalStartOffset = dur(10 * time.Minute)
 
 		reason, evidence := detect(rootcause.Candidate{State: st, ReferenceTime: ref})
 
@@ -115,7 +115,7 @@ func TestDefaultDetectors(t *testing.T) {
 		// start at 05:30, so 05:25 is actually on time for this job.
 		st := state(at(5, 25), dur(40*time.Minute), at(6, 0))
 		st.JobRun.ScheduledAt = *at(5, 0)
-		st.HistoricalPercentileStartOffset = dur(30 * time.Minute)
+		st.HistoricalStartOffset = dur(30 * time.Minute)
 
 		reason, _ := detect(rootcause.Candidate{State: st, ReferenceTime: ref})
 
@@ -125,7 +125,7 @@ func TestDefaultDetectors(t *testing.T) {
 	t.Run("falls back to the deadline-driven safe start when there's no run history yet", func(t *testing.T) {
 		st := state(at(5, 40), dur(40*time.Minute), at(6, 0))
 		st.JobRun.ScheduledAt = *at(5, 0)
-		st.HistoricalPercentileStartOffset = nil // new job, no successful runs yet
+		st.HistoricalStartOffset = nil // new job, no successful runs yet
 
 		reason, evidence := detect(rootcause.Candidate{State: st, ReferenceTime: ref})
 

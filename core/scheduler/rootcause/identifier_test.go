@@ -452,4 +452,46 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		assert.True(t, ok, "root cause identity should stay job-B when nothing upstream explains the wait, got: %+v", causes)
 		assert.Equal(t, scheduler.ReasonUnknown, cause.Reason)
 	})
+
+	t.Run("an unclassified not-started cause resolves its safe start from the historical offset, so alerts can mirror it without a second lookup", func(t *testing.T) {
+		// same shape as the still-waiting case, but the pipeline has a historical start
+		// offset for job-B: the UNKNOWN cause should resolve its safe-start evidence from
+		// it, giving the alert a consistent historical/current/delay triple even though no
+		// detector classified the cause.
+		jobC := &scheduler.JobLineageSummary{
+			JobName: "job-C", IsEnabled: true, Tenant: tnnt,
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-B": {ScheduledAt: scheduledAt, TaskStartTime: at(0), TaskEndTime: at(3), JobEndTime: at(3)},
+			},
+		}
+		jobB := &scheduler.JobLineageSummary{
+			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{jobC},
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt},
+			},
+		}
+		jobA := &scheduler.JobLineageSummary{
+			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{jobB},
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
+				"job-A": {ScheduledAt: scheduledAt},
+			},
+		}
+		jobDurations := map[scheduler.JobName]*time.Duration{
+			"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute), "job-C": dur(5 * time.Minute),
+		}
+		startOffsets := map[scheduler.JobName]*time.Duration{"job-B": dur(8 * time.Minute)}
+		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+		causes, _ := identifier.Identify(context.Background(), jobA, jobDurations, startOffsets, &targetSLA, nil, damper, referenceTime)
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-B"]
+		assert.True(t, ok, "root cause identity should stay job-B, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonUnknown, cause.Reason)
+		wantSafeStart := scheduledAt.Add(8 * time.Minute)
+		assert.Equal(t, wantSafeStart, *cause.Evidence.LatestSafeStartAt)
+		assert.Equal(t, referenceTime.Sub(wantSafeStart), cause.Evidence.InducedDelay)
+	})
 }

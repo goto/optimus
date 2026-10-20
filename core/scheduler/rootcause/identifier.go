@@ -251,6 +251,14 @@ func (i *Identifier) explanationsFor(state scheduler.JobState, pending []string,
 	})
 	if len(matches) == 0 {
 		state.Reason = scheduler.ReasonUnknown
+		if state.HistoricalStartOffset != nil {
+			safeStart := effectiveSafeStart(state)
+			state.Evidence.LatestSafeStartAt = &safeStart
+			// measures InducedDelay by the actual start (nil TaskStartTime reads as the
+			// reference time, i.e. "still waiting") against the safe start, clamped at zero.
+			state.Evidence.InducedDelay = startedLateDelay(state, referenceTime)
+			return []scheduler.JobState{state}
+		}
 		return []scheduler.JobState{i.annotateInducedDelay(state, referenceTime)}
 	}
 	out := make([]scheduler.JobState, 0, len(matches))
@@ -739,9 +747,9 @@ func populateJobSLAStates(jobDurations, startOffsets map[scheduler.JobName]*time
 	jobSLAStatesByJobName := make(map[scheduler.JobName]*scheduler.JobSLAState)
 	for jobName, inferredSLA := range jobSLAsByJobName {
 		jobSLAStatesByJobName[jobName] = &scheduler.JobSLAState{
-			EstimatedDuration:               jobDurations[jobName],
-			InferredSLA:                     inferredSLA,
-			HistoricalPercentileStartOffset: startOffsets[jobName],
+			EstimatedDuration:     jobDurations[jobName],
+			InferredSLA:           inferredSLA,
+			HistoricalStartOffset: startOffsets[jobName],
 		}
 	}
 	return jobSLAStatesByJobName

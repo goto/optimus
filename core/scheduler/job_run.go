@@ -179,9 +179,9 @@ const (
 )
 
 type JobSLAState struct {
-	EstimatedDuration               *time.Duration
-	InferredSLA                     *time.Time
-	HistoricalPercentileStartOffset *time.Duration
+	EstimatedDuration     *time.Duration
+	InferredSLA           *time.Time
+	HistoricalStartOffset *time.Duration
 }
 
 // RootCauseReason explains why a breaching job is late.

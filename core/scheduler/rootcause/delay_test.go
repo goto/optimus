@@ -106,9 +106,9 @@ func TestInducedDelay(t *testing.T) {
 		state := scheduler.JobState{
 			Reason: scheduler.ReasonStartedLate,
 			JobSLAState: scheduler.JobSLAState{
-				EstimatedDuration:               dur(40 * time.Minute),
-				InferredSLA:                     at(6, 0),
-				HistoricalPercentileStartOffset: dur(10 * time.Minute),
+				EstimatedDuration:     dur(40 * time.Minute),
+				InferredSLA:           at(6, 0),
+				HistoricalStartOffset: dur(10 * time.Minute),
 			},
 			JobRun: scheduler.JobRunSummary{
 				ScheduledAt:   *at(5, 0),
@@ -122,9 +122,9 @@ func TestInducedDelay(t *testing.T) {
 		state := scheduler.JobState{
 			Reason: scheduler.ReasonStartedLate,
 			JobSLAState: scheduler.JobSLAState{
-				EstimatedDuration:               dur(40 * time.Minute),
-				InferredSLA:                     at(6, 0),
-				HistoricalPercentileStartOffset: nil, // new job, no successful runs yet
+				EstimatedDuration:     dur(40 * time.Minute),
+				InferredSLA:           at(6, 0),
+				HistoricalStartOffset: nil, // new job, no successful runs yet
 			},
 			JobRun: scheduler.JobRunSummary{
 				ScheduledAt:   *at(5, 0),

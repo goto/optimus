@@ -536,84 +536,38 @@ func (s *JobSLAPredictorService) sendBreachAlerts(ctx context.Context, results [
 	}
 
 	alerts := agg.Build()
-	s.enrichBreachAlerts(ctx, alerts, reqConfig)
+	s.enrichBreachAlerts(alerts, reqConfig)
 	for _, alert := range alerts {
 		s.potentialSLANotifier.SendPotentialSLABreach(alert)
 	}
 }
 
-func wantsStartTimeBasedDelay(alert *scheduler.PotentialSLABreachAlert) bool {
-	return alert.Reason == scheduler.ReasonUnknown && alert.Status == scheduler.SLABreachCauseNotStarted
-}
-
-// copyStartTimeEvidence mirrors a RUNNING_LONG/STARTED_LATE cause's already-classified
-// safe-start evidence onto the alert's display fields, rather than re-deriving a second,
-// potentially inconsistent, value. Returns false (no-op) for every other reason.
-func copyStartTimeEvidence(alert *scheduler.PotentialSLABreachAlert) bool {
-	if alert.Reason != scheduler.ReasonRunningLong && alert.Reason != scheduler.ReasonStartedLate {
-		return false
-	}
-	if alert.Evidence.LatestSafeStartAt != nil {
-		percentileStart := *alert.Evidence.LatestSafeStartAt
-		alert.HistoricalStartTime = &percentileStart
-	}
-	if alert.Evidence.StartedAt != nil {
-		startedAt := *alert.Evidence.StartedAt
-		alert.CurrentStartTime = &startedAt
-	}
-	delay := alert.Evidence.InducedDelay
-	alert.TotalInducedDelay = &delay
-	return true
-}
-
-// enrichBreachAlerts populating three display fields:
-//   - HistoricalStartTime: the root-cause job's "usual" start time
-//   - CurrentStartTime: the root cause's actual start time if it has already started, otherwise
-//     the reference ("now") time.
-//   - TotalInducedDelay: CurrentStartTime minus HistoricalStartTime
-func (s *JobSLAPredictorService) enrichBreachAlerts(ctx context.Context, alerts []*scheduler.PotentialSLABreachAlert, reqConfig JobSLAPredictorRequestConfig) {
-	startDelayJobNames := make([]scheduler.JobName, 0, len(alerts))
+// enrichBreachAlerts mirrors each root cause's safe-start evidence onto the alert's display
+// fields just before sending. Value:
+//   - HistoricalStartTime: the safe start (historical percentile offset when available, floored
+//     at the job's scheduled_at).
+//   - CurrentStartTime: the actual start time for a started cause, otherwise the reference
+//     ("now") time.
+//   - TotalInducedDelay: the cause's induced delay measured against that safe start.
+//
+// Causes without safe-start evidence (UPSTREAM_FAILED, THIRD_PARTY_DELAY) measure delay against
+// a different basis; their delay reaches the payload through the evidence fields instead, and
+// no start-time fields are set here.
+func (*JobSLAPredictorService) enrichBreachAlerts(alerts []*scheduler.PotentialSLABreachAlert, reqConfig JobSLAPredictorRequestConfig) {
 	for _, alert := range alerts {
-		if copyStartTimeEvidence(alert) {
+		if alert.Evidence.LatestSafeStartAt == nil {
 			continue
 		}
-		// alert.RootCauseScheduledAt is nil for THIRD_PARTY_DELAY (the sensor identity has no
-		// single scheduled_at of its own), which wantsStartTimeBasedDelay already excludes.
-		if wantsStartTimeBasedDelay(alert) && alert.RootCauseScheduledAt != nil {
-			startDelayJobNames = append(startDelayJobNames, scheduler.JobName(alert.RootCauseJob))
-		}
-	}
-	startDelays := map[scheduler.JobName]*time.Duration{}
-	if s.startDelayEstimator != nil && len(startDelayJobNames) > 0 {
-		var err error
-		startDelays, err = s.startDelayEstimator.GetPercentileStartDelayByJobNames(ctx, startDelayJobNames, reqConfig.ReferenceTime,
-			s.config.HistoricalStartConfig.LastNRuns, s.config.HistoricalStartConfig.Percentile)
-		if err != nil {
-			s.l.Error("failed to get historical start delay, sending alerts without it", "error", err)
-			startDelays = map[scheduler.JobName]*time.Duration{}
-		}
-	}
+		historicalStart := *alert.Evidence.LatestSafeStartAt
+		alert.HistoricalStartTime = &historicalStart
 
-	for _, alert := range alerts {
-		if !wantsStartTimeBasedDelay(alert) || alert.RootCauseScheduledAt == nil {
-			continue
-		}
-		offset := startDelays[scheduler.JobName(alert.RootCauseJob)]
-		if offset == nil {
-			continue
-		}
-		p50Start := alert.RootCauseScheduledAt.Add(*offset)
-		alert.HistoricalStartTime = &p50Start
-
-		actualOrNow := reqConfig.ReferenceTime
+		currentStart := reqConfig.ReferenceTime
 		if alert.Evidence.StartedAt != nil {
-			actualOrNow = *alert.Evidence.StartedAt
+			currentStart = *alert.Evidence.StartedAt
 		}
-		alert.CurrentStartTime = &actualOrNow
-		delay := actualOrNow.Sub(p50Start)
-		if delay < 0 {
-			delay = 0
-		}
+		alert.CurrentStartTime = &currentStart
+
+		delay := alert.Evidence.InducedDelay
 		alert.TotalInducedDelay = &delay
 	}
 }

@@ -81,6 +81,7 @@ func getAlertAttributes(teanatWithDetails *tenant.WithDetails, team, severity, m
 		StartTime:          slaObj.OperatorStartTime,
 		ExpectedSLAEndTime: slaObj.SLATime,
 		CurrentState:       currentState,
+		DagRunID:           slaObj.RunID,
 
 		AlertManager: getAlertManagerProjectConfig(teanatWithDetails),
 	}

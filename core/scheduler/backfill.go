@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -148,6 +149,20 @@ func NewBackfill(id uuid.UUID, jobName JobName, tenant tenant.Tenant, config *Ba
 
 func NewBackfillRequest(jobName JobName, tenant tenant.Tenant, config *BackfilConfig, state BackfillState, message string) *Backfill {
 	return &Backfill{id: uuid.New(), jobName: jobName, tenant: tenant, config: config, state: state, message: message}
+}
+
+func IsCustomBackfillRunID(dagRunID string) bool {
+	return strings.HasPrefix(dagRunID, RunIDCustomBackfillPrefix)
+}
+
+func IsBackfillRun(dagRunID string, jobRunScheduledAt time.Time, lookBackPeriodInHours int) bool {
+	if IsCustomBackfillRunID(dagRunID) {
+		return true
+	}
+	if jobRunScheduledAt.IsZero() {
+		return false
+	}
+	return jobRunScheduledAt.Add(time.Duration(lookBackPeriodInHours) * time.Hour).Before(time.Now())
 }
 
 func NewBackfillConfig(startTime, endTime time.Time, jobConfig, assets map[string]string, description, category, approvalID, userID string) *BackfilConfig {

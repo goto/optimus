@@ -195,6 +195,16 @@ func (e Event) String() string {
 	return string(data)
 }
 
+// DagRunID returns the scheduler dag run ID this event belongs to, or an empty string when
+// it can't be determined. SLA-miss events carry no event context and their callback reports
+// no run id, so they always return empty here.
+func (e Event) DagRunID() string {
+	if e.EventContext != nil {
+		return e.EventContext.DagRun.RunID
+	}
+	return ""
+}
+
 func (e EventCategory) String() string {
 	return string(e)
 }

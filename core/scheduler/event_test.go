@@ -5,10 +5,50 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 )
+
+func TestEventDagRunID(t *testing.T) {
+	tnnt, err := tenant.NewTenant("someProject", "someNamespace")
+	require.NoError(t, err)
+
+	t.Run("should return the dag run id from the event context", func(t *testing.T) {
+		eventValues := map[string]any{
+			"event_time":   16000631600.0,
+			"task_id":      "some_txbq",
+			"status":       "running",
+			"scheduled_at": "2022-01-02T15:04:05Z",
+			"event_context": map[string]any{
+				"operator_type": "TASK",
+				"dag_run": map[string]any{
+					"run_id": "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19",
+				},
+			},
+		}
+		event, err := scheduler.EventFrom("TYPE_TASK_RETRY", eventValues, "some_job", tnnt)
+		require.NoError(t, err)
+		assert.Equal(t, "custom-backfill_9f7b0d4e-6b3a-4c11-8f2e-1d2b3c4d5e6f__2026-10-19", event.DagRunID())
+	})
+
+	t.Run("should return empty for sla miss events (no run id in callback)", func(t *testing.T) {
+		sla := []map[string]string{
+			{
+				"dag_id":       "sample_select",
+				"scheduled_at": "2006-01-02T15:04:05Z",
+			},
+		}
+		eventValues := map[string]any{
+			"event_time": "16000631600.0",
+			"slas":       sla,
+		}
+		event, err := scheduler.EventFrom("TYPE_SLA_MISS", eventValues, scheduler.JobName("sample_select"), tnnt)
+		require.NoError(t, err)
+		assert.Empty(t, event.DagRunID())
+	})
+}
 
 func TestFromStringToEventType(t *testing.T) {
 	t.Run("FromStringToEventType", func(t *testing.T) {

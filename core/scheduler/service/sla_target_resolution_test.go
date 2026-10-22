@@ -1,15 +1,15 @@
-package service
+package service //nolint:testpackage
 
 import (
 	"context"
 	"testing"
 
 	"github.com/goto/salt/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 type mockJobDetailsGetter struct {

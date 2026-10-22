@@ -193,7 +193,6 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 	lineageSummary := &LineageExecutionSummary{}
 	var largestScheduledWayTooLate, largestSystemSchedulingDelay *JobExecutionSummary
 	var largestWayTooLateUpstream, largestSystemSchedulingUpstream *JobRunSummary
-	wayTooLateCount := 0
 
 	var taskDurationJobs, hookDurationJobs []JobWithTaskDuration
 
@@ -238,35 +237,41 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 
 		scheduledToTaskStartDuration := currentRun.TaskStartTime.Sub(currentRun.ScheduledAt)
 
-		var upstreamLastTaskEndToCurrentTaskStartDuration time.Duration
 		var upstreamRun *JobRunSummary
 		hasUpstream := i < len(gatingPath)-1
-
 		if hasUpstream {
-			upstreamExec := gatingPath[i+1]
-			upstreamRun = upstreamExec.JobRunSummary
-			if upstreamRun.GetActualEndTime() != nil {
-				upstreamLastTaskEndToCurrentTaskStartDuration = currentRun.TaskStartTime.Sub(*upstreamRun.GetActualEndTime())
+			upstreamRun = gatingPath[i+1].JobRunSummary
+		}
+
+		// the run was scheduled way too late when it was scheduled after its gating upstream
+		// had already finished: the gap between the upstream's end and this run's schedule is
+		// schedule misalignment, not work in progress
+		if hasUpstream {
+			if upstreamEnd := upstreamRun.GetActualEndTime(); upstreamEnd != nil && currentRun.ScheduledAt.After(*upstreamEnd) {
+				currentScheduledWayTooLate := currentRun.ScheduledAt.Sub(*upstreamEnd)
+				currentExec.DelaySummary.ScheduledWayTooLateSeconds = int64(currentScheduledWayTooLate.Seconds())
+				lineageSummary.TotalScheduledWayTooLateSeconds += currentExec.DelaySummary.ScheduledWayTooLateSeconds
+
+				if largestScheduledWayTooLate == nil || currentScheduledWayTooLate.Seconds() > float64(largestScheduledWayTooLate.DelaySummary.ScheduledWayTooLateSeconds) {
+					largestScheduledWayTooLate = currentExec
+					largestWayTooLateUpstream = upstreamRun
+				}
 			}
 		}
 
-		if hasUpstream && upstreamLastTaskEndToCurrentTaskStartDuration > scheduledToTaskStartDuration {
-			currentScheduledWayTooLate := upstreamLastTaskEndToCurrentTaskStartDuration - scheduledToTaskStartDuration
-			currentExec.DelaySummary.ScheduledWayTooLateSeconds = int64(currentScheduledWayTooLate.Seconds())
-			lineageSummary.TotalScheduledWayTooLateSeconds += currentExec.DelaySummary.ScheduledWayTooLateSeconds
-			wayTooLateCount++
-
-			if largestScheduledWayTooLate == nil || currentScheduledWayTooLate.Seconds() > float64(largestScheduledWayTooLate.DelaySummary.ScheduledWayTooLateSeconds) {
-				largestScheduledWayTooLate = currentExec
-				largestWayTooLateUpstream = upstreamRun
+		// system scheduling delay is the wait the scheduler itself is responsible for: from
+		// the later of the run's own schedule and its gating upstream's finish, up to when the
+		// task actually started. Waiting on upstream work is deliberately excluded.
+		schedulerDelay := scheduledToTaskStartDuration
+		if hasUpstream {
+			if upstreamEnd := upstreamRun.GetActualEndTime(); upstreamEnd != nil && upstreamEnd.After(currentRun.ScheduledAt) {
+				schedulerDelay = currentRun.TaskStartTime.Sub(*upstreamEnd)
 			}
-
-			currentExec.DelaySummary.SystemSchedulingDelaySeconds = int64(scheduledToTaskStartDuration.Seconds())
-		} else if hasUpstream {
-			currentExec.DelaySummary.SystemSchedulingDelaySeconds = int64(upstreamLastTaskEndToCurrentTaskStartDuration.Seconds())
-		} else {
-			currentExec.DelaySummary.SystemSchedulingDelaySeconds = int64(scheduledToTaskStartDuration.Seconds())
 		}
+		if schedulerDelay < 0 {
+			schedulerDelay = 0
+		}
+		currentExec.DelaySummary.SystemSchedulingDelaySeconds = int64(schedulerDelay.Seconds())
 
 		lineageSummary.TotalSystemSchedulingDelaySeconds += currentExec.DelaySummary.SystemSchedulingDelaySeconds
 		if largestSystemSchedulingDelay == nil || currentExec.DelaySummary.SystemSchedulingDelaySeconds > largestSystemSchedulingDelay.DelaySummary.SystemSchedulingDelaySeconds {

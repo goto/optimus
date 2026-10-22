@@ -52,7 +52,7 @@ func TestGroupDetections(t *testing.T) {
 		assert.Equal(t, key, incident.Key)
 		assert.Len(t, incident.Details.Reasons, 2)
 		assert.True(t, incident.HasActiveReason())
-		assert.Equal(t, 40*60, incident.MaxInducedDelaySeconds) // max across active reasons
+		assert.Equal(t, 40*60, incident.MaxInducedDelaySeconds)
 		assert.Len(t, incidents[0].Impacts, 1)
 		assert.Equal(t, JobName("job_down"), incidents[0].Impacts[0].JobName)
 	})
@@ -105,7 +105,7 @@ func TestGroupDetections(t *testing.T) {
 		assert.Len(t, incidents[0].Impacts, 1)
 	})
 
-	t.Run("max induced delay ignores resolved reasons", func(t *testing.T) {
+	t.Run("max induced delay is a high-water mark including resolved reasons", func(t *testing.T) {
 		key := incidentKey("p_proj", "job_root", baseTime)
 		detections := []RootCauseDetection{
 			{
@@ -129,7 +129,8 @@ func TestGroupDetections(t *testing.T) {
 		incidents := GroupDetections(detections)
 
 		assert.Len(t, incidents, 1)
-		assert.Equal(t, 15*60, incidents[0].Incident.MaxInducedDelaySeconds)
+		// the resolved reason still counts toward the peak severity
+		assert.Equal(t, 90*60, incidents[0].Incident.MaxInducedDelaySeconds)
 	})
 
 	t.Run("orders incidents deterministically by key", func(t *testing.T) {

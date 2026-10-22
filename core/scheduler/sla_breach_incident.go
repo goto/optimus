@@ -73,10 +73,9 @@ type SLABreachIncidentKey struct {
 // entity, carrying every known reason and refreshed (updated_at bumped) as long as the
 // engine keeps observing it in the lineage graph.
 type SLABreachIncident struct {
-	ID      uuid.UUID
-	Key     SLABreachIncidentKey
-	Details RootCauseDetails
-	// MaxInducedDelaySeconds is the largest induced delay among the active reasons.
+	ID                     uuid.UUID
+	Key                    SLABreachIncidentKey
+	Details                RootCauseDetails
 	MaxInducedDelaySeconds int
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
@@ -177,7 +176,7 @@ func GroupDetections(detections []RootCauseDetection) []*SLABreachIncidentWithIm
 
 	incidents := make([]*SLABreachIncidentWithImpacts, 0, len(byKey))
 	for _, incident := range byKey {
-		incident.MaxInducedDelaySeconds = maxActiveInducedDelaySeconds(incident.Details)
+		incident.MaxInducedDelaySeconds = maxInducedDelaySeconds(incident.Details)
 		incidents = append(incidents, &SLABreachIncidentWithImpacts{
 			Incident: incident,
 			Impacts:  impactsByIncident[incident],
@@ -189,12 +188,9 @@ func GroupDetections(detections []RootCauseDetection) []*SLABreachIncidentWithIm
 	return incidents
 }
 
-func maxActiveInducedDelaySeconds(details RootCauseDetails) int {
+func maxInducedDelaySeconds(details RootCauseDetails) int {
 	maxSeconds := 0
 	for _, reason := range details.Reasons {
-		if reason.Status != ReasonStatusActive {
-			continue
-		}
 		if reason.InducedDelaySeconds > maxSeconds {
 			maxSeconds = reason.InducedDelaySeconds
 		}

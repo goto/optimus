@@ -130,6 +130,40 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		assert.Equal(t, scheduler.JobName("upstream"), result.ExecutionSummary.LargestScheduledWayTooLateJob.UpstreamJobName)
 	})
 
+	t.Run("should clamp system scheduling delay to zero when the task starts before its upstream finishes", func(t *testing.T) {
+		upstreamStartTime := baseTime.Add(5 * time.Minute)
+		upstreamEndTime := baseTime.Add(25 * time.Minute)
+		// root scheduled at baseTime, but its task starts before the upstream has finished
+		rootStartTime := baseTime.Add(10 * time.Minute)
+		rootEndTime := baseTime.Add(30 * time.Minute)
+
+		upstream := createJobLineage("upstream", tnnt, &windowConfig, nil,
+			createJobRunPair("root", "upstream", baseTime, upstreamStartTime, upstreamEndTime))
+		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
+			createJobRunPair("root", "root", baseTime, rootStartTime, rootEndTime))
+
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
+
+		// the root's wait until its upstream finish is upstream work, not scheduler lag, and
+		// the overlap must not surface as negative scheduler delay; only the upstream's own
+		// schedule-to-start wait (5m) remains
+		assert.Equal(t, int64(300), result.ExecutionSummary.TotalSystemSchedulingDelaySeconds)
+		assert.Equal(t, int64(150), result.ExecutionSummary.AverageSystemSchedulingDelaySeconds)
+	})
+
+	t.Run("should clamp system scheduling delay to zero when the task starts before its own schedule", func(t *testing.T) {
+		// root scheduled at baseTime + 30min but its task starts before that
+		rootStartTime := baseTime.Add(20 * time.Minute)
+		rootEndTime := baseTime.Add(40 * time.Minute)
+
+		jobLineage := createJobLineage("root", tnnt, &windowConfig, nil,
+			createJobRunPair("root", "root", baseTime.Add(30*time.Minute), rootStartTime, rootEndTime))
+
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
+
+		assert.Equal(t, int64(0), result.ExecutionSummary.TotalSystemSchedulingDelaySeconds)
+	})
+
 	t.Run("should calculate task and hook durations", func(t *testing.T) {
 		taskStart := baseTime.Add(10 * time.Minute)
 		taskEnd := baseTime.Add(20 * time.Minute)

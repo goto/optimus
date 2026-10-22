@@ -1,10 +1,6 @@
--- Incidents for root-cause SLA breach alerting (Publisher-Subscriber model).
--- sla_breach_root_cause is the publisher state: one row per offending entity
--- (project, job, scheduled run). The details JSONB carries the full set of
--- active/resolved reasons assembled by the engine each tick, so tiers can be
--- added and resolved without duplicating rows.
--- sla_breach_impact is the blast radius: which downstream jobs are suffering
--- because of the incident (1-to-many, no flat-table duplication).
+-- Root-cause SLA breach alerting use Publisher-Subscriber model
+
+-- sla_breach_root_cause is the publisher state: one row per offending entity (project, job, scheduled run).
 CREATE TABLE IF NOT EXISTS sla_breach_root_cause (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
@@ -16,7 +12,6 @@ CREATE TABLE IF NOT EXISTS sla_breach_root_cause (
     -- {"reasons": [{"reason": "RUNTIME_DELAY", "status": "active", "induced_delay_seconds": 2400}]}
     details        JSONB NOT NULL DEFAULT '{"reasons": []}'::jsonb,
 
-    -- the largest induced delay among the incident's active reasons
     max_induced_delay_seconds INT NOT NULL DEFAULT 0,
 
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),

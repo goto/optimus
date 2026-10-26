@@ -7,37 +7,28 @@ import (
 	"github.com/goto/optimus/core/tenant"
 )
 
-// Publisher evaluates one target lineage per call and emits tier detections for the
-// root-cause SLA breach engine (the Publisher of the Publisher-Subscriber alerting model).
-// It is a pure function of the lineage walk: persistence, alerting and deduplication live
-// one layer up.
-//
-// Every tier is evaluated independently, so one evaluation can yield detections for
-// several tiers and several offending entities; GroupDetections merges them into incidents.
 type PublisherConfig struct {
-	// TaskHookDelayThreshold is the induced-delay floor for TierRuntimeDelay, both for an
-	// individual job and for a project's flat sum along the bottleneck path.
-	TaskHookDelayThreshold time.Duration
-	// SchedulerDelayPerDepth is the per-lineage-level scheduler delay budget for
-	// TierSchedulerDelay: a node whose system scheduling delay exceeds this times its level
-	// (and whose upstreams all succeeded) flags the tier.
-	SchedulerDelayPerDepth time.Duration
-	// ThirdPartyDelayThreshold is the wait floor for TierThirdPartyDelay beyond the daily
-	// 01:00 JKT boundary.
+	RuntimeDelayThreshold    time.Duration
+	SchedulerDelayPerDepth   time.Duration
 	ThirdPartyDelayThreshold time.Duration
-	// ThirdPartyTypes are the upstream_resolvers types with wait_<type>_* sensors.
-	ThirdPartyTypes []string
+	// ThirdPartyDelayStartHourUTC anchors the daily sensor-incident boundary; see
+	// thirdPartyDailyBoundary.
+	ThirdPartyDelayStartHourUTC int
+	ThirdPartyTypes             []string
 }
 
 func (c PublisherConfig) withDefaults() PublisherConfig {
-	if c.TaskHookDelayThreshold <= 0 {
-		c.TaskHookDelayThreshold = 30 * time.Minute
+	if c.RuntimeDelayThreshold <= 0 {
+		c.RuntimeDelayThreshold = 30 * time.Minute
 	}
 	if c.SchedulerDelayPerDepth <= 0 {
 		c.SchedulerDelayPerDepth = 150 * time.Second // 2.5 minutes
 	}
 	if c.ThirdPartyDelayThreshold <= 0 {
 		c.ThirdPartyDelayThreshold = 10 * time.Minute
+	}
+	if c.ThirdPartyDelayStartHourUTC < 0 || c.ThirdPartyDelayStartHourUTC > 23 {
+		c.ThirdPartyDelayStartHourUTC = 0
 	}
 	return c
 }
@@ -55,22 +46,17 @@ func NewPublisher(config PublisherConfig) *Publisher {
 	}
 }
 
-// TargetEvaluation carries everything one target's evaluation needs.
 type TargetEvaluation struct {
 	// Target is the SLA-carrying lineage whose breach is being explained.
 	Target *scheduler.JobLineageSummary
-	// HistoricalByJob holds the historical task/hook baseline per job reachable from the
-	// target; Tier 1 induced delay is measured against it. Missing entries count as zero
-	// baseline (e.g. a job without history yet).
+	// HistoricalByJob holds the historical task/hook baseline per job reachable from the target
 	HistoricalByJob map[scheduler.JobName]scheduler.JobHistoricalDuration
-	// ReferenceTime is "now" for this evaluation tick.
-	ReferenceTime time.Time
-	// WalkOpts bound the lineage walk; zero values use the scheduler defaults.
-	WalkOpts scheduler.LineageWalkOptions
+	ReferenceTime   time.Time
+	WalkOpts        scheduler.LineageWalkOptions
 }
 
-// Evaluate runs the breach gate and the six tiers for one target. An empty result means the
-// target did not breach or produced no explanation.
+// Evaluate runs the breach gate and the six reason detectors for one target. An empty
+// result means the target did not breach or produced no explanation.
 func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection {
 	if ev.Target == nil {
 		return nil
@@ -91,8 +77,8 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 		return nil
 	}
 
-	// breach gate (the Tier 6 condition): the target missed its SLA deadline — finished
-	// after it, or still running past it
+	// breach gate: the target missed its SLA deadline — finished after it, or still
+	// running past it
 	if !breachedSLA(targetRun, ev.ReferenceTime) {
 		return nil
 	}
@@ -108,18 +94,13 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	// behind it, so the tiers below see the full chain the target is waiting on
 	chain := p.waitChain(walk)
 
-	// Tier 4: any ancestor in the whole lineage failed, of any scheduled date
 	detections := p.tierFailedUpstream(walk, impacted)
-	// Tier 5: a stuck node whose upstreams are all successful or missing entirely
 	detections = append(detections, p.tierWaitingUpstream(walk, ev.ReferenceTime, impacted)...)
-	// Tier 3: third-party sensor waits along the effective wait chain
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
-	// Tier 2: the scheduler itself was slow to start a node whose upstreams all succeeded
 	detections = append(detections, p.tierSchedulerDelay(walk, walk.GatingPath(), impacted)...)
-	// Tier 1: induced task/hook runtime along the wait chain
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
 
-	// Tier 6: the target breached but nothing upstream explains it — the SLA is too
+	// if the target breached but nothing upstream explains it, then the SLA is too
 	// aggressive for what the lineage actually delivers
 	if len(detections) == 0 {
 		return []scheduler.RootCauseDetection{{
@@ -146,7 +127,7 @@ func breachedSLA(run *scheduler.JobRunSummary, referenceTime time.Time) bool {
 // finished lineages; for an in-flight lineage it stops at the first unfinished upstream, so
 // each blocking frontier node is appended together with the latest-finishing finished
 // upstream chain behind it. Branches are deduplicated by run key.
-func (p *Publisher) waitChain(walk *scheduler.LineageWalkResult) []*scheduler.JobExecutionSummary {
+func (*Publisher) waitChain(walk *scheduler.LineageWalkResult) []*scheduler.JobExecutionSummary {
 	path := walk.GatingPath()
 	chain := make([]*scheduler.JobExecutionSummary, len(path), len(path)+len(walk.Nodes))
 	copy(chain, path)
@@ -172,8 +153,6 @@ func (p *Publisher) waitChain(walk *scheduler.LineageWalkResult) []*scheduler.Jo
 	return chain
 }
 
-// latestFinishedUpstream picks the upstream a run actually waited on among its finished
-// upstreams, mirroring the gating path's selection rule.
 func latestFinishedUpstream(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary) *scheduler.JobExecutionSummary {
 	var latest *scheduler.JobExecutionSummary
 	for _, upstreamKey := range walk.UpstreamsByKey[node.Key()] {
@@ -198,7 +177,7 @@ func laterFinisher(candidate, best *scheduler.JobExecutionSummary) bool {
 
 // tierFailedUpstream scans the whole walked lineage: any failed ancestor, regardless of
 // its scheduled date, becomes its own incident keyed on the failed job.
-func (p *Publisher) tierFailedUpstream(walk *scheduler.LineageWalkResult, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
+func (*Publisher) tierFailedUpstream(walk *scheduler.LineageWalkResult, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	var detections []scheduler.RootCauseDetection
 	for _, node := range walk.Nodes {
 		if node.Level == 0 || node.State != scheduler.StateFailed {
@@ -213,11 +192,10 @@ func (p *Publisher) tierFailedUpstream(walk *scheduler.LineageWalkResult, impact
 	return detections
 }
 
-// tierWaitingUpstream catches structural stuck states: the node is not running and not
-// finished, yet every resolved upstream is either successful or missing entirely (uncreated
-// runs, depends_on_past self-waits). Nodes whose upstreams failed belong to Tier 4; nodes
-// waiting on a still-running upstream are just normal waiting; a node stuck on its own
-// pending third-party sensor is Tier 3's finding.
+// tierWaitingUpstream catches structural stuck states: the node is not running and not finished,
+// yet every resolved upstream is either successful or missing entirely (uncreated runs, depends_on_past self-waits).
+// Nodes whose upstreams failed are FAILED_UPSTREAM's finding; nodes waiting on a still-running
+// upstream are just normal waiting.
 func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, referenceTime time.Time, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	var detections []scheduler.RootCauseDetection
 	for _, node := range walk.Nodes {
@@ -251,8 +229,9 @@ func isStuckState(node *scheduler.JobExecutionSummary) bool {
 	return node.State == scheduler.StateWaitUpstream || node.State == scheduler.StateNotScheduled
 }
 
-// hasPendingThirdPartySensor reports whether the node is currently waiting on one of its
-// own third-party sensors — a wait Tier 3 explains, so Tier 5 must not double-report it.
+// hasPendingThirdPartySensor reports whether the node is currently waiting on one of its own
+// third-party sensors — a wait THIRD_PARTY_DELAY explains, so this detector must not
+// double-report it
 func (p *Publisher) hasPendingThirdPartySensor(node *scheduler.JobExecutionSummary) bool {
 	if node.JobRunSummary.TaskStartTime != nil || node.JobRunSummary.SensorName == nil {
 		return false
@@ -277,13 +256,13 @@ func upstreamsSuccessOrMissing(walk *scheduler.LineageWalkResult, node *schedule
 }
 
 // tierThirdPartyDelay measures sensor waits along the wait chain. Wait time is counted from
-// the later of the sensor's wait start and the daily 01:00 JKT boundary.
+// the later of the sensor's wait start and the daily boundary.
 func (p *Publisher) tierThirdPartyDelay(chain []*scheduler.JobExecutionSummary, referenceTime time.Time, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	if len(p.thirdPartyByPrefix) == 0 {
 		return nil
 	}
 
-	boundary := thirdPartyDailyBoundary(referenceTime)
+	boundary := thirdPartyDailyBoundary(referenceTime, p.config.ThirdPartyDelayStartHourUTC)
 	seen := map[scheduler.JobRunKey]bool{}
 	var detections []scheduler.RootCauseDetection
 
@@ -319,7 +298,7 @@ func (p *Publisher) tierThirdPartyDelay(chain []*scheduler.JobExecutionSummary, 
 				ProjectName: node.ProjectName,
 				JobName:     node.JobName,
 				// sensors have no native run: all of today's sensor waits group into one
-				// daily incident, so the streaming team gets a single alert per sensor
+				// daily incident, so the recipients get a single alert per sensor
 				ScheduledAt: boundary,
 			},
 			Reason: scheduler.RootCauseReasonDetail{
@@ -344,18 +323,22 @@ func (p *Publisher) matchThirdPartySensor(sensorName string) string {
 	return ""
 }
 
-// thirdPartyDailyBoundary is the 01:00 JKT instant of the reference time's JKT date, in
-// UTC. Sensors lack a native scheduled_at, so this boundary doubles as the incident key's
-// scheduled_at and as the floor of the measured wait.
-func thirdPartyDailyBoundary(referenceTime time.Time) time.Time {
-	jkt := time.FixedZone("JKT", 7*60*60)
-	year, month, day := referenceTime.In(jkt).Date()
-	return time.Date(year, month, day, 1, 0, 0, 0, jkt).UTC()
+// thirdPartyDailyBoundary is the most recent daily boundary at startHourUTC at or before
+// the reference time, in UTC. Sensors lack a native scheduled_at, so the boundary doubles
+// as the incident key's scheduled_at (one incident per sensor per day) and as the floor of
+// the measured wait. A start hour of 18, for example, yields the 01:00 JKT boundary.
+func thirdPartyDailyBoundary(referenceTime time.Time, startHourUTC int) time.Time {
+	reference := referenceTime.UTC()
+	boundary := time.Date(reference.Year(), reference.Month(), reference.Day(), startHourUTC, 0, 0, 0, time.UTC)
+	if boundary.After(reference) {
+		boundary = boundary.AddDate(0, 0, -1)
+	}
+	return boundary
 }
 
 // tierSchedulerDelay attributes the scheduler itself for nodes on the gating path whose
 // system scheduling delay exceeds the per-level budget, and whose upstreams all succeeded —
-// a wait caused by a failed upstream is Tier 4's finding, not the scheduler's.
+// a wait caused by a failed upstream is FAILED_UPSTREAM's finding, not the scheduler's.
 //
 // The delay is computed here (not read from DelaySummary, which only GenerateLineage-
 // ExecutionSummary fills) with the same formula the summary uses: the wait from the later
@@ -412,7 +395,7 @@ func upstreamsAllSuccess(walk *scheduler.LineageWalkResult, node *scheduler.JobE
 }
 
 // tierRuntimeDelay measures induced delay — observed task/hook runtime minus the historical
-// baseline — along the bottleneck path, with the confirmed three-condition cascade:
+// baseline — along the wait chain, with a three-condition cascade:
 //
 //  1. any individual job on the path with induced delay over the threshold is its own
 //     incident (one per job);
@@ -430,7 +413,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 		}
 		inducedByProject[node.ProjectName] += induced
 
-		if induced > p.config.TaskHookDelayThreshold {
+		if induced > p.config.RuntimeDelayThreshold {
 			individuallyDelayed = append(individuallyDelayed, jobDelay{node: node, induced: induced})
 		}
 	}
@@ -458,7 +441,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 	var maxTotal, maxJobDelay time.Duration
 	var maxNode *scheduler.JobExecutionSummary
 	for projectName, total := range inducedByProject {
-		if detectedProjects[projectName] || total <= p.config.TaskHookDelayThreshold {
+		if detectedProjects[projectName] || total <= p.config.RuntimeDelayThreshold {
 			continue
 		}
 		if total > maxTotal {

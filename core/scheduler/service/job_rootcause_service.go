@@ -49,10 +49,11 @@ func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jo
 		durationEstimator: durationEstimator,
 		incidentRepo:      incidentRepo,
 		publisher: rootcause.NewPublisher(rootcause.PublisherConfig{
-			TaskHookDelayThreshold:   time.Duration(config.TaskHookDelayThresholdMinutes) * time.Minute,
-			SchedulerDelayPerDepth:   time.Duration(config.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
-			ThirdPartyDelayThreshold: time.Duration(config.ThirdPartyDelayThresholdSeconds) * time.Second,
-			ThirdPartyTypes:          thirdPartyTypes,
+			RuntimeDelayThreshold:       time.Duration(config.RuntimeDelayThresholdMinutes) * time.Minute,
+			SchedulerDelayPerDepth:      time.Duration(config.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
+			ThirdPartyDelayThreshold:    time.Duration(config.ThirdPartyDelayThresholdSeconds) * time.Second,
+			ThirdPartyDelayStartHourUTC: config.ThirdPartyDelayStartHourUTC,
+			ThirdPartyTypes:             thirdPartyTypes,
 		}),
 	}
 }

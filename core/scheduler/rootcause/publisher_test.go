@@ -1,12 +1,14 @@
-package rootcause
+package rootcause_test
 
 import (
 	"testing"
 	"time"
 
-	"github.com/goto/optimus/core/scheduler"
-	"github.com/goto/optimus/core/tenant"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/rootcause"
+	"github.com/goto/optimus/core/tenant"
 )
 
 func mustTenant(project, namespace string) tenant.Tenant {
@@ -62,12 +64,13 @@ func makeLineage(jobName scheduler.JobName, tnnt tenant.Tenant, run *scheduler.J
 	return lineage
 }
 
-func testPublisher() *Publisher {
-	return NewPublisher(PublisherConfig{
-		TaskHookDelayThreshold:   30 * time.Minute,
-		SchedulerDelayPerDepth:   150 * time.Second,
-		ThirdPartyDelayThreshold: 10 * time.Minute,
-		ThirdPartyTypes:          []string{"dex"},
+func testPublisher() *rootcause.Publisher {
+	return rootcause.NewPublisher(rootcause.PublisherConfig{
+		RuntimeDelayThreshold:       30 * time.Minute,
+		SchedulerDelayPerDepth:      150 * time.Second,
+		ThirdPartyDelayThreshold:    10 * time.Minute,
+		ThirdPartyDelayStartHourUTC: 18, // 01:00 JKT
+		ThirdPartyTypes:             []string{"dex"},
 	})
 }
 
@@ -82,7 +85,7 @@ func detectionsByReason(detections []scheduler.RootCauseDetection, reason schedu
 }
 
 func eval(target *scheduler.JobLineageSummary, historical map[scheduler.JobName]scheduler.JobHistoricalDuration, referenceTime time.Time) []scheduler.RootCauseDetection {
-	return testPublisher().Evaluate(TargetEvaluation{
+	return testPublisher().Evaluate(rootcause.TargetEvaluation{
 		Target:          target,
 		ReferenceTime:   referenceTime,
 		HistoricalByJob: historical,
@@ -342,14 +345,4 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Len(t, runtime, 1)
 		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
 	})
-}
-
-func TestThirdPartyDailyBoundary(t *testing.T) {
-	// 2026-10-26 03:00 UTC is 10:00 JKT; the boundary is 01:00 JKT = 2026-10-25 18:00 UTC
-	reference := time.Date(2026, 10, 26, 3, 0, 0, 0, time.UTC)
-	assert.Equal(t, time.Date(2026, 10, 25, 18, 0, 0, 0, time.UTC), thirdPartyDailyBoundary(reference))
-
-	// just before midnight JKT, the boundary still belongs to that JKT date
-	lateEvening := time.Date(2026, 10, 25, 17, 59, 0, 0, time.UTC) // 00:59 JKT Oct 26
-	assert.Equal(t, time.Date(2026, 10, 25, 18, 0, 0, 0, time.UTC), thirdPartyDailyBoundary(lateEvening))
 }

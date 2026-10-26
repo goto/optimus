@@ -101,6 +101,7 @@ type AlertingConfig struct {
 	RootCause                RootCauseConfig                     `mapstructure:"root_cause"`
 	AutoSLABreachConfig      DurationEstimatorConfig             `mapstructure:"auto_sla_breach_config"`
 	PotentialSLABreachConfig PotentialSLABreachConfig            `mapstructure:"potential_sla_breach_config"`
+	RootCauseAlert           RootCauseAlertConfig                `mapstructure:"root_cause_alert"`
 	DeduplicationConfig      map[string]AlertDeduplicationConfig `mapstructure:"deduplication"`
 }
 
@@ -127,6 +128,28 @@ type PotentialSLABreachConfig struct {
 	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
 	HistoricalStartConfig   HistoricalStartConfig   `mapstructure:"historical_start_config"`
+}
+
+// RootCauseAlertConfig tunes the root-cause SLA breach publisher: the tier thresholds and
+// where platform-level tiers (scheduler, third-party) route their alerts.
+type RootCauseAlertConfig struct {
+	// TaskHookDelayThresholdMinutes is the induced-delay floor for RUNTIME_DELAY, both for
+	// an individual job and for a project's flat sum along the bottleneck path.
+	TaskHookDelayThresholdMinutes int `mapstructure:"task_hook_delay_threshold_minutes" default:"30"`
+	// SchedulerDelayMinutesPerDepth is the per-lineage-level scheduler delay budget; a node
+	// whose system scheduling delay exceeds this times its level flags SCHEDULER_DELAY.
+	SchedulerDelayMinutesPerDepth float64 `mapstructure:"scheduler_delay_minutes_per_depth" default:"2.5"`
+	// ThirdPartyDelayThresholdSeconds is the wait floor for THIRD_PARTY_DELAY beyond the
+	// daily 01:00 JKT boundary.
+	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"600"`
+	// DedupWindowMinutes is how long an alert type suppresses repeats for the same entity.
+	DedupWindowMinutes int `mapstructure:"dedup_window_minutes" default:"60"`
+	// InfraTeam receives SCHEDULER_DELAY alerts (central batching team).
+	InfraTeam string `mapstructure:"infra_team" default:"gojek-de-batching"`
+	// ThirdPartyTeam receives THIRD_PARTY_DELAY alerts (streaming team).
+	ThirdPartyTeam string `mapstructure:"third_party_team" default:"de-streaming"`
+	// ExcludeProjects is a kill switch: projects listed here are never evaluated.
+	ExcludeProjects []string `mapstructure:"exclude_projects"`
 }
 
 // HistoricalStartConfig the percentile offset between a run's scheduled_at and when its task actually started, over the last N runs.

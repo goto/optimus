@@ -116,6 +116,25 @@ alerting:
       active_window_timezone: Asia/Jakarta
       active_window_start_hour: 0
       active_window_end_hour: 9
+    rootcause_breach:
+      dedup_keys:
+      - data.root_cause_job
+      - data.reason
+      - labels.team
+      window_minutes: 60
+      active_window_timezone: Asia/Jakarta
+      active_window_start_hour: 0
+      active_window_end_hour: 9
+
+  # root-cause SLA breach publisher (tier thresholds and platform-team routing)
+  root_cause_alert:
+    task_hook_delay_threshold_minutes: 30
+    scheduler_delay_minutes_per_depth: 2.5
+    third_party_delay_threshold_seconds: 600
+    dedup_window_minutes: 60
+    infra_team: gojek-de-batching
+    third_party_team: de-streaming
+    exclude_projects: []
 
 # SLA breach-detection background worker cadence
 sla:

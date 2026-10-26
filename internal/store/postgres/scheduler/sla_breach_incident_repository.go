@@ -13,9 +13,6 @@ import (
 	"github.com/goto/optimus/internal/errors"
 )
 
-// SLABreachIncidentRepository persists root-cause SLA breach incidents and their blast
-// radius. Both writes go through UpsertIncident so a tick's fully assembled payload is the
-// complete current truth of each incident.
 type SLABreachIncidentRepository struct {
 	db *pgxpool.Pool
 }
@@ -149,11 +146,8 @@ func (r *SLABreachIncidentRepository) GetActiveIncidents(ctx context.Context, si
 			if err != nil {
 				return nil, err
 			}
-			result.Impacts = append(result.Impacts, scheduler.ImpactedJob{
-				ProjectName: impactedKey.ProjectName,
-				JobName:     impactedKey.JobName,
-				ScheduledAt: impactedKey.ScheduledAt,
-			})
+
+			result.Impacts = append(result.Impacts, scheduler.ImpactedJob(impactedKey))
 		}
 	}
 	if err := rows.Err(); err != nil {

@@ -326,12 +326,11 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		},
 	}
 	s.expectedServerConfig.Alerting.RootCauseAlert = config.RootCauseAlertConfig{
-		TaskHookDelayThresholdMinutes:   30,
+		RuntimeDelayThresholdMinutes:    30,
 		SchedulerDelayMinutesPerDepth:   2.5,
 		ThirdPartyDelayThresholdSeconds: 600,
 		DedupWindowMinutes:              60,
-		InfraTeam:                       "gojek-de-batching",
-		ThirdPartyTeam:                  "de-streaming",
+		// platform teams default to empty: routing is disabled until configured
 	}
 	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{
 		BufferDurationInMinutes: 10,

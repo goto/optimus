@@ -128,12 +128,24 @@ alerting:
 
   # root-cause SLA breach publisher (tier thresholds and platform-team routing)
   root_cause_alert:
-    task_hook_delay_threshold_minutes: 30
+    # RuntimeDelayThresholdMinutes is the induced-delay floor for RUNTIME_DELAY, both for
+    # an individual job and for a project's flat sum along the bottleneck path.
+    runtime_delay_threshold_minutes: 30
+    # SchedulerDelayMinutesPerDepth is the per-lineage-level scheduler delay budget; a node
+    # whose system scheduling delay exceeds this times its level flags SCHEDULER_DELAY.
     scheduler_delay_minutes_per_depth: 2.5
+    # ThirdPartyDelayStartHourUTC is the UTC hour (0-23) anchoring the daily sensor-incident
+    # boundary: sensor waits are measured and grouped from the most recent occurrence of this
+    # hour. 18 = 01:00 WIB.
+    third_party_delay_start_hour_utc: 18
+    # ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
     third_party_delay_threshold_seconds: 600
+    # DedupWindowMinutes is how long an alert type suppresses repeats for the same entity.
     dedup_window_minutes: 60
-    infra_team: gojek-de-batching
-    third_party_team: de-streaming
+    # InfraTeam receives SCHEDULER_DELAY alerts.
+    infra_team: infra-team
+    # ThirdPartyTeam receives THIRD_PARTY_DELAY alerts
+    third_party_team: third-party-team
     exclude_projects: []
 
 # SLA breach-detection background worker cadence

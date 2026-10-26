@@ -1,4 +1,4 @@
-package service
+package service_test
 
 import (
 	"context"
@@ -11,11 +11,42 @@ import (
 
 	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
 )
 
 type mockIncidentRepository struct {
 	mock.Mock
+}
+
+// mockRootCauseDetailsGetter is a local JobDetailsGetter mock; the shared one lives in the
+// internal service test package and is not visible from service_test.
+type mockRootCauseDetailsGetter struct {
+	mock.Mock
+}
+
+func (m *mockRootCauseDetailsGetter) GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error) {
+	args := m.Called(ctx, projectName, jobs)
+	if jobsWithDetails, ok := args.Get(0).([]*scheduler.JobWithDetails); ok {
+		return jobsWithDetails, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *mockRootCauseDetailsGetter) GetJobsByLabels(ctx context.Context, projectName tenant.ProjectName, labels map[string]string) ([]*scheduler.JobWithDetails, error) {
+	args := m.Called(ctx, projectName, labels)
+	if jobsWithDetails, ok := args.Get(0).([]*scheduler.JobWithDetails); ok {
+		return jobsWithDetails, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *mockRootCauseDetailsGetter) GetJobsByLabelsMultiValue(ctx context.Context, projectName tenant.ProjectName, labels map[string][]string) ([]*scheduler.JobWithDetails, error) {
+	args := m.Called(ctx, projectName, labels)
+	if jobsWithDetails, ok := args.Get(0).([]*scheduler.JobWithDetails); ok {
+		return jobsWithDetails, args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 // mockRootCauseLineageFetcher is a local JobLineageFetcher mock; the shared mockery mock
@@ -149,11 +180,11 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 	lineage := rcMakeLineage("job_target", tnnt, targetRun,
 		rcMakeLineage("job_upstream", tnnt, upstreamRun))
 
-	newService := func(detailsGetter *mockJobDetailsGetter, lineageFetcher *mockRootCauseLineageFetcher, estimator *mockRootCauseDurationEstimator, repo *mockIncidentRepository) *JobRootCauseService {
-		return NewJobRootCauseService(
+	newService := func(detailsGetter *mockRootCauseDetailsGetter, lineageFetcher *mockRootCauseLineageFetcher, estimator *mockRootCauseDurationEstimator, repo *mockIncidentRepository) *service.JobRootCauseService {
+		return service.NewJobRootCauseService(
 			log.NewNoop(),
 			config.RootCauseAlertConfig{
-				TaskHookDelayThresholdMinutes:   30,
+				RuntimeDelayThresholdMinutes:    30,
 				SchedulerDelayMinutesPerDepth:   2.5,
 				ThirdPartyDelayThresholdSeconds: 600,
 			},
@@ -166,7 +197,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 	}
 
 	t.Run("persists grouped incidents when alerts are enabled", func(t *testing.T) {
-		detailsGetter := &mockJobDetailsGetter{}
+		detailsGetter := &mockRootCauseDetailsGetter{}
 		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
 
 		lineageFetcher := &mockRootCauseLineageFetcher{}
@@ -196,9 +227,9 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 				assert.Equal(t, "job_target", impacts[0].JobName.String())
 			})
 
-		service := newService(detailsGetter, lineageFetcher, estimator, repo)
+		svc := newService(detailsGetter, lineageFetcher, estimator, repo)
 
-		incidents, err := service.IdentifySLABreachRootCause(ctx, RootCauseRequestConfig{
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
 			ProjectNames:         []tenant.ProjectName{projectName},
 			JobNames:             []scheduler.JobName{"job_target"},
 			ReferenceTime:        referenceTime,
@@ -214,7 +245,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 	})
 
 	t.Run("observe mode evaluates without persisting", func(t *testing.T) {
-		detailsGetter := &mockJobDetailsGetter{}
+		detailsGetter := &mockRootCauseDetailsGetter{}
 		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
 
 		lineageFetcher := &mockRootCauseLineageFetcher{}
@@ -230,9 +261,9 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 
 		repo := &mockIncidentRepository{}
 
-		service := newService(detailsGetter, lineageFetcher, estimator, repo)
+		svc := newService(detailsGetter, lineageFetcher, estimator, repo)
 
-		incidents, err := service.IdentifySLABreachRootCause(ctx, RootCauseRequestConfig{
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
 			ProjectNames:         []tenant.ProjectName{projectName},
 			JobNames:             []scheduler.JobName{"job_target"},
 			ReferenceTime:        referenceTime,
@@ -248,14 +279,14 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 	t.Run("excluded projects are never evaluated", func(t *testing.T) {
 		repo := &mockIncidentRepository{}
 
-		service := NewJobRootCauseService(
+		svc := service.NewJobRootCauseService(
 			log.NewNoop(),
 			config.RootCauseAlertConfig{ExcludeProjects: []string{"p_root"}},
-			&mockJobDetailsGetter{}, &mockRootCauseLineageFetcher{}, &mockRootCauseDurationEstimator{},
+			&mockRootCauseDetailsGetter{}, &mockRootCauseLineageFetcher{}, &mockRootCauseDurationEstimator{},
 			repo, []string{"dex"},
 		)
 
-		incidents, err := service.IdentifySLABreachRootCause(ctx, RootCauseRequestConfig{
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
 			ProjectNames:         []tenant.ProjectName{projectName},
 			ReferenceTime:        referenceTime,
 			EnableAlert:          true,

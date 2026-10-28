@@ -37,6 +37,9 @@ const (
 	MetricNotificationQueue         = "notification_received_total"
 	MetricNotificationWorkerSendErr = "notification_err_total"
 	MetricNotificationSend          = "notification_sent_successfully"
+
+	MetricRootCauseAlertsSent    = "rootcause_alerts_sent_total"
+	MetricRootCauseAlertsDeduped = "rootcause_alerts_deduped_total"
 )
 
 var (
@@ -45,6 +48,14 @@ var (
 	alertManagerMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "alert_manager_api",
 	}, []string{"template", "status", "error"})
+
+	rootCauseAlertsSentCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: MetricRootCauseAlertsSent,
+	}, []string{"reason", "team"})
+
+	rootCauseAlertsDedupedCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: MetricRootCauseAlertsDeduped,
+	}, []string{"reason"})
 
 	eventsReceived = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name:        MetricNotificationQueue,
@@ -192,6 +203,16 @@ func (a *AlertManager) logEvent(ctx context.Context, e *AlertPayload) (uuid.UUID
 	return uuid.Nil, false, nil
 }
 
+// countRootCauseAlert increments a root-cause alert outcome counter; payloads of other
+// alert types are ignored. The reason label comes from the payload data.
+func (a *AlertManager) countRootCauseAlert(alert *AlertPayload, counter *prometheus.CounterVec, labelValues ...string) {
+	if alert.AlertType != AlertTypeRootCauseBreach {
+		return
+	}
+	reason, _ := alert.Data["reason"].(string)
+	counter.WithLabelValues(append([]string{reason}, labelValues...)...).Inc()
+}
+
 func (a *AlertManager) worker(ctx context.Context) {
 	defer a.wg.Done()
 	for {
@@ -202,6 +223,7 @@ func (a *AlertManager) worker(ctx context.Context) {
 				a.logger.Error("failed to log event", "error", err)
 			}
 			if isDeduplicated {
+				a.countRootCauseAlert(e, rootCauseAlertsDedupedCounter, "")
 				continue
 			}
 
@@ -212,6 +234,7 @@ func (a *AlertManager) worker(ctx context.Context) {
 				a.workerErrChan <- fmt.Errorf("alert worker: event_info: [ %s ], err: %w", string(eventDataBytes), err)
 			} else {
 				successSentCounter.WithLabelValues(e.Project, e.LogTag).Inc()
+				a.countRootCauseAlert(e, rootCauseAlertsSentCounter, e.Labels[DefaultChannelLabel])
 			}
 			if e.HasDefaultChannelLabel() {
 				if err != nil {

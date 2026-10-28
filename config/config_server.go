@@ -168,6 +168,7 @@ type AlertDeduplicationConfig struct {
 	ActiveWindowTimezone  string   `mapstructure:"active_window_timezone"`
 	ActiveWindowStartHour int      `mapstructure:"active_window_start_hour" default:"0"`
 	ActiveWindowEndHour   int      `mapstructure:"active_window_end_hour" default:"7"`
+	EnabledWarningDedup   bool     `mapstructure:"enabled_warning_dedup" default:"false"`
 }
 
 type ResourceManager struct {

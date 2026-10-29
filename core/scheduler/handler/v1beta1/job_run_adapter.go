@@ -385,3 +385,91 @@ func toRootCauseEvidenceProto(evidence scheduler.RootCauseEvidence) *pb.RootCaus
 	}
 	return out
 }
+
+var rootCauseReasonToProto = map[scheduler.SLABreachTier]pb.RootCauseReason{
+	scheduler.TierRuntimeDelay:    pb.RootCauseReason_ROOT_CAUSE_REASON_RUNTIME_DELAY,
+	scheduler.TierSchedulerDelay:  pb.RootCauseReason_ROOT_CAUSE_REASON_SCHEDULER_DELAY,
+	scheduler.TierThirdPartyDelay: pb.RootCauseReason_ROOT_CAUSE_REASON_THIRD_PARTY_DELAY,
+	scheduler.TierFailedUpstream:  pb.RootCauseReason_ROOT_CAUSE_REASON_FAILED_UPSTREAM,
+	scheduler.TierWaitingUpstream: pb.RootCauseReason_ROOT_CAUSE_REASON_WAITING_UPSTREAM,
+	scheduler.TierAggressiveSLA:   pb.RootCauseReason_ROOT_CAUSE_REASON_AGGRESSIVE_SLA,
+}
+
+var rootCauseStatusToProto = map[scheduler.ReasonStatus]pb.RootCauseStatus{
+	scheduler.ReasonStatusActive:   pb.RootCauseStatus_ROOT_CAUSE_STATUS_ACTIVE,
+	scheduler.ReasonStatusResolved: pb.RootCauseStatus_ROOT_CAUSE_STATUS_RESOLVED,
+}
+
+func fromRootCauseRequest(req *pb.IdentifySLABreachRootCauseRequest) (service.RootCauseRequestConfig, error) {
+	projectNames := make([]tenant.ProjectName, 0, len(req.GetProjectNames()))
+	for _, projectNameStr := range req.GetProjectNames() {
+		projectName, err := tenant.ProjectNameFrom(projectNameStr)
+		if err != nil {
+			return service.RootCauseRequestConfig{}, fmt.Errorf("unable to adapt project name [%s]: %w", projectNameStr, err)
+		}
+		projectNames = append(projectNames, projectName)
+	}
+
+	jobNames := make([]scheduler.JobName, 0, len(req.GetJobNames()))
+	for _, jobNameStr := range req.GetJobNames() {
+		jobName, err := scheduler.JobNameFrom(jobNameStr)
+		if err != nil {
+			return service.RootCauseRequestConfig{}, fmt.Errorf("unable to adapt job name [%s]: %w", jobNameStr, err)
+		}
+		jobNames = append(jobNames, jobName)
+	}
+
+	labels := make(map[string][]string, len(req.GetJobLabels()))
+	for key, values := range req.GetJobLabels() {
+		labels[key] = values.GetValues()
+	}
+
+	referenceTime := time.Now().UTC()
+	if req.GetReferenceTime() != nil && req.GetReferenceTime().IsValid() {
+		referenceTime = req.GetReferenceTime().AsTime().UTC()
+	}
+
+	return service.RootCauseRequestConfig{
+		ProjectNames:         projectNames,
+		JobNames:             jobNames,
+		Labels:               labels,
+		ReferenceTime:        referenceTime,
+		EnableAlert:          req.GetEnableAlert(),
+		ScheduleRangeInHours: time.Duration(req.GetScheduledRangeInHours()) * time.Hour,
+	}, nil
+}
+
+func toRootCauseResponse(incidents []*scheduler.SLABreachIncidentWithImpacts) *pb.IdentifySLABreachRootCauseResponse {
+	response := &pb.IdentifySLABreachRootCauseResponse{
+		RootCauses: make([]*pb.RootCause, 0, len(incidents)),
+	}
+	for _, incident := range incidents {
+		rootCause := &pb.RootCause{
+			ProjectName:     incident.Incident.Key.ProjectName.String(),
+			JobName:         incident.Incident.Key.JobName.String(),
+			ScheduledAt:     timestamppb.New(incident.Incident.Key.ScheduledAt),
+			MaxInducedDelay: durationpb.New(time.Duration(incident.Incident.MaxInducedDelaySeconds) * time.Second),
+			Reasons:         make([]*pb.RootCauseReasonDetail, 0, len(incident.Incident.Details.Reasons)),
+			ImpactedJobs:    make([]*pb.ImpactedJob, 0, len(incident.Impacts)),
+		}
+		for _, reason := range incident.Incident.Details.Reasons {
+			detail := &pb.RootCauseReasonDetail{
+				Reason:           rootCauseReasonToProto[reason.Reason],
+				Status:           rootCauseStatusToProto[reason.Status],
+				InducedDelay:     durationpb.New(time.Duration(reason.InducedDelaySeconds) * time.Second),
+				BlockedOnSensors: reason.BlockedOnSensors,
+				SourceType:       reason.SourceType,
+			}
+			rootCause.Reasons = append(rootCause.Reasons, detail)
+		}
+		for _, impacted := range incident.Impacts {
+			rootCause.ImpactedJobs = append(rootCause.ImpactedJobs, &pb.ImpactedJob{
+				ProjectName: impacted.ProjectName.String(),
+				JobName:     impacted.JobName.String(),
+				ScheduledAt: timestamppb.New(impacted.ScheduledAt),
+			})
+		}
+		response.RootCauses = append(response.RootCauses, rootCause)
+	}
+	return response
+}

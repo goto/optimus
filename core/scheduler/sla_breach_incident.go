@@ -199,3 +199,17 @@ type SLABreachIncidentRepository interface {
 	UpsertIncident(ctx context.Context, incident *SLABreachIncident, impactedJobs []ImpactedJob) error
 	GetActiveIncidents(ctx context.Context, since time.Time) ([]*SLABreachIncidentWithImpacts, error)
 }
+
+// RootCauseBreachAlert is one alert for a single active reason of an incident, routed to
+// the team that can act on it.
+type RootCauseBreachAlert struct {
+	Team             string
+	Project          string
+	RootCauseProject string
+	RootCauseJob     string
+	// RootCauseScheduledAt is nil for SCHEDULER_DELAY alerts: they route to the platform
+	// team and deduplicate globally per reason, so no per-run identity is exposed.
+	RootCauseScheduledAt *time.Time
+	Reason               RootCauseReasonDetail
+	ImpactedJobs         []string
+}

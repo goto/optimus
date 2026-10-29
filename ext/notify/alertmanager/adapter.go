@@ -28,6 +28,7 @@ const (
 	AlertTypeJobSuccess         = "job_success"
 	AlertTypeOperatorSLAMiss    = "operator_sla_miss"
 	AlertTypePotentialSLABreach = "potential_sla_breach"
+	AlertTypeRootCauseBreach    = "rootcause_breach"
 
 	OptimusReplayTemplate              = "optimus-job-replay"
 	OptimusChangeTemplate              = "optimus-change"
@@ -37,6 +38,7 @@ const (
 	OptimusSuccessNotificationTemplate = "optimus-job-success"
 	OptimusOperatorSLAMissTemplate     = "optimus-operator-sla-miss"
 	OptimusPotentialSLABreachTemplate  = "optimus-potential-sla-breach"
+	OptimusRootCauseBreachTemplate     = "optimus-root-cause-breach"
 
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"
@@ -302,6 +304,54 @@ func (a *AlertManager) SendExternalTableEvent(attr *resource.ETAlertAttrs) {
 
 func (a *AlertManager) SendPotentialSLABreach(alert *scheduler.PotentialSLABreachAlert) {
 	a.relay(a.buildPotentialSLABreachPayload(alert))
+}
+
+// SendRootCauseBreach relays one alert for a single active reason of a root-cause SLA
+// breach incident. Dedup keys (root_cause_job unless scheduler-attributed, reason, team)
+// must stay top-level strings so the alert_logs deduplication can match them.
+func (a *AlertManager) SendRootCauseBreach(alert *scheduler.RootCauseBreachAlert) {
+	a.relay(a.buildRootCauseBreachPayload(alert))
+}
+
+func (a *AlertManager) buildRootCauseBreachPayload(alert *scheduler.RootCauseBreachAlert) *AlertPayload {
+	data := map[string]interface{}{
+		"team":                  alert.Team,
+		"project":               alert.Project,
+		"root_cause_project":    alert.RootCauseProject,
+		"reason":                string(alert.Reason.Reason),
+		"impacted_jobs":         alert.ImpactedJobs,
+		"impacted_jobs_count":   len(alert.ImpactedJobs),
+		"impacted_jobs_preview": formatJobsPreview(alert.ImpactedJobs, impactedJobsPreviewLimit),
+	}
+	// a scheduler-attributed alert omits the root cause identity on purpose: the routing
+	// team is the platform team and the alert deduplicates globally per reason
+	if alert.RootCauseJob != "" {
+		data["root_cause_job"] = alert.RootCauseJob
+	}
+	if alert.RootCauseScheduledAt != nil {
+		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
+	}
+	if alert.Reason.InducedDelaySeconds > 0 {
+		data["induced_delay"] = formatDuration(time.Duration(alert.Reason.InducedDelaySeconds) * time.Second)
+	}
+	if len(alert.Reason.BlockedOnSensors) > 0 {
+		data["blocked_on_sensors"] = alert.Reason.BlockedOnSensors
+	}
+	if alert.Reason.SourceType != "" {
+		data["source_type"] = alert.Reason.SourceType
+	}
+
+	return &AlertPayload{
+		Project:  alert.Project,
+		Data:     data,
+		Template: OptimusRootCauseBreachTemplate,
+		Labels: map[string]string{
+			DefaultChannelLabel: alert.Team,
+			SeverityLabel:       WarningSeverity,
+		},
+		Endpoint:  a.endpoint,
+		AlertType: AlertTypeRootCauseBreach,
+	}
 }
 
 // buildPotentialSLABreachPayload flattens one root cause into a payload. Dedup keys

@@ -24,7 +24,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 
 	t.Run("ClaimWindow", func(t *testing.T) {
 		t.Run("claims a fresh window", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-claim-fresh")
 			workerID := uuid.New()
@@ -36,7 +36,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("second claim on the same window is rejected, not errored", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-claim-conflict")
 			start, end := currentTime, currentTime.Add(time.Minute)
@@ -53,7 +53,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("different projects can claim overlapping windows independently", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			start, end := currentTime, currentTime.Add(time.Minute)
 
@@ -69,7 +69,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 
 	t.Run("GetWatermark", func(t *testing.T) {
 		t.Run("returns nil when the project has no windows yet", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 
 			watermark, err := repo.GetWatermark(ctx, tenant.ProjectName("proj-no-history"))
@@ -78,7 +78,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("an in_progress window does not move the watermark", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-inprogress-only")
 
@@ -92,7 +92,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("a completed window advances the watermark to its end_time", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-completed")
 			end := currentTime.Add(time.Minute)
@@ -114,7 +114,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("a failed window still advances the watermark, so it does not block later windows", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-failed-advances")
 			end := currentTime.Add(time.Minute)
@@ -140,7 +140,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 
 	t.Run("ReclaimStaleWindow", func(t *testing.T) {
 		t.Run("returns nil when there is nothing stale", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-nothing-stale")
 
@@ -154,7 +154,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("reclaims a window whose lock already expired, bumping attempt_count", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-stale-reclaim")
 			start, end := currentTime, currentTime.Add(time.Minute)
@@ -176,7 +176,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("does not reclaim a window that already exhausted max attempts", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-exhausted-no-reclaim")
 
@@ -193,7 +193,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 
 	t.Run("CompleteWindow", func(t *testing.T) {
 		t.Run("succeeds when the worker still holds the lease", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-complete-ok")
 			workerID := uuid.New()
@@ -209,7 +209,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("fails when a different worker attempts to complete it", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-complete-wrong-worker")
 
@@ -223,7 +223,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("fails when the lease already expired, even for the original worker", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-complete-expired-lease")
 			workerID := uuid.New()
@@ -242,7 +242,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 
 	t.Run("RecordAttemptError", func(t *testing.T) {
 		t.Run("annotates last_error while the lease is still valid, visible after it later becomes reclaimable", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-record-error")
 			workerID := uuid.New()
@@ -273,7 +273,7 @@ func TestPostgresAirflowSyncStateRepository(t *testing.T) {
 		})
 
 		t.Run("is a no-op when a different worker no longer holds the lease", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewAirflowSyncStateRepository(db)
 			projectName := tenant.ProjectName("proj-record-error-wrong-worker")
 			workerID := uuid.New()

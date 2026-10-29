@@ -82,6 +82,10 @@ type SchedulerService interface {
 	GetRolePermissions(ctx context.Context, t tenant.Tenant, roleName string) ([]string, error)
 }
 
+type JobRootCauseService interface {
+	IdentifySLABreachRootCause(ctx context.Context, reqConfig service.RootCauseRequestConfig) ([]*scheduler.SLABreachIncidentWithImpacts, error)
+}
+
 type Notifier interface {
 	Push(ctx context.Context, event *scheduler.Event) error
 	Webhook(ctx context.Context, event *scheduler.Event) error
@@ -97,6 +101,7 @@ type JobRunHandler struct {
 	jobSLAPredictorService  JobSLAPredictorService
 	thirdPartySensorService ThirdPartySensorService
 	jobExpectatorService    JobExpectatorService
+	jobRootCauseService     JobRootCauseService
 
 	pb.UnimplementedJobRunServiceServer
 }
@@ -711,6 +716,26 @@ func (h JobRunHandler) JobExpectedCompletionTimeReport(ctx context.Context, req 
 	return response, nil
 }
 
+// IdentifySLABreachRootCause evaluates the given projects' jobs for the reasons behind their
+// SLA breaches and, unless running in observe mode, persists incidents and alerts the
+// responsible teams. A partial failure across projects still returns the incidents that
+// were evaluated; the error surfaces only when nothing succeeded.
+func (h JobRunHandler) IdentifySLABreachRootCause(ctx context.Context, req *pb.IdentifySLABreachRootCauseRequest) (*pb.IdentifySLABreachRootCauseResponse, error) {
+	reqConfig, err := fromRootCauseRequest(req)
+	if err != nil {
+		h.l.Error(fmt.Sprintf("error adapting root-cause request: %s", err.Error()))
+		return nil, errors.GRPCErr(err, "unable to adapt request")
+	}
+
+	incidents, err := h.jobRootCauseService.IdentifySLABreachRootCause(ctx, reqConfig)
+	if err != nil && len(incidents) == 0 {
+		h.l.Error(fmt.Sprintf("error identifying SLA breach root causes: %s", err.Error()))
+		return nil, errors.GRPCErr(err, "unable to identify SLA breach root causes")
+	}
+
+	return toRootCauseResponse(incidents), nil
+}
+
 func NewJobRunHandler(
 	l log.Logger,
 	service JobRunService,
@@ -720,6 +745,7 @@ func NewJobRunHandler(
 	jobSLAPredictorService JobSLAPredictorService,
 	thirdPartySensorService ThirdPartySensorService,
 	jobExpectatorService JobExpectatorService,
+	jobRootCauseService JobRootCauseService,
 ) *JobRunHandler {
 	return &JobRunHandler{
 		l:                       l,
@@ -730,5 +756,6 @@ func NewJobRunHandler(
 		jobSLAPredictorService:  jobSLAPredictorService,
 		thirdPartySensorService: thirdPartySensorService,
 		jobExpectatorService:    jobExpectatorService,
+		jobRootCauseService:     jobRootCauseService,
 	}
 }

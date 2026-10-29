@@ -76,6 +76,8 @@ type JobSLAPredictorService struct {
 	durationEstimator DurationEstimator
 	tenantGetter      TenantGetter
 	rootCause         RootCauseIdentifier
+	// incidentRepo backs the subscriber mode; nil there falls back to an error
+	incidentRepo scheduler.SLABreachIncidentRepository
 	// alerting purpose
 	potentialSLANotifier PotentialSLANotifier
 	startDelayEstimator  StartDelayEstimator
@@ -86,7 +88,7 @@ type RootCauseIdentifier interface {
 	CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummary, jobDurations map[scheduler.JobName]*time.Duration, targetedSLA *time.Time, damperFactor scheduler.DamperFactor) (map[scheduler.JobName]*time.Time, rootcause.BottleneckPath)
 }
 
-func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string, startDelayEstimator StartDelayEstimator) *JobSLAPredictorService {
+func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachConfig, rootCauseConfig config.RootCauseConfig, slaPredictorRepo SLAPredictorRepository, jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator, jobDetailsGetter JobDetailsGetter, potentialSLANotifier PotentialSLANotifier, tenantGetter TenantGetter, scheduledChangeGetter ScheduledChangeGetter, pendingSensorGetter rootcause.PendingSensorGetter, thirdPartyTypes []string, startDelayEstimator StartDelayEstimator, incidentRepo scheduler.SLABreachIncidentRepository) *JobSLAPredictorService {
 	return &JobSLAPredictorService{
 		l:                    l,
 		config:               config,
@@ -96,6 +98,7 @@ func NewJobSLAPredictorService(l log.Logger, config config.PotentialSLABreachCon
 		jobDetailsGetter:     jobDetailsGetter,
 		tenantGetter:         tenantGetter,
 		rootCause:            rootcause.NewIdentifier(l, scheduledChangeGetter, pendingSensorGetter, thirdPartyTypes, identifierConfig(rootCauseConfig)),
+		incidentRepo:         incidentRepo,
 		potentialSLANotifier: potentialSLANotifier,
 		startDelayEstimator:  startDelayEstimator,
 	}
@@ -123,6 +126,18 @@ func (s *JobSLAPredictorService) CalculateInferredSLAs(jobTarget *scheduler.JobL
 // backward compatibility; it now shares the same consolidation pipeline as the
 // batch entrypoint, so alerts are still grouped into one message per team.
 func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projectName tenant.ProjectName, jobNames []scheduler.JobName, labels map[string]string, reqConfig JobSLAPredictorRequestConfig) (map[scheduler.JobName]map[scheduler.JobName]*scheduler.JobState, error) {
+	if s.config.SubscriberMode {
+		response, err := s.identifyFromIncidents(ctx, []scheduler.SLABreachCombo{{ProjectName: projectName, JobNames: jobNames, Labels: labels}}, reqConfig)
+		if err != nil {
+			return nil, err
+		}
+		causes := make(map[scheduler.JobName]map[scheduler.JobName]*scheduler.JobState, len(response))
+		for _, breach := range response {
+			causes[breach.TargetJobName] = breach.Upstreams
+		}
+		return causes, nil
+	}
+
 	combo := scheduler.SLABreachCombo{
 		ProjectName: projectName,
 		JobNames:    jobNames,
@@ -141,7 +156,13 @@ func (s *JobSLAPredictorService) IdentifySLABreaches(ctx context.Context, projec
 // IdentifySLABreachesBatch evaluates many (project, label-group) combos and
 // consolidates the results into exactly one alert per team. A failure in one
 // combo is logged and skipped so the rest of the batch still produces alerts.
+// In subscriber mode it reads the publisher's persisted incidents instead of
+// computing lineage.
 func (s *JobSLAPredictorService) IdentifySLABreachesBatch(ctx context.Context, combos []scheduler.SLABreachCombo, reqConfig JobSLAPredictorRequestConfig) (map[string]*scheduler.TargetBreach, error) {
+	if s.config.SubscriberMode {
+		return s.identifyFromIncidents(ctx, combos, reqConfig)
+	}
+
 	results := make([]*comboBreachResult, 0, len(combos))
 	me := errors.NewMultiError("IdentifySLABreachesBatch")
 	for _, combo := range combos {

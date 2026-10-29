@@ -122,6 +122,9 @@ type RootCauseConfig struct {
 type PotentialSLABreachConfig struct {
 	DamperCoeff             float64 `mapstructure:"damper_coeff" default:"1.0"`
 	EnablePersistentLogging bool    `mapstructure:"enable_persistent_logging" default:"false"`
+	// SubscriberMode stops this job from computing lineage: it reads the incidents the
+	// root-cause publisher persists and alerts the impacted teams as a final warning.
+	SubscriberMode bool `mapstructure:"subscriber_mode" default:"false"`
 	// DedupImpactedJobs alerts each impacted (target) job run at most once. It reads what
 	// persistent logging writes, so it is a no-op unless EnablePersistentLogging is on.
 	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`

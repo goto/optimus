@@ -482,7 +482,7 @@ func (s *OptimusServer) setupHandlers() error {
 		thirdPartyUpstreamTypes = append(thirdPartyUpstreamTypes, resolver.Type.String())
 	}
 
-	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, s.conf.Alerting.RootCause, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService, operatorRunRepository, thirdPartyUpstreamTypes, jobRunRepo)
+	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, s.conf.Alerting.RootCause, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService, operatorRunRepository, thirdPartyUpstreamTypes, jobRunRepo, schedulerRepo.NewSLABreachIncidentRepository(s.dbPool))
 
 	// Job Estimator Service
 	newJobExpectatorDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,

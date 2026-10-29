@@ -80,7 +80,12 @@ alerting:
     min_padding_minutes: 0
     max_padding_minutes: 1000
   # estimator used for the earlier "potential" SLA breach warning
-  potential_sla_breach_config:
+    potential_sla_breach_config:
+      # subscriber_mode stops the Potential SLA Breach job from computing lineage: it
+      # instead reads the incidents the root-cause publisher persists (sla_breach_root_cause,
+      # refreshed within the last 24h) and alerts the impacted teams as a final warning.
+      # Repetition is suppressed by the alerting.deduplication.potential_sla_breach config.
+      subscriber_mode: false
     damper_coeff: 1.0
     enable_persistent_logging: true
     # alert each impacted job run at most once; requires enable_persistent_logging

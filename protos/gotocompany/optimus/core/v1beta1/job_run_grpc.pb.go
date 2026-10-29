@@ -48,6 +48,10 @@ type JobRunServiceClient interface {
 	// GetJobExpectedCompletionTimeReport will provide a report on the selected jobs' completion time (actual & expected)
 	// on a given point of time, and get the mean delay between those times
 	JobExpectedCompletionTimeReport(ctx context.Context, in *JobExpectedCompletionTimeReportRequest, opts ...grpc.CallOption) (*JobExpectedCompletionTimeReportResponse, error)
+	// IdentifySLABreachRootCause evaluates the lineage of the given projects' jobs, identifies
+	// why each SLA breach is (or is about to be) happening using tiered root-cause detection,
+	// and groups the findings by the offending root-cause entity (project).
+	IdentifySLABreachRootCause(ctx context.Context, in *IdentifySLABreachRootCauseRequest, opts ...grpc.CallOption) (*IdentifySLABreachRootCauseResponse, error)
 }
 
 type jobRunServiceClient struct {
@@ -175,6 +179,15 @@ func (c *jobRunServiceClient) JobExpectedCompletionTimeReport(ctx context.Contex
 	return out, nil
 }
 
+func (c *jobRunServiceClient) IdentifySLABreachRootCause(ctx context.Context, in *IdentifySLABreachRootCauseRequest, opts ...grpc.CallOption) (*IdentifySLABreachRootCauseResponse, error) {
+	out := new(IdentifySLABreachRootCauseResponse)
+	err := c.cc.Invoke(ctx, "/gotocompany.optimus.core.v1beta1.JobRunService/IdentifySLABreachRootCause", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobRunServiceServer is the server API for JobRunService service.
 // All implementations must embed UnimplementedJobRunServiceServer
 // for forward compatibility
@@ -205,6 +218,10 @@ type JobRunServiceServer interface {
 	// GetJobExpectedCompletionTimeReport will provide a report on the selected jobs' completion time (actual & expected)
 	// on a given point of time, and get the mean delay between those times
 	JobExpectedCompletionTimeReport(context.Context, *JobExpectedCompletionTimeReportRequest) (*JobExpectedCompletionTimeReportResponse, error)
+	// IdentifySLABreachRootCause evaluates the lineage of the given projects' jobs, identifies
+	// why each SLA breach is (or is about to be) happening using tiered root-cause detection,
+	// and groups the findings by the offending root-cause entity (project).
+	IdentifySLABreachRootCause(context.Context, *IdentifySLABreachRootCauseRequest) (*IdentifySLABreachRootCauseResponse, error)
 	mustEmbedUnimplementedJobRunServiceServer()
 }
 
@@ -250,6 +267,9 @@ func (UnimplementedJobRunServiceServer) GenerateExpectedFinishTime(context.Conte
 }
 func (UnimplementedJobRunServiceServer) JobExpectedCompletionTimeReport(context.Context, *JobExpectedCompletionTimeReportRequest) (*JobExpectedCompletionTimeReportResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobExpectedCompletionTimeReport not implemented")
+}
+func (UnimplementedJobRunServiceServer) IdentifySLABreachRootCause(context.Context, *IdentifySLABreachRootCauseRequest) (*IdentifySLABreachRootCauseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IdentifySLABreachRootCause not implemented")
 }
 func (UnimplementedJobRunServiceServer) mustEmbedUnimplementedJobRunServiceServer() {}
 
@@ -498,6 +518,24 @@ func _JobRunService_JobExpectedCompletionTimeReport_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobRunService_IdentifySLABreachRootCause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentifySLABreachRootCauseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobRunServiceServer).IdentifySLABreachRootCause(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gotocompany.optimus.core.v1beta1.JobRunService/IdentifySLABreachRootCause",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobRunServiceServer).IdentifySLABreachRootCause(ctx, req.(*IdentifySLABreachRootCauseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobRunService_ServiceDesc is the grpc.ServiceDesc for JobRunService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -556,6 +594,10 @@ var JobRunService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "JobExpectedCompletionTimeReport",
 			Handler:    _JobRunService_JobExpectedCompletionTimeReport_Handler,
+		},
+		{
+			MethodName: "IdentifySLABreachRootCause",
+			Handler:    _JobRunService_IdentifySLABreachRootCause_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -46,6 +46,8 @@ OPTIMUS_REQUEST_TIMEOUT_IN_SECS = int(Variable.get("optimus_request_timeout_in_s
 OPTIMUS_REQUEST_RETRY_TOTAL = int(Variable.get("optimus_request_retry_total", default_var=3))
 OPTIMUS_REQUEST_RETRY_BACKOFF_FACTOR = float(Variable.get("optimus_request_retry_backoff_factor", default_var=2))
 
+HOOK_RETRIES = int(Variable.get("hook_retries", default_var=1))
+
 # --- EVENT TYPES -----------------------------------
 OPERATOR_START_EVENT      = "operator_start"
 OPERATOR_RETRY_EVENT      = "operator_retry"
@@ -110,6 +112,10 @@ class SuperKubernetesPodOperator(KubernetesPodOperator):
         kwargs["log_events_on_failure"] = True
         if is_support_init_container_logs:
             kwargs["init_container_logs"] = True
+
+        if kwargs.get("task_id", "").startswith("hook_"):
+            kwargs.setdefault("retries", HOOK_RETRIES)
+            
         super(SuperKubernetesPodOperator, self).__init__(*args, **kwargs)
         self.do_xcom_push = kwargs.get('do_xcom_push')
         self.namespace = kwargs.get('namespace')
